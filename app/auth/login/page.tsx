@@ -37,7 +37,14 @@ export default function AuthLoginPage() {
       })
 
       if (authError) {
-        setError("Identifiants invalides. Veuillez vérifier votre adresse e-mail et votre mot de passe.")
+        console.error("Auth error:", authError)
+        if (authError.message.includes("Invalid login")) {
+          setError("Identifiants invalides. Veuillez vérifier votre adresse e-mail et votre mot de passe.")
+        } else if (authError.message.includes("Email not confirmed")) {
+          setError("Votre email n'est pas encore confirmé. Vérifiez votre boîte de réception.")
+        } else {
+          setError(authError.message)
+        }
         return
       }
 
