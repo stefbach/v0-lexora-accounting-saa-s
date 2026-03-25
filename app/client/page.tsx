@@ -8,6 +8,7 @@ import {
   CardDescription,
 } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { useProfile } from "@/hooks/use-profile"
 import {
   Table,
   TableBody,
@@ -111,6 +112,9 @@ function getStatutBadge(statut: string) {
 }
 
 export default function ClientDashboard() {
+  const { profile } = useProfile()
+  const firstName = profile?.full_name?.split(" ")[0] || ""
+
   return (
     <div className="p-6 space-y-6">
       <div>
@@ -118,7 +122,7 @@ export default function ClientDashboard() {
           Tableau de bord
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Bienvenue, Jean-Marc. Voici un aperçu de votre activité.
+          Bienvenue{firstName ? `, ${firstName}` : ""}. Voici un aperçu de votre activité.
         </p>
       </div>
 
