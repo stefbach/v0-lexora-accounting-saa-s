@@ -1,155 +1,125 @@
 "use client"
 
-import { useState } from "react"
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card"
+import { useState, useEffect, useCallback } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
-import {
-  Plus,
-  Search,
-  Eye,
-  Pencil,
-  UserCog,
-  Users,
-  FileText,
-} from "lucide-react"
+import { Plus, Search, Loader2 } from "lucide-react"
 
-const mockClients = [
-  {
-    id: "1",
-    nom: "Raj Doobur",
-    societe: "TIBOK Ltd",
-    email: "raj@tibok.mu",
-    comptableAssigne: "Marie Dupont",
-    documents: 24,
-    statutTvaMois: "declare" as const,
-  },
-  {
-    id: "2",
-    nom: "Nadia Jeetun",
-    societe: "BPO Services Ltd",
-    email: "nadia@bpo-services.mu",
-    comptableAssigne: "Jean Martin",
-    documents: 18,
-    statutTvaMois: "declare" as const,
-  },
-  {
-    id: "3",
-    nom: "Olivier Masson",
-    societe: "Obesity Care Malta",
-    email: "olivier@obesitycare.mt",
-    comptableAssigne: "Marie Dupont",
-    documents: 9,
-    statutTvaMois: "non_assujetti" as const,
-  },
-  {
-    id: "4",
-    nom: "Fatima Doorgakant",
-    societe: "NHS S2 Corp",
-    email: "fatima@nhs-s2.mu",
-    comptableAssigne: "Sophie Laurent",
-    documents: 31,
-    statutTvaMois: "en_retard" as const,
-  },
-  {
-    id: "5",
-    nom: "Vikash Doobur",
-    societe: "TIBOK Ltd",
-    email: "vikash@tibok.mu",
-    comptableAssigne: "Marie Dupont",
-    documents: 14,
-    statutTvaMois: "a_faire" as const,
-  },
-  {
-    id: "6",
-    nom: "Priya Doorgakant",
-    societe: "NHS S2 Corp",
-    email: "priya@nhs-s2.mu",
-    comptableAssigne: "Sophie Laurent",
-    documents: 22,
-    statutTvaMois: "declare" as const,
-  },
-  {
-    id: "7",
-    nom: "Yannick Lafleur",
-    societe: "BPO Services Ltd",
-    email: "yannick@bpo-services.mu",
-    comptableAssigne: "Jean Martin",
-    documents: 6,
-    statutTvaMois: "a_faire" as const,
-  },
-]
-
-const statutTvaLabels: Record<string, string> = {
-  declare: "Déclaré",
-  a_faire: "À faire",
-  en_retard: "En retard",
-  non_assujetti: "Non assujetti",
-}
-
-const statutTvaStyles: Record<string, string> = {
-  declare: "bg-emerald-100 text-emerald-700 border-emerald-200",
-  a_faire: "bg-amber-100 text-amber-700 border-amber-200",
-  en_retard: "bg-red-100 text-red-700 border-red-200",
-  non_assujetti: "bg-gray-100 text-gray-600 border-gray-200",
+interface UserProfile {
+  id: string
+  email: string
+  full_name: string
+  role: string
+  phone: string | null
+  comptable_id: string | null
+  is_active: boolean
+  created_at: string
 }
 
 export default function ClientsPage() {
   const [search, setSearch] = useState("")
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [users, setUsers] = useState<UserProfile[]>([])
+  const [loading, setLoading] = useState(true)
+  const [creating, setCreating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
 
-  const filtered = mockClients.filter(
-    (c) =>
-      c.nom.toLowerCase().includes(search.toLowerCase()) ||
-      c.societe.toLowerCase().includes(search.toLowerCase()) ||
-      c.email.toLowerCase().includes(search.toLowerCase()) ||
-      c.comptableAssigne.toLowerCase().includes(search.toLowerCase())
+  const [formName, setFormName] = useState("")
+  const [formEmail, setFormEmail] = useState("")
+  const [formPhone, setFormPhone] = useState("")
+  const [formPassword, setFormPassword] = useState("")
+  const [formComptable, setFormComptable] = useState("")
+
+  const fetchUsers = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/users")
+      const data = await res.json()
+      if (data.users) setUsers(data.users)
+    } catch {
+      console.error("Failed to fetch users")
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { fetchUsers() }, [fetchUsers])
+
+  const clients = users.filter((u) => u.role === "client")
+  const comptables = users.filter((u) => u.role === "comptable")
+
+  const filtered = clients.filter(
+    (u) =>
+      u.full_name.toLowerCase().includes(search.toLowerCase()) ||
+      u.email.toLowerCase().includes(search.toLowerCase())
   )
+
+  const resetForm = () => {
+    setFormName(""); setFormEmail(""); setFormPhone(""); setFormPassword(""); setFormComptable(""); setError(null)
+  }
+
+  const handleCreate = async () => {
+    setError(null)
+    if (!formName || !formEmail || !formPassword) {
+      setError("Veuillez remplir tous les champs obligatoires.")
+      return
+    }
+    if (formPassword.length < 6) {
+      setError("Le mot de passe doit contenir au moins 6 caractères.")
+      return
+    }
+    setCreating(true)
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: formEmail,
+          password: formPassword,
+          full_name: formName,
+          role: "client",
+          phone: formPhone || null,
+          comptable_id: formComptable || null,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || "Erreur lors de la création"); return }
+      setSuccess(`Client ${formName} créé avec succès !`)
+      resetForm()
+      setDialogOpen(false)
+      fetchUsers()
+    } catch {
+      setError("Erreur de connexion au serveur")
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const getComptableName = (id: string | null) => {
+    if (!id) return "—"
+    return users.find((u) => u.id === id)?.full_name || "—"
+  }
 
   return (
     <div className="p-6 space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
-            Clients
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Gestion de tous les clients de la plateforme
-          </p>
+          <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>Clients</h1>
+          <p className="text-muted-foreground mt-1">Gestion des clients de la plateforme</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm() }}>
           <DialogTrigger asChild>
             <Button style={{ backgroundColor: "#1E2A4A" }}>
               <Plus className="mr-2 h-4 w-4" />
@@ -159,170 +129,109 @@ export default function ClientsPage() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Nouveau client</DialogTitle>
-              <DialogDescription>
-                Renseignez les informations du nouveau client.
-              </DialogDescription>
+              <DialogDescription>Un compte sera créé automatiquement avec le rôle client.</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Nom complet</label>
-                <Input placeholder="Ex: Raj Doobur" />
+                <Label>Nom complet *</Label>
+                <Input placeholder="Ex: Raj Doobur" value={formName} onChange={(e) => setFormName(e.target.value)} />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Email</label>
-                <Input type="email" placeholder="Ex: raj@tibok.mu" />
+                <Label>Email *</Label>
+                <Input type="email" placeholder="Ex: raj@tibok.mu" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Téléphone</label>
-                <Input placeholder="Ex: +230 5678 9012" />
+                <Label>Mot de passe *</Label>
+                <Input type="password" placeholder="Minimum 6 caractères" value={formPassword} onChange={(e) => setFormPassword(e.target.value)} />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Société</label>
-                <Select>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Sélectionner une société" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="tibok">TIBOK Ltd</SelectItem>
-                    <SelectItem value="bpo">BPO Services Ltd</SelectItem>
-                    <SelectItem value="obesity">Obesity Care Malta</SelectItem>
-                    <SelectItem value="nhs">NHS S2 Corp</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label>Téléphone</Label>
+                <Input placeholder="Ex: +230 5678 9012" value={formPhone} onChange={(e) => setFormPhone(e.target.value)} />
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">
-                  Comptable assigné
-                </label>
-                <Select>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Sélectionner un comptable" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="marie">Marie Dupont</SelectItem>
-                    <SelectItem value="jean">Jean Martin</SelectItem>
-                    <SelectItem value="sophie">Sophie Laurent</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {comptables.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Comptable assigné</Label>
+                  <Select value={formComptable} onValueChange={setFormComptable}>
+                    <SelectTrigger><SelectValue placeholder="Sélectionner un comptable" /></SelectTrigger>
+                    <SelectContent>
+                      {comptables.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {error && (
+                <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">{error}</div>
+              )}
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>
-                Annuler
-              </Button>
-              <Button
-                style={{ backgroundColor: "#C9A84C" }}
-                onClick={() => setDialogOpen(false)}
-              >
-                Créer le client
+              <Button variant="outline" onClick={() => { setDialogOpen(false); resetForm() }}>Annuler</Button>
+              <Button style={{ backgroundColor: "#C9A84C" }} onClick={handleCreate} disabled={creating}>
+                {creating ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Création...</> : "Créer le client"}
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* Table */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Users className="h-5 w-5" style={{ color: "#C9A84C" }} />
-              <CardTitle style={{ color: "#1E2A4A" }}>
-                Liste des clients
-              </CardTitle>
-            </div>
-            <CardDescription>
-              {filtered.length} client{filtered.length !== 1 ? "s" : ""} trouvé
-              {filtered.length !== 1 ? "s" : ""}
-            </CardDescription>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="relative max-w-sm">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Rechercher par nom, société, email..."
-              className="pl-9"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
+      {success && (
+        <div className="rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800">{success}</div>
+      )}
 
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nom</TableHead>
-                <TableHead>Société</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Comptable assigné</TableHead>
-                <TableHead>Documents</TableHead>
-                <TableHead>Statut TVA du mois</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((client) => (
-                <TableRow key={client.id}>
-                  <TableCell className="font-medium">{client.nom}</TableCell>
-                  <TableCell>{client.societe}</TableCell>
-                  <TableCell>{client.email}</TableCell>
-                  <TableCell>{client.comptableAssigne}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1.5">
-                      <FileText
-                        className="h-3.5 w-3.5"
-                        style={{ color: "#1E2A4A" }}
-                      />
-                      <span>{client.documents}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge className={statutTvaStyles[client.statutTvaMois]}>
-                      {statutTvaLabels[client.statutTvaMois]}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        title="Voir dashboard"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        title="Modifier"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        title="Réassigner comptable"
-                        style={{ color: "#C9A84C" }}
-                      >
-                        <UserCog className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {filtered.length === 0 && (
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input placeholder="Rechercher par nom ou email..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle style={{ color: "#1E2A4A" }}>Clients ({filtered.length})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell
-                    colSpan={7}
-                    className="text-center py-8 text-muted-foreground"
-                  >
-                    Aucun client trouvé.
-                  </TableCell>
+                  <TableHead>Nom</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Téléphone</TableHead>
+                  <TableHead>Comptable assigné</TableHead>
+                  <TableHead>Statut</TableHead>
+                  <TableHead>Date création</TableHead>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+              </TableHeader>
+              <TableBody>
+                {filtered.map((u) => (
+                  <TableRow key={u.id}>
+                    <TableCell className="font-medium">{u.full_name}</TableCell>
+                    <TableCell>{u.email}</TableCell>
+                    <TableCell>{u.phone || "—"}</TableCell>
+                    <TableCell>{getComptableName(u.comptable_id)}</TableCell>
+                    <TableCell>
+                      <Badge className={u.is_active !== false ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-600"}>
+                        {u.is_active !== false ? "Actif" : "Inactif"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {new Date(u.created_at).toLocaleDateString("fr-FR")}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {filtered.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Aucun client trouvé.</TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

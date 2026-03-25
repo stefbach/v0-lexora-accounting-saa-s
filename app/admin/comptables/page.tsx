@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import {
   Card,
   CardContent,
@@ -11,6 +11,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
   Dialog,
   DialogContent,
@@ -21,13 +22,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import {
   Plus,
   Search,
   Mail,
@@ -35,86 +29,120 @@ import {
   Users,
   Eye,
   UserPlus,
-  Briefcase,
+  Loader2,
 } from "lucide-react"
 
-const mockComptables = [
-  {
-    id: "1",
-    nom: "Marie Dupont",
-    email: "marie.dupont@lexora.mu",
-    telephone: "+230 5234 5678",
-    specialite: "TVA & Fiscalité",
-    clientsAssignes: 12,
-    statut: "actif" as const,
-    societes: ["TIBOK Ltd", "Obesity Care Malta"],
-  },
-  {
-    id: "2",
-    nom: "Jean Martin",
-    email: "jean.martin@lexora.mu",
-    telephone: "+230 5345 6789",
-    specialite: "Comptabilité générale",
-    clientsAssignes: 8,
-    statut: "actif" as const,
-    societes: ["BPO Services Ltd"],
-  },
-  {
-    id: "3",
-    nom: "Sophie Laurent",
-    email: "sophie.laurent@lexora.mu",
-    telephone: "+230 5456 7890",
-    specialite: "Charges sociales & Paie",
-    clientsAssignes: 15,
-    statut: "actif" as const,
-    societes: ["NHS S2 Corp"],
-  },
-  {
-    id: "4",
-    nom: "Pierre Rochefort",
-    email: "pierre.rochefort@lexora.mu",
-    telephone: "+230 5567 8901",
-    specialite: "Audit & Révision",
-    clientsAssignes: 0,
-    statut: "inactif" as const,
-    societes: [],
-  },
-  {
-    id: "5",
-    nom: "Asha Doorgakant",
-    email: "asha.doorgakant@lexora.mu",
-    telephone: "+230 5678 9012",
-    specialite: "TVA & Fiscalité",
-    clientsAssignes: 7,
-    statut: "actif" as const,
-    societes: ["TIBOK Ltd", "BPO Services Ltd"],
-  },
-]
+interface UserProfile {
+  id: string
+  email: string
+  full_name: string
+  role: string
+  phone: string | null
+  is_active: boolean
+  created_at: string
+}
 
 export default function ComptablesPage() {
   const [search, setSearch] = useState("")
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [comptables, setComptables] = useState<UserProfile[]>([])
+  const [allUsers, setAllUsers] = useState<UserProfile[]>([])
+  const [loading, setLoading] = useState(true)
+  const [creating, setCreating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
 
-  const filtered = mockComptables.filter(
+  // Form
+  const [formName, setFormName] = useState("")
+  const [formEmail, setFormEmail] = useState("")
+  const [formPhone, setFormPhone] = useState("")
+  const [formPassword, setFormPassword] = useState("")
+
+  const fetchUsers = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/users")
+      const data = await res.json()
+      if (data.users) {
+        setAllUsers(data.users)
+        setComptables(data.users.filter((u: UserProfile) => u.role === "comptable"))
+      }
+    } catch {
+      console.error("Failed to fetch users")
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchUsers()
+  }, [fetchUsers])
+
+  const filtered = comptables.filter(
     (c) =>
-      c.nom.toLowerCase().includes(search.toLowerCase()) ||
-      c.email.toLowerCase().includes(search.toLowerCase()) ||
-      c.specialite.toLowerCase().includes(search.toLowerCase())
+      c.full_name.toLowerCase().includes(search.toLowerCase()) ||
+      c.email.toLowerCase().includes(search.toLowerCase())
   )
+
+  const resetForm = () => {
+    setFormName("")
+    setFormEmail("")
+    setFormPhone("")
+    setFormPassword("")
+    setError(null)
+  }
+
+  const handleCreate = async () => {
+    setError(null)
+    if (!formName || !formEmail || !formPassword) {
+      setError("Veuillez remplir tous les champs obligatoires.")
+      return
+    }
+    if (formPassword.length < 6) {
+      setError("Le mot de passe doit contenir au moins 6 caractères.")
+      return
+    }
+
+    setCreating(true)
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: formEmail,
+          password: formPassword,
+          full_name: formName,
+          role: "comptable",
+          phone: formPhone || null,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error || "Erreur lors de la création")
+        return
+      }
+      setSuccess(`Comptable ${formName} créé avec succès !`)
+      resetForm()
+      setDialogOpen(false)
+      fetchUsers()
+    } catch {
+      setError("Erreur de connexion au serveur")
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const getClientCount = (comptableId: string) => {
+    return allUsers.filter((u) => u.role === "client" && (u as unknown as Record<string, unknown>).comptable_id === comptableId).length
+  }
 
   return (
     <div className="p-6 space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
-            Comptables
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Gestion de l&apos;équipe comptable Lexora
-          </p>
+          <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>Comptables</h1>
+          <p className="text-muted-foreground mt-1">Gestion de l&apos;équipe comptable Lexora</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm() }}>
           <DialogTrigger asChild>
             <Button style={{ backgroundColor: "#1E2A4A" }}>
               <Plus className="mr-2 h-4 w-4" />
@@ -125,161 +153,108 @@ export default function ComptablesPage() {
             <DialogHeader>
               <DialogTitle>Nouveau comptable</DialogTitle>
               <DialogDescription>
-                Renseignez les informations du nouveau comptable.
+                Un compte Supabase sera créé automatiquement avec le rôle comptable.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Nom complet</label>
-                <Input placeholder="Ex: Marie Dupont" />
+                <Label>Nom complet *</Label>
+                <Input placeholder="Ex: Marie Dupont" value={formName} onChange={(e) => setFormName(e.target.value)} />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Email</label>
-                <Input type="email" placeholder="Ex: marie@lexora.mu" />
+                <Label>Email *</Label>
+                <Input type="email" placeholder="Ex: marie@lexora.mu" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Téléphone</label>
-                <Input placeholder="Ex: +230 5234 5678" />
+                <Label>Mot de passe *</Label>
+                <Input type="password" placeholder="Minimum 6 caractères" value={formPassword} onChange={(e) => setFormPassword(e.target.value)} />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Spécialité</label>
-                <Select>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Sélectionner une spécialité" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="tva">TVA &amp; Fiscalité</SelectItem>
-                    <SelectItem value="comptabilite">Comptabilité générale</SelectItem>
-                    <SelectItem value="charges">Charges sociales &amp; Paie</SelectItem>
-                    <SelectItem value="audit">Audit &amp; Révision</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label>Téléphone</Label>
+                <Input placeholder="Ex: +230 5234 5678" value={formPhone} onChange={(e) => setFormPhone(e.target.value)} />
               </div>
+              {error && (
+                <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">{error}</div>
+              )}
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>
-                Annuler
-              </Button>
-              <Button
-                style={{ backgroundColor: "#C9A84C" }}
-                onClick={() => setDialogOpen(false)}
-              >
-                Créer le comptable
+              <Button variant="outline" onClick={() => { setDialogOpen(false); resetForm() }}>Annuler</Button>
+              <Button style={{ backgroundColor: "#C9A84C" }} onClick={handleCreate} disabled={creating}>
+                {creating ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Création...</> : "Créer le comptable"}
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* Search */}
+      {success && (
+        <div className="rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800">{success}</div>
+      )}
+
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Rechercher par nom, email ou spécialité..."
-          className="pl-9"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+        <Input placeholder="Rechercher par nom ou email..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
 
-      {/* Cards Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {filtered.map((comptable) => (
-          <Card key={comptable.id} className="relative overflow-hidden">
-            <div
-              className="absolute top-0 left-0 right-0 h-1"
-              style={{
-                backgroundColor:
-                  comptable.statut === "actif" ? "#C9A84C" : "#9ca3af",
-              }}
-            />
-            <CardHeader className="pb-3">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div
-                    className="flex h-10 w-10 items-center justify-center rounded-full text-white font-semibold text-sm"
-                    style={{ backgroundColor: "#1E2A4A" }}
-                  >
-                    {comptable.nom
-                      .split(" ")
-                      .map((n) => n[0])
-                      .join("")}
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {filtered.map((comptable) => (
+            <Card key={comptable.id} className="relative overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-1" style={{ backgroundColor: comptable.is_active !== false ? "#C9A84C" : "#9ca3af" }} />
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full text-white font-semibold text-sm" style={{ backgroundColor: "#1E2A4A" }}>
+                      {comptable.full_name.split(" ").map((n) => n[0]).join("").toUpperCase()}
+                    </div>
+                    <div>
+                      <CardTitle className="text-base">{comptable.full_name}</CardTitle>
+                      <CardDescription className="mt-0.5">Comptable</CardDescription>
+                    </div>
                   </div>
-                  <div>
-                    <CardTitle className="text-base">
-                      {comptable.nom}
-                    </CardTitle>
-                    <CardDescription className="mt-0.5">
-                      {comptable.specialite}
-                    </CardDescription>
+                  <Badge className={comptable.is_active !== false ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-gray-100 text-gray-600 border-gray-200"}>
+                    {comptable.is_active !== false ? "Actif" : "Inactif"}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Mail className="h-3.5 w-3.5" />
+                    <span>{comptable.email}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Phone className="h-3.5 w-3.5" />
+                    <span>{comptable.phone || "—"}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Users className="h-3.5 w-3.5" />
+                    <span>{getClientCount(comptable.id)} client(s) assigné(s)</span>
                   </div>
                 </div>
-                <Badge
-                  className={
-                    comptable.statut === "actif"
-                      ? "bg-emerald-100 text-emerald-700 border-emerald-200"
-                      : "bg-gray-100 text-gray-600 border-gray-200"
-                  }
-                >
-                  {comptable.statut === "actif" ? "Actif" : "Inactif"}
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Mail className="h-3.5 w-3.5" />
-                  <span>{comptable.email}</span>
+                <div className="flex items-center gap-2 pt-2 border-t">
+                  <Button variant="outline" size="sm" className="flex-1">
+                    <Eye className="mr-1 h-3.5 w-3.5" />
+                    Voir profil
+                  </Button>
+                  <Button variant="outline" size="sm" className="flex-1" style={{ borderColor: "#C9A84C", color: "#C9A84C" }}>
+                    <UserPlus className="mr-1 h-3.5 w-3.5" />
+                    Assigner clients
+                  </Button>
                 </div>
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Phone className="h-3.5 w-3.5" />
-                  <span>{comptable.telephone}</span>
-                </div>
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Users className="h-3.5 w-3.5" />
-                  <span>
-                    {comptable.clientsAssignes} client
-                    {comptable.clientsAssignes !== 1 ? "s" : ""} assigné
-                    {comptable.clientsAssignes !== 1 ? "s" : ""}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Briefcase className="h-3.5 w-3.5" />
-                  <span>
-                    {comptable.societes.length > 0
-                      ? comptable.societes.join(", ")
-                      : "Aucune société"}
-                  </span>
-                </div>
-              </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
-              <div className="flex items-center gap-2 pt-2 border-t">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex-1"
-                >
-                  <Eye className="mr-1 h-3.5 w-3.5" />
-                  Voir profil
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex-1"
-                  style={{ borderColor: "#C9A84C", color: "#C9A84C" }}
-                >
-                  <UserPlus className="mr-1 h-3.5 w-3.5" />
-                  Assigner clients
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {filtered.length === 0 && (
+      {!loading && filtered.length === 0 && (
         <div className="text-center py-12 text-muted-foreground">
-          Aucun comptable trouvé pour cette recherche.
+          Aucun comptable trouvé.
         </div>
       )}
     </div>
