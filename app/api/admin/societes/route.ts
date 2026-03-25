@@ -53,3 +53,73 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Unknown error' }, { status: 500 })
   }
 }
+
+// PUT — Update a société
+export async function PUT(request: NextRequest) {
+  try {
+    const { id, nom, brn, numero_tva_mra, statut_tva, comptable_id } = await request.json()
+
+    if (!id) {
+      return NextResponse.json({ error: "L'identifiant de la société est requis" }, { status: 400 })
+    }
+
+    if (!nom) {
+      return NextResponse.json({ error: 'Le nom de la société est requis' }, { status: 400 })
+    }
+
+    const supabase = getAdminClient()
+
+    const { data, error } = await supabase
+      .from('societes')
+      .update({
+        nom,
+        brn: brn || null,
+        numero_tva_mra: numero_tva_mra || null,
+        statut_tva: statut_tva ?? false,
+        comptable_id: comptable_id || null,
+      })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (!data) return NextResponse.json({ error: 'Société introuvable' }, { status: 404 })
+    return NextResponse.json({ societe: data })
+  } catch (e: unknown) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur inconnue' }, { status: 500 })
+  }
+}
+
+// DELETE — Delete a société and its related dossiers
+export async function DELETE(request: NextRequest) {
+  try {
+    const { id } = await request.json()
+
+    if (!id) {
+      return NextResponse.json({ error: "L'identifiant de la société est requis" }, { status: 400 })
+    }
+
+    const supabase = getAdminClient()
+
+    // Delete related dossiers first
+    const { error: dossiersError } = await supabase
+      .from('dossiers')
+      .delete()
+      .eq('societe_id', id)
+
+    if (dossiersError) {
+      return NextResponse.json({ error: 'Erreur lors de la suppression des dossiers liés : ' + dossiersError.message }, { status: 500 })
+    }
+
+    // Delete the société
+    const { error } = await supabase
+      .from('societes')
+      .delete()
+      .eq('id', id)
+
+    if (error) return NextResponse.json({ error: 'Erreur lors de la suppression de la société : ' + error.message }, { status: 500 })
+    return NextResponse.json({ message: 'Société et dossiers associés supprimés avec succès' })
+  } catch (e: unknown) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur inconnue' }, { status: 500 })
+  }
+}

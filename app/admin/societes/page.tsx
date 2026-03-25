@@ -109,6 +109,21 @@ export default function SocietesPage() {
   const [linkClientId, setLinkClientId] = useState<string>("")
   const [linkSubmitting, setLinkSubmitting] = useState(false)
 
+  // --------------- edit dialog state ---------------
+  const [editOpen, setEditOpen] = useState(false)
+  const [editSubmitting, setEditSubmitting] = useState(false)
+  const [editSociete, setEditSociete] = useState<Societe | null>(null)
+  const [editNom, setEditNom] = useState("")
+  const [editBrn, setEditBrn] = useState("")
+  const [editTva, setEditTva] = useState("")
+  const [editStatutTva, setEditStatutTva] = useState<string>("")
+  const [editComptableId, setEditComptableId] = useState<string>("")
+
+  // --------------- delete dialog state ---------------
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false)
+  const [deleteSociete, setDeleteSociete] = useState<Societe | null>(null)
+
   // --------------- derived data ---------------
   const comptables = users.filter((u) => u.role === "comptable")
   const clients = users.filter((u) => u.role === "client")
@@ -145,7 +160,7 @@ export default function SocietesPage() {
         resDos.json(),
       ])
 
-      if (!resSoc.ok) throw new Error(dataSoc.error || "Erreur lors du chargement des sociétés")
+      if (!resSoc.ok) throw new Error(dataSoc.error || "Erreur lors du chargement des societes")
       if (!resUsr.ok) throw new Error(dataUsr.error || "Erreur lors du chargement des utilisateurs")
       if (!resDos.ok) throw new Error(dataDos.error || "Erreur lors du chargement des dossiers")
 
@@ -178,10 +193,10 @@ export default function SocietesPage() {
     }
   }, [error, loading])
 
-  // --------------- add société handler ---------------
+  // --------------- add societe handler ---------------
   const handleAdd = async () => {
     if (!addNom.trim()) {
-      setError("Le nom de la société est requis.")
+      setError("Le nom de la societe est requis.")
       return
     }
     setAddSubmitting(true)
@@ -199,7 +214,7 @@ export default function SocietesPage() {
         }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Erreur lors de la création")
+      if (!res.ok) throw new Error(data.error || "Erreur lors de la creation")
 
       const newSociete = data.societe
 
@@ -207,7 +222,7 @@ export default function SocietesPage() {
       if (addClientIds.length > 0 && newSociete?.id) {
         const comptableForDossier = addComptableId || null
         if (!comptableForDossier) {
-          setSuccess("Société créée. Attention : aucun comptable assigné, les dossiers clients n'ont pas été créés.")
+          setSuccess("Societe creee. Attention : aucun comptable assigne, les dossiers clients n'ont pas ete crees.")
         } else {
           const dossierResults = await Promise.allSettled(
             addClientIds.map((clientId) =>
@@ -225,14 +240,14 @@ export default function SocietesPage() {
           const failures = dossierResults.filter((r) => r.status === "rejected")
           if (failures.length > 0) {
             setSuccess(
-              `Société créée. ${addClientIds.length - failures.length}/${addClientIds.length} client(s) lié(s) avec succès.`
+              `Societe creee. ${addClientIds.length - failures.length}/${addClientIds.length} client(s) lie(s) avec succes.`
             )
           } else {
-            setSuccess("Société créée et client(s) lié(s) avec succès.")
+            setSuccess("Societe creee et client(s) lie(s) avec succes.")
           }
         }
       } else {
-        setSuccess("Société créée avec succès.")
+        setSuccess("Societe creee avec succes.")
       }
 
       // Reset form
@@ -254,12 +269,12 @@ export default function SocietesPage() {
   // --------------- link client handler ---------------
   const handleLinkClient = async () => {
     if (!linkSociete || !linkClientId) {
-      setError("Veuillez sélectionner un client.")
+      setError("Veuillez selectionner un client.")
       return
     }
     const comptableId = linkSociete.comptable_id
     if (!comptableId) {
-      setError("Cette société n'a pas de comptable assigné. Veuillez d'abord en assigner un.")
+      setError("Cette societe n'a pas de comptable assigne. Veuillez d'abord en assigner un.")
       return
     }
     setLinkSubmitting(true)
@@ -276,7 +291,7 @@ export default function SocietesPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Erreur lors de la liaison")
-      setSuccess("Client lié à la société avec succès.")
+      setSuccess("Client lie a la societe avec succes.")
       setLinkClientId("")
       setLinkSociete(null)
       setLinkOpen(false)
@@ -285,6 +300,80 @@ export default function SocietesPage() {
       setError(err instanceof Error ? err.message : "Erreur inconnue")
     } finally {
       setLinkSubmitting(false)
+    }
+  }
+
+  // --------------- edit societe handler ---------------
+  const openEditDialog = (s: Societe) => {
+    setEditSociete(s)
+    setEditNom(s.nom)
+    setEditBrn(s.brn ?? "")
+    setEditTva(s.numero_tva_mra ?? "")
+    setEditStatutTva(s.statut_tva ? "assujetti" : "non_assujetti")
+    setEditComptableId(s.comptable_id ?? "")
+    setEditOpen(true)
+  }
+
+  const handleEdit = async () => {
+    if (!editSociete) return
+    if (!editNom.trim()) {
+      setError("Le nom de la societe est requis.")
+      return
+    }
+    setEditSubmitting(true)
+    setError(null)
+    try {
+      const res = await fetch("/api/admin/societes", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editSociete.id,
+          nom: editNom.trim(),
+          brn: editBrn.trim() || null,
+          numero_tva_mra: editTva.trim() || null,
+          statut_tva: editStatutTva === "assujetti",
+          comptable_id: editComptableId || null,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Erreur lors de la modification")
+      setSuccess("Societe modifiee avec succes.")
+      setEditOpen(false)
+      setEditSociete(null)
+      await fetchAll()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Erreur inconnue")
+    } finally {
+      setEditSubmitting(false)
+    }
+  }
+
+  // --------------- delete societe handler ---------------
+  const openDeleteDialog = (s: Societe) => {
+    setDeleteSociete(s)
+    setDeleteOpen(true)
+  }
+
+  const handleDelete = async () => {
+    if (!deleteSociete) return
+    setDeleteSubmitting(true)
+    setError(null)
+    try {
+      const res = await fetch("/api/admin/societes", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: deleteSociete.id }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Erreur lors de la suppression")
+      setSuccess("Societe et dossiers associes supprimes avec succes.")
+      setDeleteOpen(false)
+      setDeleteSociete(null)
+      await fetchAll()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Erreur inconnue")
+    } finally {
+      setDeleteSubmitting(false)
     }
   }
 
@@ -304,33 +393,33 @@ export default function SocietesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
-            Sociétés
+            Societes
           </h1>
           <p className="text-muted-foreground mt-1">
-            Gestion des sociétés enregistrées sur la plateforme
+            Gestion des societes enregistrees sur la plateforme
           </p>
         </div>
 
-        {/* ---- Add société dialog ---- */}
+        {/* ---- Add societe dialog ---- */}
         <Dialog open={addOpen} onOpenChange={setAddOpen}>
           <DialogTrigger asChild>
             <Button style={{ backgroundColor: "#1E2A4A" }}>
               <Plus className="mr-2 h-4 w-4" />
-              Ajouter une société
+              Ajouter une societe
             </Button>
           </DialogTrigger>
           <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
             <DialogHeader>
-              <DialogTitle>Nouvelle société</DialogTitle>
+              <DialogTitle>Nouvelle societe</DialogTitle>
               <DialogDescription>
-                Renseignez les informations de la société à ajouter.
+                Renseignez les informations de la societe a ajouter.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
               {/* Nom */}
               <div className="space-y-2">
                 <Label htmlFor="add-nom">
-                  Nom de la société <span className="text-red-500">*</span>
+                  Nom de la societe <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   id="add-nom"
@@ -351,7 +440,7 @@ export default function SocietesPage() {
                 />
               </div>
 
-              {/* N° TVA MRA */}
+              {/* N TVA MRA */}
               <div className="space-y-2">
                 <Label htmlFor="add-tva">N° TVA MRA</Label>
                 <Input
@@ -367,7 +456,7 @@ export default function SocietesPage() {
                 <Label>Statut TVA</Label>
                 <Select value={addStatutTva} onValueChange={setAddStatutTva}>
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Sélectionner le statut" />
+                    <SelectValue placeholder="Selectionner le statut" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="assujetti">Assujetti</SelectItem>
@@ -378,10 +467,10 @@ export default function SocietesPage() {
 
               {/* Comptable */}
               <div className="space-y-2">
-                <Label>Comptable assigné</Label>
+                <Label>Comptable assigne</Label>
                 <Select value={addComptableId} onValueChange={setAddComptableId}>
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Sélectionner un comptable" />
+                    <SelectValue placeholder="Selectionner un comptable" />
                   </SelectTrigger>
                   <SelectContent>
                     {comptables.length === 0 && (
@@ -398,9 +487,9 @@ export default function SocietesPage() {
                 </Select>
               </div>
 
-              {/* Clients à lier */}
+              {/* Clients a lier */}
               <div className="space-y-2">
-                <Label>Client(s) à lier</Label>
+                <Label>Client(s) a lier</Label>
                 {clients.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
                     Aucun client disponible.
@@ -438,7 +527,7 @@ export default function SocietesPage() {
                 {addSubmitting && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
-                Créer la société
+                Creer la societe
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -472,7 +561,7 @@ export default function SocietesPage() {
           <DialogHeader>
             <DialogTitle>Lier un client</DialogTitle>
             <DialogDescription>
-              Sélectionnez un client à lier à la société{" "}
+              Selectionnez un client a lier a la societe{" "}
               <strong>{linkSociete?.nom}</strong>.
             </DialogDescription>
           </DialogHeader>
@@ -481,7 +570,7 @@ export default function SocietesPage() {
               <Label>Client</Label>
               <Select value={linkClientId} onValueChange={setLinkClientId}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Sélectionner un client" />
+                  <SelectValue placeholder="Selectionner un client" />
                 </SelectTrigger>
                 <SelectContent>
                   {clients.length === 0 && (
@@ -516,6 +605,159 @@ export default function SocietesPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Edit societe dialog */}
+      <Dialog
+        open={editOpen}
+        onOpenChange={(open) => {
+          setEditOpen(open)
+          if (!open) {
+            setEditSociete(null)
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle style={{ color: "#1E2A4A" }}>
+              Modifier la societe
+            </DialogTitle>
+            <DialogDescription>
+              Modifiez les informations de la societe{" "}
+              <strong>{editSociete?.nom}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {/* Nom */}
+            <div className="space-y-2">
+              <Label htmlFor="edit-nom">
+                Nom de la societe <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="edit-nom"
+                placeholder="Ex: TIBOK Ltd"
+                value={editNom}
+                onChange={(e) => setEditNom(e.target.value)}
+              />
+            </div>
+
+            {/* BRN */}
+            <div className="space-y-2">
+              <Label htmlFor="edit-brn">BRN</Label>
+              <Input
+                id="edit-brn"
+                placeholder="Ex: C12345678"
+                value={editBrn}
+                onChange={(e) => setEditBrn(e.target.value)}
+              />
+            </div>
+
+            {/* N TVA MRA */}
+            <div className="space-y-2">
+              <Label htmlFor="edit-tva">N° TVA MRA</Label>
+              <Input
+                id="edit-tva"
+                placeholder="Ex: VAT-20230001"
+                value={editTva}
+                onChange={(e) => setEditTva(e.target.value)}
+              />
+            </div>
+
+            {/* Statut TVA */}
+            <div className="space-y-2">
+              <Label>Statut TVA</Label>
+              <Select value={editStatutTva} onValueChange={setEditStatutTva}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Selectionner le statut" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="assujetti">Assujetti</SelectItem>
+                  <SelectItem value="non_assujetti">Non assujetti</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Comptable */}
+            <div className="space-y-2">
+              <Label>Comptable assigne</Label>
+              <Select value={editComptableId} onValueChange={setEditComptableId}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Selectionner un comptable" />
+                </SelectTrigger>
+                <SelectContent>
+                  {comptables.length === 0 && (
+                    <SelectItem value="_none" disabled>
+                      Aucun comptable disponible
+                    </SelectItem>
+                  )}
+                  {comptables.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.full_name} ({c.email})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditOpen(false)}>
+              Annuler
+            </Button>
+            <Button
+              style={{ backgroundColor: "#C9A84C" }}
+              onClick={handleEdit}
+              disabled={editSubmitting}
+            >
+              {editSubmitting && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Enregistrer les modifications
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirmation dialog */}
+      <Dialog
+        open={deleteOpen}
+        onOpenChange={(open) => {
+          if (!deleteSubmitting) {
+            setDeleteOpen(open)
+            if (!open) setDeleteSociete(null)
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-destructive">
+              Confirmer la suppression
+            </DialogTitle>
+            <DialogDescription className="pt-2">
+              Etes-vous sur de vouloir supprimer{" "}
+              <strong>{deleteSociete?.nom}</strong> ? Cette action supprimera
+              egalement tous les dossiers lies.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteOpen(false)}
+              disabled={deleteSubmitting}
+            >
+              Annuler
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={deleteSubmitting}
+            >
+              {deleteSubmitting && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Supprimer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Table Card */}
       <Card>
         <CardHeader>
@@ -523,13 +765,13 @@ export default function SocietesPage() {
             <div className="flex items-center gap-2">
               <Building2 className="h-5 w-5" style={{ color: "#C9A84C" }} />
               <CardTitle style={{ color: "#1E2A4A" }}>
-                Liste des sociétés
+                Liste des societes
               </CardTitle>
             </div>
             <CardDescription>
               {loading
                 ? "Chargement..."
-                : `${filtered.length} société(s) trouvée(s)`}
+                : `${filtered.length} societe(s) trouvee(s)`}
             </CardDescription>
           </div>
         </CardHeader>
@@ -553,7 +795,7 @@ export default function SocietesPage() {
                 style={{ color: "#1E2A4A" }}
               />
               <span className="ml-3 text-muted-foreground">
-                Chargement des sociétés...
+                Chargement des societes...
               </span>
             </div>
           )}
@@ -567,7 +809,7 @@ export default function SocietesPage() {
                   <TableHead>BRN</TableHead>
                   <TableHead>N° TVA MRA</TableHead>
                   <TableHead>Statut TVA</TableHead>
-                  <TableHead>Comptable assigné</TableHead>
+                  <TableHead>Comptable assigne</TableHead>
                   <TableHead>Client(s)</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -579,9 +821,9 @@ export default function SocietesPage() {
                     <TableRow key={s.id}>
                       <TableCell className="font-medium">{s.nom}</TableCell>
                       <TableCell className="font-mono text-sm">
-                        {s.brn || "—"}
+                        {s.brn || "\u2014"}
                       </TableCell>
-                      <TableCell>{s.numero_tva_mra || "—"}</TableCell>
+                      <TableCell>{s.numero_tva_mra || "\u2014"}</TableCell>
                       <TableCell>
                         <Badge
                           className={
@@ -596,7 +838,7 @@ export default function SocietesPage() {
                       <TableCell>
                         {s.comptable ? s.comptable.full_name : (
                           <span className="text-muted-foreground italic">
-                            Non assigné
+                            Non assigne
                           </span>
                         )}
                       </TableCell>
@@ -642,11 +884,7 @@ export default function SocietesPage() {
                             variant="ghost"
                             size="icon-sm"
                             title="Modifier"
-                            onClick={() =>
-                              alert(
-                                `Modification de "${s.nom}" — fonctionnalité à venir.`
-                              )
-                            }
+                            onClick={() => openEditDialog(s)}
                           >
                             <Pencil className="h-4 w-4" />
                           </Button>
@@ -656,11 +894,7 @@ export default function SocietesPage() {
                             size="icon-sm"
                             className="text-destructive hover:text-destructive"
                             title="Supprimer"
-                            onClick={() =>
-                              alert(
-                                `Suppression de "${s.nom}" — fonctionnalité à venir.`
-                              )
-                            }
+                            onClick={() => openDeleteDialog(s)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -675,7 +909,7 @@ export default function SocietesPage() {
                       colSpan={7}
                       className="text-center py-8 text-muted-foreground"
                     >
-                      Aucune société trouvée.
+                      Aucune societe trouvee.
                     </TableCell>
                   </TableRow>
                 )}
