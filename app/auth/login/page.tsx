@@ -42,6 +42,9 @@ export default function AuthLoginPage() {
       }
 
       // Fetch user role to redirect to correct dashboard
+      let role = "client"
+
+      // Try direct Supabase query first
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
         const { data: profile, error: profileError } = await supabase
@@ -50,23 +53,22 @@ export default function AuthLoginPage() {
           .eq("id", user.id)
           .single()
 
-        console.log("Profile fetch result:", { profile, profileError })
-
-        const role = profile?.role || "client"
-        router.refresh()
-        switch (role) {
-          case "admin":
-            window.location.href = "/admin"
-            break
-          case "comptable":
-            window.location.href = "/comptable"
-            break
-          default:
-            window.location.href = "/client"
+        if (profile?.role) {
+          role = profile.role
+        } else if (profileError) {
+          // Fallback: use API route which runs server-side
+          try {
+            const res = await fetch("/api/me")
+            const data = await res.json()
+            if (data.role) role = data.role
+          } catch {
+            // Default to client if all fails
+          }
         }
-      } else {
-        window.location.href = "/"
       }
+
+      const redirectPath = role === "admin" ? "/admin" : role === "comptable" ? "/comptable" : "/client"
+      window.location.href = redirectPath
     } catch {
       setError("Une erreur inattendue s'est produite. Veuillez réessayer.")
     } finally {

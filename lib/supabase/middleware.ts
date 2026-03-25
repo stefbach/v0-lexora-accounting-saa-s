@@ -20,7 +20,7 @@ export async function updateSession(request: NextRequest) {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
+          cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           )
           supabaseResponse = NextResponse.next({
@@ -34,6 +34,7 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
+  // Refresh the session - IMPORTANT: must be called to refresh expired tokens
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -43,77 +44,24 @@ export async function updateSession(request: NextRequest) {
   // Public routes that don't require authentication
   const publicRoutes = ['/', '/auth/login', '/login']
   const isPublicRoute = publicRoutes.some(
-    (route) => pathname === route || pathname.startsWith('/api/')
-  )
+    (route) => pathname === route
+  ) || pathname.startsWith('/api/') || pathname.startsWith('/dashboard')
 
+  // If not authenticated and trying to access a protected route, redirect to login
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
     return NextResponse.redirect(url)
   }
 
+  // If authenticated and visiting login page, redirect to home (login page handles role redirect)
   if (user && (pathname === '/auth/login' || pathname === '/login')) {
-    // Fetch user role from profiles table
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    const role = profile?.role || 'client'
     const url = request.nextUrl.clone()
-
-    switch (role) {
-      case 'admin':
-        url.pathname = '/admin'
-        break
-      case 'comptable':
-        url.pathname = '/comptable'
-        break
-      case 'client':
-      default:
-        url.pathname = '/client'
-        break
-    }
-
+    url.pathname = '/'
     return NextResponse.redirect(url)
   }
 
-  // Role-based route protection
-  if (user) {
-    const protectedPrefixes = ['/admin', '/client', '/comptable']
-    const isProtectedRoute = protectedPrefixes.some((prefix) =>
-      pathname.startsWith(prefix)
-    )
-
-    if (isProtectedRoute) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single()
-
-      const role = profile?.role || 'client'
-
-      if (pathname.startsWith('/admin') && role !== 'admin') {
-        const url = request.nextUrl.clone()
-        url.pathname = `/${role}`
-        return NextResponse.redirect(url)
-      }
-
-      if (pathname.startsWith('/client') && role !== 'client') {
-        const url = request.nextUrl.clone()
-        url.pathname = `/${role}`
-        return NextResponse.redirect(url)
-      }
-
-      if (pathname.startsWith('/comptable') && role !== 'comptable') {
-        const url = request.nextUrl.clone()
-        url.pathname = `/${role}`
-        return NextResponse.redirect(url)
-      }
-    }
-  }
-
+  // No role-based route protection in middleware - let the login page handle redirects
+  // This avoids RLS issues with querying profiles from middleware context
   return supabaseResponse
 }
