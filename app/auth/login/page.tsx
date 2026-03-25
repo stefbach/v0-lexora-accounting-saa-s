@@ -44,25 +44,28 @@ export default function AuthLoginPage() {
       // Fetch user role to redirect to correct dashboard
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
-        const { data: profile } = await supabase
+        const { data: profile, error: profileError } = await supabase
           .from("profiles")
           .select("role")
           .eq("id", user.id)
           .single()
 
+        console.log("Profile fetch result:", { profile, profileError })
+
         const role = profile?.role || "client"
+        router.refresh()
         switch (role) {
           case "admin":
-            router.push("/admin")
+            window.location.href = "/admin"
             break
           case "comptable":
-            router.push("/comptable")
+            window.location.href = "/comptable"
             break
           default:
-            router.push("/client")
+            window.location.href = "/client"
         }
       } else {
-        router.push("/")
+        window.location.href = "/"
       }
     } catch {
       setError("Une erreur inattendue s'est produite. Veuillez réessayer.")
