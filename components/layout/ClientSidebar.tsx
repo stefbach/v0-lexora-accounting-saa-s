@@ -1,8 +1,9 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
+import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import {
   LayoutDashboard,
@@ -26,7 +27,14 @@ const navItems = [
 
 export function ClientSidebar() {
   const pathname = usePathname()
+  const router = useRouter()
   const [collapsed, setCollapsed] = useState(false)
+
+  const handleSignOut = async () => {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push("/auth/login")
+  }
 
   return (
     <aside
@@ -117,16 +125,16 @@ export function ClientSidebar() {
           )}
           {!collapsed && <span className="ml-2">Réduire</span>}
         </Button>
-        <Link
-          href="/"
+        <button
+          onClick={handleSignOut}
           className={cn(
-            "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-white/70 transition-all duration-200 hover:bg-white/5 hover:text-white",
+            "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-white/70 transition-all duration-200 hover:bg-white/5 hover:text-white",
             collapsed && "justify-center"
           )}
         >
           <LogOut className="h-5 w-5 shrink-0" />
           {!collapsed && <span>Déconnexion</span>}
-        </Link>
+        </button>
       </div>
     </aside>
   )

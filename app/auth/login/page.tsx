@@ -41,7 +41,29 @@ export default function AuthLoginPage() {
         return
       }
 
-      router.push("/")
+      // Fetch user role to redirect to correct dashboard
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .single()
+
+        const role = profile?.role || "client"
+        switch (role) {
+          case "admin":
+            router.push("/admin")
+            break
+          case "comptable":
+            router.push("/comptable")
+            break
+          default:
+            router.push("/client")
+        }
+      } else {
+        router.push("/")
+      }
     } catch {
       setError("Une erreur inattendue s'est produite. Veuillez réessayer.")
     } finally {
