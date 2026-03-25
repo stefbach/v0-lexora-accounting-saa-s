@@ -46,6 +46,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const validRoles = ['admin', 'client_admin', 'client_user', 'comptable']
+    if (!validRoles.includes(role)) {
+      return NextResponse.json(
+        { error: `Rôle invalide. Les rôles acceptés sont : ${validRoles.join(', ')}` },
+        { status: 400 }
+      )
+    }
+
     const supabase = getAdminClient()
 
     // Create the user in Supabase Auth

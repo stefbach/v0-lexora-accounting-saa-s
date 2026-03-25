@@ -91,7 +91,7 @@ export default function UsersPage() {
   }, [fetchUsers])
 
   const comptables = users.filter((u) => u.role === "comptable")
-  const clients = users.filter((u) => u.role === "client")
+  const clients = users.filter((u) => u.role === "client_admin" || u.role === "client_user")
 
   const filteredComptables = comptables.filter(
     (u) =>
@@ -238,11 +238,12 @@ export default function UsersPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="comptable">Comptable</SelectItem>
-                    <SelectItem value="client">Client</SelectItem>
+                    <SelectItem value="client_admin">Client Admin</SelectItem>
+                    <SelectItem value="client_user">Client Utilisateur</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              {formRole === "client" && comptables.length > 0 && (
+              {(formRole === "client_admin" || formRole === "client_user") && comptables.length > 0 && (
                 <div className="space-y-2">
                   <Label>Comptable assigné</Label>
                   <Select value={formComptable} onValueChange={setFormComptable}>

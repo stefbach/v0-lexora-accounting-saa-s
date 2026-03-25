@@ -114,6 +114,12 @@ function getStatutBadge(statut: string) {
 export default function ClientDashboard() {
   const { profile } = useProfile()
   const firstName = profile?.full_name?.split(" ")[0] || ""
+  const isClientUser = profile?.role === "client_user"
+
+  // Filter stats cards based on role
+  const visibleStats = isClientUser
+    ? statsCards.filter((card) => card.title === "Derniers documents uploadés" || card.title === "Documents en traitement")
+    : statsCards
 
   return (
     <div className="p-6 space-y-6">
@@ -127,8 +133,8 @@ export default function ClientDashboard() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {statsCards.map((card) => (
+      <div className={`grid grid-cols-1 md:grid-cols-2 ${isClientUser ? "" : "lg:grid-cols-4"} gap-4`}>
+        {visibleStats.map((card) => (
           <Card key={card.title}>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -146,9 +152,9 @@ export default function ClientDashboard() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className={`grid grid-cols-1 ${isClientUser ? "" : "lg:grid-cols-3"} gap-6`}>
         {/* Recent Documents */}
-        <Card className="lg:col-span-2">
+        <Card className={isClientUser ? "" : "lg:col-span-2"}>
           <CardHeader>
             <CardTitle style={{ color: "#1E2A4A" }}>Documents récents</CardTitle>
             <CardDescription>Les 5 derniers documents uploadés</CardDescription>
@@ -184,69 +190,71 @@ export default function ClientDashboard() {
           </CardContent>
         </Card>
 
-        {/* Right column */}
-        <div className="space-y-6">
-          {/* TVA Summary */}
-          <Card>
-            <CardHeader>
-              <CardTitle style={{ color: "#1E2A4A" }}>Résumé TVA - Mars 2026</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">TVA Collectée</span>
-                <span className="font-semibold" style={{ color: "#1E2A4A" }}>
-                  120 000 MUR
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">TVA Déductible</span>
-                <span className="font-semibold" style={{ color: "#1E2A4A" }}>
-                  75 000 MUR
-                </span>
-              </div>
-              <div className="border-t pt-3 flex justify-between items-center">
-                <span className="text-sm font-medium">TVA Nette</span>
-                <span className="font-bold text-red-600">45 000 MUR</span>
-              </div>
-              <Badge className="bg-red-100 text-red-700 border-red-200 mt-2">
-                À PAYER - Échéance 20 avril 2026
-              </Badge>
-            </CardContent>
-          </Card>
+        {/* Right column - only visible for client_admin */}
+        {!isClientUser && (
+          <div className="space-y-6">
+            {/* TVA Summary */}
+            <Card>
+              <CardHeader>
+                <CardTitle style={{ color: "#1E2A4A" }}>Résumé TVA - Mars 2026</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">TVA Collectée</span>
+                  <span className="font-semibold" style={{ color: "#1E2A4A" }}>
+                    120 000 MUR
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">TVA Déductible</span>
+                  <span className="font-semibold" style={{ color: "#1E2A4A" }}>
+                    75 000 MUR
+                  </span>
+                </div>
+                <div className="border-t pt-3 flex justify-between items-center">
+                  <span className="text-sm font-medium">TVA Nette</span>
+                  <span className="font-bold text-red-600">45 000 MUR</span>
+                </div>
+                <Badge className="bg-red-100 text-red-700 border-red-200 mt-2">
+                  À PAYER - Échéance 20 avril 2026
+                </Badge>
+              </CardContent>
+            </Card>
 
-          {/* Mon Comptable */}
-          <Card>
-            <CardHeader>
-              <CardTitle style={{ color: "#1E2A4A" }}>Mon comptable</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center gap-3">
-                <div
-                  className="flex h-10 w-10 items-center justify-center rounded-full text-white font-bold text-sm"
-                  style={{ backgroundColor: "#1E2A4A" }}
-                >
-                  SR
+            {/* Mon Comptable */}
+            <Card>
+              <CardHeader>
+                <CardTitle style={{ color: "#1E2A4A" }}>Mon comptable</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="flex h-10 w-10 items-center justify-center rounded-full text-white font-bold text-sm"
+                    style={{ backgroundColor: "#1E2A4A" }}
+                  >
+                    SR
+                  </div>
+                  <div>
+                    <p className="font-semibold" style={{ color: "#1E2A4A" }}>
+                      Sophie Ramgoolam
+                    </p>
+                    <p className="text-xs text-muted-foreground">Comptable senior</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-semibold" style={{ color: "#1E2A4A" }}>
-                    Sophie Ramgoolam
-                  </p>
-                  <p className="text-xs text-muted-foreground">Comptable senior</p>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Phone className="h-4 w-4" />
+                    <span>+230 5723 4567</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Mail className="h-4 w-4" />
+                    <span>sophie.r@lexora.mu</span>
+                  </div>
                 </div>
-              </div>
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Phone className="h-4 w-4" />
-                  <span>+230 5723 4567</span>
-                </div>
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Mail className="h-4 w-4" />
-                  <span>sophie.r@lexora.mu</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
     </div>
   )

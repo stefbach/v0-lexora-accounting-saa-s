@@ -74,7 +74,10 @@ export default function AuthLoginPage() {
         }
       }
 
-      const redirectPath = role === "admin" ? "/admin" : role === "comptable" ? "/comptable" : "/client"
+      let redirectPath = "/client"
+      if (role === "admin") redirectPath = "/admin"
+      else if (role === "comptable") redirectPath = "/comptable"
+      else if (role === "client_admin" || role === "client_user") redirectPath = "/client"
       window.location.href = redirectPath
     } catch {
       setError("Une erreur inattendue s'est produite. Veuillez réessayer.")

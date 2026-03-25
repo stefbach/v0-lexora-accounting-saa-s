@@ -66,6 +66,7 @@ export default function ClientsPage() {
   const [formEmail, setFormEmail] = useState("")
   const [formPhone, setFormPhone] = useState("")
   const [formPassword, setFormPassword] = useState("")
+  const [formRole, setFormRole] = useState("client_admin")
   const [formSociete, setFormSociete] = useState("")
 
   // Link form state
@@ -104,7 +105,7 @@ export default function ClientsPage() {
     }
   }, [success])
 
-  const clients = users.filter((u) => u.role === "client")
+  const clients = users.filter((u) => u.role === "client_admin" || u.role === "client_user")
 
   const filtered = clients.filter(
     (u) =>
@@ -140,6 +141,7 @@ export default function ClientsPage() {
     setFormEmail("")
     setFormPhone("")
     setFormPassword("")
+    setFormRole("client_admin")
     setFormSociete("")
     setError(null)
   }
@@ -166,7 +168,7 @@ export default function ClientsPage() {
           email: formEmail,
           password: formPassword,
           full_name: formName,
-          role: "client",
+          role: formRole,
           phone: formPhone || null,
           comptable_id: comptableId,
         }),
@@ -286,12 +288,32 @@ export default function ClientsPage() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Nouveau client</DialogTitle>
-              <DialogDescription>Un compte sera créé automatiquement avec le rôle client.</DialogDescription>
+              <DialogDescription>Un compte sera créé automatiquement avec le rôle sélectionné.</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label>Nom complet *</Label>
                 <Input placeholder="Ex: Raj Doobur" value={formName} onChange={(e) => setFormName(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Rôle *</Label>
+                <Select value={formRole} onValueChange={setFormRole}>
+                  <SelectTrigger><SelectValue placeholder="Sélectionner un rôle" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="client_admin">
+                      <div className="flex flex-col">
+                        <span>Client Admin</span>
+                        <span className="text-xs text-muted-foreground">Accès complet aux finances</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="client_user">
+                      <div className="flex flex-col">
+                        <span>Client Utilisateur</span>
+                        <span className="text-xs text-muted-foreground">Upload de documents uniquement</span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label>Email *</Label>
@@ -365,6 +387,7 @@ export default function ClientsPage() {
                   <TableHead>Nom</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Téléphone</TableHead>
+                  <TableHead>Rôle</TableHead>
                   <TableHead>Société(s)</TableHead>
                   <TableHead>Comptable</TableHead>
                   <TableHead>Statut</TableHead>
@@ -380,6 +403,17 @@ export default function ClientsPage() {
                       <TableCell className="font-medium">{u.full_name}</TableCell>
                       <TableCell>{u.email}</TableCell>
                       <TableCell>{u.phone || "—"}</TableCell>
+                      <TableCell>
+                        {u.role === "client_admin" ? (
+                          <Badge className="border-transparent" style={{ backgroundColor: "#C9A84C30", color: "#A08530" }}>
+                            Admin société
+                          </Badge>
+                        ) : (
+                          <Badge className="border-transparent bg-gray-100 text-gray-600">
+                            Utilisateur
+                          </Badge>
+                        )}
+                      </TableCell>
                       <TableCell>
                         {clientSocietes.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
@@ -422,7 +456,7 @@ export default function ClientsPage() {
                 })}
                 {filtered.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                       Aucun client trouvé.
                     </TableCell>
                   </TableRow>

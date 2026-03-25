@@ -1,4 +1,4 @@
-export type Role = 'admin' | 'client' | 'comptable'
+export type Role = 'admin' | 'client_admin' | 'client_user' | 'comptable'
 
 export type Societe = 'TIBOK' | 'BPO' | 'OBESITY_CARE' | 'NHS_S2'
 
