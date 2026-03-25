@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useProfile } from "@/hooks/use-profile"
 import {
   Card,
@@ -28,7 +28,6 @@ import {
 } from "@/components/ui/select"
 import {
   TrendingUp,
-  TrendingDown,
   AlertTriangle,
   Banknote,
   Clock,
@@ -38,14 +37,17 @@ import {
   ShieldCheck,
   Info,
   Loader2,
+  User,
 } from "lucide-react"
 
 interface AssignedSociete {
   id: string
+  dossier_id: string
   nom: string
   brn?: string
   numero_tva_mra?: string
-  comptable?: { id: string; full_name: string; email: string; phone?: string } | null
+  statut_tva?: string
+  comptable?: { id: string; full_name: string; email: string; phone?: string | null } | null
 }
 
 // ---------------------------------------------------------------------------
@@ -428,41 +430,64 @@ function ClientUserDashboard({ name }: { name: string }) {
 // Client Admin — consolidated accounting dashboard
 // ---------------------------------------------------------------------------
 
-function ClientAdminDashboard({ name }: { name: string }) {
-  const [assignedSocietes, setAssignedSocietes] = useState<AssignedSociete[]>([])
+function ClientAdminDashboard({
+  name,
+  assignedSocietes,
+  loadingSocietes,
+}: {
+  name: string
+  assignedSocietes: AssignedSociete[]
+  loadingSocietes: boolean
+}) {
   const [selectedSociete, setSelectedSociete] = useState<string>("all")
-  const [loadingSocietes, setLoadingSocietes] = useState(true)
 
-  useEffect(() => {
-    async function fetchSocietes() {
-      try {
-        const res = await fetch("/api/client/societes")
-        const data = await res.json()
-        if (data.societes) setAssignedSocietes(data.societes)
-      } catch {
-        console.error("Failed to fetch societes")
-      } finally {
-        setLoadingSocietes(false)
-      }
+  // Names of assigned societes for filtering mock data
+  const assignedNames = useMemo(
+    () => assignedSocietes.map((s) => s.nom),
+    [assignedSocietes],
+  )
+
+  // Helper: check if a societe name from mock data matches an assigned name
+  const isAssigned = (mockName: string) =>
+    assignedNames.length === 0 || assignedNames.includes(mockName)
+
+  const matchesFilter = (mockName: string) =>
+    selectedSociete === "all" || mockName === selectedSociete
+
+  // Filtered datasets
+  const filteredPerf = useMemo(
+    () => performanceData.filter((r) => isAssigned(r.societe) && matchesFilter(r.societe)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [assignedNames, selectedSociete],
+  )
+
+  const filteredAlertes = useMemo(
+    () => alertes.filter((a) => isAssigned(a.societe) && matchesFilter(a.societe)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [assignedNames, selectedSociete],
+  )
+
+  const filteredComptes = useMemo(
+    () => comptesBancaires.filter((c) => isAssigned(c.societe) && matchesFilter(c.societe)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [assignedNames, selectedSociete],
+  )
+
+  const filteredTVA = useMemo(
+    () => tvaEcheances.filter((t) => isAssigned(t.societe) && matchesFilter(t.societe)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [assignedNames, selectedSociete],
+  )
+
+  const t = totals(filteredPerf)
+
+  // Comptable info — from selected societe or first available
+  const comptableInfo = useMemo(() => {
+    if (selectedSociete !== "all") {
+      return assignedSocietes.find((s) => s.nom === selectedSociete)?.comptable ?? null
     }
-    fetchSocietes()
-  }, [])
-
-  // Filter performance data based on assigned sociétés and selected filter
-  const assignedNames = assignedSocietes.map(s => s.nom.toUpperCase())
-  const filteredPerf = performanceData.filter(row => {
-    const isAssigned = assignedNames.some(name => row.societe.toUpperCase().includes(name) || name.includes(row.societe.toUpperCase()))
-    if (!isAssigned && assignedSocietes.length > 0) return false
-    if (selectedSociete === "all") return true
-    const selected = assignedSocietes.find(s => s.id === selectedSociete)
-    if (!selected) return true
-    return row.societe.toUpperCase().includes(selected.nom.toUpperCase()) || selected.nom.toUpperCase().includes(row.societe.toUpperCase())
-  })
-
-  const t = totals(filteredPerf.length > 0 ? filteredPerf : performanceData)
-
-  // Get comptable info from first assigned société
-  const comptableInfo = assignedSocietes.find(s => s.comptable)?.comptable
+    return assignedSocietes.find((s) => s.comptable)?.comptable ?? null
+  }, [assignedSocietes, selectedSociete])
 
   if (loadingSocietes) {
     return (
@@ -475,12 +500,18 @@ function ClientAdminDashboard({ name }: { name: string }) {
   if (assignedSocietes.length === 0) {
     return (
       <div className="p-6 space-y-4">
-        <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>Tableau de bord</h1>
+        <div className="flex items-center gap-3">
+          <Building2 className="h-7 w-7" style={{ color: "#C9A84C" }} />
+          <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>Tableau de bord</h1>
+        </div>
         <Card>
           <CardContent className="py-12 text-center">
-            <Building2 className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-            <h2 className="text-lg font-semibold mb-2">Aucune société assignée</h2>
-            <p className="text-muted-foreground">Contactez votre administrateur pour être lié à une société.</p>
+            <Info className="h-10 w-10 mx-auto mb-4 text-muted-foreground" />
+            <h2 className="text-lg font-semibold mb-2" style={{ color: "#1E2A4A" }}>Aucune societe assignee</h2>
+            <p className="text-muted-foreground">
+              Votre comptable n{"'"}a pas encore assigne de societe a votre compte.
+              Veuillez le contacter pour configurer votre dossier.
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -489,37 +520,39 @@ function ClientAdminDashboard({ name }: { name: string }) {
 
   return (
     <div className="p-6 space-y-8">
-      {/* ---- Section 1: Header ---- */}
-      <div>
-        <div className="flex items-center justify-between mb-1">
-          <div className="flex items-center gap-3">
+      {/* ---- Section 1: Header + Filter ---- */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <div className="flex items-center gap-3 mb-1">
             <Building2 className="h-7 w-7" style={{ color: "#C9A84C" }} />
             <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
-              Tableau de bord consolidé
+              Tableau de bord consolide
             </h1>
           </div>
-          <Select value={selectedSociete} onValueChange={setSelectedSociete}>
-            <SelectTrigger className="w-[280px]">
-              <Building2 className="h-4 w-4 mr-2 text-muted-foreground" />
-              <SelectValue placeholder="Toutes les sociétés" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Toutes les sociétés</SelectItem>
-              {assignedSocietes.map((s) => (
-                <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          {name ? `${name} — ` : ""}Mauritius Revenue Authority (MRA) Compliant&nbsp;/&nbsp;TVA 15%
-          {selectedSociete === "all" ? " / Multi-Sociétés" : ` / ${assignedSocietes.find(s => s.id === selectedSociete)?.nom || ""}`}
-        </p>
-        {comptableInfo && (
-          <p className="text-sm text-muted-foreground mt-1">
-            Comptable : {comptableInfo.full_name} — {comptableInfo.email}
+          <p className="text-sm text-muted-foreground">
+            {name ? `${name} — ` : ""}Mauritius Revenue Authority (MRA) Compliant&nbsp;/&nbsp;TVA 15%
+            {selectedSociete === "all" ? " / Multi-Societes" : ` / ${selectedSociete}`}
           </p>
-        )}
+          {comptableInfo && (
+            <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1">
+              <User className="h-3.5 w-3.5" />
+              Comptable : <strong>{comptableInfo.full_name}</strong> — {comptableInfo.email}
+            </p>
+          )}
+        </div>
+
+        <Select value={selectedSociete} onValueChange={setSelectedSociete}>
+          <SelectTrigger className="w-[280px]">
+            <Building2 className="h-4 w-4 mr-2 text-muted-foreground" />
+            <SelectValue placeholder="Toutes les societes" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Toutes les societes</SelectItem>
+            {assignedSocietes.map((s) => (
+              <SelectItem key={s.id} value={s.nom}>{s.nom}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* ---- Section 2: Performance par société ---- */}
@@ -555,7 +588,7 @@ function ClientAdminDashboard({ name }: { name: string }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {performanceData.map((row) => (
+                {filteredPerf.map((row) => (
                   <TableRow key={row.societe}>
                     <TableCell className="font-semibold" style={{ color: "#1E2A4A" }}>
                       {row.societe}
@@ -639,34 +672,42 @@ function ClientAdminDashboard({ name }: { name: string }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {alertes.map((a, i) => (
-                  <TableRow key={i}>
-                    <TableCell>
-                      <PrioriteDot priorite={a.priorite} />
-                    </TableCell>
-                    <TableCell>{a.type}</TableCell>
-                    <TableCell className="font-semibold" style={{ color: "#1E2A4A" }}>
-                      {a.societe}
-                    </TableCell>
-                    <TableCell className="max-w-[260px] truncate">{a.description}</TableCell>
-                    <TableCell className="text-right">{a.montant}</TableCell>
-                    <TableCell>{formatDate(a.echeance)}</TableCell>
-                    <TableCell
-                      className="text-right font-semibold"
-                      style={{ color: a.joursRestants < 0 ? "#dc2626" : a.joursRestants <= 7 ? "#ea580c" : "#1E2A4A" }}
-                    >
-                      {a.joursRestants}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        className="cursor-pointer"
-                        style={{ backgroundColor: "#1E2A4A", color: "#fff", borderColor: "#1E2A4A" }}
-                      >
-                        {a.action}
-                      </Badge>
+                {filteredAlertes.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                      Aucune alerte pour cette societe
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  filteredAlertes.map((a, i) => (
+                    <TableRow key={i}>
+                      <TableCell>
+                        <PrioriteDot priorite={a.priorite} />
+                      </TableCell>
+                      <TableCell>{a.type}</TableCell>
+                      <TableCell className="font-semibold" style={{ color: "#1E2A4A" }}>
+                        {a.societe}
+                      </TableCell>
+                      <TableCell className="max-w-[260px] truncate">{a.description}</TableCell>
+                      <TableCell className="text-right">{a.montant}</TableCell>
+                      <TableCell>{formatDate(a.echeance)}</TableCell>
+                      <TableCell
+                        className="text-right font-semibold"
+                        style={{ color: a.joursRestants < 0 ? "#dc2626" : a.joursRestants <= 7 ? "#ea580c" : "#1E2A4A" }}
+                      >
+                        {a.joursRestants}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          className="cursor-pointer"
+                          style={{ backgroundColor: "#1E2A4A", color: "#fff", borderColor: "#1E2A4A" }}
+                        >
+                          {a.action}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>
@@ -696,26 +737,34 @@ function ClientAdminDashboard({ name }: { name: string }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {comptesBancaires.map((c, i) => (
-                  <TableRow key={i}>
-                    <TableCell className="font-semibold" style={{ color: "#1E2A4A" }}>
-                      {c.societe}
-                    </TableCell>
-                    <TableCell>{c.banque}</TableCell>
-                    <TableCell className="font-mono text-xs">{c.noCompte}</TableCell>
-                    <TableCell>{c.devise}</TableCell>
-                    <TableCell className="text-right font-semibold">
-                      {fmt(c.solde, c.devise)}
-                    </TableCell>
-                    <TableCell>{formatDate(c.derniereMAJ)}</TableCell>
-                    <TableCell className="text-center">
-                      <span className="inline-flex items-center gap-1 text-green-600">
-                        <CheckCircle className="h-4 w-4" />
-                        {c.statut}
-                      </span>
+                {filteredComptes.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                      Aucun compte bancaire pour cette societe
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  filteredComptes.map((c, i) => (
+                    <TableRow key={i}>
+                      <TableCell className="font-semibold" style={{ color: "#1E2A4A" }}>
+                        {c.societe}
+                      </TableCell>
+                      <TableCell>{c.banque}</TableCell>
+                      <TableCell className="font-mono text-xs">{c.noCompte}</TableCell>
+                      <TableCell>{c.devise}</TableCell>
+                      <TableCell className="text-right font-semibold">
+                        {fmt(c.solde, c.devise)}
+                      </TableCell>
+                      <TableCell>{formatDate(c.derniereMAJ)}</TableCell>
+                      <TableCell className="text-center">
+                        <span className="inline-flex items-center gap-1 text-green-600">
+                          <CheckCircle className="h-4 w-4" />
+                          {c.statut}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>
@@ -745,26 +794,34 @@ function ClientAdminDashboard({ name }: { name: string }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {tvaEcheances.map((row, i) => (
-                  <TableRow key={i}>
-                    <TableCell className="font-semibold" style={{ color: "#1E2A4A" }}>
-                      {row.societe}
-                    </TableCell>
-                    <TableCell>{row.moisTVA}</TableCell>
-                    <TableCell className="text-right">{fmt(row.tvaCollectee, row.devise)}</TableCell>
-                    <TableCell className="text-right">{fmt(row.tvaDeductible, row.devise)}</TableCell>
-                    <TableCell
-                      className="text-right font-semibold"
-                      style={{ color: row.montantAPayer >= 0 ? "#1E2A4A" : "#16a34a" }}
-                    >
-                      {fmt(row.montantAPayer, row.devise)}
-                    </TableCell>
-                    <TableCell>{formatDate(row.deadline)}</TableCell>
-                    <TableCell className="text-center">
-                      <TVAStatutBadge statut={row.statut} />
+                {filteredTVA.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                      Aucune echeance TVA pour cette societe
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  filteredTVA.map((row, i) => (
+                    <TableRow key={i}>
+                      <TableCell className="font-semibold" style={{ color: "#1E2A4A" }}>
+                        {row.societe}
+                      </TableCell>
+                      <TableCell>{row.moisTVA}</TableCell>
+                      <TableCell className="text-right">{fmt(row.tvaCollectee, row.devise)}</TableCell>
+                      <TableCell className="text-right">{fmt(row.tvaDeductible, row.devise)}</TableCell>
+                      <TableCell
+                        className="text-right font-semibold"
+                        style={{ color: row.montantAPayer >= 0 ? "#1E2A4A" : "#16a34a" }}
+                      >
+                        {fmt(row.montantAPayer, row.devise)}
+                      </TableCell>
+                      <TableCell>{formatDate(row.deadline)}</TableCell>
+                      <TableCell className="text-center">
+                        <TVAStatutBadge statut={row.statut} />
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>
@@ -784,6 +841,30 @@ export default function ClientDashboard() {
   const firstName = fullName.split(" ")[0] || ""
   const isClientUser = profile?.role === "client_user"
 
+  const [assignedSocietes, setAssignedSocietes] = useState<AssignedSociete[]>([])
+  const [loadingSocietes, setLoadingSocietes] = useState(true)
+
+  useEffect(() => {
+    if (loading || isClientUser) {
+      setLoadingSocietes(false)
+      return
+    }
+    async function fetchSocietes() {
+      try {
+        const res = await fetch("/api/client/societes")
+        if (res.ok) {
+          const data = await res.json()
+          if (data.societes) setAssignedSocietes(data.societes)
+        }
+      } catch {
+        console.error("Failed to fetch societes")
+      } finally {
+        setLoadingSocietes(false)
+      }
+    }
+    fetchSocietes()
+  }, [loading, isClientUser])
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -796,5 +877,11 @@ export default function ClientDashboard() {
     return <ClientUserDashboard name={firstName} />
   }
 
-  return <ClientAdminDashboard name={fullName} />
+  return (
+    <ClientAdminDashboard
+      name={fullName}
+      assignedSocietes={assignedSocietes}
+      loadingSocietes={loadingSocietes}
+    />
+  )
 }
