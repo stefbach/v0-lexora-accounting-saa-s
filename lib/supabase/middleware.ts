@@ -42,7 +42,7 @@ export async function updateSession(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Public routes that don't require authentication
-  const publicRoutes = ['/', '/auth/login', '/login']
+  const publicRoutes = ['/', '/auth/login', '/login', '/redirect']
   const isPublicRoute = publicRoutes.some(
     (route) => pathname === route
   ) || pathname.startsWith('/api/') || pathname.startsWith('/dashboard')
@@ -54,10 +54,10 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // If authenticated and visiting login page, redirect to home (login page handles role redirect)
+  // If authenticated and visiting login page, redirect to role-based dashboard
   if (user && (pathname === '/auth/login' || pathname === '/login')) {
     const url = request.nextUrl.clone()
-    url.pathname = '/'
+    url.pathname = '/redirect'
     return NextResponse.redirect(url)
   }
 

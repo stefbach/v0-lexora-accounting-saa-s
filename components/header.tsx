@@ -42,7 +42,7 @@ export function Header() {
             <Link href="/auth/login">Se connecter</Link>
           </Button>
           <Button asChild>
-            <Link href="/auth/login">Accéder au tableau de bord</Link>
+            <Link href="/redirect">Accéder au tableau de bord</Link>
           </Button>
         </div>
 
@@ -70,7 +70,7 @@ export function Header() {
                   <Link href="/auth/login">Se connecter</Link>
                 </Button>
                 <Button asChild>
-                  <Link href="/auth/login">Accéder au tableau de bord</Link>
+                  <Link href="/redirect">Accéder au tableau de bord</Link>
                 </Button>
               </div>
             </nav>

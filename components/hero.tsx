@@ -38,7 +38,7 @@ export function Hero() {
 
           <div className="mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row">
             <Button size="lg" asChild className="gap-2">
-              <Link href="/auth/login">
+              <Link href="/redirect">
                 Accéder au tableau de bord
                 <ArrowRight className="h-4 w-4" />
               </Link>

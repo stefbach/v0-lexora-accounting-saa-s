@@ -21,7 +21,7 @@ export function CTA() {
               asChild
               className="gap-2 bg-background text-foreground hover:bg-background/90"
             >
-              <Link href="/auth/login">
+              <Link href="/redirect">
                 Accéder au tableau de bord
                 <ArrowRight className="h-4 w-4" />
               </Link>
