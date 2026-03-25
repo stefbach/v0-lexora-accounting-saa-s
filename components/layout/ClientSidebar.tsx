@@ -16,19 +16,25 @@ import {
   ChevronRight,
 } from "lucide-react"
 import { useState } from "react"
+import { useProfile } from "@/hooks/use-profile"
 
-const navItems = [
-  { href: "/client", label: "Tableau de bord", icon: LayoutDashboard },
-  { href: "/client/documents", label: "Mes Documents", icon: FileText },
-  { href: "/client/upload", label: "Upload", icon: Upload },
-  { href: "/client/tva", label: "TVA & Fiscal", icon: Calculator },
-  { href: "/client/notifications", label: "Notifications", icon: Bell },
+const allNavItems = [
+  { href: "/client", label: "Tableau de bord", icon: LayoutDashboard, roles: ["client_admin", "client_user"] },
+  { href: "/client/documents", label: "Mes Documents", icon: FileText, roles: ["client_admin", "client_user"] },
+  { href: "/client/upload", label: "Upload", icon: Upload, roles: ["client_admin", "client_user"] },
+  { href: "/client/tva", label: "TVA & Fiscal", icon: Calculator, roles: ["client_admin"] },
+  { href: "/client/notifications", label: "Notifications", icon: Bell, roles: ["client_admin"] },
 ]
 
 export function ClientSidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const [collapsed, setCollapsed] = useState(false)
+  const { profile } = useProfile()
+  const userRole = profile?.role || "client_admin"
+
+  const navItems = allNavItems.filter((item) => item.roles.includes(userRole))
+  const roleLabel = userRole === "client_admin" ? "Admin" : "Utilisateur"
 
   const handleSignOut = async () => {
     const supabase = createClient()
@@ -59,7 +65,7 @@ export function ClientSidebar() {
                 Lexora
               </span>
               <span className="text-[10px] font-medium uppercase tracking-wider text-white/50">
-                Client
+                {roleLabel}
               </span>
             </div>
           </Link>

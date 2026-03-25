@@ -12,6 +12,8 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { MessageSquare, Mail, Bell, CheckCircle, AlertCircle, Clock } from "lucide-react"
+import { useProfile } from "@/hooks/use-profile"
+import Link from "next/link"
 
 interface NotificationItem {
   id: string
@@ -163,7 +165,21 @@ function getTypeIcon(type: "whatsapp" | "email") {
 }
 
 export default function NotificationsPage() {
+  const { profile } = useProfile()
   const [filter, setFilter] = useState("tous")
+
+  if (profile?.role === "client_user") {
+    return (
+      <div className="p-6 flex flex-col items-center justify-center min-h-[50vh] space-y-4">
+        <h1 className="text-xl font-bold" style={{ color: "#1E2A4A" }}>
+          Vous n&apos;avez pas acc&egrave;s &agrave; cette section
+        </h1>
+        <Link href="/client" className="text-sm underline" style={{ color: "#C9A84C" }}>
+          Retour au tableau de bord
+        </Link>
+      </div>
+    )
+  }
 
   const filteredNotifications = mockNotifications.filter((n) => {
     if (filter === "tous") return true

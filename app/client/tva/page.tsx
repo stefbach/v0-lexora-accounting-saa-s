@@ -16,6 +16,8 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { TrendingUp, TrendingDown, Calculator, AlertTriangle } from "lucide-react"
+import { useProfile } from "@/hooks/use-profile"
+import Link from "next/link"
 
 function formatMUR(amount: number) {
   return amount.toLocaleString("fr-FR") + " MUR"
@@ -258,6 +260,21 @@ function getDeclarationBadge(
 }
 
 export default function TVAPage() {
+  const { profile } = useProfile()
+
+  if (profile?.role === "client_user") {
+    return (
+      <div className="p-6 flex flex-col items-center justify-center min-h-[50vh] space-y-4">
+        <h1 className="text-xl font-bold" style={{ color: "#1E2A4A" }}>
+          Vous n&apos;avez pas acc&egrave;s &agrave; cette section
+        </h1>
+        <Link href="/client" className="text-sm underline" style={{ color: "#C9A84C" }}>
+          Retour au tableau de bord
+        </Link>
+      </div>
+    )
+  }
+
   return (
     <div className="p-6 space-y-6">
       <div>
