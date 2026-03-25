@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect, useCallback } from "react"
 import { useProfile } from "@/hooks/use-profile"
 import {
   Card,
@@ -19,6 +20,13 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
   TrendingUp,
   TrendingDown,
   AlertTriangle,
@@ -29,7 +37,16 @@ import {
   Building2,
   ShieldCheck,
   Info,
+  Loader2,
 } from "lucide-react"
+
+interface AssignedSociete {
+  id: string
+  nom: string
+  brn?: string
+  numero_tva_mra?: string
+  comptable?: { id: string; full_name: string; email: string; phone?: string } | null
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -412,21 +429,97 @@ function ClientUserDashboard({ name }: { name: string }) {
 // ---------------------------------------------------------------------------
 
 function ClientAdminDashboard({ name }: { name: string }) {
-  const t = totals(performanceData)
+  const [assignedSocietes, setAssignedSocietes] = useState<AssignedSociete[]>([])
+  const [selectedSociete, setSelectedSociete] = useState<string>("all")
+  const [loadingSocietes, setLoadingSocietes] = useState(true)
+
+  useEffect(() => {
+    async function fetchSocietes() {
+      try {
+        const res = await fetch("/api/client/societes")
+        const data = await res.json()
+        if (data.societes) setAssignedSocietes(data.societes)
+      } catch {
+        console.error("Failed to fetch societes")
+      } finally {
+        setLoadingSocietes(false)
+      }
+    }
+    fetchSocietes()
+  }, [])
+
+  // Filter performance data based on assigned sociétés and selected filter
+  const assignedNames = assignedSocietes.map(s => s.nom.toUpperCase())
+  const filteredPerf = performanceData.filter(row => {
+    const isAssigned = assignedNames.some(name => row.societe.toUpperCase().includes(name) || name.includes(row.societe.toUpperCase()))
+    if (!isAssigned && assignedSocietes.length > 0) return false
+    if (selectedSociete === "all") return true
+    const selected = assignedSocietes.find(s => s.id === selectedSociete)
+    if (!selected) return true
+    return row.societe.toUpperCase().includes(selected.nom.toUpperCase()) || selected.nom.toUpperCase().includes(row.societe.toUpperCase())
+  })
+
+  const t = totals(filteredPerf.length > 0 ? filteredPerf : performanceData)
+
+  // Get comptable info from first assigned société
+  const comptableInfo = assignedSocietes.find(s => s.comptable)?.comptable
+
+  if (loadingSocietes) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#C9A84C" }} />
+      </div>
+    )
+  }
+
+  if (assignedSocietes.length === 0) {
+    return (
+      <div className="p-6 space-y-4">
+        <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>Tableau de bord</h1>
+        <Card>
+          <CardContent className="py-12 text-center">
+            <Building2 className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+            <h2 className="text-lg font-semibold mb-2">Aucune société assignée</h2>
+            <p className="text-muted-foreground">Contactez votre administrateur pour être lié à une société.</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="p-6 space-y-8">
       {/* ---- Section 1: Header ---- */}
       <div>
-        <div className="flex items-center gap-3 mb-1">
-          <Building2 className="h-7 w-7" style={{ color: "#C9A84C" }} />
-          <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
-            Tableau de bord consolidé
-          </h1>
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-3">
+            <Building2 className="h-7 w-7" style={{ color: "#C9A84C" }} />
+            <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
+              Tableau de bord consolidé
+            </h1>
+          </div>
+          <Select value={selectedSociete} onValueChange={setSelectedSociete}>
+            <SelectTrigger className="w-[280px]">
+              <Building2 className="h-4 w-4 mr-2 text-muted-foreground" />
+              <SelectValue placeholder="Toutes les sociétés" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Toutes les sociétés</SelectItem>
+              {assignedSocietes.map((s) => (
+                <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <p className="text-sm text-muted-foreground">
-          {name ? `${name} — ` : ""}Mauritius Revenue Authority (MRA) Compliant&nbsp;/&nbsp;TVA 15%&nbsp;/&nbsp;Multi-Sociétés
+          {name ? `${name} — ` : ""}Mauritius Revenue Authority (MRA) Compliant&nbsp;/&nbsp;TVA 15%
+          {selectedSociete === "all" ? " / Multi-Sociétés" : ` / ${assignedSocietes.find(s => s.id === selectedSociete)?.nom || ""}`}
         </p>
+        {comptableInfo && (
+          <p className="text-sm text-muted-foreground mt-1">
+            Comptable : {comptableInfo.full_name} — {comptableInfo.email}
+          </p>
+        )}
       </div>
 
       {/* ---- Section 2: Performance par société ---- */}
