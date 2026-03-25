@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import {
   Card,
   CardContent,
@@ -10,6 +10,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
   Table,
   TableBody,
@@ -38,112 +39,135 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Plus,
   Search,
-  Pencil,
-  Trash2,
-  Ban,
   UserCog,
   Users,
+  Loader2,
 } from "lucide-react"
 
-const mockComptables = [
-  {
-    id: "1",
-    nom: "Marie Dupont",
-    email: "marie.dupont@lexora.mu",
-    role: "comptable" as const,
-    telephone: "+230 5234 5678",
-    statut: "actif" as const,
-  },
-  {
-    id: "2",
-    nom: "Jean Martin",
-    email: "jean.martin@lexora.mu",
-    role: "comptable" as const,
-    telephone: "+230 5345 6789",
-    statut: "actif" as const,
-  },
-  {
-    id: "3",
-    nom: "Sophie Laurent",
-    email: "sophie.laurent@lexora.mu",
-    role: "comptable" as const,
-    telephone: "+230 5456 7890",
-    statut: "actif" as const,
-  },
-  {
-    id: "4",
-    nom: "Pierre Rochefort",
-    email: "pierre.rochefort@lexora.mu",
-    role: "comptable" as const,
-    telephone: "+230 5567 8901",
-    statut: "inactif" as const,
-  },
-]
-
-const mockClients = [
-  {
-    id: "5",
-    nom: "Raj Doobur",
-    email: "raj@tibok.mu",
-    role: "client" as const,
-    telephone: "+230 5678 9012",
-    statut: "actif" as const,
-    comptableAssigne: "Marie Dupont",
-  },
-  {
-    id: "6",
-    nom: "Nadia Jeetun",
-    email: "nadia@bpo-services.mu",
-    role: "client" as const,
-    telephone: "+230 5789 0123",
-    statut: "actif" as const,
-    comptableAssigne: "Jean Martin",
-  },
-  {
-    id: "7",
-    nom: "Olivier Masson",
-    email: "olivier@obesitycare.mt",
-    role: "client" as const,
-    telephone: "+356 9900 1234",
-    statut: "actif" as const,
-    comptableAssigne: "Marie Dupont",
-  },
-  {
-    id: "8",
-    nom: "Fatima Doorgakant",
-    email: "fatima@nhs-s2.mu",
-    role: "client" as const,
-    telephone: "+230 5890 1234",
-    statut: "actif" as const,
-    comptableAssigne: "Sophie Laurent",
-  },
-  {
-    id: "9",
-    nom: "Vikash Doobur",
-    email: "vikash@tibok.mu",
-    role: "client" as const,
-    telephone: "+230 5901 2345",
-    statut: "inactif" as const,
-    comptableAssigne: "Marie Dupont",
-  },
-]
+interface UserProfile {
+  id: string
+  email: string
+  full_name: string
+  role: string
+  phone: string | null
+  comptable_id: string | null
+  is_active: boolean
+  created_at: string
+}
 
 export default function UsersPage() {
   const [search, setSearch] = useState("")
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [selectedRole, setSelectedRole] = useState<string>("")
+  const [users, setUsers] = useState<UserProfile[]>([])
+  const [loading, setLoading] = useState(true)
+  const [creating, setCreating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
 
-  const filteredComptables = mockComptables.filter(
+  // Form state
+  const [formName, setFormName] = useState("")
+  const [formEmail, setFormEmail] = useState("")
+  const [formPhone, setFormPhone] = useState("")
+  const [formPassword, setFormPassword] = useState("")
+  const [formRole, setFormRole] = useState("")
+  const [formComptable, setFormComptable] = useState("")
+
+  const fetchUsers = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/users")
+      const data = await res.json()
+      if (data.users) {
+        setUsers(data.users)
+      }
+    } catch {
+      console.error("Failed to fetch users")
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchUsers()
+  }, [fetchUsers])
+
+  const comptables = users.filter((u) => u.role === "comptable")
+  const clients = users.filter((u) => u.role === "client")
+
+  const filteredComptables = comptables.filter(
     (u) =>
-      u.nom.toLowerCase().includes(search.toLowerCase()) ||
+      u.full_name.toLowerCase().includes(search.toLowerCase()) ||
       u.email.toLowerCase().includes(search.toLowerCase())
   )
 
-  const filteredClients = mockClients.filter(
+  const filteredClients = clients.filter(
     (u) =>
-      u.nom.toLowerCase().includes(search.toLowerCase()) ||
+      u.full_name.toLowerCase().includes(search.toLowerCase()) ||
       u.email.toLowerCase().includes(search.toLowerCase())
   )
+
+  const resetForm = () => {
+    setFormName("")
+    setFormEmail("")
+    setFormPhone("")
+    setFormPassword("")
+    setFormRole("")
+    setFormComptable("")
+    setError(null)
+    setSuccess(null)
+  }
+
+  const handleCreate = async () => {
+    setError(null)
+    setSuccess(null)
+
+    if (!formName || !formEmail || !formPassword || !formRole) {
+      setError("Veuillez remplir tous les champs obligatoires.")
+      return
+    }
+
+    if (formPassword.length < 6) {
+      setError("Le mot de passe doit contenir au moins 6 caractères.")
+      return
+    }
+
+    setCreating(true)
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: formEmail,
+          password: formPassword,
+          full_name: formName,
+          role: formRole,
+          phone: formPhone || null,
+          comptable_id: formComptable || null,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        setError(data.error || "Erreur lors de la création")
+        return
+      }
+
+      setSuccess(`Utilisateur ${formName} créé avec succès !`)
+      resetForm()
+      setDialogOpen(false)
+      fetchUsers()
+    } catch {
+      setError("Erreur de connexion au serveur")
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const getComptableName = (comptableId: string | null) => {
+    if (!comptableId) return "—"
+    const comptable = users.find((u) => u.id === comptableId)
+    return comptable?.full_name || "—"
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -157,7 +181,7 @@ export default function UsersPage() {
             Gestion des comptables et clients de la plateforme
           </p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm() }}>
           <DialogTrigger asChild>
             <Button style={{ backgroundColor: "#1E2A4A" }}>
               <Plus className="mr-2 h-4 w-4" />
@@ -168,26 +192,48 @@ export default function UsersPage() {
             <DialogHeader>
               <DialogTitle>Nouvel utilisateur</DialogTitle>
               <DialogDescription>
-                Renseignez les informations du nouvel utilisateur.
+                Renseignez les informations du nouvel utilisateur. Un compte Supabase sera créé automatiquement.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Nom complet</label>
-                <Input placeholder="Ex: Marie Dupont" />
+                <Label>Nom complet *</Label>
+                <Input
+                  placeholder="Ex: Marie Dupont"
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
+                />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Email</label>
-                <Input type="email" placeholder="Ex: marie@lexora.mu" />
+                <Label>Email *</Label>
+                <Input
+                  type="email"
+                  placeholder="Ex: marie@lexora.mu"
+                  value={formEmail}
+                  onChange={(e) => setFormEmail(e.target.value)}
+                />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Téléphone</label>
-                <Input placeholder="Ex: +230 5234 5678" />
+                <Label>Mot de passe *</Label>
+                <Input
+                  type="password"
+                  placeholder="Minimum 6 caractères"
+                  value={formPassword}
+                  onChange={(e) => setFormPassword(e.target.value)}
+                />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Rôle</label>
-                <Select value={selectedRole} onValueChange={setSelectedRole}>
-                  <SelectTrigger className="w-full">
+                <Label>Téléphone</Label>
+                <Input
+                  placeholder="Ex: +230 5234 5678"
+                  value={formPhone}
+                  onChange={(e) => setFormPhone(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Rôle *</Label>
+                <Select value={formRole} onValueChange={setFormRole}>
+                  <SelectTrigger>
                     <SelectValue placeholder="Sélectionner un rôle" />
                   </SelectTrigger>
                   <SelectContent>
@@ -196,38 +242,58 @@ export default function UsersPage() {
                   </SelectContent>
                 </Select>
               </div>
-              {selectedRole === "client" && (
+              {formRole === "client" && comptables.length > 0 && (
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Comptable assigné
-                  </label>
-                  <Select>
-                    <SelectTrigger className="w-full">
+                  <Label>Comptable assigné</Label>
+                  <Select value={formComptable} onValueChange={setFormComptable}>
+                    <SelectTrigger>
                       <SelectValue placeholder="Sélectionner un comptable" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="marie">Marie Dupont</SelectItem>
-                      <SelectItem value="jean">Jean Martin</SelectItem>
-                      <SelectItem value="sophie">Sophie Laurent</SelectItem>
+                      {comptables.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.full_name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
               )}
+
+              {error && (
+                <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
+                  {error}
+                </div>
+              )}
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>
+              <Button variant="outline" onClick={() => { setDialogOpen(false); resetForm() }}>
                 Annuler
               </Button>
               <Button
                 style={{ backgroundColor: "#C9A84C" }}
-                onClick={() => setDialogOpen(false)}
+                onClick={handleCreate}
+                disabled={creating}
               >
-                Créer l&apos;utilisateur
+                {creating ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Création...
+                  </>
+                ) : (
+                  "Créer l'utilisateur"
+                )}
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
+
+      {success && (
+        <div className="rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800">
+          {success}
+        </div>
+      )}
 
       {/* Search */}
       <div className="relative max-w-sm">
@@ -240,183 +306,114 @@ export default function UsersPage() {
         />
       </div>
 
-      {/* Tabs */}
-      <Tabs defaultValue="comptables">
-        <TabsList>
-          <TabsTrigger value="comptables" className="gap-1.5">
-            <UserCog className="h-4 w-4" />
-            Comptables ({filteredComptables.length})
-          </TabsTrigger>
-          <TabsTrigger value="clients" className="gap-1.5">
-            <Users className="h-4 w-4" />
-            Clients ({filteredClients.length})
-          </TabsTrigger>
-        </TabsList>
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : (
+        <Tabs defaultValue="comptables">
+          <TabsList>
+            <TabsTrigger value="comptables" className="gap-1.5">
+              <UserCog className="h-4 w-4" />
+              Comptables ({filteredComptables.length})
+            </TabsTrigger>
+            <TabsTrigger value="clients" className="gap-1.5">
+              <Users className="h-4 w-4" />
+              Clients ({filteredClients.length})
+            </TabsTrigger>
+          </TabsList>
 
-        {/* Comptables Tab */}
-        <TabsContent value="comptables">
-          <Card>
-            <CardHeader>
-              <CardTitle style={{ color: "#1E2A4A" }}>Comptables</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nom</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Téléphone</TableHead>
-                    <TableHead>Rôle</TableHead>
-                    <TableHead>Statut</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredComptables.map((u) => (
-                    <TableRow key={u.id}>
-                      <TableCell className="font-medium">{u.nom}</TableCell>
-                      <TableCell>{u.email}</TableCell>
-                      <TableCell>{u.telephone}</TableCell>
-                      <TableCell>
-                        <Badge
-                          className="border-transparent"
-                          style={{
-                            backgroundColor: "#1E2A4A15",
-                            color: "#1E2A4A",
-                          }}
-                        >
-                          Comptable
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          className={
-                            u.statut === "actif"
-                              ? "bg-emerald-100 text-emerald-700 border-emerald-200"
-                              : "bg-gray-100 text-gray-600 border-gray-200"
-                          }
-                        >
-                          {u.statut === "actif" ? "Actif" : "Inactif"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button variant="ghost" size="icon-sm">
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon-sm">
-                            <Ban className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            className="text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {filteredComptables.length === 0 && (
+          <TabsContent value="comptables">
+            <Card>
+              <CardHeader>
+                <CardTitle style={{ color: "#1E2A4A" }}>Comptables</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
                     <TableRow>
-                      <TableCell
-                        colSpan={6}
-                        className="text-center py-8 text-muted-foreground"
-                      >
-                        Aucun comptable trouvé.
-                      </TableCell>
+                      <TableHead>Nom</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Téléphone</TableHead>
+                      <TableHead>Rôle</TableHead>
+                      <TableHead>Statut</TableHead>
                     </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredComptables.map((u) => (
+                      <TableRow key={u.id}>
+                        <TableCell className="font-medium">{u.full_name}</TableCell>
+                        <TableCell>{u.email}</TableCell>
+                        <TableCell>{u.phone || "—"}</TableCell>
+                        <TableCell>
+                          <Badge className="border-transparent" style={{ backgroundColor: "#1E2A4A15", color: "#1E2A4A" }}>
+                            Comptable
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={u.is_active !== false ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-600"}>
+                            {u.is_active !== false ? "Actif" : "Inactif"}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {filteredComptables.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                          Aucun comptable trouvé.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-        {/* Clients Tab */}
-        <TabsContent value="clients">
-          <Card>
-            <CardHeader>
-              <CardTitle style={{ color: "#1E2A4A" }}>Clients</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nom</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Téléphone</TableHead>
-                    <TableHead>Rôle</TableHead>
-                    <TableHead>Comptable assigné</TableHead>
-                    <TableHead>Statut</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredClients.map((u) => (
-                    <TableRow key={u.id}>
-                      <TableCell className="font-medium">{u.nom}</TableCell>
-                      <TableCell>{u.email}</TableCell>
-                      <TableCell>{u.telephone}</TableCell>
-                      <TableCell>
-                        <Badge
-                          className="border-transparent"
-                          style={{
-                            backgroundColor: "#C9A84C20",
-                            color: "#C9A84C",
-                          }}
-                        >
-                          Client
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{u.comptableAssigne}</TableCell>
-                      <TableCell>
-                        <Badge
-                          className={
-                            u.statut === "actif"
-                              ? "bg-emerald-100 text-emerald-700 border-emerald-200"
-                              : "bg-gray-100 text-gray-600 border-gray-200"
-                          }
-                        >
-                          {u.statut === "actif" ? "Actif" : "Inactif"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button variant="ghost" size="icon-sm">
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon-sm">
-                            <Ban className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            className="text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {filteredClients.length === 0 && (
+          <TabsContent value="clients">
+            <Card>
+              <CardHeader>
+                <CardTitle style={{ color: "#1E2A4A" }}>Clients</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
                     <TableRow>
-                      <TableCell
-                        colSpan={7}
-                        className="text-center py-8 text-muted-foreground"
-                      >
-                        Aucun client trouvé.
-                      </TableCell>
+                      <TableHead>Nom</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Téléphone</TableHead>
+                      <TableHead>Comptable assigné</TableHead>
+                      <TableHead>Statut</TableHead>
                     </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredClients.map((u) => (
+                      <TableRow key={u.id}>
+                        <TableCell className="font-medium">{u.full_name}</TableCell>
+                        <TableCell>{u.email}</TableCell>
+                        <TableCell>{u.phone || "—"}</TableCell>
+                        <TableCell>{getComptableName(u.comptable_id)}</TableCell>
+                        <TableCell>
+                          <Badge className={u.is_active !== false ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-600"}>
+                            {u.is_active !== false ? "Actif" : "Inactif"}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {filteredClients.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                          Aucun client trouvé.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      )}
     </div>
   )
 }
