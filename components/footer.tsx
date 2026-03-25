@@ -1,22 +1,22 @@
 import Link from "next/link"
 
 const navigation = {
-  product: [
-    { name: "Features", href: "#features" },
-    { name: "Pricing", href: "#pricing" },
-    { name: "Security", href: "#" },
-    { name: "Integrations", href: "#" },
+  produit: [
+    { name: "Fonctionnalités", href: "#features" },
+    { name: "Tarifs", href: "#pricing" },
+    { name: "Sécurité", href: "#" },
+    { name: "Intégrations", href: "#" },
   ],
-  company: [
-    { name: "About", href: "#about" },
+  entreprise: [
+    { name: "À propos", href: "#about" },
     { name: "Blog", href: "#" },
-    { name: "Careers", href: "#" },
+    { name: "Carrières", href: "#" },
     { name: "Contact", href: "#" },
   ],
   legal: [
-    { name: "Privacy", href: "#" },
-    { name: "Terms", href: "#" },
-    { name: "Cookie Policy", href: "#" },
+    { name: "Confidentialité", href: "#" },
+    { name: "Conditions", href: "#" },
+    { name: "Cookies", href: "#" },
   ],
 }
 
@@ -33,14 +33,14 @@ export function Footer() {
               <span className="text-xl font-semibold tracking-tight text-foreground">Lexora</span>
             </Link>
             <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-              Modern accounting software for businesses, accountants, and their clients.
+              Logiciel de comptabilité moderne pour les entreprises, comptables et leurs clients à Maurice.
             </p>
           </div>
 
           <div>
-            <h3 className="text-sm font-semibold text-foreground">Product</h3>
+            <h3 className="text-sm font-semibold text-foreground">Produit</h3>
             <ul className="mt-4 space-y-3">
-              {navigation.product.map((item) => (
+              {navigation.produit.map((item) => (
                 <li key={item.name}>
                   <Link
                     href={item.href}
@@ -54,9 +54,9 @@ export function Footer() {
           </div>
 
           <div>
-            <h3 className="text-sm font-semibold text-foreground">Company</h3>
+            <h3 className="text-sm font-semibold text-foreground">Entreprise</h3>
             <ul className="mt-4 space-y-3">
-              {navigation.company.map((item) => (
+              {navigation.entreprise.map((item) => (
                 <li key={item.name}>
                   <Link
                     href={item.href}
@@ -70,7 +70,7 @@ export function Footer() {
           </div>
 
           <div>
-            <h3 className="text-sm font-semibold text-foreground">Legal</h3>
+            <h3 className="text-sm font-semibold text-foreground">Légal</h3>
             <ul className="mt-4 space-y-3">
               {navigation.legal.map((item) => (
                 <li key={item.name}>
@@ -88,7 +88,7 @@ export function Footer() {
 
         <div className="mt-12 border-t border-border pt-8">
           <p className="text-center text-sm text-muted-foreground">
-            &copy; {new Date().getFullYear()} Lexora. All rights reserved.
+            &copy; {new Date().getFullYear()} Lexora. Tous droits réservés.
           </p>
         </div>
       </div>

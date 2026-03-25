@@ -1,36 +1,36 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Users, FileText, BarChart3, Shield, Clock, Zap } from "lucide-react"
+import { Users, FileText, BarChart3, Shield, MessageSquare, Cpu } from "lucide-react"
 
 const features = [
   {
-    icon: Users,
-    title: "Multi-Role Access",
-    description: "Separate dashboards for admins, accountants, and clients with role-specific permissions and views.",
+    icon: Cpu,
+    title: "Traitement IA des documents",
+    description: "Classification automatique des factures, relevés bancaires et fiches de paie grâce à Claude AI via n8n.",
   },
   {
     icon: FileText,
-    title: "Document Management",
-    description: "Securely upload, organize, and share financial documents between accountants and clients.",
+    title: "Conformité MRA",
+    description: "Calcul automatique de la TVA, génération des formulaires MRA et suivi des deadlines fiscales.",
+  },
+  {
+    icon: MessageSquare,
+    title: "Alertes WhatsApp",
+    description: "Notifications automatiques par WhatsApp pour les échéances TVA, documents traités et rappels urgents.",
+  },
+  {
+    icon: Users,
+    title: "Multi-rôles",
+    description: "Tableaux de bord dédiés pour admin, comptables et clients avec permissions par rôle.",
   },
   {
     icon: BarChart3,
-    title: "Real-Time Analytics",
-    description: "Interactive dashboards with live financial metrics, charts, and customizable reports.",
+    title: "Rapports P&L automatiques",
+    description: "Génération mensuelle du compte de résultat, EBITDA et indicateurs financiers par société.",
   },
   {
     icon: Shield,
-    title: "Bank-Level Security",
-    description: "Enterprise-grade encryption and compliance with SOC 2, GDPR, and financial regulations.",
-  },
-  {
-    icon: Clock,
-    title: "Automated Workflows",
-    description: "Schedule recurring tasks, automate reminders, and streamline approval processes.",
-  },
-  {
-    icon: Zap,
-    title: "Instant Collaboration",
-    description: "Real-time updates and notifications keep everyone aligned on financial matters.",
+    title: "Sécurité bancaire",
+    description: "Chiffrement de bout en bout, authentification Supabase et stockage sécurisé des documents.",
   },
 ]
 
@@ -40,10 +40,10 @@ export function Features() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-            Everything you need to manage finances
+            Tout ce qu&apos;il faut pour gérer vos finances
           </h2>
           <p className="mt-4 text-lg text-muted-foreground">
-            Built for accounting professionals who demand efficiency, security, and collaboration.
+            Conçu pour les professionnels de la comptabilité à Maurice qui exigent efficacité, sécurité et collaboration.
           </p>
         </div>
 
