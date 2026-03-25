@@ -1,5 +1,6 @@
 "use client"
 
+import { useProfile } from "@/hooks/use-profile"
 import {
   Card,
   CardContent,
@@ -8,254 +9,699 @@ import {
   CardDescription,
 } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { useProfile } from "@/hooks/use-profile"
 import {
   Table,
   TableBody,
   TableCell,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { FileText, Clock, Calculator, Bell, User, Phone, Mail } from "lucide-react"
+import {
+  TrendingUp,
+  TrendingDown,
+  AlertTriangle,
+  Banknote,
+  Clock,
+  CheckCircle,
+  FileText,
+  Building2,
+  ShieldCheck,
+  Info,
+} from "lucide-react"
 
-const statsCards = [
-  {
-    title: "Derniers documents uploadés",
-    value: "12",
-    description: "Ce mois-ci",
-    icon: FileText,
-    color: "#1E2A4A",
-  },
-  {
-    title: "Documents en traitement",
-    value: "3",
-    description: "En cours d'analyse",
-    icon: Clock,
-    color: "#C9A84C",
-  },
-  {
-    title: "Statut TVA du mois",
-    value: "À PAYER",
-    description: "45 000 MUR",
-    icon: Calculator,
-    color: "#DC2626",
-  },
-  {
-    title: "Alertes WhatsApp",
-    value: "2",
-    description: "Non lues",
-    icon: Bell,
-    color: "#C9A84C",
-  },
-]
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
-const recentDocuments = [
-  {
-    id: "1",
-    nom: "facture_fournisseur_2026_03.pdf",
-    date: "2026-03-24",
-    type: "Facture fournisseur",
-    societe: "TIBOK",
-    statut: "Traité",
-  },
-  {
-    id: "2",
-    nom: "releve_bancaire_feb.pdf",
-    date: "2026-03-22",
-    type: "Relevé bancaire",
-    societe: "BPO",
-    statut: "En cours",
-  },
-  {
-    id: "3",
-    nom: "facture_client_0045.pdf",
-    date: "2026-03-20",
-    type: "Facture client",
-    societe: "TIBOK",
-    statut: "Traité",
-  },
-  {
-    id: "4",
-    nom: "fiche_paie_mars_2026.xlsx",
-    date: "2026-03-18",
-    type: "Fiche de paie",
-    societe: "BPO",
-    statut: "En cours",
-  },
-  {
-    id: "5",
-    nom: "charges_sociales_q1.pdf",
-    date: "2026-03-15",
-    type: "Charges sociales",
-    societe: "TIBOK",
-    statut: "Traité",
-  },
-]
+function fmt(amount: number, currency = "MUR"): string {
+  return `${currency} ${amount.toLocaleString("en-US")}`
+}
 
 function formatDate(dateStr: string) {
   const d = new Date(dateStr)
-  return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" })
+  return d.toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  })
 }
 
-function getStatutBadge(statut: string) {
-  switch (statut) {
-    case "Traité":
-      return <Badge className="bg-green-100 text-green-700 border-green-200">Traité</Badge>
-    case "En cours":
-      return <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200">En cours</Badge>
-    case "Erreur":
-      return <Badge className="bg-red-100 text-red-700 border-red-200">Erreur</Badge>
-    default:
-      return <Badge variant="secondary">{statut}</Badge>
+// ---------------------------------------------------------------------------
+// Mock data — Performance par société
+// ---------------------------------------------------------------------------
+
+interface SocietePerf {
+  societe: string
+  ca: number
+  charges: number
+  resultatNet: number
+  margePct: number
+  tvaCollectee: number
+  tvaDeductible: number
+  tvaAPayer: number
+  tresorerie: number
+  impayesClients: number
+  fournisseursDus: number
+  npfHrdcDus: number
+  payeDus: number
+  statut: "En attente" | "À jour"
+}
+
+const performanceData: SocietePerf[] = [
+  {
+    societe: "TIBOK",
+    ca: 4_500_000,
+    charges: 3_200_000,
+    resultatNet: 1_300_000,
+    margePct: 28.9,
+    tvaCollectee: 675_000,
+    tvaDeductible: 480_000,
+    tvaAPayer: 195_000,
+    tresorerie: 3_340_000,
+    impayesClients: 450_000,
+    fournisseursDus: 320_000,
+    npfHrdcDus: 85_000,
+    payeDus: 120_000,
+    statut: "En attente",
+  },
+  {
+    societe: "BPO COMPANY",
+    ca: 2_800_000,
+    charges: 2_350_000,
+    resultatNet: 450_000,
+    margePct: 16.1,
+    tvaCollectee: 420_000,
+    tvaDeductible: 352_500,
+    tvaAPayer: 67_500,
+    tresorerie: 1_200_000,
+    impayesClients: 180_000,
+    fournisseursDus: 210_000,
+    npfHrdcDus: 62_000,
+    payeDus: 95_000,
+    statut: "À jour",
+  },
+  {
+    societe: "OBESITY CARE CLINIC MALTA",
+    ca: 1_200_000,
+    charges: 1_050_000,
+    resultatNet: 150_000,
+    margePct: 12.5,
+    tvaCollectee: 180_000,
+    tvaDeductible: 157_500,
+    tvaAPayer: 22_500,
+    tresorerie: 120_000,
+    impayesClients: 95_000,
+    fournisseursDus: 78_000,
+    npfHrdcDus: 0,
+    payeDus: 0,
+    statut: "À jour",
+  },
+  {
+    societe: "NHS S2 CROSS-BORDER",
+    ca: 850_000,
+    charges: 920_000,
+    resultatNet: -70_000,
+    margePct: -8.2,
+    tvaCollectee: 127_500,
+    tvaDeductible: 138_000,
+    tvaAPayer: -10_500,
+    tresorerie: 85_000,
+    impayesClients: 210_000,
+    fournisseursDus: 45_000,
+    npfHrdcDus: 0,
+    payeDus: 0,
+    statut: "En attente",
+  },
+]
+
+function totals(data: SocietePerf[]) {
+  const sum = (fn: (r: SocietePerf) => number) =>
+    data.reduce((a, r) => a + fn(r), 0)
+  const ca = sum((r) => r.ca)
+  const charges = sum((r) => r.charges)
+  const resultatNet = sum((r) => r.resultatNet)
+  return {
+    ca,
+    charges,
+    resultatNet,
+    margePct: ca > 0 ? (resultatNet / ca) * 100 : 0,
+    tvaCollectee: sum((r) => r.tvaCollectee),
+    tvaDeductible: sum((r) => r.tvaDeductible),
+    tvaAPayer: sum((r) => r.tvaAPayer),
+    tresorerie: sum((r) => r.tresorerie),
+    impayesClients: sum((r) => r.impayesClients),
+    fournisseursDus: sum((r) => r.fournisseursDus),
+    npfHrdcDus: sum((r) => r.npfHrdcDus),
+    payeDus: sum((r) => r.payeDus),
   }
 }
 
-export default function ClientDashboard() {
-  const { profile } = useProfile()
-  const firstName = profile?.full_name?.split(" ")[0] || ""
-  const isClientUser = profile?.role === "client_user"
+// ---------------------------------------------------------------------------
+// Mock data — Alertes
+// ---------------------------------------------------------------------------
 
-  // Filter stats cards based on role
-  const visibleStats = isClientUser
-    ? statsCards.filter((card) => card.title === "Derniers documents uploadés" || card.title === "Documents en traitement")
-    : statsCards
+interface Alerte {
+  priorite: "URGENT" | "MOYEN" | "INFO"
+  type: string
+  societe: string
+  description: string
+  montant: string
+  echeance: string
+  joursRestants: number
+  action: string
+}
 
+const alertes: Alerte[] = [
+  {
+    priorite: "URGENT",
+    type: "Impayé client",
+    societe: "TIBOK",
+    description: "Facture #INV-2025-0847 — Client Mauritius Telecom",
+    montant: "MUR 450,000",
+    echeance: "2026-03-15",
+    joursRestants: -10,
+    action: "Relancer client",
+  },
+  {
+    priorite: "MOYEN",
+    type: "Échéance NPF",
+    societe: "BPO COMPANY",
+    description: "Cotisations NPF Q1 2026",
+    montant: "MUR 62,000",
+    echeance: "2026-04-15",
+    joursRestants: 21,
+    action: "Préparer paiement",
+  },
+  {
+    priorite: "MOYEN",
+    type: "TVA à déclarer",
+    societe: "TIBOK",
+    description: "Déclaration TVA mensuelle mars 2026",
+    montant: "MUR 195,000",
+    echeance: "2026-04-20",
+    joursRestants: 26,
+    action: "Soumettre MRA",
+  },
+  {
+    priorite: "INFO",
+    type: "Rapprochement",
+    societe: "BPO COMPANY",
+    description: "Relevé bancaire MCB — 12 écritures à valider",
+    montant: "-",
+    echeance: "2026-03-31",
+    joursRestants: 6,
+    action: "Valider écritures",
+  },
+]
+
+// ---------------------------------------------------------------------------
+// Mock data — Trésorerie par compte bancaire
+// ---------------------------------------------------------------------------
+
+interface CompteBancaire {
+  societe: string
+  banque: string
+  noCompte: string
+  devise: string
+  solde: number
+  derniereMAJ: string
+  statut: "À jour"
+}
+
+const comptesBancaires: CompteBancaire[] = [
+  { societe: "TIBOK", banque: "MCB Mauritius", noCompte: "ACC-MCB-001", devise: "MUR", solde: 2_450_000, derniereMAJ: "2026-03-24", statut: "À jour" },
+  { societe: "TIBOK", banque: "SBM Bank", noCompte: "ACC-SBM-001", devise: "MUR", solde: 890_000, derniereMAJ: "2026-03-24", statut: "À jour" },
+  { societe: "BPO COMPANY", banque: "MCB Mauritius", noCompte: "ACC-MCB-002", devise: "MUR", solde: 1_200_000, derniereMAJ: "2026-03-23", statut: "À jour" },
+  { societe: "BPO COMPANY", banque: "CIC France", noCompte: "00096355901", devise: "EUR", solde: 45_000, derniereMAJ: "2026-03-20", statut: "À jour" },
+  { societe: "OBESITY CARE CLINIC MALTA", banque: "Bank of Valletta", noCompte: "ACC-BOV-001", devise: "EUR", solde: 120_000, derniereMAJ: "2026-03-22", statut: "À jour" },
+  { societe: "NHS S2 CROSS-BORDER", banque: "Barclays UK", noCompte: "ACC-BAR-001", devise: "GBP", solde: 85_000, derniereMAJ: "2026-03-21", statut: "À jour" },
+]
+
+// ---------------------------------------------------------------------------
+// Mock data — TVA prochaines échéances
+// ---------------------------------------------------------------------------
+
+interface TVAEcheance {
+  societe: string
+  moisTVA: string
+  tvaCollectee: number
+  tvaDeductible: number
+  montantAPayer: number
+  deadline: string
+  devise: string
+  statut: "À déclarer" | "Déclaré" | "En retard"
+}
+
+const tvaEcheances: TVAEcheance[] = [
+  { societe: "TIBOK", moisTVA: "Mars 2026", tvaCollectee: 675_000, tvaDeductible: 480_000, montantAPayer: 195_000, deadline: "2026-04-20", devise: "MUR", statut: "À déclarer" },
+  { societe: "BPO COMPANY", moisTVA: "Mars 2026", tvaCollectee: 420_000, tvaDeductible: 352_500, montantAPayer: 67_500, deadline: "2026-04-20", devise: "MUR", statut: "À déclarer" },
+  { societe: "OBESITY CARE CLINIC MALTA", moisTVA: "Mars 2026", tvaCollectee: 180_000, tvaDeductible: 157_500, montantAPayer: 22_500, deadline: "2026-04-20", devise: "EUR", statut: "Déclaré" },
+  { societe: "NHS S2 CROSS-BORDER", moisTVA: "Mars 2026", tvaCollectee: 127_500, tvaDeductible: 138_000, montantAPayer: -10_500, deadline: "2026-04-20", devise: "GBP", statut: "En retard" },
+]
+
+// ---------------------------------------------------------------------------
+// Mock data — client_user documents
+// ---------------------------------------------------------------------------
+
+const recentDocuments = [
+  { id: "1", fichier: "facture_fournisseur_2026_03.pdf", date: "2026-03-24", type: "Facture fournisseur", statut: "Traité" },
+  { id: "2", fichier: "releve_bancaire_feb.pdf", date: "2026-03-22", type: "Relevé bancaire", statut: "En cours" },
+  { id: "3", fichier: "facture_client_0045.pdf", date: "2026-03-20", type: "Facture client", statut: "Traité" },
+  { id: "4", fichier: "fiche_paie_mars_2026.xlsx", date: "2026-03-18", type: "Fiche de paie", statut: "En cours" },
+  { id: "5", fichier: "charges_sociales_q1.pdf", date: "2026-03-15", type: "Charges sociales", statut: "Traité" },
+]
+
+// ---------------------------------------------------------------------------
+// Badge helpers
+// ---------------------------------------------------------------------------
+
+function MargeBadge({ pct }: { pct: number }) {
+  const label = `${pct.toFixed(1)} %`
+  if (pct > 15)
+    return <Badge className="bg-green-100 text-green-700 border-green-200">{label}</Badge>
+  if (pct >= 5)
+    return <Badge className="bg-orange-100 text-orange-700 border-orange-200">{label}</Badge>
+  return <Badge className="bg-red-100 text-red-700 border-red-200">{label}</Badge>
+}
+
+function StatutSocieteBadge({ statut }: { statut: string }) {
+  if (statut === "À jour")
+    return <Badge className="bg-green-100 text-green-700 border-green-200">{statut}</Badge>
+  return <Badge className="bg-orange-100 text-orange-700 border-orange-200">{statut}</Badge>
+}
+
+function PrioriteDot({ priorite }: { priorite: Alerte["priorite"] }) {
+  const colors: Record<string, string> = {
+    URGENT: "bg-red-500",
+    MOYEN: "bg-orange-500",
+    INFO: "bg-blue-500",
+  }
   return (
-    <div className="p-6 space-y-6">
+    <span className="flex items-center gap-2">
+      <span className={`inline-block h-2.5 w-2.5 rounded-full ${colors[priorite]}`} />
+      {priorite}
+    </span>
+  )
+}
+
+function TVAStatutBadge({ statut }: { statut: TVAEcheance["statut"] }) {
+  if (statut === "Déclaré")
+    return <Badge className="bg-green-100 text-green-700 border-green-200">{statut}</Badge>
+  if (statut === "En retard")
+    return <Badge className="bg-red-100 text-red-700 border-red-200">{statut}</Badge>
+  return <Badge className="bg-orange-100 text-orange-700 border-orange-200">{statut}</Badge>
+}
+
+function DocStatutBadge({ statut }: { statut: string }) {
+  if (statut === "Traité")
+    return <Badge className="bg-green-100 text-green-700 border-green-200">Traité</Badge>
+  if (statut === "En cours")
+    return <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200">En cours</Badge>
+  return <Badge variant="secondary">{statut}</Badge>
+}
+
+// ---------------------------------------------------------------------------
+// Client User — simple view
+// ---------------------------------------------------------------------------
+
+function ClientUserDashboard({ name }: { name: string }) {
+  return (
+    <div className="p-6 space-y-6 max-w-4xl">
+      {/* Welcome */}
       <div>
         <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
-          Tableau de bord
+          Bienvenue{name ? `, ${name}` : ""}
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Bienvenue{firstName ? `, ${firstName}` : ""}. Voici un aperçu de votre activité.
+          Voici un aperçu de vos documents.
         </p>
       </div>
 
-      {/* Stats Cards */}
-      <div className={`grid grid-cols-1 md:grid-cols-2 ${isClientUser ? "" : "lg:grid-cols-4"} gap-4`}>
-        {visibleStats.map((card) => (
-          <Card key={card.title}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {card.title}
-              </CardTitle>
-              <card.icon className="h-5 w-5" style={{ color: card.color }} />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
-                {card.value}
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">{card.description}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      <div className={`grid grid-cols-1 ${isClientUser ? "" : "lg:grid-cols-3"} gap-6`}>
-        {/* Recent Documents */}
-        <Card className={isClientUser ? "" : "lg:col-span-2"}>
-          <CardHeader>
-            <CardTitle style={{ color: "#1E2A4A" }}>Documents récents</CardTitle>
-            <CardDescription>Les 5 derniers documents uploadés</CardDescription>
+      {/* Two summary cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Derniers documents uploadés
+            </CardTitle>
+            <FileText className="h-5 w-5" style={{ color: "#1E2A4A" }} />
           </CardHeader>
           <CardContent>
+            <div className="text-3xl font-bold" style={{ color: "#1E2A4A" }}>12</div>
+            <p className="text-xs text-muted-foreground mt-1">Ce mois-ci</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Documents en traitement
+            </CardTitle>
+            <Clock className="h-5 w-5" style={{ color: "#C9A84C" }} />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold" style={{ color: "#C9A84C" }}>3</div>
+            <p className="text-xs text-muted-foreground mt-1">En cours d{"'"}analyse</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Recent documents table */}
+      <Card>
+        <CardHeader>
+          <CardTitle style={{ color: "#1E2A4A" }}>Documents récents</CardTitle>
+          <CardDescription>Les 5 derniers documents uploadés</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Fichier</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Statut</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {recentDocuments.map((doc) => (
+                <TableRow key={doc.id}>
+                  <TableCell className="font-medium flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-muted-foreground" />
+                    <span className="truncate max-w-[250px]">{doc.fichier}</span>
+                  </TableCell>
+                  <TableCell>{formatDate(doc.date)}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline">{doc.type}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <DocStatutBadge statut={doc.statut} />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Client Admin — consolidated accounting dashboard
+// ---------------------------------------------------------------------------
+
+function ClientAdminDashboard({ name }: { name: string }) {
+  const t = totals(performanceData)
+
+  return (
+    <div className="p-6 space-y-8">
+      {/* ---- Section 1: Header ---- */}
+      <div>
+        <div className="flex items-center gap-3 mb-1">
+          <Building2 className="h-7 w-7" style={{ color: "#C9A84C" }} />
+          <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
+            Tableau de bord consolidé
+          </h1>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          {name ? `${name} — ` : ""}Mauritius Revenue Authority (MRA) Compliant&nbsp;/&nbsp;TVA 15%&nbsp;/&nbsp;Multi-Sociétés
+        </p>
+      </div>
+
+      {/* ---- Section 2: Performance par société ---- */}
+      <Card className="overflow-hidden">
+        <CardHeader
+          className="rounded-t-xl py-3"
+          style={{ backgroundColor: "#1E2A4A" }}
+        >
+          <CardTitle className="text-white flex items-center gap-2">
+            <TrendingUp className="h-5 w-5" />
+            Performance par société
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Fichier</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Société</TableHead>
-                  <TableHead>Statut</TableHead>
+                <TableRow className="bg-slate-50">
+                  <TableHead className="font-semibold">Société</TableHead>
+                  <TableHead className="font-semibold text-right">CA (MUR)</TableHead>
+                  <TableHead className="font-semibold text-right">Charges</TableHead>
+                  <TableHead className="font-semibold text-right">Résultat Net</TableHead>
+                  <TableHead className="font-semibold text-center">Marge %</TableHead>
+                  <TableHead className="font-semibold text-right">TVA Collectée</TableHead>
+                  <TableHead className="font-semibold text-right">TVA Déductible</TableHead>
+                  <TableHead className="font-semibold text-right">TVA à Payer</TableHead>
+                  <TableHead className="font-semibold text-right">Trésorerie</TableHead>
+                  <TableHead className="font-semibold text-right">Impayés Clients</TableHead>
+                  <TableHead className="font-semibold text-right">Fournisseurs Dus</TableHead>
+                  <TableHead className="font-semibold text-right">NPF/HRDC Dus</TableHead>
+                  <TableHead className="font-semibold text-right">PAYE Dus</TableHead>
+                  <TableHead className="font-semibold text-center">Statut</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {recentDocuments.map((doc) => (
-                  <TableRow key={doc.id}>
-                    <TableCell className="font-medium flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-muted-foreground" />
-                      <span className="truncate max-w-[200px]">{doc.nom}</span>
+                {performanceData.map((row) => (
+                  <TableRow key={row.societe}>
+                    <TableCell className="font-semibold" style={{ color: "#1E2A4A" }}>
+                      {row.societe}
                     </TableCell>
-                    <TableCell>{formatDate(doc.date)}</TableCell>
+                    <TableCell className="text-right">{fmt(row.ca)}</TableCell>
+                    <TableCell className="text-right">{fmt(row.charges)}</TableCell>
+                    <TableCell
+                      className="text-right font-semibold"
+                      style={{ color: row.resultatNet >= 0 ? "#16a34a" : "#dc2626" }}
+                    >
+                      {fmt(row.resultatNet)}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <MargeBadge pct={row.margePct} />
+                    </TableCell>
+                    <TableCell className="text-right">{fmt(row.tvaCollectee)}</TableCell>
+                    <TableCell className="text-right">{fmt(row.tvaDeductible)}</TableCell>
+                    <TableCell className="text-right">{fmt(row.tvaAPayer)}</TableCell>
+                    <TableCell className="text-right">{fmt(row.tresorerie)}</TableCell>
+                    <TableCell className="text-right">{fmt(row.impayesClients)}</TableCell>
+                    <TableCell className="text-right">{fmt(row.fournisseursDus)}</TableCell>
+                    <TableCell className="text-right">{fmt(row.npfHrdcDus)}</TableCell>
+                    <TableCell className="text-right">{fmt(row.payeDus)}</TableCell>
+                    <TableCell className="text-center">
+                      <StatutSocieteBadge statut={row.statut} />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+              <TableFooter>
+                <TableRow className="font-bold" style={{ backgroundColor: "#f1f5f9" }}>
+                  <TableCell style={{ color: "#1E2A4A" }}>TOTAL</TableCell>
+                  <TableCell className="text-right">{fmt(t.ca)}</TableCell>
+                  <TableCell className="text-right">{fmt(t.charges)}</TableCell>
+                  <TableCell
+                    className="text-right"
+                    style={{ color: t.resultatNet >= 0 ? "#16a34a" : "#dc2626" }}
+                  >
+                    {fmt(t.resultatNet)}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <MargeBadge pct={t.margePct} />
+                  </TableCell>
+                  <TableCell className="text-right">{fmt(t.tvaCollectee)}</TableCell>
+                  <TableCell className="text-right">{fmt(t.tvaDeductible)}</TableCell>
+                  <TableCell className="text-right">{fmt(t.tvaAPayer)}</TableCell>
+                  <TableCell className="text-right">{fmt(t.tresorerie)}</TableCell>
+                  <TableCell className="text-right">{fmt(t.impayesClients)}</TableCell>
+                  <TableCell className="text-right">{fmt(t.fournisseursDus)}</TableCell>
+                  <TableCell className="text-right">{fmt(t.npfHrdcDus)}</TableCell>
+                  <TableCell className="text-right">{fmt(t.payeDus)}</TableCell>
+                  <TableCell />
+                </TableRow>
+              </TableFooter>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ---- Section 3: Alertes en cours ---- */}
+      <Card className="overflow-hidden">
+        <CardHeader className="rounded-t-xl py-3 bg-red-600">
+          <CardTitle className="text-white flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5" />
+            Alertes en cours
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-red-50">
+                  <TableHead className="font-semibold">Priorité</TableHead>
+                  <TableHead className="font-semibold">Type</TableHead>
+                  <TableHead className="font-semibold">Société</TableHead>
+                  <TableHead className="font-semibold">Description</TableHead>
+                  <TableHead className="font-semibold text-right">Montant (MUR)</TableHead>
+                  <TableHead className="font-semibold">Échéance</TableHead>
+                  <TableHead className="font-semibold text-right">Jours Restants</TableHead>
+                  <TableHead className="font-semibold">Action Requise</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {alertes.map((a, i) => (
+                  <TableRow key={i}>
                     <TableCell>
-                      <Badge variant="outline">{doc.type}</Badge>
+                      <PrioriteDot priorite={a.priorite} />
                     </TableCell>
-                    <TableCell>{doc.societe}</TableCell>
-                    <TableCell>{getStatutBadge(doc.statut)}</TableCell>
+                    <TableCell>{a.type}</TableCell>
+                    <TableCell className="font-semibold" style={{ color: "#1E2A4A" }}>
+                      {a.societe}
+                    </TableCell>
+                    <TableCell className="max-w-[260px] truncate">{a.description}</TableCell>
+                    <TableCell className="text-right">{a.montant}</TableCell>
+                    <TableCell>{formatDate(a.echeance)}</TableCell>
+                    <TableCell
+                      className="text-right font-semibold"
+                      style={{ color: a.joursRestants < 0 ? "#dc2626" : a.joursRestants <= 7 ? "#ea580c" : "#1E2A4A" }}
+                    >
+                      {a.joursRestants}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        className="cursor-pointer"
+                        style={{ backgroundColor: "#1E2A4A", color: "#fff", borderColor: "#1E2A4A" }}
+                      >
+                        {a.action}
+                      </Badge>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
-          </CardContent>
-        </Card>
-
-        {/* Right column - only visible for client_admin */}
-        {!isClientUser && (
-          <div className="space-y-6">
-            {/* TVA Summary */}
-            <Card>
-              <CardHeader>
-                <CardTitle style={{ color: "#1E2A4A" }}>Résumé TVA - Mars 2026</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">TVA Collectée</span>
-                  <span className="font-semibold" style={{ color: "#1E2A4A" }}>
-                    120 000 MUR
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">TVA Déductible</span>
-                  <span className="font-semibold" style={{ color: "#1E2A4A" }}>
-                    75 000 MUR
-                  </span>
-                </div>
-                <div className="border-t pt-3 flex justify-between items-center">
-                  <span className="text-sm font-medium">TVA Nette</span>
-                  <span className="font-bold text-red-600">45 000 MUR</span>
-                </div>
-                <Badge className="bg-red-100 text-red-700 border-red-200 mt-2">
-                  À PAYER - Échéance 20 avril 2026
-                </Badge>
-              </CardContent>
-            </Card>
-
-            {/* Mon Comptable */}
-            <Card>
-              <CardHeader>
-                <CardTitle style={{ color: "#1E2A4A" }}>Mon comptable</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <div
-                    className="flex h-10 w-10 items-center justify-center rounded-full text-white font-bold text-sm"
-                    style={{ backgroundColor: "#1E2A4A" }}
-                  >
-                    SR
-                  </div>
-                  <div>
-                    <p className="font-semibold" style={{ color: "#1E2A4A" }}>
-                      Sophie Ramgoolam
-                    </p>
-                    <p className="text-xs text-muted-foreground">Comptable senior</p>
-                  </div>
-                </div>
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Phone className="h-4 w-4" />
-                    <span>+230 5723 4567</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Mail className="h-4 w-4" />
-                    <span>sophie.r@lexora.mu</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
           </div>
-        )}
-      </div>
+        </CardContent>
+      </Card>
+
+      {/* ---- Section 4: Trésorerie par compte bancaire ---- */}
+      <Card className="overflow-hidden">
+        <CardHeader className="rounded-t-xl py-3 bg-teal-700">
+          <CardTitle className="text-white flex items-center gap-2">
+            <Banknote className="h-5 w-5" />
+            Trésorerie par compte bancaire
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-teal-50">
+                  <TableHead className="font-semibold">Société</TableHead>
+                  <TableHead className="font-semibold">Banque</TableHead>
+                  <TableHead className="font-semibold">N° Compte</TableHead>
+                  <TableHead className="font-semibold">Devise</TableHead>
+                  <TableHead className="font-semibold text-right">Solde</TableHead>
+                  <TableHead className="font-semibold">Dernière MAJ</TableHead>
+                  <TableHead className="font-semibold text-center">Statut</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {comptesBancaires.map((c, i) => (
+                  <TableRow key={i}>
+                    <TableCell className="font-semibold" style={{ color: "#1E2A4A" }}>
+                      {c.societe}
+                    </TableCell>
+                    <TableCell>{c.banque}</TableCell>
+                    <TableCell className="font-mono text-xs">{c.noCompte}</TableCell>
+                    <TableCell>{c.devise}</TableCell>
+                    <TableCell className="text-right font-semibold">
+                      {fmt(c.solde, c.devise)}
+                    </TableCell>
+                    <TableCell>{formatDate(c.derniereMAJ)}</TableCell>
+                    <TableCell className="text-center">
+                      <span className="inline-flex items-center gap-1 text-green-600">
+                        <CheckCircle className="h-4 w-4" />
+                        {c.statut}
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ---- Section 5: TVA à déclarer — Prochaines échéances ---- */}
+      <Card className="overflow-hidden">
+        <CardHeader className="rounded-t-xl py-3 bg-amber-600">
+          <CardTitle className="text-white flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5" />
+            TVA à déclarer — Prochaines échéances
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-amber-50">
+                  <TableHead className="font-semibold">Société</TableHead>
+                  <TableHead className="font-semibold">Mois TVA</TableHead>
+                  <TableHead className="font-semibold text-right">TVA Collectée</TableHead>
+                  <TableHead className="font-semibold text-right">TVA Déductible</TableHead>
+                  <TableHead className="font-semibold text-right">Montant à Payer</TableHead>
+                  <TableHead className="font-semibold">Deadline</TableHead>
+                  <TableHead className="font-semibold text-center">Statut</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {tvaEcheances.map((row, i) => (
+                  <TableRow key={i}>
+                    <TableCell className="font-semibold" style={{ color: "#1E2A4A" }}>
+                      {row.societe}
+                    </TableCell>
+                    <TableCell>{row.moisTVA}</TableCell>
+                    <TableCell className="text-right">{fmt(row.tvaCollectee, row.devise)}</TableCell>
+                    <TableCell className="text-right">{fmt(row.tvaDeductible, row.devise)}</TableCell>
+                    <TableCell
+                      className="text-right font-semibold"
+                      style={{ color: row.montantAPayer >= 0 ? "#1E2A4A" : "#16a34a" }}
+                    >
+                      {fmt(row.montantAPayer, row.devise)}
+                    </TableCell>
+                    <TableCell>{formatDate(row.deadline)}</TableCell>
+                    <TableCell className="text-center">
+                      <TVAStatutBadge statut={row.statut} />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
+}
+
+// ---------------------------------------------------------------------------
+// Main export
+// ---------------------------------------------------------------------------
+
+export default function ClientDashboard() {
+  const { profile, loading } = useProfile()
+  const fullName = profile?.full_name || ""
+  const firstName = fullName.split(" ")[0] || ""
+  const isClientUser = profile?.role === "client_user"
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Clock className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  if (isClientUser) {
+    return <ClientUserDashboard name={firstName} />
+  }
+
+  return <ClientAdminDashboard name={fullName} />
 }
