@@ -2,12 +2,12 @@
 
 import { useState, useCallback } from "react"
 import { useProfile } from "@/hooks/use-profile"
+import Link from "next/link"
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
-  CardDescription,
 } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -23,19 +23,17 @@ import {
   Upload,
   FileText,
   TrendingUp,
-  TrendingDown,
   AlertTriangle,
   CheckCircle,
-  Clock,
   Loader2,
-  Phone,
-  Mail,
-  MessageCircle,
-  Calendar,
-  CircleDollarSign,
-  Wallet,
+  Lightbulb,
   BarChart3,
+  Wallet,
+  CircleDollarSign,
   Banknote,
+  ArrowRight,
+  Clock,
+  Check,
 } from "lucide-react"
 
 // ---------------------------------------------------------------------------
@@ -47,79 +45,78 @@ function fmtMUR(amount: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// Mock data — client_user uploads
+// Mock data
 // ---------------------------------------------------------------------------
 
-const mockUploads = [
-  { id: "1", nom: "facture_mars_2026.pdf", date: "25/03/2026", statut: "Recu" },
-  { id: "2", nom: "releve_bancaire_fev.pdf", date: "22/03/2026", statut: "En cours" },
-  { id: "3", nom: "facture_client_0045.pdf", date: "20/03/2026", statut: "Traite" },
-  { id: "4", nom: "fiche_paie_mars.xlsx", date: "18/03/2026", statut: "En cours" },
-  { id: "5", nom: "charges_sociales_q1.pdf", date: "15/03/2026", statut: "Traite" },
-  { id: "6", nom: "bon_commande_412.pdf", date: "12/03/2026", statut: "Traite" },
-  { id: "7", nom: "note_frais_mars.pdf", date: "10/03/2026", statut: "Recu" },
-  { id: "8", nom: "contrat_location.pdf", date: "08/03/2026", statut: "Traite" },
-  { id: "9", nom: "devis_fournisseur.pdf", date: "05/03/2026", statut: "En cours" },
-  { id: "10", nom: "assurance_vehicule.pdf", date: "02/03/2026", statut: "Traite" },
-]
-
-// ---------------------------------------------------------------------------
-// Mock data — client_admin alerts
-// ---------------------------------------------------------------------------
-
-interface MockAlert {
-  id: string
-  niveau: "red" | "orange" | "blue"
-  message: string
-  action: string
-}
-
-const mockAlerts: MockAlert[] = [
+const mockAlerts = [
   {
     id: "a1",
-    niveau: "red",
-    message: "Votre declaration TVA de Mars est a soumettre avant le 20/04. Montant : 45,230 MUR",
-    action: "Uploader maintenant",
+    niveau: "red" as const,
+    message: "Votre declaration TVA de mars doit etre soumise avant le 20 avril. Montant estime : 45 230 MUR.",
   },
   {
     id: "a2",
-    niveau: "orange",
-    message: "Votre comptable a besoin de documents manquants",
-    action: "Voir le detail",
+    niveau: "orange" as const,
+    message: "3 factures clients sont impayees depuis plus de 30 jours. Total : 87 500 MUR.",
   },
   {
     id: "a3",
-    niveau: "blue",
-    message: "Votre rapport mensuel Mars est pret",
-    action: "Marquer comme lu",
+    niveau: "blue" as const,
+    message: "Votre rapport mensuel de mars est pret. Consultez-le dans vos documents.",
   },
 ]
 
-// ---------------------------------------------------------------------------
-// Mock data — client_admin obligations
-// ---------------------------------------------------------------------------
-
-const mockObligations = [
-  { quoi: "Declaration TVA MRA", pourQuand: "Avant le 20/04", combien: "45,230 MUR", statut: "a_faire" as const },
-  { quoi: "Cotisations CSG/NSF", pourQuand: "Avant le 30/04", combien: "8,450 MUR", statut: "en_cours" as const },
-  { quoi: "Bonus fin d'annee", pourQuand: "Avant le 25/12", combien: "\u2014", statut: "decembre" as const },
+const mockActions = [
+  { quoi: "Envoyer les factures manquantes a votre comptable", pourQuand: "Avant le 5 avril", combien: "3 factures", fait: false },
+  { quoi: "Payer la TVA du mois de mars", pourQuand: "Avant le 20 avril", combien: "45 230 MUR", fait: false },
+  { quoi: "Verifier les fiches de paie de mars", pourQuand: "Avant le 30 mars", combien: "17 employes", fait: true },
+  { quoi: "Renouveler l'assurance du vehicule", pourQuand: "Avant le 15 avril", combien: "12 800 MUR", fait: false },
 ]
-
-// ---------------------------------------------------------------------------
-// Mock data — client_admin recent documents
-// ---------------------------------------------------------------------------
 
 const mockDocuments = [
-  { id: "d1", nom: "Bilan Mars 2026.pdf", date: "25/03/2026", statut: "classe" as const },
-  { id: "d2", nom: "Releve MCB Fevrier.pdf", date: "22/03/2026", statut: "en_cours" as const },
-  { id: "d3", nom: "Facture #0412.pdf", date: "20/03/2026", statut: "question" as const },
-  { id: "d4", nom: "Fiche paie employes.xlsx", date: "18/03/2026", statut: "classe" as const },
-  { id: "d5", nom: "Declaration CSG Q1.pdf", date: "15/03/2026", statut: "classe" as const },
+  { id: "d1", nom: "Rapport Mars 2026.pdf", date: "25/03/2026", statut: "Classe" },
+  { id: "d2", nom: "Releve MCB Fevrier.pdf", date: "22/03/2026", statut: "Analyse en cours" },
+  { id: "d3", nom: "Facture client #0456.pdf", date: "20/03/2026", statut: "Question du comptable" },
+  { id: "d4", nom: "Fiche paie equipe mars.xlsx", date: "18/03/2026", statut: "Classe" },
+  { id: "d5", nom: "CSG Q1 2026.pdf", date: "15/03/2026", statut: "Classe" },
+]
+
+const mockRecentUploads = [
+  { id: "u1", nom: "facture_mars_2026.pdf", date: "25/03/2026", statut: "Recu" },
+  { id: "u2", nom: "releve_MCB_fev.pdf", date: "22/03/2026", statut: "En cours" },
+  { id: "u3", nom: "facture_orange.jpeg", date: "20/03/2026", statut: "Traite" },
+  { id: "u4", nom: "fiche_paie_mars.xlsx", date: "18/03/2026", statut: "En cours" },
+  { id: "u5", nom: "note_frais.pdf", date: "15/03/2026", statut: "Recu" },
 ]
 
 // ---------------------------------------------------------------------------
-// Upload status badge
+// Doc status badge
 // ---------------------------------------------------------------------------
+
+function DocStatutBadge({ statut }: { statut: string }) {
+  switch (statut) {
+    case "Classe":
+      return (
+        <Badge className="bg-green-100 text-green-700 border-green-200 flex items-center gap-1">
+          <CheckCircle className="h-3 w-3" /> Classe
+        </Badge>
+      )
+    case "Analyse en cours":
+      return (
+        <Badge className="bg-blue-100 text-blue-700 border-blue-200 flex items-center gap-1">
+          <Loader2 className="h-3 w-3 animate-spin" /> Analyse en cours
+        </Badge>
+      )
+    case "Question du comptable":
+      return (
+        <Badge className="bg-orange-100 text-orange-700 border-orange-200 flex items-center gap-1">
+          <AlertTriangle className="h-3 w-3" /> Question
+        </Badge>
+      )
+    default:
+      return <Badge variant="secondary">{statut}</Badge>
+  }
+}
 
 function UploadStatutBadge({ statut }: { statut: string }) {
   switch (statut) {
@@ -139,52 +136,10 @@ function UploadStatutBadge({ statut }: { statut: string }) {
 }
 
 // ---------------------------------------------------------------------------
-// Document status badge (admin)
+// Client User — simple view
 // ---------------------------------------------------------------------------
 
-function DocStatutBadge({ statut }: { statut: "classe" | "en_cours" | "question" }) {
-  switch (statut) {
-    case "classe":
-      return (
-        <Badge className="bg-green-100 text-green-700 border-green-200 flex items-center gap-1">
-          <CheckCircle className="h-3 w-3" /> Classe
-        </Badge>
-      )
-    case "en_cours":
-      return (
-        <Badge className="bg-blue-100 text-blue-700 border-blue-200 flex items-center gap-1">
-          <Loader2 className="h-3 w-3 animate-spin" /> En cours
-        </Badge>
-      )
-    case "question":
-      return (
-        <Badge className="bg-orange-100 text-orange-700 border-orange-200 flex items-center gap-1">
-          <AlertTriangle className="h-3 w-3" /> Question du comptable
-        </Badge>
-      )
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Obligation status badge
-// ---------------------------------------------------------------------------
-
-function ObligationStatutBadge({ statut }: { statut: "a_faire" | "en_cours" | "decembre" }) {
-  switch (statut) {
-    case "a_faire":
-      return <Badge className="bg-red-100 text-red-700 border-red-200">A faire</Badge>
-    case "en_cours":
-      return <Badge className="bg-orange-100 text-orange-700 border-orange-200">En cours</Badge>
-    case "decembre":
-      return <Badge className="bg-gray-100 text-gray-500 border-gray-200">Decembre</Badge>
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Client User — ultra simple layout
-// ---------------------------------------------------------------------------
-
-function ClientUserDashboard({ firstName, societe }: { firstName: string; societe: string }) {
+function ClientUserDashboard({ firstName }: { firstName: string }) {
   const [dragOver, setDragOver] = useState(false)
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -199,25 +154,24 @@ function ClientUserDashboard({ firstName, societe }: { firstName: string; societ
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setDragOver(false)
-    // Mock: would handle file upload here
   }, [])
 
   return (
     <div className="p-6 space-y-6 max-w-3xl mx-auto">
-      {/* Greeting */}
       <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
-        Bonjour {firstName} <span role="img" aria-label="wave">👋</span>
-        <span className="text-lg font-normal text-muted-foreground ml-3">| {societe}</span>
+        Bonjour {firstName}
       </h1>
+      <p className="text-muted-foreground">
+        Deposez vos documents ci-dessous, votre comptable s{"'"}en occupe.
+      </p>
 
-      {/* Big upload zone */}
+      {/* Upload zone */}
       <div
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         className={`
-          border-2 border-dashed rounded-xl p-12 text-center cursor-pointer
-          transition-colors duration-200
+          border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-colors
           ${dragOver
             ? "border-[#C9A84C] bg-[#C9A84C]/10"
             : "border-gray-300 hover:border-[#C9A84C] hover:bg-[#C9A84C]/5"
@@ -234,10 +188,7 @@ function ClientUserDashboard({ firstName, societe }: { firstName: string; societ
         <p className="text-sm text-muted-foreground mt-1">
           ou cliquez pour choisir un fichier
         </p>
-        <Button
-          className="mt-4"
-          style={{ backgroundColor: "#C9A84C", color: "#fff" }}
-        >
+        <Button className="mt-4 text-white" style={{ backgroundColor: "#C9A84C" }}>
           <Upload className="h-4 w-4 mr-2" />
           Choisir un fichier
         </Button>
@@ -259,11 +210,13 @@ function ClientUserDashboard({ firstName, societe }: { firstName: string; societ
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {mockUploads.map((u) => (
+                {mockRecentUploads.map((u) => (
                   <TableRow key={u.id}>
-                    <TableCell className="flex items-center gap-2 font-medium">
-                      <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <span className="truncate max-w-[300px]">{u.nom}</span>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                        {u.nom}
+                      </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">{u.date}</TableCell>
                     <TableCell>
@@ -285,90 +238,42 @@ function ClientUserDashboard({ firstName, societe }: { firstName: string; societ
 // ---------------------------------------------------------------------------
 
 function ClientAdminDashboard({ firstName, societe }: { firstName: string; societe: string }) {
-  const alertCount = mockAlerts.length
-  const currentDate = "26 mars 2026"
-
   return (
     <div className="p-6 space-y-8 max-w-5xl mx-auto">
       {/* ================================================================== */}
-      {/* Section 1 — Header */}
+      {/* Section 1 — Resume du mois */}
       {/* ================================================================== */}
-      <Card className="overflow-hidden border-0">
+      <Card className="overflow-hidden border-0 shadow-md">
         <CardHeader className="py-5 px-6" style={{ backgroundColor: "#1E2A4A" }}>
           <CardTitle className="text-white text-2xl">
             Bonjour {firstName}
           </CardTitle>
-          <CardDescription className="text-white/70 text-sm mt-1">
-            {societe} | Mars 2026 &mdash; {currentDate}
-          </CardDescription>
+          <p className="text-white/70 text-sm mt-1">
+            {societe} | Mars 2026
+          </p>
         </CardHeader>
-        {alertCount > 0 && (
-          <div className="bg-red-600 text-white px-6 py-3 flex items-center gap-2 text-sm font-medium">
-            <AlertTriangle className="h-4 w-4 shrink-0" />
-            Attention : {alertCount} action(s) requise(s) ce mois
-          </div>
-        )}
+        <CardContent className="p-6">
+          <h3 className="text-sm font-semibold mb-2" style={{ color: "#C9A84C" }}>
+            Resume du mois
+          </h3>
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            Ce mois-ci, votre chiffre d{"'"}affaires a augmente de 12% par rapport a fevrier,
+            grace a une bonne performance sur vos factures clients. Vos depenses restent stables.
+            Votre tresorerie est saine avec plus de 2 millions MUR disponibles. Il reste 3 factures
+            impayees a relancer et votre declaration TVA a preparer avant le 20 avril. Dans l{"'"}ensemble,
+            le mois de mars est positif pour votre entreprise.
+          </p>
+        </CardContent>
       </Card>
 
       {/* ================================================================== */}
-      {/* Section 2 — Mes Alertes */}
+      {/* Section 2 — Mes 4 chiffres cles */}
       {/* ================================================================== */}
       <div>
         <h2 className="text-lg font-semibold mb-3" style={{ color: "#1E2A4A" }}>
-          Mes Alertes
-        </h2>
-
-        {mockAlerts.length === 0 ? (
-          <Card className="border-green-200 bg-green-50">
-            <CardContent className="py-6 flex items-center gap-3">
-              <CheckCircle className="h-6 w-6 text-green-600" />
-              <span className="text-green-700 font-medium">Tout est a jour ce mois</span>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-3">
-            {mockAlerts.map((alert) => {
-              const colors = {
-                red: { border: "border-red-300", bg: "bg-red-50", dot: "bg-red-500" },
-                orange: { border: "border-orange-300", bg: "bg-orange-50", dot: "bg-orange-500" },
-                blue: { border: "border-blue-300", bg: "bg-blue-50", dot: "bg-blue-500" },
-              }
-              const c = colors[alert.niveau]
-              return (
-                <Card key={alert.id} className={`${c.border} ${c.bg}`}>
-                  <CardContent className="py-4 flex items-center justify-between gap-4">
-                    <div className="flex items-start gap-3">
-                      <span className={`mt-1.5 inline-block h-3 w-3 rounded-full shrink-0 ${c.dot}`} />
-                      <p className="text-sm">{alert.message}</p>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="shrink-0 text-xs"
-                      style={{
-                        borderColor: "#1E2A4A",
-                        color: "#1E2A4A",
-                      }}
-                    >
-                      {alert.action}
-                    </Button>
-                  </CardContent>
-                </Card>
-              )
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* ================================================================== */}
-      {/* Section 3 — Mes Chiffres du Mois */}
-      {/* ================================================================== */}
-      <div>
-        <h2 className="text-lg font-semibold mb-3" style={{ color: "#1E2A4A" }}>
-          Mes Chiffres du Mois
+          Mes 4 chiffres cles
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Chiffre d'Affaires */}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
@@ -382,12 +287,11 @@ function ClientAdminDashboard({ firstName, societe }: { firstName: string; socie
               </div>
               <div className="flex items-center gap-1 mt-1 text-sm text-green-600">
                 <TrendingUp className="h-4 w-4" />
-                +12%
+                +12% vs fevrier
               </div>
             </CardContent>
           </Card>
 
-          {/* Depenses */}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
@@ -399,35 +303,29 @@ function ClientAdminDashboard({ firstName, societe }: { firstName: string; socie
               <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
                 {fmtMUR(135_000)}
               </div>
-              <div className="flex items-center gap-1 mt-1 text-sm text-orange-600">
-                <TrendingDown className="h-4 w-4" />
-                +3%
-              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Stable par rapport au mois dernier
+              </p>
             </CardContent>
           </Card>
 
-          {/* Resultat */}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                 <CircleDollarSign className="h-4 w-4" style={{ color: "#C9A84C" }} />
-                Resultat
+                Benefice
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
                 {fmtMUR(515_000)}
               </div>
-              <div className="flex items-center gap-2 mt-1">
-                <Badge className="bg-green-100 text-green-700 border-green-200 text-xs">
-                  Benefice
-                </Badge>
-                <span className="text-xs text-muted-foreground">79.2% marge</span>
-              </div>
+              <Badge className="bg-green-100 text-green-700 border-green-200 text-xs mt-1">
+                Positif
+              </Badge>
             </CardContent>
           </Card>
 
-          {/* Tresorerie */}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
@@ -439,43 +337,50 @@ function ClientAdminDashboard({ firstName, societe }: { firstName: string; socie
               <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
                 {fmtMUR(2_150_000)}
               </div>
-              <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-                <Calendar className="h-3 w-3" />
-                Mis a jour le 25/03/2026
-              </div>
+              <Badge className="bg-green-100 text-green-700 border-green-200 text-xs mt-1">
+                Sain
+              </Badge>
             </CardContent>
           </Card>
         </div>
       </div>
 
       {/* ================================================================== */}
-      {/* Section 4 — Ce que vous devez faire ce mois */}
+      {/* Section 3 — Mes actions ce mois */}
       {/* ================================================================== */}
       <div>
         <h2 className="text-lg font-semibold mb-3" style={{ color: "#1E2A4A" }}>
-          Ce que vous devez faire ce mois
+          Mes actions ce mois
         </h2>
         <Card>
           <CardContent className="p-0">
             <Table>
               <TableHeader>
                 <TableRow className="bg-slate-50">
-                  <TableHead className="font-semibold">Quoi</TableHead>
+                  <TableHead className="font-semibold">Quoi faire</TableHead>
                   <TableHead className="font-semibold">Pour quand</TableHead>
                   <TableHead className="font-semibold">Combien</TableHead>
-                  <TableHead className="font-semibold">Statut</TableHead>
+                  <TableHead className="font-semibold">Fait ?</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {mockObligations.map((ob, i) => (
+                {mockActions.map((action, i) => (
                   <TableRow key={i}>
                     <TableCell className="font-medium" style={{ color: "#1E2A4A" }}>
-                      {ob.quoi}
+                      {action.quoi}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{ob.pourQuand}</TableCell>
-                    <TableCell className="font-medium">{ob.combien}</TableCell>
+                    <TableCell className="text-muted-foreground">{action.pourQuand}</TableCell>
+                    <TableCell className="font-medium">{action.combien}</TableCell>
                     <TableCell>
-                      <ObligationStatutBadge statut={ob.statut} />
+                      {action.fait ? (
+                        <Badge className="bg-green-100 text-green-700 border-green-200 flex items-center gap-1 w-fit">
+                          <Check className="h-3 w-3" /> Fait
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-orange-100 text-orange-700 border-orange-200 flex items-center gap-1 w-fit">
+                          <Clock className="h-3 w-3" /> A faire
+                        </Badge>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -486,12 +391,77 @@ function ClientAdminDashboard({ firstName, societe }: { firstName: string; socie
       </div>
 
       {/* ================================================================== */}
-      {/* Section 5 — Documents recents */}
+      {/* Section 4 — Mes alertes */}
       {/* ================================================================== */}
       <div>
         <h2 className="text-lg font-semibold mb-3" style={{ color: "#1E2A4A" }}>
-          Documents recents
+          Mes alertes
         </h2>
+        <div className="space-y-3">
+          {mockAlerts.map((alert) => {
+            const colors = {
+              red: { border: "border-red-300", bg: "bg-red-50", dot: "bg-red-500" },
+              orange: { border: "border-orange-300", bg: "bg-orange-50", dot: "bg-orange-500" },
+              blue: { border: "border-blue-300", bg: "bg-blue-50", dot: "bg-blue-500" },
+            }
+            const c = colors[alert.niveau]
+            return (
+              <Card key={alert.id} className={`${c.border} ${c.bg}`}>
+                <CardContent className="py-4 flex items-center gap-3">
+                  <span className={`inline-block h-3 w-3 rounded-full shrink-0 ${c.dot}`} />
+                  <p className="text-sm">{alert.message}</p>
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* ================================================================== */}
+      {/* Section 5 — Conseil du mois */}
+      {/* ================================================================== */}
+      <div>
+        <h2 className="text-lg font-semibold mb-3" style={{ color: "#1E2A4A" }}>
+          Conseil du mois
+        </h2>
+        <Card className="border-[#C9A84C]/30 bg-[#C9A84C]/5">
+          <CardContent className="py-6 flex gap-4">
+            <Lightbulb className="h-6 w-6 shrink-0 mt-0.5" style={{ color: "#C9A84C" }} />
+            <div>
+              <p className="text-sm font-semibold mb-1" style={{ color: "#1E2A4A" }}>
+                Pensez a relancer vos clients
+              </p>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Vous avez 87 500 MUR de factures impayees depuis plus de 30 jours. Relancer vos clients
+                rapidement permet de maintenir votre tresorerie en bonne sante. Vous pouvez contacter
+                votre comptable pour qu{"'"}il envoie les rappels a votre place.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ================================================================== */}
+      {/* Section 6 — Documents recents */}
+      {/* ================================================================== */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold" style={{ color: "#1E2A4A" }}>
+            Documents recents
+          </h2>
+          <Button
+            variant="ghost"
+            size="sm"
+            asChild
+            className="text-sm"
+            style={{ color: "#C9A84C" }}
+          >
+            <Link href="/client/documents">
+              Voir tous les documents
+              <ArrowRight className="h-4 w-4 ml-1" />
+            </Link>
+          </Button>
+        </div>
         <Card>
           <CardContent className="p-0">
             <Table>
@@ -505,9 +475,11 @@ function ClientAdminDashboard({ firstName, societe }: { firstName: string; socie
               <TableBody>
                 {mockDocuments.map((doc) => (
                   <TableRow key={doc.id}>
-                    <TableCell className="flex items-center gap-2 font-medium">
-                      <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                      {doc.nom}
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                        {doc.nom}
+                      </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">{doc.date}</TableCell>
                     <TableCell>
@@ -517,66 +489,6 @@ function ClientAdminDashboard({ firstName, societe }: { firstName: string; socie
                 ))}
               </TableBody>
             </Table>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* ================================================================== */}
-      {/* Section 6 — Mon Comptable */}
-      {/* ================================================================== */}
-      <div>
-        <h2 className="text-lg font-semibold mb-3" style={{ color: "#1E2A4A" }}>
-          Mon Comptable
-        </h2>
-        <Card>
-          <CardContent className="py-6">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
-                <p className="text-lg font-semibold" style={{ color: "#1E2A4A" }}>
-                  Test Compta
-                </p>
-                <p className="text-sm text-muted-foreground flex items-center gap-2 mt-1">
-                  <Mail className="h-3.5 w-3.5" />
-                  compta@lexora.mu
-                </p>
-                <p className="text-sm text-muted-foreground flex items-center gap-2 mt-1">
-                  <Phone className="h-3.5 w-3.5" />
-                  +230 5700 0000
-                </p>
-                <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1">
-                  <Clock className="h-3 w-3" />
-                  A mis a jour vos finances il y a 2 jours
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  asChild
-                  size="sm"
-                  className="text-white"
-                  style={{ backgroundColor: "#25D366" }}
-                >
-                  <a
-                    href="https://wa.me/23057000000"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <MessageCircle className="h-4 w-4 mr-2" />
-                    WhatsApp
-                  </a>
-                </Button>
-                <Button
-                  asChild
-                  size="sm"
-                  variant="outline"
-                  style={{ borderColor: "#1E2A4A", color: "#1E2A4A" }}
-                >
-                  <a href="mailto:compta@lexora.mu">
-                    <Mail className="h-4 w-4 mr-2" />
-                    Email
-                  </a>
-                </Button>
-              </div>
-            </div>
           </CardContent>
         </Card>
       </div>
@@ -590,9 +502,8 @@ function ClientAdminDashboard({ firstName, societe }: { firstName: string; socie
 
 export default function ClientDashboard() {
   const { profile, loading } = useProfile()
-  const [pageLoading] = useState(false)
 
-  if (loading || pageLoading) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#C9A84C" }} />
@@ -603,14 +514,11 @@ export default function ClientDashboard() {
   const fullName = profile?.full_name || ""
   const firstName = fullName.split(" ")[0] || ""
   const isClientUser = profile?.role === "client_user"
-
-  // Mock societe name
   const societe = "Ma Societe Ltd"
 
   if (isClientUser) {
-    return <ClientUserDashboard firstName={firstName} societe={societe} />
+    return <ClientUserDashboard firstName={firstName} />
   }
 
-  // Default: client_admin (or any other client role)
   return <ClientAdminDashboard firstName={firstName} societe={societe} />
 }
