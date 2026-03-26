@@ -47,17 +47,17 @@ const mockBanque = [
 ]
 
 const mockSalaires = [
-  { employe: "Raj Kumar", brut: 85000, npf: 2550, paye: 4250, net: 78200, cout: 95750, statut: "paye" },
-  { employe: "Priya Doobur", brut: 65000, npf: 1950, paye: 2250, net: 60800, cout: 72750, statut: "paye" },
-  { employe: "Vikash Jeetun", brut: 55000, npf: 1650, paye: 1250, net: 52100, cout: 61750, statut: "paye" },
-  { employe: "Nadia Ramgoolam", brut: 120000, npf: 3600, paye: 8750, net: 107650, cout: 134400, statut: "a_payer" },
-  { employe: "Anil Doorgakant", brut: 95000, npf: 2850, paye: 5750, net: 86400, cout: 106550, statut: "paye" },
+  { employe: "Raj Kumar", brut: 85000, csg: 2550, nsf: 1275, paye: 4250, net: 76925, cout: 95750, statut: "paye" },
+  { employe: "Priya Doobur", brut: 65000, csg: 1950, nsf: 975, paye: 2250, net: 59825, cout: 72750, statut: "paye" },
+  { employe: "Vikash Jeetun", brut: 55000, csg: 1650, nsf: 825, paye: 1250, net: 51275, cout: 61750, statut: "paye" },
+  { employe: "Nadia Ramgoolam", brut: 120000, csg: 3600, nsf: 1800, paye: 8750, net: 105850, cout: 134400, statut: "a_payer" },
+  { employe: "Anil Doorgakant", brut: 95000, csg: 2850, nsf: 1425, paye: 5750, net: 84975, cout: 106550, statut: "paye" },
 ]
 
 const mockCharges = [
-  { periode: "Mars 2026", npf_p: 25200, npf_s: 12600, hrdc: 4200, nps: 1250, paye: 22250, total: 65500, statut: "conforme" },
-  { periode: "Fév 2026", npf_p: 24800, npf_s: 12400, hrdc: 4130, nps: 1200, paye: 21800, total: 64330, statut: "conforme" },
-  { periode: "Jan 2026", npf_p: 24500, npf_s: 12250, hrdc: 4080, nps: 1200, paye: 21500, total: 63530, statut: "ecart" },
+  { periode: "Mars 2026", csg_e: 12600, csg_p: 25200, nsf_e: 6300, nsf_p: 10500, training: 4200, paye: 22250, total: 81050, statut: "conforme" },
+  { periode: "Fév 2026", csg_e: 12400, csg_p: 24800, nsf_e: 6200, nsf_p: 10330, training: 4130, paye: 21800, total: 79660, statut: "conforme" },
+  { periode: "Jan 2026", csg_e: 12250, csg_p: 24500, nsf_e: 6125, nsf_p: 10210, training: 4080, paye: 21500, total: 78665, statut: "ecart" },
 ]
 
 const mockTVA = [
@@ -71,12 +71,18 @@ const mockDossiers = [
   { nom: "Factures Clients", count: 8, anomalies: 0 },
   { nom: "Relevés Bancaires", count: 3, anomalies: 2 },
   { nom: "Fiches de Paie", count: 17, anomalies: 0 },
-  { nom: "Charges Sociales MRA", count: 6, anomalies: 0 },
+  { nom: "Déclaration CSG/NSF Mensuelle", count: 6, anomalies: 0 },
   { nom: "Déclarations TVA MRA", count: 4, anomalies: 0 },
   { nom: "Rapprochement Bancaire", count: 3, anomalies: 1 },
-  { nom: "Immobilisations", count: 2, anomalies: 0 },
+  { nom: "Grand Livre", count: 45, anomalies: 0 },
+  { nom: "Balance des Comptes", count: 3, anomalies: 0 },
+  { nom: "États Financiers IFRS", count: 2, anomalies: 0 },
+  { nom: "Registre Immobilisations", count: 8, anomalies: 0 },
   { nom: "Contrats", count: 5, anomalies: 0 },
   { nom: "Rapports P&L", count: 3, anomalies: 0 },
+  { nom: "ROC Annual Return", count: 1, anomalies: 0 },
+  { nom: "APS Trimestriel", count: 0, anomalies: 0 },
+  { nom: "13ème Mois", count: 0, anomalies: 0 },
   { nom: "Liasse Fiscale Annuelle", count: 0, anomalies: 0 },
   { nom: "Divers", count: 2, anomalies: 0 },
 ]
@@ -243,27 +249,28 @@ export default function SocieteContextPage() {
 
         <TabsContent value="salaires"><Card><CardContent className="p-0">
           <Table><TableHeader><TableRow>
-            <TableHead>Employé</TableHead><TableHead className="text-right">Brut</TableHead><TableHead className="text-right">NPF</TableHead><TableHead className="text-right">PAYE</TableHead>
-            <TableHead className="text-right">Net</TableHead><TableHead className="text-right">Coût</TableHead><TableHead>Statut</TableHead><TableHead></TableHead>
+            <TableHead>Employé</TableHead><TableHead className="text-right">Brut</TableHead><TableHead className="text-right">CSG 3%</TableHead><TableHead className="text-right">NSF 1.5%</TableHead><TableHead className="text-right">PAYE</TableHead>
+            <TableHead className="text-right">Net</TableHead><TableHead className="text-right">Coût empl.</TableHead><TableHead>Statut</TableHead><TableHead></TableHead>
           </TableRow></TableHeader>
-          <TableBody>{mockSalaires.map((s,i)=>(<TableRow key={i}><TableCell className="font-medium">{s.employe}</TableCell><TableCell className="text-right">{fmt(s.brut)}</TableCell><TableCell className="text-right">{fmt(s.npf)}</TableCell><TableCell className="text-right">{fmt(s.paye)}</TableCell><TableCell className="text-right font-semibold">{fmt(s.net)}</TableCell><TableCell className="text-right">{fmt(s.cout)}</TableCell><TableCell>{stBadge(s.statut)}</TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
+          <TableBody>{mockSalaires.map((s,i)=>(<TableRow key={i}><TableCell className="font-medium">{s.employe}</TableCell><TableCell className="text-right">{fmt(s.brut)}</TableCell><TableCell className="text-right">{fmt(s.csg)}</TableCell><TableCell className="text-right">{fmt(s.nsf)}</TableCell><TableCell className="text-right">{fmt(s.paye)}</TableCell><TableCell className="text-right font-semibold">{fmt(s.net)}</TableCell><TableCell className="text-right">{fmt(s.cout)}</TableCell><TableCell>{stBadge(s.statut)}</TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
           </Table></CardContent></Card>
         </TabsContent>
 
         <TabsContent value="charges" className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-4">
-            <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">NPF Total</p><p className="text-xl font-bold">{fmt(37800)}</p></CardContent></Card>
-            <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">HRDC</p><p className="text-xl font-bold">{fmt(4200)}</p></CardContent></Card>
-            <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">NPS</p><p className="text-xl font-bold">{fmt(1250)}</p></CardContent></Card>
+          <div className="grid gap-3 md:grid-cols-5">
+            <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">CSG (3%+6%)</p><p className="text-xl font-bold">{fmt(37800)}</p></CardContent></Card>
+            <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">NSF (1.5%+2.5%)</p><p className="text-xl font-bold">{fmt(16800)}</p></CardContent></Card>
+            <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">Training Levy</p><p className="text-xl font-bold">{fmt(4200)}</p></CardContent></Card>
             <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">PAYE</p><p className="text-xl font-bold">{fmt(22250)}</p></CardContent></Card>
+            <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">Total mensuel</p><p className="text-xl font-bold" style={{ color: "#1E2A4A" }}>{fmt(81050)}</p></CardContent></Card>
           </div>
           <Card><CardContent className="p-0">
             <Table><TableHeader><TableRow>
-              <TableHead>Période</TableHead><TableHead className="text-right">NPF P.</TableHead><TableHead className="text-right">NPF S.</TableHead>
-              <TableHead className="text-right">HRDC</TableHead><TableHead className="text-right">NPS</TableHead><TableHead className="text-right">PAYE</TableHead>
+              <TableHead>Période</TableHead><TableHead className="text-right">CSG Empl.</TableHead><TableHead className="text-right">CSG Patr.</TableHead>
+              <TableHead className="text-right">NSF Empl.</TableHead><TableHead className="text-right">NSF Patr.</TableHead><TableHead className="text-right">Training</TableHead><TableHead className="text-right">PAYE</TableHead>
               <TableHead className="text-right">Total</TableHead><TableHead>Statut</TableHead><TableHead></TableHead>
             </TableRow></TableHeader>
-            <TableBody>{mockCharges.map((c,i)=>(<TableRow key={i}><TableCell className="font-medium">{c.periode}</TableCell><TableCell className="text-right">{fmt(c.npf_p)}</TableCell><TableCell className="text-right">{fmt(c.npf_s)}</TableCell><TableCell className="text-right">{fmt(c.hrdc)}</TableCell><TableCell className="text-right">{fmt(c.nps)}</TableCell><TableCell className="text-right">{fmt(c.paye)}</TableCell><TableCell className="text-right font-semibold">{fmt(c.total)}</TableCell><TableCell>{stBadge(c.statut)}</TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
+            <TableBody>{mockCharges.map((c,i)=>(<TableRow key={i}><TableCell className="font-medium">{c.periode}</TableCell><TableCell className="text-right">{fmt(c.csg_e)}</TableCell><TableCell className="text-right">{fmt(c.csg_p)}</TableCell><TableCell className="text-right">{fmt(c.nsf_e)}</TableCell><TableCell className="text-right">{fmt(c.nsf_p)}</TableCell><TableCell className="text-right">{fmt(c.training)}</TableCell><TableCell className="text-right">{fmt(c.paye)}</TableCell><TableCell className="text-right font-semibold">{fmt(c.total)}</TableCell><TableCell>{stBadge(c.statut)}</TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
             </Table></CardContent></Card>
         </TabsContent>
 
