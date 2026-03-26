@@ -90,7 +90,7 @@ export default function UsersPage() {
     fetchUsers()
   }, [fetchUsers])
 
-  const comptables = users.filter((u) => u.role === "comptable")
+  const comptables = users.filter((u) => u.role === "comptable" || u.role === "comptable_dedie")
   const clients = users.filter((u) => u.role === "client_admin" || u.role === "client_user")
 
   const filteredComptables = comptables.filter(
@@ -237,7 +237,8 @@ export default function UsersPage() {
                     <SelectValue placeholder="Sélectionner un rôle" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="comptable">Comptable</SelectItem>
+                    <SelectItem value="comptable">Comptable (tous les clients)</SelectItem>
+                    <SelectItem value="comptable_dedie">Comptable dédié (clients assignés)</SelectItem>
                     <SelectItem value="client_admin">Client Admin</SelectItem>
                     <SelectItem value="client_user">Client Utilisateur</SelectItem>
                   </SelectContent>

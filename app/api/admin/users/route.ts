@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const validRoles = ['admin', 'client_admin', 'client_user', 'comptable']
+    const validRoles = ['admin', 'client_admin', 'client_user', 'comptable', 'comptable_dedie']
     if (!validRoles.includes(role)) {
       return NextResponse.json(
         { error: `Rôle invalide. Les rôles acceptés sont : ${validRoles.join(', ')}` },

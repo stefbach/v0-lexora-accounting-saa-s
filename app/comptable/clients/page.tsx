@@ -1,214 +1,154 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
-import { Eye, Search, Users } from "lucide-react"
+import { Eye, Search, Loader2 } from "lucide-react"
+import { useProfile } from "@/hooks/use-profile"
 
-const clients = [
-  {
-    id: "cl-001",
-    name: "Jean-Marc Dupont",
-    societe: "TIBOK Ltd",
-    derniereActivite: "24 mars 2026",
-    docsEnAttente: 3,
-    statutTVA: "en_retard" as const,
-  },
-  {
-    id: "cl-002",
-    name: "Marie Lefèvre",
-    societe: "BPO Services Ltd",
-    derniereActivite: "23 mars 2026",
-    docsEnAttente: 5,
-    statutTVA: "a_declarer" as const,
-  },
-  {
-    id: "cl-003",
-    name: "Pierre Martin",
-    societe: "Obesity Care Malta",
-    derniereActivite: "22 mars 2026",
-    docsEnAttente: 2,
-    statutTVA: "a_jour" as const,
-  },
-  {
-    id: "cl-004",
-    name: "Sophie Bernard",
-    societe: "NHS S2 Healthcare",
-    derniereActivite: "21 mars 2026",
-    docsEnAttente: 1,
-    statutTVA: "a_declarer" as const,
-  },
-  {
-    id: "cl-005",
-    name: "Luc Moreau",
-    societe: "TIBOK Ltd",
-    derniereActivite: "20 mars 2026",
-    docsEnAttente: 0,
-    statutTVA: "a_jour" as const,
-  },
-  {
-    id: "cl-006",
-    name: "Claire Fontaine",
-    societe: "NHS S2 Healthcare",
-    derniereActivite: "19 mars 2026",
-    docsEnAttente: 2,
-    statutTVA: "a_jour" as const,
-  },
-  {
-    id: "cl-007",
-    name: "Antoine Rousseau",
-    societe: "BPO Services Ltd",
-    derniereActivite: "18 mars 2026",
-    docsEnAttente: 1,
-    statutTVA: "en_retard" as const,
-  },
-  {
-    id: "cl-008",
-    name: "Nathalie Girard",
-    societe: "Obesity Care Malta",
-    derniereActivite: "17 mars 2026",
-    docsEnAttente: 1,
-    statutTVA: "a_declarer" as const,
-  },
-]
+interface Client {
+  id: string
+  full_name: string
+  email: string
+  role: string
+  phone: string | null
+  is_active: boolean
+  created_at: string
+}
 
-const statutTVAConfig: Record<
-  string,
-  { label: string; className: string }
-> = {
-  a_jour: {
-    label: "À jour",
-    className: "bg-green-100 text-green-700 border-green-200",
-  },
-  en_retard: {
-    label: "En retard",
-    className: "bg-red-100 text-red-700 border-red-200",
-  },
-  a_declarer: {
-    label: "À déclarer",
-    className: "bg-orange-100 text-orange-700 border-orange-200",
-  },
+interface Dossier {
+  id: string
+  client_id: string
+  societe_id: string
+  societe: { id: string; nom: string } | null
 }
 
 export default function ComptableClientsPage() {
   const [search, setSearch] = useState("")
+  const [clients, setClients] = useState<Client[]>([])
+  const [dossiers, setDossiers] = useState<Dossier[]>([])
+  const [loading, setLoading] = useState(true)
+  const { profile } = useProfile()
+
+  const fetchData = useCallback(async () => {
+    try {
+      const res = await fetch("/api/comptable/clients")
+      const data = await res.json()
+      if (data.clients) setClients(data.clients)
+      if (data.dossiers) setDossiers(data.dossiers)
+    } catch {
+      console.error("Failed to fetch clients")
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { fetchData() }, [fetchData])
 
   const filtered = clients.filter(
     (c) =>
-      c.name.toLowerCase().includes(search.toLowerCase()) ||
-      c.societe.toLowerCase().includes(search.toLowerCase())
+      c.full_name.toLowerCase().includes(search.toLowerCase()) ||
+      c.email.toLowerCase().includes(search.toLowerCase())
   )
 
+  const getClientSocietes = (clientId: string) => {
+    return dossiers
+      .filter((d) => d.client_id === clientId && d.societe)
+      .map((d) => d.societe!.nom)
+  }
+
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div
-            className="flex h-10 w-10 items-center justify-center rounded-lg"
-            style={{ backgroundColor: "#C9A84C20" }}
-          >
-            <Users className="h-5 w-5" style={{ color: "#C9A84C" }} />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
-              Mes Clients
-            </h1>
-            <p className="text-sm text-gray-500">
-              {clients.length} clients dans votre portefeuille
-            </p>
-          </div>
-        </div>
+    <div className="flex-1 overflow-auto p-6 space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
+          {profile?.role === "comptable_dedie" ? "Mes Clients Assignés" : "Mes Clients"}
+        </h1>
+        <p className="text-muted-foreground">
+          {profile?.role === "comptable_dedie"
+            ? "Clients et sociétés qui vous sont assignés"
+            : "Tous les clients de la plateforme"}
+        </p>
       </div>
 
-      {/* Search */}
-      <Card>
-        <CardContent className="pt-0">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-            <Input
-              placeholder="Rechercher par nom ou société..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-        </CardContent>
-      </Card>
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input placeholder="Rechercher par nom ou email..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+      </div>
 
-      {/* Clients Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle style={{ color: "#1E2A4A" }}>
-            Liste des clients
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Client</TableHead>
-                <TableHead>Société</TableHead>
-                <TableHead>Dernière activité</TableHead>
-                <TableHead className="text-center">
-                  Documents en attente
-                </TableHead>
-                <TableHead>Statut TVA du mois</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((client) => {
-                const tvaConfig = statutTVAConfig[client.statutTVA]
-                return (
-                  <TableRow key={client.id}>
-                    <TableCell className="font-medium">
-                      {client.name}
-                    </TableCell>
-                    <TableCell>{client.societe}</TableCell>
-                    <TableCell className="text-gray-500">
-                      {client.derniereActivite}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {client.docsEnAttente > 0 ? (
-                        <Badge className="bg-amber-100 text-amber-700 border-amber-200">
-                          {client.docsEnAttente}
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle style={{ color: "#1E2A4A" }}>Clients ({filtered.length})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Client</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Société(s)</TableHead>
+                  <TableHead>Rôle</TableHead>
+                  <TableHead>Statut</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.map((client) => {
+                  const societes = getClientSocietes(client.id)
+                  return (
+                    <TableRow key={client.id}>
+                      <TableCell className="font-medium">{client.full_name}</TableCell>
+                      <TableCell>{client.email}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {societes.length > 0 ? societes.map((s, i) => (
+                            <Badge key={i} variant="outline" style={{ borderColor: "#C9A84C", color: "#1E2A4A" }}>{s}</Badge>
+                          )) : <span className="text-muted-foreground text-sm">Aucune</span>}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={client.role === "client_admin" ? "bg-amber-50 text-amber-700" : "bg-gray-50 text-gray-600"}>
+                          {client.role === "client_admin" ? "Admin" : "Utilisateur"}
                         </Badge>
-                      ) : (
-                        <span className="text-gray-400">0</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={tvaConfig.className}>
-                        {tvaConfig.label}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Link href={`/comptable/clients/${client.id}`}>
-                        <Button variant="outline" size="sm">
-                          <Eye className="h-4 w-4 mr-1" />
-                          Voir dossier
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={client.is_active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}>
+                          {client.is_active ? "Actif" : "Inactif"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Button variant="outline" size="sm" asChild>
+                          <Link href={`/comptable/clients/${client.id}`}>
+                            <Eye className="mr-1 h-4 w-4" />
+                            Voir dossier
+                          </Link>
                         </Button>
-                      </Link>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+                {filtered.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      Aucun client trouvé.
                     </TableCell>
                   </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

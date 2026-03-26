@@ -13,6 +13,9 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog"
 import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select"
+import {
   Plus, Search, Mail, Phone, Users, Eye, UserPlus, Loader2, Calendar,
 } from "lucide-react"
 
@@ -45,6 +48,7 @@ export default function ComptablesPage() {
   const [formEmail, setFormEmail] = useState("")
   const [formPhone, setFormPhone] = useState("")
   const [formPassword, setFormPassword] = useState("")
+  const [formRole, setFormRole] = useState<"comptable" | "comptable_dedie">("comptable")
 
   // Assign form
   const [selectedClientIds, setSelectedClientIds] = useState<Set<string>>(new Set())
@@ -63,7 +67,7 @@ export default function ComptablesPage() {
 
   useEffect(() => { fetchUsers() }, [fetchUsers])
 
-  const comptables = allUsers.filter((u) => u.role === "comptable")
+  const comptables = allUsers.filter((u) => u.role === "comptable" || u.role === "comptable_dedie")
   const clients = allUsers.filter((u) => u.role === "client")
 
   const filtered = comptables.filter(
@@ -79,7 +83,7 @@ export default function ComptablesPage() {
     clients.filter((c) => c.comptable_id === comptableId)
 
   const resetForm = () => {
-    setFormName(""); setFormEmail(""); setFormPhone(""); setFormPassword(""); setError(null)
+    setFormName(""); setFormEmail(""); setFormPhone(""); setFormPassword(""); setFormRole("comptable"); setError(null)
   }
 
   const handleCreate = async () => {
@@ -95,7 +99,7 @@ export default function ComptablesPage() {
       const res = await fetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: formEmail, password: formPassword, full_name: formName, role: "comptable", phone: formPhone || null }),
+        body: JSON.stringify({ email: formEmail, password: formPassword, full_name: formName, role: formRole, phone: formPhone || null }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || "Erreur"); return }
@@ -200,6 +204,16 @@ export default function ComptablesPage() {
                 <Label>Téléphone</Label>
                 <Input placeholder="Ex: +230 5234 5678" value={formPhone} onChange={(e) => setFormPhone(e.target.value)} />
               </div>
+              <div className="space-y-2">
+                <Label>Type de comptable *</Label>
+                <Select value={formRole} onValueChange={(v) => setFormRole(v as "comptable" | "comptable_dedie")}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="comptable">Comptable (accès à tous les clients)</SelectItem>
+                    <SelectItem value="comptable_dedie">Comptable dédié (clients assignés uniquement)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               {error && <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">{error}</div>}
             </div>
             <DialogFooter>
@@ -234,7 +248,7 @@ export default function ComptablesPage() {
                     </div>
                     <div>
                       <CardTitle className="text-base">{comptable.full_name}</CardTitle>
-                      <CardDescription className="mt-0.5">Comptable</CardDescription>
+                      <CardDescription className="mt-0.5">{comptable.role === "comptable_dedie" ? "Comptable dédié" : "Comptable"}</CardDescription>
                     </div>
                   </div>
                   <Badge className={comptable.is_active !== false ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-gray-100 text-gray-600 border-gray-200"}>
