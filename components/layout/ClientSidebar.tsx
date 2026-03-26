@@ -9,6 +9,7 @@ import {
   LayoutDashboard, FileText, LogOut, ChevronLeft, ChevronRight,
   DollarSign, Landmark, Calculator, Users as UsersIcon, Bell,
   Settings, Lightbulb, Building2, Calendar, Wallet,
+  BarChart3, Target, TrendingUp, ClipboardList,
 } from "lucide-react"
 import { useState } from "react"
 import { useProfile } from "@/hooks/use-profile"
@@ -24,9 +25,15 @@ const adminSocieteNav: NavSection[] = [
   ]},
   { label: "Mes Finances", items: [
     { href: "/client/finances", label: "Mes Chiffres", icon: DollarSign },
-    { href: "/client/tresorerie", label: "Trésorerie", icon: Landmark },
+    { href: "/client/tresorerie", label: "Mes Comptes Bancaires", icon: Landmark },
     { href: "/client/tva", label: "Ma TVA", icon: Calculator },
     { href: "/client/salaires", label: "Salaires & Charges", icon: Wallet },
+  ]},
+  { label: "Analyse", items: [
+    { href: "/client/bilan", label: "Mon Bilan", icon: ClipboardList },
+    { href: "/client/tableau-de-bord", label: "Tableau de Bord", icon: BarChart3 },
+    { href: "/client/previsionnel", label: "Prévisionnel", icon: TrendingUp },
+    { href: "/client/simulations", label: "Simulations", icon: Target },
     { href: "/client/conseils", label: "Conseils", icon: Lightbulb },
   ]},
   { label: "Mon Compte", items: [
@@ -43,7 +50,12 @@ const adminFreelanceNav: NavSection[] = [
   ]},
   { label: "Mes Finances", items: [
     { href: "/client/revenus-depenses", label: "Mes Revenus & Dépenses", icon: DollarSign },
-    { href: "/client/tresorerie", label: "Trésorerie", icon: Landmark },
+    { href: "/client/tresorerie", label: "Mes Comptes Bancaires", icon: Landmark },
+  ]},
+  { label: "Analyse", items: [
+    { href: "/client/bilan", label: "Mon Bilan", icon: ClipboardList },
+    { href: "/client/previsionnel", label: "Prévisionnel", icon: TrendingUp },
+    { href: "/client/simulations", label: "Simulations", icon: Target },
     { href: "/client/fiscal-freelance", label: "Mes Obligations Fiscales", icon: Calendar },
     { href: "/client/conseils", label: "Conseils", icon: Lightbulb },
   ]},

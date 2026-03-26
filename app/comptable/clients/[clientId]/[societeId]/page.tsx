@@ -195,6 +195,22 @@ export default function SocieteContextPage() {
           <TabsTrigger value="alertes">Alertes</TabsTrigger>
         </TabsList>
 
+        {/* Quick links to full pages */}
+        <div className="flex flex-wrap gap-2 -mt-2">
+          <Link href={`/comptable/clients/${clientId}/${societeId}/bilan`}>
+            <Button variant="outline" size="sm" className="text-xs gap-1"><FileIcon className="h-3 w-3" />Bilan Officiel</Button>
+          </Link>
+          <Link href={`/comptable/clients/${clientId}/${societeId}/tableau-de-bord`}>
+            <Button variant="outline" size="sm" className="text-xs gap-1"><BarChart3 className="h-3 w-3" />Tableau de Bord</Button>
+          </Link>
+          <Link href={`/comptable/clients/${clientId}/${societeId}/previsionnel`}>
+            <Button variant="outline" size="sm" className="text-xs gap-1"><TrendingUp className="h-3 w-3" />Prévisionnel</Button>
+          </Link>
+          <Link href={`/comptable/clients/${clientId}/${societeId}/simulations`}>
+            <Button variant="outline" size="sm" className="text-xs gap-1"><Calculator className="h-3 w-3" />Simulations</Button>
+          </Link>
+        </div>
+
         <TabsContent value="overview" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <Card><CardHeader className="pb-2"><CardTitle className="text-base">Résumé du mois</CardTitle></CardHeader>
