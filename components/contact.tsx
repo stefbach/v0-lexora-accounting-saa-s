@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "@/components/ui/card"
-import { Loader2, CheckCircle, Mail, Phone, MapPin } from "lucide-react"
+import { Loader2, CheckCircle, MapPin } from "lucide-react"
 
 export function Contact() {
   const [formData, setFormData] = useState({
@@ -76,16 +76,6 @@ export function Contact() {
             </div>
 
             <div className="space-y-4">
-              <div className="flex items-center gap-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                  <Mail className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Email</p>
-                  <p className="font-medium text-foreground">contact@lexora.mu</p>
-                </div>
-              </div>
-
               <div className="flex items-center gap-4">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
                   <MapPin className="h-5 w-5 text-primary" />
