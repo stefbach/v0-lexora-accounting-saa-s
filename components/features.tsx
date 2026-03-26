@@ -1,11 +1,11 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Users, FileText, BarChart3, Shield, MessageSquare, Cpu } from "lucide-react"
+import { Users, FileText, BarChart3, Shield, MessageSquare, Zap } from "lucide-react"
 
 const features = [
   {
-    icon: Cpu,
-    title: "Traitement IA des documents",
-    description: "Classification automatique des factures, relevés bancaires et fiches de paie grâce à Claude AI via n8n.",
+    icon: Zap,
+    title: "Traitement automatique des documents",
+    description: "Classifiez et extrayez automatiquement les données de vos factures, relevés bancaires et fiches de paie.",
   },
   {
     icon: FileText,
@@ -14,23 +14,23 @@ const features = [
   },
   {
     icon: MessageSquare,
-    title: "Alertes WhatsApp",
-    description: "Notifications automatiques par WhatsApp pour les échéances TVA, documents traités et rappels urgents.",
+    title: "Alertes en temps réel",
+    description: "Notifications automatiques pour les échéances TVA, documents traités et rappels urgents.",
   },
   {
     icon: Users,
-    title: "Multi-rôles",
-    description: "Tableaux de bord dédiés pour admin, comptables et clients avec permissions par rôle.",
+    title: "Gestion multi-sociétés",
+    description: "Gérez plusieurs entités depuis un seul tableau de bord avec des accès dédiés par rôle.",
   },
   {
     icon: BarChart3,
-    title: "Rapports P&L automatiques",
-    description: "Génération mensuelle du compte de résultat, EBITDA et indicateurs financiers par société.",
+    title: "Rapports financiers",
+    description: "Compte de résultat, EBITDA et indicateurs financiers générés automatiquement chaque mois.",
   },
   {
     icon: Shield,
-    title: "Sécurité bancaire",
-    description: "Chiffrement de bout en bout, authentification Supabase et stockage sécurisé des documents.",
+    title: "Sécurité et confidentialité",
+    description: "Chiffrement de bout en bout et stockage sécurisé de tous vos documents financiers.",
   },
 ]
 

@@ -4,9 +4,9 @@ import { ArrowRight, CheckCircle2 } from "lucide-react"
 
 export function Hero() {
   const highlights = [
-    "Traitement IA des documents",
+    "Traitement automatique des documents",
     "Conformité MRA",
-    "Alertes WhatsApp",
+    "Alertes en temps réel",
   ]
 
   return (
@@ -21,18 +21,18 @@ export function Hero() {
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-secondary/50 px-4 py-1.5">
             <span className="h-2 w-2 rounded-full bg-chart-4" />
             <span className="text-sm font-medium text-muted-foreground">
-              La comptabilité intelligente pour Maurice
+              La plateforme comptable pour Maurice
             </span>
           </div>
 
           <h1 className="text-balance text-4xl font-bold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
             Comptabilité Professionnelle
-            <span className="block text-primary">Simplifiée par l&apos;IA</span>
+            <span className="block text-primary">Simplifiée et Automatisée</span>
           </h1>
 
           <p className="mx-auto mt-6 max-w-2xl text-pretty text-lg leading-relaxed text-muted-foreground">
-            Optimisez votre flux financier avec Lexora. Connectez comptables,
-            entreprises et clients sur une plateforme puissante conçue pour
+            Optimisez votre gestion financière avec Lexora. Connectez comptables,
+            entreprises et clients sur une plateforme conçue pour
             la comptabilité moderne à Maurice.
           </p>
 
