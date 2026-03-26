@@ -30,15 +30,22 @@ export function Contact() {
 
     setSending(true)
     try {
-      const res = await fetch("/api/contact", {
+      const res = await fetch("https://formsubmit.co/ajax/megane-quenette@obesity-care-clinic.com", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          Nom: formData.nom,
+          Email: formData.email,
+          Entreprise: formData.entreprise || "Non renseignée",
+          Telephone: formData.telephone || "Non renseigné",
+          Message: formData.message,
+          _subject: `[Lexora] Nouveau contact — ${formData.nom}`,
+          _template: "table",
+        }),
       })
 
       if (!res.ok) {
-        const data = await res.json()
-        setError(data.error || "Erreur lors de l'envoi du message.")
+        setError("Erreur lors de l'envoi. Veuillez réessayer.")
         return
       }
 
