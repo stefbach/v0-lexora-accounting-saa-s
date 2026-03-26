@@ -268,7 +268,7 @@ PATTERNS DE RECONNAISSANCE AUTOMATIQUE:
 - CEB, EMTEL, MTML, ORANGE → 626 Telecom/Electricite
 - UBER, BOLT, TAXI → 624 Transport
 - MRA, MAURITIUS REVENUE → 4457/4456 TVA
-- NPF, NATIONAL PENSIONS → 431 NPF
+- CSG, NATIONAL PENSIONS → 431 CSG
 - SALARY, SALAIRE → 421 Remuneration personnel
 - VIREMENT CLIENT, PAYMENT RECEIVED → 411 Clients
 - LOAN, PRET, EMI → 164 Emprunts
@@ -292,13 +292,13 @@ REPONSE en JSON strict selon le format ReleveBancaireResult.`
 export const SYSTEM_PROMPT_CHARGES_SOCIALES = `Tu es un expert en droit social mauricien specialise dans les charges sociales et cotisations.
 
 COTISATIONS OBLIGATOIRES MAURICE:
-1. NPF (National Pensions Fund):
+1. CSG (Contribution Sociale Generalisee):
    - Part patronale: 6% du salaire brut
    - Part salariale: 3% du salaire brut
    - Plafond: pas de plafond
    - Echeance: 15 du mois suivant
 
-2. HRDC (Human Resource Development Council):
+2. Training Levy (Training Levy (ex-HRDC)):
    - Taux: 1% du salaire brut (employeur uniquement)
    - Applicable aux entreprises > 10 salaries
 
@@ -315,8 +315,8 @@ COTISATIONS OBLIGATOIRES MAURICE:
    - Declaration et paiement au MRA avant le 20 du mois suivant
 
 PLAN COMPTABLE:
-- 431 - NPF a payer (part patronale + salariale)
-- 432 - HRDC a payer
+- 431 - CSG a payer (part patronale + salariale)
+- 432 - Training Levy a payer
 - 433 - NPS a payer
 - 444 - PAYE retenue a la source
 - 645 - Charges sociales patronales (debit)
@@ -335,9 +335,9 @@ export const SYSTEM_PROMPT_FICHE_PAIE = `Tu es un expert en paie mauricien speci
 
 REGLES DE PAIE MAURICE:
 - Salaire minimum national: MUR 11,575 par mois (Workers' Rights Act 2019, revise)
-- NPF salariale: 3% du salaire brut
-- NPF patronale: 6% du salaire brut (charge employeur, pas deduit du net)
-- HRDC: 1% du salaire brut (charge employeur)
+- CSG salariale: 3% du salaire brut
+- CSG patronale: 6% du salaire brut (charge employeur, pas deduit du net)
+- Training Levy: 1% du salaire brut (charge employeur)
 - NPS employe: MUR 1.00/mois, NPS employeur: MUR 2.50/mois
 - PAYE: selon bareme progressif (0%/10%/15%)
 - 13eme mois: obligatoire, verse en decembre, = 1/12 du salaire annuel brut
@@ -346,18 +346,18 @@ REGLES DE PAIE MAURICE:
 
 CALCUL DU NET:
 Salaire brut
-- NPF salariale (3%)
+- CSG salariale (3%)
 - PAYE (selon bareme)
 - NPS salarie (MUR 1)
 = Net a payer
 
 PLAN COMPTABLE:
 - 641 - Remunerations du personnel (debit - salaire brut)
-- 645 - Charges sociales patronales (debit - NPF patronal + HRDC + NPS employeur)
+- 645 - Charges sociales patronales (debit - CSG patronal + Training Levy + NPS employeur)
 - 421 - Personnel, remunerations dues (credit - net a payer)
 - 444 - PAYE retenue (credit)
-- 431 - NPF a payer (credit - part salariale + patronale)
-- 432 - HRDC a payer (credit)
+- 431 - CSG a payer (credit - part salariale + patronale)
+- 432 - Training Levy a payer (credit)
 - 422 - Acomptes et avances au personnel (si applicable)
 
 REGLES:
@@ -408,7 +408,7 @@ TYPES DE DOCUMENTS:
 - facture_client: facture emise a un client (vente)
 - releve_bancaire: releve de compte bancaire
 - fiche_paie: bulletin de salaire
-- charges_sociales: declaration NPF, HRDC, PAYE
+- charges_sociales: declaration CSG, Training Levy, PAYE
 
 REGLES:
 1. Analyse le contenu du document (texte OCR ou structure)
@@ -431,7 +431,7 @@ REGLES:
 EXEMPLES:
 - "🚨 URGENT TVA | TIBOK | MUR 195,000 a payer avant le 20/04 | Action: soumettre declaration MRA"
 - "⚠️ IMPAYE | BPO Co | Facture #847 MUR 450K en retard 10j | Relancer client"
-- "✅ NPF Q1 | Obesity Care | MUR 85,000 paye le 15/03 | Aucune action requise"
+- "✅ CSG Q1 | Obesity Care | MUR 85,000 paye le 15/03 | Aucune action requise"
 
 REPONSE en JSON strict selon le format AlerteWhatsAppResult.`
 
