@@ -497,26 +497,7 @@ function ClientAdminDashboard({
     )
   }
 
-  if (assignedSocietes.length === 0) {
-    return (
-      <div className="p-6 space-y-4">
-        <div className="flex items-center gap-3">
-          <Building2 className="h-7 w-7" style={{ color: "#C9A84C" }} />
-          <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>Tableau de bord</h1>
-        </div>
-        <Card>
-          <CardContent className="py-12 text-center">
-            <Info className="h-10 w-10 mx-auto mb-4 text-muted-foreground" />
-            <h2 className="text-lg font-semibold mb-2" style={{ color: "#1E2A4A" }}>Aucune societe assignee</h2>
-            <p className="text-muted-foreground">
-              Votre comptable n{"'"}a pas encore assigne de societe a votre compte.
-              Veuillez le contacter pour configurer votre dossier.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
+
 
   return (
     <div className="p-6 space-y-8">
