@@ -4,13 +4,10 @@ const navigation = {
   produit: [
     { name: "Fonctionnalités", href: "#features" },
     { name: "Sécurité", href: "#" },
-    { name: "Intégrations", href: "#" },
   ],
   entreprise: [
     { name: "À propos", href: "#about" },
-    { name: "Blog", href: "#" },
-    { name: "Carrières", href: "#" },
-    { name: "Contact", href: "#" },
+    { name: "Contact", href: "#contact" },
   ],
   legal: [
     { name: "Confidentialité", href: "#" },
