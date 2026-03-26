@@ -82,9 +82,7 @@ export function Contact() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Email</p>
-                  <a href="mailto:megane-quenette@obesity-care-clinic.com" className="font-medium text-foreground hover:text-primary transition-colors">
-                    megane-quenette@obesity-care-clinic.com
-                  </a>
+                  <p className="font-medium text-foreground">contact@lexora.mu</p>
                 </div>
               </div>
 
