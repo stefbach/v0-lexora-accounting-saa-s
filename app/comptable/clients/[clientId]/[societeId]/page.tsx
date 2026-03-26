@@ -2,6 +2,7 @@
 
 import { useParams } from "next/navigation"
 import Link from "next/link"
+import { useState, useCallback, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -11,7 +12,8 @@ import {
 } from "@/components/ui/table"
 import {
   ArrowLeft, TrendingUp, TrendingDown, ChevronRight, Upload,
-  BarChart3, Landmark, Wallet, Calculator, FolderOpen,
+  BarChart3, Landmark, Wallet, Calculator, FolderOpen, Loader2,
+  FileText as FileIcon, CheckCircle, AlertTriangle as AlertIcon, Pencil,
 } from "lucide-react"
 
 function fmt(n: number) { return n.toLocaleString("fr-FR") + " MUR" }
@@ -89,8 +91,55 @@ function stBadge(s: string) {
 export default function SocieteContextPage() {
   const params = useParams()
   const clientId = params.clientId as string
+  const societeId = params.societeId as string
   const clientName = "Jean-Marc Dupont"
   const societeName = "TIBOK Ltd"
+
+  // Documents state
+  const [uploading, setUploading] = useState(false)
+  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [dragActive, setDragActive] = useState(false)
+  const [selectedDossier, setSelectedDossier] = useState<string | null>(null)
+  const [uploadedFiles, setUploadedFiles] = useState<Array<{ name: string; status: string; type?: string; date: string }>>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return
+    setUploading(true)
+    setUploadError(null)
+    setUploadSuccess(null)
+
+    for (const file of Array.from(files)) {
+      const formData = new FormData()
+      formData.append("file", file)
+      formData.append("societe_id", societeId)
+
+      try {
+        const res = await fetch("/api/documents/upload", { method: "POST", body: formData })
+        const data = await res.json()
+        if (res.ok) {
+          setUploadedFiles(prev => [{ name: file.name, status: "En cours de traitement", date: new Date().toLocaleDateString("fr-FR"), type: "Détection..." }, ...prev])
+          setUploadSuccess(`${file.name} uploadé avec succès. Analyse en cours...`)
+        } else {
+          setUploadError(data.error || "Erreur lors de l'upload")
+        }
+      } catch {
+        setUploadError("Erreur de connexion")
+      }
+    }
+    setUploading(false)
+    setTimeout(() => { setUploadSuccess(null); setUploadError(null) }, 5000)
+  }
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setDragActive(false)
+    handleUpload(e.dataTransfer.files)
+  }, [societeId])
+
+  const handleDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); setDragActive(true) }, [])
+  const handleDragLeave = useCallback(() => setDragActive(false), [])
 
   return (
     <div className="flex-1 overflow-auto p-6 space-y-6">
@@ -161,9 +210,9 @@ export default function SocieteContextPage() {
           <Table><TableHeader><TableRow>
             <TableHead>Fournisseur</TableHead><TableHead>N°</TableHead><TableHead>Date</TableHead>
             <TableHead className="text-right">HT</TableHead><TableHead className="text-right">TVA</TableHead><TableHead className="text-right">TTC</TableHead>
-            <TableHead>Échéance</TableHead><TableHead>Statut</TableHead><TableHead>Compte</TableHead>
+            <TableHead>Échéance</TableHead><TableHead>Statut</TableHead><TableHead>Compte</TableHead><TableHead></TableHead>
           </TableRow></TableHeader>
-          <TableBody>{mockFournisseurs.map((f,i)=>(<TableRow key={i}><TableCell className="font-medium">{f.fournisseur}</TableCell><TableCell>{f.numero}</TableCell><TableCell>{f.date}</TableCell><TableCell className="text-right">{fmt(f.ht)}</TableCell><TableCell className="text-right">{fmt(f.tva)}</TableCell><TableCell className="text-right font-semibold">{fmt(f.ttc)}</TableCell><TableCell>{f.echeance}</TableCell><TableCell>{stBadge(f.statut)}</TableCell><TableCell><Badge variant="outline">{f.compte}</Badge></TableCell></TableRow>))}</TableBody>
+          <TableBody>{mockFournisseurs.map((f,i)=>(<TableRow key={i}><TableCell className="font-medium">{f.fournisseur}</TableCell><TableCell>{f.numero}</TableCell><TableCell>{f.date}</TableCell><TableCell className="text-right">{fmt(f.ht)}</TableCell><TableCell className="text-right">{fmt(f.tva)}</TableCell><TableCell className="text-right font-semibold">{fmt(f.ttc)}</TableCell><TableCell>{f.echeance}</TableCell><TableCell>{stBadge(f.statut)}</TableCell><TableCell><Badge variant="outline">{f.compte}</Badge></TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
           </Table></CardContent></Card>
         </TabsContent>
 
@@ -171,9 +220,9 @@ export default function SocieteContextPage() {
           <Table><TableHeader><TableRow>
             <TableHead>Client</TableHead><TableHead>N°</TableHead><TableHead>Date</TableHead>
             <TableHead className="text-right">HT</TableHead><TableHead className="text-right">TVA</TableHead><TableHead className="text-right">TTC</TableHead>
-            <TableHead>Échéance</TableHead><TableHead>Statut</TableHead><TableHead className="text-right">Retard</TableHead>
+            <TableHead>Échéance</TableHead><TableHead>Statut</TableHead><TableHead className="text-right">Retard</TableHead><TableHead></TableHead>
           </TableRow></TableHeader>
-          <TableBody>{mockFacturesClients.map((f,i)=>(<TableRow key={i}><TableCell className="font-medium">{f.client}</TableCell><TableCell>{f.numero}</TableCell><TableCell>{f.date}</TableCell><TableCell className="text-right">{fmt(f.ht)}</TableCell><TableCell className="text-right">{fmt(f.tva)}</TableCell><TableCell className="text-right font-semibold">{fmt(f.ttc)}</TableCell><TableCell>{f.echeance}</TableCell><TableCell>{stBadge(f.statut)}</TableCell><TableCell className={`text-right ${f.jours>30?"text-red-600 font-bold":f.jours>0?"text-orange-600":""}`}>{f.jours>0?f.jours+"j":"—"}</TableCell></TableRow>))}</TableBody>
+          <TableBody>{mockFacturesClients.map((f,i)=>(<TableRow key={i}><TableCell className="font-medium">{f.client}</TableCell><TableCell>{f.numero}</TableCell><TableCell>{f.date}</TableCell><TableCell className="text-right">{fmt(f.ht)}</TableCell><TableCell className="text-right">{fmt(f.tva)}</TableCell><TableCell className="text-right font-semibold">{fmt(f.ttc)}</TableCell><TableCell>{f.echeance}</TableCell><TableCell>{stBadge(f.statut)}</TableCell><TableCell className={`text-right ${f.jours>30?"text-red-600 font-bold":f.jours>0?"text-orange-600":""}`}>{f.jours>0?f.jours+"j":"—"}</TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
           </Table></CardContent></Card>
         </TabsContent>
 
@@ -186,18 +235,18 @@ export default function SocieteContextPage() {
           <Card><CardContent className="p-0">
             <Table><TableHeader><TableRow>
               <TableHead>Date</TableHead><TableHead>Libellé</TableHead><TableHead className="text-right">Débit</TableHead><TableHead className="text-right">Crédit</TableHead>
-              <TableHead>Tiers</TableHead><TableHead>Compte</TableHead><TableHead>Statut</TableHead>
+              <TableHead>Tiers</TableHead><TableHead>Compte</TableHead><TableHead>Statut</TableHead><TableHead></TableHead>
             </TableRow></TableHeader>
-            <TableBody>{mockBanque.map((b,i)=>(<TableRow key={i} className={b.statut==="non_identifie"?"bg-red-50":b.statut==="a_verifier"?"bg-orange-50":""}><TableCell>{b.date}</TableCell><TableCell className="font-medium">{b.libelle}</TableCell><TableCell className="text-right text-red-600">{b.debit>0?fmt(b.debit):""}</TableCell><TableCell className="text-right text-green-600">{b.credit>0?fmt(b.credit):""}</TableCell><TableCell>{b.tiers}</TableCell><TableCell><Badge variant="outline">{b.compte}</Badge></TableCell><TableCell>{stBadge(b.statut)}</TableCell></TableRow>))}</TableBody>
+            <TableBody>{mockBanque.map((b,i)=>(<TableRow key={i} className={b.statut==="non_identifie"?"bg-red-50":b.statut==="a_verifier"?"bg-orange-50":""}><TableCell>{b.date}</TableCell><TableCell className="font-medium">{b.libelle}</TableCell><TableCell className="text-right text-red-600">{b.debit>0?fmt(b.debit):""}</TableCell><TableCell className="text-right text-green-600">{b.credit>0?fmt(b.credit):""}</TableCell><TableCell>{b.tiers}</TableCell><TableCell><Badge variant="outline">{b.compte}</Badge></TableCell><TableCell>{stBadge(b.statut)}</TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
             </Table></CardContent></Card>
         </TabsContent>
 
         <TabsContent value="salaires"><Card><CardContent className="p-0">
           <Table><TableHeader><TableRow>
             <TableHead>Employé</TableHead><TableHead className="text-right">Brut</TableHead><TableHead className="text-right">NPF</TableHead><TableHead className="text-right">PAYE</TableHead>
-            <TableHead className="text-right">Net</TableHead><TableHead className="text-right">Coût</TableHead><TableHead>Statut</TableHead>
+            <TableHead className="text-right">Net</TableHead><TableHead className="text-right">Coût</TableHead><TableHead>Statut</TableHead><TableHead></TableHead>
           </TableRow></TableHeader>
-          <TableBody>{mockSalaires.map((s,i)=>(<TableRow key={i}><TableCell className="font-medium">{s.employe}</TableCell><TableCell className="text-right">{fmt(s.brut)}</TableCell><TableCell className="text-right">{fmt(s.npf)}</TableCell><TableCell className="text-right">{fmt(s.paye)}</TableCell><TableCell className="text-right font-semibold">{fmt(s.net)}</TableCell><TableCell className="text-right">{fmt(s.cout)}</TableCell><TableCell>{stBadge(s.statut)}</TableCell></TableRow>))}</TableBody>
+          <TableBody>{mockSalaires.map((s,i)=>(<TableRow key={i}><TableCell className="font-medium">{s.employe}</TableCell><TableCell className="text-right">{fmt(s.brut)}</TableCell><TableCell className="text-right">{fmt(s.npf)}</TableCell><TableCell className="text-right">{fmt(s.paye)}</TableCell><TableCell className="text-right font-semibold">{fmt(s.net)}</TableCell><TableCell className="text-right">{fmt(s.cout)}</TableCell><TableCell>{stBadge(s.statut)}</TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
           </Table></CardContent></Card>
         </TabsContent>
 
@@ -212,9 +261,9 @@ export default function SocieteContextPage() {
             <Table><TableHeader><TableRow>
               <TableHead>Période</TableHead><TableHead className="text-right">NPF P.</TableHead><TableHead className="text-right">NPF S.</TableHead>
               <TableHead className="text-right">HRDC</TableHead><TableHead className="text-right">NPS</TableHead><TableHead className="text-right">PAYE</TableHead>
-              <TableHead className="text-right">Total</TableHead><TableHead>Statut</TableHead>
+              <TableHead className="text-right">Total</TableHead><TableHead>Statut</TableHead><TableHead></TableHead>
             </TableRow></TableHeader>
-            <TableBody>{mockCharges.map((c,i)=>(<TableRow key={i}><TableCell className="font-medium">{c.periode}</TableCell><TableCell className="text-right">{fmt(c.npf_p)}</TableCell><TableCell className="text-right">{fmt(c.npf_s)}</TableCell><TableCell className="text-right">{fmt(c.hrdc)}</TableCell><TableCell className="text-right">{fmt(c.nps)}</TableCell><TableCell className="text-right">{fmt(c.paye)}</TableCell><TableCell className="text-right font-semibold">{fmt(c.total)}</TableCell><TableCell>{stBadge(c.statut)}</TableCell></TableRow>))}</TableBody>
+            <TableBody>{mockCharges.map((c,i)=>(<TableRow key={i}><TableCell className="font-medium">{c.periode}</TableCell><TableCell className="text-right">{fmt(c.npf_p)}</TableCell><TableCell className="text-right">{fmt(c.npf_s)}</TableCell><TableCell className="text-right">{fmt(c.hrdc)}</TableCell><TableCell className="text-right">{fmt(c.nps)}</TableCell><TableCell className="text-right">{fmt(c.paye)}</TableCell><TableCell className="text-right font-semibold">{fmt(c.total)}</TableCell><TableCell>{stBadge(c.statut)}</TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
             </Table></CardContent></Card>
         </TabsContent>
 
@@ -227,32 +276,80 @@ export default function SocieteContextPage() {
           <Card><CardContent className="p-0">
             <Table><TableHeader><TableRow>
               <TableHead>Mois</TableHead><TableHead className="text-right">Collectée</TableHead><TableHead className="text-right">Déductible</TableHead>
-              <TableHead className="text-right">Nette</TableHead><TableHead>Deadline</TableHead><TableHead>Statut</TableHead><TableHead>Réf</TableHead>
+              <TableHead className="text-right">Nette</TableHead><TableHead>Deadline</TableHead><TableHead>Statut</TableHead><TableHead>Réf</TableHead><TableHead></TableHead>
             </TableRow></TableHeader>
-            <TableBody>{mockTVA.map((t,i)=>(<TableRow key={i}><TableCell className="font-medium">{t.mois}</TableCell><TableCell className="text-right">{fmt(t.collectee)}</TableCell><TableCell className="text-right">{fmt(t.deductible)}</TableCell><TableCell className="text-right font-semibold">{fmt(t.nette)}</TableCell><TableCell>{t.deadline}</TableCell><TableCell>{stBadge(t.statut)}</TableCell><TableCell className="text-xs text-muted-foreground">{t.ref||"—"}</TableCell></TableRow>))}</TableBody>
+            <TableBody>{mockTVA.map((t,i)=>(<TableRow key={i}><TableCell className="font-medium">{t.mois}</TableCell><TableCell className="text-right">{fmt(t.collectee)}</TableCell><TableCell className="text-right">{fmt(t.deductible)}</TableCell><TableCell className="text-right font-semibold">{fmt(t.nette)}</TableCell><TableCell>{t.deadline}</TableCell><TableCell>{stBadge(t.statut)}</TableCell><TableCell className="text-xs text-muted-foreground">{t.ref||"—"}</TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
             </Table></CardContent></Card>
         </TabsContent>
 
         <TabsContent value="documents" className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h3 className="font-semibold" style={{ color: "#1E2A4A" }}>Dossiers</h3>
-            <Button size="sm" style={{ backgroundColor: "#C9A84C" }}><Upload className="mr-1 h-4 w-4" />Uploader</Button>
+          {/* Upload Zone */}
+          <div
+            className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${dragActive ? "border-amber-400 bg-amber-50" : "border-muted-foreground/25 hover:border-muted-foreground/50"}`}
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+          >
+            <input ref={fileInputRef} type="file" className="hidden" multiple accept=".pdf,.jpeg,.jpg,.png,.xlsx" onChange={(e) => handleUpload(e.target.files)} />
+            {uploading ? (
+              <div className="flex flex-col items-center gap-2">
+                <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#C9A84C" }} />
+                <p className="text-sm text-muted-foreground">Upload en cours...</p>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-2">
+                <Upload className="h-8 w-8 text-muted-foreground" />
+                <p className="text-sm font-medium">Glissez-déposez vos fichiers ici</p>
+                <p className="text-xs text-muted-foreground">PDF, JPEG, PNG, XLSX — max 10 MB</p>
+                <Button size="sm" variant="outline" className="mt-2" onClick={() => fileInputRef.current?.click()}>Parcourir</Button>
+              </div>
+            )}
           </div>
-          <div className="grid gap-2">
-            {mockDossiers.map((d,i)=>(
-              <Card key={i} className={`cursor-pointer hover:bg-muted/50 ${d.count===0?"opacity-50":""}`}>
-                <CardContent className="flex items-center justify-between py-3">
-                  <div className="flex items-center gap-3">
-                    <FolderOpen className="h-5 w-5" style={{ color: "#C9A84C" }} />
-                    <div><p className="text-sm font-medium">{d.nom}</p><p className="text-xs text-muted-foreground">{d.count} doc{d.count!==1?"s":""}{d.count===0?" — vide":""}</p></div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {d.anomalies>0&&<Badge className="bg-red-100 text-red-700">{d.anomalies} anomalie{d.anomalies>1?"s":""}</Badge>}
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+
+          {uploadSuccess && <div className="rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800 flex items-center gap-2"><CheckCircle className="h-4 w-4" />{uploadSuccess}</div>}
+          {uploadError && <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800 flex items-center gap-2"><AlertIcon className="h-4 w-4" />{uploadError}</div>}
+
+          {/* Uploaded files */}
+          {uploadedFiles.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-base">Documents uploadés</CardTitle></CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader><TableRow><TableHead>Fichier</TableHead><TableHead>Date</TableHead><TableHead>Type détecté</TableHead><TableHead>Statut</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {uploadedFiles.map((f, i) => (
+                      <TableRow key={i}>
+                        <TableCell className="flex items-center gap-2"><FileIcon className="h-4 w-4 text-muted-foreground" />{f.name}</TableCell>
+                        <TableCell>{f.date}</TableCell>
+                        <TableCell><Badge variant="outline">{f.type}</Badge></TableCell>
+                        <TableCell><Badge className="bg-blue-100 text-blue-700">{f.status}</Badge></TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Dossiers */}
+          <div>
+            <h3 className="font-semibold mb-3" style={{ color: "#1E2A4A" }}>Dossiers de la société</h3>
+            <div className="grid gap-2">
+              {mockDossiers.map((d,i)=>(
+                <Card key={i} className={`cursor-pointer hover:bg-muted/50 ${d.count===0?"opacity-50":""}`} onClick={() => setSelectedDossier(selectedDossier === d.nom ? null : d.nom)}>
+                  <CardContent className="flex items-center justify-between py-3">
+                    <div className="flex items-center gap-3">
+                      <FolderOpen className="h-5 w-5" style={{ color: "#C9A84C" }} />
+                      <div><p className="text-sm font-medium">{d.nom}</p><p className="text-xs text-muted-foreground">{d.count} doc{d.count!==1?"s":""}{d.count===0?" — vide":""}</p></div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {d.anomalies>0&&<Badge className="bg-red-100 text-red-700">{d.anomalies} anomalie{d.anomalies>1?"s":""}</Badge>}
+                      <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform ${selectedDossier===d.nom?"rotate-90":""}`} />
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           </div>
         </TabsContent>
 
