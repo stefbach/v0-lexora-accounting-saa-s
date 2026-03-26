@@ -10,19 +10,10 @@ import {
   LayoutDashboard,
   Users,
   UsersRound,
-  Building2,
-  FileText,
-  BarChart3,
   AlertTriangle,
   LogOut,
   ChevronLeft,
   ChevronRight,
-  Truck,
-  Receipt,
-  Landmark,
-  Wallet,
-  BadgePercent,
-  Calculator,
 } from "lucide-react"
 import { useState } from "react"
 
@@ -33,24 +24,6 @@ const navSections = [
       { href: "/comptable", label: "Tableau de bord", icon: LayoutDashboard },
       { href: "/comptable/clients", label: "Mes Clients", icon: Users },
       { href: "/comptable/equipe", label: "Mon Équipe", icon: UsersRound },
-    ],
-  },
-  {
-    label: "Comptabilité",
-    items: [
-      { href: "/comptable/fournisseurs", label: "Fournisseurs", icon: Truck },
-      { href: "/comptable/factures-clients", label: "Factures Clients", icon: Receipt },
-      { href: "/comptable/banque", label: "Banque", icon: Landmark },
-      { href: "/comptable/salaires", label: "Salaires", icon: Wallet },
-      { href: "/comptable/charges-sociales", label: "Charges Sociales", icon: BadgePercent },
-      { href: "/comptable/tva", label: "TVA", icon: Calculator },
-    ],
-  },
-  {
-    label: null,
-    items: [
-      { href: "/comptable/documents", label: "Documents", icon: FileText },
-      { href: "/comptable/rapports", label: "Rapports", icon: BarChart3 },
       { href: "/comptable/alertes", label: "Alertes", icon: AlertTriangle },
     ],
   },
