@@ -32,7 +32,6 @@ const navSections = [
     items: [
       { href: "/comptable", label: "Tableau de bord", icon: LayoutDashboard },
       { href: "/comptable/clients", label: "Mes Clients", icon: Users },
-      { href: "/comptable/societes", label: "Sociétés", icon: Building2 },
       { href: "/comptable/equipe", label: "Mon Équipe", icon: UsersRound },
     ],
   },
