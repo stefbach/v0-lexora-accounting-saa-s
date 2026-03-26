@@ -76,7 +76,7 @@ export default function ComptableSocietesPage() {
   const fetchData = useCallback(async () => {
     try {
       const [societesRes, clientsRes, dossiersRes] = await Promise.all([
-        fetch("/api/admin/societes"),
+        fetch("/api/comptable/societes"),
         fetch("/api/comptable/clients"),
         fetch("/api/admin/dossiers"),
       ])
