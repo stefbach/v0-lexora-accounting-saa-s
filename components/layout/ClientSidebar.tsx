@@ -6,47 +6,86 @@ import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import {
-  LayoutDashboard,
-  FileText,
-  Upload,
-  Calculator,
-  Bell,
-  LogOut,
-  ChevronLeft,
-  ChevronRight,
-  Truck,
-  Landmark,
-  Wallet,
-  BadgePercent,
-  Building2,
+  LayoutDashboard, FileText, Upload, Calculator, Bell, LogOut,
+  ChevronLeft, ChevronRight, Truck, Landmark, Wallet, BadgePercent,
+  Building2, Users, Settings, DollarSign, Calendar,
 } from "lucide-react"
 import { useState } from "react"
 import { useProfile } from "@/hooks/use-profile"
 
-const navSections = [
+interface NavItem {
+  href: string
+  label: string
+  icon: React.ComponentType<{ className?: string }>
+}
+
+interface NavSection {
+  label: string | null
+  items: NavItem[]
+}
+
+// Admin with société(s)
+const adminSocieteNav: NavSection[] = [
   {
     label: null,
     items: [
-      { href: "/client", label: "Tableau de bord", icon: LayoutDashboard, roles: ["client_admin", "client_user"] },
-      { href: "/client/documents", label: "Mes Documents", icon: FileText, roles: ["client_admin", "client_user"] },
-      { href: "/client/upload", label: "Upload", icon: Upload, roles: ["client_admin", "client_user"] },
-      { href: "/client/societes", label: "Mes Sociétés", icon: Building2, roles: ["client_admin"] },
+      { href: "/client", label: "Tableau de bord", icon: LayoutDashboard },
+      { href: "/client/upload", label: "Uploader un document", icon: Upload },
+      { href: "/client/documents", label: "Mes Documents", icon: FileText },
+      { href: "/client/societes", label: "Mes Sociétés", icon: Building2 },
     ],
   },
   {
     label: "Comptabilité",
     items: [
-      { href: "/client/fournisseurs", label: "Fournisseurs", icon: Truck, roles: ["client_admin"] },
-      { href: "/client/banque", label: "Banque", icon: Landmark, roles: ["client_admin"] },
-      { href: "/client/salaires", label: "Salaires", icon: Wallet, roles: ["client_admin"] },
-      { href: "/client/charges-sociales", label: "Charges Sociales", icon: BadgePercent, roles: ["client_admin"] },
-      { href: "/client/tva", label: "TVA & Fiscal", icon: Calculator, roles: ["client_admin"] },
+      { href: "/client/finances", label: "Mes Finances", icon: DollarSign },
+      { href: "/client/tva", label: "TVA & Fiscal", icon: Calculator },
     ],
   },
   {
     label: null,
     items: [
-      { href: "/client/notifications", label: "Notifications", icon: Bell, roles: ["client_admin"] },
+      { href: "/client/equipe", label: "Mon Équipe", icon: Users },
+      { href: "/client/alertes", label: "Mes Alertes", icon: Bell },
+      { href: "/client/profil", label: "Mon Profil", icon: Settings },
+    ],
+  },
+]
+
+// Admin freelance (no société)
+const adminFreelanceNav: NavSection[] = [
+  {
+    label: null,
+    items: [
+      { href: "/client", label: "Tableau de bord", icon: LayoutDashboard },
+      { href: "/client/upload", label: "Uploader un document", icon: Upload },
+      { href: "/client/documents", label: "Mes Documents", icon: FileText },
+    ],
+  },
+  {
+    label: "Comptabilité",
+    items: [
+      { href: "/client/revenus-depenses", label: "Revenus & Dépenses", icon: DollarSign },
+      { href: "/client/fiscal-freelance", label: "Mes Obligations Fiscales", icon: Calendar },
+    ],
+  },
+  {
+    label: null,
+    items: [
+      { href: "/client/alertes", label: "Mes Alertes", icon: Bell },
+      { href: "/client/profil", label: "Mon Profil", icon: Settings },
+    ],
+  },
+]
+
+// Client USER — minimal
+const userNav: NavSection[] = [
+  {
+    label: null,
+    items: [
+      { href: "/client/upload", label: "Uploader un document", icon: Upload },
+      { href: "/client/documents", label: "Mes Uploads", icon: FileText },
+      { href: "/client/profil", label: "Mon Profil", icon: Settings },
     ],
   },
 ]
@@ -56,15 +95,25 @@ export function ClientSidebar() {
   const router = useRouter()
   const [collapsed, setCollapsed] = useState(false)
   const { profile } = useProfile()
-  const userRole = profile?.role || "client_admin"
 
-  const filteredSections = navSections
-    .map((section) => ({
-      ...section,
-      items: section.items.filter((item) => item.roles.includes(userRole)),
-    }))
-    .filter((section) => section.items.length > 0)
-  const roleLabel = userRole === "client_admin" ? "Admin" : "Utilisateur"
+  const role = profile?.role || "client_admin"
+  const category = (profile as Record<string, unknown>)?.client_category as string | undefined
+  const isUser = role === "client_user"
+  const isFreelance = category === "individuel"
+
+  let navSections: NavSection[]
+  let roleLabel: string
+
+  if (isUser) {
+    navSections = userNav
+    roleLabel = "Utilisateur"
+  } else if (isFreelance) {
+    navSections = adminFreelanceNav
+    roleLabel = "Freelance"
+  } else {
+    navSections = adminSocieteNav
+    roleLabel = "Admin"
+  }
 
   const handleSignOut = async () => {
     const supabase = createClient()
@@ -80,73 +129,52 @@ export function ClientSidebar() {
       )}
       style={{ backgroundColor: "#1E2A4A" }}
     >
-      {/* Logo */}
       <div className="flex h-16 items-center justify-between border-b border-white/10 px-4">
         {!collapsed ? (
           <Link href="/client" className="flex items-center gap-2">
-            <div
-              className="flex h-8 w-8 items-center justify-center rounded-lg"
-              style={{ backgroundColor: "#C9A84C" }}
-            >
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: "#C9A84C" }}>
               <span className="text-sm font-bold text-white">L</span>
             </div>
             <div className="flex flex-col">
-              <span className="text-lg font-semibold" style={{ color: "#C9A84C" }}>
-                Lexora
-              </span>
-              <span className="text-[10px] font-medium uppercase tracking-wider text-white/50">
-                {roleLabel}
-              </span>
+              <span className="text-lg font-semibold" style={{ color: "#C9A84C" }}>Lexora</span>
+              <span className="text-[10px] font-medium uppercase tracking-wider text-white/50">{roleLabel}</span>
             </div>
           </Link>
         ) : (
-          <div
-            className="mx-auto flex h-8 w-8 items-center justify-center rounded-lg"
-            style={{ backgroundColor: "#C9A84C" }}
-          >
+          <div className="mx-auto flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: "#C9A84C" }}>
             <span className="text-sm font-bold text-white">L</span>
           </div>
         )}
       </div>
 
-      {/* Navigation */}
       <div className="flex-1 overflow-y-auto p-3">
         {!collapsed && (
           <div className="mb-4 rounded-lg bg-white/5 px-3 py-2">
-            <p className="text-xs font-medium uppercase tracking-wider text-white/50">
-              Portail Client
-            </p>
+            <p className="text-xs font-medium uppercase tracking-wider text-white/50">Mon Espace</p>
           </div>
         )}
 
         <nav className="flex flex-col gap-1">
-          {filteredSections.map((section, sIdx) => (
+          {navSections.map((section, sIdx) => (
             <div key={sIdx}>
               {section.label && !collapsed && (
-                <p className="mt-4 mb-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-white/40">
-                  {section.label}
-                </p>
+                <p className="mt-4 mb-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-white/40">{section.label}</p>
               )}
               {section.label && collapsed && <div className="my-2 mx-3 border-t border-white/10" />}
               {section.items.map((item) => {
-                const isActive =
-                  item.href === "/client"
-                    ? pathname === "/client"
-                    : pathname.startsWith(item.href)
+                const isActive = item.href === "/client" ? pathname === "/client" : pathname.startsWith(item.href)
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
                     className={cn(
                       "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
-                      isActive
-                        ? "bg-white/10 shadow-sm"
-                        : "text-white/70 hover:bg-white/5 hover:text-white",
+                      isActive ? "bg-white/10 shadow-sm" : "text-white/70 hover:bg-white/5 hover:text-white",
                       collapsed && "justify-center"
                     )}
                     style={isActive ? { color: "#C9A84C" } : undefined}
                   >
-                    <item.icon className="h-4.5 w-4.5 shrink-0" />
+                    <item.icon className="h-4 w-4 shrink-0" />
                     {!collapsed && <span>{item.label}</span>}
                   </Link>
                 )
@@ -156,28 +184,14 @@ export function ClientSidebar() {
         </nav>
       </div>
 
-      {/* Footer */}
       <div className="border-t border-white/10 p-3">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setCollapsed(!collapsed)}
-          className="mb-2 w-full justify-center text-white/70 hover:bg-white/5 hover:text-white"
-        >
-          {collapsed ? (
-            <ChevronRight className="h-4 w-4" />
-          ) : (
-            <ChevronLeft className="h-4 w-4" />
-          )}
+        <Button variant="ghost" size="sm" onClick={() => setCollapsed(!collapsed)}
+          className="mb-2 w-full justify-center text-white/70 hover:bg-white/5 hover:text-white">
+          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
           {!collapsed && <span className="ml-2">Réduire</span>}
         </Button>
-        <button
-          onClick={handleSignOut}
-          className={cn(
-            "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-white/70 transition-all duration-200 hover:bg-white/5 hover:text-white",
-            collapsed && "justify-center"
-          )}
-        >
+        <button onClick={handleSignOut}
+          className={cn("flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-white/70 transition-all duration-200 hover:bg-white/5 hover:text-white", collapsed && "justify-center")}>
           <LogOut className="h-5 w-5 shrink-0" />
           {!collapsed && <span>Déconnexion</span>}
         </button>
