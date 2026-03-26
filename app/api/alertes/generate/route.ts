@@ -72,21 +72,97 @@ export async function POST() {
     // Check for unpaid client invoices (from documents with type facture_client)
     // This would query the n8n_result for payment status — simplified for now
 
-    // 13ème mois alert (November/December)
-    if (currentMonth === 10 || currentMonth === 11) {
-      const { data: societes } = await supabase.from('societes').select('id, nom, comptable_id').eq('actif', true)
-      if (societes) {
-        for (const s of societes) {
+    // Get all active sociétés for annual alerts
+    const { data: societes } = await supabase.from('societes').select('id, nom, comptable_id').eq('actif', true)
+
+    if (societes) {
+      for (const s of societes) {
+        // 13ème mois (December)
+        if (currentMonth === 11) {
+          if (currentDay === 1) {
+            await supabase.from('alertes').insert({
+              comptable_id: s.comptable_id, societe_id: s.id,
+              type_alerte: 'treizieme_mois', niveau: 'informatif',
+              titre: `13ème mois ${s.nom} à préparer`,
+              description: '75% avant 25/12, 25% avant 31/12. Obligation légale Workers Rights Act 2019.',
+              statut: 'active',
+            })
+            alertsCreated.push(`treizieme_mois: ${s.nom}`)
+          } else if (currentDay >= 18 && currentDay < 25) {
+            await supabase.from('alertes').insert({
+              comptable_id: s.comptable_id, societe_id: s.id,
+              type_alerte: 'treizieme_mois', niveau: 'important',
+              titre: `75% du 13ème mois ${s.nom} avant le 25 décembre`,
+              description: 'Paiement obligatoire des 75% du bonus fin d\'année.',
+              statut: 'active',
+            })
+            alertsCreated.push(`treizieme_mois_75: ${s.nom}`)
+          }
+        }
+
+        // ROC Annual Return (November → December → January)
+        if (currentMonth === 10) {
           await supabase.from('alertes').insert({
-            comptable_id: s.comptable_id,
-            societe_id: s.id,
-            type_alerte: 'treizieme_mois',
-            niveau: 'informatif',
-            titre: `13ème mois ${s.nom} à provisionner`,
-            description: 'Obligation légale — masse salariale annuelle / 12',
+            comptable_id: s.comptable_id, societe_id: s.id,
+            type_alerte: 'roc_annual_return', niveau: 'informatif',
+            titre: `ROC Annual Return ${s.nom} avant le 31 décembre`,
+            description: 'Retour annuel registre sociétés (CBRD). Portal: companies.govmu.org',
+            echeance: `${today.getFullYear()}-12-31`,
             statut: 'active',
           })
-          alertsCreated.push(`treizieme_mois: ${s.nom}`)
+          alertsCreated.push(`roc_annual: ${s.nom}`)
+        } else if (currentMonth === 11 && currentDay >= 15) {
+          await supabase.from('alertes').insert({
+            comptable_id: s.comptable_id, societe_id: s.id,
+            type_alerte: 'roc_annual_return', niveau: 'important',
+            titre: `ROC Annual Return ${s.nom} — deadline imminente`,
+            description: 'Deadline 31 décembre. Pénalité: MUR 20,000 + risque radiation.',
+            echeance: `${today.getFullYear()}-12-31`,
+            statut: 'active',
+          })
+          alertsCreated.push(`roc_annual_urgent: ${s.nom}`)
+        }
+
+        // APS trimestriel alerts (if CA > 10M — simplified check)
+        if (currentMonth === 6) { // July → Q1 August
+          await supabase.from('alertes').insert({
+            comptable_id: s.comptable_id, societe_id: s.id,
+            type_alerte: 'aps_trimestriel', niveau: 'informatif',
+            titre: `APS Q1 ${s.nom} à payer en août`,
+            description: 'Acompte IS trimestriel si CA > 10M MUR.',
+            statut: 'active',
+          })
+          alertsCreated.push(`aps_q1: ${s.nom}`)
+        } else if (currentMonth === 9) { // October → Q2 November
+          await supabase.from('alertes').insert({
+            comptable_id: s.comptable_id, societe_id: s.id,
+            type_alerte: 'aps_trimestriel', niveau: 'informatif',
+            titre: `APS Q2 ${s.nom} à payer en novembre`,
+            description: 'Acompte IS trimestriel.',
+            statut: 'active',
+          })
+          alertsCreated.push(`aps_q2: ${s.nom}`)
+        } else if (currentMonth === 0) { // January → Q3 February
+          await supabase.from('alertes').insert({
+            comptable_id: s.comptable_id, societe_id: s.id,
+            type_alerte: 'aps_trimestriel', niveau: 'informatif',
+            titre: `APS Q3 ${s.nom} à payer en février`,
+            description: 'Acompte IS trimestriel.',
+            statut: 'active',
+          })
+          alertsCreated.push(`aps_q3: ${s.nom}`)
+        }
+
+        // CSG mensuelle reminder (end of month)
+        if (currentDay >= 25) {
+          await supabase.from('alertes').insert({
+            comptable_id: s.comptable_id, societe_id: s.id,
+            type_alerte: 'csg_mensuelle', niveau: 'important',
+            titre: `CSG/NSF ${s.nom} à déclarer`,
+            description: 'Déclaration CSG/NSF mensuelle due fin du mois suivant.',
+            statut: 'active',
+          })
+          alertsCreated.push(`csg_mensuelle: ${s.nom}`)
         }
       }
     }
