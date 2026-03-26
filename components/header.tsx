@@ -10,9 +10,9 @@ export function Header() {
   const [open, setOpen] = useState(false)
 
   const navLinks = [
-    { href: "#features", label: "Features" },
-    { href: "#pricing", label: "Pricing" },
-    { href: "#about", label: "About" },
+    { href: "#features", label: "Fonctionnalités" },
+    { href: "#about", label: "À propos" },
+    { href: "#contact", label: "Contact" },
   ]
 
   return (
@@ -39,10 +39,10 @@ export function Header() {
 
         <div className="hidden items-center gap-3 md:flex">
           <Button variant="ghost" asChild>
-            <Link href="/login">Sign In</Link>
+            <Link href="/auth/login">Se connecter</Link>
           </Button>
           <Button asChild>
-            <Link href="/dashboard">Get Started</Link>
+            <Link href="/redirect">Accéder au tableau de bord</Link>
           </Button>
         </div>
 
@@ -50,7 +50,7 @@ export function Header() {
           <SheetTrigger asChild className="md:hidden">
             <Button variant="ghost" size="icon">
               <Menu className="h-5 w-5" />
-              <span className="sr-only">Toggle menu</span>
+              <span className="sr-only">Menu</span>
             </Button>
           </SheetTrigger>
           <SheetContent side="right" className="w-[280px]">
@@ -67,10 +67,10 @@ export function Header() {
               ))}
               <div className="mt-4 flex flex-col gap-3">
                 <Button variant="outline" asChild>
-                  <Link href="/login">Sign In</Link>
+                  <Link href="/auth/login">Se connecter</Link>
                 </Button>
                 <Button asChild>
-                  <Link href="/dashboard">Get Started</Link>
+                  <Link href="/redirect">Accéder au tableau de bord</Link>
                 </Button>
               </div>
             </nav>

@@ -1,14 +1,10 @@
 import type { Metadata } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 
-const _geist = Geist({ subsets: ["latin"] });
-const _geistMono = Geist_Mono({ subsets: ["latin"] });
-
 export const metadata: Metadata = {
-  title: 'Lexora | Modern Accounting Software',
-  description: 'Professional accounting software for businesses, accountants, and their clients. Streamline your financial workflow.',
+  title: 'Lexora | Comptabilité IA pour Maurice',
+  description: 'Plateforme SaaS de comptabilité intelligente pour Maurice. Traitement IA des documents, conformité MRA, alertes WhatsApp.',
   generator: 'v0.app',
   icons: {
     icon: [
@@ -35,7 +31,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
+    <html lang="fr">
       <body className="font-sans antialiased">
         {children}
         <Analytics />

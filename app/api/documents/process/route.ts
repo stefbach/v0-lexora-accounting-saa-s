@@ -1,0 +1,474 @@
+import { createClient } from '@supabase/supabase-js'
+import { NextRequest, NextResponse } from 'next/server'
+import Anthropic from '@anthropic-ai/sdk'
+import type { DocumentType, Societe } from '@/lib/types'
+
+// ---------------------------------------------------------------------------
+// Supabase admin client (service role – bypasses RLS)
+// ---------------------------------------------------------------------------
+function getAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !serviceKey) {
+    throw new Error('Variables Supabase manquantes (URL ou clé service)')
+  }
+  return createClient(url, serviceKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Anthropic client
+// ---------------------------------------------------------------------------
+function getAnthropicClient() {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) {
+    throw new Error('ANTHROPIC_API_KEY non configurée')
+  }
+  return new Anthropic({ apiKey })
+}
+
+// ---------------------------------------------------------------------------
+// System prompts (simplified – will be refactored into a dedicated file later)
+// ---------------------------------------------------------------------------
+
+const PROMPT_ROUTING = `Tu es un assistant comptable expert à Maurice. Analyse le document fourni et détecte :
+1. La **société** concernée parmi : TIBOK, BPO, OBESITY_CARE, NHS_S2.
+   Cherche le nom de la société dans l'en-tête, le pied de page, le destinataire ou l'émetteur du document.
+2. Le **type de document** parmi : facture_fournisseur, facture_client, releve_bancaire, charges_sociales, fiche_paie.
+
+Réponds UNIQUEMENT en JSON valide, sans markdown, sans explication :
+{
+  "societe": "<TIBOK|BPO|OBESITY_CARE|NHS_S2|INCONNU>",
+  "type_document": "<facture_fournisseur|facture_client|releve_bancaire|charges_sociales|fiche_paie|autre>",
+  "confiance_societe": <0-100>,
+  "confiance_type": <0-100>,
+  "indices": "<éléments du document ayant permis la détection>"
+}`
+
+const PROMPT_FACTURE_FOURNISSEUR = `Tu es un assistant comptable expert. Extrais les données de cette facture fournisseur.
+
+Réponds UNIQUEMENT en JSON valide, sans markdown :
+{
+  "fournisseur": { "nom": "", "brn": "", "numero_tva": "", "adresse": "" },
+  "facture": { "numero": "", "date": "", "date_echeance": "", "devise": "MUR" },
+  "lignes": [{ "description": "", "quantite": 0, "prix_unitaire": 0, "montant_ht": 0, "taux_tva": 0, "montant_tva": 0, "montant_ttc": 0 }],
+  "totaux": { "total_ht": 0, "total_tva": 0, "total_ttc": 0 },
+  "ecritures_suggerees": [{ "compte": "", "libelle": "", "debit": 0, "credit": 0 }]
+}`
+
+const PROMPT_FACTURE_CLIENT = `Tu es un assistant comptable expert. Extrais les données de cette facture client (émise par la société).
+
+Réponds UNIQUEMENT en JSON valide, sans markdown :
+{
+  "client": { "nom": "", "brn": "", "adresse": "" },
+  "facture": { "numero": "", "date": "", "date_echeance": "", "devise": "MUR" },
+  "lignes": [{ "description": "", "quantite": 0, "prix_unitaire": 0, "montant_ht": 0, "taux_tva": 0, "montant_tva": 0, "montant_ttc": 0 }],
+  "totaux": { "total_ht": 0, "total_tva": 0, "total_ttc": 0 },
+  "ecritures_suggerees": [{ "compte": "", "libelle": "", "debit": 0, "credit": 0 }]
+}`
+
+const PROMPT_RELEVE_BANCAIRE = `Tu es un assistant comptable expert. Extrais les données de ce relevé bancaire.
+
+Réponds UNIQUEMENT en JSON valide, sans markdown :
+{
+  "banque": "",
+  "compte": { "numero": "", "titulaire": "", "devise": "MUR" },
+  "periode": { "debut": "", "fin": "" },
+  "solde_ouverture": 0,
+  "solde_cloture": 0,
+  "transactions": [{ "date": "", "description": "", "reference": "", "debit": 0, "credit": 0, "solde": 0 }],
+  "total_debits": 0,
+  "total_credits": 0,
+  "rapprochement": { "nombre_transactions": 0, "solde_verifie": true }
+}`
+
+const PROMPT_CHARGES_SOCIALES = `Tu es un assistant comptable expert à Maurice. Extrais les données de ce document de charges sociales (NPF, HRDC, NPS, PAYE).
+
+Réponds UNIQUEMENT en JSON valide, sans markdown :
+{
+  "organisme": "",
+  "periode": "",
+  "societe": "",
+  "charges": {
+    "npf": { "base": 0, "taux": 0, "montant_employeur": 0, "montant_employe": 0, "total": 0 },
+    "hrdc": { "base": 0, "taux": 0, "montant": 0 },
+    "nps": { "base": 0, "taux": 0, "montant_employeur": 0, "montant_employe": 0, "total": 0 },
+    "paye": { "base_imposable": 0, "montant": 0 }
+  },
+  "total_charges_employeur": 0,
+  "total_charges_employe": 0,
+  "total_general": 0,
+  "ecritures_suggerees": [{ "compte": "", "libelle": "", "debit": 0, "credit": 0 }]
+}`
+
+const PROMPT_FICHE_PAIE = `Tu es un assistant comptable expert à Maurice. Extrais les données de cette fiche de paie.
+
+Réponds UNIQUEMENT en JSON valide, sans markdown :
+{
+  "employe": { "nom": "", "poste": "", "numero": "" },
+  "periode": "",
+  "salaire_base": 0,
+  "indemnites": [{ "description": "", "montant": 0 }],
+  "brut": 0,
+  "deductions": {
+    "npf_employe": 0,
+    "nps_employe": 0,
+    "paye": 0,
+    "autres": [{ "description": "", "montant": 0 }]
+  },
+  "total_deductions": 0,
+  "net_a_payer": 0,
+  "charges_patronales": {
+    "npf_employeur": 0,
+    "nps_employeur": 0,
+    "hrdc": 0
+  },
+  "ecritures_suggerees": [{ "compte": "", "libelle": "", "debit": 0, "credit": 0 }]
+}`
+
+const PROCESSING_PROMPTS: Record<string, string> = {
+  facture_fournisseur: PROMPT_FACTURE_FOURNISSEUR,
+  facture_client: PROMPT_FACTURE_CLIENT,
+  releve_bancaire: PROMPT_RELEVE_BANCAIRE,
+  charges_sociales: PROMPT_CHARGES_SOCIALES,
+  fiche_paie: PROMPT_FICHE_PAIE,
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Map file extension to a media type Claude understands. */
+function getMediaType(filename: string): 'image/jpeg' | 'image/png' | 'image/webp' | 'application/pdf' {
+  const ext = filename.split('.').pop()?.toLowerCase()
+  switch (ext) {
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg'
+    case 'png':
+      return 'image/png'
+    case 'webp':
+      return 'image/webp'
+    case 'pdf':
+      return 'application/pdf'
+    default:
+      return 'application/pdf'
+  }
+}
+
+function isVisualDocument(filename: string): boolean {
+  const ext = filename.split('.').pop()?.toLowerCase()
+  return ['pdf', 'jpg', 'jpeg', 'png', 'webp'].includes(ext || '')
+}
+
+// ---------------------------------------------------------------------------
+// POST handler
+// ---------------------------------------------------------------------------
+
+export async function POST(request: NextRequest) {
+  const startTime = Date.now()
+
+  try {
+    // ---- 1. Parse & validate input ----------------------------------------
+    const body = await request.json()
+    const { document_id, storage_path, nom_fichier, client_id, societe } = body as {
+      document_id: string
+      storage_path: string
+      nom_fichier: string
+      client_id: string
+      societe?: string
+    }
+
+    if (!document_id || !storage_path || !nom_fichier || !client_id) {
+      return NextResponse.json(
+        { error: 'Paramètres manquants : document_id, storage_path, nom_fichier et client_id sont requis' },
+        { status: 400 },
+      )
+    }
+
+    console.log(`[documents/process] Début du traitement – document_id=${document_id}, fichier=${nom_fichier}`)
+
+    const supabase = getAdminClient()
+    const anthropic = getAnthropicClient()
+
+    // ---- 2. Update status to en_cours -------------------------------------
+    await supabase
+      .from('documents')
+      .update({ statut: 'en_cours' })
+      .eq('id', document_id)
+
+    // ---- 3. Download file from Supabase Storage ---------------------------
+    const { data: fileData, error: downloadError } = await supabase.storage
+      .from('documents')
+      .download(storage_path)
+
+    if (downloadError || !fileData) {
+      console.error(`[documents/process] Erreur téléchargement : ${downloadError?.message}`)
+      await markError(supabase, document_id, 'Impossible de télécharger le fichier depuis le stockage')
+      return NextResponse.json(
+        { error: 'Échec du téléchargement du fichier', details: downloadError?.message },
+        { status: 500 },
+      )
+    }
+
+    // ---- 4. Prepare file content for Claude --------------------------------
+    const isVisual = isVisualDocument(nom_fichier)
+    const isXlsx = nom_fichier.toLowerCase().endsWith('.xlsx')
+
+    let fileBase64: string | null = null
+    let textContent: string | null = null
+
+    if (isVisual) {
+      const arrayBuffer = await fileData.arrayBuffer()
+      fileBase64 = Buffer.from(arrayBuffer).toString('base64')
+    } else if (isXlsx) {
+      // XLSX files need text extraction – for now we note this limitation
+      textContent = '[Fichier XLSX détecté – extraction de texte requise. Veuillez fournir un PDF ou une image pour un traitement optimal.]'
+      console.warn(`[documents/process] Fichier XLSX détecté (${nom_fichier}) – extraction de texte limitée`)
+    } else {
+      // Fallback: try to read as text
+      textContent = await fileData.text()
+    }
+
+    // ---- 5. Step 1 — Routing with Prompt 7 ---------------------------------
+    console.log(`[documents/process] Étape 1 – Détection du type de document et de la société`)
+
+    const routingMessages = buildMessages(
+      'Analyse ce document pour détecter la société et le type de document.',
+      fileBase64,
+      nom_fichier,
+      textContent,
+    )
+
+    const routingResponse = await anthropic.messages.create({
+      model: 'claude-opus-4-5-20250514',
+      max_tokens: 4096,
+      temperature: 0,
+      system: PROMPT_ROUTING,
+      messages: routingMessages,
+    })
+
+    const routingText = routingResponse.content
+      .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+      .map((block) => block.text)
+      .join('')
+
+    console.log(`[documents/process] Résultat routing : ${routingText.substring(0, 200)}`)
+
+    let routingResult: {
+      societe: string
+      type_document: string
+      confiance_societe: number
+      confiance_type: number
+      indices: string
+    }
+
+    try {
+      routingResult = JSON.parse(routingText)
+    } catch {
+      console.error(`[documents/process] Échec du parsing du routing : ${routingText}`)
+      await markError(supabase, document_id, 'Impossible de détecter le type de document')
+      return NextResponse.json(
+        { error: 'Échec de la détection du type de document', raw: routingText },
+        { status: 500 },
+      )
+    }
+
+    const detectedSociete = (societe || routingResult.societe) as Societe | 'INCONNU'
+    const detectedType = routingResult.type_document as DocumentType
+
+    console.log(
+      `[documents/process] Détecté – société=${detectedSociete}, type=${detectedType}, ` +
+      `confiance_société=${routingResult.confiance_societe}%, confiance_type=${routingResult.confiance_type}%`,
+    )
+
+    // ---- 6. Step 2 — Processing with type-specific prompt -------------------
+    const processingPrompt = PROCESSING_PROMPTS[detectedType]
+
+    let processingResult: Record<string, unknown> | null = null
+
+    if (processingPrompt) {
+      console.log(`[documents/process] Étape 2 – Extraction des données (${detectedType})`)
+
+      const processingMessages = buildMessages(
+        `Extrais toutes les données comptables de ce document (${detectedType}).`,
+        fileBase64,
+        nom_fichier,
+        textContent,
+      )
+
+      const processingResponse = await anthropic.messages.create({
+        model: 'claude-opus-4-5-20250514',
+        max_tokens: 4096,
+        temperature: 0,
+        system: processingPrompt,
+        messages: processingMessages,
+      })
+
+      const processingText = processingResponse.content
+        .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+        .map((block) => block.text)
+        .join('')
+
+      console.log(`[documents/process] Résultat extraction : ${processingText.substring(0, 200)}...`)
+
+      try {
+        processingResult = JSON.parse(processingText)
+      } catch {
+        console.error(`[documents/process] Échec du parsing de l'extraction : ${processingText}`)
+        // Continue – we still save the raw text as n8n_result
+        processingResult = { raw_response: processingText, parsing_error: true }
+      }
+    } else {
+      console.warn(`[documents/process] Pas de prompt d'extraction pour le type : ${detectedType}`)
+      processingResult = { message: `Aucun prompt d'extraction pour le type "${detectedType}"` }
+    }
+
+    // ---- 7. Save results to database ---------------------------------------
+    const n8nResult = {
+      routing: routingResult,
+      extraction: processingResult,
+      metadata: {
+        processed_at: new Date().toISOString(),
+        processing_time_ms: Date.now() - startTime,
+        model: 'claude-opus-4-5-20250514',
+        nom_fichier,
+      },
+    }
+
+    const updatePayload: Record<string, unknown> = {
+      n8n_result: n8nResult,
+      type_document: detectedType,
+      statut: 'traite' as const,
+    }
+
+    if (detectedSociete !== 'INCONNU') {
+      updatePayload.societe_detectee = detectedSociete
+    }
+
+    const { error: updateError } = await supabase
+      .from('documents')
+      .update(updatePayload)
+      .eq('id', document_id)
+
+    if (updateError) {
+      console.error(`[documents/process] Erreur mise à jour document : ${updateError.message}`)
+      return NextResponse.json(
+        { error: 'Erreur lors de la sauvegarde des résultats', details: updateError.message },
+        { status: 500 },
+      )
+    }
+
+    const duration = Date.now() - startTime
+    console.log(`[documents/process] Traitement terminé en ${duration}ms – document_id=${document_id}`)
+
+    // ---- 8. Return result ---------------------------------------------------
+    return NextResponse.json({
+      success: true,
+      document_id,
+      societe_detectee: detectedSociete,
+      type_document: detectedType,
+      confiance: {
+        societe: routingResult.confiance_societe,
+        type: routingResult.confiance_type,
+      },
+      result: processingResult,
+      processing_time_ms: duration,
+    })
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'Erreur inconnue'
+    console.error(`[documents/process] Erreur inattendue : ${message}`)
+
+    // Try to mark document as error if we have the id
+    try {
+      const body = await request.clone().json().catch(() => null)
+      if (body?.document_id) {
+        const supabase = getAdminClient()
+        await markError(supabase, body.document_id, message)
+      }
+    } catch {
+      // Ignore – best effort
+    }
+
+    return NextResponse.json(
+      { error: 'Erreur lors du traitement du document', details: message },
+      { status: 500 },
+    )
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Build Claude messages with vision or text content
+// ---------------------------------------------------------------------------
+function buildMessages(
+  userText: string,
+  fileBase64: string | null,
+  filename: string,
+  textContent: string | null,
+): Anthropic.MessageParam[] {
+  if (fileBase64) {
+    const mediaType = getMediaType(filename)
+
+    // PDF uses document type, images use image type
+    if (mediaType === 'application/pdf') {
+      return [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'document',
+              source: { type: 'base64', media_type: 'application/pdf', data: fileBase64 },
+            },
+            { type: 'text', text: userText },
+          ],
+        },
+      ]
+    }
+
+    // Image files
+    return [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'image',
+            source: { type: 'base64', media_type: mediaType, data: fileBase64 },
+          },
+          { type: 'text', text: userText },
+        ],
+      },
+    ]
+  }
+
+  // Text-only fallback
+  const content = textContent
+    ? `${userText}\n\n--- Contenu du document (${filename}) ---\n${textContent}`
+    : userText
+
+  return [{ role: 'user', content }]
+}
+
+// ---------------------------------------------------------------------------
+// Mark a document as erreur in the database
+// ---------------------------------------------------------------------------
+async function markError(
+  supabase: ReturnType<typeof createClient>,
+  documentId: string,
+  errorMessage: string,
+) {
+  try {
+    await supabase
+      .from('documents')
+      .update({
+        statut: 'erreur',
+        n8n_result: {
+          error: errorMessage,
+          failed_at: new Date().toISOString(),
+        },
+      })
+      .eq('id', documentId)
+  } catch (e) {
+    console.error(`[documents/process] Impossible de marquer le document en erreur : ${e}`)
+  }
+}

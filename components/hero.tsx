@@ -4,9 +4,9 @@ import { ArrowRight, CheckCircle2 } from "lucide-react"
 
 export function Hero() {
   const highlights = [
-    "Automated bookkeeping",
-    "Real-time reporting",
-    "Secure document storage",
+    "Traitement automatique des documents",
+    "Conformité MRA",
+    "Alertes en temps réel",
   ]
 
   return (
@@ -21,30 +21,30 @@ export function Hero() {
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-secondary/50 px-4 py-1.5">
             <span className="h-2 w-2 rounded-full bg-chart-4" />
             <span className="text-sm font-medium text-muted-foreground">
-              Trusted by 2,000+ accounting firms
+              La plateforme comptable pour Maurice
             </span>
           </div>
 
           <h1 className="text-balance text-4xl font-bold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-            Professional Accounting
-            <span className="block text-primary">Made Simple</span>
+            Comptabilité Professionnelle
+            <span className="block text-primary">Simplifiée et Automatisée</span>
           </h1>
 
           <p className="mx-auto mt-6 max-w-2xl text-pretty text-lg leading-relaxed text-muted-foreground">
-            Streamline your financial workflow with Lexora. Connect accountants, 
-            businesses, and clients on one powerful platform designed for modern 
-            accounting practices.
+            Optimisez votre gestion financière avec Lexora. Connectez comptables,
+            entreprises et clients sur une plateforme conçue pour
+            la comptabilité moderne à Maurice.
           </p>
 
           <div className="mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row">
             <Button size="lg" asChild className="gap-2">
-              <Link href="/dashboard">
-                Access Dashboard
+              <Link href="/redirect">
+                Accéder au tableau de bord
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </Button>
             <Button size="lg" variant="outline" asChild>
-              <Link href="#features">Learn More</Link>
+              <Link href="#features">En savoir plus</Link>
             </Button>
           </div>
 
