@@ -18,6 +18,7 @@ import {
   Landmark,
   Wallet,
   BadgePercent,
+  Building2,
 } from "lucide-react"
 import { useState } from "react"
 import { useProfile } from "@/hooks/use-profile"
@@ -29,6 +30,7 @@ const navSections = [
       { href: "/client", label: "Tableau de bord", icon: LayoutDashboard, roles: ["client_admin", "client_user"] },
       { href: "/client/documents", label: "Mes Documents", icon: FileText, roles: ["client_admin", "client_user"] },
       { href: "/client/upload", label: "Upload", icon: Upload, roles: ["client_admin", "client_user"] },
+      { href: "/client/societes", label: "Mes Sociétés", icon: Building2, roles: ["client_admin"] },
     ],
   },
   {
