@@ -1,15 +1,15 @@
 import { createClient } from '@supabase/supabase-js'
 
-function getSupabase() {
+function getServiceClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
 }
 
-interface NotificationParams {
-  destinataire_id?: string
+export interface NotificationParams {
+  destinataire_id: string
   destinataire_type: 'client' | 'comptable'
   societe_id?: string
   type: string
@@ -18,57 +18,53 @@ interface NotificationParams {
   niveau?: 'critique' | 'important' | 'info'
   canaux?: ('app' | 'whatsapp' | 'email')[]
   cron_name?: string
-  telephone?: string
-  email?: string
 }
 
-export async function envoyerNotification(params: NotificationParams) {
-  const supabase = getSupabase()
-  const canaux = params.canaux || ['app']
+export async function envoyerNotification(params: NotificationParams): Promise<void> {
+  const { destinataire_id, destinataire_type, societe_id, type, titre, message, niveau = 'info', canaux = ['app'], cron_name } = params
+  const supabase = getServiceClient()
 
   // 1. Always create in-app notification
-  const { data: notif } = await supabase.from('notifications').insert({
-    destinataire_id: params.destinataire_id,
-    destinataire_type: params.destinataire_type,
-    societe_id: params.societe_id,
-    type: params.type,
-    titre: params.titre,
-    message: params.message,
-    niveau: params.niveau || 'info',
-    envoye_app: true,
-    envoye_whatsapp: canaux.includes('whatsapp'),
-    envoye_email: canaux.includes('email'),
-    cron_name: params.cron_name,
-  }).select().single()
+  await supabase.from('notifications').insert({
+    destinataire_id, destinataire_type, societe_id, type, titre, message, niveau,
+    envoye_app: true, cron_name,
+  })
+
+  if (canaux.length <= 1) return
+
+  // Get contact info
+  const { data: profile } = await supabase.from('profiles').select('email, phone').eq('id', destinataire_id).single()
+  if (!profile) return
 
   // 2. WhatsApp via WATI
-  if (canaux.includes('whatsapp') && params.telephone && process.env.WATI_API_URL && process.env.WATI_API_KEY) {
-    try {
-      await fetch(`${process.env.WATI_API_URL}/api/v1/sendSessionMessage/${params.telephone.replace(/\s+/g, '')}`, {
-        method: 'POST',
-        headers: { Authorization: process.env.WATI_API_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messageText: `${params.titre}\n\n${params.message}` }),
-      })
-    } catch (e) {
-      console.error('WhatsApp notification failed:', e)
+  if (canaux.includes('whatsapp') && profile.phone) {
+    const watiUrl = process.env.WATI_API_URL
+    const watiKey = process.env.WATI_API_KEY
+    if (watiUrl && watiKey) {
+      try {
+        await fetch(`${watiUrl}/api/v1/sendSessionMessage/${profile.phone}`, {
+          method: 'POST',
+          headers: { Authorization: watiKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messageText: message }),
+        })
+      } catch (err) { console.error('[notifications] WATI error:', err) }
     }
   }
 
   // 3. Email via Resend
-  if (canaux.includes('email') && params.email && process.env.RESEND_API_KEY) {
-    try {
-      const { Resend } = await import('resend')
-      const resend = new Resend(process.env.RESEND_API_KEY)
-      await resend.emails.send({
-        from: 'Lexora <onboarding@resend.dev>',
-        to: params.email,
-        subject: params.titre,
-        text: params.message,
-      })
-    } catch (e) {
-      console.error('Email notification failed:', e)
+  if (canaux.includes('email') && profile.email) {
+    const resendKey = process.env.RESEND_API_KEY
+    if (resendKey) {
+      try {
+        const { Resend } = await import('resend')
+        const resend = new Resend(resendKey)
+        await resend.emails.send({
+          from: 'Lexora <onboarding@resend.dev>',
+          to: profile.email,
+          subject: titre,
+          html: `<p>${message}</p>`,
+        })
+      } catch (err) { console.error('[notifications] Resend error:', err) }
     }
   }
-
-  return notif
 }

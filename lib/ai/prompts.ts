@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 export const CLAUDE_CONFIG = {
-  model: "claude-opus-4-5-20250514" as const,
+  model: (process.env.ANTHROPIC_MODEL || "claude-opus-4-6") as string,
   max_tokens: 4096,
   temperature: 0,
 }

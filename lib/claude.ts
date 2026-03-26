@@ -4,13 +4,18 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 })
 
+export const CLAUDE_MODEL = process.env.ANTHROPIC_MODEL || 'claude-opus-4-6'
+
+/**
+ * Appel Claude API — retourne le texte brut
+ */
 export async function callClaude(
   systemPrompt: string,
   userPrompt: string,
   maxTokens: number = 4096
-): Promise<Record<string, unknown>> {
+): Promise<string> {
   const message = await anthropic.messages.create({
-    model: process.env.ANTHROPIC_MODEL || 'claude-opus-4-5-20250514',
+    model: CLAUDE_MODEL,
     max_tokens: maxTokens,
     temperature: 0,
     messages: [{
@@ -19,17 +24,32 @@ export async function callClaude(
     }],
   })
 
-  const text = message.content[0].type === 'text' ? message.content[0].text : ''
-
-  try {
-    return JSON.parse(text)
-  } catch {
-    return { raw_text: text, parse_error: true }
+  const content = message.content[0]
+  if (content.type !== 'text') {
+    throw new Error('Réponse Claude inattendue (pas de texte)')
   }
+  return content.text
 }
 
+/**
+ * Appel Claude API — retourne un objet JSON parsé
+ */
+export async function callClaudeJSON<T = unknown>(
+  systemPrompt: string,
+  userPrompt: string,
+  maxTokens: number = 4096
+): Promise<T> {
+  const text = await callClaude(systemPrompt, userPrompt, maxTokens)
+  const clean = text.replace(/```json|```/g, '').trim()
+  return JSON.parse(clean) as T
+}
+
+/**
+ * Vérifie le secret Vercel Cron dans l'Authorization header
+ */
 export function verifyCronSecret(request: Request): boolean {
   const authHeader = request.headers.get('authorization')
-  if (!process.env.CRON_SECRET) return true // Allow if no secret configured
-  return authHeader === `Bearer ${process.env.CRON_SECRET}`
+  const secret = process.env.CRON_SECRET
+  if (!secret) return false
+  return authHeader === `Bearer ${secret}`
 }
