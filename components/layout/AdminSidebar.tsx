@@ -10,7 +10,6 @@ import {
   Building2,
   UserCog,
   Users,
-  FileText,
   Settings,
   LogOut,
   ChevronLeft,
@@ -23,7 +22,6 @@ const navItems = [
   { href: "/admin/societes", label: "Sociétés", icon: Building2 },
   { href: "/admin/comptables", label: "Comptables", icon: UserCog },
   { href: "/admin/clients", label: "Clients", icon: Users },
-  { href: "/admin/documents", label: "Documents", icon: FileText },
   { href: "/admin/parametres", label: "Paramètres", icon: Settings },
 ]
 
