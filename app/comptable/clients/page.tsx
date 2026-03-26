@@ -65,6 +65,13 @@ export default function ComptableClientsPage() {
   const [formRole, setFormRole] = useState("client_admin")
   const [formSociete, setFormSociete] = useState("")
 
+  // Link client to société dialog
+  const [linkDialogOpen2, setLinkDialogOpen2] = useState(false)
+  const [linkClientId2, setLinkClientId2] = useState<string | null>(null)
+  const [linkSocieteId2, setLinkSocieteId2] = useState("")
+  const [linking2, setLinking2] = useState(false)
+  const [linkError2, setLinkError2] = useState<string | null>(null)
+
   // Comptable dédié dialog
   const [teamDialogOpen, setTeamDialogOpen] = useState(false)
   const [creatingTeam, setCreatingTeam] = useState(false)
@@ -209,6 +216,36 @@ export default function ComptableClientsPage() {
       setTeamError("Erreur de connexion au serveur")
     } finally {
       setCreatingTeam(false)
+    }
+  }
+
+  const handleLinkSociete = async () => {
+    setLinkError2(null)
+    if (!linkClientId2 || !linkSocieteId2) { setLinkError2("Veuillez sélectionner une société."); return }
+
+    setLinking2(true)
+    try {
+      const selectedSociete = societes.find(s => s.id === linkSocieteId2)
+      const comptableId = selectedSociete?.comptable_id || profile?.id
+
+      const res = await fetch("/api/admin/dossiers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          client_id: linkClientId2,
+          societe_id: linkSocieteId2,
+          comptable_id: comptableId,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setLinkError2(data.error || "Erreur"); return }
+
+      setSuccess("Client lié à la société avec succès !")
+      setLinkDialogOpen2(false); fetchData()
+    } catch {
+      setLinkError2("Erreur de connexion")
+    } finally {
+      setLinking2(false)
     }
   }
 
@@ -386,12 +423,24 @@ export default function ComptableClientsPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <Button variant="outline" size="sm" asChild>
-                          <Link href={`/comptable/clients/${client.id}`}>
-                            <Eye className="mr-1 h-4 w-4" />
-                            Voir dossier
-                          </Link>
-                        </Button>
+                        <div className="flex gap-1">
+                          <Button variant="outline" size="sm" asChild>
+                            <Link href={`/comptable/clients/${client.id}`}>
+                              <Eye className="mr-1 h-4 w-4" />
+                              Voir dossier
+                            </Link>
+                          </Button>
+                          {isComptableAdmin && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              style={{ borderColor: "#C9A84C", color: "#C9A84C" }}
+                              onClick={() => { setLinkClientId2(client.id); setLinkSocieteId2(""); setLinkError2(null); setLinkDialogOpen2(true) }}
+                            >
+                              Lier société
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   )
@@ -408,6 +457,38 @@ export default function ComptableClientsPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Link Client to Société Dialog */}
+      <Dialog open={linkDialogOpen2} onOpenChange={setLinkDialogOpen2}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Lier à une société</DialogTitle>
+            <DialogDescription>
+              {linkClientId2 && `Client : ${clients.find(c => c.id === linkClientId2)?.full_name}`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Société</Label>
+              <Select value={linkSocieteId2} onValueChange={setLinkSocieteId2}>
+                <SelectTrigger><SelectValue placeholder="Sélectionner une société" /></SelectTrigger>
+                <SelectContent>
+                  {societes.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {linkError2 && <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">{linkError2}</div>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLinkDialogOpen2(false)}>Annuler</Button>
+            <Button style={{ backgroundColor: "#C9A84C" }} onClick={handleLinkSociete} disabled={linking2}>
+              {linking2 ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Liaison...</> : "Lier la société"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

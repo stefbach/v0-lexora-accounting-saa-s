@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import {
   LayoutDashboard,
   Users,
+  Building2,
   FileText,
   BarChart3,
   AlertTriangle,
@@ -21,6 +22,7 @@ import { useState } from "react"
 const navItems = [
   { href: "/comptable", label: "Tableau de bord", icon: LayoutDashboard },
   { href: "/comptable/clients", label: "Mes Clients", icon: Users },
+  { href: "/comptable/societes", label: "Sociétés", icon: Building2 },
   { href: "/comptable/documents", label: "Documents", icon: FileText },
   { href: "/comptable/rapports", label: "Rapports", icon: BarChart3 },
   { href: "/comptable/alertes", label: "Alertes", icon: AlertTriangle },
