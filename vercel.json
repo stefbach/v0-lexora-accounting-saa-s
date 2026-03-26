@@ -1,0 +1,16 @@
+{
+  "crons": [
+    { "path": "/api/cron/maj-soldes-bancaires", "schedule": "0 2 * * *" },
+    { "path": "/api/cron/brief-mensuel", "schedule": "0 8 1 * *" },
+    { "path": "/api/cron/alerte-tva-j5", "schedule": "0 8 15 * *" },
+    { "path": "/api/cron/alerte-tva-retard", "schedule": "0 8 21 * *" },
+    { "path": "/api/cron/alerte-csg-mensuelle", "schedule": "0 8 25 * *" },
+    { "path": "/api/cron/alerte-documents-manquants", "schedule": "0 8 28 * *" },
+    { "path": "/api/cron/rapport-mensuel", "schedule": "0 7 2 * *" },
+    { "path": "/api/cron/tableau-de-bord-hebdo", "schedule": "0 8 * * 1" },
+    { "path": "/api/cron/alerte-roc", "schedule": "0 8 1 11 *" },
+    { "path": "/api/cron/alerte-treizieme-mois", "schedule": "0 8 1 12 *" },
+    { "path": "/api/cron/alerte-aps", "schedule": "0 8 1 7,10,1 *" },
+    { "path": "/api/cron/previsionnel-auto", "schedule": "0 7 1 * *" }
+  ]
+}
