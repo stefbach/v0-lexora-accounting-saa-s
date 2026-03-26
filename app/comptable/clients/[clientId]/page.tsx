@@ -300,7 +300,7 @@ export default function FicheClientPage() {
   const showConsolide = societes.length >= 2
 
   return (
-    <div className="space-y-8 pb-12">
+    <div className="flex-1 overflow-auto p-6 lg:p-8 space-y-8 pb-12">
       {/* ------------------------------------------------------------------ */}
       {/* BREADCRUMB                                                          */}
       {/* ------------------------------------------------------------------ */}
