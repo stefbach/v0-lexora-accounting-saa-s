@@ -26,7 +26,6 @@ import {
   Mail,
   MessageCircle,
   Phone,
-  Pencil,
   Plus,
   Upload,
   Bell,
@@ -366,17 +365,18 @@ export default function FicheClientPage() {
                 size="sm"
                 className="gap-1"
                 style={{ borderColor: GOLD, color: GOLD }}
+                asChild
               >
-                <MessageCircle className="h-4 w-4" />
-                WhatsApp
+                <a href={`https://wa.me/${client.phone.replace(/\s+/g, "").replace("+", "")}`} target="_blank" rel="noopener noreferrer">
+                  <MessageCircle className="h-4 w-4" />
+                  WhatsApp
+                </a>
               </Button>
-              <Button variant="outline" size="sm" className="gap-1">
-                <Mail className="h-4 w-4" />
-                Email
-              </Button>
-              <Button variant="outline" size="sm" className="gap-1">
-                <Pencil className="h-4 w-4" />
-                Modifier
+              <Button variant="outline" size="sm" className="gap-1" asChild>
+                <a href={`mailto:${client.email}`}>
+                  <Mail className="h-4 w-4" />
+                  Email
+                </a>
               </Button>
             </div>
           </div>
