@@ -4,6 +4,7 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
+import { useProfile } from "@/hooks/use-profile"
 import { Button } from "@/components/ui/button"
 import {
   LayoutDashboard,
@@ -29,6 +30,8 @@ export function ComptableSidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const [collapsed, setCollapsed] = useState(false)
+  const { profile } = useProfile()
+  const roleLabel = profile?.role === "comptable_dedie" ? "Comptable dédié" : "Comptable"
 
   const handleSignOut = async () => {
     const supabase = createClient()
@@ -59,7 +62,7 @@ export function ComptableSidebar() {
                 Lexora
               </span>
               <span className="text-[10px] font-medium uppercase tracking-wider text-white/50">
-                Comptable
+                {roleLabel}
               </span>
             </div>
           </Link>

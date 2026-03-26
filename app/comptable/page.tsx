@@ -106,7 +106,9 @@ export default function ComptableDashboardPage() {
           Bienvenue{firstName ? `, ${firstName}` : ""}
         </h1>
         <p className="text-gray-500 text-sm">
-          Voici un aperçu de votre portefeuille clients
+          {profile?.role === "comptable_dedie"
+            ? "Voici un aperçu de vos clients assignés"
+            : "Voici un aperçu de votre portefeuille clients"}
         </p>
       </div>
 

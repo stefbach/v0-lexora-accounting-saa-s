@@ -36,7 +36,7 @@ export default function RedirectPage() {
       }
 
       if (role === "admin") window.location.href = "/admin"
-      else if (role === "comptable") window.location.href = "/comptable"
+      else if (role === "comptable" || role === "comptable_dedie") window.location.href = "/comptable"
       else window.location.href = "/client"
     }
 
