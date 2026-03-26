@@ -128,7 +128,7 @@ export default function FinancesPage() {
     <div className="p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
-          Mes Finances
+          Mes Chiffres
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
           Suivez vos revenus, vos dépenses, la TVA et les salaires en un coup d&apos;oeil.
@@ -137,9 +137,8 @@ export default function FinancesPage() {
 
       <Tabs defaultValue="mensuel">
         <TabsList>
-          <TabsTrigger value="mensuel">Vue mensuelle</TabsTrigger>
-          <TabsTrigger value="resultat">Compte de résultat</TabsTrigger>
-          <TabsTrigger value="tva">TVA</TabsTrigger>
+          <TabsTrigger value="mensuel">Mes Chiffres</TabsTrigger>
+          <TabsTrigger value="tva">Ma TVA</TabsTrigger>
           <TabsTrigger value="salaires">Salaires &amp; Charges</TabsTrigger>
         </TabsList>
 
@@ -294,104 +293,7 @@ export default function FinancesPage() {
           </Card>
         </TabsContent>
 
-        {/* Tab 2 - Compte de résultat */}
-        <TabsContent value="resultat" className="space-y-6 mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle style={{ color: "#1E2A4A" }}>
-                Compte de résultat annuel — 2025/2026
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div>
-                <h3 className="text-sm font-semibold mb-3" style={{ color: "#22C55E" }}>
-                  Revenus
-                </h3>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Catégorie</TableHead>
-                      <TableHead className="text-right">Montant annuel</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {annualRevenues.map((row) => (
-                      <TableRow key={row.categorie}>
-                        <TableCell className="font-medium">{row.categorie}</TableCell>
-                        <TableCell className="text-right text-green-600 font-semibold">
-                          {formatMUR(row.montant)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    <TableRow className="border-t-2">
-                      <TableCell className="font-bold" style={{ color: "#1E2A4A" }}>
-                        Total des revenus
-                      </TableCell>
-                      <TableCell className="text-right font-bold text-green-600">
-                        {formatMUR(totalAnnualRevenues)}
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </div>
-
-              <div>
-                <h3 className="text-sm font-semibold mb-3" style={{ color: "#EF4444" }}>
-                  Dépenses
-                </h3>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Catégorie</TableHead>
-                      <TableHead className="text-right">Montant annuel</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {annualExpenses.map((row) => (
-                      <TableRow key={row.categorie}>
-                        <TableCell className="font-medium">{row.categorie}</TableCell>
-                        <TableCell className="text-right text-red-600 font-semibold">
-                          {formatMUR(row.montant)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    <TableRow className="border-t-2">
-                      <TableCell className="font-bold" style={{ color: "#1E2A4A" }}>
-                        Total des dépenses
-                      </TableCell>
-                      <TableCell className="text-right font-bold text-red-600">
-                        {formatMUR(totalAnnualExpenses)}
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </div>
-
-              <Card className="border-2" style={{ borderColor: "#C9A84C" }}>
-                <CardContent className="py-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-lg font-semibold" style={{ color: "#1E2A4A" }}>
-                        Résultat net annuel
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        Revenus moins dépenses sur l&apos;année.
-                      </p>
-                    </div>
-                    <div
-                      className="text-3xl font-bold"
-                      style={{ color: annualResult >= 0 ? "#22C55E" : "#EF4444" }}
-                    >
-                      {annualResult >= 0 ? "+" : ""}{formatMUR(annualResult)}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Tab 3 - TVA */}
+        {/* Tab 2 - Ma TVA */}
         <TabsContent value="tva" className="space-y-6 mt-4">
           <Card>
             <CardHeader>
