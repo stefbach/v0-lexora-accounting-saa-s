@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import {
   LayoutDashboard,
   Users,
+  UsersRound,
   Building2,
   FileText,
   BarChart3,
@@ -16,16 +17,44 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  Truck,
+  Receipt,
+  Landmark,
+  Wallet,
+  BadgePercent,
+  Calculator,
 } from "lucide-react"
 import { useState } from "react"
 
-const navItems = [
-  { href: "/comptable", label: "Tableau de bord", icon: LayoutDashboard },
-  { href: "/comptable/clients", label: "Mes Clients", icon: Users },
-  { href: "/comptable/societes", label: "Sociétés", icon: Building2 },
-  { href: "/comptable/documents", label: "Documents", icon: FileText },
-  { href: "/comptable/rapports", label: "Rapports", icon: BarChart3 },
-  { href: "/comptable/alertes", label: "Alertes", icon: AlertTriangle },
+const navSections = [
+  {
+    label: null,
+    items: [
+      { href: "/comptable", label: "Tableau de bord", icon: LayoutDashboard },
+      { href: "/comptable/clients", label: "Mes Clients", icon: Users },
+      { href: "/comptable/societes", label: "Sociétés", icon: Building2 },
+      { href: "/comptable/equipe", label: "Mon Équipe", icon: UsersRound },
+    ],
+  },
+  {
+    label: "Comptabilité",
+    items: [
+      { href: "/comptable/fournisseurs", label: "Fournisseurs", icon: Truck },
+      { href: "/comptable/factures-clients", label: "Factures Clients", icon: Receipt },
+      { href: "/comptable/banque", label: "Banque", icon: Landmark },
+      { href: "/comptable/salaires", label: "Salaires", icon: Wallet },
+      { href: "/comptable/charges-sociales", label: "Charges Sociales", icon: BadgePercent },
+      { href: "/comptable/tva", label: "TVA", icon: Calculator },
+    ],
+  },
+  {
+    label: null,
+    items: [
+      { href: "/comptable/documents", label: "Documents", icon: FileText },
+      { href: "/comptable/rapports", label: "Rapports", icon: BarChart3 },
+      { href: "/comptable/alertes", label: "Alertes", icon: AlertTriangle },
+    ],
+  },
 ]
 
 export function ComptableSidebar() {
@@ -89,29 +118,39 @@ export function ComptableSidebar() {
         )}
 
         <nav className="flex flex-col gap-1">
-          {navItems.map((item) => {
-            const isActive =
-              item.href === "/comptable"
-                ? pathname === "/comptable"
-                : pathname.startsWith(item.href)
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
-                  isActive
-                    ? "bg-white/10 shadow-sm"
-                    : "text-white/70 hover:bg-white/5 hover:text-white",
-                  collapsed && "justify-center"
-                )}
-                style={isActive ? { color: "#C9A84C" } : undefined}
-              >
-                <item.icon className="h-5 w-5 shrink-0" />
-                {!collapsed && <span>{item.label}</span>}
-              </Link>
-            )
-          })}
+          {navSections.map((section, sIdx) => (
+            <div key={sIdx}>
+              {section.label && !collapsed && (
+                <p className="mt-4 mb-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-white/40">
+                  {section.label}
+                </p>
+              )}
+              {section.label && collapsed && <div className="my-2 mx-3 border-t border-white/10" />}
+              {section.items.map((item) => {
+                const isActive =
+                  item.href === "/comptable"
+                    ? pathname === "/comptable"
+                    : pathname.startsWith(item.href)
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
+                      isActive
+                        ? "bg-white/10 shadow-sm"
+                        : "text-white/70 hover:bg-white/5 hover:text-white",
+                      collapsed && "justify-center"
+                    )}
+                    style={isActive ? { color: "#C9A84C" } : undefined}
+                  >
+                    <item.icon className="h-4.5 w-4.5 shrink-0" />
+                    {!collapsed && <span>{item.label}</span>}
+                  </Link>
+                )
+              })}
+            </div>
+          ))}
         </nav>
       </div>
 

@@ -14,16 +14,39 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  Truck,
+  Landmark,
+  Wallet,
+  BadgePercent,
 } from "lucide-react"
 import { useState } from "react"
 import { useProfile } from "@/hooks/use-profile"
 
-const allNavItems = [
-  { href: "/client", label: "Tableau de bord", icon: LayoutDashboard, roles: ["client_admin", "client_user"] },
-  { href: "/client/documents", label: "Mes Documents", icon: FileText, roles: ["client_admin", "client_user"] },
-  { href: "/client/upload", label: "Upload", icon: Upload, roles: ["client_admin", "client_user"] },
-  { href: "/client/tva", label: "TVA & Fiscal", icon: Calculator, roles: ["client_admin"] },
-  { href: "/client/notifications", label: "Notifications", icon: Bell, roles: ["client_admin"] },
+const navSections = [
+  {
+    label: null,
+    items: [
+      { href: "/client", label: "Tableau de bord", icon: LayoutDashboard, roles: ["client_admin", "client_user"] },
+      { href: "/client/documents", label: "Mes Documents", icon: FileText, roles: ["client_admin", "client_user"] },
+      { href: "/client/upload", label: "Upload", icon: Upload, roles: ["client_admin", "client_user"] },
+    ],
+  },
+  {
+    label: "Comptabilité",
+    items: [
+      { href: "/client/fournisseurs", label: "Fournisseurs", icon: Truck, roles: ["client_admin"] },
+      { href: "/client/banque", label: "Banque", icon: Landmark, roles: ["client_admin"] },
+      { href: "/client/salaires", label: "Salaires", icon: Wallet, roles: ["client_admin"] },
+      { href: "/client/charges-sociales", label: "Charges Sociales", icon: BadgePercent, roles: ["client_admin"] },
+      { href: "/client/tva", label: "TVA & Fiscal", icon: Calculator, roles: ["client_admin"] },
+    ],
+  },
+  {
+    label: null,
+    items: [
+      { href: "/client/notifications", label: "Notifications", icon: Bell, roles: ["client_admin"] },
+    ],
+  },
 ]
 
 export function ClientSidebar() {
@@ -33,7 +56,12 @@ export function ClientSidebar() {
   const { profile } = useProfile()
   const userRole = profile?.role || "client_admin"
 
-  const navItems = allNavItems.filter((item) => item.roles.includes(userRole))
+  const filteredSections = navSections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => item.roles.includes(userRole)),
+    }))
+    .filter((section) => section.items.length > 0)
   const roleLabel = userRole === "client_admin" ? "Admin" : "Utilisateur"
 
   const handleSignOut = async () => {
@@ -90,29 +118,39 @@ export function ClientSidebar() {
         )}
 
         <nav className="flex flex-col gap-1">
-          {navItems.map((item) => {
-            const isActive =
-              item.href === "/client"
-                ? pathname === "/client"
-                : pathname.startsWith(item.href)
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
-                  isActive
-                    ? "bg-white/10 shadow-sm"
-                    : "text-white/70 hover:bg-white/5 hover:text-white",
-                  collapsed && "justify-center"
-                )}
-                style={isActive ? { color: "#C9A84C" } : undefined}
-              >
-                <item.icon className="h-5 w-5 shrink-0" />
-                {!collapsed && <span>{item.label}</span>}
-              </Link>
-            )
-          })}
+          {filteredSections.map((section, sIdx) => (
+            <div key={sIdx}>
+              {section.label && !collapsed && (
+                <p className="mt-4 mb-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-white/40">
+                  {section.label}
+                </p>
+              )}
+              {section.label && collapsed && <div className="my-2 mx-3 border-t border-white/10" />}
+              {section.items.map((item) => {
+                const isActive =
+                  item.href === "/client"
+                    ? pathname === "/client"
+                    : pathname.startsWith(item.href)
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
+                      isActive
+                        ? "bg-white/10 shadow-sm"
+                        : "text-white/70 hover:bg-white/5 hover:text-white",
+                      collapsed && "justify-center"
+                    )}
+                    style={isActive ? { color: "#C9A84C" } : undefined}
+                  >
+                    <item.icon className="h-4.5 w-4.5 shrink-0" />
+                    {!collapsed && <span>{item.label}</span>}
+                  </Link>
+                )
+              })}
+            </div>
+          ))}
         </nav>
       </div>
 

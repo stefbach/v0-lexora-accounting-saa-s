@@ -16,7 +16,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
-import { Eye, Search, Loader2, Plus, UserPlus } from "lucide-react"
+import { Eye, Search, Loader2, Plus } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
 
 interface Client {
@@ -72,14 +72,6 @@ export default function ComptableClientsPage() {
   const [linking2, setLinking2] = useState(false)
   const [linkError2, setLinkError2] = useState<string | null>(null)
 
-  // Comptable dédié dialog
-  const [teamDialogOpen, setTeamDialogOpen] = useState(false)
-  const [creatingTeam, setCreatingTeam] = useState(false)
-  const [teamError, setTeamError] = useState<string | null>(null)
-  const [teamName, setTeamName] = useState("")
-  const [teamEmail, setTeamEmail] = useState("")
-  const [teamPhone, setTeamPhone] = useState("")
-  const [teamPassword, setTeamPassword] = useState("")
 
   const fetchData = useCallback(async () => {
     try {
@@ -181,44 +173,6 @@ export default function ComptableClientsPage() {
     }
   }
 
-  const resetTeamForm = () => {
-    setTeamName(""); setTeamEmail(""); setTeamPhone(""); setTeamPassword(""); setTeamError(null)
-  }
-
-  const handleCreateTeam = async () => {
-    setTeamError(null)
-    if (!teamName || !teamEmail || !teamPassword) {
-      setTeamError("Veuillez remplir tous les champs obligatoires."); return
-    }
-    if (teamPassword.length < 6) {
-      setTeamError("Le mot de passe doit contenir au moins 6 caractères."); return
-    }
-
-    setCreatingTeam(true)
-    try {
-      const res = await fetch("/api/admin/users", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: teamEmail,
-          password: teamPassword,
-          full_name: teamName,
-          role: "comptable_dedie",
-          phone: teamPhone || null,
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) { setTeamError(data.error || "Erreur lors de la création"); return }
-
-      setSuccess(`Comptable dédié ${teamName} créé avec succès !`)
-      resetTeamForm(); setTeamDialogOpen(false); fetchData()
-    } catch {
-      setTeamError("Erreur de connexion au serveur")
-    } finally {
-      setCreatingTeam(false)
-    }
-  }
-
   const handleLinkSociete = async () => {
     setLinkError2(null)
     if (!linkClientId2 || !linkSocieteId2) { setLinkError2("Veuillez sélectionner une société."); return }
@@ -263,47 +217,6 @@ export default function ComptableClientsPage() {
           </p>
         </div>
         {isComptableAdmin && (
-          <div className="flex gap-2">
-            <Dialog open={teamDialogOpen} onOpenChange={(open) => { setTeamDialogOpen(open); if (!open) resetTeamForm() }}>
-              <DialogTrigger asChild>
-                <Button variant="outline" style={{ borderColor: "#C9A84C", color: "#C9A84C" }}>
-                  <UserPlus className="mr-2 h-4 w-4" />
-                  Ajouter un comptable dédié
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Nouveau comptable dédié</DialogTitle>
-                  <DialogDescription>Ajoutez un membre à votre équipe. Il n&apos;aura accès qu&apos;aux clients qui lui seront assignés.</DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label>Nom complet *</Label>
-                    <Input placeholder="Ex: Sophie Laurent" value={teamName} onChange={(e) => setTeamName(e.target.value)} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Email *</Label>
-                    <Input type="email" placeholder="Ex: sophie@lexora.mu" value={teamEmail} onChange={(e) => setTeamEmail(e.target.value)} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Mot de passe *</Label>
-                    <Input type="password" placeholder="Minimum 6 caractères" value={teamPassword} onChange={(e) => setTeamPassword(e.target.value)} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Téléphone</Label>
-                    <Input placeholder="Ex: +230 5234 5678" value={teamPhone} onChange={(e) => setTeamPhone(e.target.value)} />
-                  </div>
-                  {teamError && <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">{teamError}</div>}
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => { setTeamDialogOpen(false); resetTeamForm() }}>Annuler</Button>
-                  <Button style={{ backgroundColor: "#C9A84C" }} onClick={handleCreateTeam} disabled={creatingTeam}>
-                    {creatingTeam ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Création...</> : "Créer le comptable dédié"}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-
           <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm() }}>
             <DialogTrigger asChild>
               <Button style={{ backgroundColor: "#1E2A4A" }}>
@@ -366,7 +279,6 @@ export default function ComptableClientsPage() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-          </div>
         )}
       </div>
 
