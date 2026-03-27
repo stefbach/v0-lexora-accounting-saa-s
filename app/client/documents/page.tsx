@@ -360,8 +360,9 @@ export default function ClientDocumentsPage() {
                           className="text-xs"
                           style={{ color: GOLD }}
                           onClick={async () => {
+                            setDocuments(prev => prev.map(d => d.id === doc.id ? { ...d, statut: "en_cours" } : d))
                             try {
-                              await fetch("/api/documents/process", {
+                              const res = await fetch("/api/documents/process", {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
                                 body: JSON.stringify({
@@ -371,8 +372,14 @@ export default function ClientDocumentsPage() {
                                   client_id: profile?.id,
                                 }),
                               })
-                              setDocuments(prev => prev.map(d => d.id === doc.id ? { ...d, statut: "en_cours" } : d))
-                            } catch {}
+                              const data = await res.json()
+                              if (data.success) {
+                                // Refresh documents list to get updated data
+                                await fetchDocuments()
+                              }
+                            } catch {
+                              await fetchDocuments()
+                            }
                           }}
                         >
                           Réessayer
