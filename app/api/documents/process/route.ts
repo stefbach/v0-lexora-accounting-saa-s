@@ -141,6 +141,29 @@ const PROCESSING_PROMPTS: Record<string, string> = {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/** Retry wrapper for Anthropic API calls (handles 529 overloaded errors) */
+async function callWithRetry(
+  anthropic: Anthropic,
+  params: Parameters<typeof anthropic.messages.create>[0],
+  maxRetries = 3,
+): Promise<Anthropic.Message> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await anthropic.messages.create(params)
+    } catch (e: any) {
+      const status = e?.status || e?.error?.status
+      if ((status === 529 || status === 529) && attempt < maxRetries) {
+        const delay = Math.pow(2, attempt) * 2000 // 2s, 4s, 8s
+        console.log(`[documents/process] API overloaded, retry ${attempt + 1}/${maxRetries} in ${delay}ms`)
+        await new Promise(r => setTimeout(r, delay))
+        continue
+      }
+      throw e
+    }
+  }
+  throw new Error('Max retries exceeded')
+}
+
 /** Map file extension to a media type Claude understands. */
 function getMediaType(filename: string): 'image/jpeg' | 'image/png' | 'image/webp' | 'application/pdf' {
   const ext = filename.split('.').pop()?.toLowerCase()
@@ -245,7 +268,7 @@ export async function POST(request: NextRequest) {
       textContent,
     )
 
-    const routingResponse = await anthropic.messages.create({
+    const routingResponse = await callWithRetry(anthropic, {
       model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6',
       max_tokens: 4096,
       temperature: 0,
@@ -307,7 +330,7 @@ export async function POST(request: NextRequest) {
         textContent,
       )
 
-      const processingResponse = await anthropic.messages.create({
+      const processingResponse = await callWithRetry(anthropic, {
         model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6',
         max_tokens: 4096,
         temperature: 0,
