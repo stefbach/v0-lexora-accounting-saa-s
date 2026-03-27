@@ -231,8 +231,8 @@ export default function ClientDocumentsPage() {
         {uploading ? (
           <div className="flex flex-col items-center gap-2">
             <Loader2 className="h-8 w-8 animate-spin" style={{ color: GOLD }} />
-            <p className="text-sm text-muted-foreground">Envoi et analyse en cours...</p>
-            <p className="text-xs text-muted-foreground">L&apos;IA analyse et classe votre document (peut prendre jusqu&apos;à 30 secondes)</p>
+            <p className="text-sm text-muted-foreground">Analyse en cours...</p>
+            <p className="text-xs text-muted-foreground">Votre document sera classé automatiquement dans le bon dossier</p>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-2">
