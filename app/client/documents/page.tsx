@@ -168,17 +168,24 @@ export default function ClientDocumentsPage() {
         const data = await res.json()
         if (res.ok && data.document) {
           const doc = data.document
+          const docType = doc.type_document || null
+          const docStatut = doc.statut || "en_attente"
           setDocuments(prev => [{
             id: doc.id,
             nom_fichier: file.name,
             type_fichier: file.type.split("/").pop() || "pdf",
-            type_document: null,
-            statut: "en_attente",
+            type_document: docType,
+            statut: docStatut,
             storage_path: doc.storage_path || null,
             created_at: new Date().toISOString(),
-            societe_detectee: null,
+            societe_detectee: doc.societe_detectee || null,
           }, ...prev])
-          setUploadSuccess(`${file.name} envoyé ! L'analyse démarre automatiquement.`)
+          if (docStatut === "traite" && docType) {
+            const folderLabel = FOLDERS.find(f => f.key === docType)?.label || docType
+            setUploadSuccess(`${file.name} analysé et classé dans "${folderLabel}" !`)
+          } else {
+            setUploadSuccess(`${file.name} envoyé !`)
+          }
         } else {
           setUploadError(data.error || "Erreur lors de l'envoi")
         }
