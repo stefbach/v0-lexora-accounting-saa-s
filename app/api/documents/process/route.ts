@@ -1,547 +1,154 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
-import type { DocumentType, Societe } from '@/lib/types'
 
-// Allow up to 60 seconds for AI processing on Vercel
 export const maxDuration = 60
 
-// ---------------------------------------------------------------------------
-// Supabase admin client (service role – bypasses RLS)
-// ---------------------------------------------------------------------------
-function getAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !serviceKey) {
-    throw new Error('Variables Supabase manquantes (URL ou clé service)')
-  }
-  return createClient(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  })
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
 }
-
-// ---------------------------------------------------------------------------
-// Anthropic client
-// ---------------------------------------------------------------------------
-function getAnthropicClient() {
-  const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) {
-    throw new Error('ANTHROPIC_API_KEY non configurée')
-  }
-  return new Anthropic({ apiKey })
-}
-
-// ---------------------------------------------------------------------------
-// System prompts (simplified – will be refactored into a dedicated file later)
-// ---------------------------------------------------------------------------
-
-const PROMPT_ROUTING = `Tu es un assistant comptable expert. Analyse le document fourni et détecte :
-1. La **société ou personne** émettrice ou destinataire du document. Cherche le nom dans l'en-tête, le pied de page, le destinataire ou l'émetteur.
-2. Le **type de document** parmi : facture_fournisseur, facture_client, releve_bancaire, charges_sociales, fiche_paie, contrat, autre.
-
-IMPORTANT: Réponds UNIQUEMENT en JSON valide. Pas de markdown, pas de backticks, pas d'explication. Juste le JSON brut.
-{
-  "societe": "<nom de la société détectée ou INCONNU>",
-  "type_document": "<facture_fournisseur|facture_client|releve_bancaire|charges_sociales|fiche_paie|contrat|autre>",
-  "confiance_societe": <0-100>,
-  "confiance_type": <0-100>,
-  "indices": "<éléments du document ayant permis la détection>"
-}`
-
-const PROMPT_FACTURE_FOURNISSEUR = `Tu es un assistant comptable expert. Extrais les données de cette facture fournisseur.
-
-Réponds UNIQUEMENT en JSON valide, sans markdown :
-{
-  "fournisseur": { "nom": "", "brn": "", "numero_tva": "", "adresse": "" },
-  "facture": { "numero": "", "date": "", "date_echeance": "", "devise": "MUR" },
-  "lignes": [{ "description": "", "quantite": 0, "prix_unitaire": 0, "montant_ht": 0, "taux_tva": 0, "montant_tva": 0, "montant_ttc": 0 }],
-  "totaux": { "total_ht": 0, "total_tva": 0, "total_ttc": 0 },
-  "ecritures_suggerees": [{ "compte": "", "libelle": "", "debit": 0, "credit": 0 }]
-}`
-
-const PROMPT_FACTURE_CLIENT = `Tu es un assistant comptable expert. Extrais les données de cette facture client (émise par la société).
-
-Réponds UNIQUEMENT en JSON valide, sans markdown :
-{
-  "client": { "nom": "", "brn": "", "adresse": "" },
-  "facture": { "numero": "", "date": "", "date_echeance": "", "devise": "MUR" },
-  "lignes": [{ "description": "", "quantite": 0, "prix_unitaire": 0, "montant_ht": 0, "taux_tva": 0, "montant_tva": 0, "montant_ttc": 0 }],
-  "totaux": { "total_ht": 0, "total_tva": 0, "total_ttc": 0 },
-  "ecritures_suggerees": [{ "compte": "", "libelle": "", "debit": 0, "credit": 0 }]
-}`
-
-const PROMPT_RELEVE_BANCAIRE = `Tu es un assistant comptable expert. Extrais les données de ce relevé bancaire.
-
-Réponds UNIQUEMENT en JSON valide, sans markdown :
-{
-  "banque": "",
-  "compte": { "numero": "", "titulaire": "", "devise": "MUR" },
-  "periode": { "debut": "", "fin": "" },
-  "solde_ouverture": 0,
-  "solde_cloture": 0,
-  "transactions": [{ "date": "", "description": "", "reference": "", "debit": 0, "credit": 0, "solde": 0 }],
-  "total_debits": 0,
-  "total_credits": 0,
-  "rapprochement": { "nombre_transactions": 0, "solde_verifie": true }
-}`
-
-const PROMPT_CHARGES_SOCIALES = `Tu es un assistant comptable expert à Maurice. Extrais les données de ce document de charges sociales (NPF, HRDC, NPS, PAYE).
-
-Réponds UNIQUEMENT en JSON valide, sans markdown :
-{
-  "organisme": "",
-  "periode": "",
-  "societe": "",
-  "charges": {
-    "npf": { "base": 0, "taux": 0, "montant_employeur": 0, "montant_employe": 0, "total": 0 },
-    "hrdc": { "base": 0, "taux": 0, "montant": 0 },
-    "nps": { "base": 0, "taux": 0, "montant_employeur": 0, "montant_employe": 0, "total": 0 },
-    "paye": { "base_imposable": 0, "montant": 0 }
-  },
-  "total_charges_employeur": 0,
-  "total_charges_employe": 0,
-  "total_general": 0,
-  "ecritures_suggerees": [{ "compte": "", "libelle": "", "debit": 0, "credit": 0 }]
-}`
-
-const PROMPT_FICHE_PAIE = `Tu es un assistant comptable expert à Maurice. Extrais les données de cette fiche de paie.
-
-Réponds UNIQUEMENT en JSON valide, sans markdown :
-{
-  "employe": { "nom": "", "poste": "", "numero": "" },
-  "periode": "",
-  "salaire_base": 0,
-  "indemnites": [{ "description": "", "montant": 0 }],
-  "brut": 0,
-  "deductions": {
-    "npf_employe": 0,
-    "nps_employe": 0,
-    "paye": 0,
-    "autres": [{ "description": "", "montant": 0 }]
-  },
-  "total_deductions": 0,
-  "net_a_payer": 0,
-  "charges_patronales": {
-    "npf_employeur": 0,
-    "nps_employeur": 0,
-    "hrdc": 0
-  },
-  "ecritures_suggerees": [{ "compte": "", "libelle": "", "debit": 0, "credit": 0 }]
-}`
-
-const PROCESSING_PROMPTS: Record<string, string> = {
-  facture_fournisseur: PROMPT_FACTURE_FOURNISSEUR,
-  facture_client: PROMPT_FACTURE_CLIENT,
-  releve_bancaire: PROMPT_RELEVE_BANCAIRE,
-  charges_sociales: PROMPT_CHARGES_SOCIALES,
-  fiche_paie: PROMPT_FICHE_PAIE,
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Retry wrapper for Anthropic API calls (handles 529 overloaded errors) */
-async function callWithRetry(
-  anthropic: Anthropic,
-  params: Parameters<typeof anthropic.messages.create>[0],
-  maxRetries = 3,
-): Promise<Anthropic.Message> {
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      return await anthropic.messages.create(params)
-    } catch (e: any) {
-      const status = e?.status || e?.error?.status
-      if ((status === 529 || status === 529) && attempt < maxRetries) {
-        const delay = Math.pow(2, attempt) * 2000 // 2s, 4s, 8s
-        console.log(`[documents/process] API overloaded, retry ${attempt + 1}/${maxRetries} in ${delay}ms`)
-        await new Promise(r => setTimeout(r, delay))
-        continue
-      }
-      throw e
-    }
-  }
-  throw new Error('Max retries exceeded')
-}
-
-/** Map file extension to a media type Claude understands. */
-function getMediaType(filename: string): 'image/jpeg' | 'image/png' | 'image/webp' | 'application/pdf' {
-  const ext = filename.split('.').pop()?.toLowerCase()
-  switch (ext) {
-    case 'jpg':
-    case 'jpeg':
-      return 'image/jpeg'
-    case 'png':
-      return 'image/png'
-    case 'webp':
-      return 'image/webp'
-    case 'pdf':
-      return 'application/pdf'
-    default:
-      return 'application/pdf'
-  }
-}
-
-function isVisualDocument(filename: string): boolean {
-  const ext = filename.split('.').pop()?.toLowerCase()
-  return ['pdf', 'jpg', 'jpeg', 'png', 'webp'].includes(ext || '')
-}
-
-// ---------------------------------------------------------------------------
-// POST handler
-// ---------------------------------------------------------------------------
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now()
-  let parsedDocumentId: string | null = null
+  let documentId = ''
 
   try {
-    // ---- 1. Parse & validate input ----------------------------------------
     const body = await request.json()
-    const { document_id, storage_path, nom_fichier, client_id, societe } = body as {
-      document_id: string
-      storage_path: string
-      nom_fichier: string
-      client_id: string
-      societe?: string
+    documentId = body.document_id
+    const storagePath = body.storage_path
+    const nomFichier = body.nom_fichier
+
+    if (!documentId || !storagePath || !nomFichier) {
+      return NextResponse.json({ error: 'Paramètres manquants', received: body }, { status: 400 })
     }
 
-    if (!document_id || !storage_path || !nom_fichier || !client_id) {
-      return NextResponse.json(
-        { error: 'Paramètres manquants : document_id, storage_path, nom_fichier et client_id sont requis' },
-        { status: 400 },
-      )
+    const supabase = getSupabase()
+
+    // Step 1: Update status
+    await supabase.from('documents').update({ statut: 'en_cours' }).eq('id', documentId)
+
+    // Step 2: Download file
+    const { data: fileData, error: dlError } = await supabase.storage.from('documents').download(storagePath)
+    if (dlError || !fileData) {
+      await supabase.from('documents').update({ statut: 'erreur', n8n_result: { error: `Download failed: ${dlError?.message}` } }).eq('id', documentId)
+      return NextResponse.json({ error: 'Download failed', details: dlError?.message }, { status: 500 })
     }
 
-    parsedDocumentId = document_id
-    console.log(`[documents/process] Début du traitement – document_id=${document_id}, fichier=${nom_fichier}`)
+    // Step 3: Prepare content
+    const ext = nomFichier.split('.').pop()?.toLowerCase() || ''
+    const isVisual = ['pdf', 'jpg', 'jpeg', 'png', 'webp'].includes(ext)
+    const arrayBuffer = await fileData.arrayBuffer()
+    const base64 = Buffer.from(arrayBuffer).toString('base64')
 
-    const supabase = getAdminClient()
-    const anthropic = getAnthropicClient()
+    const mediaType = ext === 'pdf' ? 'application/pdf'
+      : ext === 'png' ? 'image/png'
+      : 'image/jpeg'
 
-    // ---- 2. Update status to en_cours -------------------------------------
-    await supabase
-      .from('documents')
-      .update({ statut: 'en_cours' })
-      .eq('id', document_id)
+    // Step 4: Call Anthropic
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
-    // ---- 3. Download file from Supabase Storage ---------------------------
-    const { data: fileData, error: downloadError } = await supabase.storage
-      .from('documents')
-      .download(storage_path)
+    const contentBlock = ext === 'pdf'
+      ? { type: 'document' as const, source: { type: 'base64' as const, media_type: 'application/pdf' as const, data: base64 } }
+      : { type: 'image' as const, source: { type: 'base64' as const, media_type: mediaType as 'image/jpeg' | 'image/png', data: base64 } }
 
-    if (downloadError || !fileData) {
-      console.error(`[documents/process] Erreur téléchargement : ${downloadError?.message}`)
-      await markError(supabase, document_id, 'Impossible de télécharger le fichier depuis le stockage')
-      return NextResponse.json(
-        { error: 'Échec du téléchargement du fichier', details: downloadError?.message },
-        { status: 500 },
-      )
-    }
-
-    // ---- 4. Prepare file content for Claude --------------------------------
-    const isVisual = isVisualDocument(nom_fichier)
-    const isXlsx = nom_fichier.toLowerCase().endsWith('.xlsx')
-
-    let fileBase64: string | null = null
-    let textContent: string | null = null
-
-    if (isVisual) {
-      const arrayBuffer = await fileData.arrayBuffer()
-      fileBase64 = Buffer.from(arrayBuffer).toString('base64')
-    } else if (isXlsx) {
-      // XLSX files need text extraction – for now we note this limitation
-      textContent = '[Fichier XLSX détecté – extraction de texte requise. Veuillez fournir un PDF ou une image pour un traitement optimal.]'
-      console.warn(`[documents/process] Fichier XLSX détecté (${nom_fichier}) – extraction de texte limitée`)
-    } else {
-      // Fallback: try to read as text
-      textContent = await fileData.text()
-    }
-
-    // ---- 5. Single AI call — classify + extract in one shot (fast!) ----------
-    // Use Haiku for document processing — fast enough for Vercel timeout
-    const FAST_MODEL = 'claude-haiku-4-5-20251001'
-
-    const COMBINED_PROMPT = `Tu es un expert-comptable mauricien. Analyse ce document comptable et retourne UN SEUL objet JSON.
-
-CLASSIFICATION — Détermine:
-- type_document: facture_fournisseur, facture_client, releve_bancaire, charges_sociales, fiche_paie, contrat, ou autre
-- La société/personne émettrice et destinataire
-
-EXTRACTION — Extrais TOUTES les données pour la comptabilité:
-- Montants (HT, TVA, TTC), dates, numéros de référence
-- Lignes de détail avec descriptions, quantités, prix unitaires
-- Écritures comptables suggérées (plan comptable OHADA/Maurice)
-- Pour les relevés bancaires: transactions avec dates, descriptions, débits, crédits
-- Pour les charges sociales: NPF, HRDC, NPS, PAYE avec bases et taux
-- Pour les fiches de paie: salaire brut, déductions, net, charges patronales
-
-COMPTABILITE — Suggère les écritures comptables:
-- Comptes du plan comptable (401 Fournisseurs, 411 Clients, 512 Banque, 6xx Charges, 7xx Produits)
-- TVA: 4456 TVA déductible, 4457 TVA collectée
-- Charges sociales: 431 CSG, 437 Autres organismes sociaux
-
-IMPORTANT: Réponds UNIQUEMENT en JSON valide. Pas de markdown, pas de backticks, pas de texte autour.
-{
-  "routing": {
-    "societe": "<nom société/personne détectée ou INCONNU>",
-    "type_document": "<facture_fournisseur|facture_client|releve_bancaire|charges_sociales|fiche_paie|contrat|autre>",
-    "confiance_type": <0-100>,
-    "indices": "<éléments clés>"
-  },
-  "extraction": {
-    "emetteur": {"nom": "", "adresse": "", "brn": "", "tva": ""},
-    "destinataire": {"nom": "", "adresse": ""},
-    "date_document": "",
-    "date_echeance": "",
-    "numero_reference": "",
-    "devise": "<EUR|MUR|GBP|USD>",
-    "montant_ht": 0,
-    "montant_tva": 0,
-    "taux_tva": 0,
-    "montant_ttc": 0,
-    "lignes": [{"description": "", "quantite": 1, "prix_unitaire": 0, "montant": 0}],
-    "ecritures_comptables": [{"compte": "", "libelle": "", "debit": 0, "credit": 0}],
-    "notes": ""
-  }
-}`
-
-    console.log(`[documents/process] Analyse avec ${FAST_MODEL}...`)
-
-    const messages = buildMessages(
-      'Analyse ce document comptable. Classifie-le et extrais les données.',
-      fileBase64,
-      nom_fichier,
-      textContent,
-    )
-
-    const response = await callWithRetry(anthropic, {
-      model: FAST_MODEL,
+    const response = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 2048,
       temperature: 0,
-      system: COMBINED_PROMPT,
-      messages,
+      system: `Tu es un expert-comptable. Analyse ce document et retourne UN JSON (sans markdown, sans backticks):
+{
+  "routing": {
+    "societe": "<nom société ou INCONNU>",
+    "type_document": "<facture_fournisseur|facture_client|releve_bancaire|charges_sociales|fiche_paie|contrat|autre>",
+    "confiance_type": <0-100>
+  },
+  "extraction": {
+    "emetteur": "",
+    "destinataire": "",
+    "date_document": "",
+    "numero_reference": "",
+    "devise": "",
+    "montant_ht": 0,
+    "montant_tva": 0,
+    "montant_ttc": 0,
+    "lignes": [{"description": "", "montant": 0}],
+    "ecritures_comptables": [{"compte": "", "libelle": "", "debit": 0, "credit": 0}]
+  }
+}`,
+      messages: [{
+        role: 'user',
+        content: isVisual
+          ? [contentBlock, { type: 'text' as const, text: 'Analyse ce document comptable.' }]
+          : `Analyse ce document: ${await fileData.text()}`
+      }],
     })
 
-    const responseText = response.content
-      .filter((block): block is Anthropic.TextBlock => block.type === 'text')
-      .map((block) => block.text)
-      .join('')
+    const text = response.content
+      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+      .map(b => b.text).join('')
 
-    console.log(`[documents/process] Résultat : ${responseText.substring(0, 300)}`)
-
-    let parsed: { routing?: any; extraction?: any } = {}
+    let parsed: any = {}
     try {
-      const cleaned = responseText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
-      parsed = JSON.parse(cleaned)
+      parsed = JSON.parse(text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim())
     } catch {
-      console.error(`[documents/process] Parsing failed: ${responseText.substring(0, 200)}`)
-      parsed = {
-        routing: { societe: 'INCONNU', type_document: 'autre', confiance_type: 0, indices: 'parsing failed' },
-        extraction: { raw_response: responseText },
-      }
+      parsed = { routing: { type_document: 'autre', societe: 'INCONNU', confiance_type: 0 }, extraction: {} }
     }
 
-    const routingResult = parsed.routing || { societe: 'INCONNU', type_document: 'autre', confiance_type: 0, indices: '' }
-    const processingResult = parsed.extraction || {}
-    const detectedSociete = (societe || routingResult.societe || 'INCONNU') as string
-    const detectedType = (routingResult.type_document || 'autre') as DocumentType
+    const typeDoc = parsed.routing?.type_document || 'autre'
+    const societe = parsed.routing?.societe || 'INCONNU'
+    const extraction = parsed.extraction || {}
+    const duration = Date.now() - startTime
 
-    console.log(`[documents/process] Classifié: type=${detectedType}, société=${detectedSociete}, confiance=${routingResult.confiance_type}%`)
-
-    // ---- 6. Save results to database ---------------------------------------
-    const n8nResult = {
-      routing: routingResult,
-      extraction: processingResult,
-      metadata: {
-        processed_at: new Date().toISOString(),
-        processing_time_ms: Date.now() - startTime,
-        model: FAST_MODEL,
-        nom_fichier,
-      },
+    // Step 5: Save results
+    const updateData: any = {
+      type_document: typeDoc,
+      statut: 'traite',
+      n8n_result: { routing: parsed.routing, extraction, metadata: { processing_time_ms: duration, model: 'claude-haiku-4-5-20251001' } },
     }
+    if (societe !== 'INCONNU') updateData.societe_detectee = societe
 
-    const updatePayload: Record<string, unknown> = {
-      n8n_result: n8nResult,
-      type_document: detectedType,
-      statut: 'traite' as const,
-    }
+    await supabase.from('documents').update(updateData).eq('id', documentId)
 
-    if (detectedSociete !== 'INCONNU') {
-      updatePayload.societe_detectee = detectedSociete
-    }
-
-    const { error: updateError } = await supabase
-      .from('documents')
-      .update(updatePayload)
-      .eq('id', document_id)
-
-    if (updateError) {
-      console.error(`[documents/process] Erreur mise à jour document : ${updateError.message}`)
-      return NextResponse.json(
-        { error: 'Erreur lors de la sauvegarde des résultats', details: updateError.message },
-        { status: 500 },
-      )
-    }
-
-    // ---- 7. Auto-create accounting entries from extracted data ----------------
-    const ecritures = processingResult?.ecritures_comptables
+    // Step 6: Auto-create accounting entries
+    const ecritures = extraction.ecritures_comptables
     if (Array.isArray(ecritures) && ecritures.length > 0) {
-      // Get the dossier_id from the document
-      const { data: docRecord } = await supabase
-        .from('documents')
-        .select('dossier_id')
-        .eq('id', document_id)
-        .single()
-
-      if (docRecord?.dossier_id) {
-        const journalMap: Record<string, string> = {
-          facture_fournisseur: 'ACH',
-          facture_client: 'VTE',
-          releve_bancaire: 'BNQ',
-          charges_sociales: 'OD',
-          fiche_paie: 'OD',
-        }
-        const journal = journalMap[detectedType] || 'OD'
-        const dateEcriture = processingResult?.date_document || new Date().toISOString().split('T')[0]
-
+      const { data: doc } = await supabase.from('documents').select('dossier_id').eq('id', documentId).single()
+      if (doc?.dossier_id) {
+        const journalMap: Record<string, string> = { facture_fournisseur: 'ACH', facture_client: 'VTE', releve_bancaire: 'BNQ' }
         const entries = ecritures
           .filter((e: any) => e.compte && (e.debit > 0 || e.credit > 0))
           .map((e: any) => ({
-            dossier_id: docRecord.dossier_id,
-            date_ecriture: dateEcriture,
-            journal,
-            numero_piece: processingResult?.numero_reference || null,
+            dossier_id: doc.dossier_id,
+            date_ecriture: extraction.date_document || new Date().toISOString().split('T')[0],
+            journal: journalMap[typeDoc] || 'OD',
+            numero_piece: extraction.numero_reference || null,
             compte: String(e.compte),
-            libelle: e.libelle || `${detectedType} — ${nom_fichier}`,
+            libelle: e.libelle || nomFichier,
             debit: Number(e.debit) || 0,
             credit: Number(e.credit) || 0,
-            piece_justificative: document_id,
+            piece_justificative: documentId,
           }))
-
         if (entries.length > 0) {
-          const { error: ecritureError } = await supabase
-            .from('ecritures_comptables')
-            .insert(entries)
-
-          if (ecritureError) {
-            console.error(`[documents/process] Erreur création écritures : ${ecritureError.message}`)
-          } else {
-            console.log(`[documents/process] ${entries.length} écriture(s) comptable(s) créée(s)`)
-          }
+          await supabase.from('ecritures_comptables').insert(entries)
         }
       }
     }
 
-    const duration = Date.now() - startTime
-    console.log(`[documents/process] Traitement terminé en ${duration}ms – document_id=${document_id}`)
+    return NextResponse.json({ success: true, type_document: typeDoc, societe_detectee: societe, processing_time_ms: duration })
 
-    // ---- 8. Return result ---------------------------------------------------
-    return NextResponse.json({
-      success: true,
-      document_id,
-      societe_detectee: detectedSociete,
-      type_document: detectedType,
-      confiance: {
-        societe: routingResult.confiance_societe,
-        type: routingResult.confiance_type,
-      },
-      result: processingResult,
-      processing_time_ms: duration,
-    })
-  } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : 'Erreur inconnue'
-    const stack = e instanceof Error ? e.stack : undefined
-    console.error(`[documents/process] Erreur inattendue : ${message}`, stack)
+  } catch (e: any) {
+    const msg = e?.message || 'Unknown error'
+    console.error(`[process] ERROR: ${msg}`, e?.stack)
 
-    // Mark document as error if we have the id
-    if (parsedDocumentId) {
-      try {
-        const supabase = getAdminClient()
-        await markError(supabase, parsedDocumentId, message)
-      } catch {
-        // Ignore – best effort
-      }
+    if (documentId) {
+      const supabase = getSupabase()
+      await supabase.from('documents').update({ statut: 'erreur', n8n_result: { error: msg } }).eq('id', documentId).catch(() => {})
     }
 
-    return NextResponse.json(
-      { error: 'Erreur lors du traitement du document', details: message },
-      { status: 500 },
-    )
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Build Claude messages with vision or text content
-// ---------------------------------------------------------------------------
-function buildMessages(
-  userText: string,
-  fileBase64: string | null,
-  filename: string,
-  textContent: string | null,
-): Anthropic.MessageParam[] {
-  if (fileBase64) {
-    const mediaType = getMediaType(filename)
-
-    // PDF uses document type, images use image type
-    if (mediaType === 'application/pdf') {
-      return [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'document',
-              source: { type: 'base64', media_type: 'application/pdf', data: fileBase64 },
-            },
-            { type: 'text', text: userText },
-          ],
-        },
-      ]
-    }
-
-    // Image files
-    return [
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'image',
-            source: { type: 'base64', media_type: mediaType, data: fileBase64 },
-          },
-          { type: 'text', text: userText },
-        ],
-      },
-    ]
-  }
-
-  // Text-only fallback
-  const content = textContent
-    ? `${userText}\n\n--- Contenu du document (${filename}) ---\n${textContent}`
-    : userText
-
-  return [{ role: 'user', content }]
-}
-
-// ---------------------------------------------------------------------------
-// Mark a document as erreur in the database
-// ---------------------------------------------------------------------------
-async function markError(
-  supabase: ReturnType<typeof createClient>,
-  documentId: string,
-  errorMessage: string,
-) {
-  try {
-    await supabase
-      .from('documents')
-      .update({
-        statut: 'erreur',
-        n8n_result: {
-          error: errorMessage,
-          failed_at: new Date().toISOString(),
-        },
-      })
-      .eq('id', documentId)
-  } catch (e) {
-    console.error(`[documents/process] Impossible de marquer le document en erreur : ${e}`)
+    return NextResponse.json({ error: msg, stack: e?.stack?.split('\n').slice(0, 5) }, { status: 500 })
   }
 }
