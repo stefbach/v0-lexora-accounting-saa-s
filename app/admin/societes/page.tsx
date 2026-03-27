@@ -125,8 +125,8 @@ export default function SocietesPage() {
   const [deleteSociete, setDeleteSociete] = useState<Societe | null>(null)
 
   // --------------- derived data ---------------
-  const comptables = users.filter((u) => u.role === "comptable")
-  const clients = users.filter((u) => u.role === "client")
+  const comptables = users.filter((u) => u.role === "comptable" || u.role === "comptable_dedie")
+  const clients = users.filter((u) => u.role === "client_admin" || u.role === "client_user" || u.role === "client")
 
   const clientsForSociete = (societeId: string): Profile[] => {
     const clientIds = dossiers
@@ -221,30 +221,26 @@ export default function SocietesPage() {
       // Create dossiers for selected clients
       if (addClientIds.length > 0 && newSociete?.id) {
         const comptableForDossier = addComptableId || null
-        if (!comptableForDossier) {
-          setSuccess("Societe creee. Attention : aucun comptable assigne, les dossiers clients n'ont pas ete crees.")
-        } else {
-          const dossierResults = await Promise.allSettled(
-            addClientIds.map((clientId) =>
-              fetch("/api/admin/dossiers", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  client_id: clientId,
-                  societe_id: newSociete.id,
-                  comptable_id: comptableForDossier,
-                }),
-              })
-            )
+        const dossierResults = await Promise.allSettled(
+          addClientIds.map((clientId) =>
+            fetch("/api/admin/dossiers", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                client_id: clientId,
+                societe_id: newSociete.id,
+                comptable_id: comptableForDossier,
+              }),
+            })
           )
-          const failures = dossierResults.filter((r) => r.status === "rejected")
-          if (failures.length > 0) {
-            setSuccess(
-              `Societe creee. ${addClientIds.length - failures.length}/${addClientIds.length} client(s) lie(s) avec succes.`
-            )
-          } else {
-            setSuccess("Societe creee et client(s) lie(s) avec succes.")
-          }
+        )
+        const failures = dossierResults.filter((r) => r.status === "rejected")
+        if (failures.length > 0) {
+          setSuccess(
+            `Societe creee. ${addClientIds.length - failures.length}/${addClientIds.length} client(s) lie(s) avec succes.`
+          )
+        } else {
+          setSuccess("Societe creee et client(s) lie(s) avec succes.")
         }
       } else {
         setSuccess("Societe creee avec succes.")
@@ -272,11 +268,6 @@ export default function SocietesPage() {
       setError("Veuillez selectionner un client.")
       return
     }
-    const comptableId = linkSociete.comptable_id
-    if (!comptableId) {
-      setError("Cette societe n'a pas de comptable assigne. Veuillez d'abord en assigner un.")
-      return
-    }
     setLinkSubmitting(true)
     setError(null)
     try {
@@ -286,7 +277,7 @@ export default function SocietesPage() {
         body: JSON.stringify({
           client_id: linkClientId,
           societe_id: linkSociete.id,
-          comptable_id: comptableId,
+          comptable_id: linkSociete.comptable_id || null,
         }),
       })
       const data = await res.json()

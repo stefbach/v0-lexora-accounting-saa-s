@@ -29,8 +29,8 @@ export async function POST(request: NextRequest) {
   try {
     const { client_id, societe_id, comptable_id } = await request.json()
 
-    if (!client_id || !societe_id || !comptable_id) {
-      return NextResponse.json({ error: 'client_id, societe_id et comptable_id sont requis' }, { status: 400 })
+    if (!client_id || !societe_id) {
+      return NextResponse.json({ error: 'client_id et societe_id sont requis' }, { status: 400 })
     }
 
     const supabase = getAdminClient()
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
 
     const { data, error } = await supabase
       .from('dossiers')
-      .insert({ client_id, societe_id, comptable_id })
+      .insert({ client_id, societe_id, comptable_id: comptable_id || null })
       .select()
       .single()
 

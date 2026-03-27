@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -16,7 +17,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
-import { Plus, Search, Loader2, Users, Building2 } from "lucide-react"
+import { Plus, Search, Loader2, Users, Building2, Link } from "lucide-react"
 
 interface UserProfile {
   id: string
@@ -63,6 +64,7 @@ export default function AdminClientsPage() {
   const [formPhone, setFormPhone] = useState("")
   const [formPassword, setFormPassword] = useState("")
   const [formRole, setFormRole] = useState("client_admin")
+  const [formSocieteIds, setFormSocieteIds] = useState<string[]>([])
 
   // Société create
   const [societeDialog, setSocieteDialog] = useState(false)
@@ -72,6 +74,13 @@ export default function AdminClientsPage() {
   const [formBrn, setFormBrn] = useState("")
   const [formTva, setFormTva] = useState("")
   const [formStatutTva, setFormStatutTva] = useState("true")
+  const [formClientIds, setFormClientIds] = useState<string[]>([])
+
+  // Link societies to existing client
+  const [linkDialog, setLinkDialog] = useState(false)
+  const [linkClient, setLinkClient] = useState<UserProfile | null>(null)
+  const [linkSocieteIds, setLinkSocieteIds] = useState<string[]>([])
+  const [linking, setLinking] = useState(false)
 
   const fetchData = useCallback(async () => {
     try {
@@ -91,7 +100,6 @@ export default function AdminClientsPage() {
   useEffect(() => { if (success) { const t = setTimeout(() => setSuccess(null), 5000); return () => clearTimeout(t) } }, [success])
 
   const clients = users.filter(u => u.role === "client_admin" || u.role === "client_user")
-  const comptables = users.filter(u => u.role === "comptable" || u.role === "comptable_dedie")
 
   const filteredClients = clients.filter(c =>
     c.full_name.toLowerCase().includes(search.toLowerCase()) || c.email.toLowerCase().includes(search.toLowerCase())
@@ -103,11 +111,22 @@ export default function AdminClientsPage() {
   const getClientSocietes = (clientId: string) =>
     dossiers.filter(d => d.client_id === clientId && d.societe).map(d => d.societe!.nom)
 
+  const getClientSocieteIds = (clientId: string) =>
+    dossiers.filter(d => d.client_id === clientId).map(d => d.societe_id)
+
   const getSocieteClients = (societeId: string) =>
     dossiers.filter(d => d.societe_id === societeId && d.client).map(d => d.client!)
 
-  const resetClientForm = () => { setFormName(""); setFormEmail(""); setFormPhone(""); setFormPassword(""); setFormRole("client_admin"); setError(null) }
-  const resetSocieteForm = () => { setFormNom(""); setFormBrn(""); setFormTva(""); setFormStatutTva("true"); setSocieteError(null) }
+  const resetClientForm = () => { setFormName(""); setFormEmail(""); setFormPhone(""); setFormPassword(""); setFormRole("client_admin"); setFormSocieteIds([]); setError(null) }
+  const resetSocieteForm = () => { setFormNom(""); setFormBrn(""); setFormTva(""); setFormStatutTva("true"); setFormClientIds([]); setSocieteError(null) }
+
+  const toggleSocieteSelection = (societeId: string, list: string[], setter: (v: string[]) => void) => {
+    setter(list.includes(societeId) ? list.filter(id => id !== societeId) : [...list, societeId])
+  }
+
+  const toggleClientSelection = (clientId: string) => {
+    setFormClientIds(prev => prev.includes(clientId) ? prev.filter(id => id !== clientId) : [...prev, clientId])
+  }
 
   const handleCreateClient = async () => {
     setError(null)
@@ -121,7 +140,26 @@ export default function AdminClientsPage() {
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || "Erreur"); return }
-      setSuccess(`Client ${formName} créé !`); resetClientForm(); setClientDialog(false); fetchData()
+
+      const newUserId = data.user?.id
+
+      // Link selected societies via dossiers
+      if (newUserId && formSocieteIds.length > 0) {
+        await Promise.allSettled(
+          formSocieteIds.map(societeId => {
+            const societe = societes.find(s => s.id === societeId)
+            return fetch("/api/admin/dossiers", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ client_id: newUserId, societe_id: societeId, comptable_id: societe?.comptable_id || null }),
+            })
+          })
+        )
+        setSuccess(`Client ${formName} créé et lié à ${formSocieteIds.length} société(s) !`)
+      } else {
+        setSuccess(`Client ${formName} créé !`)
+      }
+
+      resetClientForm(); setClientDialog(false); fetchData()
     } catch { setError("Erreur de connexion") } finally { setCreating(false) }
   }
 
@@ -136,8 +174,60 @@ export default function AdminClientsPage() {
       })
       const data = await res.json()
       if (!res.ok) { setSocieteError(data.error || "Erreur"); return }
-      setSuccess(`Société ${formNom} créée !`); resetSocieteForm(); setSocieteDialog(false); fetchData()
+
+      const newSociete = data.societe
+
+      // Link selected clients via dossiers
+      if (newSociete?.id && formClientIds.length > 0) {
+        await Promise.allSettled(
+          formClientIds.map(clientId =>
+            fetch("/api/admin/dossiers", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ client_id: clientId, societe_id: newSociete.id, comptable_id: null }),
+            })
+          )
+        )
+        setSuccess(`Société ${formNom} créée et liée à ${formClientIds.length} client(s) !`)
+      } else {
+        setSuccess(`Société ${formNom} créée !`)
+      }
+
+      resetSocieteForm(); setSocieteDialog(false); fetchData()
     } catch { setSocieteError("Erreur de connexion") } finally { setCreatingSociete(false) }
+  }
+
+  // Link societies to an existing client
+  const openLinkDialog = (client: UserProfile) => {
+    setLinkClient(client)
+    const alreadyLinked = getClientSocieteIds(client.id)
+    setLinkSocieteIds([...alreadyLinked])
+    setLinkDialog(true)
+  }
+
+  const handleLinkSocietes = async () => {
+    if (!linkClient) return
+    setLinking(true)
+    try {
+      const alreadyLinked = getClientSocieteIds(linkClient.id)
+      const toAdd = linkSocieteIds.filter(id => !alreadyLinked.includes(id))
+
+      if (toAdd.length > 0) {
+        await Promise.allSettled(
+          toAdd.map(societeId => {
+            const societe = societes.find(s => s.id === societeId)
+            return fetch("/api/admin/dossiers", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ client_id: linkClient.id, societe_id: societeId, comptable_id: societe?.comptable_id || null }),
+            })
+          })
+        )
+        setSuccess(`${toAdd.length} société(s) liée(s) à ${linkClient.full_name} !`)
+      } else {
+        setSuccess("Aucune nouvelle société à lier.")
+      }
+
+      setLinkDialog(false); setLinkClient(null); setLinkSocieteIds([]); fetchData()
+    } catch { setError("Erreur lors de la liaison") } finally { setLinking(false) }
   }
 
   return (
@@ -168,7 +258,7 @@ export default function AdminClientsPage() {
             <div className="flex justify-end">
               <Dialog open={clientDialog} onOpenChange={(o) => { setClientDialog(o); if (!o) resetClientForm() }}>
                 <DialogTrigger asChild><Button style={{ backgroundColor: "#1E2A4A" }}><Plus className="mr-2 h-4 w-4" />Ajouter un client</Button></DialogTrigger>
-                <DialogContent>
+                <DialogContent className="max-h-[90vh] overflow-y-auto">
                   <DialogHeader><DialogTitle>Nouveau client</DialogTitle><DialogDescription>Créez un compte client.</DialogDescription></DialogHeader>
                   <div className="space-y-4 py-4">
                     <div className="space-y-2"><Label>Nom complet *</Label><Input value={formName} onChange={(e) => setFormName(e.target.value)} /></div>
@@ -179,6 +269,27 @@ export default function AdminClientsPage() {
                       <Select value={formRole} onValueChange={setFormRole}><SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent><SelectItem value="client_admin">Client Admin</SelectItem><SelectItem value="client_user">Client Utilisateur</SelectItem></SelectContent>
                       </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Société(s) à lier</Label>
+                      {societes.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">Aucune société disponible.</p>
+                      ) : (
+                        <div className="max-h-40 overflow-y-auto rounded-md border p-3 space-y-2">
+                          {societes.map(s => (
+                            <div key={s.id} className="flex items-center gap-2">
+                              <Checkbox
+                                id={`create-client-soc-${s.id}`}
+                                checked={formSocieteIds.includes(s.id)}
+                                onCheckedChange={() => toggleSocieteSelection(s.id, formSocieteIds, setFormSocieteIds)}
+                              />
+                              <label htmlFor={`create-client-soc-${s.id}`} className="text-sm cursor-pointer">
+                                {s.nom}{s.brn ? ` (${s.brn})` : ""}
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     {error && <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">{error}</div>}
                   </div>
@@ -195,7 +306,7 @@ export default function AdminClientsPage() {
               <Table>
                 <TableHeader><TableRow>
                   <TableHead>Nom</TableHead><TableHead>Email</TableHead><TableHead>Téléphone</TableHead>
-                  <TableHead>Rôle</TableHead><TableHead>Société(s)</TableHead><TableHead>Statut</TableHead><TableHead>Date création</TableHead>
+                  <TableHead>Rôle</TableHead><TableHead>Société(s)</TableHead><TableHead>Statut</TableHead><TableHead>Date création</TableHead><TableHead>Actions</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
                   {filteredClients.map(c => (
@@ -213,9 +324,15 @@ export default function AdminClientsPage() {
                       </TableCell>
                       <TableCell><Badge className={c.is_active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}>{c.is_active ? "Actif" : "Inactif"}</Badge></TableCell>
                       <TableCell className="text-muted-foreground">{new Date(c.created_at).toLocaleDateString("fr-FR")}</TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="sm" title="Lier des sociétés" onClick={() => openLinkDialog(c)}>
+                          <Link className="h-4 w-4 mr-1" style={{ color: "#C9A84C" }} />
+                          <span className="text-xs">Lier</span>
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
-                  {filteredClients.length === 0 && <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Aucun client trouvé.</TableCell></TableRow>}
+                  {filteredClients.length === 0 && <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Aucun client trouvé.</TableCell></TableRow>}
                 </TableBody>
               </Table>
             </CardContent></Card>
@@ -226,7 +343,7 @@ export default function AdminClientsPage() {
             <div className="flex justify-end">
               <Dialog open={societeDialog} onOpenChange={(o) => { setSocieteDialog(o); if (!o) resetSocieteForm() }}>
                 <DialogTrigger asChild><Button style={{ backgroundColor: "#1E2A4A" }}><Plus className="mr-2 h-4 w-4" />Ajouter une société</Button></DialogTrigger>
-                <DialogContent>
+                <DialogContent className="max-h-[90vh] overflow-y-auto">
                   <DialogHeader><DialogTitle>Nouvelle société</DialogTitle></DialogHeader>
                   <div className="space-y-4 py-4">
                     <div className="space-y-2"><Label>Nom *</Label><Input value={formNom} onChange={(e) => setFormNom(e.target.value)} /></div>
@@ -238,6 +355,27 @@ export default function AdminClientsPage() {
                       <Select value={formStatutTva} onValueChange={setFormStatutTva}><SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent><SelectItem value="true">Assujetti</SelectItem><SelectItem value="false">Non assujetti</SelectItem></SelectContent>
                       </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Client(s) à lier</Label>
+                      {clients.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">Aucun client disponible.</p>
+                      ) : (
+                        <div className="max-h-40 overflow-y-auto rounded-md border p-3 space-y-2">
+                          {clients.map(c => (
+                            <div key={c.id} className="flex items-center gap-2">
+                              <Checkbox
+                                id={`create-soc-client-${c.id}`}
+                                checked={formClientIds.includes(c.id)}
+                                onCheckedChange={() => toggleClientSelection(c.id)}
+                              />
+                              <label htmlFor={`create-soc-client-${c.id}`} className="text-sm cursor-pointer">
+                                {c.full_name} ({c.email})
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     {societeError && <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">{societeError}</div>}
                   </div>
@@ -279,6 +417,48 @@ export default function AdminClientsPage() {
           </TabsContent>
         </Tabs>
       )}
+
+      {/* Link societies to existing client dialog */}
+      <Dialog open={linkDialog} onOpenChange={(o) => { setLinkDialog(o); if (!o) { setLinkClient(null); setLinkSocieteIds([]) } }}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Lier des sociétés</DialogTitle>
+            <DialogDescription>
+              {linkClient && `Sélectionnez les sociétés à lier à ${linkClient.full_name}`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 max-h-[400px] overflow-auto space-y-2">
+            {societes.length === 0 ? (
+              <p className="text-center text-muted-foreground py-4">Aucune société disponible.</p>
+            ) : (
+              societes.map(s => {
+                const isLinked = linkClient ? getClientSocieteIds(linkClient.id).includes(s.id) : false
+                const isSelected = linkSocieteIds.includes(s.id)
+                return (
+                  <div
+                    key={s.id}
+                    className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${isSelected ? "border-amber-300 bg-amber-50" : "border-border hover:bg-muted/50"}`}
+                    onClick={() => { if (!isLinked) toggleSocieteSelection(s.id, linkSocieteIds, setLinkSocieteIds) }}
+                  >
+                    <Checkbox checked={isSelected} disabled={isLinked} onCheckedChange={() => { if (!isLinked) toggleSocieteSelection(s.id, linkSocieteIds, setLinkSocieteIds) }} />
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">{s.nom}</p>
+                      <p className="text-xs text-muted-foreground">{s.brn || "Pas de BRN"}</p>
+                    </div>
+                    {isLinked && <Badge variant="outline" className="text-xs">Déjà liée</Badge>}
+                  </div>
+                )
+              })
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLinkDialog(false)}>Annuler</Button>
+            <Button style={{ backgroundColor: "#C9A84C" }} onClick={handleLinkSocietes} disabled={linking || societes.length === 0}>
+              {linking ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Liaison...</> : "Enregistrer"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
