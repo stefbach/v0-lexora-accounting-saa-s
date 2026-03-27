@@ -24,6 +24,58 @@ const NAVY = "#1E2A4A"
 const GOLD = "#C9A84C"
 
 function fmt(n: number) { return n.toLocaleString("fr-FR") + " MUR" }
+function fmt2(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
+function fmtColor(n: number) { if (n < 0) return { color: "#DC2626" }; return {} }
+function fmtVal(n: number): string { if (n < 0) return `(${fmt2(Math.abs(n))})`; return fmt2(n) }
+
+const REVENUE_LABELS: Record<string, string> = {
+  "706": "Prestations de services (706)",
+  "707": "Ventes de marchandises (707)",
+  "701": "Ventes de produits finis (701)",
+  "702": "Ventes de produits intermediaires (702)",
+  "703": "Ventes de produits residuels (703)",
+  "704": "Travaux (704)",
+  "705": "Etudes (705)",
+  "708": "Produits des activites annexes (708)",
+  "709": "RRR accordes (709)",
+  "711": "Variation des stocks (711)",
+  "713": "Variation en-cours de production (713)",
+  "721": "Production immobilisee (721)",
+  "741": "Subventions d'exploitation (741)",
+  "751": "Produits de gestion courante (751)",
+  "753": "Commissions (753)",
+  "758": "Produits divers de gestion courante (758)",
+  "761": "Produits financiers (761)",
+  "771": "Produits exceptionnels (771)",
+}
+
+const EXPENSE_GROUPS: { label: string; range: string; match: (p: string) => boolean }[] = [
+  { label: "Achats", range: "601-609", match: (p) => { const n = parseInt(p); return n >= 601 && n <= 609 } },
+  { label: "Services exterieurs", range: "611-619", match: (p) => { const n = parseInt(p); return n >= 611 && n <= 619 } },
+  { label: "Autres services exterieurs", range: "621-629", match: (p) => { const n = parseInt(p); return n >= 621 && n <= 629 } },
+  { label: "Impots et taxes", range: "631-639", match: (p) => { const n = parseInt(p); return n >= 631 && n <= 639 } },
+  { label: "Charges de personnel", range: "641-649", match: (p) => { const n = parseInt(p); return n >= 641 && n <= 649 } },
+  { label: "Autres charges de gestion", range: "651-659", match: (p) => { const n = parseInt(p); return n >= 651 && n <= 659 } },
+  { label: "Charges financieres", range: "661-669", match: (p) => { const n = parseInt(p); return n >= 661 && n <= 669 } },
+]
+
+function groupExpenses(expensesByAccount: Record<string, number>) {
+  const groups: { label: string; range: string; amount: number }[] = []
+  const assigned = new Set<string>()
+  for (const group of EXPENSE_GROUPS) {
+    let total = 0
+    for (const [prefix, amount] of Object.entries(expensesByAccount)) {
+      if (group.match(prefix)) { total += amount; assigned.add(prefix) }
+    }
+    if (total !== 0) groups.push({ label: group.label, range: group.range, amount: total })
+  }
+  let otherTotal = 0
+  for (const [prefix, amount] of Object.entries(expensesByAccount)) {
+    if (!assigned.has(prefix)) otherTotal += amount
+  }
+  if (otherTotal !== 0) groups.push({ label: "Autres charges", range: "classe 6", amount: otherTotal })
+  return groups
+}
 
 // ---------------------------------------------------------------------------
 // Types
