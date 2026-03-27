@@ -8,43 +8,17 @@ import { useProfile } from "@/hooks/use-profile"
 import { Button } from "@/components/ui/button"
 import {
   LayoutDashboard, Users, UsersRound, AlertTriangle, LogOut,
-  ChevronLeft, ChevronRight, FileText, Receipt, CreditCard,
-  Landmark, Wallet, BarChart3, TrendingUp, Calculator, Building2,
+  ChevronLeft, ChevronRight,
 } from "lucide-react"
 import { useState } from "react"
 
 interface NavItem { href: string; label: string; icon: React.ComponentType<{ className?: string }> }
-interface NavSection { label: string | null; items: NavItem[] }
 
-const navSections: NavSection[] = [
-  {
-    label: null,
-    items: [
-      { href: "/comptable",         label: "Tableau de bord", icon: LayoutDashboard },
-      { href: "/comptable/clients", label: "Mes Clients",     icon: Users },
-      { href: "/comptable/equipe",  label: "Mon Équipe",      icon: UsersRound },
-      { href: "/comptable/alertes", label: "Alertes",         icon: AlertTriangle },
-    ],
-  },
-  {
-    label: "Comptabilité",
-    items: [
-      { href: "/comptable/documents",        label: "Documents",        icon: FileText },
-      { href: "/comptable/fournisseurs",     label: "Fournisseurs",     icon: Receipt },
-      { href: "/comptable/factures-clients", label: "Factures Clients", icon: CreditCard },
-      { href: "/comptable/banque",           label: "Banque",           icon: Landmark },
-      { href: "/comptable/salaires",         label: "Salaires",         icon: Wallet },
-      { href: "/comptable/charges-sociales", label: "Charges Sociales", icon: Building2 },
-      { href: "/comptable/tva",              label: "TVA MRA",          icon: Calculator },
-    ],
-  },
-  {
-    label: "Pilotage",
-    items: [
-      { href: "/comptable/rapports",  label: "Rapports P&L",  icon: BarChart3 },
-      { href: "/comptable/societes",  label: "Sociétés",      icon: TrendingUp },
-    ],
-  },
+const navItems: NavItem[] = [
+  { href: "/comptable",         label: "Tableau de bord", icon: LayoutDashboard },
+  { href: "/comptable/clients", label: "Mes Clients",     icon: Users },
+  { href: "/comptable/equipe",  label: "Mon Équipe",      icon: UsersRound },
+  { href: "/comptable/alertes", label: "Alertes",         icon: AlertTriangle },
 ]
 
 export function ComptableSidebar() {
@@ -62,10 +36,7 @@ export function ComptableSidebar() {
 
   return (
     <aside
-      className={cn(
-        "sticky top-0 flex h-screen flex-col transition-all duration-300",
-        collapsed ? "w-16" : "w-64"
-      )}
+      className={cn("sticky top-0 flex h-screen flex-col transition-all duration-300", collapsed ? "w-16" : "w-64")}
       style={{ backgroundColor: "#1E2A4A" }}
     >
       <div className="flex h-16 items-center justify-between border-b border-white/10 px-4">
@@ -93,27 +64,19 @@ export function ComptableSidebar() {
           </div>
         )}
         <nav className="flex flex-col gap-1">
-          {navSections.map((section, sIdx) => (
-            <div key={sIdx}>
-              {section.label && !collapsed && (
-                <p className="mt-4 mb-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-white/40">{section.label}</p>
-              )}
-              {section.label && collapsed && <div className="my-2 mx-3 border-t border-white/10" />}
-              {section.items.map((item) => {
-                const isActive = item.href === "/comptable" ? pathname === "/comptable" : pathname.startsWith(item.href)
-                return (
-                  <Link key={item.href} href={item.href}
-                    className={cn("flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
-                      isActive ? "bg-white/10 shadow-sm" : "text-white/70 hover:bg-white/5 hover:text-white",
-                      collapsed && "justify-center")}
-                    style={isActive ? { color: "#C9A84C" } : undefined}>
-                    <item.icon className="h-4 w-4 shrink-0" />
-                    {!collapsed && <span>{item.label}</span>}
-                  </Link>
-                )
-              })}
-            </div>
-          ))}
+          {navItems.map((item) => {
+            const isActive = item.href === "/comptable" ? pathname === "/comptable" : pathname.startsWith(item.href)
+            return (
+              <Link key={item.href} href={item.href}
+                className={cn("flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
+                  isActive ? "bg-white/10 shadow-sm" : "text-white/70 hover:bg-white/5 hover:text-white",
+                  collapsed && "justify-center")}
+                style={isActive ? { color: "#C9A84C" } : undefined}>
+                <item.icon className="h-4 w-4 shrink-0" />
+                {!collapsed && <span>{item.label}</span>}
+              </Link>
+            )
+          })}
         </nav>
       </div>
 
