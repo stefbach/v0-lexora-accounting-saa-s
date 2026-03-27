@@ -2,7 +2,7 @@
 
 import { useParams } from "next/navigation"
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -62,13 +62,6 @@ const tresoParCompte: TresoCompteRow[] = [
   { compte: "CIC (Compte EUR)", devise: "EUR", actuel: 12000, j30: 11000, j60: 13000, j90: 15000 },
 ]
 
-const totalMUR = (col: "actuel" | "j30" | "j60" | "j90") => {
-  const taux = 46.5
-  return tresoParCompte.reduce((s, r) => {
-    return s + (r.devise === "EUR" ? r[col] * taux : r[col])
-  }, 0)
-}
-
 export default function PrevisionnelPage() {
   const params = useParams()
   const clientId = params.clientId as string
@@ -76,6 +69,21 @@ export default function PrevisionnelPage() {
   const societeName = "TIBOK Ltd"
 
   const [selectedPeriod, setSelectedPeriod] = useState(periods[0])
+  const [tauxChange, setTauxChange] = useState<Record<string, number>>({ EUR: 46.5, GBP: 54.2, USD: 44.8, MUR: 1 })
+
+  useEffect(() => {
+    fetch("/api/taux-change")
+      .then(r => r.json())
+      .then(data => { if (data.rates) setTauxChange(data.rates) })
+      .catch(() => {})
+  }, [])
+
+  const totalMUR = (col: "actuel" | "j30" | "j60" | "j90") => {
+    return tresoParCompte.reduce((s, r) => {
+      const taux = tauxChange[r.devise] || 1
+      return s + (r.devise !== "MUR" ? r[col] * taux : r[col])
+    }, 0)
+  }
 
   return (
     <div className="min-h-screen p-6 space-y-6" style={{ background: "#F4F6FB" }}>

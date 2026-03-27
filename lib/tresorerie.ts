@@ -1,12 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-
-// Bank of Mauritius reference exchange rates
-const TAUX_CHANGE: Record<string, number> = {
-  EUR: 46.50,
-  GBP: 54.20,
-  USD: 44.80,
-  MUR: 1,
-}
+import { getTauxChange, convertToMUR as convertWithRates } from '@/lib/taux-change'
 
 function getSupabase() {
   return createClient(
@@ -36,19 +29,16 @@ export interface TresorerieConsolidee {
   comptes: CompteBalance[]
   nb_comptes: number
   date_derniere_maj: string | null
+  taux_change: Record<string, number>
 }
 
-export function convertToMUR(amount: number, devise: string): number {
-  const taux = TAUX_CHANGE[devise] || 1
-  return amount * taux
-}
-
-export function getTauxChange(devise: string): number {
-  return TAUX_CHANGE[devise] || 1
+export function convertToMUR(amount: number, devise: string, rates: Record<string, number>): number {
+  return convertWithRates(amount, devise, rates)
 }
 
 export async function calculerTresorerieConsolidee(societeId: string): Promise<TresorerieConsolidee> {
   const supabase = getSupabase()
+  const rates = await getTauxChange()
 
   const { data: comptes } = await supabase
     .from('comptes_bancaires')
@@ -58,7 +48,7 @@ export async function calculerTresorerieConsolidee(societeId: string): Promise<T
     .order('ordre_affichage')
 
   if (!comptes || comptes.length === 0) {
-    return { total_mur: 0, total_eur: 0, total_gbp: 0, total_converti_mur: 0, comptes: [], nb_comptes: 0, date_derniere_maj: null }
+    return { total_mur: 0, total_eur: 0, total_gbp: 0, total_converti_mur: 0, comptes: [], nb_comptes: 0, date_derniere_maj: null, taux_change: rates }
   }
 
   const comptesBalances: CompteBalance[] = comptes.map(c => ({
@@ -68,7 +58,7 @@ export async function calculerTresorerieConsolidee(societeId: string): Promise<T
     numero_compte: c.numero_compte,
     devise: c.devise,
     solde_actuel: c.solde_actuel || 0,
-    solde_mur: convertToMUR(c.solde_actuel || 0, c.devise),
+    solde_mur: convertToMUR(c.solde_actuel || 0, c.devise, rates),
     compte_principal: c.compte_principal,
     date_dernier_releve: c.date_dernier_releve,
   }))
@@ -89,5 +79,6 @@ export async function calculerTresorerieConsolidee(societeId: string): Promise<T
     comptes: comptesBalances,
     nb_comptes: comptesBalances.length,
     date_derniere_maj,
+    taux_change: rates,
   }
 }

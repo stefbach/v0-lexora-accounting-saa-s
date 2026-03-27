@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { getTauxChange } from '@/lib/taux-change'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,13 +10,6 @@ function getAdminClient() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
-}
-
-const TAUX_CHANGE: Record<string, number> = {
-  EUR: 46.5,
-  GBP: 54.2,
-  USD: 44.8,
-  MUR: 1,
 }
 
 export async function GET(request: Request) {
@@ -29,6 +23,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
     }
 
+    const rates = await getTauxChange()
+
     // Get all active comptes bancaires
     const { data: comptes, error: comptesError } = await supabase
       .from('comptes_bancaires')
@@ -41,7 +37,7 @@ export async function GET(request: Request) {
     // Convert to MUR
     let totalMur = 0
     const parCompte = (comptes || []).map((c: any) => {
-      const taux = TAUX_CHANGE[c.devise] || 1
+      const taux = rates[c.devise] || 1
       const soldeMur = (c.solde_actuel || 0) * taux
       totalMur += soldeMur
       return {
@@ -59,7 +55,7 @@ export async function GET(request: Request) {
       societe_id,
       total_mur: Math.round(totalMur * 100) / 100,
       par_compte: parCompte,
-      taux_change: TAUX_CHANGE,
+      taux_change: rates,
       nb_comptes: parCompte.length,
     })
   } catch (error) {

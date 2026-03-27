@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { callClaudeJSON } from '@/lib/claude'
+import { getTauxChange } from '@/lib/taux-change'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,7 +32,7 @@ export async function POST(request: Request) {
     if (comptesError) throw comptesError
 
     // Calculate trésorerie consolidée in MUR
-    const tauxChange: Record<string, number> = { EUR: 46.5, GBP: 54.2, MUR: 1, USD: 1 }
+    const tauxChange = await getTauxChange()
     let tresorerieConsolidee = 0
     const detailParCompte = (comptes || []).map((c: any) => {
       const taux = tauxChange[c.devise] || 1
