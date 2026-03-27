@@ -47,8 +47,10 @@ interface Transaction {
   libelle: string
   debit: number
   credit: number
+  solde_apres: number | null
+  tiers: string | null
+  compte_comptable: string | null
   statut: string
-  compte?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -118,23 +120,20 @@ function TresorerieView() {
   const bankAccounts: any[] = data?.bankAccounts ?? []
   const totalBankMUR = data?.totalBankMUR ?? 0
 
-  // Build transactions from ecritures and extractedInvoices
-  const ecritures: any[] = data?.ecritures ?? []
-  const extractedInvoices: any[] = data?.extractedInvoices ?? []
+  // Build transactions from bankTransactions (extracted from releve_bancaire documents)
+  const rawBankTx: any[] = data?.bankTransactions ?? []
 
-  // Build a combined transaction list from extractedInvoices (which have richer data)
-  const transactions: Transaction[] = extractedInvoices.map((inv: any) => {
-    const isClient = inv.type === "facture_client"
-    return {
-      id: inv.id,
-      date: inv.date || "",
-      libelle: `${isClient ? "Facture client" : "Facture fournisseur"} - ${inv.emetteur || inv.destinataire || inv.nom_fichier}${inv.numero ? ` (${inv.numero})` : ""}`,
-      debit: isClient ? 0 : inv.montant_ttc || 0,
-      credit: isClient ? inv.montant_ttc || 0 : 0,
-      statut: inv.montant_ttc > 0 ? "identifie" : "a_verifier",
-      compte: "",
-    }
-  })
+  const transactions: Transaction[] = rawBankTx.map((tx: any) => ({
+    id: tx.id,
+    date: tx.date || "",
+    libelle: tx.libelle || "",
+    debit: Number(tx.debit) || 0,
+    credit: Number(tx.credit) || 0,
+    solde_apres: tx.solde_apres ?? null,
+    tiers: tx.tiers || null,
+    compte_comptable: tx.compte_comptable || null,
+    statut: tx.statut || "non_identifie",
+  }))
 
   // Sort by date descending
   transactions.sort((a, b) => {
@@ -143,9 +142,9 @@ function TresorerieView() {
     return new Date(b.date).getTime() - new Date(a.date).getTime()
   })
 
-  // Anomalies: transactions with status containing "non_identifie" or "a_verifier"
+  // Anomalies: transactions where tiers is not identified or statut contains "a_verifier" or "non_identifie"
   const anomalies = transactions.filter(
-    (t) => t.statut.includes("non_identifie") || t.statut.includes("a_verifier")
+    (t) => !t.tiers || t.statut.includes("non_identifie") || t.statut.includes("a_verifier")
   )
 
   function getStatutBadge(statut: string) {

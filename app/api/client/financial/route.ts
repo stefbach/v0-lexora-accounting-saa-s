@@ -185,6 +185,69 @@ export async function GET(request: Request) {
       .filter(e => e.compte?.startsWith('43'))
       .reduce((sum, e) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
 
+    // Balance sheet items
+    const immobilisations = allEcritures
+      .filter(e => e.compte?.startsWith('2'))
+      .reduce((sum, e) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
+
+    const stocks = allEcritures
+      .filter(e => e.compte?.startsWith('3'))
+      .reduce((sum, e) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
+
+    const autresCreances = allEcritures
+      .filter(e => e.compte?.startsWith('46') || e.compte?.startsWith('47'))
+      .reduce((sum, e) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
+
+    const capitauxPropres = allEcritures
+      .filter(e => e.compte?.startsWith('1'))
+      .reduce((sum, e) => sum + (Number(e.credit) || 0) - (Number(e.debit) || 0), 0)
+
+    const emprunts = allEcritures
+      .filter(e => e.compte?.startsWith('16'))
+      .reduce((sum, e) => sum + (Number(e.credit) || 0) - (Number(e.debit) || 0), 0)
+
+    const dettesFournisseurs = allEcritures
+      .filter(e => e.compte?.startsWith('40'))
+      .reduce((sum, e) => sum + (Number(e.credit) || 0) - (Number(e.debit) || 0), 0)
+
+    const dettesFiscales = allEcritures
+      .filter(e => e.compte?.startsWith('44'))
+      .reduce((sum, e) => sum + (Number(e.credit) || 0) - (Number(e.debit) || 0), 0)
+
+    const dettesSociales = allEcritures
+      .filter(e => e.compte?.startsWith('43'))
+      .reduce((sum, e) => sum + (Number(e.credit) || 0) - (Number(e.debit) || 0), 0)
+
+    // Extract bank transactions from releve_bancaire documents
+    const bankTransactions: any[] = []
+    allDocs
+      .filter(d => d.type_document === 'releve_bancaire')
+      .forEach(d => {
+        const extraction = d.n8n_result?.extraction || {}
+        const transactions = extraction.transactions || []
+        transactions.forEach((tx: any, idx: number) => {
+          bankTransactions.push({
+            id: `${d.id}-tx-${idx}`,
+            document_id: d.id,
+            date: tx.date || tx.date_operation || '',
+            libelle: tx.libelle || tx.description || '',
+            debit: Number(tx.debit) || 0,
+            credit: Number(tx.credit) || 0,
+            solde_apres: tx.solde_apres ?? tx.solde ?? null,
+            tiers: tx.tiers || tx.tiers_identifie || null,
+            compte_comptable: tx.compte_comptable || tx.compte || null,
+            statut: tx.statut || 'non_identifie',
+          })
+        })
+      })
+
+    // Sort bank transactions by date descending
+    bankTransactions.sort((a, b) => {
+      if (!a.date) return 1
+      if (!b.date) return -1
+      return new Date(b.date).getTime() - new Date(a.date).getTime()
+    })
+
     // Extract invoices from documents with currency conversion
     const extractedInvoices = allDocs
       .filter(d => d.type_document === 'facture_fournisseur' || d.type_document === 'facture_client')
@@ -226,6 +289,14 @@ export async function GET(request: Request) {
         revenueByAccount: Object.fromEntries(Object.entries(revenueByAccount).map(([k, v]) => [k, Math.round(v * 100) / 100])),
         expensesByAccount: Object.fromEntries(Object.entries(expensesByAccount).map(([k, v]) => [k, Math.round(v * 100) / 100])),
         creances: Math.round(creances * 100) / 100,
+        immobilisations: Math.round(immobilisations * 100) / 100,
+        stocks: Math.round(stocks * 100) / 100,
+        autresCreances: Math.round(autresCreances * 100) / 100,
+        capitauxPropres: Math.round(capitauxPropres * 100) / 100,
+        emprunts: Math.round(emprunts * 100) / 100,
+        dettesFournisseurs: Math.round(dettesFournisseurs * 100) / 100,
+        dettesFiscales: Math.round(dettesFiscales * 100) / 100,
+        dettesSociales: Math.round(dettesSociales * 100) / 100,
         lastMonthRevenue: Math.round(lastMonthRevenue * 100) / 100,
         lastMonthExpenses: Math.round(lastMonthExpenses * 100) / 100,
         docsByType: allDocs.reduce((acc: Record<string, number>, d) => {
@@ -233,6 +304,7 @@ export async function GET(request: Request) {
         }, {}),
         totalDocuments: allDocs.length,
         extractedInvoices,
+        bankTransactions,
         totalEcritures: allEcritures.length,
         currentMonth,
         taux_change: rates,
@@ -255,7 +327,7 @@ function emptyFinancial() {
     salaires: 0, chargesSociales: 0,
     revenueByAccount: {}, expensesByAccount: {},
     creances: 0, lastMonthRevenue: 0, lastMonthExpenses: 0,
-    docsByType: {}, totalDocuments: 0, extractedInvoices: [],
+    docsByType: {}, totalDocuments: 0, extractedInvoices: [], bankTransactions: [],
     totalEcritures: 0, currentMonth: '', taux_change: {},
   }
 }
