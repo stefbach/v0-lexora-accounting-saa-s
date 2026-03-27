@@ -18,8 +18,10 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   RefreshCw,
+  Building2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -80,12 +82,27 @@ export default function PrevisionnelPage() {
   const [forecasts, setForecasts] = useState<ForecastPeriod[]>([])
   const [fetching, setFetching] = useState(true)
   const [error, setError] = useState(false)
+  const [selectedSociete, setSelectedSociete] = useState<string>("all")
+  const [societes, setSocietes] = useState<{ id: string; nom: string }[]>([])
+
+  // Fetch societes list from financial API
+  useEffect(() => {
+    fetch("/api/client/financial")
+      .then(res => res.json())
+      .then(json => {
+        if (json.financial?.availableSocietes) setSocietes(json.financial.availableSocietes)
+      })
+      .catch(() => {})
+  }, [])
 
   async function fetchPrevisionnel() {
     setFetching(true)
     setError(false)
     try {
-      const res = await fetch("/api/client/previsionnel")
+      const url = selectedSociete !== "all"
+        ? `/api/client/previsionnel?societe_id=${selectedSociete}`
+        : "/api/client/previsionnel"
+      const res = await fetch(url)
       if (res.ok) {
         const data = await res.json()
         // The API returns { previsionnel: { periodes: [...], ... } }
@@ -115,7 +132,7 @@ export default function PrevisionnelPage() {
 
   useEffect(() => {
     fetchPrevisionnel()
-  }, [])
+  }, [selectedSociete])
 
   if (loading) {
     return (

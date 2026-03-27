@@ -46,9 +46,11 @@ export async function GET(request: Request) {
       targetClientId = requestedClientId
     }
 
-    // Get client's dossiers
-    const { data: dossiers } = await supabase
-      .from('dossiers').select('id, societe_id').eq('client_id', targetClientId)
+    // Get client's dossiers, optionally filtered by société
+    const requestedSocieteId = searchParams.get('societe_id')
+    let dossierQuery = supabase.from('dossiers').select('id, societe_id').eq('client_id', targetClientId)
+    if (requestedSocieteId) dossierQuery = dossierQuery.eq('societe_id', requestedSocieteId)
+    const { data: dossiers } = await dossierQuery
 
     if (!dossiers || dossiers.length === 0) {
       return NextResponse.json({ previsionnel: null, message: 'Aucun dossier trouve' })

@@ -305,6 +305,11 @@ export async function GET(request: Request) {
         totalDocuments: allDocs.length,
         extractedInvoices,
         bankTransactions,
+        ecritures: allEcritures.map(e => ({
+          id: e.id, date_ecriture: e.date_ecriture, journal: e.journal,
+          numero_piece: e.numero_piece, compte: e.compte, libelle: e.libelle,
+          debit: Number(e.debit) || 0, credit: Number(e.credit) || 0,
+        })),
         totalEcritures: allEcritures.length,
         currentMonth,
         taux_change: rates,

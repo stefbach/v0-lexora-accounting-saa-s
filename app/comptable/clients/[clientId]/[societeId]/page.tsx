@@ -58,6 +58,17 @@ interface AlerteEntry {
 interface KPI {
   label: string; value: number; green?: boolean
 }
+interface EcritureRaw {
+  id: string; date_ecriture: string; journal: string; numero_piece: string; compte: string; libelle: string; debit: number; credit: number
+}
+interface FinancialRaw {
+  totalRevenue: number; totalExpenses: number; resultat: number; totalBankMUR: number
+  totalDocuments: number; totalEcritures: number
+  immobilisations: number; stocks: number; creances: number; autresCreances: number
+  capitauxPropres: number; emprunts: number; dettesFournisseurs: number; dettesFiscales: number; dettesSociales: number
+  revenueByAccount: Record<string, number>; expensesByAccount: Record<string, number>
+  ecritures: EcritureRaw[]
+}
 interface SocieteData {
   clientName: string
   societeName: string
@@ -71,6 +82,7 @@ interface SocieteData {
   dossiers: DossierEntry[]
   grandLivre: GLAccount[]
   alertes: AlerteEntry[]
+  financial: FinancialRaw | null
 }
 
 function stBadge(s: string) {
@@ -202,6 +214,23 @@ export default function SocieteContextPage() {
               }]
             : []
 
+        // Fetch alertes
+        let alertesData: AlerteEntry[] = []
+        try {
+          const alertesRes = await fetch(`/api/client/alertes?client_id=${clientId}`)
+          if (alertesRes.ok) {
+            const alertesJson = await alertesRes.json()
+            const items = alertesJson.alertes || []
+            alertesData = items.map((a: any) => ({
+              niveau: a.type === 'urgent' ? 'critique' : a.type === 'attention' ? 'important' : 'info',
+              titre: a.titre || '',
+              description: a.description || '',
+              montant: a.montant || 0,
+              echeance: a.echeance || '',
+            }))
+          }
+        } catch { /* silently fail */ }
+
         setData({
           clientName: user.full_name,
           societeName: societe.nom,
@@ -223,7 +252,27 @@ export default function SocieteContextPage() {
           tva: tvaRows,
           dossiers: [],
           grandLivre: [],
-          alertes: [],
+          alertes: alertesData,
+          financial: {
+            totalRevenue: fin.totalRevenue || 0,
+            totalExpenses: fin.totalExpenses || 0,
+            resultat: fin.resultat || 0,
+            totalBankMUR: fin.totalBankMUR || 0,
+            totalDocuments: fin.totalDocuments || 0,
+            totalEcritures: fin.totalEcritures || 0,
+            immobilisations: fin.immobilisations || 0,
+            stocks: fin.stocks || 0,
+            creances: fin.creances || 0,
+            autresCreances: fin.autresCreances || 0,
+            capitauxPropres: fin.capitauxPropres || 0,
+            emprunts: fin.emprunts || 0,
+            dettesFournisseurs: fin.dettesFournisseurs || 0,
+            dettesFiscales: fin.dettesFiscales || 0,
+            dettesSociales: fin.dettesSociales || 0,
+            revenueByAccount: fin.revenueByAccount || {},
+            expensesByAccount: fin.expensesByAccount || {},
+            ecritures: fin.ecritures || [],
+          },
         })
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : "Une erreur est survenue")
@@ -303,7 +352,8 @@ export default function SocieteContextPage() {
     )
   }
 
-  const { clientName, societeName, kpis, fournisseurs, facturesClients, banque, salaires, charges, tva, dossiers, grandLivre, alertes } = data
+  const { clientName, societeName, kpis, fournisseurs, facturesClients, banque, salaires, charges, tva, dossiers, grandLivre, alertes, financial } = data
+  const fin = financial || {} as FinancialRaw
 
   return (
     <div className="flex-1 overflow-auto p-6 space-y-6">
@@ -383,7 +433,74 @@ export default function SocieteContextPage() {
 
         {/* Overview */}
         <TabsContent value="overview" className="space-y-4">
-          <EmptyTab icon={BarChart3} message="Aucune donnée disponible" detail="Les données de synthèse apparaîtront ici une fois les écritures saisies." />
+          {fin.totalEcritures > 0 || fin.totalDocuments > 0 ? (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Chiffre d&apos;affaires</CardTitle>
+                    <TrendingUp className="h-5 w-5" style={{ color: "#22C55E" }} />
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold" style={{ color: NAVY }}>{fmt(fin.totalRevenue)}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Comptes classe 7</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Charges</CardTitle>
+                    <TrendingDown className="h-5 w-5" style={{ color: "#EF4444" }} />
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold" style={{ color: "#EF4444" }}>{fmt(fin.totalExpenses)}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Comptes classe 6</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Resultat</CardTitle>
+                    <BarChart3 className="h-5 w-5" style={{ color: GOLD }} />
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold" style={{ color: fin.resultat >= 0 ? "#22C55E" : "#EF4444" }}>{fmt(fin.resultat)}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Revenus - Charges</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Tresorerie</CardTitle>
+                    <Landmark className="h-5 w-5" style={{ color: NAVY }} />
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold" style={{ color: NAVY }}>{fmt(fin.totalBankMUR)}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Solde bancaire total</p>
+                  </CardContent>
+                </Card>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm" style={{ color: NAVY }}>Documents traites</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-3xl font-bold" style={{ color: GOLD }}>{fin.totalDocuments}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Factures, releves et autres documents importes</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm" style={{ color: NAVY }}>Ecritures comptables</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-3xl font-bold" style={{ color: GOLD }}>{fin.totalEcritures}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Lignes enregistrees dans le grand livre</p>
+                  </CardContent>
+                </Card>
+              </div>
+            </>
+          ) : (
+            <EmptyTab icon={BarChart3} message="Aucune donnee disponible" detail="Les donnees de synthese apparaitront ici une fois les ecritures saisies." />
+          )}
         </TabsContent>
 
         {/* Fournisseurs */}
@@ -488,19 +605,45 @@ export default function SocieteContextPage() {
               <Button variant="outline" size="sm">Imprimer</Button>
             </div>
           </div>
-          {grandLivre.length === 0 ? (
-            <EmptyTab icon={FileIcon} message="Aucune écriture comptable" detail="Le grand livre sera alimenté par les écritures comptables." />
-          ) : (
+          {(fin.ecritures && fin.ecritures.length > 0) ? (
+            <Card><CardContent className="p-0">
+              <Table>
+                <TableHeader><TableRow>
+                  <TableHead>Date</TableHead><TableHead>Journal</TableHead><TableHead>N° piece</TableHead>
+                  <TableHead>Compte</TableHead><TableHead>Libelle</TableHead>
+                  <TableHead className="text-right">Debit (MUR)</TableHead><TableHead className="text-right">Credit (MUR)</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  {fin.ecritures.map((e, i) => (
+                    <TableRow key={e.id || i}>
+                      <TableCell>{e.date_ecriture || '—'}</TableCell>
+                      <TableCell><Badge variant="outline">{e.journal || '—'}</Badge></TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{e.numero_piece || '—'}</TableCell>
+                      <TableCell><Badge variant="outline" className="font-mono">{e.compte || '—'}</Badge></TableCell>
+                      <TableCell className="font-medium">{e.libelle || '—'}</TableCell>
+                      <TableCell className="text-right text-red-600">{e.debit > 0 ? fmt(e.debit) : ''}</TableCell>
+                      <TableCell className="text-right text-green-600">{e.credit > 0 ? fmt(e.credit) : ''}</TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow className="bg-muted/30 font-bold">
+                    <TableCell colSpan={5} className="text-right">Total</TableCell>
+                    <TableCell className="text-right text-red-600">{fmt(fin.ecritures.reduce((s, e) => s + (e.debit || 0), 0))}</TableCell>
+                    <TableCell className="text-right text-green-600">{fmt(fin.ecritures.reduce((s, e) => s + (e.credit || 0), 0))}</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </CardContent></Card>
+          ) : grandLivre.length > 0 ? (
             grandLivre.map((account) => (
               <Card key={account.compte}>
                 <CardHeader className="py-3" style={{ backgroundColor: `${NAVY}08` }}>
-                  <CardTitle className="text-sm">ACCOUNT: {account.compte} — {account.nom}</CardTitle>
+                  <CardTitle className="text-sm">COMPTE: {account.compte} — {account.nom}</CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
                   <Table>
                     <TableHeader><TableRow>
-                      <TableHead>Date</TableHead><TableHead>Réf</TableHead><TableHead>Description</TableHead>
-                      <TableHead className="text-right">Débit (MUR)</TableHead><TableHead className="text-right">Crédit (MUR)</TableHead><TableHead className="text-right">Solde (MUR)</TableHead>
+                      <TableHead>Date</TableHead><TableHead>Ref</TableHead><TableHead>Description</TableHead>
+                      <TableHead className="text-right">Debit (MUR)</TableHead><TableHead className="text-right">Credit (MUR)</TableHead><TableHead className="text-right">Solde (MUR)</TableHead>
                     </TableRow></TableHeader>
                     <TableBody>
                       {account.entries.map((e, i) => (
@@ -516,12 +659,58 @@ export default function SocieteContextPage() {
                 </CardContent>
               </Card>
             ))
+          ) : (
+            <EmptyTab icon={FileIcon} message="Aucune ecriture comptable" detail="Le grand livre sera alimente par les ecritures comptables." />
           )}
         </TabsContent>
 
         {/* États Financiers */}
         <TabsContent value="etats-financiers" className="space-y-4">
-          <EmptyTab icon={FileIcon} message="Aucun état financier disponible" detail="Les états financiers IFRS seront générés à la clôture de l'exercice." />
+          {fin.totalEcritures > 0 ? (() => {
+            const totalActif = (fin.immobilisations || 0) + (fin.stocks || 0) + (fin.creances || 0) + (fin.autresCreances || 0) + (fin.totalBankMUR || 0)
+            const totalPassif = (fin.capitauxPropres || 0) + (fin.emprunts || 0) + (fin.dettesFournisseurs || 0) + (fin.dettesFiscales || 0) + (fin.dettesSociales || 0) + (fin.resultat || 0)
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Card>
+                  <CardHeader style={{ backgroundColor: `${NAVY}08` }}>
+                    <CardTitle className="text-base" style={{ color: NAVY }}>Actif</CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableBody>
+                        <TableRow><TableCell className="font-medium">Immobilisations (classe 2)</TableCell><TableCell className="text-right">{fmt(fin.immobilisations || 0)}</TableCell></TableRow>
+                        <TableRow><TableCell className="font-medium">Stocks (classe 3)</TableCell><TableCell className="text-right">{fmt(fin.stocks || 0)}</TableCell></TableRow>
+                        <TableRow><TableCell className="font-medium">Creances clients (41x)</TableCell><TableCell className="text-right">{fmt(fin.creances || 0)}</TableCell></TableRow>
+                        <TableRow><TableCell className="font-medium">Autres creances (46x-47x)</TableCell><TableCell className="text-right">{fmt(fin.autresCreances || 0)}</TableCell></TableRow>
+                        <TableRow><TableCell className="font-medium">Tresorerie (512)</TableCell><TableCell className="text-right">{fmt(fin.totalBankMUR || 0)}</TableCell></TableRow>
+                        <TableRow className="bg-muted/30 font-bold"><TableCell>Total Actif</TableCell><TableCell className="text-right" style={{ color: NAVY }}>{fmt(totalActif)}</TableCell></TableRow>
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader style={{ backgroundColor: `${NAVY}08` }}>
+                    <CardTitle className="text-base" style={{ color: NAVY }}>Passif</CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableBody>
+                        <TableRow><TableCell className="font-medium">Capitaux propres (classe 1)</TableCell><TableCell className="text-right">{fmt(fin.capitauxPropres || 0)}</TableCell></TableRow>
+                        <TableRow><TableCell className="font-medium">Resultat de l&apos;exercice</TableCell><TableCell className="text-right" style={{ color: (fin.resultat || 0) >= 0 ? "#22C55E" : "#EF4444" }}>{fmt(fin.resultat || 0)}</TableCell></TableRow>
+                        <TableRow><TableCell className="font-medium">Emprunts (16x)</TableCell><TableCell className="text-right">{fmt(fin.emprunts || 0)}</TableCell></TableRow>
+                        <TableRow><TableCell className="font-medium">Dettes fournisseurs (40x)</TableCell><TableCell className="text-right">{fmt(fin.dettesFournisseurs || 0)}</TableCell></TableRow>
+                        <TableRow><TableCell className="font-medium">Dettes fiscales (44x)</TableCell><TableCell className="text-right">{fmt(fin.dettesFiscales || 0)}</TableCell></TableRow>
+                        <TableRow><TableCell className="font-medium">Dettes sociales (43x)</TableCell><TableCell className="text-right">{fmt(fin.dettesSociales || 0)}</TableCell></TableRow>
+                        <TableRow className="bg-muted/30 font-bold"><TableCell>Total Passif</TableCell><TableCell className="text-right" style={{ color: NAVY }}>{fmt(totalPassif)}</TableCell></TableRow>
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              </div>
+            )
+          })() : (
+            <EmptyTab icon={FileIcon} message="Aucun etat financier disponible" detail="Les etats financiers seront generes a la cloture de l'exercice." />
+          )}
         </TabsContent>
 
         {/* Immobilisations */}
@@ -615,7 +804,73 @@ export default function SocieteContextPage() {
 
         {/* P&L */}
         <TabsContent value="pnl" className="space-y-4">
-          <EmptyTab icon={BarChart3} message="Aucun rapport P&L disponible" detail="Le compte de résultat sera généré à partir des écritures comptables." />
+          {fin.totalEcritures > 0 ? (() => {
+            const revEntries = Object.entries(fin.revenueByAccount || {}).sort(([a],[b]) => a.localeCompare(b))
+            const expEntries = Object.entries(fin.expensesByAccount || {}).sort(([a],[b]) => a.localeCompare(b))
+            const accountLabels: Record<string, string> = {
+              '701': 'Ventes de produits finis', '706': 'Prestations de services', '707': 'Ventes de marchandises',
+              '708': 'Produits annexes', '709': 'RRR accordes', '700': 'Autres produits',
+              '601': 'Achats matieres premieres', '602': 'Autres approvisionnements', '604': 'Achats etudes/prestations',
+              '606': 'Achats non stockes', '607': 'Achats de marchandises', '610': 'Services exterieurs',
+              '611': 'Sous-traitance', '612': 'Redevances', '613': 'Locations', '614': 'Charges locatives',
+              '615': 'Entretien/reparations', '616': 'Assurances', '617': 'Etudes/recherches',
+              '618': 'Divers', '621': 'Personnel exterieur', '622': 'Honoraires',
+              '623': 'Publicite', '624': 'Transports', '625': 'Deplacements', '626': 'Frais postaux/telecom',
+              '627': 'Services bancaires', '628': 'Divers services', '631': 'Impots/taxes',
+              '641': 'Remunerations du personnel', '645': 'Charges sociales', '651': 'Redevances',
+              '661': 'Charges interets', '671': 'Charges exceptionnelles', '681': 'Dotations amortissements',
+            }
+            return (
+              <Card>
+                <CardHeader style={{ backgroundColor: `${NAVY}08` }}>
+                  <CardTitle style={{ color: NAVY }}>Compte de Resultat — {societeName}</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader><TableRow>
+                      <TableHead>Poste</TableHead><TableHead>Compte</TableHead><TableHead className="text-right">Montant (MUR)</TableHead>
+                    </TableRow></TableHeader>
+                    <TableBody>
+                      <TableRow className="bg-green-50"><TableCell colSpan={3} className="font-bold text-green-800">PRODUITS (Classe 7)</TableCell></TableRow>
+                      {revEntries.map(([code, amount]) => (
+                        <TableRow key={code}>
+                          <TableCell>{accountLabels[code] || `Compte ${code}x`}</TableCell>
+                          <TableCell><Badge variant="outline" className="font-mono">{code}x</Badge></TableCell>
+                          <TableCell className="text-right text-green-700 font-medium">{fmt(amount)}</TableCell>
+                        </TableRow>
+                      ))}
+                      {revEntries.length === 0 && <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground text-sm">Aucun produit enregistre</TableCell></TableRow>}
+                      <TableRow className="bg-green-100/50 font-bold">
+                        <TableCell colSpan={2}>Total Produits</TableCell>
+                        <TableCell className="text-right text-green-800">{fmt(fin.totalRevenue || 0)}</TableCell>
+                      </TableRow>
+
+                      <TableRow className="bg-red-50"><TableCell colSpan={3} className="font-bold text-red-800">CHARGES (Classe 6)</TableCell></TableRow>
+                      {expEntries.map(([code, amount]) => (
+                        <TableRow key={code}>
+                          <TableCell>{accountLabels[code] || `Compte ${code}x`}</TableCell>
+                          <TableCell><Badge variant="outline" className="font-mono">{code}x</Badge></TableCell>
+                          <TableCell className="text-right text-red-600 font-medium">{fmt(amount)}</TableCell>
+                        </TableRow>
+                      ))}
+                      {expEntries.length === 0 && <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground text-sm">Aucune charge enregistree</TableCell></TableRow>}
+                      <TableRow className="bg-red-100/50 font-bold">
+                        <TableCell colSpan={2}>Total Charges</TableCell>
+                        <TableCell className="text-right text-red-800">{fmt(fin.totalExpenses || 0)}</TableCell>
+                      </TableRow>
+
+                      <TableRow className="font-bold text-lg" style={{ backgroundColor: `${GOLD}15` }}>
+                        <TableCell colSpan={2} style={{ color: NAVY }}>RESULTAT NET</TableCell>
+                        <TableCell className="text-right" style={{ color: (fin.resultat || 0) >= 0 ? "#22C55E" : "#EF4444" }}>{fmt(fin.resultat || 0)}</TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            )
+          })() : (
+            <EmptyTab icon={BarChart3} message="Aucun rapport P&L disponible" detail="Le compte de resultat sera genere a partir des ecritures comptables." />
+          )}
         </TabsContent>
 
         {/* Alertes */}
