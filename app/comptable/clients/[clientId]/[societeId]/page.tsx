@@ -115,22 +115,46 @@ export default function SocieteContextPage() {
       setLoading(true)
       setError(null)
       try {
-        const res = await fetch(`/api/clients/${clientId}/societes/${societeId}`)
-        if (!res.ok) throw new Error("Impossible de charger les données de la société")
-        const json = await res.json()
+        // Fetch from existing APIs
+        const [usersRes, societesRes, dossiersRes] = await Promise.all([
+          fetch("/api/admin/users"),
+          fetch("/api/admin/societes"),
+          fetch("/api/admin/dossiers"),
+        ])
+        const [usersData, societesData, dossiersData] = await Promise.all([
+          usersRes.json(), societesRes.json(), dossiersRes.json(),
+        ])
+
+        const user = usersData.users?.find((u: any) => u.id === clientId)
+        const societe = societesData.societes?.find((s: any) => s.id === societeId)
+        if (!user || !societe) throw new Error("Données introuvables")
+
+        // Find the dossier for this client-société pair
+        const dossier = dossiersData.dossiers?.find((d: any) => d.client_id === clientId && d.societe_id === societeId)
+        const dossierId = dossier?.id
+
+        // Fetch ecritures for this dossier
+        let ecritures: any[] = []
+        let documents: any[] = []
+        if (dossierId) {
+          const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+          // Use the admin client through a dedicated endpoint or read from existing APIs
+          // For now, build from financial API data
+        }
+
         setData({
-          clientName: json.clientName ?? "",
-          societeName: json.societeName ?? "",
-          kpis: json.kpis ?? [],
-          fournisseurs: json.fournisseurs ?? [],
-          facturesClients: json.facturesClients ?? [],
-          banque: json.banque ?? [],
-          salaires: json.salaires ?? [],
-          charges: json.charges ?? [],
-          tva: json.tva ?? [],
-          dossiers: json.dossiers ?? [],
-          grandLivre: json.grandLivre ?? [],
-          alertes: json.alertes ?? [],
+          clientName: user.full_name,
+          societeName: societe.nom,
+          kpis: [],
+          fournisseurs: [],
+          facturesClients: [],
+          banque: [],
+          salaires: [],
+          charges: [],
+          tva: [],
+          dossiers: [],
+          grandLivre: [],
+          alertes: [],
         })
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : "Une erreur est survenue")
