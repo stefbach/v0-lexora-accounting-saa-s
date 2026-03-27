@@ -74,12 +74,44 @@ export default function ClientDocumentsPage() {
     if (profile?.id) fetchData()
   }, [profile?.id])
 
+  // Auto-provision a personal société + dossier for individual clients
+  const autoProvision = async (): Promise<string | null> => {
+    if (!profile) return null
+    try {
+      // Create personal société
+      const socRes = await fetch("/api/admin/societes", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nom: `${profile.full_name || profile.email} — Personnel`, brn: null, numero_tva_mra: null, statut_tva: false }),
+      })
+      const socData = await socRes.json()
+      if (!socRes.ok || !socData.societe?.id) return null
+
+      // Create dossier linking client to personal société
+      await fetch("/api/admin/dossiers", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ client_id: profile.id, societe_id: socData.societe.id, comptable_id: null }),
+      })
+
+      setSocieteId(socData.societe.id)
+      return socData.societe.id
+    } catch {
+      return null
+    }
+  }
+
   const handleUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return
-    if (!societeId) {
-      setUploadError("Aucune société liée à votre compte. Contactez votre comptable.")
-      setTimeout(() => setUploadError(null), 5000)
-      return
+
+    let uploadSocieteId = societeId
+
+    // If no société, auto-create a personal one
+    if (!uploadSocieteId) {
+      uploadSocieteId = await autoProvision()
+      if (!uploadSocieteId) {
+        setUploadError("Impossible de créer votre espace personnel. Contactez votre comptable.")
+        setTimeout(() => setUploadError(null), 5000)
+        return
+      }
     }
 
     setUploading(true)
@@ -89,7 +121,7 @@ export default function ClientDocumentsPage() {
     for (const file of Array.from(files)) {
       const formData = new FormData()
       formData.append("file", file)
-      formData.append("societe_id", societeId)
+      formData.append("societe_id", uploadSocieteId)
 
       try {
         const res = await fetch("/api/documents/upload", { method: "POST", body: formData })

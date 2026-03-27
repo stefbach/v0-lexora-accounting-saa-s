@@ -25,14 +25,11 @@ import {
   Loader2,
   Mail,
   MessageCircle,
-  Phone,
   Plus,
   Upload,
   Bell,
   BarChart3,
-  Send,
   Clock,
-  ShieldAlert,
   UserX,
 } from "lucide-react"
 
@@ -68,15 +65,11 @@ interface Alerte {
 interface Societe {
   id: string
   nom: string
-  active: boolean
   brn: string
-  statut_tva: boolean
-  ca_mois: number
-  tva_nette: number
-  docs_attente: number
-  derniere_activite: string
-  alertes_critiques: number
-  alertes_importantes: number
+  statut: string
+  dernierDoc: string
+  nbDocs: number
+  anomalies: number
 }
 
 interface Obligation {
@@ -141,8 +134,7 @@ function alertDotColor(niveau: Alerte["niveau"]) {
 }
 
 function societeLeftBorder(s: Societe) {
-  if (s.alertes_critiques > 0) return "border-l-4 border-l-red-500"
-  if (s.alertes_importantes > 0) return "border-l-4 border-l-orange-500"
+  if (s.anomalies > 0) return "border-l-4 border-l-orange-500"
   return "border-l-4 border-l-green-500"
 }
 
@@ -210,13 +202,18 @@ export default function FicheClientPage() {
             anomalies: 0,
           }))
 
+        const isPersonalOnly = clientSocietes.length === 1 && clientSocietes[0].nom.endsWith("— Personnel")
+        const clientType = isPersonalOnly || clientSocietes.length === 0
+          ? "individuel"
+          : clientSocietes.length > 1 ? "groupe" : "mono"
+
         setClient({
           id: user.id,
           full_name: user.full_name,
           email: user.email,
           phone: user.phone || "",
-          type: clientSocietes.length > 1 ? "groupe" : clientSocietes.length === 1 ? "mono" : "individuel",
-          societeCount: clientSocietes.length,
+          type: clientType,
+          societeCount: isPersonalOnly ? 0 : clientSocietes.length,
           created_at: user.created_at,
         })
         setSocietes(clientSocietes)
@@ -438,7 +435,32 @@ export default function FicheClientPage() {
             <CardContent className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
               <Building2 className="h-10 w-10 text-muted-foreground/40" />
               <p className="font-medium">Aucune société enregistrée</p>
-              <p className="text-sm">Ajoutez une société pour commencer le suivi comptable.</p>
+              <p className="text-sm">Créez un dossier personnel pour commencer le suivi comptable.</p>
+              <Button
+                size="sm"
+                className="mt-2 gap-1 text-white"
+                style={{ backgroundColor: GOLD }}
+                onClick={async () => {
+                  try {
+                    const socRes = await fetch("/api/admin/societes", {
+                      method: "POST", headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ nom: `${client.full_name} — Personnel`, brn: null, numero_tva_mra: null, statut_tva: false }),
+                    })
+                    const socData = await socRes.json()
+                    if (socRes.ok && socData.societe?.id) {
+                      await fetch("/api/admin/dossiers", {
+                        method: "POST", headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ client_id: client.id, societe_id: socData.societe.id, comptable_id: null }),
+                      })
+                      // Refresh page
+                      window.location.reload()
+                    }
+                  } catch {}
+                }}
+              >
+                <Plus className="h-4 w-4" />
+                Créer le dossier personnel
+              </Button>
             </CardContent>
           </Card>
         ) : (
@@ -456,78 +478,46 @@ export default function FicheClientPage() {
                     </div>
                     <Badge
                       className={
-                        soc.active
+                        soc.statut === "actif"
                           ? "bg-green-100 text-green-700 border-green-200"
                           : "bg-gray-100 text-gray-500 border-gray-200"
                       }
                       variant="outline"
                     >
-                      {soc.active ? "Active" : "Inactive"}
+                      {soc.statut === "actif" ? "Active" : "Inactive"}
                     </Badge>
                   </div>
 
-                  {/* BRN + TVA */}
-                  <div className="text-xs text-muted-foreground">
-                    BRN : {soc.brn} &nbsp;·&nbsp; TVA :{" "}
-                    {soc.statut_tva ? (
-                      <span className="text-green-600 font-medium">Enregistrée</span>
-                    ) : (
-                      <span className="text-gray-400">Non enregistrée</span>
-                    )}
-                  </div>
+                  {/* BRN */}
+                  {soc.brn && (
+                    <div className="text-xs text-muted-foreground">
+                      BRN : {soc.brn}
+                    </div>
+                  )}
 
                   {/* KPIs */}
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div>
-                      <p className="text-muted-foreground text-xs">CA ce mois</p>
+                      <p className="text-muted-foreground text-xs">Documents</p>
                       <p className="font-semibold" style={{ color: NAVY }}>
-                        {formatMUR(soc.ca_mois)}
+                        {soc.nbDocs}
                       </p>
                     </div>
                     <div>
-                      <p className="text-muted-foreground text-xs">TVA nette</p>
-                      <div className="flex items-center gap-1">
-                        <span className="font-semibold" style={{ color: NAVY }}>
-                          {formatMUR(soc.tva_nette)}
-                        </span>
-                        <Badge
-                          variant="outline"
-                          className="text-[10px] px-1"
-                          style={{ borderColor: GOLD, color: GOLD }}
-                        >
-                          À payer
-                        </Badge>
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground text-xs">Docs en attente</p>
-                      <p className="font-semibold" style={{ color: soc.docs_attente > 0 ? "#EA580C" : NAVY }}>
-                        {soc.docs_attente}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground text-xs">Dernière activité</p>
-                      <p className="font-semibold" style={{ color: NAVY }}>
-                        {soc.derniere_activite}
+                      <p className="text-muted-foreground text-xs">Anomalies</p>
+                      <p className="font-semibold" style={{ color: soc.anomalies > 0 ? "#EA580C" : NAVY }}>
+                        {soc.anomalies}
                       </p>
                     </div>
                   </div>
 
                   {/* Alert badges */}
-                  {(soc.alertes_critiques > 0 || soc.alertes_importantes > 0) && (
+                  {soc.anomalies > 0 && (
                     <div className="flex items-center gap-2">
-                      {soc.alertes_critiques > 0 && (
-                        <Badge className="bg-red-600 text-white border-red-600 text-xs gap-1">
-                          <ShieldAlert className="h-3 w-3" />
-                          {soc.alertes_critiques} critique{soc.alertes_critiques > 1 ? "s" : ""}
-                        </Badge>
-                      )}
-                      {soc.alertes_importantes > 0 && (
-                        <Badge className="bg-orange-500 text-white border-orange-500 text-xs gap-1">
-                          <AlertTriangle className="h-3 w-3" />
-                          {soc.alertes_importantes} important{soc.alertes_importantes > 1 ? "es" : "e"}
-                        </Badge>
-                      )}
+                      <Badge className="bg-orange-500 text-white border-orange-500 text-xs gap-1">
+                        <AlertTriangle className="h-3 w-3" />
+                        {soc.anomalies} anomalie{soc.anomalies > 1 ? "s" : ""}
+                      </Badge>
                     </div>
                   )}
 

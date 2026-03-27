@@ -155,8 +155,20 @@ export default function AdminClientsPage() {
           })
         )
         setSuccess(`Client ${formName} créé et lié à ${formSocieteIds.length} société(s) !`)
-      } else {
-        setSuccess(`Client ${formName} créé !`)
+      } else if (newUserId) {
+        // Auto-create a personal société + dossier for individual clients
+        const socRes = await fetch("/api/admin/societes", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ nom: `${formName} — Personnel`, brn: null, numero_tva_mra: null, statut_tva: false }),
+        })
+        const socData = await socRes.json()
+        if (socRes.ok && socData.societe?.id) {
+          await fetch("/api/admin/dossiers", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ client_id: newUserId, societe_id: socData.societe.id, comptable_id: null }),
+          })
+        }
+        setSuccess(`Client ${formName} créé avec un dossier personnel !`)
       }
 
       resetClientForm(); setClientDialog(false); fetchData()
