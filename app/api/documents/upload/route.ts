@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { processDocument } from '@/lib/process-document'
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -46,7 +47,6 @@ export async function POST(request: NextRequest) {
     // Resolve dossier_id: find existing or auto-create
     let resolvedDossierId = dossierId
     if (!resolvedDossierId) {
-      // Find an existing dossier for this client (optionally filtered by societe)
       let dossierQuery = supabase.from('dossiers').select('id').eq('client_id', user.id)
       if (societeId) dossierQuery = dossierQuery.eq('societe_id', societeId)
       const { data: existingDossiers } = await dossierQuery.limit(1).single()
@@ -54,40 +54,29 @@ export async function POST(request: NextRequest) {
       if (existingDossiers) {
         resolvedDossierId = existingDossiers.id
       } else if (societeId) {
-        // Auto-create a dossier for this client + société
         const { data: newDossier } = await supabase
           .from('dossiers')
           .insert({ client_id: user.id, societe_id: societeId, comptable_id: null })
-          .select('id')
-          .single()
+          .select('id').single()
         resolvedDossierId = newDossier?.id || null
       } else {
-        // No société and no dossier — try to find ANY dossier for this client
         const { data: anyDossier } = await supabase
-          .from('dossiers')
-          .select('id')
-          .eq('client_id', user.id)
-          .limit(1)
-          .single()
+          .from('dossiers').select('id').eq('client_id', user.id).limit(1).single()
 
         if (anyDossier) {
           resolvedDossierId = anyDossier.id
         } else {
-          // Last resort: auto-create personal société + dossier
           const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
-          const personalName = `${profile?.full_name || user.email} — Personnel`
           const { data: newSoc } = await supabase
             .from('societes')
-            .insert({ nom: personalName, statut_tva: false })
-            .select('id')
-            .single()
+            .insert({ nom: `${profile?.full_name || user.email} — Personnel`, statut_tva: false })
+            .select('id').single()
 
           if (newSoc) {
             const { data: newDossier } = await supabase
               .from('dossiers')
               .insert({ client_id: user.id, societe_id: newSoc.id, comptable_id: null })
-              .select('id')
-              .single()
+              .select('id').single()
             resolvedDossierId = newDossier?.id || null
           }
         }
@@ -108,10 +97,7 @@ export async function POST(request: NextRequest) {
 
     const { error: storageError } = await supabase.storage
       .from('documents')
-      .upload(storagePath, fileBuffer, {
-        contentType: file.type,
-        upsert: false,
-      })
+      .upload(storagePath, fileBuffer, { contentType: file.type, upsert: false })
 
     if (storageError) {
       return NextResponse.json({ error: `Erreur upload : ${storageError.message}` }, { status: 500 })
@@ -138,35 +124,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Erreur enregistrement : ${docError.message}` }, { status: 500 })
     }
 
-    // Process document inline (Vercel kills background fetches)
-    try {
-      const processUrl = `${request.nextUrl.origin}/api/documents/process`
-      const processRes = await fetch(processUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          document_id: doc.id,
-          storage_path: storagePath,
-          nom_fichier: file.name,
-          client_id: user.id,
-          societe: societeId || undefined,
-        }),
-      })
-      const processData = await processRes.json()
+    // Process document directly (no HTTP call — runs in same function)
+    const result = await processDocument({
+      document_id: doc.id,
+      storage_path: storagePath,
+      nom_fichier: file.name,
+      client_id: user.id,
+      societe: societeId || undefined,
+    })
 
-      return NextResponse.json({
-        document: { ...doc, statut: processRes.ok ? 'traite' : 'erreur' },
-        processing: processData,
-        message: processRes.ok ? 'Document uploadé et analysé avec succès.' : 'Document uploadé. Erreur lors de l\'analyse.',
-      })
-    } catch (processErr) {
-      console.error('Process error:', processErr)
-      return NextResponse.json({
-        document: doc,
-        message: 'Document uploadé. L\'analyse a échoué.',
-        processing_error: processErr instanceof Error ? processErr.message : 'Erreur inconnue',
-      })
-    }
+    return NextResponse.json({
+      document: { ...doc, statut: result.success ? 'traite' : 'erreur', type_document: result.type_document },
+      processing: result,
+      message: result.success
+        ? `Document uploadé et classé comme ${result.type_document}.`
+        : `Document uploadé. Erreur d'analyse : ${result.error}`,
+    })
   } catch (e: unknown) {
     console.error('Upload error:', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur inconnue' }, { status: 500 })
