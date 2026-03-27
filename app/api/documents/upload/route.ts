@@ -40,6 +40,61 @@ export async function POST(request: NextRequest) {
 
     const supabase = getAdminClient()
 
+    // Resolve dossier_id: find existing or auto-create
+    let resolvedDossierId = dossierId
+    if (!resolvedDossierId) {
+      // Find an existing dossier for this client (optionally filtered by societe)
+      let dossierQuery = supabase.from('dossiers').select('id').eq('client_id', user.id)
+      if (societeId) dossierQuery = dossierQuery.eq('societe_id', societeId)
+      const { data: existingDossiers } = await dossierQuery.limit(1).single()
+
+      if (existingDossiers) {
+        resolvedDossierId = existingDossiers.id
+      } else if (societeId) {
+        // Auto-create a dossier for this client + société
+        const { data: newDossier } = await supabase
+          .from('dossiers')
+          .insert({ client_id: user.id, societe_id: societeId, comptable_id: null })
+          .select('id')
+          .single()
+        resolvedDossierId = newDossier?.id || null
+      } else {
+        // No société and no dossier — try to find ANY dossier for this client
+        const { data: anyDossier } = await supabase
+          .from('dossiers')
+          .select('id')
+          .eq('client_id', user.id)
+          .limit(1)
+          .single()
+
+        if (anyDossier) {
+          resolvedDossierId = anyDossier.id
+        } else {
+          // Last resort: auto-create personal société + dossier
+          const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
+          const personalName = `${profile?.full_name || user.email} — Personnel`
+          const { data: newSoc } = await supabase
+            .from('societes')
+            .insert({ nom: personalName, statut_tva: false })
+            .select('id')
+            .single()
+
+          if (newSoc) {
+            const { data: newDossier } = await supabase
+              .from('dossiers')
+              .insert({ client_id: user.id, societe_id: newSoc.id, comptable_id: null })
+              .select('id')
+              .single()
+            resolvedDossierId = newDossier?.id || null
+          }
+        }
+      }
+
+      if (!resolvedDossierId) {
+        return NextResponse.json({ error: 'Impossible de trouver ou créer un dossier pour ce document' }, { status: 400 })
+      }
+    }
+
     // Determine file extension
     const ext = file.name.split('.').pop()?.toLowerCase() || 'pdf'
     const typeFichier = ext === 'jpg' ? 'jpeg' : ext as 'pdf' | 'jpeg' | 'png' | 'xlsx'
@@ -63,7 +118,7 @@ export async function POST(request: NextRequest) {
     const { data: doc, error: docError } = await supabase
       .from('documents')
       .insert({
-        dossier_id: dossierId || null,
+        dossier_id: resolvedDossierId,
         uploaded_by: user.id,
         nom_fichier: file.name,
         type_fichier: typeFichier,

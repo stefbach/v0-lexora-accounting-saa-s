@@ -65,6 +65,10 @@ export default function AdminClientsPage() {
   const [formPassword, setFormPassword] = useState("")
   const [formRole, setFormRole] = useState("client_admin")
   const [formSocieteIds, setFormSocieteIds] = useState<string[]>([])
+  const [formBrnClient, setFormBrnClient] = useState("")
+  const [formTvaClient, setFormTvaClient] = useState("")
+  const [formStatutTvaClient, setFormStatutTvaClient] = useState("false")
+  const [formAdresse, setFormAdresse] = useState("")
 
   // Société create
   const [societeDialog, setSocieteDialog] = useState(false)
@@ -117,7 +121,7 @@ export default function AdminClientsPage() {
   const getSocieteClients = (societeId: string) =>
     dossiers.filter(d => d.societe_id === societeId && d.client).map(d => d.client!)
 
-  const resetClientForm = () => { setFormName(""); setFormEmail(""); setFormPhone(""); setFormPassword(""); setFormRole("client_admin"); setFormSocieteIds([]); setError(null) }
+  const resetClientForm = () => { setFormName(""); setFormEmail(""); setFormPhone(""); setFormPassword(""); setFormRole("client_admin"); setFormSocieteIds([]); setFormBrnClient(""); setFormTvaClient(""); setFormStatutTvaClient("false"); setFormAdresse(""); setError(null) }
   const resetSocieteForm = () => { setFormNom(""); setFormBrn(""); setFormTva(""); setFormStatutTva("true"); setFormClientIds([]); setSocieteError(null) }
 
   const toggleSocieteSelection = (societeId: string, list: string[], setter: (v: string[]) => void) => {
@@ -159,7 +163,13 @@ export default function AdminClientsPage() {
         // Auto-create a personal société + dossier for individual clients
         const socRes = await fetch("/api/admin/societes", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ nom: `${formName} — Personnel`, brn: null, numero_tva_mra: null, statut_tva: false }),
+          body: JSON.stringify({
+            nom: `${formName} — Personnel`,
+            brn: formBrnClient || null,
+            numero_tva_mra: formTvaClient || null,
+            statut_tva: formStatutTvaClient === "true",
+            adresse: formAdresse || null,
+          }),
         })
         const socData = await socRes.json()
         if (socRes.ok && socData.societe?.id) {
@@ -280,6 +290,16 @@ export default function AdminClientsPage() {
                     <div className="space-y-2"><Label>Type *</Label>
                       <Select value={formRole} onValueChange={setFormRole}><SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent><SelectItem value="client_admin">Client Admin</SelectItem><SelectItem value="client_user">Client Utilisateur</SelectItem></SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2"><Label>BRN</Label><Input placeholder="Ex: C07012345" value={formBrnClient} onChange={(e) => setFormBrnClient(e.target.value)} /></div>
+                      <div className="space-y-2"><Label>N° TVA MRA</Label><Input placeholder="Ex: VAT-20260001" value={formTvaClient} onChange={(e) => setFormTvaClient(e.target.value)} /></div>
+                    </div>
+                    <div className="space-y-2"><Label>Adresse</Label><Input placeholder="Ex: Port Louis, Mauritius" value={formAdresse} onChange={(e) => setFormAdresse(e.target.value)} /></div>
+                    <div className="space-y-2"><Label>Statut TVA</Label>
+                      <Select value={formStatutTvaClient} onValueChange={setFormStatutTvaClient}><SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent><SelectItem value="true">Assujetti</SelectItem><SelectItem value="false">Non assujetti</SelectItem></SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-2">

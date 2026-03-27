@@ -60,6 +60,10 @@ export default function ComptableClientsPage() {
   const [formPhone, setFormPhone] = useState("")
   const [formPassword, setFormPassword] = useState("")
   const [formRole, setFormRole] = useState("client_admin")
+  const [formBrn, setFormBrn] = useState("")
+  const [formTva, setFormTva] = useState("")
+  const [formStatutTva, setFormStatutTva] = useState("false")
+  const [formAdresse, setFormAdresse] = useState("")
 
   const fetchData = useCallback(async () => {
     try {
@@ -97,7 +101,7 @@ export default function ComptableClientsPage() {
     getClientSocietes(clientId).length
 
   const resetForm = () => {
-    setFormName(""); setFormEmail(""); setFormPhone(""); setFormPassword(""); setFormRole("client_admin"); setError(null)
+    setFormName(""); setFormEmail(""); setFormPhone(""); setFormPassword(""); setFormRole("client_admin"); setFormBrn(""); setFormTva(""); setFormStatutTva("false"); setFormAdresse(""); setError(null)
   }
 
   const handleCreate = async () => {
@@ -112,6 +116,28 @@ export default function ComptableClientsPage() {
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || "Erreur"); return }
+
+      const newUserId = data.user?.id
+      // Auto-create personal société + dossier
+      if (newUserId) {
+        const socRes = await fetch("/api/admin/societes", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            nom: `${formName} — Personnel`,
+            brn: formBrn || null,
+            numero_tva_mra: formTva || null,
+            statut_tva: formStatutTva === "true",
+            adresse: formAdresse || null,
+          }),
+        })
+        const socData = await socRes.json()
+        if (socRes.ok && socData.societe?.id) {
+          await fetch("/api/admin/dossiers", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ client_id: newUserId, societe_id: socData.societe.id, comptable_id: profile?.id || null }),
+          })
+        }
+      }
       setSuccess(`Client ${formName} créé avec succès !`)
       resetForm(); setDialogOpen(false); fetchData()
     } catch { setError("Erreur de connexion") } finally { setCreating(false) }
@@ -133,7 +159,7 @@ export default function ComptableClientsPage() {
             <DialogTrigger asChild>
               <Button style={{ backgroundColor: "#1E2A4A" }}><Plus className="mr-2 h-4 w-4" />Ajouter un client</Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-h-[90vh] overflow-y-auto">
               <DialogHeader><DialogTitle>Nouveau client</DialogTitle><DialogDescription>Créez un compte client.</DialogDescription></DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2"><Label>Nom complet *</Label><Input placeholder="Ex: Jean-Marc Dupont" value={formName} onChange={(e) => setFormName(e.target.value)} /></div>
@@ -143,6 +169,16 @@ export default function ComptableClientsPage() {
                 <div className="space-y-2"><Label>Type *</Label>
                   <Select value={formRole} onValueChange={setFormRole}><SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent><SelectItem value="client_admin">Client Admin</SelectItem><SelectItem value="client_user">Client Utilisateur</SelectItem></SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2"><Label>BRN</Label><Input placeholder="Ex: C07012345" value={formBrn} onChange={(e) => setFormBrn(e.target.value)} /></div>
+                  <div className="space-y-2"><Label>N° TVA MRA</Label><Input placeholder="Ex: VAT-20260001" value={formTva} onChange={(e) => setFormTva(e.target.value)} /></div>
+                </div>
+                <div className="space-y-2"><Label>Adresse</Label><Input placeholder="Ex: Port Louis, Mauritius" value={formAdresse} onChange={(e) => setFormAdresse(e.target.value)} /></div>
+                <div className="space-y-2"><Label>Statut TVA</Label>
+                  <Select value={formStatutTva} onValueChange={setFormStatutTva}><SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent><SelectItem value="true">Assujetti</SelectItem><SelectItem value="false">Non assujetti</SelectItem></SelectContent>
                   </Select>
                 </div>
                 {error && <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">{error}</div>}
