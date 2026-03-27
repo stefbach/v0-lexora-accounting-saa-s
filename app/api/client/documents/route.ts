@@ -1,17 +1,29 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 
-// GET — List all documents for the current client (via their dossiers)
+function getAdminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+}
+
+// GET — List all documents for the current user (via their dossiers)
 export async function GET() {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const supabaseAuth = await createServerClient()
+    const { data: { user } } = await supabaseAuth.auth.getUser()
 
     if (!user) {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
 
-    // Get all dossiers for this client
+    // Use admin client to bypass RLS
+    const supabase = getAdminClient()
+
+    // Get all dossiers for this user
     const { data: dossiers } = await supabase
       .from('dossiers')
       .select('id')
