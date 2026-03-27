@@ -152,7 +152,8 @@ export default function FinancesPage() {
                 <TableRow>
                   <TableHead>&Eacute;metteur</TableHead>
                   <TableHead>Date</TableHead>
-                  <TableHead className="text-right">Montant TTC</TableHead>
+                  <TableHead className="text-right">Montant original</TableHead>
+                  <TableHead className="text-right">Montant MUR</TableHead>
                   <TableHead>Type</TableHead>
                 </TableRow>
               </TableHeader>
@@ -161,8 +162,11 @@ export default function FinancesPage() {
                   <TableRow key={inv.id}>
                     <TableCell className="font-medium">{inv.emetteur || "—"}</TableCell>
                     <TableCell>{inv.date || "—"}</TableCell>
-                    <TableCell className="text-right">{formatMUR(inv.montant_ttc ?? 0)}</TableCell>
-                    <TableCell>{inv.type || "—"}</TableCell>
+                    <TableCell className="text-right">
+                      {(inv.montant_ttc ?? 0).toLocaleString("fr-FR")} {inv.devise || "MUR"}
+                    </TableCell>
+                    <TableCell className="text-right font-medium">{formatMUR(inv.montant_ttc_mur ?? inv.montant_ttc ?? 0)}</TableCell>
+                    <TableCell>{inv.type === "facture_fournisseur" ? "Fournisseur" : inv.type === "facture_client" ? "Client" : inv.type || "—"}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
