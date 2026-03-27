@@ -3,6 +3,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import type { DocumentType, Societe } from '@/lib/types'
 
+// Allow up to 60 seconds for AI processing on Vercel
+export const maxDuration = 60
+
 // ---------------------------------------------------------------------------
 // Supabase admin client (service role – bypasses RLS)
 // ---------------------------------------------------------------------------
@@ -167,6 +170,7 @@ function isVisualDocument(filename: string): boolean {
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now()
+  let parsedDocumentId: string | null = null
 
   try {
     // ---- 1. Parse & validate input ----------------------------------------
@@ -186,6 +190,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    parsedDocumentId = document_id
     console.log(`[documents/process] Début du traitement – document_id=${document_id}, fichier=${nom_fichier}`)
 
     const supabase = getAdminClient()
@@ -383,17 +388,17 @@ export async function POST(request: NextRequest) {
     })
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Erreur inconnue'
-    console.error(`[documents/process] Erreur inattendue : ${message}`)
+    const stack = e instanceof Error ? e.stack : undefined
+    console.error(`[documents/process] Erreur inattendue : ${message}`, stack)
 
-    // Try to mark document as error if we have the id
-    try {
-      const body = await request.clone().json().catch(() => null)
-      if (body?.document_id) {
+    // Mark document as error if we have the id
+    if (parsedDocumentId) {
+      try {
         const supabase = getAdminClient()
-        await markError(supabase, body.document_id, message)
+        await markError(supabase, parsedDocumentId, message)
+      } catch {
+        // Ignore – best effort
       }
-    } catch {
-      // Ignore – best effort
     }
 
     return NextResponse.json(
