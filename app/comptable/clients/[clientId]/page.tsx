@@ -182,15 +182,44 @@ export default function FicheClientPage() {
       setLoading(true)
       setError(null)
       try {
-        const res = await fetch(`/api/clients/${clientId}`)
-        if (!res.ok) throw new Error("Impossible de charger les données du client")
-        const data = await res.json()
-        setClient(data.client ?? null)
-        setAlertes(data.alertes ?? [])
-        setSocietes(data.societes ?? [])
-        setObligations(data.obligations ?? [])
-        setConsolide(data.consolide ?? [])
-        setActivites(data.activites ?? [])
+        const [usersRes, societesRes, dossiersRes] = await Promise.all([
+          fetch("/api/admin/users"),
+          fetch("/api/admin/societes"),
+          fetch("/api/admin/dossiers"),
+        ])
+        const [usersData, societesData, dossiersData] = await Promise.all([
+          usersRes.json(), societesRes.json(), dossiersRes.json(),
+        ])
+
+        // Find the client
+        const user = usersData.users?.find((u: any) => u.id === clientId)
+        if (!user) throw new Error("Client introuvable")
+
+        // Get client's societes via dossiers
+        const clientDossiers = (dossiersData.dossiers || []).filter((d: any) => d.client_id === clientId)
+        const societeIds = [...new Set(clientDossiers.map((d: any) => d.societe_id))]
+        const clientSocietes = (societesData.societes || [])
+          .filter((s: any) => societeIds.includes(s.id))
+          .map((s: any) => ({
+            id: s.id,
+            nom: s.nom,
+            brn: s.brn || "",
+            statut: "actif" as const,
+            dernierDoc: "",
+            nbDocs: 0,
+            anomalies: 0,
+          }))
+
+        setClient({
+          id: user.id,
+          full_name: user.full_name,
+          email: user.email,
+          phone: user.phone || "",
+          type: clientSocietes.length > 1 ? "groupe" : clientSocietes.length === 1 ? "mono" : "individuel",
+          societeCount: clientSocietes.length,
+          created_at: user.created_at,
+        })
+        setSocietes(clientSocietes)
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : "Une erreur est survenue")
       } finally {
