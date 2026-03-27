@@ -13,6 +13,8 @@ import {
   TrendingUp, TrendingDown, DollarSign, Loader2, FileText, Receipt,
 } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Building2 } from "lucide-react"
 
 const NAVY = "#1E2A4A"
 const GOLD = "#C9A84C"
@@ -29,14 +31,23 @@ export default function FinancesPage() {
   const { profile, loading } = useProfile()
   const [data, setData] = useState<any>(null)
   const [fetching, setFetching] = useState(true)
+  const [selectedSociete, setSelectedSociete] = useState<string>("all")
+  const [societes, setSocietes] = useState<{ id: string; nom: string }[]>([])
 
   useEffect(() => {
-    fetch("/api/client/financial")
+    setFetching(true)
+    const url = selectedSociete !== "all"
+      ? `/api/client/financial?societe_id=${selectedSociete}`
+      : "/api/client/financial"
+    fetch(url)
       .then((res) => res.json())
-      .then((json) => setData(json.financial))
+      .then((json) => {
+        setData(json.financial)
+        if (json.financial?.availableSocietes) setSocietes(json.financial.availableSocietes)
+      })
       .catch(() => setData(null))
       .finally(() => setFetching(false))
-  }, [])
+  }, [selectedSociete])
 
   if (loading || fetching) {
     return (
@@ -114,11 +125,25 @@ export default function FinancesPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Mes Chiffres</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Suivez vos revenus, vos dépenses et votre résultat.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Mes Chiffres</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Suivez vos revenus, vos dépenses et votre résultat.
+          </p>
+        </div>
+        {societes.length > 1 && (
+          <div className="flex items-center gap-2">
+            <Building2 className="h-4 w-4 text-muted-foreground" />
+            <Select value={selectedSociete} onValueChange={setSelectedSociete}>
+              <SelectTrigger className="w-[220px] h-9"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Toutes les sociétés</SelectItem>
+                {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
       {/* KPI Cards */}

@@ -46,9 +46,11 @@ export async function GET(request: Request) {
       targetClientId = requestedClientId
     }
 
-    // Get client's dossiers
-    const { data: dossiers } = await supabase
-      .from('dossiers').select('id, societe_id').eq('client_id', targetClientId)
+    // Get client's dossiers, optionally filtered by société
+    const requestedSocieteId = searchParams.get('societe_id')
+    let dossierQuery = supabase.from('dossiers').select('id, societe_id').eq('client_id', targetClientId)
+    if (requestedSocieteId) dossierQuery = dossierQuery.eq('societe_id', requestedSocieteId)
+    const { data: dossiers } = await dossierQuery
 
     if (!dossiers || dossiers.length === 0) {
       return NextResponse.json({ financial: emptyFinancial() })
@@ -56,6 +58,15 @@ export async function GET(request: Request) {
 
     const dossierIds = dossiers.map(d => d.id)
     const societeIds = [...new Set(dossiers.map(d => d.societe_id))]
+
+    // Get all société names for the filter dropdown
+    const { data: allClientDossiers } = await supabase
+      .from('dossiers').select('societe_id, societe:societes(id, nom)')
+      .eq('client_id', targetClientId)
+    const availableSocietes = (allClientDossiers || [])
+      .filter((d: any) => d.societe && !(d.societe as any).nom?.endsWith('— Personnel'))
+      .map((d: any) => ({ id: d.societe_id, nom: (d.societe as any).nom }))
+      .filter((s: any, i: number, arr: any[]) => arr.findIndex((x: any) => x.id === s.id) === i)
 
     // Get all accounting entries
     const { data: ecritures } = await supabase
@@ -213,6 +224,8 @@ export async function GET(request: Request) {
         totalEcritures: allEcritures.length,
         currentMonth,
         taux_change: rates,
+        availableSocietes,
+        selectedSocieteId: requestedSocieteId || null,
       }
     })
   } catch (e: unknown) {
