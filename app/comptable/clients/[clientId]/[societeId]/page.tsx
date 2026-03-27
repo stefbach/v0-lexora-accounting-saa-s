@@ -129,8 +129,8 @@ export default function SocieteContextPage() {
         const societe = societesData.societes?.find((s: any) => s.id === societeId)
         if (!user || !societe) throw new Error("Données introuvables")
 
-        // Fetch financial data for this client
-        const finRes = await fetch(`/api/client/financial?client_id=${clientId}`)
+        // Fetch financial data for this client filtered by société
+        const finRes = await fetch(`/api/client/financial?client_id=${clientId}&societe_id=${societeId}`)
         const finData = finRes.ok ? await finRes.json() : { financial: null }
         const fin = finData.financial || {}
 
@@ -160,23 +160,67 @@ export default function SocieteContextPage() {
           { label: 'Trésorerie', value: fin.totalBankMUR || 0, green: true },
         ]
 
+        // Build bank entries from bankTransactions (individual lines from statements)
+        // plus bank account summary rows
+        const bankEntries: BanqueEntry[] = (fin.bankTransactions || []).map((tx: any) => ({
+          date: tx.date || '—',
+          libelle: tx.libelle || '—',
+          debit: tx.debit || 0,
+          credit: tx.credit || 0,
+          tiers: tx.tiers || '',
+          compte: tx.compte_comptable || '512',
+          statut: tx.statut || 'non_identifie',
+        }))
+
+        // If no transactions, show bank account summaries
+        if (bankEntries.length === 0) {
+          for (const b of (fin.bankAccounts || [])) {
+            bankEntries.push({
+              date: '—', libelle: `${b.banque} — ${b.nom_compte || ''}`,
+              debit: 0, credit: b.solde_actuel || 0,
+              tiers: '', compte: '512', statut: 'rapproche',
+            })
+          }
+        }
+
+        // Build TVA rows from tvaRecords or from computed values
+        const tvaRows: TVAEntry[] = (fin.tvaRecords || []).length > 0
+          ? (fin.tvaRecords || []).map((t: any) => ({
+              mois: t.periode, collectee: t.tva_collectee || 0, deductible: t.tva_deductible || 0,
+              nette: t.tva_nette || 0, deadline: t.date_limite || '—',
+              statut: t.statut || 'a_declarer', ref: '',
+            }))
+          : (fin.tvaCollectee || fin.tvaDeductible)
+            ? [{
+                mois: fin.currentMonth || '—',
+                collectee: fin.tvaCollectee || 0,
+                deductible: fin.tvaDeductible || 0,
+                nette: fin.tvaNette || 0,
+                deadline: '—',
+                statut: 'a_declarer',
+                ref: '',
+              }]
+            : []
+
         setData({
           clientName: user.full_name,
           societeName: societe.nom,
           kpis,
           fournisseurs,
           facturesClients,
-          banque: (fin.bankAccounts || []).map((b: any) => ({
-            date: '—', libelle: b.banque, debit: 0, credit: 0,
-            tiers: b.nom_compte || '', compte: '512', statut: 'rapproche',
-          })),
-          salaires: [],
-          charges: [],
-          tva: (fin.tvaRecords || []).map((t: any) => ({
-            mois: t.periode, collectee: t.tva_collectee || 0, deductible: t.tva_deductible || 0,
-            nette: t.tva_nette || 0, deadline: t.date_limite || '—',
-            statut: t.statut || 'a_declarer', ref: '',
-          })),
+          banque: bankEntries,
+          salaires: fin.salaires ? [{
+            employe: 'Total masse salariale', brut: fin.salaires, csg: 0, nsf: 0,
+            paye: 0, net: fin.salaires, cout: fin.salaires + (fin.chargesSociales || 0),
+            statut: 'paye',
+          }] : [],
+          charges: fin.chargesSociales ? [{
+            periode: fin.currentMonth || '—',
+            csg_e: 0, csg_p: 0, nsf_e: 0, nsf_p: 0, training: 0,
+            paye: 0, total: fin.chargesSociales,
+            statut: 'paye',
+          }] : [],
+          tva: tvaRows,
           dossiers: [],
           grandLivre: [],
           alertes: [],

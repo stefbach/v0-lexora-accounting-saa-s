@@ -326,7 +326,9 @@ function emptyFinancial() {
     bankAccounts: [], totalBankMUR: 0,
     salaires: 0, chargesSociales: 0,
     revenueByAccount: {}, expensesByAccount: {},
-    creances: 0, lastMonthRevenue: 0, lastMonthExpenses: 0,
+    creances: 0, immobilisations: 0, stocks: 0, autresCreances: 0,
+    capitauxPropres: 0, emprunts: 0, dettesFournisseurs: 0, dettesFiscales: 0, dettesSociales: 0,
+    lastMonthRevenue: 0, lastMonthExpenses: 0,
     docsByType: {}, totalDocuments: 0, extractedInvoices: [], bankTransactions: [],
     totalEcritures: 0, currentMonth: '', taux_change: {},
   }

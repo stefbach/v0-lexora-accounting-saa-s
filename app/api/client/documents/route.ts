@@ -44,12 +44,27 @@ export async function GET() {
       return NextResponse.json({ documents: [] })
     }
 
+    // Check user role from profiles table
+    const { data: userProfile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
     // Get all documents in those dossiers
-    const { data: documents, error } = await supabase
+    // client_user: only sees documents they uploaded themselves
+    // client_admin: sees all documents from all dossiers of the same société
+    let documentsQuery = supabase
       .from('documents')
       .select('id, nom_fichier, type_fichier, type_document, statut, storage_path, created_at, societe_detectee, n8n_result')
       .in('dossier_id', dossierIds)
       .order('created_at', { ascending: false })
+
+    if (userProfile?.role === 'client_user') {
+      documentsQuery = documentsQuery.eq('uploaded_by', user.id)
+    }
+
+    const { data: documents, error } = await documentsQuery
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })

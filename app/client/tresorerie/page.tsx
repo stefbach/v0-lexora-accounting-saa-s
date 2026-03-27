@@ -266,7 +266,7 @@ function TresorerieView() {
                 Aucune transaction disponible.
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                Les transactions apparaitront une fois vos documents comptables traites.
+                Uploadez un releve bancaire dans &quot;Mes Documents&quot; pour voir vos transactions ici.
               </p>
             </div>
           ) : (
@@ -278,30 +278,37 @@ function TresorerieView() {
                     <TableHead>Libelle</TableHead>
                     <TableHead className="text-right">Debit</TableHead>
                     <TableHead className="text-right">Credit</TableHead>
+                    <TableHead className="text-right">Solde apres</TableHead>
+                    <TableHead>Tiers identifie</TableHead>
+                    <TableHead>Compte comptable</TableHead>
                     <TableHead>Statut</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {transactions.slice(0, 20).map((tx) => (
+                  {transactions.map((tx) => (
                     <TableRow key={tx.id}>
                       <TableCell className="text-sm whitespace-nowrap">{formatDate(tx.date)}</TableCell>
-                      <TableCell className="text-sm max-w-[300px] truncate">{tx.libelle}</TableCell>
+                      <TableCell className="text-sm max-w-[250px] truncate">{tx.libelle}</TableCell>
                       <TableCell className="text-right text-sm font-medium text-red-600">
-                        {tx.debit > 0 ? formatMUR(tx.debit) : "—"}
+                        {tx.debit > 0 ? formatMUR(tx.debit) : "\u2014"}
                       </TableCell>
                       <TableCell className="text-right text-sm font-medium text-green-600">
-                        {tx.credit > 0 ? formatMUR(tx.credit) : "—"}
+                        {tx.credit > 0 ? formatMUR(tx.credit) : "\u2014"}
+                      </TableCell>
+                      <TableCell className="text-right text-sm">
+                        {tx.solde_apres != null ? formatMUR(tx.solde_apres) : "\u2014"}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {tx.tiers || <span className="text-muted-foreground italic">Non identifie</span>}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {tx.compte_comptable || "\u2014"}
                       </TableCell>
                       <TableCell>{getStatutBadge(tx.statut)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
-              {transactions.length > 20 && (
-                <p className="text-xs text-muted-foreground text-center mt-3">
-                  Affichage des 20 dernieres transactions sur {transactions.length} au total.
-                </p>
-              )}
             </div>
           )}
         </CardContent>
@@ -330,25 +337,38 @@ function TresorerieView() {
                   <TableRow>
                     <TableHead>Date</TableHead>
                     <TableHead>Libelle</TableHead>
-                    <TableHead className="text-right">Montant</TableHead>
+                    <TableHead className="text-right">Debit</TableHead>
+                    <TableHead className="text-right">Credit</TableHead>
+                    <TableHead>Tiers</TableHead>
                     <TableHead>Statut</TableHead>
+                    <TableHead>Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {anomalies.map((tx) => (
                     <TableRow key={tx.id} className="bg-orange-50/50">
                       <TableCell className="text-sm whitespace-nowrap">{formatDate(tx.date)}</TableCell>
-                      <TableCell className="text-sm max-w-[300px] truncate">{tx.libelle}</TableCell>
-                      <TableCell className="text-right text-sm font-medium">
-                        {tx.debit > 0 ? (
-                          <span className="text-red-600">{formatMUR(tx.debit)}</span>
-                        ) : tx.credit > 0 ? (
-                          <span className="text-green-600">{formatMUR(tx.credit)}</span>
-                        ) : (
-                          "—"
-                        )}
+                      <TableCell className="text-sm max-w-[250px] truncate">{tx.libelle}</TableCell>
+                      <TableCell className="text-right text-sm font-medium text-red-600">
+                        {tx.debit > 0 ? formatMUR(tx.debit) : "\u2014"}
+                      </TableCell>
+                      <TableCell className="text-right text-sm font-medium text-green-600">
+                        {tx.credit > 0 ? formatMUR(tx.credit) : "\u2014"}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {tx.tiers || <span className="text-muted-foreground italic">Non identifie</span>}
                       </TableCell>
                       <TableCell>{getStatutBadge(tx.statut)}</TableCell>
+                      <TableCell>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-xs"
+                          style={{ borderColor: "#C9A84C", color: "#C9A84C" }}
+                        >
+                          Mettre a jour
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

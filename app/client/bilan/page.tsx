@@ -14,7 +14,11 @@ import {
   TrendingUp,
   TrendingDown,
   DollarSign,
+  Building2,
+  BookOpen,
+  Scale,
 } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 const NAVY = "#1E2A4A"
 const GOLD = "#C9A84C"
@@ -39,6 +43,7 @@ const REVENUE_LABELS: Record<string, string> = {
   "721": "Production immobilis\u00e9e",
   "741": "Subventions d\u2019exploitation",
   "751": "Produits de gestion courante",
+  "753": "Commissions",
   "758": "Produits divers de gestion courante",
   "761": "Produits financiers",
   "771": "Produits exceptionnels",
@@ -73,7 +78,6 @@ function groupExpenses(expensesByAccount: Record<string, number>) {
     }
   }
 
-  // Catch-all for other class 6 accounts
   const otherDetails: { prefix: string; amount: number }[] = []
   let otherTotal = 0
   for (const [prefix, amount] of Object.entries(expensesByAccount)) {
@@ -93,14 +97,23 @@ export default function BilanPage() {
   const { profile, loading } = useProfile()
   const [data, setData] = useState<any>(null)
   const [fetching, setFetching] = useState(true)
+  const [selectedSociete, setSelectedSociete] = useState<string>("all")
+  const [societes, setSocietes] = useState<{ id: string; nom: string }[]>([])
 
   useEffect(() => {
-    fetch("/api/client/financial")
+    setFetching(true)
+    const url = selectedSociete !== "all"
+      ? `/api/client/financial?societe_id=${selectedSociete}`
+      : "/api/client/financial"
+    fetch(url)
       .then((res) => res.json())
-      .then((json) => setData(json.financial))
+      .then((json) => {
+        setData(json.financial)
+        if (json.financial?.availableSocietes) setSocietes(json.financial.availableSocietes)
+      })
       .catch(() => setData(null))
       .finally(() => setFetching(false))
-  }, [])
+  }, [selectedSociete])
 
   if (loading || fetching) {
     return (
@@ -128,32 +141,58 @@ export default function BilanPage() {
 
   const totalRevenue = data?.totalRevenue ?? 0
   const totalExpenses = data?.totalExpenses ?? 0
-  const resultatExploitation = totalRevenue - totalExpenses
-  const resultatNet = resultatExploitation
+  const resultatNet = totalRevenue - totalExpenses
 
   const revenueByAccount: Record<string, number> = data?.revenueByAccount ?? {}
   const expensesByAccount: Record<string, number> = data?.expensesByAccount ?? {}
 
-  // Build revenue details sorted by prefix
+  // Balance sheet data
+  const immobilisations = data?.immobilisations ?? 0
+  const stocks = data?.stocks ?? 0
+  const creancesClients = data?.creances ?? 0
+  const autresCreances = data?.autresCreances ?? 0
+  const tresorerie = data?.totalBankMUR ?? 0
+  const totalActif = immobilisations + stocks + creancesClients + autresCreances + tresorerie
+
+  const capitauxPropres = data?.capitauxPropres ?? 0
+  const emprunts = data?.emprunts ?? 0
+  const dettesFournisseurs = data?.dettesFournisseurs ?? 0
+  const dettesFiscales = data?.dettesFiscales ?? 0
+  const dettesSociales = data?.dettesSociales ?? 0
+  const totalPassif = capitauxPropres + emprunts + dettesFournisseurs + dettesFiscales + dettesSociales
+
+  // P&L details
   const revenueDetails = Object.entries(revenueByAccount)
     .filter(([, v]) => v !== 0)
     .sort(([a], [b]) => a.localeCompare(b))
-
-  // Build expense groups
   const expenseGroups = groupExpenses(expensesByAccount)
 
-  const hasData = totalRevenue !== 0 || totalExpenses !== 0
+  const hasData = totalRevenue !== 0 || totalExpenses !== 0 || totalActif !== 0 || totalPassif !== 0
 
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold" style={{ color: NAVY }}>
-          Compte de R&eacute;sultat (P&amp;L)
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Synth&egrave;se Produits &amp; Charges de l&apos;exercice en cours
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>
+            Mon Bilan
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Bilan comptable et Compte de R&eacute;sultat de l&apos;exercice en cours
+          </p>
+        </div>
+        {societes.length > 1 && (
+          <div className="flex items-center gap-2">
+            <Building2 className="h-4 w-4 text-muted-foreground" />
+            <Select value={selectedSociete} onValueChange={setSelectedSociete}>
+              <SelectTrigger className="w-[220px] h-9"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Toutes les soci&eacute;t&eacute;s</SelectItem>
+                {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
       {/* Summary cards */}
@@ -161,33 +200,33 @@ export default function BilanPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <TrendingUp className="h-4 w-4" style={{ color: "#22C55E" }} />
-              Total Produits
+              <Scale className="h-4 w-4" style={{ color: NAVY }} />
+              Total Actif
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold" style={{ color: "#22C55E" }}>
-              {formatMUR(totalRevenue)}
+            <p className="text-2xl font-bold" style={{ color: NAVY }}>
+              {formatMUR(totalActif)}
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <TrendingDown className="h-4 w-4" style={{ color: "#EF4444" }} />
-              Total Charges
+              <BookOpen className="h-4 w-4" style={{ color: GOLD }} />
+              Total Passif
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold" style={{ color: "#EF4444" }}>
-              {formatMUR(totalExpenses)}
+            <p className="text-2xl font-bold" style={{ color: GOLD }}>
+              {formatMUR(totalPassif)}
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <DollarSign className="h-4 w-4" style={{ color: GOLD }} />
+              <DollarSign className="h-4 w-4" style={{ color: resultatNet >= 0 ? "#22C55E" : "#EF4444" }} />
               R&eacute;sultat Net
             </CardTitle>
           </CardHeader>
@@ -212,10 +251,120 @@ export default function BilanPage() {
         </Card>
       ) : (
         <>
-          {/* P&L Detail Table */}
+          {/* ============================================ */}
+          {/* BILAN (Balance Sheet) */}
+          {/* ============================================ */}
           <Card>
             <CardHeader>
-              <CardTitle style={{ color: NAVY }}>D&eacute;tail du Compte de R&eacute;sultat</CardTitle>
+              <CardTitle className="flex items-center gap-2" style={{ color: NAVY }}>
+                <Scale className="h-5 w-5" style={{ color: GOLD }} />
+                Bilan Comptable
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">Situation patrimoniale de l&apos;entreprise</p>
+            </CardHeader>
+            <CardContent className="overflow-x-auto">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* ACTIF */}
+                <div>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b-2" style={{ borderColor: NAVY }}>
+                        <th className="text-left py-2 font-bold text-base" style={{ color: NAVY }}>ACTIF</th>
+                        <th className="text-right py-2 font-bold" style={{ color: NAVY }}>Montant (MUR)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-b border-gray-100">
+                        <td className="py-2 pl-4">Immobilisations (classe 2)</td>
+                        <td className="py-2 text-right font-medium">{formatMUR(immobilisations)}</td>
+                      </tr>
+                      <tr className="border-b border-gray-100">
+                        <td className="py-2 pl-4">Stocks (classe 3)</td>
+                        <td className="py-2 text-right font-medium">{formatMUR(stocks)}</td>
+                      </tr>
+                      <tr className="border-b border-gray-100">
+                        <td className="py-2 pl-4">Cr&eacute;ances clients (classe 41)</td>
+                        <td className="py-2 text-right font-medium">{formatMUR(creancesClients)}</td>
+                      </tr>
+                      <tr className="border-b border-gray-100">
+                        <td className="py-2 pl-4">Autres cr&eacute;ances (classes 46, 47)</td>
+                        <td className="py-2 text-right font-medium">{formatMUR(autresCreances)}</td>
+                      </tr>
+                      <tr className="border-b border-gray-100">
+                        <td className="py-2 pl-4">Tr&eacute;sorerie (classe 5)</td>
+                        <td className="py-2 text-right font-medium">{formatMUR(tresorerie)}</td>
+                      </tr>
+                      <tr style={{ backgroundColor: NAVY }}>
+                        <td className="py-3 pl-4 font-bold text-white rounded-bl-lg">TOTAL ACTIF</td>
+                        <td className="py-3 text-right font-bold text-white rounded-br-lg">{formatMUR(totalActif)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* PASSIF */}
+                <div>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b-2" style={{ borderColor: GOLD }}>
+                        <th className="text-left py-2 font-bold text-base" style={{ color: NAVY }}>PASSIF</th>
+                        <th className="text-right py-2 font-bold" style={{ color: NAVY }}>Montant (MUR)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-b border-gray-100">
+                        <td className="py-2 pl-4">Capitaux propres (classe 1)</td>
+                        <td className="py-2 text-right font-medium">{formatMUR(capitauxPropres)}</td>
+                      </tr>
+                      <tr className="border-b border-gray-100">
+                        <td className="py-2 pl-4">Emprunts (classe 16)</td>
+                        <td className="py-2 text-right font-medium">{formatMUR(emprunts)}</td>
+                      </tr>
+                      <tr className="border-b border-gray-100">
+                        <td className="py-2 pl-4">Dettes fournisseurs (classe 40)</td>
+                        <td className="py-2 text-right font-medium">{formatMUR(dettesFournisseurs)}</td>
+                      </tr>
+                      <tr className="border-b border-gray-100">
+                        <td className="py-2 pl-4">Dettes fiscales (classe 44)</td>
+                        <td className="py-2 text-right font-medium">{formatMUR(dettesFiscales)}</td>
+                      </tr>
+                      <tr className="border-b border-gray-100">
+                        <td className="py-2 pl-4">Dettes sociales (classe 43)</td>
+                        <td className="py-2 text-right font-medium">{formatMUR(dettesSociales)}</td>
+                      </tr>
+                      <tr style={{ backgroundColor: GOLD }}>
+                        <td className="py-3 pl-4 font-bold text-white rounded-bl-lg">TOTAL PASSIF</td>
+                        <td className="py-3 text-right font-bold text-white rounded-br-lg">{formatMUR(totalPassif)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Balance check */}
+              {Math.abs(totalActif - totalPassif) > 0.01 && (
+                <div className="mt-4 p-3 rounded-lg bg-orange-50 border border-orange-200">
+                  <p className="text-sm text-orange-700 font-medium">
+                    Attention : &eacute;cart entre Actif et Passif de {formatMUR(Math.abs(totalActif - totalPassif))}
+                  </p>
+                  <p className="text-xs text-orange-600 mt-1">
+                    Le r&eacute;sultat de l&apos;exercice ({formatMUR(resultatNet)}) n&apos;est pas encore affect&eacute; aux capitaux propres.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* ============================================ */}
+          {/* COMPTE DE RESULTAT (P&L) */}
+          {/* ============================================ */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2" style={{ color: NAVY }}>
+                <TrendingUp className="h-5 w-5" style={{ color: GOLD }} />
+                Compte de R&eacute;sultat (P&amp;L)
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">Produits et charges de l&apos;exercice en cours</p>
             </CardHeader>
             <CardContent className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -289,18 +438,10 @@ export default function BilanPage() {
                   {/* Spacer */}
                   <tr><td className="py-2" colSpan={2}></td></tr>
 
-                  {/* RESULTAT */}
+                  {/* RESULTAT NET */}
                   <tr style={{ backgroundColor: NAVY }}>
                     <td className="py-3 pl-4 font-bold text-white rounded-bl-lg">
-                      R&eacute;sultat d&apos;exploitation
-                    </td>
-                    <td className="py-3 text-right font-bold text-white rounded-br-lg">
-                      {formatMUR(resultatExploitation)}
-                    </td>
-                  </tr>
-                  <tr style={{ backgroundColor: GOLD }}>
-                    <td className="py-3 pl-4 font-bold text-white rounded-bl-lg">
-                      R&eacute;sultat net
+                      R&Eacute;SULTAT NET (Produits - Charges)
                     </td>
                     <td className="py-3 text-right font-bold text-white rounded-br-lg">
                       {formatMUR(resultatNet)}

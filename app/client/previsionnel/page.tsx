@@ -88,8 +88,10 @@ export default function PrevisionnelPage() {
       const res = await fetch("/api/client/previsionnel")
       if (res.ok) {
         const data = await res.json()
-        // Support { previsions: [...] } or { forecasts: [...] } or direct array
-        const items = data.previsions || data.forecasts || data.periodes || []
+        // The API returns { previsionnel: { periodes: [...], ... } }
+        // Support multiple response shapes from the AI
+        const prev = data.previsionnel || data
+        const items = prev.periodes || prev.previsions || prev.forecasts || data.previsions || data.forecasts || data.periodes || []
         if (Array.isArray(items) && items.length > 0) {
           setForecasts(
             items.map((p: any) => ({
