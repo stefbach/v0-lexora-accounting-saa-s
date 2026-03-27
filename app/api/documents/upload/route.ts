@@ -80,24 +80,40 @@ export async function POST(request: NextRequest) {
     // === AI PROCESSING — no re-download needed, use base64 from above ===
     let typeDocument = 'autre'
     let detectedSociete = 'INCONNU'
+    let processError = ''
     try {
-      const isVisual = ['pdf', 'jpg', 'jpeg', 'png', 'webp'].includes(ext)
-      const mediaType = ext === 'pdf' ? 'application/pdf' : ext === 'png' ? 'image/png' : 'image/jpeg'
+      const isImage = ['jpg', 'jpeg', 'png', 'webp'].includes(ext)
+      const isPdf = ext === 'pdf'
 
-      const contentBlock = ext === 'pdf'
-        ? { type: 'document' as const, source: { type: 'base64' as const, media_type: 'application/pdf' as const, data: base64 } }
-        : { type: 'image' as const, source: { type: 'base64' as const, media_type: mediaType as 'image/jpeg' | 'image/png', data: base64 } }
+      // Build message content based on file type
+      let messageContent: any
+      if (isImage) {
+        const mediaType = ext === 'png' ? 'image/png' : 'image/jpeg'
+        messageContent = [
+          { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
+          { type: 'text', text: 'Analyse ce document comptable.' },
+        ]
+      } else if (isPdf) {
+        messageContent = [
+          { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
+          { type: 'text', text: 'Analyse ce document comptable.' },
+        ]
+      } else {
+        messageContent = 'Analyse ce document comptable:\n' + fileBuffer.toString('utf-8').substring(0, 5000)
+      }
 
       const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
+
+      // Use Sonnet for PDFs (document type support), Haiku for images
+      const model = isPdf ? 'claude-sonnet-4-5-20241022' : 'claude-haiku-4-5-20251001'
+
       const response = await anthropic.messages.create({
-        model: 'claude-haiku-4-5-20251001',
+        model,
         max_tokens: 2048,
         temperature: 0,
         system: `Tu es un expert-comptable. Analyse ce document et retourne UNIQUEMENT un JSON valide (pas de markdown, pas de backticks, pas de texte avant ou après):
 {"routing":{"societe":"<nom de la société ou personne ou INCONNU>","type_document":"<facture_fournisseur|facture_client|releve_bancaire|charges_sociales|fiche_paie|contrat|autre>","confiance_type":0},"extraction":{"emetteur":"","destinataire":"","date_document":"YYYY-MM-DD","numero_reference":"","devise":"","montant_ht":0,"montant_tva":0,"montant_ttc":0,"lignes":[{"description":"","montant":0}],"ecritures_comptables":[{"compte":"","libelle":"","debit":0,"credit":0}]}}`,
-        messages: [{ role: 'user', content: isVisual
-          ? [contentBlock, { type: 'text' as const, text: 'Analyse ce document comptable.' }]
-          : `Analyse ce document comptable:\n${fileBuffer.toString('utf-8').substring(0, 5000)}` }],
+        messages: [{ role: 'user', content: messageContent }],
       })
 
       const text = response.content.filter((b): b is Anthropic.TextBlock => b.type === 'text').map(b => b.text).join('')
@@ -127,12 +143,16 @@ export async function POST(request: NextRequest) {
           }))
         if (entries.length > 0) await supabase.from('ecritures_comptables').insert(entries)
       }
-    } catch (processError: any) {
-      const errMsg = processError?.message || String(processError)
-      console.error('[upload] Processing error:', errMsg)
-      await supabase.from('documents').update({
-        statut: 'erreur', n8n_result: { error: errMsg }
-      }).eq('id', doc.id)
+    } catch (err: any) {
+      processError = err?.message || String(err)
+      console.error('[upload] Processing error:', processError, err?.stack)
+      try {
+        await supabase.from('documents').update({
+          statut: 'erreur', n8n_result: { error: processError }
+        }).eq('id', doc.id)
+      } catch (dbErr) {
+        console.error('[upload] Failed to update error status:', dbErr)
+      }
     }
 
     // Return the final document state from DB
@@ -140,14 +160,16 @@ export async function POST(request: NextRequest) {
       .select('id, nom_fichier, type_fichier, type_document, statut, storage_path, created_at, societe_detectee')
       .eq('id', doc.id).single()
 
-    return NextResponse.json({
+    const result: any = {
       document: finalDoc || doc,
       message: finalDoc?.statut === 'traite'
         ? `Classé: ${finalDoc.type_document}`
         : finalDoc?.statut === 'erreur'
         ? `Erreur d'analyse`
         : `Envoyé`,
-    })
+    }
+    if (processError) result.processing_error = processError
+    return NextResponse.json(result)
   } catch (e: unknown) {
     console.error('Upload error:', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur inconnue' }, { status: 500 })
