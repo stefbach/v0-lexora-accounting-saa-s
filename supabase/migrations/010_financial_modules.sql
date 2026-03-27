@@ -7,7 +7,7 @@
 -- ============================================================
 -- 1. COMPTES BANCAIRES (enhanced)
 -- ============================================================
-DROP TABLE IF EXISTS public.comptes_bancaires;
+DROP TABLE IF EXISTS public.comptes_bancaires CASCADE;
 CREATE TABLE public.comptes_bancaires (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   societe_id UUID REFERENCES public.societes(id) ON DELETE CASCADE NOT NULL,
