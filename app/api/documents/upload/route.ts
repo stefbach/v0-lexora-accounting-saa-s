@@ -117,16 +117,18 @@ export async function POST(request: NextRequest) {
     const detectedSociete = parsed.routing?.societe || 'INCONNU'
     const extraction = parsed.extraction || {}
 
-    // Update document as processed
+    // Update document as processed (don't set societe_detectee — it has a CHECK constraint for now)
     const updateData: any = {
       type_document: typeDocument, statut: 'traite',
       n8n_result: { routing: parsed.routing, extraction, metadata: { model: 'claude-sonnet-4-6', processed_at: new Date().toISOString() } },
     }
-    if (detectedSociete !== 'INCONNU') updateData.societe_detectee = detectedSociete
-    const { error: updateError, count: updateCount } = await supabase
-      .from('documents').update(updateData).eq('id', doc.id)
-    const dbUpdateResult = updateError ? `ERROR: ${updateError.message}` : `OK (count: ${updateCount})`
-    console.log('[upload] DB UPDATE:', dbUpdateResult, 'docId:', doc.id)
+    // Only set societe_detectee if it matches the old CHECK constraint values, otherwise skip
+    const allowedSocietes = ['TIBOK', 'BPO', 'OBESITY_CARE', 'NHS_S2']
+    if (detectedSociete !== 'INCONNU' && allowedSocietes.includes(detectedSociete)) {
+      updateData.societe_detectee = detectedSociete
+    }
+    const { error: updateError } = await supabase.from('documents').update(updateData).eq('id', doc.id)
+    if (updateError) console.error('[upload] DB UPDATE FAILED:', updateError.message)
 
     // Auto-create accounting entries
     const ecritures = extraction.ecritures_comptables
@@ -148,16 +150,7 @@ export async function POST(request: NextRequest) {
       .select('id, nom_fichier, type_fichier, type_document, statut, storage_path, created_at, societe_detectee')
       .eq('id', doc.id).single()
 
-    return NextResponse.json({
-      document: finalDoc || doc,
-      message: `Classé: ${typeDocument}`,
-      _debug: {
-        docId: doc.id,
-        finalStatut: finalDoc?.statut,
-        finalType: finalDoc?.type_document,
-        dbUpdateResult,
-      },
-    })
+    return NextResponse.json({ document: finalDoc || doc, message: `Classé: ${typeDocument}` })
 
   } catch (e: any) {
     const errMsg = e?.message || String(e)
