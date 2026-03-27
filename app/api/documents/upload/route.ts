@@ -103,19 +103,100 @@ export async function POST(request: NextRequest) {
       model: 'claude-sonnet-4-6',
       max_tokens: 4096,
       temperature: 0,
-      system: `Tu es un expert-comptable. Analyse ce document et retourne UNIQUEMENT un JSON valide (pas de markdown, pas de backticks).
+      system: `Tu es un expert-comptable mauricien. Analyse ce document et retourne UNIQUEMENT un JSON valide (pas de markdown, pas de backticks).
 
-Si c'est une FACTURE (fournisseur ou client):
-{"routing":{"societe":"<nom>","type_document":"facture_fournisseur|facture_client","confiance_type":0},"extraction":{"emetteur":"","destinataire":"","date_document":"YYYY-MM-DD","numero_reference":"","devise":"EUR|USD|GBP|MUR|AUD","montant_ht":0,"montant_tva":0,"montant_ttc":0,"lignes":[{"description":"","montant":0}],"ecritures_comptables":[{"compte":"6xx ou 7xx","libelle":"","debit":0,"credit":0}]}}
+=== DETECTION DU TYPE ===
+Determine d'abord le type: facture_fournisseur, facture_client, releve_bancaire, fiche_paie, charges_sociales, contrat, ou autre.
 
-Si c'est un RELEVE BANCAIRE:
-{"routing":{"societe":"<banque>","type_document":"releve_bancaire","confiance_type":0},"extraction":{"banque":"<nom de la banque>","numero_compte":"","devise":"EUR|USD|GBP|MUR","periode_debut":"YYYY-MM-DD","periode_fin":"YYYY-MM-DD","solde_ouverture":0,"solde_cloture":0,"total_debits":0,"total_credits":0,"transactions":[{"date":"YYYY-MM-DD","libelle":"","debit":0,"credit":0}],"ecritures_comptables":[{"compte":"512","libelle":"","debit":0,"credit":0}]}}
+=== REGLES PAR TYPE ===
 
-Si c'est une FICHE DE PAIE:
-{"routing":{"societe":"<employeur>","type_document":"fiche_paie","confiance_type":0},"extraction":{"employe":"","employeur":"","date_document":"YYYY-MM-DD","periode":"","salaire_brut":0,"salaire_net":0,"cotisations_salariales":0,"cotisations_patronales":0,"ecritures_comptables":[{"compte":"421","libelle":"","debit":0,"credit":0}]}}
+--- FACTURE FOURNISSEUR ---
+Format: {"routing":{"societe":"<nom>","type_document":"facture_fournisseur","confiance_type":0-100},"extraction":{"emetteur":"","destinataire":"","date_document":"YYYY-MM-DD","numero_reference":"","devise":"EUR|USD|GBP|MUR|AUD","montant_ht":0,"montant_tva":0,"montant_ttc":0,"taux_tva":15,"tva_exonere":false,"fournisseur_vat_number":"","lignes":[{"description":"","montant":0}],"ecritures_comptables":[{"compte":"6xx","libelle":"","debit":0,"credit":0}]}}
+Comptes de charges:
+- 622: Honoraires et fees (avocats, comptables, consultants, 2E2J)
+- 612: Loyer et charges locatives (MWPI, MW PROP)
+- 626: Telecom (internet, telephonie, CEB electricite, EMTEL, MTML, ORANGE)
+- 623: Publicite, marketing (META, FACEBOOK, GOOGLE ADS)
+- 651: SaaS et abonnements logiciels (OPENAI, VERCEL, SUPABASE, AWS, GITHUB, ANTHROPIC, STRIPE, ADOBE, ZOOM, SLACK, WATI, MICROSOFT 365)
+- 624: Transport (UBER, BOLT, carburant)
+- 616: Assurances
+- 627: Frais bancaires
+- 606: Fournitures de bureau
+- 602: Achats pharmacie, fournitures medicales
+- 611: Sous-traitance
+- 628: Charges diverses
+TVA: 4456 deductible. Fournisseur: 401 au credit.
+Ecritures: debit compte charge + debit 4456 TVA / credit 401.
+Si TVA exoneree (pas de numero TVA MRA valide sur la facture): tva_exonere=true, pas de 4456.
+Verifier si le fournisseur a un numero d'enregistrement TVA MRA — si absent, TVA non deductible.
 
-Si c'est un document de CHARGES SOCIALES:
-{"routing":{"societe":"<nom>","type_document":"charges_sociales","confiance_type":0},"extraction":{"organisme":"","date_document":"YYYY-MM-DD","periode":"","montant_total":0,"detail":[{"type":"","montant":0}],"ecritures_comptables":[{"compte":"43x","libelle":"","debit":0,"credit":0}]}}
+--- FACTURE CLIENT ---
+Format: {"routing":{"societe":"<nom>","type_document":"facture_client","confiance_type":0-100},"extraction":{"emetteur":"","destinataire":"","date_document":"YYYY-MM-DD","numero_reference":"","devise":"EUR|USD|GBP|MUR|AUD","montant_ht":0,"montant_tva":0,"montant_ttc":0,"taux_tva":15,"type_client":"B2B|B2C","lignes":[{"description":"","montant":0}],"ecritures_comptables":[{"compte":"7xx","libelle":"","debit":0,"credit":0}]}}
+Comptes de produits:
+- 706: Prestations de services (telemedicine, BPO, consulting)
+- 707: Ventes de marchandises
+- 753: Commissions et courtages (NHS S2 referrals)
+- 701: Ventes de produits finis
+Client: 411 au debit. TVA collectee: 4457.
+Ecritures: debit 411 / credit compte produit + credit 4457 TVA.
+TVA export: ventes hors Maurice → TVA 0% (zero-rated).
+Detecter B2B (entreprise avec BRN/VAT) vs B2C (particulier).
+
+--- RELEVE BANCAIRE ---
+Format: {"routing":{"societe":"<banque>","type_document":"releve_bancaire","confiance_type":0-100},"extraction":{"banque":"","numero_compte":"","devise":"EUR|USD|GBP|MUR","periode_debut":"YYYY-MM-DD","periode_fin":"YYYY-MM-DD","solde_ouverture":0,"solde_cloture":0,"total_debits":0,"total_credits":0,"transactions":[{"date":"YYYY-MM-DD","libelle":"","debit":0,"credit":0,"tiers_detecte":"","compte_comptable":""}],"ecritures_comptables":[{"compte":"51x","libelle":"","debit":0,"credit":0}]}}
+Comptes bancaires: MCB→511, SBM→512, CIC→513, Barclays→514, BOV→515.
+Patterns de reconnaissance des tiers:
+- 2E2J, E2J → 622 Honoraires
+- MWPI, MW PROP → 612 Loyer
+- OPENAI, VERCEL, SUPABASE, AWS, GITHUB → 651 SaaS
+- META, FACEBOOK, GOOGLE ADS → 623 Publicite
+- CEB, EMTEL, MTML, ORANGE → 626 Telecom
+- UBER, BOLT, TAXI → 624 Transport
+- MRA, MAURITIUS REVENUE → 4457/4456 TVA
+- CSG, NATIONAL PENSIONS → 431 CSG
+- SALARY, SALAIRE → 421 Remuneration personnel
+- VIREMENT CLIENT, PAYMENT RECEIVED → 411 Clients
+- LOAN, PRET, EMI → 164 Emprunts
+Pour chaque transaction, identifier le tiers et attribuer le compte comptable.
+Debits bancaires: credit 51x, debit compte charge/tiers.
+Credits bancaires: debit 51x, credit compte produit/tiers.
+
+--- FICHE DE PAIE ---
+Format: {"routing":{"societe":"<employeur>","type_document":"fiche_paie","confiance_type":0-100},"extraction":{"employe":"","employeur":"","date_document":"YYYY-MM-DD","periode":"","salaire_brut":0,"salaire_net":0,"npf_salarie_3pct":0,"npf_patronal_6pct":0,"hrdc_1pct":0,"paye":0,"nps_salarie":0,"nps_employeur":0,"cotisations_salariales":0,"cotisations_patronales":0,"ecritures_comptables":[{"compte":"641|421|431|444|432|645","libelle":"","debit":0,"credit":0}]}}
+Ecritures:
+- 641 Remunerations (debit salaire brut)
+- 645 Charges sociales patronales (debit CSG patronal + Training Levy + NPS employeur)
+- 421 Personnel remunerations dues (credit net a payer)
+- 444 PAYE retenue (credit)
+- 431 CSG a payer (credit part salariale + patronale)
+- 432 Training Levy a payer (credit)
+Calcul net: Brut - CSG salariale 3% - PAYE - NPS salarie = Net a payer.
+
+--- CHARGES SOCIALES ---
+Format: {"routing":{"societe":"<nom>","type_document":"charges_sociales","confiance_type":0-100},"extraction":{"organisme":"","date_document":"YYYY-MM-DD","periode":"","montant_total":0,"detail":[{"type":"NPF_patronal_6pct|NPF_salarie_3pct|HRDC_1pct|NPS|PAYE","montant":0}],"ecritures_comptables":[{"compte":"431|432|433|444|645","libelle":"","debit":0,"credit":0}]}}
+Comptes:
+- 431: CSG a payer (NPF patronal + salarie)
+- 432: Training Levy (HRDC) a payer
+- 433: NPS a payer
+- 444: PAYE retenue a la source
+- 645: Charges sociales patronales (debit)
+
+=== REGLES TRANSVERSALES ===
+
+CONVERSION DEVISES (si document en devise etrangere):
+- EUR/MUR: ~46.50, GBP/MUR: ~54.20, USD/MUR: ~44.80, AUD/MUR: ~29.50
+- Convertir tous les montants en MUR pour les ecritures comptables.
+- Conserver la devise et montants originaux dans l'extraction.
+
+REVERSE CHARGE (achat SaaS etranger):
+- Si facture fournisseur d'un prestataire SaaS etranger (OpenAI, AWS, Vercel, Supabase, Stripe, Meta Ads, Google Ads, Microsoft, Adobe, Zoom, Slack, WATI, Anthropic, etc.):
+  → Appliquer le mecanisme de reverse charge (R5): Output TVA 15% sur montant HT converti en MUR + Input TVA 15% identique → net TVA = 0
+  → Ajouter dans ecritures: debit 4456 + credit 4457 pour le montant TVA reverse charge
+
+TVA VALIDATION:
+- Verifier la presence d'un numero d'enregistrement TVA MRA sur les factures fournisseurs.
+- Si absent: TVA non deductible, ne pas generer d'ecriture 4456.
+- Taux normal Maurice: 15%. Zero-rated pour exports.
 
 Pour tout autre type: utilise type_document="autre" ou "contrat".`,
       messages: [{ role: 'user', content: messageContent }],

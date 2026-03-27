@@ -19,6 +19,9 @@ import {
   Users,
   Receipt,
   Lock,
+  TrendingUp,
+  Shield,
+  FileText,
 } from "lucide-react"
 
 // ---------------------------------------------------------------------------
@@ -40,6 +43,7 @@ interface Conseil {
   montant?: number
   detail: string
   urgence: "haute" | "moyenne" | "basse"
+  domaine?: string
   icon: string
   action: string
 }
@@ -60,6 +64,12 @@ function ConseilIcon({ icon }: { icon: string }) {
       return <PiggyBank className="h-6 w-6" />
     case "lightbulb":
       return <Lightbulb className="h-6 w-6" />
+    case "trending":
+      return <TrendingUp className="h-6 w-6" />
+    case "shield":
+      return <Shield className="h-6 w-6" />
+    case "file":
+      return <FileText className="h-6 w-6" />
     default:
       return <Lightbulb className="h-6 w-6" />
   }
@@ -93,6 +103,19 @@ function UrgenceBadge({ urgence }: { urgence: Conseil["urgence"] }) {
 }
 
 // ---------------------------------------------------------------------------
+// Domain badge
+// ---------------------------------------------------------------------------
+
+function DomaineBadge({ domaine }: { domaine?: string }) {
+  if (!domaine) return null
+  return (
+    <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
+      {domaine}
+    </Badge>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Access denied for client_user
 // ---------------------------------------------------------------------------
 
@@ -122,6 +145,7 @@ function AccessDenied() {
 function ConseilsView() {
   const [conseils, setConseils] = useState<Conseil[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
 
   useEffect(() => {
     async function fetchConseils() {
@@ -129,12 +153,28 @@ function ConseilsView() {
         const res = await fetch("/api/client/conseils")
         if (res.ok) {
           const data = await res.json()
-          if (Array.isArray(data.conseils)) {
-            setConseils(data.conseils)
+          // Support both { conseils: [...] } and { recommendations: [...] }
+          const items = data.conseils || data.recommendations || []
+          if (Array.isArray(items)) {
+            setConseils(
+              items.map((c: any, idx: number) => ({
+                id: c.id || `conseil-${idx + 1}`,
+                titre: c.titre || c.title || "",
+                description: c.description || "",
+                montant: c.montant ?? c.amount ?? undefined,
+                detail: c.detail || c.details || c.description || "",
+                urgence: c.urgence || c.priority || "basse",
+                domaine: c.domaine || c.domain || undefined,
+                icon: c.icon || "lightbulb",
+                action: c.action || c.action_requise || "Consulter",
+              }))
+            )
           }
+        } else {
+          setError(true)
         }
       } catch {
-        // API not available -- leave empty
+        setError(true)
       } finally {
         setLoading(false)
       }
@@ -167,7 +207,9 @@ function ConseilsView() {
           <CardContent className="py-12 text-center space-y-4">
             <Lightbulb className="h-12 w-12 mx-auto" style={{ color: "#C9A84C" }} />
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              Les conseils financiers apparaitront ici une fois vos donnees analysees.
+              {error
+                ? "Impossible de charger les conseils pour le moment. Reessayez plus tard."
+                : "Les conseils financiers apparaitront ici une fois vos donnees analysees."}
             </p>
           </CardContent>
         </Card>
@@ -203,11 +245,12 @@ function ConseilsView() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    {conseil.montant && (
+                    {conseil.montant != null && conseil.montant > 0 && (
                       <span className="text-sm font-bold" style={{ color: "#1E2A4A" }}>
                         {fmtMUR(conseil.montant)}
                       </span>
                     )}
+                    <DomaineBadge domaine={conseil.domaine} />
                     <UrgenceBadge urgence={conseil.urgence} />
                   </div>
                 </div>
