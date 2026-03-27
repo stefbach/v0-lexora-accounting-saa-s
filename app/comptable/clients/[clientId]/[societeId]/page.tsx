@@ -989,63 +989,115 @@ export default function SocieteContextPage() {
         {/* P&L */}
         <TabsContent value="pnl" className="space-y-4">
           {fin.totalEcritures > 0 ? (() => {
-            const revEntries = Object.entries(fin.revenueByAccount || {}).sort(([a],[b]) => a.localeCompare(b))
-            const expEntries = Object.entries(fin.expensesByAccount || {}).sort(([a],[b]) => a.localeCompare(b))
-            const accountLabels: Record<string, string> = {
-              '701': 'Ventes de produits finis', '706': 'Prestations de services', '707': 'Ventes de marchandises',
-              '708': 'Produits annexes', '709': 'RRR accordes', '700': 'Autres produits',
-              '601': 'Achats matieres premieres', '602': 'Autres approvisionnements', '604': 'Achats etudes/prestations',
-              '606': 'Achats non stockes', '607': 'Achats de marchandises', '610': 'Services exterieurs',
-              '611': 'Sous-traitance', '612': 'Redevances', '613': 'Locations', '614': 'Charges locatives',
-              '615': 'Entretien/reparations', '616': 'Assurances', '617': 'Etudes/recherches',
-              '618': 'Divers', '621': 'Personnel exterieur', '622': 'Honoraires',
-              '623': 'Publicite', '624': 'Transports', '625': 'Deplacements', '626': 'Frais postaux/telecom',
-              '627': 'Services bancaires', '628': 'Divers services', '631': 'Impots/taxes',
-              '641': 'Remunerations du personnel', '645': 'Charges sociales', '651': 'Redevances',
-              '661': 'Charges interets', '671': 'Charges exceptionnelles', '681': 'Dotations amortissements',
-            }
+            const revenueDetails = Object.entries(fin.revenueByAccount || {})
+              .filter(([, v]) => v !== 0)
+              .sort(([a], [b]) => a.localeCompare(b))
+            const allExpenseGroups = groupExpenses(fin.expensesByAccount || {})
+            const operatingExpenseGroups = allExpenseGroups.filter(g => g.range !== "661-669")
+            const financialCharges = allExpenseGroups.find(g => g.range === "661-669")
+            const totalOperatingExpenses = operatingExpenseGroups.reduce((s, g) => s + g.amount, 0)
+            const totalRevenue = fin.totalRevenue || 0
+            const operatingIncome = totalRevenue - totalOperatingExpenses
+            const financialChargesAmount = financialCharges?.amount ?? 0
+            const incomeBeforeTax = operatingIncome - financialChargesAmount
+            const resultatNet = fin.resultat || 0
+
+            const formattedDate = new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })
+
             return (
-              <Card>
-                <CardHeader style={{ backgroundColor: `${NAVY}08` }}>
-                  <CardTitle style={{ color: NAVY }}>Compte de Resultat — {societeName}</CardTitle>
+              <Card className="overflow-hidden">
+                <CardHeader className="text-center py-5" style={{ backgroundColor: NAVY }}>
+                  <CardTitle className="text-lg font-bold text-white tracking-wide">
+                    {societeName.toUpperCase()}
+                  </CardTitle>
+                  <p className="text-base font-semibold mt-1" style={{ color: GOLD }}>COMPTE DE RESULTAT</p>
+                  <p className="text-xs text-gray-300 mt-1">Exercice au {formattedDate}</p>
                 </CardHeader>
                 <CardContent className="p-0">
                   <Table>
-                    <TableHeader><TableRow>
-                      <TableHead>Poste</TableHead><TableHead>Compte</TableHead><TableHead className="text-right">Montant (MUR)</TableHead>
-                    </TableRow></TableHeader>
+                    <TableHeader>
+                      <TableRow style={{ backgroundColor: "#F4F6FA" }}>
+                        <TableHead className="w-2/3" style={{ color: NAVY }}>&nbsp;</TableHead>
+                        <TableHead className="text-right" style={{ color: NAVY }}>Periode courante (MUR)</TableHead>
+                      </TableRow>
+                    </TableHeader>
                     <TableBody>
-                      <TableRow className="bg-green-50"><TableCell colSpan={3} className="font-bold text-green-800">PRODUITS (Classe 7)</TableCell></TableRow>
-                      {revEntries.map(([code, amount]) => (
-                        <TableRow key={code}>
-                          <TableCell>{accountLabels[code] || `Compte ${code}x`}</TableCell>
-                          <TableCell><Badge variant="outline" className="font-mono">{code}x</Badge></TableCell>
-                          <TableCell className="text-right text-green-700 font-medium">{fmt(amount)}</TableCell>
+                      {/* PRODUITS D'EXPLOITATION */}
+                      <TableRow style={{ backgroundColor: NAVY }}>
+                        <TableCell colSpan={2} className="text-sm font-bold text-white">PRODUITS D&apos;EXPLOITATION</TableCell>
+                      </TableRow>
+                      {revenueDetails.map(([prefix, amount]) => (
+                        <TableRow key={prefix}>
+                          <TableCell className="pl-8 text-sm text-muted-foreground">
+                            {REVENUE_LABELS[prefix] || `Compte ${prefix}x`}
+                          </TableCell>
+                          <TableCell className="text-right text-sm font-mono tabular-nums">{fmt2(amount)} MUR</TableCell>
                         </TableRow>
                       ))}
-                      {revEntries.length === 0 && <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground text-sm">Aucun produit enregistre</TableCell></TableRow>}
-                      <TableRow className="bg-green-100/50 font-bold">
-                        <TableCell colSpan={2}>Total Produits</TableCell>
-                        <TableCell className="text-right text-green-800">{fmt(fin.totalRevenue || 0)}</TableCell>
+                      {revenueDetails.length === 0 && (
+                        <TableRow><TableCell colSpan={2} className="text-center text-muted-foreground text-sm py-4">Aucun produit enregistre</TableCell></TableRow>
+                      )}
+                      <TableRow className="bg-gray-50" style={{ borderTop: `2px solid ${NAVY}` }}>
+                        <TableCell className="text-sm font-bold" style={{ color: NAVY }}>Total produits d&apos;exploitation</TableCell>
+                        <TableCell className="text-right text-sm font-bold font-mono tabular-nums" style={{ color: NAVY }}>{fmt2(totalRevenue)} MUR</TableCell>
                       </TableRow>
 
-                      <TableRow className="bg-red-50"><TableCell colSpan={3} className="font-bold text-red-800">CHARGES (Classe 6)</TableCell></TableRow>
-                      {expEntries.map(([code, amount]) => (
-                        <TableRow key={code}>
-                          <TableCell>{accountLabels[code] || `Compte ${code}x`}</TableCell>
-                          <TableCell><Badge variant="outline" className="font-mono">{code}x</Badge></TableCell>
-                          <TableCell className="text-right text-red-600 font-medium">{fmt(amount)}</TableCell>
+                      {/* CHARGES D'EXPLOITATION */}
+                      <TableRow style={{ backgroundColor: NAVY }}>
+                        <TableCell colSpan={2} className="text-sm font-bold text-white">CHARGES D&apos;EXPLOITATION</TableCell>
+                      </TableRow>
+                      {operatingExpenseGroups.map((group) => (
+                        <TableRow key={group.label}>
+                          <TableCell className="pl-8 text-sm text-muted-foreground">
+                            {group.label} ({group.range})
+                          </TableCell>
+                          <TableCell className="text-right text-sm font-mono tabular-nums" style={{ color: "#DC2626" }}>
+                            ({fmt2(group.amount)}) MUR
+                          </TableCell>
                         </TableRow>
                       ))}
-                      {expEntries.length === 0 && <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground text-sm">Aucune charge enregistree</TableCell></TableRow>}
-                      <TableRow className="bg-red-100/50 font-bold">
-                        <TableCell colSpan={2}>Total Charges</TableCell>
-                        <TableCell className="text-right text-red-800">{fmt(fin.totalExpenses || 0)}</TableCell>
+                      {operatingExpenseGroups.length === 0 && (
+                        <TableRow><TableCell colSpan={2} className="text-center text-muted-foreground text-sm py-4">Aucune charge enregistree</TableCell></TableRow>
+                      )}
+                      <TableRow className="bg-gray-50" style={{ borderTop: `2px solid ${NAVY}` }}>
+                        <TableCell className="text-sm font-bold" style={{ color: NAVY }}>Total charges d&apos;exploitation</TableCell>
+                        <TableCell className="text-right text-sm font-bold font-mono tabular-nums" style={{ color: "#DC2626" }}>
+                          ({fmt2(totalOperatingExpenses)}) MUR
+                        </TableCell>
                       </TableRow>
 
-                      <TableRow className="font-bold text-lg" style={{ backgroundColor: `${GOLD}15` }}>
-                        <TableCell colSpan={2} style={{ color: NAVY }}>RESULTAT NET</TableCell>
-                        <TableCell className="text-right" style={{ color: (fin.resultat || 0) >= 0 ? "#22C55E" : "#EF4444" }}>{fmt(fin.resultat || 0)}</TableCell>
+                      {/* RESULTAT D'EXPLOITATION */}
+                      <TableRow style={{ backgroundColor: GOLD }}>
+                        <TableCell className="text-sm font-bold text-white">RESULTAT D&apos;EXPLOITATION</TableCell>
+                        <TableCell className="text-right text-sm font-bold text-white font-mono tabular-nums">
+                          {fmtVal(operatingIncome)} MUR
+                        </TableCell>
+                      </TableRow>
+
+                      {/* CHARGES FINANCIERES */}
+                      <TableRow>
+                        <TableCell className="text-sm text-muted-foreground">
+                          Charges financieres (661-669)
+                        </TableCell>
+                        <TableCell className="text-right text-sm font-mono tabular-nums" style={financialChargesAmount > 0 ? { color: "#DC2626" } : {}}>
+                          {financialChargesAmount > 0 ? `(${fmt2(financialChargesAmount)})` : fmt2(0)} MUR
+                        </TableCell>
+                      </TableRow>
+
+                      {/* RESULTAT AVANT IMPOTS */}
+                      <TableRow className="bg-gray-50" style={{ borderTop: `2px solid ${NAVY}` }}>
+                        <TableCell className="text-sm font-semibold" style={{ color: NAVY }}>Resultat avant impots</TableCell>
+                        <TableCell className="text-right text-sm font-bold font-mono tabular-nums" style={fmtColor(incomeBeforeTax)}>
+                          {fmtVal(incomeBeforeTax)} MUR
+                        </TableCell>
+                      </TableRow>
+
+                      {/* RESULTAT NET */}
+                      <TableRow style={{ backgroundColor: NAVY }}>
+                        <TableCell className="py-4 text-sm font-bold text-white">RESULTAT NET</TableCell>
+                        <TableCell className="py-4 text-right text-sm font-bold font-mono tabular-nums" style={{ color: resultatNet >= 0 ? "#4ADE80" : "#FCA5A5" }}>
+                          {fmtVal(resultatNet)} MUR
+                        </TableCell>
                       </TableRow>
                     </TableBody>
                   </Table>
