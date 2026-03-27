@@ -383,6 +383,55 @@ IMPORTANT: Réponds UNIQUEMENT en JSON valide. Pas de markdown, pas de backticks
       )
     }
 
+    // ---- 7. Auto-create accounting entries from extracted data ----------------
+    const ecritures = processingResult?.ecritures_comptables
+    if (Array.isArray(ecritures) && ecritures.length > 0) {
+      // Get the dossier_id from the document
+      const { data: docRecord } = await supabase
+        .from('documents')
+        .select('dossier_id')
+        .eq('id', document_id)
+        .single()
+
+      if (docRecord?.dossier_id) {
+        const journalMap: Record<string, string> = {
+          facture_fournisseur: 'ACH',
+          facture_client: 'VTE',
+          releve_bancaire: 'BNQ',
+          charges_sociales: 'OD',
+          fiche_paie: 'OD',
+        }
+        const journal = journalMap[detectedType] || 'OD'
+        const dateEcriture = processingResult?.date_document || new Date().toISOString().split('T')[0]
+
+        const entries = ecritures
+          .filter((e: any) => e.compte && (e.debit > 0 || e.credit > 0))
+          .map((e: any) => ({
+            dossier_id: docRecord.dossier_id,
+            date_ecriture: dateEcriture,
+            journal,
+            numero_piece: processingResult?.numero_reference || null,
+            compte: String(e.compte),
+            libelle: e.libelle || `${detectedType} — ${nom_fichier}`,
+            debit: Number(e.debit) || 0,
+            credit: Number(e.credit) || 0,
+            piece_justificative: document_id,
+          }))
+
+        if (entries.length > 0) {
+          const { error: ecritureError } = await supabase
+            .from('ecritures_comptables')
+            .insert(entries)
+
+          if (ecritureError) {
+            console.error(`[documents/process] Erreur création écritures : ${ecritureError.message}`)
+          } else {
+            console.log(`[documents/process] ${entries.length} écriture(s) comptable(s) créée(s)`)
+          }
+        }
+      }
+    }
+
     const duration = Date.now() - startTime
     console.log(`[documents/process] Traitement terminé en ${duration}ms – document_id=${document_id}`)
 
