@@ -22,7 +22,9 @@ import {
   TrendingUp,
   Shield,
   FileText,
+  Building2,
 } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -147,12 +149,27 @@ function ConseilsView() {
   const [loading, setLoading] = useState(false)
   const [generated, setGenerated] = useState(false)
   const [error, setError] = useState(false)
+  const [selectedSociete, setSelectedSociete] = useState<string>("all")
+  const [societes, setSocietes] = useState<{ id: string; nom: string }[]>([])
+
+  // Fetch societes list
+  useEffect(() => {
+    fetch("/api/client/financial")
+      .then(res => res.json())
+      .then(json => {
+        if (json.financial?.availableSocietes) setSocietes(json.financial.availableSocietes)
+      })
+      .catch(() => {})
+  }, [])
 
   async function handleGenerate() {
     setLoading(true)
     setError(false)
     try {
-      const res = await fetch("/api/client/conseils")
+      const url = selectedSociete !== "all"
+        ? `/api/client/conseils?societe_id=${selectedSociete}`
+        : "/api/client/conseils"
+      const res = await fetch(url)
       if (res.ok) {
         const data = await res.json()
         // The API returns { conseils: { recommandations: [...], ... } }
@@ -188,13 +205,27 @@ function ConseilsView() {
   return (
     <div className="p-6 space-y-6 max-w-4xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
-            Conseils de votre comptable
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Des recommandations personnalisees pour votre entreprise ce mois-ci.
-          </p>
+        <div className="flex items-center gap-4">
+          <div>
+            <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
+              Conseils de votre comptable
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Des recommandations personnalisees pour votre entreprise ce mois-ci.
+            </p>
+          </div>
+          {societes.length > 1 && (
+            <div className="flex items-center gap-2">
+              <Building2 className="h-4 w-4 text-muted-foreground" />
+              <Select value={selectedSociete} onValueChange={setSelectedSociete}>
+                <SelectTrigger className="w-[220px] h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toutes les societes</SelectItem>
+                  {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
         <Button
           onClick={handleGenerate}

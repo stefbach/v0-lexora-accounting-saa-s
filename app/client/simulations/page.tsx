@@ -77,41 +77,57 @@ export default function SimulationsPage() {
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState("")
   const [societeId, setSocieteId] = useState<string | null>(null)
+  const [selectedSociete, setSelectedSociete] = useState<string>("all")
+  const [societes, setSocietes] = useState<{ id: string; nom: string }[]>([])
+  const [allSocieteIds, setAllSocieteIds] = useState<string[]>([])
 
   // Form state
   const [titre, setTitre] = useState("")
   const [typeSimulation, setTypeSimulation] = useState("")
   const [description, setDescription] = useState("")
 
-  // Fetch societe_id and existing simulations
+  // Fetch societes list and societe_ids
+  useEffect(() => {
+    async function fetchSocietes() {
+      try {
+        const res = await fetch("/api/client/financial")
+        const json = await res.json()
+        if (json.financial?.availableSocietes) {
+          setSocietes(json.financial.availableSocietes)
+          setAllSocieteIds(json.financial.availableSocietes.map((s: any) => s.id))
+          if (json.financial.availableSocietes.length > 0) {
+            setSocieteId(json.financial.availableSocietes[0].id)
+          }
+        }
+      } catch {}
+    }
+    fetchSocietes()
+  }, [])
+
+  // Fetch simulations when selected societe changes
   useEffect(() => {
     async function init() {
+      if (allSocieteIds.length === 0) return
+      setLoading(true)
       try {
         const supabase = createClient()
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return
+        const targetIds = selectedSociete !== "all" ? [selectedSociete] : allSocieteIds
 
-        // Get the client's societe via dossiers
-        const { data: dossiers } = await supabase
-          .from("dossiers")
-          .select("societe_id")
-          .eq("client_id", user.id)
-          .limit(1)
+        const { data: sims } = await supabase
+          .from("simulations")
+          .select("*")
+          .in("societe_id", targetIds)
+          .order("created_at", { ascending: false })
 
-        if (dossiers && dossiers.length > 0) {
-          const socId = dossiers[0].societe_id
-          setSocieteId(socId)
+        if (sims) {
+          setSimulations(sims)
+        }
 
-          // Fetch existing simulations
-          const { data: sims } = await supabase
-            .from("simulations")
-            .select("*")
-            .eq("societe_id", socId)
-            .order("created_at", { ascending: false })
-
-          if (sims) {
-            setSimulations(sims)
-          }
+        // Set societeId for creating new simulations
+        if (selectedSociete !== "all") {
+          setSocieteId(selectedSociete)
+        } else if (allSocieteIds.length > 0) {
+          setSocieteId(allSocieteIds[0])
         }
       } catch {
         // silently fail
@@ -121,7 +137,7 @@ export default function SimulationsPage() {
     }
 
     init()
-  }, [])
+  }, [selectedSociete, allSocieteIds])
 
   async function handleCreateSimulation() {
     if (!societeId || !titre.trim() || !typeSimulation) return
@@ -203,13 +219,27 @@ export default function SimulationsPage() {
     <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
-            Mes Simulations
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Testez l&apos;impact de vos decisions sur votre tresorerie
-          </p>
+        <div className="flex items-center gap-4">
+          <div>
+            <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
+              Mes Simulations
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Testez l&apos;impact de vos decisions sur votre tresorerie
+            </p>
+          </div>
+          {societes.length > 1 && (
+            <div className="flex items-center gap-2">
+              <Building2 className="h-4 w-4 text-muted-foreground" />
+              <Select value={selectedSociete} onValueChange={setSelectedSociete}>
+                <SelectTrigger className="w-[220px] h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toutes les societes</SelectItem>
+                  {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
 
         <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setSubmitError("") }}>
