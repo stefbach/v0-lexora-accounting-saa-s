@@ -32,15 +32,14 @@ function getAnthropicClient() {
 // System prompts (simplified – will be refactored into a dedicated file later)
 // ---------------------------------------------------------------------------
 
-const PROMPT_ROUTING = `Tu es un assistant comptable expert à Maurice. Analyse le document fourni et détecte :
-1. La **société** concernée parmi : TIBOK, BPO, OBESITY_CARE, NHS_S2.
-   Cherche le nom de la société dans l'en-tête, le pied de page, le destinataire ou l'émetteur du document.
-2. Le **type de document** parmi : facture_fournisseur, facture_client, releve_bancaire, charges_sociales, fiche_paie.
+const PROMPT_ROUTING = `Tu es un assistant comptable expert. Analyse le document fourni et détecte :
+1. La **société ou personne** émettrice ou destinataire du document. Cherche le nom dans l'en-tête, le pied de page, le destinataire ou l'émetteur.
+2. Le **type de document** parmi : facture_fournisseur, facture_client, releve_bancaire, charges_sociales, fiche_paie, contrat, autre.
 
-Réponds UNIQUEMENT en JSON valide, sans markdown, sans explication :
+IMPORTANT: Réponds UNIQUEMENT en JSON valide. Pas de markdown, pas de backticks, pas d'explication. Juste le JSON brut.
 {
-  "societe": "<TIBOK|BPO|OBESITY_CARE|NHS_S2|INCONNU>",
-  "type_document": "<facture_fournisseur|facture_client|releve_bancaire|charges_sociales|fiche_paie|autre>",
+  "societe": "<nom de la société détectée ou INCONNU>",
+  "type_document": "<facture_fournisseur|facture_client|releve_bancaire|charges_sociales|fiche_paie|contrat|autre>",
   "confiance_societe": <0-100>,
   "confiance_type": <0-100>,
   "indices": "<éléments du document ayant permis la détection>"
@@ -265,14 +264,19 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      routingResult = JSON.parse(routingText)
+      // Strip markdown backticks if Claude wraps the response
+      const cleanedText = routingText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
+      routingResult = JSON.parse(cleanedText)
     } catch {
       console.error(`[documents/process] Échec du parsing du routing : ${routingText}`)
-      await markError(supabase, document_id, 'Impossible de détecter le type de document')
-      return NextResponse.json(
-        { error: 'Échec de la détection du type de document', raw: routingText },
-        { status: 500 },
-      )
+      // Try to salvage: default to "autre" type so document is still saved
+      routingResult = {
+        societe: 'INCONNU',
+        type_document: 'autre',
+        confiance_societe: 0,
+        confiance_type: 0,
+        indices: `Parsing failed. Raw response: ${routingText.substring(0, 200)}`,
+      }
     }
 
     const detectedSociete = (societe || routingResult.societe) as Societe | 'INCONNU'
@@ -314,7 +318,8 @@ export async function POST(request: NextRequest) {
       console.log(`[documents/process] Résultat extraction : ${processingText.substring(0, 200)}...`)
 
       try {
-        processingResult = JSON.parse(processingText)
+        const cleanedExtraction = processingText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
+        processingResult = JSON.parse(cleanedExtraction)
       } catch {
         console.error(`[documents/process] Échec du parsing de l'extraction : ${processingText}`)
         // Continue – we still save the raw text as n8n_result

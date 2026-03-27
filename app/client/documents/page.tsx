@@ -341,7 +341,34 @@ export default function ClientDocumentsPage() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Button variant="ghost" size="sm"><Download className="h-3.5 w-3.5" /></Button>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="sm"><Download className="h-3.5 w-3.5" /></Button>
+                      {(doc.statut === "erreur" || doc.statut === "en_attente") && doc.storage_path && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs"
+                          style={{ color: GOLD }}
+                          onClick={async () => {
+                            try {
+                              await fetch("/api/documents/process", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  document_id: doc.id,
+                                  storage_path: doc.storage_path,
+                                  nom_fichier: doc.nom_fichier,
+                                  client_id: profile?.id,
+                                }),
+                              })
+                              setDocuments(prev => prev.map(d => d.id === doc.id ? { ...d, statut: "en_cours" } : d))
+                            } catch {}
+                          }}
+                        >
+                          Réessayer
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
