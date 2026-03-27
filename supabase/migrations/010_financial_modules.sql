@@ -274,19 +274,31 @@ ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.cron_logs ENABLE ROW LEVEL SECURITY;
 
 -- Simple RLS: comptables + admin can manage everything
+DROP POLICY IF EXISTS "manage_comptes_bancaires" ON public.comptes_bancaires;
 CREATE POLICY "manage_comptes_bancaires" ON public.comptes_bancaires FOR ALL USING (public.get_my_role() IN ('admin','comptable','comptable_dedie'));
+DROP POLICY IF EXISTS "manage_releves" ON public.releves_bancaires;
 CREATE POLICY "manage_releves" ON public.releves_bancaires FOR ALL USING (public.get_my_role() IN ('admin','comptable','comptable_dedie'));
+DROP POLICY IF EXISTS "manage_transactions" ON public.transactions_bancaires;
 CREATE POLICY "manage_transactions" ON public.transactions_bancaires FOR ALL USING (public.get_my_role() IN ('admin','comptable','comptable_dedie'));
+DROP POLICY IF EXISTS "manage_bilans" ON public.bilans_officiels;
 CREATE POLICY "manage_bilans" ON public.bilans_officiels FOR ALL USING (public.get_my_role() IN ('admin','comptable','comptable_dedie'));
+DROP POLICY IF EXISTS "manage_tdb" ON public.tableaux_de_bord;
 CREATE POLICY "manage_tdb" ON public.tableaux_de_bord FOR ALL USING (public.get_my_role() IN ('admin','comptable','comptable_dedie'));
+DROP POLICY IF EXISTS "manage_prev" ON public.previsionnels;
 CREATE POLICY "manage_prev" ON public.previsionnels FOR ALL USING (public.get_my_role() IN ('admin','comptable','comptable_dedie'));
+DROP POLICY IF EXISTS "manage_sims" ON public.simulations;
 CREATE POLICY "manage_sims" ON public.simulations FOR ALL USING (true);
+DROP POLICY IF EXISTS "manage_notifs" ON public.notifications;
 CREATE POLICY "manage_notifs" ON public.notifications FOR ALL USING (true);
+DROP POLICY IF EXISTS "manage_cron_logs" ON public.cron_logs;
 CREATE POLICY "manage_cron_logs" ON public.cron_logs FOR ALL USING (public.get_my_role() IN ('admin','comptable'));
 
 -- Clients can read published content
+DROP POLICY IF EXISTS "clients_read_bilans" ON public.bilans_officiels;
 CREATE POLICY "clients_read_bilans" ON public.bilans_officiels FOR SELECT USING (publie_client = true AND public.get_my_role() IN ('client_admin'));
+DROP POLICY IF EXISTS "clients_read_tdb" ON public.tableaux_de_bord;
 CREATE POLICY "clients_read_tdb" ON public.tableaux_de_bord FOR SELECT USING (publie_client = true AND public.get_my_role() IN ('client_admin'));
+DROP POLICY IF EXISTS "clients_read_prev" ON public.previsionnels;
 CREATE POLICY "clients_read_prev" ON public.previsionnels FOR SELECT USING (visible_client = true AND public.get_my_role() IN ('client_admin'));
 
 -- ============================================================
