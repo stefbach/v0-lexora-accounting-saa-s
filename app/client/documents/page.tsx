@@ -288,12 +288,12 @@ export default function ClientDocumentsPage() {
           <Select value={selectedUploadSociete} onValueChange={setSelectedUploadSociete}>
             <SelectTrigger className="w-[260px] h-9"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="auto">Détection automatique (IA)</SelectItem>
+              <SelectItem value="auto">Détection automatique</SelectItem>
               {societes.map(s => <SelectItem key={s.societe_id} value={s.societe_id}>{s.nom}</SelectItem>)}
             </SelectContent>
           </Select>
           {selectedUploadSociete === "auto" && (
-            <span className="text-xs text-muted-foreground">L&apos;IA détectera la société depuis le document</span>
+            <span className="text-xs text-muted-foreground">La société sera détectée depuis le document</span>
           )}
         </div>
       )}

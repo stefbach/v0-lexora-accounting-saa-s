@@ -211,27 +211,44 @@ Pour tout autre type: utilise type_document="autre" ou "contrat".`,
     const detectedSociete = parsed.routing?.societe || 'INCONNU'
     const extraction = parsed.extraction || {}
 
-    // Update document as processed (don't set societe_detectee — it has a CHECK constraint for now)
+    // Try to match detected société to client's known sociétés and re-route if needed
+    let finalDossierId = resolvedDossierId
+    if (detectedSociete && detectedSociete !== 'INCONNU') {
+      // Get all sociétés linked to this client
+      const { data: clientDossiers } = await supabase
+        .from('dossiers').select('id, societe_id, societe:societes(nom)')
+        .eq('client_id', user.id)
+      if (clientDossiers && clientDossiers.length > 1) {
+        const matched = clientDossiers.find((d: any) => {
+          const socName = (d.societe as any)?.nom?.toLowerCase() || ''
+          const detected = detectedSociete.toLowerCase()
+          return socName.includes(detected) || detected.includes(socName.replace(' — personnel', ''))
+        })
+        if (matched && matched.id !== resolvedDossierId) {
+          finalDossierId = matched.id
+          // Move document to the correct dossier
+          await supabase.from('documents').update({ dossier_id: matched.id }).eq('id', doc.id)
+        }
+      }
+    }
+
+    // Update document as processed
     const updateData: any = {
       type_document: typeDocument, statut: 'traite',
+      societe_detectee: detectedSociete !== 'INCONNU' ? detectedSociete : null,
       n8n_result: { routing: parsed.routing, extraction, metadata: { model: 'claude-sonnet-4-6', processed_at: new Date().toISOString() } },
-    }
-    // Only set societe_detectee if it matches the old CHECK constraint values, otherwise skip
-    const allowedSocietes = ['TIBOK', 'BPO', 'OBESITY_CARE', 'NHS_S2']
-    if (detectedSociete !== 'INCONNU' && allowedSocietes.includes(detectedSociete)) {
-      updateData.societe_detectee = detectedSociete
     }
     const { error: updateError } = await supabase.from('documents').update(updateData).eq('id', doc.id)
     if (updateError) console.error('[upload] DB UPDATE FAILED:', updateError.message)
 
-    // Auto-create accounting entries
+    // Auto-create accounting entries (use the matched dossier)
     const ecritures = extraction.ecritures_comptables
     if (Array.isArray(ecritures) && ecritures.length > 0) {
       const journalMap: Record<string, string> = { facture_fournisseur: 'ACH', facture_client: 'VTE', releve_bancaire: 'BNQ', fiche_paie: 'OD', charges_sociales: 'OD' }
       const entries = ecritures
         .filter((e: any) => e.compte && (e.debit > 0 || e.credit > 0))
         .map((e: any) => ({
-          dossier_id: resolvedDossierId, date_ecriture: extraction.date_document || new Date().toISOString().split('T')[0],
+          dossier_id: finalDossierId, date_ecriture: extraction.date_document || new Date().toISOString().split('T')[0],
           journal: journalMap[typeDocument] || 'OD', numero_piece: extraction.numero_reference || null,
           compte: String(e.compte), libelle: e.libelle || file.name,
           debit: Number(e.debit) || 0, credit: Number(e.credit) || 0, piece_justificative: doc.id,
