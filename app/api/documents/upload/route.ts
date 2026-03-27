@@ -1,7 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
-import { processDocument } from '@/lib/process-document'
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -10,12 +9,8 @@ function getAdminClient() {
   return createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
-// Allow up to 60 seconds for upload + AI processing
-export const maxDuration = 60
-
 export async function POST(request: NextRequest) {
   try {
-    // Get the authenticated user
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
     if (!user) {
@@ -31,73 +26,62 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Aucun fichier fourni' }, { status: 400 })
     }
 
-    // Validate file type
     const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
     if (!allowedTypes.includes(file.type)) {
       return NextResponse.json({ error: 'Type de fichier non supporté. Acceptés : PDF, JPEG, PNG, XLSX' }, { status: 400 })
     }
 
-    // Validate file size (10MB)
     if (file.size > 10 * 1024 * 1024) {
       return NextResponse.json({ error: 'Fichier trop volumineux (max 10 MB)' }, { status: 400 })
     }
 
     const supabase = getAdminClient()
 
-    // Resolve dossier_id: find existing or auto-create
+    // Resolve dossier_id
     let resolvedDossierId = dossierId
     if (!resolvedDossierId) {
       let dossierQuery = supabase.from('dossiers').select('id').eq('client_id', user.id)
       if (societeId) dossierQuery = dossierQuery.eq('societe_id', societeId)
-      const { data: existingDossiers } = await dossierQuery.limit(1).single()
+      const { data: existing } = await dossierQuery.limit(1).single()
 
-      if (existingDossiers) {
-        resolvedDossierId = existingDossiers.id
+      if (existing) {
+        resolvedDossierId = existing.id
       } else if (societeId) {
-        const { data: newDossier } = await supabase
-          .from('dossiers')
+        const { data: nd } = await supabase.from('dossiers')
           .insert({ client_id: user.id, societe_id: societeId, comptable_id: null })
           .select('id').single()
-        resolvedDossierId = newDossier?.id || null
+        resolvedDossierId = nd?.id || null
       } else {
-        const { data: anyDossier } = await supabase
-          .from('dossiers').select('id').eq('client_id', user.id).limit(1).single()
-
-        if (anyDossier) {
-          resolvedDossierId = anyDossier.id
+        const { data: any } = await supabase.from('dossiers')
+          .select('id').eq('client_id', user.id).limit(1).single()
+        if (any) {
+          resolvedDossierId = any.id
         } else {
           const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
-          const { data: newSoc } = await supabase
-            .from('societes')
+          const { data: newSoc } = await supabase.from('societes')
             .insert({ nom: `${profile?.full_name || user.email} — Personnel`, statut_tva: false })
             .select('id').single()
-
           if (newSoc) {
-            const { data: newDossier } = await supabase
-              .from('dossiers')
+            const { data: nd } = await supabase.from('dossiers')
               .insert({ client_id: user.id, societe_id: newSoc.id, comptable_id: null })
               .select('id').single()
-            resolvedDossierId = newDossier?.id || null
+            resolvedDossierId = nd?.id || null
           }
         }
       }
-
       if (!resolvedDossierId) {
-        return NextResponse.json({ error: 'Impossible de trouver ou créer un dossier pour ce document' }, { status: 400 })
+        return NextResponse.json({ error: 'Impossible de créer un dossier' }, { status: 400 })
       }
     }
 
-    // Determine file extension
+    // Upload to storage
     const ext = file.name.split('.').pop()?.toLowerCase() || 'pdf'
     const typeFichier = ext === 'jpg' ? 'jpeg' : ext as 'pdf' | 'jpeg' | 'png' | 'xlsx'
-
-    // Upload to Supabase Storage
     const storagePath = `${user.id}/${Date.now()}_${file.name}`
-    const fileBuffer = await file.arrayBuffer()
 
     const { error: storageError } = await supabase.storage
       .from('documents')
-      .upload(storagePath, fileBuffer, { contentType: file.type, upsert: false })
+      .upload(storagePath, await file.arrayBuffer(), { contentType: file.type, upsert: false })
 
     if (storageError) {
       return NextResponse.json({ error: `Erreur upload : ${storageError.message}` }, { status: 500 })
@@ -124,21 +108,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Erreur enregistrement : ${docError.message}` }, { status: 500 })
     }
 
-    // Process document directly (no HTTP call — runs in same function)
-    const result = await processDocument({
-      document_id: doc.id,
-      storage_path: storagePath,
-      nom_fichier: file.name,
-      client_id: user.id,
-      societe: societeId || undefined,
-    })
-
+    // Return immediately — processing will be triggered by the client
     return NextResponse.json({
-      document: { ...doc, statut: result.success ? 'traite' : 'erreur', type_document: result.type_document },
-      processing: result,
-      message: result.success
-        ? `Document uploadé et classé comme ${result.type_document}.`
-        : `Document uploadé. Erreur d'analyse : ${result.error}`,
+      document: doc,
+      message: 'Document uploadé avec succès.',
     })
   } catch (e: unknown) {
     console.error('Upload error:', e)

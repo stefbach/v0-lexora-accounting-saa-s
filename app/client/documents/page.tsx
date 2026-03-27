@@ -163,27 +163,34 @@ export default function ClientDocumentsPage() {
       formData.append("societe_id", uploadSocieteId)
 
       try {
+        // Step 1: Upload (fast — just saves file)
         const res = await fetch("/api/documents/upload", { method: "POST", body: formData })
         const data = await res.json()
-        if (res.ok) {
-          const docStatut = data.document?.statut || (data.processing?.success ? "traite" : "en_attente")
-          const docType = data.processing?.type_document || data.document?.type_document || null
+        if (res.ok && data.document) {
+          const doc = data.document
           setDocuments(prev => [{
-            id: data.document?.id || crypto.randomUUID(),
+            id: doc.id,
             nom_fichier: file.name,
             type_fichier: file.type.split("/").pop() || "pdf",
-            type_document: docType,
-            statut: docStatut,
-            storage_path: data.document?.storage_path || null,
+            type_document: null,
+            statut: "en_attente",
+            storage_path: doc.storage_path || null,
             created_at: new Date().toISOString(),
-            societe_detectee: data.processing?.societe_detectee || null,
+            societe_detectee: null,
           }, ...prev])
-          if (docStatut === "traite") {
-            const folderLabel = FOLDERS.find(f => f.key === docType)?.label || "Autres Documents"
-            setUploadSuccess(`${file.name} analysé et classé dans "${folderLabel}" !`)
-          } else {
-            setUploadSuccess(`${file.name} envoyé ! ${data.processing_error ? 'Analyse échouée.' : 'Analyse en cours...'}`)
-          }
+          setUploadSuccess(`${file.name} envoyé ! L'analyse va classer automatiquement le document.`)
+
+          // Step 2: Trigger processing separately (don't await — let it run)
+          fetch("/api/documents/process", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              document_id: doc.id,
+              storage_path: doc.storage_path,
+              nom_fichier: file.name,
+              client_id: profile?.id,
+            }),
+          }).then(() => fetchDocuments()).catch(() => fetchDocuments())
         } else {
           setUploadError(data.error || "Erreur lors de l'envoi")
         }

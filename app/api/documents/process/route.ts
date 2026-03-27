@@ -261,29 +261,47 @@ export async function POST(request: NextRequest) {
     // ---- 5. Single AI call — classify + extract in one shot (fast!) ----------
     const FAST_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6'
 
-    const COMBINED_PROMPT = `Tu es un assistant comptable expert. Analyse ce document et retourne UN SEUL JSON avec:
-1. "routing": classification du document
-2. "extraction": données extraites
+    const COMBINED_PROMPT = `Tu es un expert-comptable mauricien. Analyse ce document comptable et retourne UN SEUL objet JSON.
 
-IMPORTANT: Réponds UNIQUEMENT en JSON valide. Pas de markdown, pas de backticks.
+CLASSIFICATION — Détermine:
+- type_document: facture_fournisseur, facture_client, releve_bancaire, charges_sociales, fiche_paie, contrat, ou autre
+- La société/personne émettrice et destinataire
+
+EXTRACTION — Extrais TOUTES les données pour la comptabilité:
+- Montants (HT, TVA, TTC), dates, numéros de référence
+- Lignes de détail avec descriptions, quantités, prix unitaires
+- Écritures comptables suggérées (plan comptable OHADA/Maurice)
+- Pour les relevés bancaires: transactions avec dates, descriptions, débits, crédits
+- Pour les charges sociales: NPF, HRDC, NPS, PAYE avec bases et taux
+- Pour les fiches de paie: salaire brut, déductions, net, charges patronales
+
+COMPTABILITE — Suggère les écritures comptables:
+- Comptes du plan comptable (401 Fournisseurs, 411 Clients, 512 Banque, 6xx Charges, 7xx Produits)
+- TVA: 4456 TVA déductible, 4457 TVA collectée
+- Charges sociales: 431 CSG, 437 Autres organismes sociaux
+
+IMPORTANT: Réponds UNIQUEMENT en JSON valide. Pas de markdown, pas de backticks, pas de texte autour.
 {
   "routing": {
-    "societe": "<nom de la société/personne détectée ou INCONNU>",
+    "societe": "<nom société/personne détectée ou INCONNU>",
     "type_document": "<facture_fournisseur|facture_client|releve_bancaire|charges_sociales|fiche_paie|contrat|autre>",
     "confiance_type": <0-100>,
-    "indices": "<éléments clés détectés>"
+    "indices": "<éléments clés>"
   },
   "extraction": {
-    "emetteur": "<nom de l'émetteur>",
-    "destinataire": "<nom du destinataire>",
-    "date": "<date du document>",
-    "numero": "<numéro de facture/document>",
+    "emetteur": {"nom": "", "adresse": "", "brn": "", "tva": ""},
+    "destinataire": {"nom": "", "adresse": ""},
+    "date_document": "",
+    "date_echeance": "",
+    "numero_reference": "",
     "devise": "<EUR|MUR|GBP|USD>",
-    "montant_total": <montant total>,
-    "montant_ht": <montant HT si applicable>,
-    "montant_tva": <montant TVA si applicable>,
-    "lignes": [{"description": "", "quantite": 0, "montant": 0}],
-    "ecritures_suggerees": [{"compte": "", "libelle": "", "debit": 0, "credit": 0}]
+    "montant_ht": 0,
+    "montant_tva": 0,
+    "taux_tva": 0,
+    "montant_ttc": 0,
+    "lignes": [{"description": "", "quantite": 1, "prix_unitaire": 0, "montant": 0}],
+    "ecritures_comptables": [{"compte": "", "libelle": "", "debit": 0, "credit": 0}],
+    "notes": ""
   }
 }`
 
