@@ -166,17 +166,24 @@ export default function ClientDocumentsPage() {
         const res = await fetch("/api/documents/upload", { method: "POST", body: formData })
         const data = await res.json()
         if (res.ok) {
+          const docStatut = data.document?.statut || (data.processing?.success ? "traite" : "en_attente")
+          const docType = data.processing?.type_document || data.document?.type_document || null
           setDocuments(prev => [{
             id: data.document?.id || crypto.randomUUID(),
             nom_fichier: file.name,
             type_fichier: file.type.split("/").pop() || "pdf",
-            type_document: null,
-            statut: "en_attente",
-            storage_path: null,
+            type_document: docType,
+            statut: docStatut,
+            storage_path: data.document?.storage_path || null,
             created_at: new Date().toISOString(),
-            societe_detectee: null,
+            societe_detectee: data.processing?.societe_detectee || null,
           }, ...prev])
-          setUploadSuccess(`${file.name} envoyé ! L'analyse va classer automatiquement le document dans le bon dossier.`)
+          if (docStatut === "traite") {
+            const folderLabel = FOLDERS.find(f => f.key === docType)?.label || "Autres Documents"
+            setUploadSuccess(`${file.name} analysé et classé dans "${folderLabel}" !`)
+          } else {
+            setUploadSuccess(`${file.name} envoyé ! ${data.processing_error ? 'Analyse échouée.' : 'Analyse en cours...'}`)
+          }
         } else {
           setUploadError(data.error || "Erreur lors de l'envoi")
         }
@@ -224,7 +231,8 @@ export default function ClientDocumentsPage() {
         {uploading ? (
           <div className="flex flex-col items-center gap-2">
             <Loader2 className="h-8 w-8 animate-spin" style={{ color: GOLD }} />
-            <p className="text-sm text-muted-foreground">Envoi en cours...</p>
+            <p className="text-sm text-muted-foreground">Envoi et analyse en cours...</p>
+            <p className="text-xs text-muted-foreground">L&apos;IA analyse et classe votre document (peut prendre jusqu&apos;à 30 secondes)</p>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-2">

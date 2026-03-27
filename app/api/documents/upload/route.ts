@@ -9,6 +9,9 @@ function getAdminClient() {
   return createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
+// Allow up to 60 seconds for upload + AI processing
+export const maxDuration = 60
+
 export async function POST(request: NextRequest) {
   try {
     // Get the authenticated user
@@ -135,32 +138,35 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Erreur enregistrement : ${docError.message}` }, { status: 500 })
     }
 
-    // Trigger document processing
-    // Use waitUntil if available (Vercel Edge), otherwise fire-and-forget
-    const processUrl = `${request.nextUrl.origin}/api/documents/process`
-    const processBody = JSON.stringify({
-      document_id: doc.id,
-      storage_path: storagePath,
-      nom_fichier: file.name,
-      client_id: user.id,
-      societe: societeId || undefined,
-    })
-
-    // Try to process in background, but don't block the upload response
+    // Process document inline (Vercel kills background fetches)
     try {
-      fetch(processUrl, {
+      const processUrl = `${request.nextUrl.origin}/api/documents/process`
+      const processRes = await fetch(processUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: processBody,
-      }).catch(err => console.error('Process trigger failed:', err))
-    } catch (err) {
-      console.error('Process trigger error:', err)
-    }
+        body: JSON.stringify({
+          document_id: doc.id,
+          storage_path: storagePath,
+          nom_fichier: file.name,
+          client_id: user.id,
+          societe: societeId || undefined,
+        }),
+      })
+      const processData = await processRes.json()
 
-    return NextResponse.json({
-      document: doc,
-      message: 'Document uploadé avec succès. Traitement en cours.',
-    })
+      return NextResponse.json({
+        document: { ...doc, statut: processRes.ok ? 'traite' : 'erreur' },
+        processing: processData,
+        message: processRes.ok ? 'Document uploadé et analysé avec succès.' : 'Document uploadé. Erreur lors de l\'analyse.',
+      })
+    } catch (processErr) {
+      console.error('Process error:', processErr)
+      return NextResponse.json({
+        document: doc,
+        message: 'Document uploadé. L\'analyse a échoué.',
+        processing_error: processErr instanceof Error ? processErr.message : 'Erreur inconnue',
+      })
+    }
   } catch (e: unknown) {
     console.error('Upload error:', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur inconnue' }, { status: 500 })
