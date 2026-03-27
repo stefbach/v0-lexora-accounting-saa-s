@@ -123,7 +123,10 @@ export async function POST(request: NextRequest) {
       n8n_result: { routing: parsed.routing, extraction, metadata: { model: 'claude-sonnet-4-6', processed_at: new Date().toISOString() } },
     }
     if (detectedSociete !== 'INCONNU') updateData.societe_detectee = detectedSociete
-    await supabase.from('documents').update(updateData).eq('id', doc.id)
+    const { error: updateError, count: updateCount } = await supabase
+      .from('documents').update(updateData).eq('id', doc.id)
+    const dbUpdateResult = updateError ? `ERROR: ${updateError.message}` : `OK (count: ${updateCount})`
+    console.log('[upload] DB UPDATE:', dbUpdateResult, 'docId:', doc.id)
 
     // Auto-create accounting entries
     const ecritures = extraction.ecritures_comptables
@@ -145,7 +148,16 @@ export async function POST(request: NextRequest) {
       .select('id, nom_fichier, type_fichier, type_document, statut, storage_path, created_at, societe_detectee')
       .eq('id', doc.id).single()
 
-    return NextResponse.json({ document: finalDoc || doc, message: `Classé: ${typeDocument}` })
+    return NextResponse.json({
+      document: finalDoc || doc,
+      message: `Classé: ${typeDocument}`,
+      _debug: {
+        docId: doc.id,
+        finalStatut: finalDoc?.statut,
+        finalType: finalDoc?.type_document,
+        dbUpdateResult,
+      },
+    })
 
   } catch (e: any) {
     const errMsg = e?.message || String(e)
