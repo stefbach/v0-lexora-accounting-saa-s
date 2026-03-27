@@ -101,10 +101,23 @@ export async function POST(request: NextRequest) {
 
     const aiResponse = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 2048,
+      max_tokens: 4096,
       temperature: 0,
-      system: `Tu es un expert-comptable. Analyse ce document et retourne UNIQUEMENT un JSON valide (pas de markdown, pas de backticks):
-{"routing":{"societe":"<nom ou INCONNU>","type_document":"<facture_fournisseur|facture_client|releve_bancaire|charges_sociales|fiche_paie|contrat|autre>","confiance_type":0},"extraction":{"emetteur":"","destinataire":"","date_document":"YYYY-MM-DD","numero_reference":"","devise":"","montant_ht":0,"montant_tva":0,"montant_ttc":0,"lignes":[{"description":"","montant":0}],"ecritures_comptables":[{"compte":"","libelle":"","debit":0,"credit":0}]}}`,
+      system: `Tu es un expert-comptable. Analyse ce document et retourne UNIQUEMENT un JSON valide (pas de markdown, pas de backticks).
+
+Si c'est une FACTURE (fournisseur ou client):
+{"routing":{"societe":"<nom>","type_document":"facture_fournisseur|facture_client","confiance_type":0},"extraction":{"emetteur":"","destinataire":"","date_document":"YYYY-MM-DD","numero_reference":"","devise":"EUR|USD|GBP|MUR|AUD","montant_ht":0,"montant_tva":0,"montant_ttc":0,"lignes":[{"description":"","montant":0}],"ecritures_comptables":[{"compte":"6xx ou 7xx","libelle":"","debit":0,"credit":0}]}}
+
+Si c'est un RELEVE BANCAIRE:
+{"routing":{"societe":"<banque>","type_document":"releve_bancaire","confiance_type":0},"extraction":{"banque":"<nom de la banque>","numero_compte":"","devise":"EUR|USD|GBP|MUR","periode_debut":"YYYY-MM-DD","periode_fin":"YYYY-MM-DD","solde_ouverture":0,"solde_cloture":0,"total_debits":0,"total_credits":0,"transactions":[{"date":"YYYY-MM-DD","libelle":"","debit":0,"credit":0}],"ecritures_comptables":[{"compte":"512","libelle":"","debit":0,"credit":0}]}}
+
+Si c'est une FICHE DE PAIE:
+{"routing":{"societe":"<employeur>","type_document":"fiche_paie","confiance_type":0},"extraction":{"employe":"","employeur":"","date_document":"YYYY-MM-DD","periode":"","salaire_brut":0,"salaire_net":0,"cotisations_salariales":0,"cotisations_patronales":0,"ecritures_comptables":[{"compte":"421","libelle":"","debit":0,"credit":0}]}}
+
+Si c'est un document de CHARGES SOCIALES:
+{"routing":{"societe":"<nom>","type_document":"charges_sociales","confiance_type":0},"extraction":{"organisme":"","date_document":"YYYY-MM-DD","periode":"","montant_total":0,"detail":[{"type":"","montant":0}],"ecritures_comptables":[{"compte":"43x","libelle":"","debit":0,"credit":0}]}}
+
+Pour tout autre type: utilise type_document="autre" ou "contrat".`,
       messages: [{ role: 'user', content: messageContent }],
     })
 
@@ -143,6 +156,66 @@ export async function POST(request: NextRequest) {
           debit: Number(e.debit) || 0, credit: Number(e.credit) || 0, piece_justificative: doc.id,
         }))
       if (entries.length > 0) await supabase.from('ecritures_comptables').insert(entries)
+    }
+
+    // Handle bank statement: create/update bank account + store statement
+    if (typeDocument === 'releve_bancaire' && extraction.banque) {
+      const bankDevise = extraction.devise || 'MUR'
+      const bankName = extraction.banque
+      const solde = Number(extraction.solde_cloture) || 0
+
+      // Find or create bank account
+      // Get the societe_id from the dossier
+      const { data: dossierData } = await supabase.from('dossiers').select('societe_id').eq('id', resolvedDossierId).single()
+      const bankSocieteId = dossierData?.societe_id
+
+      if (bankSocieteId) {
+        // Check if bank account exists
+        const { data: existingBank } = await supabase.from('comptes_bancaires')
+          .select('id').eq('societe_id', bankSocieteId).eq('banque', bankName).limit(1).single()
+
+        if (existingBank) {
+          // Update balance
+          await supabase.from('comptes_bancaires').update({
+            solde_actuel: solde,
+            date_dernier_releve: extraction.periode_fin || new Date().toISOString().split('T')[0],
+          }).eq('id', existingBank.id)
+        } else {
+          // Create new bank account
+          await supabase.from('comptes_bancaires').insert({
+            societe_id: bankSocieteId,
+            banque: bankName,
+            nom_compte: extraction.numero_compte || bankName,
+            numero_compte: extraction.numero_compte || null,
+            devise: bankDevise,
+            solde_actuel: solde,
+            solde_dernier_releve: solde,
+            date_dernier_releve: extraction.periode_fin || new Date().toISOString().split('T')[0],
+            actif: true,
+          })
+        }
+
+        // Store bank statement record
+        const { data: bankAccount } = await supabase.from('comptes_bancaires')
+          .select('id').eq('societe_id', bankSocieteId).eq('banque', bankName).limit(1).single()
+
+        if (bankAccount) {
+          await supabase.from('releves_bancaires').insert({
+            compte_bancaire_id: bankAccount.id,
+            societe_id: bankSocieteId,
+            periode: extraction.periode_fin?.substring(0, 7) || new Date().toISOString().substring(0, 7),
+            date_debut: extraction.periode_debut || extraction.periode_fin || new Date().toISOString().split('T')[0],
+            date_fin: extraction.periode_fin || new Date().toISOString().split('T')[0],
+            solde_ouverture: Number(extraction.solde_ouverture) || 0,
+            solde_cloture: solde,
+            total_debits: Number(extraction.total_debits) || 0,
+            total_credits: Number(extraction.total_credits) || 0,
+            document_id: doc.id,
+            transactions_json: extraction.transactions || [],
+            statut_rapprochement: 'en_attente',
+          }).catch(e => console.error('[upload] releves_bancaires insert error:', e))
+        }
+      }
     }
 
     // Return final state
