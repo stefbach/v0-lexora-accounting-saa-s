@@ -60,6 +60,18 @@ export default function ComptableClientsPage() {
   const [formPhone, setFormPhone] = useState("")
   const [formPassword, setFormPassword] = useState("")
   const [formRole, setFormRole] = useState("client_admin")
+  const [formClientType, setFormClientType] = useState<"individuel" | "societe">("individuel")
+  // Individual fields
+  const [formBrn, setFormBrn] = useState("")
+  const [formTva, setFormTva] = useState("")
+  const [formStatutTva, setFormStatutTva] = useState("false")
+  const [formAdresse, setFormAdresse] = useState("")
+  // Society fields
+  const [formSocNom, setFormSocNom] = useState("")
+  const [formSocBrn, setFormSocBrn] = useState("")
+  const [formSocTva, setFormSocTva] = useState("")
+  const [formSocStatutTva, setFormSocStatutTva] = useState("false")
+  const [formSocAdresse, setFormSocAdresse] = useState("")
 
   const fetchData = useCallback(async () => {
     try {
@@ -97,13 +109,14 @@ export default function ComptableClientsPage() {
     getClientSocietes(clientId).length
 
   const resetForm = () => {
-    setFormName(""); setFormEmail(""); setFormPhone(""); setFormPassword(""); setFormRole("client_admin"); setError(null)
+    setFormName(""); setFormEmail(""); setFormPhone(""); setFormPassword(""); setFormRole("client_admin"); setFormClientType("individuel"); setFormBrn(""); setFormTva(""); setFormStatutTva("false"); setFormAdresse(""); setFormSocNom(""); setFormSocBrn(""); setFormSocTva(""); setFormSocStatutTva("false"); setFormSocAdresse(""); setError(null)
   }
 
   const handleCreate = async () => {
     setError(null)
     if (!formName || !formEmail || !formPassword) { setError("Veuillez remplir tous les champs obligatoires."); return }
     if (formPassword.length < 6) { setError("Le mot de passe doit contenir au moins 6 caractères."); return }
+    if (formClientType === "societe" && !formSocNom) { setError("Le nom de la société est requis."); return }
     setCreating(true)
     try {
       const res = await fetch("/api/admin/users", {
@@ -112,7 +125,51 @@ export default function ComptableClientsPage() {
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || "Erreur"); return }
-      setSuccess(`Client ${formName} créé avec succès !`)
+
+      const newUserId = data.user?.id
+      if (newUserId) {
+        if (formClientType === "societe") {
+          // Create the société with its details
+          const socRes = await fetch("/api/admin/societes", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              nom: formSocNom,
+              brn: formSocBrn || null,
+              numero_tva_mra: formSocTva || null,
+              statut_tva: formSocStatutTva === "true",
+              adresse: formSocAdresse || null,
+            }),
+          })
+          const socData = await socRes.json()
+          if (socRes.ok && socData.societe?.id) {
+            await fetch("/api/admin/dossiers", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ client_id: newUserId, societe_id: socData.societe.id, comptable_id: profile?.id || null }),
+            })
+          }
+          setSuccess(`Client ${formName} créé avec la société ${formSocNom} !`)
+        } else {
+          // Individual: create personal société
+          const socRes = await fetch("/api/admin/societes", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              nom: `${formName} — Personnel`,
+              brn: formBrn || null,
+              numero_tva_mra: formTva || null,
+              statut_tva: formStatutTva === "true",
+              adresse: formAdresse || null,
+            }),
+          })
+          const socData = await socRes.json()
+          if (socRes.ok && socData.societe?.id) {
+            await fetch("/api/admin/dossiers", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ client_id: newUserId, societe_id: socData.societe.id, comptable_id: profile?.id || null }),
+            })
+          }
+          setSuccess(`Client individuel ${formName} créé !`)
+        }
+      }
       resetForm(); setDialogOpen(false); fetchData()
     } catch { setError("Erreur de connexion") } finally { setCreating(false) }
   }
@@ -133,18 +190,80 @@ export default function ComptableClientsPage() {
             <DialogTrigger asChild>
               <Button style={{ backgroundColor: "#1E2A4A" }}><Plus className="mr-2 h-4 w-4" />Ajouter un client</Button>
             </DialogTrigger>
-            <DialogContent>
-              <DialogHeader><DialogTitle>Nouveau client</DialogTitle><DialogDescription>Créez un compte client.</DialogDescription></DialogHeader>
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+              <DialogHeader><DialogTitle>Nouveau client</DialogTitle><DialogDescription>Créez un compte client et son dossier.</DialogDescription></DialogHeader>
               <div className="space-y-4 py-4">
+                {/* Client type selector */}
+                <div className="space-y-2">
+                  <Label>Type de client *</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      className={`rounded-lg border-2 p-3 text-left transition-colors ${formClientType === "individuel" ? "border-amber-400 bg-amber-50" : "border-border hover:bg-muted/50"}`}
+                      onClick={() => setFormClientType("individuel")}
+                    >
+                      <p className="text-sm font-medium">Individuel / Freelance</p>
+                      <p className="text-xs text-muted-foreground">Sans société, travailleur indépendant</p>
+                    </button>
+                    <button
+                      type="button"
+                      className={`rounded-lg border-2 p-3 text-left transition-colors ${formClientType === "societe" ? "border-amber-400 bg-amber-50" : "border-border hover:bg-muted/50"}`}
+                      onClick={() => setFormClientType("societe")}
+                    >
+                      <p className="text-sm font-medium">Avec société</p>
+                      <p className="text-xs text-muted-foreground">Entreprise enregistrée (Ltd, SARL...)</p>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Common client fields */}
                 <div className="space-y-2"><Label>Nom complet *</Label><Input placeholder="Ex: Jean-Marc Dupont" value={formName} onChange={(e) => setFormName(e.target.value)} /></div>
-                <div className="space-y-2"><Label>Email *</Label><Input type="email" placeholder="Ex: jm@tibok.mu" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} /></div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2"><Label>Email *</Label><Input type="email" placeholder="Ex: jm@tibok.mu" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} /></div>
+                  <div className="space-y-2"><Label>Téléphone</Label><Input placeholder="Ex: +230 5678 9012" value={formPhone} onChange={(e) => setFormPhone(e.target.value)} /></div>
+                </div>
                 <div className="space-y-2"><Label>Mot de passe *</Label><Input type="password" placeholder="Minimum 6 caractères" value={formPassword} onChange={(e) => setFormPassword(e.target.value)} /></div>
-                <div className="space-y-2"><Label>Téléphone</Label><Input placeholder="Ex: +230 5678 9012" value={formPhone} onChange={(e) => setFormPhone(e.target.value)} /></div>
-                <div className="space-y-2"><Label>Type *</Label>
+                <div className="space-y-2"><Label>Rôle *</Label>
                   <Select value={formRole} onValueChange={setFormRole}><SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent><SelectItem value="client_admin">Client Admin</SelectItem><SelectItem value="client_user">Client Utilisateur</SelectItem></SelectContent>
                   </Select>
                 </div>
+
+                {/* Individual-specific fields */}
+                {formClientType === "individuel" && (
+                  <div className="space-y-4 rounded-lg border p-4 bg-muted/20">
+                    <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>Détails du freelance / individuel</p>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2"><Label>BRN</Label><Input placeholder="Ex: C07012345" value={formBrn} onChange={(e) => setFormBrn(e.target.value)} /></div>
+                      <div className="space-y-2"><Label>N° TVA MRA</Label><Input placeholder="Ex: VAT-20260001" value={formTva} onChange={(e) => setFormTva(e.target.value)} /></div>
+                    </div>
+                    <div className="space-y-2"><Label>Adresse</Label><Input placeholder="Ex: Port Louis, Mauritius" value={formAdresse} onChange={(e) => setFormAdresse(e.target.value)} /></div>
+                    <div className="space-y-2"><Label>Statut TVA</Label>
+                      <Select value={formStatutTva} onValueChange={setFormStatutTva}><SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent><SelectItem value="true">Assujetti</SelectItem><SelectItem value="false">Non assujetti</SelectItem></SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
+
+                {/* Society-specific fields */}
+                {formClientType === "societe" && (
+                  <div className="space-y-4 rounded-lg border p-4 bg-muted/20">
+                    <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>Détails de la société</p>
+                    <div className="space-y-2"><Label>Nom de la société *</Label><Input placeholder="Ex: TIBOK Ltd" value={formSocNom} onChange={(e) => setFormSocNom(e.target.value)} /></div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2"><Label>BRN</Label><Input placeholder="Ex: C07012345" value={formSocBrn} onChange={(e) => setFormSocBrn(e.target.value)} /></div>
+                      <div className="space-y-2"><Label>N° TVA MRA</Label><Input placeholder="Ex: VAT-20260001" value={formSocTva} onChange={(e) => setFormSocTva(e.target.value)} /></div>
+                    </div>
+                    <div className="space-y-2"><Label>Adresse</Label><Input placeholder="Ex: Ebène, Mauritius" value={formSocAdresse} onChange={(e) => setFormSocAdresse(e.target.value)} /></div>
+                    <div className="space-y-2"><Label>Statut TVA</Label>
+                      <Select value={formSocStatutTva} onValueChange={setFormSocStatutTva}><SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent><SelectItem value="true">Assujetti</SelectItem><SelectItem value="false">Non assujetti</SelectItem></SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
+
                 {error && <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">{error}</div>}
               </div>
               <DialogFooter>

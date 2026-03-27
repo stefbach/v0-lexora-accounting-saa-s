@@ -79,15 +79,84 @@ export default function PrevisionnelPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const res = await fetch(`/api/comptable/clients/${clientId}/${societeId}/previsionnel`)
-        if (res.ok) {
-          const json = await res.json()
-          if (json.data) {
-            setData(json.data)
-            if (json.data.periods?.length > 0) {
-              setSelectedPeriod(json.data.periods[0])
+        // Fetch société name
+        const societeRes = await fetch("/api/admin/societes")
+        const societeData = await societeRes.json()
+        const societe = (societeData.societes || []).find((s: any) => s.id === societeId)
+        const fetchedSocieteName = societe?.nom || societeId
+
+        // Fetch previsionnel data from the AI-powered endpoint
+        const prevRes = await fetch(`/api/client/previsionnel?client_id=${clientId}`)
+        const prevData = prevRes.ok ? await prevRes.json() : {}
+        const prev = prevData.previsionnel
+
+        if (prev) {
+          // Build prévision vs réel rows from AI response
+          const previsionVsReel: PrevisionRow[] = []
+          if (prev.prevision_vs_reel) {
+            for (const row of prev.prevision_vs_reel) {
+              previsionVsReel.push({
+                poste: row.poste || row.label || '',
+                prevu: row.prevu || row.previsionnel || 0,
+                reel: row.reel || row.actuel || 0,
+              })
             }
           }
+
+          // Build trésorerie par compte from AI response
+          const tresoParCompte: TresoCompteRow[] = []
+          if (prev.comptes_bancaires || prev.tresorerie_previsionnelle) {
+            const comptes = prev.comptes_bancaires || prev.tresorerie_previsionnelle || []
+            for (const c of comptes) {
+              tresoParCompte.push({
+                compte: c.banque || c.compte || c.nom_compte || '',
+                devise: (c.devise || 'MUR') as "MUR" | "EUR",
+                actuel: c.solde_actuel || c.actuel || 0,
+                j30: c.j30 || c.solde_j30 || 0,
+                j60: c.j60 || c.solde_j60 || 0,
+                j90: c.j90 || c.solde_j90 || 0,
+              })
+            }
+          }
+
+          // Build analyse IA
+          const analyseIA: AnalyseIA[] = []
+          if (prev.analyses || prev.recommandations || prev.alertes) {
+            const items = prev.analyses || prev.recommandations || prev.alertes || []
+            for (const item of (Array.isArray(items) ? items : [items])) {
+              if (typeof item === 'string') {
+                analyseIA.push({ type: 'attention', texte: item })
+              } else {
+                analyseIA.push({
+                  type: item.type || (item.risque ? 'risque' : 'attention'),
+                  texte: item.texte || item.message || item.description || JSON.stringify(item),
+                })
+              }
+            }
+          }
+
+          setData({
+            societeName: fetchedSocieteName,
+            periods: prev.periods || [prev.periode || ''],
+            previsionVsReel,
+            tresoParCompte,
+            analyseIA,
+          })
+
+          if (prev.periods?.length > 0) {
+            setSelectedPeriod(prev.periods[0])
+          } else if (prev.periode) {
+            setSelectedPeriod(prev.periode)
+          }
+        } else {
+          // No previsionnel data, just set société name
+          setData({
+            societeName: fetchedSocieteName,
+            periods: [],
+            previsionVsReel: [],
+            tresoParCompte: [],
+            analyseIA: [],
+          })
         }
       } catch {
         // API not available

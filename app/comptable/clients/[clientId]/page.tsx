@@ -190,6 +190,14 @@ export default function FicheClientPage() {
         // Get client's societes via dossiers
         const clientDossiers = (dossiersData.dossiers || []).filter((d: any) => d.client_id === clientId)
         const societeIds = [...new Set(clientDossiers.map((d: any) => d.societe_id))]
+
+        // Fetch documents count per dossier
+        let docsRes: any = null
+        try {
+          const r = await fetch(`/api/client/financial?client_id=${clientId}`)
+          if (r.ok) docsRes = (await r.json()).financial
+        } catch {}
+
         const clientSocietes = (societesData.societes || [])
           .filter((s: any) => societeIds.includes(s.id))
           .map((s: any) => ({
@@ -198,9 +206,25 @@ export default function FicheClientPage() {
             brn: s.brn || "",
             statut: "actif" as const,
             dernierDoc: "",
-            nbDocs: 0,
-            anomalies: 0,
+            nbDocs: docsRes?.totalDocuments || 0,
+            anomalies: docsRes?.bankTransactions?.filter((t: any) => !t.tiers || t.statut?.includes("a_verifier")).length || 0,
           }))
+
+        // Fetch alerts for this client
+        try {
+          const alertsRes = await fetch(`/api/client/alertes?client_id=${clientId}`)
+          if (alertsRes.ok) {
+            const alertsData = await alertsRes.json()
+            setAlertes((alertsData.alertes || []).map((a: any) => ({
+              id: a.id || crypto.randomUUID(),
+              niveau: a.type === "urgent" ? "critique" : a.type === "attention" ? "attention" : "info",
+              titre: a.titre,
+              description: a.description,
+              montant: a.montant || 0,
+              echeance: a.echeance || "",
+            })))
+          }
+        } catch {}
 
         const isPersonalOnly = clientSocietes.length === 1 && clientSocietes[0].nom.endsWith("— Personnel")
         const clientType = isPersonalOnly || clientSocietes.length === 0

@@ -2,7 +2,8 @@
 
 import { useParams } from "next/navigation"
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
+import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -12,7 +13,7 @@ import {
 } from "@/components/ui/table"
 import {
   ArrowLeft, Plus, Brain, TrendingUp, TrendingDown, CheckCircle2,
-  Clock, AlertTriangle, X, BarChart3,
+  Clock, X, BarChart3, Loader2,
 } from "lucide-react"
 
 // ---------------------------------------------------------------------------
@@ -65,8 +66,50 @@ const typeOptions = [
   { value: "investissement", label: "Investissement" },
   { value: "emprunt", label: "Emprunt bancaire" },
   { value: "expansion", label: "Expansion" },
-  { value: "reduction", label: "Réduction de coûts" },
+  { value: "reduction", label: "Reduction de couts" },
 ]
+
+function mapDbSimulation(row: any): Simulation {
+  const score = row.score_opportunite || 0
+  const isGood = score >= 70
+  const optim = row.scenario_optimiste || {}
+  const base = row.scenario_base || {}
+  const pessim = row.scenario_pessimiste || {}
+
+  return {
+    id: row.id,
+    titre: row.titre || "Sans titre",
+    type: row.type_simulation || "autre",
+    description: row.recommandation || "",
+    score,
+    verdict: isGood ? "Viable" : "A evaluer",
+    verdictColor: isGood ? "text-green-700" : "text-orange-700",
+    verdictBg: isGood ? "bg-green-100" : "bg-orange-100",
+    date: row.created_at ? new Date(row.created_at).toLocaleDateString("fr-FR") : "--",
+    impacts: [],
+    scenarios: [
+      {
+        nom: "Optimiste",
+        probabilite: optim.probabilite || "--",
+        impact: optim.impact_tresorerie ? fmt(optim.impact_tresorerie) : optim.description || "--",
+        detail: optim.description || "",
+      },
+      {
+        nom: "Base",
+        probabilite: base.probabilite || "--",
+        impact: base.impact_tresorerie ? fmt(base.impact_tresorerie) : base.description || "--",
+        detail: base.description || "",
+      },
+      {
+        nom: "Pessimiste",
+        probabilite: pessim.probabilite || "--",
+        impact: pessim.impact_tresorerie ? fmt(pessim.impact_tresorerie) : pessim.description || "--",
+        detail: pessim.description || "",
+      },
+    ],
+    analyseIA: row.recommandation || "Aucune analyse disponible.",
+  }
+}
 
 export default function SimulationsPage() {
   const params = useParams()
@@ -74,6 +117,9 @@ export default function SimulationsPage() {
   const societeId = params.societeId as string
 
   const [showDialog, setShowDialog] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
   const [newSim, setNewSim] = useState({
     titre: "",
     type: "nouveau_client",
@@ -81,7 +127,73 @@ export default function SimulationsPage() {
     parametres: "",
   })
 
-  const simulations: Simulation[] = []
+  const [simulations, setSimulations] = useState<Simulation[]>([])
+
+  const fetchSimulations = useCallback(async () => {
+    setLoading(true)
+    try {
+      const supabase = createClient()
+      const { data: rows, error } = await supabase
+        .from("simulations")
+        .select("*")
+        .eq("societe_id", societeId)
+        .order("created_at", { ascending: false })
+
+      if (!error && rows) {
+        setSimulations(rows.map(mapDbSimulation))
+      }
+    } catch {
+      // API not available, keep empty
+    } finally {
+      setLoading(false)
+    }
+  }, [societeId])
+
+  useEffect(() => {
+    fetchSimulations()
+  }, [fetchSimulations])
+
+  async function handleSubmit() {
+    if (!newSim.titre || !newSim.description) return
+    setSubmitting(true)
+    setSubmitError(null)
+
+    try {
+      const res = await fetch("/api/simuler-scenario", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          societe_id: societeId,
+          type_simulation: newSim.type,
+          titre: newSim.titre,
+          parametres: {
+            description: newSim.description,
+            parametres_additionnels: newSim.parametres,
+          },
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        setSubmitError(data.error || "Erreur lors de la simulation.")
+        setSubmitting(false)
+        return
+      }
+
+      // Add the new simulation to the list
+      if (data.simulation) {
+        setSimulations(prev => [mapDbSimulation(data.simulation), ...prev])
+      }
+
+      setNewSim({ titre: "", type: "nouveau_client", description: "", parametres: "" })
+      setShowDialog(false)
+    } catch {
+      setSubmitError("Erreur de connexion.")
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   return (
     <div className="min-h-screen p-6 space-y-6" style={{ background: "#F4F6FB" }}>
@@ -97,7 +209,7 @@ export default function SimulationsPage() {
             Simulations
           </h1>
           <p className="text-sm text-gray-500">
-            Modélisez l&apos;impact de décisions stratégiques sur la trésorerie
+            Modelisez l&apos;impact de decisions strategiques sur la tresorerie
           </p>
         </div>
         <Button
@@ -115,7 +227,7 @@ export default function SimulationsPage() {
           <Card className="w-full max-w-lg mx-4">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle style={{ color: NAVY }}>Nouvelle simulation</CardTitle>
-              <Button variant="ghost" size="sm" onClick={() => setShowDialog(false)}>
+              <Button variant="ghost" size="sm" onClick={() => { setShowDialog(false); setSubmitError(null) }}>
                 <X className="w-4 h-4" />
               </Button>
             </CardHeader>
@@ -147,31 +259,40 @@ export default function SimulationsPage() {
                 <textarea
                   className="border rounded-md px-3 py-2 w-full text-sm"
                   rows={3}
-                  placeholder="Décrivez le contexte et les hypothèses..."
+                  placeholder="Decrivez le contexte et les hypotheses..."
                   value={newSim.description}
                   onChange={(e) => setNewSim({ ...newSim, description: e.target.value })}
                 />
               </div>
               <div>
-                <label className="text-sm font-medium block mb-1">Paramètres</label>
+                <label className="text-sm font-medium block mb-1">Parametres</label>
                 <textarea
                   className="border rounded-md px-3 py-2 w-full text-sm"
                   rows={2}
-                  placeholder="Montant estimé, durée, nombre d'employés..."
+                  placeholder="Montant estime, duree, nombre d'employes..."
                   value={newSim.parametres}
                   onChange={(e) => setNewSim({ ...newSim, parametres: e.target.value })}
                 />
               </div>
+              {submitError && (
+                <p className="text-sm text-red-600">{submitError}</p>
+              )}
               <div className="flex justify-end gap-2 pt-2">
-                <Button variant="outline" size="sm" onClick={() => setShowDialog(false)}>
+                <Button variant="outline" size="sm" onClick={() => { setShowDialog(false); setSubmitError(null) }}>
                   Annuler
                 </Button>
                 <Button
                   size="sm"
+                  disabled={submitting || !newSim.titre || !newSim.description}
                   style={{ background: NAVY, color: "white" }}
-                  onClick={() => setShowDialog(false)}
+                  onClick={handleSubmit}
                 >
-                  <Brain className="w-4 h-4 mr-1" /> Analyser avec l&apos;IA
+                  {submitting ? (
+                    <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                  ) : (
+                    <Brain className="w-4 h-4 mr-1" />
+                  )}
+                  Analyser avec l&apos;IA
                 </Button>
               </div>
             </CardContent>
@@ -181,13 +302,17 @@ export default function SimulationsPage() {
 
       {/* Simulations list */}
       <div className="space-y-6">
-        {simulations.length === 0 ? (
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="h-8 w-8 animate-spin" style={{ color: GOLD }} />
+          </div>
+        ) : simulations.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
               <BarChart3 className="h-12 w-12 text-muted-foreground/40" />
               <p className="font-medium text-base">Aucune simulation</p>
               <p className="text-sm text-center">
-                Créez votre première simulation pour modéliser l&apos;impact de décisions stratégiques sur la trésorerie.
+                Creez votre premiere simulation pour modeliser l&apos;impact de decisions strategiques sur la tresorerie.
               </p>
               <Button
                 size="sm"
@@ -208,11 +333,11 @@ export default function SimulationsPage() {
                     <div className="flex items-center gap-3 mb-1">
                       <CardTitle style={{ color: NAVY }}>{sim.titre}</CardTitle>
                       <Badge variant="outline" className="text-xs">
-                        {typeOptions.find((t) => t.value === sim.type)?.label}
+                        {typeOptions.find((t) => t.value === sim.type)?.label || sim.type}
                       </Badge>
                     </div>
                     <p className="text-sm text-gray-500">{sim.description}</p>
-                    <p className="text-xs text-gray-400 mt-1">Créée le {sim.date}</p>
+                    <p className="text-xs text-gray-400 mt-1">Creee le {sim.date}</p>
                   </div>
                   <div className="flex flex-col items-center ml-4">
                     <span className="text-xs text-gray-500 mb-1">Score</span>
@@ -233,50 +358,11 @@ export default function SimulationsPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <Tabs defaultValue="impact" className="w-full">
+                <Tabs defaultValue="scenarios" className="w-full">
                   <TabsList className="mb-3">
-                    <TabsTrigger value="impact">Impact par compte</TabsTrigger>
-                    <TabsTrigger value="scenarios">3 Scénarios</TabsTrigger>
+                    <TabsTrigger value="scenarios">3 Scenarios</TabsTrigger>
                     <TabsTrigger value="analyse">Analyse IA</TabsTrigger>
                   </TabsList>
-
-                  {/* Impact par compte */}
-                  <TabsContent value="impact">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Compte bancaire</TableHead>
-                          <TableHead className="text-right">Impact mensuel</TableHead>
-                          <TableHead className="text-right">Tendance</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {sim.impacts.map((imp) => (
-                          <TableRow key={imp.compte}>
-                            <TableCell className="text-sm font-medium">{imp.compte}</TableCell>
-                            <TableCell className={`text-right text-sm font-semibold ${imp.impact > 0 ? "text-green-600" : imp.impact < 0 ? "text-red-600" : "text-gray-400"}`}>
-                              {imp.impact !== 0 ? (
-                                <>
-                                  {imp.impact > 0 ? "+" : ""}{fmt(imp.impact)}{imp.frequence}
-                                </>
-                              ) : (
-                                "—"
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {imp.impact > 0 ? (
-                                <TrendingUp className="w-4 h-4 text-green-600 inline" />
-                              ) : imp.impact < 0 ? (
-                                <TrendingDown className="w-4 h-4 text-red-600 inline" />
-                              ) : (
-                                <span className="text-gray-400">—</span>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TabsContent>
 
                   {/* 3 Scénarios */}
                   <TabsContent value="scenarios">

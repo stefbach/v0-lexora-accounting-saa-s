@@ -1,214 +1,370 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useProfile } from "@/hooks/use-profile"
+import { Loader2, Building2, Printer } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import {
-  Building2,
-  Landmark,
-  Banknote,
-  Users,
-  Scale,
-  FileText,
-  CheckCircle2,
-  Clock,
-} from "lucide-react"
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table"
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function fmtMUR(amount: number): string {
-  return `${amount.toLocaleString("fr-FR")} MUR`
+function fmt(n: number): string {
+  return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-// ---------------------------------------------------------------------------
-// Mock data
-// ---------------------------------------------------------------------------
+function amountCell(n: number) {
+  const style: React.CSSProperties = {}
+  if (n > 0) style.color = "#16A34A"
+  if (n < 0) style.color = "#DC2626"
+  const display = n < 0 ? `(${fmt(Math.abs(n))})` : fmt(n)
+  return { display, style }
+}
 
-const actifItems = [
-  { label: "Équipement", montant: 850_000, icon: Building2 },
-  { label: "Logiciels", montant: 350_000, icon: FileText },
-  { label: "Argent en banque", montant: 773_000, icon: Banknote, details: [
-    { label: "MCB", montant: 150_000 },
-    { label: "SBM", montant: 65_000 },
-    { label: "CIC", montant: 558_000, devise: "EUR" },
-  ]},
-  { label: "Clients qui vous doivent", montant: 396_000, icon: Users },
+// Revenue account labels
+const REVENUE_LABELS: Record<string, string> = {
+  "706": "Prestations de services (706)",
+  "707": "Ventes de marchandises (707)",
+  "701": "Ventes de produits finis (701)",
+  "702": "Ventes de produits intermediaires (702)",
+  "703": "Ventes de produits residuels (703)",
+  "704": "Travaux (704)",
+  "705": "Etudes (705)",
+  "708": "Produits des activites annexes (708)",
+  "709": "RRR accordes (709)",
+  "711": "Variation des stocks (711)",
+  "713": "Variation en-cours de production (713)",
+  "721": "Production immobilisee (721)",
+  "741": "Subventions d'exploitation (741)",
+  "751": "Produits de gestion courante (751)",
+  "753": "Commissions (753)",
+  "758": "Produits divers de gestion courante (758)",
+  "761": "Produits financiers (761)",
+  "771": "Produits exceptionnels (771)",
+}
+
+const EXPENSE_GROUPS: { label: string; range: string; match: (p: string) => boolean }[] = [
+  { label: "Achats", range: "601-609", match: (p) => { const n = parseInt(p); return n >= 601 && n <= 609 } },
+  { label: "Services exterieurs", range: "611-619", match: (p) => { const n = parseInt(p); return n >= 611 && n <= 619 } },
+  { label: "Autres services exterieurs", range: "621-629", match: (p) => { const n = parseInt(p); return n >= 621 && n <= 629 } },
+  { label: "Impots et taxes", range: "631-639", match: (p) => { const n = parseInt(p); return n >= 631 && n <= 639 } },
+  { label: "Charges de personnel", range: "641-649", match: (p) => { const n = parseInt(p); return n >= 641 && n <= 649 } },
+  { label: "Autres charges de gestion", range: "651-659", match: (p) => { const n = parseInt(p); return n >= 651 && n <= 659 } },
+  { label: "Charges financieres", range: "661-669", match: (p) => { const n = parseInt(p); return n >= 661 && n <= 669 } },
 ]
 
-const passifItems = [
-  { label: "Fournisseurs", montant: 228_000 },
-  { label: "TVA à payer", montant: 129_000 },
-  { label: "Cotisations", montant: 81_000 },
-  { label: "Capital", montant: 100_000 },
-  { label: "Bénéfices accumulés", montant: 1_831_000 },
-]
+function groupExpenses(expensesByAccount: Record<string, number>) {
+  const groups: { label: string; range: string; amount: number }[] = []
+  const assigned = new Set<string>()
 
-const totalActif = actifItems.reduce((s, i) => s + i.montant, 0)
-const totalPassif = passifItems.reduce((s, i) => s + i.montant, 0)
-const isEquilibre = totalActif === totalPassif
+  for (const group of EXPENSE_GROUPS) {
+    let total = 0
+    for (const [prefix, amount] of Object.entries(expensesByAccount)) {
+      if (group.match(prefix)) {
+        total += amount
+        assigned.add(prefix)
+      }
+    }
+    if (total !== 0) {
+      groups.push({ label: group.label, range: group.range, amount: total })
+    }
+  }
 
-const bilanStatus: "preparation" | "finalise" = "preparation"
-const isPublished = false
+  let otherTotal = 0
+  for (const [prefix, amount] of Object.entries(expensesByAccount)) {
+    if (!assigned.has(prefix)) {
+      otherTotal += amount
+    }
+  }
+  if (otherTotal !== 0) {
+    groups.push({ label: "Autres charges", range: "classe 6", amount: otherTotal })
+  }
 
-// ---------------------------------------------------------------------------
-// Page
-// ---------------------------------------------------------------------------
+  return groups
+}
+
+/* ── Shared sub-components for the clean table design ── */
+
+function SectionHeader({ label }: { label: string }) {
+  return (
+    <TableRow>
+      <TableCell colSpan={3} className="text-sm font-bold pt-5 pb-2 border-b">{label}</TableCell>
+    </TableRow>
+  )
+}
+
+function SubItem({ label, current, prev = "\u2014" }: { label: string; current: number; prev?: string }) {
+  const a = amountCell(current)
+  return (
+    <TableRow>
+      <TableCell className="pl-8 text-sm py-2">{label}</TableCell>
+      <TableCell className="text-right text-sm font-mono tabular-nums py-2" style={a.style}>{a.display}</TableCell>
+      <TableCell className="text-right text-sm font-mono tabular-nums py-2 text-muted-foreground">{prev}</TableCell>
+    </TableRow>
+  )
+}
+
+function TotalRow({ label, current, prev = "\u2014", grand = false }: { label: string; current: number; prev?: string; grand?: boolean }) {
+  const a = amountCell(current)
+  return (
+    <TableRow className={grand ? "border-t-2 border-b-2" : "border-t"}>
+      <TableCell className={`text-sm py-2 ${grand ? "font-bold text-base" : "font-bold"}`}>{label}</TableCell>
+      <TableCell className={`text-right font-mono tabular-nums py-2 ${grand ? "font-bold text-base" : "text-sm font-bold"}`} style={a.style}>{a.display}</TableCell>
+      <TableCell className={`text-right font-mono tabular-nums py-2 text-muted-foreground ${grand ? "text-base" : "text-sm"}`}>{prev}</TableCell>
+    </TableRow>
+  )
+}
+
+/* ── Balance Sheet Table ── */
+function BalanceSheetTable({ data }: { data: any }) {
+  const immobilisations = data?.immobilisations ?? 0
+  const creancesClients = data?.creances ?? 0
+  const tresorerie = data?.totalBankMUR ?? 0
+  const totalNonCurrentAssets = immobilisations
+  const totalCurrentAssets = tresorerie + creancesClients
+  const totalAssets = totalCurrentAssets + totalNonCurrentAssets
+
+  const capitauxPropres = data?.capitauxPropres ?? 0
+  const totalRevenue = data?.totalRevenue ?? 0
+  const totalExpenses = data?.totalExpenses ?? 0
+  const retainedEarnings = totalRevenue - totalExpenses
+  const totalEquity = capitauxPropres + retainedEarnings
+
+  const dettesFournisseurs = data?.dettesFournisseurs ?? 0
+  const dettesFiscales = data?.dettesFiscales ?? 0
+  const dettesSociales = data?.dettesSociales ?? 0
+  const totalCurrentLiabilities = dettesFournisseurs + dettesFiscales + dettesSociales
+
+  const totalEquityAndLiabilities = totalEquity + totalCurrentLiabilities
+
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="w-1/2">Poste</TableHead>
+          <TableHead className="text-right">2025-2026 (MUR)</TableHead>
+          <TableHead className="text-right">2024-2025 (MUR)</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        <SectionHeader label="NON-CURRENT ASSETS" />
+        <SubItem label="Property, Plant & Equipment" current={immobilisations} />
+        <SubItem label="Intangible Assets" current={0} />
+        <TotalRow label="Total Non-Current Assets" current={totalNonCurrentAssets} />
+
+        <SectionHeader label="CURRENT ASSETS" />
+        <SubItem label="Trade Receivables" current={creancesClients} />
+        <SubItem label="Cash & Bank" current={tresorerie} />
+        <TotalRow label="Total Current Assets" current={totalCurrentAssets} />
+
+        <TotalRow label="TOTAL ASSETS" current={totalAssets} grand />
+
+        <SectionHeader label="EQUITY" />
+        <SubItem label="Share Capital" current={capitauxPropres} />
+        <SubItem label="Retained Earnings" current={retainedEarnings} />
+        <TotalRow label="Total Equity" current={totalEquity} />
+
+        <SectionHeader label="CURRENT LIABILITIES" />
+        <SubItem label="Trade Payables" current={dettesFournisseurs} />
+        <SubItem label="VAT Payable" current={dettesFiscales} />
+        <SubItem label="CSG/NSF/PAYE Payable" current={dettesSociales} />
+        <TotalRow label="Total Current Liabilities" current={totalCurrentLiabilities} />
+
+        <TotalRow label="TOTAL EQUITY & LIABILITIES" current={totalEquityAndLiabilities} grand />
+      </TableBody>
+    </Table>
+  )
+}
+
+/* ── Profit & Loss Table ── */
+function ProfitLossTable({ data }: { data: any }) {
+  const revenueByAccount: Record<string, number> = data?.revenueByAccount ?? {}
+  const expensesByAccount: Record<string, number> = data?.expensesByAccount ?? {}
+  const totalRevenue = data?.totalRevenue ?? 0
+  const totalExpenses = data?.totalExpenses ?? 0
+
+  const revenueDetails = Object.entries(revenueByAccount)
+    .filter(([, v]) => v !== 0)
+    .sort(([a], [b]) => a.localeCompare(b))
+
+  const allExpenseGroups = groupExpenses(expensesByAccount)
+  const profitBeforeTax = totalRevenue - totalExpenses
+  const incomeTax = profitBeforeTax > 0 ? profitBeforeTax * 0.15 : 0
+  const netProfit = profitBeforeTax - incomeTax
+
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="w-1/2">Poste</TableHead>
+          <TableHead className="text-right">2025-2026 (MUR)</TableHead>
+          <TableHead className="text-right">2024-2025 (MUR)</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        <SectionHeader label="REVENUE" />
+        {revenueDetails.map(([prefix, amount]) => (
+          <SubItem key={prefix} label={REVENUE_LABELS[prefix] || `Compte ${prefix}x`} current={amount} />
+        ))}
+        {revenueDetails.length === 0 && (
+          <TableRow>
+            <TableCell colSpan={3} className="text-center text-muted-foreground text-sm py-4">Aucun produit enregistre</TableCell>
+          </TableRow>
+        )}
+        <TotalRow label="TOTAL REVENUE" current={totalRevenue} />
+
+        <SectionHeader label="OPERATING EXPENSES" />
+        {allExpenseGroups.map((group) => (
+          <SubItem key={group.label} label={`${group.label} (${group.range})`} current={-group.amount} />
+        ))}
+        {allExpenseGroups.length === 0 && (
+          <TableRow>
+            <TableCell colSpan={3} className="text-center text-muted-foreground text-sm py-4">Aucune charge enregistree</TableCell>
+          </TableRow>
+        )}
+        <TotalRow label="TOTAL EXPENSES" current={-totalExpenses} />
+
+        <TotalRow label="PROFIT BEFORE TAX" current={profitBeforeTax} />
+        <SubItem label="Income Tax (15%)" current={-incomeTax} />
+        <TotalRow label="NET PROFIT" current={netProfit} grand />
+      </TableBody>
+    </Table>
+  )
+}
 
 export default function BilanPage() {
-  const { profile } = useProfile()
+  const { profile, loading } = useProfile()
+  const [data, setData] = useState<any>(null)
+  const [fetching, setFetching] = useState(true)
+  const [selectedSociete, setSelectedSociete] = useState<string>("all")
+  const [societes, setSocietes] = useState<{ id: string; nom: string }[]>([])
+
+  useEffect(() => {
+    setFetching(true)
+    const url = selectedSociete !== "all"
+      ? `/api/client/financial?societe_id=${selectedSociete}`
+      : "/api/client/financial"
+    fetch(url)
+      .then((res) => res.json())
+      .then((json) => {
+        setData(json.financial)
+        if (json.financial?.availableSocietes) setSocietes(json.financial.availableSocietes)
+      })
+      .catch(() => setData(null))
+      .finally(() => setFetching(false))
+  }, [selectedSociete])
+
+  if (loading || fetching) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
 
   if (profile?.role === "client_user") {
     return (
       <div className="p-6 flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-        <h1 className="text-xl font-bold" style={{ color: "#1E2A4A" }}>
-          Accès non autorisé
-        </h1>
+        <h1 className="text-xl font-bold">Acces non autorise</h1>
         <p className="text-sm text-muted-foreground">
-          Vous n&apos;avez pas la permission d&apos;accéder à cette page.
+          Vous n&apos;avez pas la permission d&apos;acceder a cette page.
         </p>
-        <Link href="/client/documents" className="text-sm underline" style={{ color: "#C9A84C" }}>
+        <Link href="/client/documents" className="text-sm underline text-blue-600">
           Retour aux documents
         </Link>
       </div>
     )
   }
 
+  const totalRevenue = data?.totalRevenue ?? 0
+  const totalExpenses = data?.totalExpenses ?? 0
+  const totalAssets = (data?.totalBankMUR ?? 0) + (data?.creances ?? 0) + (data?.immobilisations ?? 0)
+  const totalLiabilitiesAndEquity = (data?.capitauxPropres ?? 0) + (totalRevenue - totalExpenses) + (data?.dettesFournisseurs ?? 0) + (data?.dettesFiscales ?? 0) + (data?.dettesSociales ?? 0)
+  const hasData = totalRevenue !== 0 || totalExpenses !== 0 || totalAssets !== 0 || totalLiabilitiesAndEquity !== 0
+
+  const selectedSocieteName = selectedSociete !== "all"
+    ? societes.find(s => s.id === selectedSociete)?.nom ?? "Societe"
+    : societes.length === 1
+      ? societes[0].nom
+      : "Consolide"
+
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
-            Mon Bilan
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Votre situation financière à la clôture de l&apos;exercice
+    <div className="p-6 space-y-6 max-w-[900px] mx-auto">
+      {/* Top bar: filter + print */}
+      <div className="flex items-center justify-between flex-wrap gap-4 print:hidden">
+        <div className="flex items-center gap-3">
+          {societes.length > 1 && (
+            <div className="flex items-center gap-2">
+              <Building2 className="h-4 w-4 text-muted-foreground" />
+              <Select value={selectedSociete} onValueChange={setSelectedSociete}>
+                <SelectTrigger className="w-[220px] h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toutes les societes</SelectItem>
+                  {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
+        <button
+          onClick={() => window.print()}
+          className="flex items-center gap-2 px-3 py-2 rounded text-sm font-medium border hover:bg-muted transition-colors"
+        >
+          <Printer className="h-4 w-4" />
+          Print
+        </button>
+      </div>
+
+      {!hasData ? (
+        <div className="flex flex-col items-center gap-2 py-16">
+          <p className="text-sm text-muted-foreground">
+            Aucune ecriture comptable disponible pour le moment.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Les donnees apparaitront ici une fois vos factures traitees.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          {bilanStatus === "preparation" ? (
-            <Badge className="bg-orange-100 text-orange-700 border-orange-200">
-              <Clock className="h-3 w-3 mr-1" />
-              En préparation
-            </Badge>
-          ) : (
-            <Badge className="bg-green-100 text-green-700 border-green-200">
-              <CheckCircle2 className="h-3 w-3 mr-1" />
-              Finalisé
-            </Badge>
-          )}
-          {isEquilibre && (
-            <Badge className="bg-green-100 text-green-700 border-green-200">
-              <Scale className="h-3 w-3 mr-1" />
-              Équilibré
-            </Badge>
-          )}
-        </div>
-      </div>
+      ) : (
+        <>
+          {/* Company name centered */}
+          <div className="text-center space-y-1">
+            <h1 className="text-2xl font-bold">{selectedSocieteName.toUpperCase()}</h1>
+            <p className="text-sm text-muted-foreground">
+              Prepared in accordance with IFRS for SMEs &mdash; Companies Act 2001 Mauritius
+            </p>
+          </div>
 
-      {/* Not published notice */}
-      {!isPublished && (
-        <Card className="border-orange-200 bg-orange-50">
-          <CardContent className="py-4">
-            <div className="flex items-center gap-3">
-              <Clock className="h-5 w-5 text-orange-500 shrink-0" />
-              <p className="text-sm text-orange-700">
-                En cours de préparation par votre comptable
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+          {/* Tabs: Balance Sheet | Profit & Loss */}
+          <Tabs defaultValue="balance-sheet" className="space-y-4">
+            <TabsList>
+              <TabsTrigger value="balance-sheet">Balance Sheet</TabsTrigger>
+              <TabsTrigger value="profit-loss">Profit &amp; Loss</TabsTrigger>
+            </TabsList>
 
-      {/* Two-section layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Actif */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2" style={{ color: "#1E2A4A" }}>
-              <Landmark className="h-5 w-5" style={{ color: "#C9A84C" }} />
-              Ce que vous possédez
-            </CardTitle>
-            <p className="text-xs text-muted-foreground">Actif</p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {actifItems.map((item) => {
-              const Icon = item.icon
-              return (
-                <div key={item.label} className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Icon className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">{item.label}</span>
-                    </div>
-                    <span className="text-sm font-semibold" style={{ color: "#1E2A4A" }}>
-                      {fmtMUR(item.montant)}
-                    </span>
-                  </div>
-                  {item.details && (
-                    <div className="ml-6 space-y-0.5">
-                      {item.details.map((d) => (
-                        <div key={d.label} className="flex items-center justify-between text-xs text-muted-foreground">
-                          <span>{d.label}{d.devise ? ` (${d.devise})` : ""}</span>
-                          <span>{fmtMUR(d.montant)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-            <div className="border-t pt-3 flex items-center justify-between">
-              <span className="text-sm font-bold" style={{ color: "#1E2A4A" }}>Total Actif</span>
-              <span className="text-base font-bold" style={{ color: "#C9A84C" }}>
-                {fmtMUR(totalActif)}
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Passif */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2" style={{ color: "#1E2A4A" }}>
-              <Banknote className="h-5 w-5" style={{ color: "#C9A84C" }} />
-              Ce que vous devez
-            </CardTitle>
-            <p className="text-xs text-muted-foreground">Passif</p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {passifItems.map((item) => (
-              <div key={item.label} className="flex items-center justify-between">
-                <span className="text-sm">{item.label}</span>
-                <span className="text-sm font-semibold" style={{ color: "#1E2A4A" }}>
-                  {fmtMUR(item.montant)}
-                </span>
+            <TabsContent value="balance-sheet">
+              <div className="border rounded-lg overflow-hidden">
+                <BalanceSheetTable data={data} />
               </div>
-            ))}
-            <div className="border-t pt-3 flex items-center justify-between">
-              <span className="text-sm font-bold" style={{ color: "#1E2A4A" }}>Total Passif</span>
-              <span className="text-base font-bold" style={{ color: "#C9A84C" }}>
-                {fmtMUR(totalPassif)}
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            </TabsContent>
 
-      {/* Footer note */}
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-muted-foreground italic">
-          Préparé par votre comptable — Exercice 2025-2026
-        </p>
-      </div>
+            <TabsContent value="profit-loss">
+              <div className="border rounded-lg overflow-hidden">
+                <ProfitLossTable data={data} />
+              </div>
+            </TabsContent>
+          </Tabs>
+
+          {/* Footer */}
+          <div className="text-center py-4 print:py-2">
+            <p className="text-xs text-muted-foreground italic">
+              All amounts are in Mauritian Rupees (MUR)
+            </p>
+          </div>
+        </>
+      )}
     </div>
   )
 }

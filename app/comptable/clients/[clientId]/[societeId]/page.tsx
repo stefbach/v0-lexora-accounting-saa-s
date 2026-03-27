@@ -14,17 +14,128 @@ import {
   ArrowLeft, TrendingUp, TrendingDown, ChevronRight, Upload,
   BarChart3, Landmark, Wallet, Calculator, FolderOpen, Loader2,
   FileText as FileIcon, CheckCircle, AlertTriangle as AlertIcon, Pencil,
+  Building2,
 } from "lucide-react"
 
-function fmt(n: number) { return n.toLocaleString("fr-FR") + " MUR" }
+// ---------------------------------------------------------------------------
+// Colors
+// ---------------------------------------------------------------------------
+const NAVY = "#1E2A4A"
+const GOLD = "#C9A84C"
 
-const mockFournisseurs: any[] = []
-const mockFacturesClients: any[] = []
-const mockBanque: any[] = []
-const mockSalaires: any[] = []
-const mockCharges: any[] = []
-const mockTVA: any[] = []
-const mockDossiers: any[] = []
+function fmt(n: number) { return n.toLocaleString("fr-FR") + " MUR" }
+function fmt2(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
+function fmtColor(n: number) { if (n < 0) return { color: "#DC2626" }; return {} }
+function fmtVal(n: number): string { if (n < 0) return `(${fmt2(Math.abs(n))})`; return fmt2(n) }
+
+const REVENUE_LABELS: Record<string, string> = {
+  "706": "Prestations de services (706)",
+  "707": "Ventes de marchandises (707)",
+  "701": "Ventes de produits finis (701)",
+  "702": "Ventes de produits intermediaires (702)",
+  "703": "Ventes de produits residuels (703)",
+  "704": "Travaux (704)",
+  "705": "Etudes (705)",
+  "708": "Produits des activites annexes (708)",
+  "709": "RRR accordes (709)",
+  "711": "Variation des stocks (711)",
+  "713": "Variation en-cours de production (713)",
+  "721": "Production immobilisee (721)",
+  "741": "Subventions d'exploitation (741)",
+  "751": "Produits de gestion courante (751)",
+  "753": "Commissions (753)",
+  "758": "Produits divers de gestion courante (758)",
+  "761": "Produits financiers (761)",
+  "771": "Produits exceptionnels (771)",
+}
+
+const EXPENSE_GROUPS: { label: string; range: string; match: (p: string) => boolean }[] = [
+  { label: "Achats", range: "601-609", match: (p) => { const n = parseInt(p); return n >= 601 && n <= 609 } },
+  { label: "Services exterieurs", range: "611-619", match: (p) => { const n = parseInt(p); return n >= 611 && n <= 619 } },
+  { label: "Autres services exterieurs", range: "621-629", match: (p) => { const n = parseInt(p); return n >= 621 && n <= 629 } },
+  { label: "Impots et taxes", range: "631-639", match: (p) => { const n = parseInt(p); return n >= 631 && n <= 639 } },
+  { label: "Charges de personnel", range: "641-649", match: (p) => { const n = parseInt(p); return n >= 641 && n <= 649 } },
+  { label: "Autres charges de gestion", range: "651-659", match: (p) => { const n = parseInt(p); return n >= 651 && n <= 659 } },
+  { label: "Charges financieres", range: "661-669", match: (p) => { const n = parseInt(p); return n >= 661 && n <= 669 } },
+]
+
+function groupExpenses(expensesByAccount: Record<string, number>) {
+  const groups: { label: string; range: string; amount: number }[] = []
+  const assigned = new Set<string>()
+  for (const group of EXPENSE_GROUPS) {
+    let total = 0
+    for (const [prefix, amount] of Object.entries(expensesByAccount)) {
+      if (group.match(prefix)) { total += amount; assigned.add(prefix) }
+    }
+    if (total !== 0) groups.push({ label: group.label, range: group.range, amount: total })
+  }
+  let otherTotal = 0
+  for (const [prefix, amount] of Object.entries(expensesByAccount)) {
+    if (!assigned.has(prefix)) otherTotal += amount
+  }
+  if (otherTotal !== 0) groups.push({ label: "Autres charges", range: "classe 6", amount: otherTotal })
+  return groups
+}
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+interface Fournisseur {
+  fournisseur: string; numero: string; date: string; ht: number; tva: number; ttc: number; echeance: string; statut: string; compte: string
+}
+interface FactureClient {
+  client: string; numero: string; date: string; ht: number; tva: number; ttc: number; echeance: string; statut: string; jours: number
+}
+interface BanqueEntry {
+  date: string; libelle: string; debit: number; credit: number; tiers: string; compte: string; statut: string
+}
+interface SalaireEntry {
+  employe: string; brut: number; csg: number; nsf: number; paye: number; net: number; cout: number; statut: string
+}
+interface ChargeEntry {
+  periode: string; csg_e: number; csg_p: number; nsf_e: number; nsf_p: number; training: number; paye: number; total: number; statut: string
+}
+interface TVAEntry {
+  mois: string; collectee: number; deductible: number; nette: number; deadline: string; statut: string; ref: string
+}
+interface DossierEntry {
+  nom: string; count: number; anomalies: number
+}
+interface GLAccount {
+  compte: string; nom: string; entries: { date: string; ref: string; desc: string; debit: number; credit: number; solde: number }[]
+}
+interface AlerteEntry {
+  niveau: string; titre: string; description: string; montant: number; echeance: string
+}
+interface KPI {
+  label: string; value: number; green?: boolean
+}
+interface EcritureRaw {
+  id: string; date_ecriture: string; journal: string; numero_piece: string; compte: string; libelle: string; debit: number; credit: number
+}
+interface FinancialRaw {
+  totalRevenue: number; totalExpenses: number; resultat: number; totalBankMUR: number
+  totalDocuments: number; totalEcritures: number
+  immobilisations: number; stocks: number; creances: number; autresCreances: number
+  capitauxPropres: number; emprunts: number; dettesFournisseurs: number; dettesFiscales: number; dettesSociales: number
+  revenueByAccount: Record<string, number>; expensesByAccount: Record<string, number>
+  ecritures: EcritureRaw[]
+}
+interface SocieteData {
+  clientName: string
+  societeName: string
+  kpis: KPI[]
+  fournisseurs: Fournisseur[]
+  facturesClients: FactureClient[]
+  banque: BanqueEntry[]
+  salaires: SalaireEntry[]
+  charges: ChargeEntry[]
+  tva: TVAEntry[]
+  dossiers: DossierEntry[]
+  grandLivre: GLAccount[]
+  alertes: AlerteEntry[]
+  financial: FinancialRaw | null
+}
 
 function stBadge(s: string) {
   if (["paye","solde","rapproche","declare","conforme"].includes(s)) return <Badge className="bg-green-100 text-green-700">{({paye:"Payé",solde:"Soldé",rapproche:"Rapproché",declare:"Déclaré",conforme:"Conforme"} as Record<string,string>)[s]}</Badge>
@@ -33,26 +144,26 @@ function stBadge(s: string) {
   return <Badge variant="outline">{s}</Badge>
 }
 
+function EmptyTab({ icon: Icon, message, detail }: { icon: React.ElementType; message: string; detail: string }) {
+  return (
+    <Card>
+      <CardContent className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
+        <Icon className="h-12 w-12 text-muted-foreground/40" />
+        <p className="font-medium text-base">{message}</p>
+        <p className="text-sm">{detail}</p>
+      </CardContent>
+    </Card>
+  )
+}
+
 export default function SocieteContextPage() {
   const params = useParams()
   const clientId = params.clientId as string
   const societeId = params.societeId as string
-  const [clientName, setClientName] = useState("")
-  const [societeName, setSocieteName] = useState("")
 
-  useEffect(() => {
-    async function fetchNames() {
-      try {
-        const [usersRes, socRes] = await Promise.all([fetch("/api/admin/users"), fetch("/api/admin/societes")])
-        const [usersData, socData] = await Promise.all([usersRes.json(), socRes.json()])
-        const client = usersData.users?.find((u: any) => u.id === clientId)
-        if (client) setClientName(client.full_name)
-        const soc = socData.societes?.find((s: any) => s.id === societeId)
-        if (soc) setSocieteName(soc.nom)
-      } catch {}
-    }
-    fetchNames()
-  }, [clientId, societeId])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [data, setData] = useState<SocieteData | null>(null)
 
   // Documents state
   const [uploading, setUploading] = useState(false)
@@ -63,7 +174,168 @@ export default function SocieteContextPage() {
   const [uploadedFiles, setUploadedFiles] = useState<Array<{ name: string; status: string; type?: string; date: string }>>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const handleUpload = async (files: FileList | null) => {
+  useEffect(() => {
+    async function fetchData() {
+      setLoading(true)
+      setError(null)
+      try {
+        // Fetch from existing APIs
+        const [usersRes, societesRes, dossiersRes] = await Promise.all([
+          fetch("/api/admin/users"),
+          fetch("/api/admin/societes"),
+          fetch("/api/admin/dossiers"),
+        ])
+        const [usersData, societesData, dossiersData] = await Promise.all([
+          usersRes.json(), societesRes.json(), dossiersRes.json(),
+        ])
+
+        const user = usersData.users?.find((u: any) => u.id === clientId)
+        const societe = societesData.societes?.find((s: any) => s.id === societeId)
+        if (!user || !societe) throw new Error("Données introuvables")
+
+        // Fetch financial data for this client filtered by société
+        const finRes = await fetch(`/api/client/financial?client_id=${clientId}&societe_id=${societeId}`)
+        const finData = finRes.ok ? await finRes.json() : { financial: null }
+        const fin = finData.financial || {}
+
+        // Build fournisseurs from extracted invoices
+        const fournisseurs = (fin.extractedInvoices || [])
+          .filter((inv: any) => inv.type === 'facture_fournisseur')
+          .map((inv: any) => ({
+            fournisseur: inv.emetteur || '—', numero: inv.numero || '—',
+            date: inv.date || '—', ht: inv.montant_ht || 0, tva: inv.montant_tva || 0,
+            ttc: inv.montant_ttc_mur || inv.montant_ttc || 0, echeance: '—',
+            statut: 'en_attente', compte: '401',
+          }))
+
+        const facturesClients = (fin.extractedInvoices || [])
+          .filter((inv: any) => inv.type === 'facture_client')
+          .map((inv: any) => ({
+            client: inv.destinataire || inv.emetteur || '—', numero: inv.numero || '—',
+            date: inv.date || '—', ht: inv.montant_ht || 0, tva: inv.montant_tva || 0,
+            ttc: inv.montant_ttc_mur || inv.montant_ttc || 0, echeance: '—',
+            statut: 'en_attente', jours: 0,
+          }))
+
+        const kpis: KPI[] = [
+          { label: 'Chiffre d\'affaires', value: fin.totalRevenue || 0, green: true },
+          { label: 'Dépenses', value: fin.totalExpenses || 0 },
+          { label: 'Résultat', value: fin.resultat || 0, green: (fin.resultat || 0) > 0 },
+          { label: 'Trésorerie', value: fin.totalBankMUR || 0, green: true },
+        ]
+
+        // Build bank entries from bankTransactions (individual lines from statements)
+        // plus bank account summary rows
+        const bankEntries: BanqueEntry[] = (fin.bankTransactions || []).map((tx: any) => ({
+          date: tx.date || '—',
+          libelle: tx.libelle || '—',
+          debit: tx.debit || 0,
+          credit: tx.credit || 0,
+          tiers: tx.tiers || '',
+          compte: tx.compte_comptable || '512',
+          statut: tx.statut || 'non_identifie',
+        }))
+
+        // If no transactions, show bank account summaries
+        if (bankEntries.length === 0) {
+          for (const b of (fin.bankAccounts || [])) {
+            bankEntries.push({
+              date: '—', libelle: `${b.banque} — ${b.nom_compte || ''}`,
+              debit: 0, credit: b.solde_actuel || 0,
+              tiers: '', compte: '512', statut: 'rapproche',
+            })
+          }
+        }
+
+        // Build TVA rows from tvaRecords or from computed values
+        const tvaRows: TVAEntry[] = (fin.tvaRecords || []).length > 0
+          ? (fin.tvaRecords || []).map((t: any) => ({
+              mois: t.periode, collectee: t.tva_collectee || 0, deductible: t.tva_deductible || 0,
+              nette: t.tva_nette || 0, deadline: t.date_limite || '—',
+              statut: t.statut || 'a_declarer', ref: '',
+            }))
+          : (fin.tvaCollectee || fin.tvaDeductible)
+            ? [{
+                mois: fin.currentMonth || '—',
+                collectee: fin.tvaCollectee || 0,
+                deductible: fin.tvaDeductible || 0,
+                nette: fin.tvaNette || 0,
+                deadline: '—',
+                statut: 'a_declarer',
+                ref: '',
+              }]
+            : []
+
+        // Fetch alertes
+        let alertesData: AlerteEntry[] = []
+        try {
+          const alertesRes = await fetch(`/api/client/alertes?client_id=${clientId}`)
+          if (alertesRes.ok) {
+            const alertesJson = await alertesRes.json()
+            const items = alertesJson.alertes || []
+            alertesData = items.map((a: any) => ({
+              niveau: a.type === 'urgent' ? 'critique' : a.type === 'attention' ? 'important' : 'info',
+              titre: a.titre || '',
+              description: a.description || '',
+              montant: a.montant || 0,
+              echeance: a.echeance || '',
+            }))
+          }
+        } catch { /* silently fail */ }
+
+        setData({
+          clientName: user.full_name,
+          societeName: societe.nom,
+          kpis,
+          fournisseurs,
+          facturesClients,
+          banque: bankEntries,
+          salaires: fin.salaires ? [{
+            employe: 'Total masse salariale', brut: fin.salaires, csg: 0, nsf: 0,
+            paye: 0, net: fin.salaires, cout: fin.salaires + (fin.chargesSociales || 0),
+            statut: 'a_verifier',
+          }] : [],
+          charges: fin.chargesSociales ? [{
+            periode: fin.currentMonth || '—',
+            csg_e: 0, csg_p: 0, nsf_e: 0, nsf_p: 0, training: 0,
+            paye: 0, total: fin.chargesSociales,
+            statut: 'a_verifier',
+          }] : [],
+          tva: tvaRows,
+          dossiers: [],
+          grandLivre: [],
+          alertes: alertesData,
+          financial: {
+            totalRevenue: fin.totalRevenue || 0,
+            totalExpenses: fin.totalExpenses || 0,
+            resultat: fin.resultat || 0,
+            totalBankMUR: fin.totalBankMUR || 0,
+            totalDocuments: fin.totalDocuments || 0,
+            totalEcritures: fin.totalEcritures || 0,
+            immobilisations: fin.immobilisations || 0,
+            stocks: fin.stocks || 0,
+            creances: fin.creances || 0,
+            autresCreances: fin.autresCreances || 0,
+            capitauxPropres: fin.capitauxPropres || 0,
+            emprunts: fin.emprunts || 0,
+            dettesFournisseurs: fin.dettesFournisseurs || 0,
+            dettesFiscales: fin.dettesFiscales || 0,
+            dettesSociales: fin.dettesSociales || 0,
+            revenueByAccount: fin.revenueByAccount || {},
+            expensesByAccount: fin.expensesByAccount || {},
+            ecritures: fin.ecritures || [],
+          },
+        })
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "Une erreur est survenue")
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchData()
+  }, [clientId, societeId])
+
+  const handleUpload = useCallback(async (files: FileList | null) => {
     if (!files || files.length === 0) return
     setUploading(true)
     setUploadError(null)
@@ -76,12 +348,12 @@ export default function SocieteContextPage() {
 
       try {
         const res = await fetch("/api/documents/upload", { method: "POST", body: formData })
-        const data = await res.json()
+        const respData = await res.json()
         if (res.ok) {
           setUploadedFiles(prev => [{ name: file.name, status: "En cours de traitement", date: new Date().toLocaleDateString("fr-FR"), type: "Détection..." }, ...prev])
           setUploadSuccess(`${file.name} uploadé avec succès. Analyse en cours...`)
         } else {
-          setUploadError(data.error || "Erreur lors de l'upload")
+          setUploadError(respData.error || "Erreur lors de l'upload")
         }
       } catch {
         setUploadError("Erreur de connexion")
@@ -89,16 +361,51 @@ export default function SocieteContextPage() {
     }
     setUploading(false)
     setTimeout(() => { setUploadSuccess(null); setUploadError(null) }, 5000)
-  }
+  }, [societeId])
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setDragActive(false)
     handleUpload(e.dataTransfer.files)
-  }, [societeId])
+  }, [handleUpload])
 
   const handleDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); setDragActive(true) }, [])
   const handleDragLeave = useCallback(() => setDragActive(false), [])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: GOLD }} />
+      </div>
+    )
+  }
+
+  if (error || !data) {
+    return (
+      <div className="flex-1 overflow-auto p-6">
+        <div className="flex items-center gap-2 text-sm mb-8">
+          <Link href="/comptable/clients" className="text-muted-foreground hover:text-foreground">Portefeuille</Link>
+          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          <Link href={`/comptable/clients/${clientId}`} className="text-muted-foreground hover:text-foreground">Client</Link>
+        </div>
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
+            <Building2 className="h-12 w-12 text-muted-foreground/40" />
+            <p className="font-medium text-base">{error || "Société introuvable"}</p>
+            <p className="text-sm">Vérifiez le lien ou retournez à la fiche client.</p>
+            <Link href={`/comptable/clients/${clientId}`}>
+              <Button variant="outline" className="mt-2 gap-2" style={{ borderColor: NAVY, color: NAVY }}>
+                <ArrowLeft className="h-4 w-4" /> Retour au client
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  const { clientName, societeName, kpis, fournisseurs, facturesClients, banque, salaires, charges, tva, dossiers, grandLivre, alertes, financial } = data
+  const fin = financial || {} as FinancialRaw
 
   return (
     <div className="flex-1 overflow-auto p-6 space-y-6">
@@ -108,28 +415,40 @@ export default function SocieteContextPage() {
           <ChevronRight className="h-4 w-4 text-muted-foreground" />
           <Link href={`/comptable/clients/${clientId}`} className="text-muted-foreground hover:text-foreground">{clientName}</Link>
           <ChevronRight className="h-4 w-4 text-muted-foreground" />
-          <span className="font-medium" style={{ color: "#1E2A4A" }}>{societeName}</span>
+          <span className="font-medium" style={{ color: NAVY }}>{societeName}</span>
         </div>
         <Button variant="outline" size="sm" asChild>
           <Link href={`/comptable/clients/${clientId}`}><ArrowLeft className="mr-1 h-4 w-4" />Retour au client</Link>
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        {[
-          { label: "CA du mois", value: 0, icon: TrendingUp, green: true },
-          { label: "Charges", value: 0, icon: TrendingDown },
-          { label: "Résultat", value: 0, icon: BarChart3, green: true },
-          { label: "TVA nette", value: 0, icon: Calculator },
-          { label: "Trésorerie", value: 0, icon: Landmark, green: true },
-          { label: "Masse salariale", value: 0, icon: Wallet },
-        ].map((k) => (
-          <Card key={k.label}><CardContent className="pt-4 pb-3">
-            <p className="text-xs text-muted-foreground mb-1">{k.label}</p>
-            <p className={`text-lg font-bold ${k.green ? "text-green-700" : ""}`} style={!k.green ? { color: "#1E2A4A" } : undefined}>{k.value === 0 ? "—" : fmt(k.value)}</p>
-          </CardContent></Card>
-        ))}
-      </div>
+      {/* KPI Cards */}
+      {kpis.length > 0 ? (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          {kpis.map((k) => (
+            <Card key={k.label}><CardContent className="pt-4 pb-3">
+              <p className="text-xs text-muted-foreground mb-1">{k.label}</p>
+              <p className={`text-lg font-bold ${k.green ? "text-green-700" : ""}`} style={!k.green ? { color: NAVY } : undefined}>{fmt(k.value)}</p>
+            </CardContent></Card>
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          {[
+            { label: "CA du mois", icon: TrendingUp },
+            { label: "Charges", icon: TrendingDown },
+            { label: "Résultat", icon: BarChart3 },
+            { label: "TVA nette", icon: Calculator },
+            { label: "Trésorerie", icon: Landmark },
+            { label: "Masse salariale", icon: Wallet },
+          ].map((k) => (
+            <Card key={k.label}><CardContent className="pt-4 pb-3">
+              <p className="text-xs text-muted-foreground mb-1">{k.label}</p>
+              <p className="text-lg font-bold text-muted-foreground/40">—</p>
+            </CardContent></Card>
+          ))}
+        </div>
+      )}
 
       <Tabs defaultValue="overview" className="space-y-4">
         <TabsList className="flex-wrap h-auto gap-1">
@@ -164,262 +483,425 @@ export default function SocieteContextPage() {
           </Link>
         </div>
 
+        {/* Overview */}
         <TabsContent value="overview" className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card><CardHeader className="pb-2"><CardTitle className="text-base">Résumé du mois</CardTitle></CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <div className="flex justify-between"><span>Factures fournisseurs</span><span className="font-medium">6 — {fmt(228135)}</span></div>
-                <div className="flex justify-between"><span>Factures clients</span><span className="font-medium">5 — {fmt(1144250)}</span></div>
-                <div className="flex justify-between"><span>Transactions bancaires</span><span className="font-medium">8 opérations</span></div>
-                <div className="flex justify-between"><span>Fiches de paie</span><span className="font-medium">5 employés</span></div>
-              </CardContent>
-            </Card>
-            <Card><CardHeader className="pb-2"><CardTitle className="text-base">Points d&apos;attention</CardTitle></CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-red-500" />TVA Mars à déclarer avant le 20/04</div>
-                <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-orange-500" />1 transaction non identifiée</div>
-                <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-orange-500" />2 factures impayées ({fmt(396750)})</div>
-              </CardContent>
-            </Card>
-          </div>
+          {fin.totalEcritures > 0 || fin.totalDocuments > 0 ? (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Chiffre d&apos;affaires</CardTitle>
+                    <TrendingUp className="h-5 w-5" style={{ color: "#22C55E" }} />
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold" style={{ color: NAVY }}>{fmt(fin.totalRevenue)}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Comptes classe 7</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Charges</CardTitle>
+                    <TrendingDown className="h-5 w-5" style={{ color: "#EF4444" }} />
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold" style={{ color: "#EF4444" }}>{fmt(fin.totalExpenses)}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Comptes classe 6</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Resultat</CardTitle>
+                    <BarChart3 className="h-5 w-5" style={{ color: GOLD }} />
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold" style={{ color: fin.resultat >= 0 ? "#22C55E" : "#EF4444" }}>{fmt(fin.resultat)}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Revenus - Charges</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Tresorerie</CardTitle>
+                    <Landmark className="h-5 w-5" style={{ color: NAVY }} />
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold" style={{ color: NAVY }}>{fmt(fin.totalBankMUR)}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Solde bancaire total</p>
+                  </CardContent>
+                </Card>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm" style={{ color: NAVY }}>Documents traites</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-3xl font-bold" style={{ color: GOLD }}>{fin.totalDocuments}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Factures, releves et autres documents importes</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm" style={{ color: NAVY }}>Ecritures comptables</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-3xl font-bold" style={{ color: GOLD }}>{fin.totalEcritures}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Lignes enregistrees dans le grand livre</p>
+                  </CardContent>
+                </Card>
+              </div>
+            </>
+          ) : (
+            <EmptyTab icon={BarChart3} message="Aucune donnee disponible" detail="Les donnees de synthese apparaitront ici une fois les ecritures saisies." />
+          )}
         </TabsContent>
 
-        <TabsContent value="fournisseurs"><Card><CardContent className="p-0">
-          <Table><TableHeader><TableRow>
-            <TableHead>Fournisseur</TableHead><TableHead>N°</TableHead><TableHead>Date</TableHead>
-            <TableHead className="text-right">HT</TableHead><TableHead className="text-right">TVA</TableHead><TableHead className="text-right">TTC</TableHead>
-            <TableHead>Échéance</TableHead><TableHead>Statut</TableHead><TableHead>Compte</TableHead><TableHead></TableHead>
-          </TableRow></TableHeader>
-          <TableBody>{mockFournisseurs.map((f,i)=>(<TableRow key={i}><TableCell className="font-medium">{f.fournisseur}</TableCell><TableCell>{f.numero}</TableCell><TableCell>{f.date}</TableCell><TableCell className="text-right">{fmt(f.ht)}</TableCell><TableCell className="text-right">{fmt(f.tva)}</TableCell><TableCell className="text-right font-semibold">{fmt(f.ttc)}</TableCell><TableCell>{f.echeance}</TableCell><TableCell>{stBadge(f.statut)}</TableCell><TableCell><Badge variant="outline">{f.compte}</Badge></TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
-          </Table></CardContent></Card>
+        {/* Fournisseurs */}
+        <TabsContent value="fournisseurs">
+          {fournisseurs.length === 0 ? (
+            <EmptyTab icon={FileIcon} message="Aucune facture fournisseur" detail="Les factures fournisseurs apparaîtront ici une fois importées." />
+          ) : (
+            <Card><CardContent className="p-0">
+              <Table><TableHeader><TableRow>
+                <TableHead>Fournisseur</TableHead><TableHead>N°</TableHead><TableHead>Date</TableHead>
+                <TableHead className="text-right">HT</TableHead><TableHead className="text-right">TVA</TableHead><TableHead className="text-right">TTC</TableHead>
+                <TableHead>Échéance</TableHead><TableHead>Statut</TableHead><TableHead>Compte</TableHead><TableHead></TableHead>
+              </TableRow></TableHeader>
+              <TableBody>{fournisseurs.map((f,i)=>(<TableRow key={i}><TableCell className="font-medium">{f.fournisseur}</TableCell><TableCell>{f.numero}</TableCell><TableCell>{f.date}</TableCell><TableCell className="text-right">{fmt(f.ht)}</TableCell><TableCell className="text-right">{fmt(f.tva)}</TableCell><TableCell className="text-right font-semibold">{fmt(f.ttc)}</TableCell><TableCell>{f.echeance}</TableCell><TableCell>{stBadge(f.statut)}</TableCell><TableCell><Badge variant="outline">{f.compte}</Badge></TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
+              </Table></CardContent></Card>
+          )}
         </TabsContent>
 
-        <TabsContent value="clients"><Card><CardContent className="p-0">
-          <Table><TableHeader><TableRow>
-            <TableHead>Client</TableHead><TableHead>N°</TableHead><TableHead>Date</TableHead>
-            <TableHead className="text-right">HT</TableHead><TableHead className="text-right">TVA</TableHead><TableHead className="text-right">TTC</TableHead>
-            <TableHead>Échéance</TableHead><TableHead>Statut</TableHead><TableHead className="text-right">Retard</TableHead><TableHead></TableHead>
-          </TableRow></TableHeader>
-          <TableBody>{mockFacturesClients.map((f,i)=>(<TableRow key={i}><TableCell className="font-medium">{f.client}</TableCell><TableCell>{f.numero}</TableCell><TableCell>{f.date}</TableCell><TableCell className="text-right">{fmt(f.ht)}</TableCell><TableCell className="text-right">{fmt(f.tva)}</TableCell><TableCell className="text-right font-semibold">{fmt(f.ttc)}</TableCell><TableCell>{f.echeance}</TableCell><TableCell>{stBadge(f.statut)}</TableCell><TableCell className={`text-right ${f.jours>30?"text-red-600 font-bold":f.jours>0?"text-orange-600":""}`}>{f.jours>0?f.jours+"j":"—"}</TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
-          </Table></CardContent></Card>
+        {/* Factures Clients */}
+        <TabsContent value="clients">
+          {facturesClients.length === 0 ? (
+            <EmptyTab icon={FileIcon} message="Aucune facture client" detail="Les factures clients apparaîtront ici une fois créées." />
+          ) : (
+            <Card><CardContent className="p-0">
+              <Table><TableHeader><TableRow>
+                <TableHead>Client</TableHead><TableHead>N°</TableHead><TableHead>Date</TableHead>
+                <TableHead className="text-right">HT</TableHead><TableHead className="text-right">TVA</TableHead><TableHead className="text-right">TTC</TableHead>
+                <TableHead>Échéance</TableHead><TableHead>Statut</TableHead><TableHead className="text-right">Retard</TableHead><TableHead></TableHead>
+              </TableRow></TableHeader>
+              <TableBody>{facturesClients.map((f,i)=>(<TableRow key={i}><TableCell className="font-medium">{f.client}</TableCell><TableCell>{f.numero}</TableCell><TableCell>{f.date}</TableCell><TableCell className="text-right">{fmt(f.ht)}</TableCell><TableCell className="text-right">{fmt(f.tva)}</TableCell><TableCell className="text-right font-semibold">{fmt(f.ttc)}</TableCell><TableCell>{f.echeance}</TableCell><TableCell>{stBadge(f.statut)}</TableCell><TableCell className={`text-right ${f.jours>30?"text-red-600 font-bold":f.jours>0?"text-orange-600":""}`}>{f.jours>0?f.jours+"j":"—"}</TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
+              </Table></CardContent></Card>
+          )}
         </TabsContent>
 
+        {/* Banque */}
         <TabsContent value="banque" className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-3">
-            <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">Solde MCB</p><p className="text-xl font-bold text-green-700">{fmt(2340000)}</p></CardContent></Card>
-            <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">Non rapprochées</p><p className="text-xl font-bold text-orange-600">2</p></CardContent></Card>
-            <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">Dernière MAJ</p><p className="text-xl font-bold">25/03/2026</p></CardContent></Card>
-          </div>
-          <Card><CardContent className="p-0">
-            <Table><TableHeader><TableRow>
-              <TableHead>Date</TableHead><TableHead>Libellé</TableHead><TableHead className="text-right">Débit</TableHead><TableHead className="text-right">Crédit</TableHead>
-              <TableHead>Tiers</TableHead><TableHead>Compte</TableHead><TableHead>Statut</TableHead><TableHead></TableHead>
-            </TableRow></TableHeader>
-            <TableBody>{mockBanque.map((b,i)=>(<TableRow key={i} className={b.statut==="non_identifie"?"bg-red-50":b.statut==="a_verifier"?"bg-orange-50":""}><TableCell>{b.date}</TableCell><TableCell className="font-medium">{b.libelle}</TableCell><TableCell className="text-right text-red-600">{b.debit>0?fmt(b.debit):""}</TableCell><TableCell className="text-right text-green-600">{b.credit>0?fmt(b.credit):""}</TableCell><TableCell>{b.tiers}</TableCell><TableCell><Badge variant="outline">{b.compte}</Badge></TableCell><TableCell>{stBadge(b.statut)}</TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
-            </Table></CardContent></Card>
+          {banque.length === 0 ? (
+            <EmptyTab icon={Landmark} message="Aucune transaction bancaire" detail="Les relevés bancaires apparaîtront ici une fois importés." />
+          ) : (
+            <Card><CardContent className="p-0">
+              <Table><TableHeader><TableRow>
+                <TableHead>Date</TableHead><TableHead>Libellé</TableHead><TableHead className="text-right">Débit</TableHead><TableHead className="text-right">Crédit</TableHead>
+                <TableHead>Tiers</TableHead><TableHead>Compte</TableHead><TableHead>Statut</TableHead><TableHead></TableHead>
+              </TableRow></TableHeader>
+              <TableBody>{banque.map((b,i)=>(<TableRow key={i} className={b.statut==="non_identifie"?"bg-red-50":b.statut==="a_verifier"?"bg-orange-50":""}><TableCell>{b.date}</TableCell><TableCell className="font-medium">{b.libelle}</TableCell><TableCell className="text-right text-red-600">{b.debit>0?fmt(b.debit):""}</TableCell><TableCell className="text-right text-green-600">{b.credit>0?fmt(b.credit):""}</TableCell><TableCell>{b.tiers}</TableCell><TableCell><Badge variant="outline">{b.compte}</Badge></TableCell><TableCell>{stBadge(b.statut)}</TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
+              </Table></CardContent></Card>
+          )}
         </TabsContent>
 
-        <TabsContent value="salaires"><Card><CardContent className="p-0">
-          <Table><TableHeader><TableRow>
-            <TableHead>Employé</TableHead><TableHead className="text-right">Brut</TableHead><TableHead className="text-right">CSG 3%</TableHead><TableHead className="text-right">NSF 1.5%</TableHead><TableHead className="text-right">PAYE</TableHead>
-            <TableHead className="text-right">Net</TableHead><TableHead className="text-right">Coût empl.</TableHead><TableHead>Statut</TableHead><TableHead></TableHead>
-          </TableRow></TableHeader>
-          <TableBody>{mockSalaires.map((s,i)=>(<TableRow key={i}><TableCell className="font-medium">{s.employe}</TableCell><TableCell className="text-right">{fmt(s.brut)}</TableCell><TableCell className="text-right">{fmt(s.csg)}</TableCell><TableCell className="text-right">{fmt(s.nsf)}</TableCell><TableCell className="text-right">{fmt(s.paye)}</TableCell><TableCell className="text-right font-semibold">{fmt(s.net)}</TableCell><TableCell className="text-right">{fmt(s.cout)}</TableCell><TableCell>{stBadge(s.statut)}</TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
-          </Table></CardContent></Card>
+        {/* Salaires */}
+        <TabsContent value="salaires">
+          {salaires.length === 0 ? (
+            <EmptyTab icon={Wallet} message="Aucune fiche de paie" detail="Les fiches de paie apparaîtront ici une fois saisies." />
+          ) : (
+            <Card><CardContent className="p-0">
+              <Table><TableHeader><TableRow>
+                <TableHead>Employé</TableHead><TableHead className="text-right">Brut</TableHead><TableHead className="text-right">CSG 3%</TableHead><TableHead className="text-right">NSF 1.5%</TableHead><TableHead className="text-right">PAYE</TableHead>
+                <TableHead className="text-right">Net</TableHead><TableHead className="text-right">Coût empl.</TableHead><TableHead>Statut</TableHead><TableHead></TableHead>
+              </TableRow></TableHeader>
+              <TableBody>{salaires.map((s,i)=>(<TableRow key={i}><TableCell className="font-medium">{s.employe}</TableCell><TableCell className="text-right">{fmt(s.brut)}</TableCell><TableCell className="text-right">{fmt(s.csg)}</TableCell><TableCell className="text-right">{fmt(s.nsf)}</TableCell><TableCell className="text-right">{fmt(s.paye)}</TableCell><TableCell className="text-right font-semibold">{fmt(s.net)}</TableCell><TableCell className="text-right">{fmt(s.cout)}</TableCell><TableCell>{stBadge(s.statut)}</TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
+              </Table></CardContent></Card>
+          )}
         </TabsContent>
 
+        {/* Charges Sociales */}
         <TabsContent value="charges" className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-5">
-            <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">CSG (3%+6%)</p><p className="text-xl font-bold">{fmt(37800)}</p></CardContent></Card>
-            <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">NSF (1.5%+2.5%)</p><p className="text-xl font-bold">{fmt(16800)}</p></CardContent></Card>
-            <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">Training Levy</p><p className="text-xl font-bold">{fmt(4200)}</p></CardContent></Card>
-            <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">PAYE</p><p className="text-xl font-bold">{fmt(22250)}</p></CardContent></Card>
-            <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">Total mensuel</p><p className="text-xl font-bold" style={{ color: "#1E2A4A" }}>{fmt(81050)}</p></CardContent></Card>
-          </div>
-          <Card><CardContent className="p-0">
-            <Table><TableHeader><TableRow>
-              <TableHead>Période</TableHead><TableHead className="text-right">CSG Empl.</TableHead><TableHead className="text-right">CSG Patr.</TableHead>
-              <TableHead className="text-right">NSF Empl.</TableHead><TableHead className="text-right">NSF Patr.</TableHead><TableHead className="text-right">Training</TableHead><TableHead className="text-right">PAYE</TableHead>
-              <TableHead className="text-right">Total</TableHead><TableHead>Statut</TableHead><TableHead></TableHead>
-            </TableRow></TableHeader>
-            <TableBody>{mockCharges.map((c,i)=>(<TableRow key={i}><TableCell className="font-medium">{c.periode}</TableCell><TableCell className="text-right">{fmt(c.csg_e)}</TableCell><TableCell className="text-right">{fmt(c.csg_p)}</TableCell><TableCell className="text-right">{fmt(c.nsf_e)}</TableCell><TableCell className="text-right">{fmt(c.nsf_p)}</TableCell><TableCell className="text-right">{fmt(c.training)}</TableCell><TableCell className="text-right">{fmt(c.paye)}</TableCell><TableCell className="text-right font-semibold">{fmt(c.total)}</TableCell><TableCell>{stBadge(c.statut)}</TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
-            </Table></CardContent></Card>
+          {charges.length === 0 ? (
+            <EmptyTab icon={Calculator} message="Aucune charge sociale" detail="Les charges sociales apparaîtront ici une fois calculées." />
+          ) : (
+            <Card><CardContent className="p-0">
+              <Table><TableHeader><TableRow>
+                <TableHead>Période</TableHead><TableHead className="text-right">CSG Empl.</TableHead><TableHead className="text-right">CSG Patr.</TableHead>
+                <TableHead className="text-right">NSF Empl.</TableHead><TableHead className="text-right">NSF Patr.</TableHead><TableHead className="text-right">Training</TableHead><TableHead className="text-right">PAYE</TableHead>
+                <TableHead className="text-right">Total</TableHead><TableHead>Statut</TableHead><TableHead></TableHead>
+              </TableRow></TableHeader>
+              <TableBody>{charges.map((c,i)=>(<TableRow key={i}><TableCell className="font-medium">{c.periode}</TableCell><TableCell className="text-right">{fmt(c.csg_e)}</TableCell><TableCell className="text-right">{fmt(c.csg_p)}</TableCell><TableCell className="text-right">{fmt(c.nsf_e)}</TableCell><TableCell className="text-right">{fmt(c.nsf_p)}</TableCell><TableCell className="text-right">{fmt(c.training)}</TableCell><TableCell className="text-right">{fmt(c.paye)}</TableCell><TableCell className="text-right font-semibold">{fmt(c.total)}</TableCell><TableCell>{stBadge(c.statut)}</TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
+              </Table></CardContent></Card>
+          )}
         </TabsContent>
 
+        {/* TVA */}
         <TabsContent value="tva" className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-3">
-            <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">TVA Collectée</p><p className="text-xl font-bold">{fmt(149250)}</p></CardContent></Card>
-            <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">TVA Déductible</p><p className="text-xl font-bold">{fmt(19710)}</p></CardContent></Card>
-            <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">TVA Nette</p><p className="text-xl font-bold text-red-600">{fmt(129540)}</p></CardContent></Card>
-          </div>
-          <Card><CardContent className="p-0">
-            <Table><TableHeader><TableRow>
-              <TableHead>Mois</TableHead><TableHead className="text-right">Collectée</TableHead><TableHead className="text-right">Déductible</TableHead>
-              <TableHead className="text-right">Nette</TableHead><TableHead>Deadline</TableHead><TableHead>Statut</TableHead><TableHead>Réf</TableHead><TableHead></TableHead>
-            </TableRow></TableHeader>
-            <TableBody>{mockTVA.map((t,i)=>(<TableRow key={i}><TableCell className="font-medium">{t.mois}</TableCell><TableCell className="text-right">{fmt(t.collectee)}</TableCell><TableCell className="text-right">{fmt(t.deductible)}</TableCell><TableCell className="text-right font-semibold">{fmt(t.nette)}</TableCell><TableCell>{t.deadline}</TableCell><TableCell>{stBadge(t.statut)}</TableCell><TableCell className="text-xs text-muted-foreground">{t.ref||"—"}</TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
-            </Table></CardContent></Card>
+          {tva.length === 0 ? (
+            <EmptyTab icon={Calculator} message="Aucune déclaration TVA" detail="Les déclarations TVA apparaîtront ici une fois générées." />
+          ) : (
+            <Card><CardContent className="p-0">
+              <Table><TableHeader><TableRow>
+                <TableHead>Mois</TableHead><TableHead className="text-right">Collectée</TableHead><TableHead className="text-right">Déductible</TableHead>
+                <TableHead className="text-right">Nette</TableHead><TableHead>Deadline</TableHead><TableHead>Statut</TableHead><TableHead>Réf</TableHead><TableHead></TableHead>
+              </TableRow></TableHeader>
+              <TableBody>{tva.map((t,i)=>(<TableRow key={i}><TableCell className="font-medium">{t.mois}</TableCell><TableCell className="text-right">{fmt(t.collectee)}</TableCell><TableCell className="text-right">{fmt(t.deductible)}</TableCell><TableCell className="text-right font-semibold">{fmt(t.nette)}</TableCell><TableCell>{t.deadline}</TableCell><TableCell>{stBadge(t.statut)}</TableCell><TableCell className="text-xs text-muted-foreground">{t.ref||"—"}</TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
+              </Table></CardContent></Card>
+          )}
         </TabsContent>
 
-        {/* === GRAND LIVRE === */}
+        {/* Grand Livre */}
         <TabsContent value="grand-livre" className="space-y-4">
           <div className="flex justify-between items-center">
-            <h3 className="font-semibold" style={{ color: "#1E2A4A" }}>Grand Livre — {societeName}</h3>
+            <h3 className="font-semibold" style={{ color: NAVY }}>Grand Livre — {societeName}</h3>
             <div className="flex gap-2">
               <Button variant="outline" size="sm">Exporter Excel</Button>
               <Button variant="outline" size="sm">Imprimer</Button>
             </div>
           </div>
-          {[
-            { compte: "1000", nom: "Cash & Bank", entries: [
-              { date: "2026-03-25", ref: "BQ-001", desc: "Encaissement Mauritius Telecom", debit: 207000, credit: 0, solde: 2340000 },
-              { date: "2026-03-24", ref: "BQ-002", desc: "Paiement MCB Card Services", debit: 0, credit: 14375, solde: 2133000 },
-              { date: "2026-03-15", ref: "SAL-001", desc: "Virement salaires mars", debit: 0, credit: 420000, solde: 2147375 },
-            ]},
-            { compte: "4000", nom: "Consultation Revenue (B2C)", entries: [
-              { date: "2026-03-20", ref: "VTE-001", desc: "Factures consultations mars", debit: 0, credit: 650000, solde: 650000 },
-              { date: "2026-03-10", ref: "VTE-002", desc: "Abonnements corporate mars", debit: 0, credit: 345000, solde: 995000 },
-            ]},
-            { compte: "6100", nom: "Salaries & Benefits", entries: [
-              { date: "2026-03-15", ref: "SAL-001", desc: "Salaires bruts mars 2026", debit: 420000, credit: 0, solde: 420000 },
-            ]},
-            { compte: "6200", nom: "Technology & Hosting", entries: [
-              { date: "2026-03-22", ref: "ACH-001", desc: "OpenAI API mars", debit: 45000, credit: 0, solde: 45000 },
-              { date: "2026-03-10", ref: "ACH-002", desc: "Frais bancaires MCB", debit: 2500, credit: 0, solde: 47500 },
-            ]},
-          ].map((account) => (
-            <Card key={account.compte}>
-              <CardHeader className="py-3" style={{ backgroundColor: "#1E2A4A08" }}>
-                <CardTitle className="text-sm">ACCOUNT: {account.compte} — {account.nom}</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader><TableRow>
-                    <TableHead>Date</TableHead><TableHead>Réf</TableHead><TableHead>Description</TableHead>
-                    <TableHead className="text-right">Débit (MUR)</TableHead><TableHead className="text-right">Crédit (MUR)</TableHead><TableHead className="text-right">Solde (MUR)</TableHead>
-                  </TableRow></TableHeader>
-                  <TableBody>
-                    {account.entries.map((e, i) => (
-                      <TableRow key={i}>
-                        <TableCell>{e.date}</TableCell><TableCell className="text-xs">{e.ref}</TableCell><TableCell>{e.desc}</TableCell>
-                        <TableCell className="text-right">{e.debit > 0 ? fmt(e.debit) : ""}</TableCell>
-                        <TableCell className="text-right">{e.credit > 0 ? fmt(e.credit) : ""}</TableCell>
-                        <TableCell className="text-right font-semibold">{fmt(e.solde)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          ))}
+          {(fin.ecritures && fin.ecritures.length > 0) ? (
+            <Card><CardContent className="p-0">
+              <Table>
+                <TableHeader><TableRow>
+                  <TableHead>Date</TableHead><TableHead>Journal</TableHead><TableHead>N° piece</TableHead>
+                  <TableHead>Compte</TableHead><TableHead>Libelle</TableHead>
+                  <TableHead className="text-right">Debit (MUR)</TableHead><TableHead className="text-right">Credit (MUR)</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  {fin.ecritures.map((e, i) => (
+                    <TableRow key={e.id || i}>
+                      <TableCell>{e.date_ecriture || '—'}</TableCell>
+                      <TableCell><Badge variant="outline">{e.journal || '—'}</Badge></TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{e.numero_piece || '—'}</TableCell>
+                      <TableCell><Badge variant="outline" className="font-mono">{e.compte || '—'}</Badge></TableCell>
+                      <TableCell className="font-medium">{e.libelle || '—'}</TableCell>
+                      <TableCell className="text-right text-red-600">{e.debit > 0 ? fmt(e.debit) : ''}</TableCell>
+                      <TableCell className="text-right text-green-600">{e.credit > 0 ? fmt(e.credit) : ''}</TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow className="bg-muted/30 font-bold">
+                    <TableCell colSpan={5} className="text-right">Total</TableCell>
+                    <TableCell className="text-right text-red-600">{fmt(fin.ecritures.reduce((s, e) => s + (e.debit || 0), 0))}</TableCell>
+                    <TableCell className="text-right text-green-600">{fmt(fin.ecritures.reduce((s, e) => s + (e.credit || 0), 0))}</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </CardContent></Card>
+          ) : grandLivre.length > 0 ? (
+            grandLivre.map((account) => (
+              <Card key={account.compte}>
+                <CardHeader className="py-3" style={{ backgroundColor: `${NAVY}08` }}>
+                  <CardTitle className="text-sm">COMPTE: {account.compte} — {account.nom}</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader><TableRow>
+                      <TableHead>Date</TableHead><TableHead>Ref</TableHead><TableHead>Description</TableHead>
+                      <TableHead className="text-right">Debit (MUR)</TableHead><TableHead className="text-right">Credit (MUR)</TableHead><TableHead className="text-right">Solde (MUR)</TableHead>
+                    </TableRow></TableHeader>
+                    <TableBody>
+                      {account.entries.map((e, i) => (
+                        <TableRow key={i}>
+                          <TableCell>{e.date}</TableCell><TableCell className="text-xs">{e.ref}</TableCell><TableCell>{e.desc}</TableCell>
+                          <TableCell className="text-right">{e.debit > 0 ? fmt(e.debit) : ""}</TableCell>
+                          <TableCell className="text-right">{e.credit > 0 ? fmt(e.credit) : ""}</TableCell>
+                          <TableCell className="text-right font-semibold">{fmt(e.solde)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            ))
+          ) : (
+            <EmptyTab icon={FileIcon} message="Aucune ecriture comptable" detail="Le grand livre sera alimente par les ecritures comptables." />
+          )}
         </TabsContent>
 
-        {/* === ÉTATS FINANCIERS IFRS === */}
+        {/* États Financiers */}
         <TabsContent value="etats-financiers" className="space-y-4">
-          <div className="text-center mb-4">
-            <h3 className="font-bold text-lg" style={{ color: "#1E2A4A" }}>DIGITAL DATA SOLUTIONS LTD (TIBOK)</h3>
-            <p className="text-xs text-muted-foreground">Prepared in accordance with IFRS for SMEs — Companies Act 2001 Mauritius</p>
-          </div>
-          <Tabs defaultValue="bilan">
-            <TabsList><TabsTrigger value="bilan">Balance Sheet</TabsTrigger><TabsTrigger value="pl">Profit & Loss</TabsTrigger></TabsList>
-            <TabsContent value="bilan">
-              <Card><CardContent className="p-0">
-                <Table>
-                  <TableHeader><TableRow><TableHead>Poste</TableHead><TableHead className="text-right">2025-2026 (MUR)</TableHead><TableHead className="text-right">2024-2025 (MUR)</TableHead></TableRow></TableHeader>
-                  <TableBody>
-                    <TableRow className="bg-muted/50 font-bold"><TableCell colSpan={3}>NON-CURRENT ASSETS</TableCell></TableRow>
-                    <TableRow><TableCell className="pl-6">Property, Plant & Equipment</TableCell><TableCell className="text-right">{fmt(850000)}</TableCell><TableCell className="text-right">{fmt(720000)}</TableCell></TableRow>
-                    <TableRow><TableCell className="pl-6">Intangible Assets</TableCell><TableCell className="text-right">{fmt(350000)}</TableCell><TableCell className="text-right">{fmt(200000)}</TableCell></TableRow>
-                    <TableRow className="font-semibold border-t"><TableCell>Total Non-Current Assets</TableCell><TableCell className="text-right">{fmt(1200000)}</TableCell><TableCell className="text-right">{fmt(920000)}</TableCell></TableRow>
-                    <TableRow className="bg-muted/50 font-bold"><TableCell colSpan={3}>CURRENT ASSETS</TableCell></TableRow>
-                    <TableRow><TableCell className="pl-6">Trade Receivables</TableCell><TableCell className="text-right">{fmt(396750)}</TableCell><TableCell className="text-right">{fmt(280000)}</TableCell></TableRow>
-                    <TableRow><TableCell className="pl-6">Cash & Bank</TableCell><TableCell className="text-right">{fmt(2340000)}</TableCell><TableCell className="text-right">{fmt(1800000)}</TableCell></TableRow>
-                    <TableRow className="font-semibold border-t"><TableCell>Total Current Assets</TableCell><TableCell className="text-right">{fmt(2736750)}</TableCell><TableCell className="text-right">{fmt(2080000)}</TableCell></TableRow>
-                    <TableRow className="font-bold border-t-2 text-lg"><TableCell>TOTAL ASSETS</TableCell><TableCell className="text-right">{fmt(3936750)}</TableCell><TableCell className="text-right">{fmt(3000000)}</TableCell></TableRow>
-                    <TableRow className="bg-muted/50 font-bold"><TableCell colSpan={3}>EQUITY</TableCell></TableRow>
-                    <TableRow><TableCell className="pl-6">Share Capital</TableCell><TableCell className="text-right">{fmt(100000)}</TableCell><TableCell className="text-right">{fmt(100000)}</TableCell></TableRow>
-                    <TableRow><TableCell className="pl-6">Retained Earnings</TableCell><TableCell className="text-right">{fmt(2800000)}</TableCell><TableCell className="text-right">{fmt(2100000)}</TableCell></TableRow>
-                    <TableRow className="font-semibold border-t"><TableCell>Total Equity</TableCell><TableCell className="text-right">{fmt(2900000)}</TableCell><TableCell className="text-right">{fmt(2200000)}</TableCell></TableRow>
-                    <TableRow className="bg-muted/50 font-bold"><TableCell colSpan={3}>CURRENT LIABILITIES</TableCell></TableRow>
-                    <TableRow><TableCell className="pl-6">Trade Payables</TableCell><TableCell className="text-right">{fmt(228135)}</TableCell><TableCell className="text-right">{fmt(180000)}</TableCell></TableRow>
-                    <TableRow><TableCell className="pl-6">VAT Payable</TableCell><TableCell className="text-right">{fmt(129540)}</TableCell><TableCell className="text-right">{fmt(95000)}</TableCell></TableRow>
-                    <TableRow><TableCell className="pl-6">CSG/NSF/PAYE Payable</TableCell><TableCell className="text-right">{fmt(81050)}</TableCell><TableCell className="text-right">{fmt(65000)}</TableCell></TableRow>
-                    <TableRow className="font-semibold border-t"><TableCell>Total Current Liabilities</TableCell><TableCell className="text-right">{fmt(1036750)}</TableCell><TableCell className="text-right">{fmt(800000)}</TableCell></TableRow>
-                    <TableRow className="font-bold border-t-2 text-lg"><TableCell>TOTAL EQUITY & LIABILITIES</TableCell><TableCell className="text-right">{fmt(3936750)}</TableCell><TableCell className="text-right">{fmt(3000000)}</TableCell></TableRow>
-                  </TableBody>
-                </Table>
-              </CardContent></Card>
-            </TabsContent>
-            <TabsContent value="pl">
-              <Card><CardContent className="p-0">
-                <Table>
-                  <TableHeader><TableRow><TableHead>Poste</TableHead><TableHead className="text-right">2025-2026 (MUR)</TableHead><TableHead className="text-right">2024-2025 (MUR)</TableHead></TableRow></TableHeader>
-                  <TableBody>
-                    <TableRow className="bg-muted/50 font-bold"><TableCell colSpan={3}>REVENUE</TableCell></TableRow>
-                    <TableRow><TableCell className="pl-6">Consultation Revenue (B2C)</TableCell><TableCell className="text-right text-green-700">{fmt(6500000)}</TableCell><TableCell className="text-right">{fmt(4800000)}</TableCell></TableRow>
-                    <TableRow><TableCell className="pl-6">Corporate/B2B Revenue</TableCell><TableCell className="text-right text-green-700">{fmt(4200000)}</TableCell><TableCell className="text-right">{fmt(3200000)}</TableCell></TableRow>
-                    <TableRow><TableCell className="pl-6">Pharmacy Revenue</TableCell><TableCell className="text-right text-green-700">{fmt(1240000)}</TableCell><TableCell className="text-right">{fmt(950000)}</TableCell></TableRow>
-                    <TableRow className="font-bold border-t"><TableCell>TOTAL REVENUE</TableCell><TableCell className="text-right text-green-700">{fmt(11940000)}</TableCell><TableCell className="text-right">{fmt(8950000)}</TableCell></TableRow>
-                    <TableRow className="bg-muted/50 font-bold"><TableCell colSpan={3}>OPERATING EXPENSES</TableCell></TableRow>
-                    <TableRow><TableCell className="pl-6">Salaries & Benefits</TableCell><TableCell className="text-right text-red-600">{fmt(5040000)}</TableCell><TableCell className="text-right">{fmt(4200000)}</TableCell></TableRow>
-                    <TableRow><TableCell className="pl-6">Technology & Hosting</TableCell><TableCell className="text-right text-red-600">{fmt(540000)}</TableCell><TableCell className="text-right">{fmt(420000)}</TableCell></TableRow>
-                    <TableRow><TableCell className="pl-6">Marketing</TableCell><TableCell className="text-right text-red-600">{fmt(384000)}</TableCell><TableCell className="text-right">{fmt(300000)}</TableCell></TableRow>
-                    <TableRow><TableCell className="pl-6">Professional Fees</TableCell><TableCell className="text-right text-red-600">{fmt(420000)}</TableCell><TableCell className="text-right">{fmt(360000)}</TableCell></TableRow>
-                    <TableRow><TableCell className="pl-6">Rent & Utilities</TableCell><TableCell className="text-right text-red-600">{fmt(300000)}</TableCell><TableCell className="text-right">{fmt(280000)}</TableCell></TableRow>
-                    <TableRow><TableCell className="pl-6">Depreciation</TableCell><TableCell className="text-right text-red-600">{fmt(180000)}</TableCell><TableCell className="text-right">{fmt(150000)}</TableCell></TableRow>
-                    <TableRow><TableCell className="pl-6">Other Expenses</TableCell><TableCell className="text-right text-red-600">{fmt(636000)}</TableCell><TableCell className="text-right">{fmt(490000)}</TableCell></TableRow>
-                    <TableRow className="font-bold border-t"><TableCell>TOTAL EXPENSES</TableCell><TableCell className="text-right text-red-600">{fmt(7500000)}</TableCell><TableCell className="text-right">{fmt(6200000)}</TableCell></TableRow>
-                    <TableRow className="font-bold border-t-2 text-lg"><TableCell>PROFIT BEFORE TAX</TableCell><TableCell className="text-right text-green-700">{fmt(4440000)}</TableCell><TableCell className="text-right">{fmt(2750000)}</TableCell></TableRow>
-                    <TableRow><TableCell className="pl-6">Income Tax (15%)</TableCell><TableCell className="text-right text-red-600">{fmt(666000)}</TableCell><TableCell className="text-right">{fmt(412500)}</TableCell></TableRow>
-                    <TableRow className="font-bold border-t-2 text-lg bg-green-50"><TableCell>PROFIT AFTER TAX</TableCell><TableCell className="text-right text-green-700">{fmt(3774000)}</TableCell><TableCell className="text-right">{fmt(2337500)}</TableCell></TableRow>
-                  </TableBody>
-                </Table>
-              </CardContent></Card>
-            </TabsContent>
-          </Tabs>
+          {fin.totalEcritures > 0 ? (() => {
+            const immobilisations = fin.immobilisations || 0
+            const creancesClients = fin.creances || 0
+            const tresorerie = fin.totalBankMUR || 0
+            const totalNonCurrentAssets = immobilisations
+            const totalCurrentAssets = tresorerie + creancesClients
+            const totalAssets = totalCurrentAssets + totalNonCurrentAssets
+
+            const capitauxPropres = fin.capitauxPropres || 0
+            const totalRevenue = fin.totalRevenue || 0
+            const totalExpenses = fin.totalExpenses || 0
+            const retainedEarnings = totalRevenue - totalExpenses
+            const totalEquity = capitauxPropres + retainedEarnings
+
+            const dettesFournisseurs = fin.dettesFournisseurs || 0
+            const dettesFiscales = fin.dettesFiscales || 0
+            const dettesSociales = fin.dettesSociales || 0
+            const totalCurrentLiabilities = dettesFournisseurs + dettesFiscales + dettesSociales
+
+            const totalEquityAndLiabilities = totalEquity + totalCurrentLiabilities
+
+            const revenueByAccount: Record<string, number> = fin.revenueByAccount || {}
+            const expensesByAccount: Record<string, number> = fin.expensesByAccount || {}
+            const revenueDetails = Object.entries(revenueByAccount)
+              .filter(([, v]) => v !== 0)
+              .sort(([a], [b]) => a.localeCompare(b))
+            const allExpenseGroups = groupExpenses(expensesByAccount)
+            const profitBeforeTax = totalRevenue - totalExpenses
+            const incomeTax = profitBeforeTax > 0 ? profitBeforeTax * 0.15 : 0
+            const netProfit = profitBeforeTax - incomeTax
+
+            const amtCell = (n: number) => {
+              const s: React.CSSProperties = {}
+              if (n > 0) s.color = "#16A34A"
+              if (n < 0) s.color = "#DC2626"
+              const d = n < 0 ? `(${fmt2(Math.abs(n))})` : fmt2(n)
+              return { d, s }
+            }
+
+            const SectionHdr = ({ label }: { label: string }) => (
+              <TableRow>
+                <TableCell colSpan={3} className="text-sm font-bold pt-5 pb-2 border-b">{label}</TableCell>
+              </TableRow>
+            )
+            const SubLine = ({ label, current }: { label: string; current: number }) => {
+              const a = amtCell(current)
+              return (
+                <TableRow>
+                  <TableCell className="pl-8 text-sm py-2">{label}</TableCell>
+                  <TableCell className="text-right text-sm font-mono tabular-nums py-2" style={a.s}>{a.d}</TableCell>
+                  <TableCell className="text-right text-sm font-mono tabular-nums py-2 text-muted-foreground">{"\u2014"}</TableCell>
+                </TableRow>
+              )
+            }
+            const TotLine = ({ label, current, grand = false }: { label: string; current: number; grand?: boolean }) => {
+              const a = amtCell(current)
+              return (
+                <TableRow className={grand ? "border-t-2 border-b-2" : "border-t"}>
+                  <TableCell className={`text-sm py-2 ${grand ? "font-bold text-base" : "font-bold"}`}>{label}</TableCell>
+                  <TableCell className={`text-right font-mono tabular-nums py-2 ${grand ? "font-bold text-base" : "text-sm font-bold"}`} style={a.s}>{a.d}</TableCell>
+                  <TableCell className={`text-right font-mono tabular-nums py-2 text-muted-foreground ${grand ? "text-base" : "text-sm"}`}>{"\u2014"}</TableCell>
+                </TableRow>
+              )
+            }
+
+            return (
+              <div className="max-w-[900px] mx-auto space-y-6">
+                <div className="text-center space-y-1">
+                  <h1 className="text-2xl font-bold">{societeName.toUpperCase()}</h1>
+                  <p className="text-sm text-muted-foreground">
+                    Prepared in accordance with IFRS for SMEs &mdash; Companies Act 2001 Mauritius
+                  </p>
+                </div>
+
+                <Tabs defaultValue="balance-sheet" className="space-y-4">
+                  <TabsList>
+                    <TabsTrigger value="balance-sheet">Balance Sheet</TabsTrigger>
+                    <TabsTrigger value="profit-loss">Profit &amp; Loss</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="balance-sheet">
+                    <div className="border rounded-lg overflow-hidden">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-1/2">Poste</TableHead>
+                            <TableHead className="text-right">2025-2026 (MUR)</TableHead>
+                            <TableHead className="text-right">2024-2025 (MUR)</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          <SectionHdr label="NON-CURRENT ASSETS" />
+                          <SubLine label="Property, Plant & Equipment" current={immobilisations} />
+                          <SubLine label="Intangible Assets" current={0} />
+                          <TotLine label="Total Non-Current Assets" current={totalNonCurrentAssets} />
+
+                          <SectionHdr label="CURRENT ASSETS" />
+                          <SubLine label="Trade Receivables" current={creancesClients} />
+                          <SubLine label="Cash & Bank" current={tresorerie} />
+                          <TotLine label="Total Current Assets" current={totalCurrentAssets} />
+
+                          <TotLine label="TOTAL ASSETS" current={totalAssets} grand />
+
+                          <SectionHdr label="EQUITY" />
+                          <SubLine label="Share Capital" current={capitauxPropres} />
+                          <SubLine label="Retained Earnings" current={retainedEarnings} />
+                          <TotLine label="Total Equity" current={totalEquity} />
+
+                          <SectionHdr label="CURRENT LIABILITIES" />
+                          <SubLine label="Trade Payables" current={dettesFournisseurs} />
+                          <SubLine label="VAT Payable" current={dettesFiscales} />
+                          <SubLine label="CSG/NSF/PAYE Payable" current={dettesSociales} />
+                          <TotLine label="Total Current Liabilities" current={totalCurrentLiabilities} />
+
+                          <TotLine label="TOTAL EQUITY & LIABILITIES" current={totalEquityAndLiabilities} grand />
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="profit-loss">
+                    <div className="border rounded-lg overflow-hidden">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-1/2">Poste</TableHead>
+                            <TableHead className="text-right">2025-2026 (MUR)</TableHead>
+                            <TableHead className="text-right">2024-2025 (MUR)</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          <SectionHdr label="REVENUE" />
+                          {revenueDetails.map(([prefix, amount]) => (
+                            <SubLine key={prefix} label={REVENUE_LABELS[prefix] || `Compte ${prefix}x`} current={amount} />
+                          ))}
+                          {revenueDetails.length === 0 && (
+                            <TableRow>
+                              <TableCell colSpan={3} className="text-center text-muted-foreground text-sm py-4">Aucun produit enregistre</TableCell>
+                            </TableRow>
+                          )}
+                          <TotLine label="TOTAL REVENUE" current={totalRevenue} />
+
+                          <SectionHdr label="OPERATING EXPENSES" />
+                          {allExpenseGroups.map((group) => (
+                            <SubLine key={group.label} label={`${group.label} (${group.range})`} current={-group.amount} />
+                          ))}
+                          {allExpenseGroups.length === 0 && (
+                            <TableRow>
+                              <TableCell colSpan={3} className="text-center text-muted-foreground text-sm py-4">Aucune charge enregistree</TableCell>
+                            </TableRow>
+                          )}
+                          <TotLine label="TOTAL EXPENSES" current={-totalExpenses} />
+
+                          <TotLine label="PROFIT BEFORE TAX" current={profitBeforeTax} />
+                          <SubLine label="Income Tax (15%)" current={-incomeTax} />
+                          <TotLine label="NET PROFIT" current={netProfit} grand />
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </TabsContent>
+                </Tabs>
+
+                <div className="text-center py-4">
+                  <p className="text-xs text-muted-foreground italic">
+                    All amounts are in Mauritian Rupees (MUR)
+                  </p>
+                </div>
+              </div>
+            )
+          })() : (
+            <EmptyTab icon={FileIcon} message="Aucun etat financier disponible" detail="Les etats financiers seront generes a la cloture de l'exercice." />
+          )}
         </TabsContent>
 
-        {/* === IMMOBILISATIONS === */}
+        {/* Immobilisations */}
         <TabsContent value="immobilisations" className="space-y-4">
           <div className="flex justify-between items-center">
-            <h3 className="font-semibold" style={{ color: "#1E2A4A" }}>Registre des Immobilisations — {societeName}</h3>
-            <Button size="sm" style={{ backgroundColor: "#C9A84C" }}>+ Ajouter un actif</Button>
+            <h3 className="font-semibold" style={{ color: NAVY }}>Registre des Immobilisations — {societeName}</h3>
+            <Button size="sm" style={{ backgroundColor: GOLD }}>+ Ajouter un actif</Button>
           </div>
-          <Card><CardContent className="p-0">
-            <Table>
-              <TableHeader><TableRow>
-                <TableHead>Description</TableHead><TableHead>Catégorie</TableHead><TableHead>Date achat</TableHead>
-                <TableHead className="text-right">Coût (MUR)</TableHead><TableHead>Durée</TableHead>
-                <TableHead className="text-right">Amort. cumulé</TableHead><TableHead className="text-right">Dotation année</TableHead>
-                <TableHead className="text-right">Valeur nette</TableHead><TableHead></TableHead>
-              </TableRow></TableHeader>
-              <TableBody>
-                {[
-                  { desc: "Serveurs AWS dédiés", cat: "IT & Technology", date: "2024-01-15", cout: 450000, duree: "3 ans", amort: 150000, dot: 150000, vn: 150000 },
-                  { desc: "MacBook Pro M3 (x5)", cat: "IT & Technology", date: "2024-06-01", cout: 625000, duree: "3 ans", amort: 138890, dot: 208333, vn: 277777 },
-                  { desc: "Mobilier bureau", cat: "Furniture", date: "2023-03-01", cout: 180000, duree: "10 ans", amort: 54000, dot: 18000, vn: 108000 },
-                  { desc: "Équipement médical", cat: "Equipment", date: "2024-09-01", cout: 320000, duree: "5 ans", amort: 32000, dot: 64000, vn: 224000 },
-                  { desc: "Logiciel EHR licence", cat: "IT & Technology", date: "2025-01-01", cout: 200000, duree: "5 ans", amort: 0, dot: 40000, vn: 160000 },
-                ].map((a, i) => (
-                  <TableRow key={i}>
-                    <TableCell className="font-medium">{a.desc}</TableCell><TableCell><Badge variant="outline">{a.cat}</Badge></TableCell><TableCell>{a.date}</TableCell>
-                    <TableCell className="text-right">{fmt(a.cout)}</TableCell><TableCell>{a.duree}</TableCell>
-                    <TableCell className="text-right">{fmt(a.amort)}</TableCell><TableCell className="text-right">{fmt(a.dot)}</TableCell>
-                    <TableCell className="text-right font-semibold">{fmt(a.vn)}</TableCell>
-                    <TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell>
-                  </TableRow>
-                ))}
-                <TableRow className="font-bold border-t-2">
-                  <TableCell colSpan={3}>TOTAL</TableCell>
-                  <TableCell className="text-right">{fmt(1775000)}</TableCell><TableCell></TableCell>
-                  <TableCell className="text-right">{fmt(374890)}</TableCell><TableCell className="text-right">{fmt(480333)}</TableCell>
-                  <TableCell className="text-right">{fmt(919777)}</TableCell><TableCell></TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </CardContent></Card>
+          <EmptyTab icon={Landmark} message="Aucune immobilisation enregistrée" detail="Les actifs immobilisés apparaîtront ici une fois saisis." />
         </TabsContent>
 
+        {/* Documents */}
         <TabsContent value="documents" className="space-y-4">
           {/* Upload Zone */}
           <div
@@ -431,7 +913,7 @@ export default function SocieteContextPage() {
             <input ref={fileInputRef} type="file" className="hidden" multiple accept=".pdf,.jpeg,.jpg,.png,.xlsx" onChange={(e) => handleUpload(e.target.files)} />
             {uploading ? (
               <div className="flex flex-col items-center gap-2">
-                <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#C9A84C" }} />
+                <Loader2 className="h-8 w-8 animate-spin" style={{ color: GOLD }} />
                 <p className="text-sm text-muted-foreground">Upload en cours...</p>
               </div>
             ) : (
@@ -471,50 +953,160 @@ export default function SocieteContextPage() {
 
           {/* Dossiers */}
           <div>
-            <h3 className="font-semibold mb-3" style={{ color: "#1E2A4A" }}>Dossiers de la société</h3>
-            <div className="grid gap-2">
-              {mockDossiers.map((d,i)=>(
-                <Card key={i} className={`cursor-pointer hover:bg-muted/50 ${d.count===0?"opacity-50":""}`} onClick={() => setSelectedDossier(selectedDossier === d.nom ? null : d.nom)}>
-                  <CardContent className="flex items-center justify-between py-3">
-                    <div className="flex items-center gap-3">
-                      <FolderOpen className="h-5 w-5" style={{ color: "#C9A84C" }} />
-                      <div><p className="text-sm font-medium">{d.nom}</p><p className="text-xs text-muted-foreground">{d.count} doc{d.count!==1?"s":""}{d.count===0?" — vide":""}</p></div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {d.anomalies>0&&<Badge className="bg-red-100 text-red-700">{d.anomalies} anomalie{d.anomalies>1?"s":""}</Badge>}
-                      <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform ${selectedDossier===d.nom?"rotate-90":""}`} />
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="pnl" className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
-            {[{l:"CA",v:995000,c:"text-green-700"},{l:"Charges",v:208400},{l:"EBITDA",v:786600,c:"text-green-700"},{l:"Marge",v:"79.1%",c:"text-green-700"},{l:"Trésorerie",v:2340000},{l:"DSO",v:"18j"}].map((k,i)=>(
-              <Card key={i}><CardContent className="pt-4"><p className="text-xs text-muted-foreground">{k.l}</p><p className={`text-lg font-bold ${k.c||""}`}>{typeof k.v==="number"?fmt(k.v):k.v}</p></CardContent></Card>
-            ))}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="alertes" className="space-y-3">
-          {[
-            {n:"critique",t:"TVA Mars 2026 non déclarée",d:"Pénalité en cours",m:129540,e:"20/03/2026"},
-            {n:"important",t:"Facture Swan Insurance impayée > 30j",d:"41 jours de retard",m:109250,e:"15/03/2026"},
-            {n:"informatif",t:"Transaction non identifiée",d:"15,600 MUR le 12/03",m:15600,e:""},
-          ].map((a,i)=>(
-            <Card key={i}><CardContent className="flex items-start gap-3 py-4">
-              <div className={`mt-1 h-2.5 w-2.5 rounded-full shrink-0 ${a.n==="critique"?"bg-red-500":a.n==="important"?"bg-orange-500":"bg-blue-500"}`} />
-              <div className="flex-1">
-                <Badge className={a.n==="critique"?"bg-red-100 text-red-800":a.n==="important"?"bg-orange-100 text-orange-800":"bg-blue-100 text-blue-800"}>{a.n==="critique"?"Critique":a.n==="important"?"Important":"Info"}</Badge>
-                <p className="text-sm font-medium mt-1">{a.t}</p><p className="text-xs text-muted-foreground">{a.d}</p>
+            <h3 className="font-semibold mb-3" style={{ color: NAVY }}>Dossiers de la société</h3>
+            {dossiers.length === 0 ? (
+              <div className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
+                <FolderOpen className="h-10 w-10 text-muted-foreground/40" />
+                <p className="font-medium">Aucun dossier</p>
+                <p className="text-sm">Les dossiers seront créés automatiquement lors de l&apos;import de documents.</p>
               </div>
-              <div className="text-right shrink-0"><p className="text-sm font-semibold">{fmt(a.m)}</p>{a.e&&<p className="text-xs text-muted-foreground">{a.e}</p>}</div>
-              <Button variant="outline" size="sm">Traiter</Button>
-            </CardContent></Card>
-          ))}
+            ) : (
+              <div className="grid gap-2">
+                {dossiers.map((d,i)=>(
+                  <Card key={i} className={`cursor-pointer hover:bg-muted/50 ${d.count===0?"opacity-50":""}`} onClick={() => setSelectedDossier(selectedDossier === d.nom ? null : d.nom)}>
+                    <CardContent className="flex items-center justify-between py-3">
+                      <div className="flex items-center gap-3">
+                        <FolderOpen className="h-5 w-5" style={{ color: GOLD }} />
+                        <div><p className="text-sm font-medium">{d.nom}</p><p className="text-xs text-muted-foreground">{d.count} doc{d.count!==1?"s":""}{d.count===0?" — vide":""}</p></div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {d.anomalies>0&&<Badge className="bg-red-100 text-red-700">{d.anomalies} anomalie{d.anomalies>1?"s":""}</Badge>}
+                        <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform ${selectedDossier===d.nom?"rotate-90":""}`} />
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
+        {/* P&L */}
+        <TabsContent value="pnl" className="space-y-4">
+          {fin.totalEcritures > 0 ? (() => {
+            const revenueByAccount: Record<string, number> = fin.revenueByAccount || {}
+            const expensesByAccount: Record<string, number> = fin.expensesByAccount || {}
+            const totalRevenue = fin.totalRevenue || 0
+            const totalExpenses = fin.totalExpenses || 0
+            const revenueDetails = Object.entries(revenueByAccount)
+              .filter(([, v]) => v !== 0)
+              .sort(([a], [b]) => a.localeCompare(b))
+            const allExpenseGroups = groupExpenses(expensesByAccount)
+            const profitBeforeTax = totalRevenue - totalExpenses
+            const incomeTax = profitBeforeTax > 0 ? profitBeforeTax * 0.15 : 0
+            const netProfit = profitBeforeTax - incomeTax
+
+            const amtCell = (n: number) => {
+              const s: React.CSSProperties = {}
+              if (n > 0) s.color = "#16A34A"
+              if (n < 0) s.color = "#DC2626"
+              const d = n < 0 ? `(${fmt2(Math.abs(n))})` : fmt2(n)
+              return { d, s }
+            }
+
+            const SectionHdr = ({ label }: { label: string }) => (
+              <TableRow>
+                <TableCell colSpan={3} className="text-sm font-bold pt-5 pb-2 border-b">{label}</TableCell>
+              </TableRow>
+            )
+            const SubLine = ({ label, current }: { label: string; current: number }) => {
+              const a = amtCell(current)
+              return (
+                <TableRow>
+                  <TableCell className="pl-8 text-sm py-2">{label}</TableCell>
+                  <TableCell className="text-right text-sm font-mono tabular-nums py-2" style={a.s}>{a.d}</TableCell>
+                  <TableCell className="text-right text-sm font-mono tabular-nums py-2 text-muted-foreground">{"\u2014"}</TableCell>
+                </TableRow>
+              )
+            }
+            const TotLine = ({ label, current, grand = false }: { label: string; current: number; grand?: boolean }) => {
+              const a = amtCell(current)
+              return (
+                <TableRow className={grand ? "border-t-2 border-b-2" : "border-t"}>
+                  <TableCell className={`text-sm py-2 ${grand ? "font-bold text-base" : "font-bold"}`}>{label}</TableCell>
+                  <TableCell className={`text-right font-mono tabular-nums py-2 ${grand ? "font-bold text-base" : "text-sm font-bold"}`} style={a.s}>{a.d}</TableCell>
+                  <TableCell className={`text-right font-mono tabular-nums py-2 text-muted-foreground ${grand ? "text-base" : "text-sm"}`}>{"\u2014"}</TableCell>
+                </TableRow>
+              )
+            }
+
+            return (
+              <div className="max-w-[900px] mx-auto space-y-6">
+                <div className="text-center space-y-1">
+                  <h1 className="text-2xl font-bold">{societeName.toUpperCase()}</h1>
+                  <p className="text-sm text-muted-foreground">
+                    Prepared in accordance with IFRS for SMEs &mdash; Companies Act 2001 Mauritius
+                  </p>
+                </div>
+
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-1/2">Poste</TableHead>
+                        <TableHead className="text-right">2025-2026 (MUR)</TableHead>
+                        <TableHead className="text-right">2024-2025 (MUR)</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      <SectionHdr label="REVENUE" />
+                      {revenueDetails.map(([prefix, amount]) => (
+                        <SubLine key={prefix} label={REVENUE_LABELS[prefix] || `Compte ${prefix}x`} current={amount} />
+                      ))}
+                      {revenueDetails.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={3} className="text-center text-muted-foreground text-sm py-4">Aucun produit enregistre</TableCell>
+                        </TableRow>
+                      )}
+                      <TotLine label="TOTAL REVENUE" current={totalRevenue} />
+
+                      <SectionHdr label="OPERATING EXPENSES" />
+                      {allExpenseGroups.map((group) => (
+                        <SubLine key={group.label} label={`${group.label} (${group.range})`} current={-group.amount} />
+                      ))}
+                      {allExpenseGroups.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={3} className="text-center text-muted-foreground text-sm py-4">Aucune charge enregistree</TableCell>
+                        </TableRow>
+                      )}
+                      <TotLine label="TOTAL EXPENSES" current={-totalExpenses} />
+
+                      <TotLine label="PROFIT BEFORE TAX" current={profitBeforeTax} />
+                      <SubLine label="Income Tax (15%)" current={-incomeTax} />
+                      <TotLine label="NET PROFIT" current={netProfit} grand />
+                    </TableBody>
+                  </Table>
+                </div>
+
+                <div className="text-center py-4">
+                  <p className="text-xs text-muted-foreground italic">
+                    All amounts are in Mauritian Rupees (MUR)
+                  </p>
+                </div>
+              </div>
+            )
+          })() : (
+            <EmptyTab icon={BarChart3} message="Aucun rapport P&L disponible" detail="Le compte de resultat sera genere a partir des ecritures comptables." />
+          )}
+        </TabsContent>
+
+        {/* Alertes */}
+        <TabsContent value="alertes" className="space-y-3">
+          {alertes.length === 0 ? (
+            <EmptyTab icon={AlertIcon} message="Aucune alerte" detail="Les alertes fiscales et comptables apparaîtront ici automatiquement." />
+          ) : (
+            alertes.map((a,i)=>(
+              <Card key={i}><CardContent className="flex items-start gap-3 py-4">
+                <div className={`mt-1 h-2.5 w-2.5 rounded-full shrink-0 ${a.niveau==="critique"?"bg-red-500":a.niveau==="important"?"bg-orange-500":"bg-blue-500"}`} />
+                <div className="flex-1">
+                  <Badge className={a.niveau==="critique"?"bg-red-100 text-red-800":a.niveau==="important"?"bg-orange-100 text-orange-800":"bg-blue-100 text-blue-800"}>{a.niveau==="critique"?"Critique":a.niveau==="important"?"Important":"Info"}</Badge>
+                  <p className="text-sm font-medium mt-1">{a.titre}</p><p className="text-xs text-muted-foreground">{a.description}</p>
+                </div>
+                <div className="text-right shrink-0"><p className="text-sm font-semibold">{fmt(a.montant)}</p>{a.echeance&&<p className="text-xs text-muted-foreground">{a.echeance}</p>}</div>
+                <Button variant="outline" size="sm">Traiter</Button>
+              </CardContent></Card>
+            ))
+          )}
         </TabsContent>
       </Tabs>
     </div>

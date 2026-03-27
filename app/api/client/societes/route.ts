@@ -22,9 +22,9 @@ export async function GET() {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    // Extract unique sociétés
+    // Extract unique sociétés, filtering out personal ones (ending in "— Personnel")
     const societes = dossiers
-      ?.filter(d => d.societe)
+      ?.filter(d => d.societe && !(d.societe as any).nom?.endsWith('— Personnel'))
       .map(d => ({
         id: d.societe_id,
         dossier_id: d.id,

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import {
   Card,
@@ -13,15 +13,31 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
-import { User, Building2, Bell, Shield } from "lucide-react"
+import { User, Building2, Bell, Shield, Loader2 } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
 
-export default function ProfilPage() {
-  const { profile } = useProfile()
+interface Societe {
+  id: string
+  nom: string
+  brn: string | null
+  numero_tva_mra: string | null
+  comptable?: {
+    id: string
+    full_name: string
+    email: string
+    phone: string | null
+  } | null
+}
 
-  const [fullName, setFullName] = useState("Raj Doobur")
-  const [email, setEmail] = useState("raj@tibok.mu")
-  const [phone, setPhone] = useState("+230 5 987 6543")
+export default function ProfilPage() {
+  const { profile, loading } = useProfile()
+
+  const [fullName, setFullName] = useState("")
+  const [email, setEmail] = useState("")
+  const [phone, setPhone] = useState("")
+
+  const [societe, setSociete] = useState<Societe | null>(null)
+  const [loadingSociete, setLoadingSociete] = useState(true)
 
   const [notifEmail, setNotifEmail] = useState(true)
   const [notifWhatsapp, setNotifWhatsapp] = useState(true)
@@ -29,17 +45,54 @@ export default function ProfilPage() {
   const [notifDocuments, setNotifDocuments] = useState(true)
   const [notifSalaires, setNotifSalaires] = useState(false)
 
+  // Populate form fields from profile
+  useEffect(() => {
+    if (profile) {
+      setFullName(profile.full_name || "")
+      setEmail(profile.email || "")
+      setPhone(profile.phone || "")
+    }
+  }, [profile])
+
+  // Fetch societe data
+  useEffect(() => {
+    async function fetchSociete() {
+      try {
+        const res = await fetch("/api/client/societes")
+        if (res.ok) {
+          const data = await res.json()
+          if (data.societes && data.societes.length > 0) {
+            setSociete(data.societes[0])
+          }
+        }
+      } catch {
+        console.error("Failed to fetch societe")
+      } finally {
+        setLoadingSociete(false)
+      }
+    }
+    fetchSociete()
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#C9A84C" }} />
+      </div>
+    )
+  }
+
   if (profile?.role === "client_user") {
     return (
       <div className="p-6 flex flex-col items-center justify-center min-h-[50vh] space-y-4">
         <h1 className="text-xl font-bold" style={{ color: "#1E2A4A" }}>
-          Accès non autorisé
+          Acc&egrave;s non autoris&eacute;
         </h1>
         <p className="text-sm text-muted-foreground">
-          Vous n&apos;avez pas la permission d&apos;accéder à cette page.
+          Vous n&apos;avez pas la permission d&apos;acc&eacute;der &agrave; cette page.
         </p>
         <Link href="/client/upload" className="text-sm underline" style={{ color: "#C9A84C" }}>
-          Retour à l&apos;envoi de documents
+          Retour &agrave; l&apos;envoi de documents
         </Link>
       </div>
     )
@@ -52,7 +105,7 @@ export default function ProfilPage() {
           Mon Profil
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Gérez vos informations personnelles et vos préférences.
+          G&eacute;rez vos informations personnelles et vos pr&eacute;f&eacute;rences.
         </p>
       </div>
 
@@ -84,7 +137,7 @@ export default function ProfilPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="phone">Téléphone</Label>
+              <Label htmlFor="phone">T&eacute;l&eacute;phone</Label>
               <Input
                 id="phone"
                 value={phone}
@@ -92,10 +145,10 @@ export default function ProfilPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Rôle</Label>
+              <Label>R&ocirc;le</Label>
               <div className="flex items-center h-9">
                 <Badge style={{ backgroundColor: "#1E2A4A", color: "white" }}>
-                  Administrateur
+                  {profile?.role === "client_admin" ? "Administrateur" : profile?.role || "---"}
                 </Badge>
               </div>
             </div>
@@ -113,40 +166,56 @@ export default function ProfilPage() {
         <CardHeader>
           <div className="flex items-center gap-3">
             <Building2 className="h-5 w-5" style={{ color: "#1E2A4A" }} />
-            <CardTitle style={{ color: "#1E2A4A" }}>Ma Société</CardTitle>
+            <CardTitle style={{ color: "#1E2A4A" }}>Ma Soci&eacute;t&eacute;</CardTitle>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Nom de la société</p>
-              <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>TIBOK Ltd</p>
+          {loadingSociete ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin" style={{ color: "#C9A84C" }} />
             </div>
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Numéro BRN</p>
-              <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>C07012345</p>
+          ) : societe ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">Nom de la soci&eacute;t&eacute;</p>
+                <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>
+                  {societe.nom}
+                </p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">Num&eacute;ro BRN</p>
+                <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>
+                  {societe.brn || "---"}
+                </p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">Num&eacute;ro TVA (MRA)</p>
+                <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>
+                  {societe.numero_tva_mra || "---"}
+                </p>
+              </div>
+              {societe.comptable && (
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Comptable assign&eacute;</p>
+                  <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>
+                    {societe.comptable.full_name}
+                  </p>
+                </div>
+              )}
             </div>
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Numéro TAN</p>
-              <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>T2345678</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Adresse</p>
-              <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>
-                10 rue Bourbon, Port-Louis, Maurice
+          ) : (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <Building2 className="h-10 w-10 text-muted-foreground/40 mb-3" />
+              <p className="text-sm text-muted-foreground">
+                Aucune soci&eacute;t&eacute; associ&eacute;e &agrave; votre compte.
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Contactez votre comptable pour lier votre soci&eacute;t&eacute;.
               </p>
             </div>
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Comptable assigné</p>
-              <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>Sophie Ramgoolam</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Date de création</p>
-              <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>15 janvier 2020</p>
-            </div>
-          </div>
+          )}
           <p className="text-xs text-muted-foreground mt-4">
-            Ces informations sont gérées par votre comptable. Contactez-le pour toute modification.
+            Ces informations sont g&eacute;r&eacute;es par votre comptable. Contactez-le pour toute modification.
           </p>
         </CardContent>
       </Card>
@@ -156,7 +225,7 @@ export default function ProfilPage() {
         <CardHeader>
           <div className="flex items-center gap-3">
             <Bell className="h-5 w-5" style={{ color: "#1E2A4A" }} />
-            <CardTitle style={{ color: "#1E2A4A" }}>Préférences de notifications</CardTitle>
+            <CardTitle style={{ color: "#1E2A4A" }}>Pr&eacute;f&eacute;rences de notifications</CardTitle>
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -177,21 +246,21 @@ export default function ProfilPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>Rappels TVA</p>
-              <p className="text-sm text-muted-foreground">Soyez prévenu avant chaque date limite de TVA.</p>
+              <p className="text-sm text-muted-foreground">Soyez pr&eacute;venu avant chaque date limite de TVA.</p>
             </div>
             <Switch checked={notifTva} onCheckedChange={setNotifTva} />
           </div>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>Documents traités</p>
-              <p className="text-sm text-muted-foreground">Notification quand vos documents sont classés.</p>
+              <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>Documents trait&eacute;s</p>
+              <p className="text-sm text-muted-foreground">Notification quand vos documents sont class&eacute;s.</p>
             </div>
             <Switch checked={notifDocuments} onCheckedChange={setNotifDocuments} />
           </div>
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>Salaires</p>
-              <p className="text-sm text-muted-foreground">Notification quand les fiches de paie sont prêtes.</p>
+              <p className="text-sm text-muted-foreground">Notification quand les fiches de paie sont pr&ecirc;tes.</p>
             </div>
             <Switch checked={notifSalaires} onCheckedChange={setNotifSalaires} />
           </div>
@@ -203,7 +272,7 @@ export default function ProfilPage() {
         <CardHeader>
           <div className="flex items-center gap-3">
             <Shield className="h-5 w-5" style={{ color: "#1E2A4A" }} />
-            <CardTitle style={{ color: "#1E2A4A" }}>Sécurité</CardTitle>
+            <CardTitle style={{ color: "#1E2A4A" }}>S&eacute;curit&eacute;</CardTitle>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -211,7 +280,7 @@ export default function ProfilPage() {
             <div>
               <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>Mot de passe</p>
               <p className="text-sm text-muted-foreground">
-                Dernière modification il y a 3 mois.
+                Modifiez votre mot de passe pour s&eacute;curiser votre compte.
               </p>
             </div>
             <Button variant="outline" style={{ borderColor: "#1E2A4A", color: "#1E2A4A" }}>

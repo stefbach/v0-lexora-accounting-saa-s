@@ -285,11 +285,12 @@ function ClientAdminDashboard({ firstName, societe }: { firstName: string; socie
           const firstSociete = societes[0]
           const societeId = firstSociete.id
 
-          // Try to fetch brief/summary data
-          try {
-            const now = new Date()
-            const periode = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`
-            const briefRes = await fetch("/api/brief-client", {
+          // Fetch brief/summary data and financial data in parallel
+          const now = new Date()
+          const periode = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`
+
+          const [briefResult, financialResult] = await Promise.allSettled([
+            fetch("/api/brief-client", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -297,8 +298,13 @@ function ClientAdminDashboard({ firstName, societe }: { firstName: string; socie
                 societe_id: societeId,
                 periode,
               }),
-            })
-            const briefData = await briefRes.json()
+            }).then((r) => r.json()),
+            fetch("/api/client/financial").then((r) => r.json()),
+          ])
+
+          // Process brief data
+          if (briefResult.status === "fulfilled") {
+            const briefData = briefResult.value
             if (briefData.success) {
               setBrief({
                 resume_texte: briefData.resume_texte || null,
@@ -314,8 +320,22 @@ function ClientAdminDashboard({ firstName, societe }: { firstName: string; socie
                 )
               }
             }
-          } catch {
-            // Brief not available -- leave empty
+          }
+
+          // Process financial data for KPIs
+          if (financialResult.status === "fulfilled") {
+            const finData = financialResult.value.financial
+            if (finData) {
+              setKpis({
+                chiffreAffaires: finData.totalRevenue ?? null,
+                depenses: finData.totalExpenses ?? null,
+                benefice: finData.resultat ?? null,
+                tresorerie: finData.totalBankMUR ?? null,
+                tendanceCA: finData.lastMonthRevenue && finData.totalRevenue
+                  ? `${finData.lastMonthRevenue > 0 ? "+" : ""}${Math.round(((finData.monthlyRevenue - finData.lastMonthRevenue) / finData.lastMonthRevenue) * 100)}% vs mois dernier`
+                  : null,
+              })
+            }
           }
         }
       } catch {
