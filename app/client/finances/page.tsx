@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import {
   Card,
@@ -7,21 +8,36 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table"
 import {
   TrendingUp,
   TrendingDown,
   DollarSign,
-  Users,
   Loader2,
   FileText,
 } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
 
+function formatMUR(n: number) {
+  return n.toLocaleString("fr-FR") + " MUR"
+}
+
 export default function FinancesPage() {
   const { profile, loading } = useProfile()
+  const [data, setData] = useState<any>(null)
+  const [fetching, setFetching] = useState(true)
 
-  if (loading) {
+  useEffect(() => {
+    fetch("/api/client/financial")
+      .then((res) => res.json())
+      .then((json) => setData(json.financial))
+      .catch(() => setData(null))
+      .finally(() => setFetching(false))
+  }, [])
+
+  if (loading || fetching) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#C9A84C" }} />
@@ -45,6 +61,11 @@ export default function FinancesPage() {
     )
   }
 
+  const totalRevenue = data?.totalRevenue ?? 0
+  const totalExpenses = data?.totalExpenses ?? 0
+  const resultat = data?.resultat ?? 0
+  const invoices: any[] = data?.extractedInvoices ?? []
+
   return (
     <div className="p-6 space-y-6">
       <div>
@@ -56,121 +77,99 @@ export default function FinancesPage() {
         </p>
       </div>
 
-      <Tabs defaultValue="mensuel">
-        <TabsList>
-          <TabsTrigger value="mensuel">Mes Chiffres</TabsTrigger>
-          <TabsTrigger value="tva">Ma TVA</TabsTrigger>
-          <TabsTrigger value="salaires">Salaires &amp; Charges</TabsTrigger>
-        </TabsList>
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Total revenus
+            </CardTitle>
+            <TrendingUp className="h-5 w-5" style={{ color: "#22C55E" }} />
+          </CardHeader>
+          <CardContent>
+            {totalRevenue === 0 ? (
+              <p className="text-sm text-muted-foreground">Aucune donn&eacute;e</p>
+            ) : (
+              <p className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>{formatMUR(totalRevenue)}</p>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Total d&eacute;penses
+            </CardTitle>
+            <TrendingDown className="h-5 w-5" style={{ color: "#EF4444" }} />
+          </CardHeader>
+          <CardContent>
+            {totalExpenses === 0 ? (
+              <p className="text-sm text-muted-foreground">Aucune donn&eacute;e</p>
+            ) : (
+              <p className="text-2xl font-bold" style={{ color: "#EF4444" }}>{formatMUR(totalExpenses)}</p>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              R&eacute;sultat
+            </CardTitle>
+            <DollarSign className="h-5 w-5" style={{ color: "#C9A84C" }} />
+          </CardHeader>
+          <CardContent>
+            {resultat === 0 ? (
+              <p className="text-sm text-muted-foreground">Aucune donn&eacute;e</p>
+            ) : (
+              <p className="text-2xl font-bold" style={{ color: resultat >= 0 ? "#22C55E" : "#EF4444" }}>
+                {formatMUR(resultat)}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
-        {/* Tab 1 - Vue mensuelle */}
-        <TabsContent value="mensuel" className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Total revenus
-                </CardTitle>
-                <TrendingUp className="h-5 w-5" style={{ color: "#22C55E" }} />
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">Pas encore de donn&eacute;es</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Total d&eacute;penses
-                </CardTitle>
-                <TrendingDown className="h-5 w-5" style={{ color: "#EF4444" }} />
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">Pas encore de donn&eacute;es</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  R&eacute;sultat du mois
-                </CardTitle>
-                <DollarSign className="h-5 w-5" style={{ color: "#C9A84C" }} />
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">Pas encore de donn&eacute;es</p>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card>
-            <CardContent className="py-10">
-              <div className="flex flex-col items-center justify-center text-center">
-                <FileText className="h-10 w-10 text-muted-foreground/40 mb-3" />
-                <p className="text-sm text-muted-foreground">
-                  Aucune donn&eacute;e de revenus ou de d&eacute;penses disponible pour le moment.
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Vos chiffres appara&icirc;tront ici une fois vos documents comptables trait&eacute;s.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Tab 2 - Ma TVA */}
-        <TabsContent value="tva" className="space-y-6 mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle style={{ color: "#1E2A4A" }}>Suivi de la TVA</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-col items-center justify-center py-10 text-center">
-                <FileText className="h-10 w-10 text-muted-foreground/40 mb-3" />
-                <p className="text-sm text-muted-foreground">
-                  Aucune d&eacute;claration TVA disponible pour le moment.
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Votre comptable remplira cette section au fur et &agrave; mesure des d&eacute;clarations.
-                </p>
-              </div>
-
-              <div className="rounded-lg border p-4 bg-blue-50/50">
-                <p className="text-sm" style={{ color: "#1E2A4A" }}>
-                  <strong>Comment &ccedil;a marche ?</strong>
-                </p>
-                <p className="text-sm text-muted-foreground mt-2">
-                  La TVA collect&eacute;e est celle que vos clients vous ont pay&eacute;e en plus de vos prix.
-                  La TVA d&eacute;ductible est celle que vous avez pay&eacute;e sur vos achats professionnels.
-                  La diff&eacute;rence (&quot;Je dois&quot;) est ce que vous devez reverser &agrave; la MRA chaque mois.
-                  Votre comptable s&apos;occupe de faire la d&eacute;claration pour vous.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Tab 3 - Salaires & Charges */}
-        <TabsContent value="salaires" className="space-y-6 mt-4">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <Users className="h-5 w-5" style={{ color: "#1E2A4A" }} />
-                <CardTitle style={{ color: "#1E2A4A" }}>Salaires &amp; Charges mensuels</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-col items-center justify-center py-10 text-center">
-                <FileText className="h-10 w-10 text-muted-foreground/40 mb-3" />
-                <p className="text-sm text-muted-foreground">
-                  Aucune donn&eacute;e de salaires disponible pour le moment.
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Les informations de paie appara&icirc;tront ici une fois trait&eacute;es par votre comptable.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+      {/* Invoices Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle style={{ color: "#1E2A4A" }}>
+            Factures extraites ({invoices.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {invoices.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 text-center">
+              <FileText className="h-10 w-10 text-muted-foreground/40 mb-3" />
+              <p className="text-sm text-muted-foreground">
+                Aucune donn&eacute;e de revenus ou de d&eacute;penses disponible pour le moment.
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Vos chiffres appara&icirc;tront ici une fois vos documents comptables trait&eacute;s.
+              </p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>&Eacute;metteur</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead className="text-right">Montant TTC</TableHead>
+                  <TableHead>Type</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {invoices.map((inv: any) => (
+                  <TableRow key={inv.id}>
+                    <TableCell className="font-medium">{inv.emetteur || "—"}</TableCell>
+                    <TableCell>{inv.date || "—"}</TableCell>
+                    <TableCell className="text-right">{formatMUR(inv.montant_ttc ?? 0)}</TableCell>
+                    <TableCell>{inv.type || "—"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

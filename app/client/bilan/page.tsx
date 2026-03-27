@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useProfile } from "@/hooks/use-profile"
 import {
@@ -13,7 +14,12 @@ import {
   Banknote,
   Loader2,
   FileText,
+  DollarSign,
 } from "lucide-react"
+
+function formatMUR(n: number) {
+  return n.toLocaleString("fr-FR") + " MUR"
+}
 
 // ---------------------------------------------------------------------------
 // Page
@@ -21,8 +27,18 @@ import {
 
 export default function BilanPage() {
   const { profile, loading } = useProfile()
+  const [data, setData] = useState<any>(null)
+  const [fetching, setFetching] = useState(true)
 
-  if (loading) {
+  useEffect(() => {
+    fetch("/api/client/financial")
+      .then((res) => res.json())
+      .then((json) => setData(json.financial))
+      .catch(() => setData(null))
+      .finally(() => setFetching(false))
+  }, [])
+
+  if (loading || fetching) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#C9A84C" }} />
@@ -46,6 +62,12 @@ export default function BilanPage() {
     )
   }
 
+  const totalRevenue = data?.totalRevenue ?? 0
+  const totalExpenses = data?.totalExpenses ?? 0
+  const resultat = data?.resultat ?? 0
+
+  const hasData = totalRevenue !== 0 || totalExpenses !== 0 || resultat !== 0
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -60,52 +82,84 @@ export default function BilanPage() {
         </div>
       </div>
 
-      {/* Empty state */}
+      {/* P&L Summary */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Actif */}
+        {/* Revenus (Actif) */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2" style={{ color: "#1E2A4A" }}>
               <Landmark className="h-5 w-5" style={{ color: "#C9A84C" }} />
-              Ce que vous poss&eacute;dez
+              Revenus (Produits)
             </CardTitle>
-            <p className="text-xs text-muted-foreground">Actif</p>
+            <p className="text-xs text-muted-foreground">Total des revenus per&ccedil;us</p>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-col items-center justify-center py-8 text-center">
-              <FileText className="h-10 w-10 text-muted-foreground/40 mb-3" />
-              <p className="text-sm text-muted-foreground">
-                Aucune donn&eacute;e d&apos;actif disponible pour le moment.
+            {totalRevenue === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <FileText className="h-10 w-10 text-muted-foreground/40 mb-3" />
+                <p className="text-sm text-muted-foreground">
+                  Aucune donn&eacute;e de revenus disponible pour le moment.
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Votre comptable pr&eacute;parera votre bilan en fin d&apos;exercice.
+                </p>
+              </div>
+            ) : (
+              <p className="text-3xl font-bold" style={{ color: "#22C55E" }}>
+                {formatMUR(totalRevenue)}
               </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Votre comptable pr&eacute;parera votre bilan en fin d&apos;exercice.
-              </p>
-            </div>
+            )}
           </CardContent>
         </Card>
 
-        {/* Passif */}
+        {/* Depenses (Passif) */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2" style={{ color: "#1E2A4A" }}>
               <Banknote className="h-5 w-5" style={{ color: "#C9A84C" }} />
-              Ce que vous devez
+              D&eacute;penses (Charges)
             </CardTitle>
-            <p className="text-xs text-muted-foreground">Passif</p>
+            <p className="text-xs text-muted-foreground">Total des d&eacute;penses engag&eacute;es</p>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-col items-center justify-center py-8 text-center">
-              <FileText className="h-10 w-10 text-muted-foreground/40 mb-3" />
-              <p className="text-sm text-muted-foreground">
-                Aucune donn&eacute;e de passif disponible pour le moment.
+            {totalExpenses === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <FileText className="h-10 w-10 text-muted-foreground/40 mb-3" />
+                <p className="text-sm text-muted-foreground">
+                  Aucune donn&eacute;e de d&eacute;penses disponible pour le moment.
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Votre comptable pr&eacute;parera votre bilan en fin d&apos;exercice.
+                </p>
+              </div>
+            ) : (
+              <p className="text-3xl font-bold" style={{ color: "#EF4444" }}>
+                {formatMUR(totalExpenses)}
               </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Votre comptable pr&eacute;parera votre bilan en fin d&apos;exercice.
-              </p>
-            </div>
+            )}
           </CardContent>
         </Card>
       </div>
+
+      {/* Resultat (Bottom Line) */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2" style={{ color: "#1E2A4A" }}>
+            <DollarSign className="h-5 w-5" style={{ color: "#C9A84C" }} />
+            R&eacute;sultat net
+          </CardTitle>
+          <p className="text-xs text-muted-foreground">Revenus - D&eacute;penses</p>
+        </CardHeader>
+        <CardContent>
+          {resultat === 0 ? (
+            <p className="text-sm text-muted-foreground">Aucune donn&eacute;e</p>
+          ) : (
+            <p className="text-3xl font-bold" style={{ color: resultat >= 0 ? "#22C55E" : "#EF4444" }}>
+              {formatMUR(resultat)}
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Footer note */}
       <div className="flex items-center justify-between">

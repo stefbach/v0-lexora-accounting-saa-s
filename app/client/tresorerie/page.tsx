@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { useProfile } from "@/hooks/use-profile"
 import {
   Card,
@@ -8,12 +9,18 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table"
+import {
   Loader2,
   Banknote,
-  ArrowRight,
   Lock,
   Wallet,
 } from "lucide-react"
+
+function formatMUR(n: number) {
+  return n.toLocaleString("fr-FR") + " MUR"
+}
 
 // ---------------------------------------------------------------------------
 // Access denied view for client_user
@@ -39,10 +46,32 @@ function AccessDenied() {
 }
 
 // ---------------------------------------------------------------------------
-// Main treasury view (client_admin) - empty state
+// Main treasury view (client_admin)
 // ---------------------------------------------------------------------------
 
 function TresorerieView() {
+  const [data, setData] = useState<any>(null)
+  const [fetching, setFetching] = useState(true)
+
+  useEffect(() => {
+    fetch("/api/client/financial")
+      .then((res) => res.json())
+      .then((json) => setData(json.financial))
+      .catch(() => setData(null))
+      .finally(() => setFetching(false))
+  }, [])
+
+  if (fetching) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#C9A84C" }} />
+      </div>
+    )
+  }
+
+  const bankAccounts: any[] = data?.bankAccounts ?? []
+  const totalBankMUR = data?.totalBankMUR ?? 0
+
   return (
     <div className="p-6 space-y-6 max-w-5xl mx-auto">
       <div>
@@ -54,16 +83,33 @@ function TresorerieView() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Card 1 -- Situation aujourd'hui */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <Banknote className="h-4 w-4" style={{ color: "#C9A84C" }} />
-              Situation aujourd{"'"}hui
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+      {/* Total */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+            <Banknote className="h-4 w-4" style={{ color: "#C9A84C" }} />
+            Solde total
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {totalBankMUR === 0 ? (
+            <p className="text-sm text-muted-foreground">Aucune donn&eacute;e</p>
+          ) : (
+            <p className="text-3xl font-bold" style={{ color: "#1E2A4A" }}>{formatMUR(totalBankMUR)}</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Bank Accounts */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2" style={{ color: "#1E2A4A" }}>
+            <Wallet className="h-5 w-5" style={{ color: "#C9A84C" }} />
+            Comptes bancaires ({bankAccounts.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {bankAccounts.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-6 text-center">
               <Wallet className="h-10 w-10 text-muted-foreground/40 mb-3" />
               <p className="text-sm text-muted-foreground">
@@ -73,51 +119,34 @@ function TresorerieView() {
                 Vos soldes appara&icirc;tront ici une fois vos comptes connect&eacute;s.
               </p>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Card 2 -- Dans 30 jours */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <ArrowRight className="h-4 w-4" style={{ color: "#C9A84C" }} />
-              Dans 30 jours
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col items-center justify-center py-6 text-center">
-              <Wallet className="h-10 w-10 text-muted-foreground/40 mb-3" />
-              <p className="text-sm text-muted-foreground">
-                Pas encore de pr&eacute;vision disponible.
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Les pr&eacute;visions seront calcul&eacute;es &agrave; partir de vos donn&eacute;es comptables.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Card 3 -- Dans 60-90 jours */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <ArrowRight className="h-4 w-4" style={{ color: "#C9A84C" }} />
-              Dans 60 a 90 jours
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col items-center justify-center py-6 text-center">
-              <Wallet className="h-10 w-10 text-muted-foreground/40 mb-3" />
-              <p className="text-sm text-muted-foreground">
-                Pas encore de pr&eacute;vision disponible.
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Les estimations &agrave; long terme appara&icirc;tront ici.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Banque</TableHead>
+                  <TableHead>Nom du compte</TableHead>
+                  <TableHead>Devise</TableHead>
+                  <TableHead className="text-right">Solde actuel</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {bankAccounts.map((acc: any) => (
+                  <TableRow key={acc.id || acc.nom_compte}>
+                    <TableCell className="font-medium">{acc.banque || "—"}</TableCell>
+                    <TableCell>{acc.nom_compte || "—"}</TableCell>
+                    <TableCell>{acc.devise || "MUR"}</TableCell>
+                    <TableCell className="text-right font-semibold">
+                      {(acc.solde_actuel ?? 0) === 0
+                        ? "Aucune donn\u00e9e"
+                        : (acc.solde_actuel ?? 0).toLocaleString("fr-FR") + " " + (acc.devise || "MUR")}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }
