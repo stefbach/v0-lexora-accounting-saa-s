@@ -4,7 +4,7 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 })
 
-export const CLAUDE_MODEL = process.env.ANTHROPIC_MODEL || 'claude-opus-4-6'
+export const CLAUDE_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6'
 
 /**
  * Appel Claude API — retourne le texte brut
