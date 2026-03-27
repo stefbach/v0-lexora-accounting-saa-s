@@ -7,10 +7,8 @@ import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import {
   LayoutDashboard,
-  Building2,
   UserCog,
   Users,
-  FileText,
   Settings,
   LogOut,
   ChevronLeft,
@@ -20,10 +18,8 @@ import { useState } from "react"
 
 const navItems = [
   { href: "/admin", label: "Tableau de bord", icon: LayoutDashboard },
-  { href: "/admin/societes", label: "Sociétés", icon: Building2 },
-  { href: "/admin/comptables", label: "Comptables", icon: UserCog },
   { href: "/admin/clients", label: "Clients", icon: Users },
-  { href: "/admin/documents", label: "Documents", icon: FileText },
+  { href: "/admin/comptables", label: "Comptables", icon: UserCog },
   { href: "/admin/parametres", label: "Paramètres", icon: Settings },
 ]
 

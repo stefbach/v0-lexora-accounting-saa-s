@@ -242,7 +242,7 @@ export async function POST(request: NextRequest) {
     )
 
     const routingResponse = await anthropic.messages.create({
-      model: 'claude-opus-4-5-20250514',
+      model: process.env.ANTHROPIC_MODEL || 'claude-opus-4-6',
       max_tokens: 4096,
       temperature: 0,
       system: PROMPT_ROUTING,
@@ -299,7 +299,7 @@ export async function POST(request: NextRequest) {
       )
 
       const processingResponse = await anthropic.messages.create({
-        model: 'claude-opus-4-5-20250514',
+        model: process.env.ANTHROPIC_MODEL || 'claude-opus-4-6',
         max_tokens: 4096,
         temperature: 0,
         system: processingPrompt,
@@ -332,7 +332,7 @@ export async function POST(request: NextRequest) {
       metadata: {
         processed_at: new Date().toISOString(),
         processing_time_ms: Date.now() - startTime,
-        model: 'claude-opus-4-5-20250514',
+        model: process.env.ANTHROPIC_MODEL || 'claude-opus-4-6',
         nom_fichier,
       },
     }
