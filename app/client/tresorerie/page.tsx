@@ -113,10 +113,10 @@ function TresorerieView() {
             <div className="flex flex-col items-center justify-center py-6 text-center">
               <Wallet className="h-10 w-10 text-muted-foreground/40 mb-3" />
               <p className="text-sm text-muted-foreground">
-                Pas encore de donn&eacute;es de tr&eacute;sorerie.
+                Aucun compte bancaire enregistré.
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                Vos soldes appara&icirc;tront ici une fois vos comptes connect&eacute;s.
+                Uploadez un relevé bancaire dans &quot;Mes Documents&quot; pour voir vos comptes ici.
               </p>
             </div>
           ) : (
@@ -126,7 +126,8 @@ function TresorerieView() {
                   <TableHead>Banque</TableHead>
                   <TableHead>Nom du compte</TableHead>
                   <TableHead>Devise</TableHead>
-                  <TableHead className="text-right">Solde actuel</TableHead>
+                  <TableHead className="text-right">Solde</TableHead>
+                  <TableHead className="text-right">Solde (MUR)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -136,12 +137,17 @@ function TresorerieView() {
                     <TableCell>{acc.nom_compte || "—"}</TableCell>
                     <TableCell>{acc.devise || "MUR"}</TableCell>
                     <TableCell className="text-right font-semibold">
-                      {(acc.solde_actuel ?? 0) === 0
-                        ? "Aucune donn\u00e9e"
-                        : (acc.solde_actuel ?? 0).toLocaleString("fr-FR") + " " + (acc.devise || "MUR")}
+                      {(acc.solde_actuel ?? 0).toLocaleString("fr-FR")} {acc.devise || "MUR"}
+                    </TableCell>
+                    <TableCell className="text-right font-bold" style={{ color: "#1E2A4A" }}>
+                      {acc.devise !== "MUR" && acc.solde_mur ? formatMUR(acc.solde_mur) : "—"}
                     </TableCell>
                   </TableRow>
                 ))}
+                <TableRow className="bg-muted/30 font-bold">
+                  <TableCell colSpan={4} className="text-right">Total consolidé (MUR)</TableCell>
+                  <TableCell className="text-right" style={{ color: "#1E2A4A" }}>{formatMUR(totalBankMUR)}</TableCell>
+                </TableRow>
               </TableBody>
             </Table>
           )}
