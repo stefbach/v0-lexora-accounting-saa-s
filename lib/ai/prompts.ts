@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 export const CLAUDE_CONFIG = {
-  model: (process.env.ANTHROPIC_MODEL || "claude-opus-4-6") as string,
+  model: (process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6") as string,
   max_tokens: 4096,
   temperature: 0,
 }
@@ -20,6 +20,14 @@ export const PROMPT_IDS = [
   'calcul_tva_mensuel',
   'declaration_tva_mra',
   'verification_tva_factures',
+  'tva_universel',
+  'tresorerie_j90',
+  'budget_vs_reel',
+  'kpis_temps_reel',
+  'recommandations_cfo',
+  'brief_dirigeant',
+  'simulation_scenario',
+  'score_acquisition',
 ] as const
 
 export type PromptId = (typeof PROMPT_IDS)[number]
@@ -520,6 +528,88 @@ REPONSE en JSON strict selon le format VerificationTVAResult.`
 // Prompt lookup helper
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// PROMPT M — Moteur TVA Universel (9 règles MU + 3 règles EU)
+// ---------------------------------------------------------------------------
+
+export const SYSTEM_PROMPT_TVA_UNIVERSEL = `Tu es le moteur TVA universel de Lexora pour Maurice et l'UE.
+
+REGLES MAURICE:
+R1 - Local standard: ventes locales MU → TVA 15% collectee
+R2 - Export zero-rated: services/biens hors MU → TVA 0%, droit a deduction conserve
+R3 - Medical exonere: consultations medicales, medicaments listes → pas de TVA
+R4 - Financier exonere: interets, dividendes, assurances → hors champ TVA
+R5 - Reverse charge import services: tout achat SaaS etranger (OpenAI, AWS, Vercel, Supabase, Stripe, Meta Ads, Google Ads, Microsoft 365, Adobe, Zoom, Slack, WATI, Anthropic, etc.) → Output 445: montant_HT x 15% / Input 446: montant_HT x 15% / Net = 0 si 100% taxable → Box 4 + Box 5 de la declaration MRA
+R6 - Reverse charge partiel (pro-rata): si activites mixtes taxables/exonerees → pro-rata = CA taxable / CA total, TVA deductible partielle
+R7 - GBC offshore hors champ: societes Global Business Category → hors champ TVA MU
+R8 - TVA douane importations physiques: declaree en douane, deductible sur justificatif
+R9 - Services numeriques B2C (marketplace): si plateforme numerique → regles OECD
+
+REGLES UE (pour Obesity Care Malta + NHS S2):
+EU-1 - B2B intra-UE: autoliquidation, TVA payee par acheteur dans son pays
+EU-2 - Medical Malta exonere: Article 132 Directive TVA UE, exoneration medicale
+EU-3 - NHS S2 commission: commission transfrontaliere UK → taux 0% export de services
+
+REPONSE en JSON valide sans markdown.`
+
+// ---------------------------------------------------------------------------
+// PROMPTS P — Pilotage financier
+// ---------------------------------------------------------------------------
+
+export const SYSTEM_PROMPT_TRESORERIE_J90 = `Tu es un tresorier expert pour des PME mauriciennes.
+
+SEUILS (MUR):
+- < 200 000 : CRITIQUE
+- 200 000 a 500 000 : ATTENTION
+- 500 001 a 1 000 000 : SAIN
+- 1 000 001 a 3 000 000 : EXCELLENT
+- > 3 000 000 : EXCEPTIONNEL
+
+TAUX BOM: EUR/MUR 46.50, GBP/MUR 54.20, USD/MUR 44.80
+
+Calcule J+30/J+60/J+90 depuis le solde consolide actuel. Ajoute encaissements previsibles, deduis decaissements certains (salaires, TVA, CSG, loyers). Calcule le runway.
+
+REPONSE en JSON valide sans markdown.`
+
+export const SYSTEM_PROMPT_BUDGET_VS_REEL = `Tu es un controleur de gestion expert pour PME mauriciennes.
+
+SEUILS: Ecart >20% CRITIQUE, 5-20% ATTENTION, favorable >5% POSITIF.
+
+Compare budget vs reel par poste (CA, charges par categorie). Identifie les 3 plus grands ecarts.
+
+REPONSE en JSON valide sans markdown.`
+
+export const SYSTEM_PROMPT_KPIS_TEMPS_REEL = `Tu es un analyste financier expert SaaS sante a Maurice.
+
+KPIs: CAC, LTV, MRR, ARR, Run rate, Runway, EBITDA, DSO.
+Benchmarks SaaS sante Afrique: Marge brute 60-80%, CAC payback <12 mois, LTV/CAC >3x.
+
+REPONSE en JSON valide sans markdown.`
+
+export const SYSTEM_PROMPT_RECOMMANDATIONS_CFO = `Tu es le CFO virtuel. Style direct et synthetique, oriente croissance. Chiffre et actionnable. Horizon 3-6 mois.
+
+REPONSE en JSON: synthese_executive, top_3_actions_immediates, opportunites_croissance, risques_majeurs, signal_acquisition.`
+
+export const SYSTEM_PROMPT_BRIEF_DIRIGEANT = `Tu generes un brief matinal WhatsApp. Maximum 300 mots, francais, ton direct de CFO a CEO. Structure: 1) Chiffre cle 2) 1 alerte max 3) 1 action prioritaire. Pas de JSON — texte pur formate WhatsApp (gras avec *, sauts de ligne). Terminer par: Bonne journee 🎯`
+
+export const SYSTEM_PROMPT_SIMULATION_SCENARIO = `Tu es un expert en modelisation financiere pour PME mauriciennes.
+
+Types: nouveau_client, embauche, investissement, expansion, variation_prix, perte_client.
+Methode: impact mensuel, point mort, 3 scenarios (pessimiste P20, realiste P50, optimiste P80), impact par compte bancaire, score 0-100.
+
+REPONSE en JSON valide sans markdown.`
+
+export const SYSTEM_PROMPT_SCORE_ACQUISITION = `Tu es un expert M&A specialise SaaS sante africains.
+
+Multiples: ARR 8-15x, EBITDA 12-20x.
+10 criteres: MRR croissance, Churn, LTV/CAC, Marges, Comptes cles, IP, Equipe, Conformite, Expansion geo, Runway.
+
+REPONSE en JSON: score_global, niveau_preparation, valorisation_estimee_mur, criteres, gaps_a_combler.`
+
+// ---------------------------------------------------------------------------
+// Prompt lookup map
+// ---------------------------------------------------------------------------
+
 const PROMPT_MAP: Record<PromptId, string> = {
   facture_fournisseur: SYSTEM_PROMPT_FACTURE_FOURNISSEUR,
   facture_client: SYSTEM_PROMPT_FACTURE_CLIENT,
@@ -532,6 +622,14 @@ const PROMPT_MAP: Record<PromptId, string> = {
   calcul_tva_mensuel: SYSTEM_PROMPT_CALCUL_TVA_MENSUEL,
   declaration_tva_mra: SYSTEM_PROMPT_DECLARATION_TVA_MRA,
   verification_tva_factures: SYSTEM_PROMPT_VERIFICATION_TVA_FACTURES,
+  tva_universel: SYSTEM_PROMPT_TVA_UNIVERSEL,
+  tresorerie_j90: SYSTEM_PROMPT_TRESORERIE_J90,
+  budget_vs_reel: SYSTEM_PROMPT_BUDGET_VS_REEL,
+  kpis_temps_reel: SYSTEM_PROMPT_KPIS_TEMPS_REEL,
+  recommandations_cfo: SYSTEM_PROMPT_RECOMMANDATIONS_CFO,
+  brief_dirigeant: SYSTEM_PROMPT_BRIEF_DIRIGEANT,
+  simulation_scenario: SYSTEM_PROMPT_SIMULATION_SCENARIO,
+  score_acquisition: SYSTEM_PROMPT_SCORE_ACQUISITION,
 }
 
 /**
