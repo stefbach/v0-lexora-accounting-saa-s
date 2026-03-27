@@ -129,29 +129,54 @@ export default function SocieteContextPage() {
         const societe = societesData.societes?.find((s: any) => s.id === societeId)
         if (!user || !societe) throw new Error("Données introuvables")
 
-        // Find the dossier for this client-société pair
-        const dossier = dossiersData.dossiers?.find((d: any) => d.client_id === clientId && d.societe_id === societeId)
-        const dossierId = dossier?.id
+        // Fetch financial data for this client
+        const finRes = await fetch(`/api/client/financial?client_id=${clientId}`)
+        const finData = finRes.ok ? await finRes.json() : { financial: null }
+        const fin = finData.financial || {}
 
-        // Fetch ecritures for this dossier
-        let ecritures: any[] = []
-        let documents: any[] = []
-        if (dossierId) {
-          const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-          // Use the admin client through a dedicated endpoint or read from existing APIs
-          // For now, build from financial API data
-        }
+        // Build fournisseurs from extracted invoices
+        const fournisseurs = (fin.extractedInvoices || [])
+          .filter((inv: any) => inv.type === 'facture_fournisseur')
+          .map((inv: any) => ({
+            fournisseur: inv.emetteur || '—', numero: inv.numero || '—',
+            date: inv.date || '—', ht: inv.montant_ht || 0, tva: inv.montant_tva || 0,
+            ttc: inv.montant_ttc_mur || inv.montant_ttc || 0, echeance: '—',
+            statut: 'paye', compte: '401',
+          }))
+
+        const facturesClients = (fin.extractedInvoices || [])
+          .filter((inv: any) => inv.type === 'facture_client')
+          .map((inv: any) => ({
+            client: inv.destinataire || inv.emetteur || '—', numero: inv.numero || '—',
+            date: inv.date || '—', ht: inv.montant_ht || 0, tva: inv.montant_tva || 0,
+            ttc: inv.montant_ttc_mur || inv.montant_ttc || 0, echeance: '—',
+            statut: 'paye', jours: 0,
+          }))
+
+        const kpis: KPI[] = [
+          { label: 'Chiffre d\'affaires', value: fin.totalRevenue || 0, green: true },
+          { label: 'Dépenses', value: fin.totalExpenses || 0 },
+          { label: 'Résultat', value: fin.resultat || 0, green: (fin.resultat || 0) > 0 },
+          { label: 'Trésorerie', value: fin.totalBankMUR || 0, green: true },
+        ]
 
         setData({
           clientName: user.full_name,
           societeName: societe.nom,
-          kpis: [],
-          fournisseurs: [],
-          facturesClients: [],
-          banque: [],
+          kpis,
+          fournisseurs,
+          facturesClients,
+          banque: (fin.bankAccounts || []).map((b: any) => ({
+            date: '—', libelle: b.banque, debit: 0, credit: 0,
+            tiers: b.nom_compte || '', compte: '512', statut: 'rapproche',
+          })),
           salaires: [],
           charges: [],
-          tva: [],
+          tva: (fin.tvaRecords || []).map((t: any) => ({
+            mois: t.periode, collectee: t.tva_collectee || 0, deductible: t.tva_deductible || 0,
+            nette: t.tva_nette || 0, deadline: t.date_limite || '—',
+            statut: t.statut || 'a_declarer', ref: '',
+          })),
           dossiers: [],
           grandLivre: [],
           alertes: [],

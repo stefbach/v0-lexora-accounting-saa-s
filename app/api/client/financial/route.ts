@@ -19,8 +19,10 @@ function convertToMUR(amount: number, devise: string, rates: Record<string, numb
   return amount
 }
 
-// GET — Aggregated financial data for the current client
-export async function GET() {
+// GET — Aggregated financial data for a client
+// For clients: returns their own data
+// For comptables: accepts ?client_id=xxx to view a client's data
+export async function GET(request: Request) {
   try {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
@@ -29,9 +31,24 @@ export async function GET() {
     const supabase = getAdminClient()
     const rates = await getTauxChange()
 
+    // Determine which client's data to fetch
+    const { searchParams } = new URL(request.url)
+    const requestedClientId = searchParams.get('client_id')
+
+    let targetClientId = user.id
+
+    if (requestedClientId && requestedClientId !== user.id) {
+      // Verify the logged-in user is a comptable
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+      if (!profile || !['comptable', 'comptable_dedie', 'admin'].includes(profile.role)) {
+        return NextResponse.json({ error: 'Accès non autorisé' }, { status: 403 })
+      }
+      targetClientId = requestedClientId
+    }
+
     // Get client's dossiers
     const { data: dossiers } = await supabase
-      .from('dossiers').select('id, societe_id').eq('client_id', user.id)
+      .from('dossiers').select('id, societe_id').eq('client_id', targetClientId)
 
     if (!dossiers || dossiers.length === 0) {
       return NextResponse.json({ financial: emptyFinancial() })
