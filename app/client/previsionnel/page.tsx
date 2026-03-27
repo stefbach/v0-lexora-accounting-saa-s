@@ -180,13 +180,27 @@ export default function PrevisionnelPage() {
     <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
-            Mon Previsionnel
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Anticipez l&apos;evolution de votre tresorerie
-          </p>
+        <div className="flex items-center gap-4">
+          <div>
+            <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
+              Mon Previsionnel
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Anticipez l&apos;evolution de votre tresorerie
+            </p>
+          </div>
+          {societes.length > 1 && (
+            <div className="flex items-center gap-2">
+              <Building2 className="h-4 w-4 text-muted-foreground" />
+              <Select value={selectedSociete} onValueChange={setSelectedSociete}>
+                <SelectTrigger className="w-[220px] h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toutes les societes</SelectItem>
+                  {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
         <Button
           variant="outline"
