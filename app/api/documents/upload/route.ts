@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { after } from 'next/server'
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -8,6 +9,8 @@ function getAdminClient() {
   if (!url || !serviceKey) throw new Error('Missing Supabase admin credentials')
   return createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
 }
+
+export const maxDuration = 60
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,7 +31,7 @@ export async function POST(request: NextRequest) {
 
     const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
     if (!allowedTypes.includes(file.type)) {
-      return NextResponse.json({ error: 'Type de fichier non supporté. Acceptés : PDF, JPEG, PNG, XLSX' }, { status: 400 })
+      return NextResponse.json({ error: 'Type de fichier non supporté' }, { status: 400 })
     }
 
     if (file.size > 10 * 1024 * 1024) {
@@ -40,20 +43,14 @@ export async function POST(request: NextRequest) {
     // Resolve dossier_id
     let resolvedDossierId = dossierId
     if (!resolvedDossierId) {
-      let dossierQuery = supabase.from('dossiers').select('id').eq('client_id', user.id)
-      if (societeId) dossierQuery = dossierQuery.eq('societe_id', societeId)
-      const { data: existing } = await dossierQuery.limit(1).single()
+      let q = supabase.from('dossiers').select('id').eq('client_id', user.id)
+      if (societeId) q = q.eq('societe_id', societeId)
+      const { data: d } = await q.limit(1).single()
 
-      if (existing) {
-        resolvedDossierId = existing.id
-      } else if (societeId) {
-        const { data: nd } = await supabase.from('dossiers')
-          .insert({ client_id: user.id, societe_id: societeId, comptable_id: null })
-          .select('id').single()
-        resolvedDossierId = nd?.id || null
+      if (d) {
+        resolvedDossierId = d.id
       } else {
-        const { data: any } = await supabase.from('dossiers')
-          .select('id').eq('client_id', user.id).limit(1).single()
+        const { data: any } = await supabase.from('dossiers').select('id').eq('client_id', user.id).limit(1).single()
         if (any) {
           resolvedDossierId = any.id
         } else {
@@ -108,10 +105,34 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Erreur enregistrement : ${docError.message}` }, { status: 500 })
     }
 
-    // Return immediately — processing will be triggered by the client
+    // Trigger processing AFTER response is sent (Next.js after() API)
+    // This runs in the same serverless function but doesn't block the response
+    after(async () => {
+      try {
+        const { processDocument } = await import('@/lib/process-document')
+        await processDocument({
+          document_id: doc.id,
+          storage_path: storagePath,
+          nom_fichier: file.name,
+          client_id: user.id,
+          societe: societeId || undefined,
+        })
+      } catch (e) {
+        console.error('[upload/after] Processing failed:', e)
+        // Mark as error
+        try {
+          const s = getAdminClient()
+          await s.from('documents').update({
+            statut: 'erreur',
+            n8n_result: { error: e instanceof Error ? e.message : 'Processing failed' },
+          }).eq('id', doc.id)
+        } catch {}
+      }
+    })
+
     return NextResponse.json({
       document: doc,
-      message: 'Document uploadé avec succès.',
+      message: 'Document uploadé. Analyse en cours...',
     })
   } catch (e: unknown) {
     console.error('Upload error:', e)

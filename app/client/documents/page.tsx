@@ -178,19 +178,7 @@ export default function ClientDocumentsPage() {
             created_at: new Date().toISOString(),
             societe_detectee: null,
           }, ...prev])
-          setUploadSuccess(`${file.name} envoyé ! L'analyse va classer automatiquement le document.`)
-
-          // Step 2: Trigger processing separately (fire-and-forget from browser)
-          fetch("/api/documents/process", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              document_id: doc.id,
-              storage_path: doc.storage_path,
-              nom_fichier: file.name,
-              client_id: profile?.id,
-            }),
-          }).catch(() => {}) // ignore — polling will pick up results
+          setUploadSuccess(`${file.name} envoyé ! L'analyse démarre automatiquement.`)
         } else {
           setUploadError(data.error || "Erreur lors de l'envoi")
         }
