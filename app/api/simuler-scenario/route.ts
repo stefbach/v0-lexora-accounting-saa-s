@@ -35,7 +35,7 @@ export async function POST(request: Request) {
       .from('rapports_mensuels')
       .select('*')
       .eq('societe_id', societe_id)
-      .order('mois', { ascending: false })
+      .order('periode', { ascending: false })
       .limit(1)
       .single()
 
@@ -61,17 +61,21 @@ export async function POST(request: Request) {
       Retourne uniquement le JSON.`
     )
 
-    // Save to simulations table
+    // Save to simulations table using actual schema fields
+    const a = analyse as any
     const { data: simulation, error: insertError } = await supabase
       .from('simulations')
       .insert({
         societe_id,
         titre,
         type_simulation,
-        parametres,
-        resultats: analyse,
-        score_viabilite: (analyse as any).score_viabilite || null,
-        genere_le: new Date().toISOString(),
+        parametres_json: parametres,
+        scenario_optimiste: a.scenario_optimiste || null,
+        scenario_base: a.scenario_realiste || null,
+        scenario_pessimiste: a.scenario_pessimiste || null,
+        recommandation: a.recommandation || null,
+        score_opportunite: a.score_viabilite || null,
+        statut: 'genere',
       })
       .select()
       .single()

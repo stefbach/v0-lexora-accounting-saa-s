@@ -36,44 +36,68 @@ export async function GET(request: Request) {
     let previsionsGenerees = 0
 
     for (const societe of societes || []) {
-      // Gather last 6 months of revenue data for averaging
+      // Gather last 6 months of ecritures via dossiers
       const sixMoisAvant = new Date(now.getFullYear(), now.getMonth() - 6, 1).toISOString().slice(0, 10)
       const finMoisPrecedent = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().slice(0, 10)
 
-      const { data: factures } = await supabase
-        .from('factures')
-        .select('montant_ht, date_facture')
+      const { data: dossiers } = await supabase
+        .from('dossiers')
+        .select('id')
         .eq('societe_id', societe.id)
-        .gte('date_facture', sixMoisAvant)
-        .lte('date_facture', finMoisPrecedent)
 
-      const { data: depenses } = await supabase
-        .from('depenses')
-        .select('montant, date_depense')
-        .eq('societe_id', societe.id)
-        .gte('date_depense', sixMoisAvant)
-        .lte('date_depense', finMoisPrecedent)
+      const dossierIds = (dossiers || []).map((d: any) => d.id)
 
-      // Calculate monthly averages
-      const totalRevenus = factures?.reduce((sum, f) => sum + (f.montant_ht || 0), 0) || 0
-      const totalDepenses = depenses?.reduce((sum, d) => sum + (d.montant || 0), 0) || 0
-      const nbMoisDonnees = Math.max(1, Math.min(6, new Set(factures?.map(f => f.date_facture?.slice(0, 7))).size || 1))
+      let ecritures: any[] = []
+      if (dossierIds.length > 0) {
+        const { data: ecrituresData } = await supabase
+          .from('ecritures_comptables')
+          .select('montant, compte_debit, compte_credit, date_ecriture')
+          .in('dossier_id', dossierIds)
+          .gte('date_ecriture', sixMoisAvant)
+          .lte('date_ecriture', finMoisPrecedent)
+        ecritures = ecrituresData || []
+      }
+
+      // Calculate monthly averages from ecritures
+      const totalRevenus = ecritures
+        .filter(e => e.compte_credit?.startsWith('7'))
+        .reduce((sum, e) => sum + (e.montant || 0), 0)
+      const totalDepenses = ecritures
+        .filter(e => e.compte_debit?.startsWith('6'))
+        .reduce((sum, e) => sum + (e.montant || 0), 0)
+      const nbMoisDonnees = Math.max(1, Math.min(6, new Set(ecritures.map(e => e.date_ecriture?.slice(0, 7))).size || 1))
 
       const revenuMoyenMensuel = totalRevenus / nbMoisDonnees
       const depenseMoyenneMensuelle = totalDepenses / nbMoisDonnees
       const resultatPrevisionnel = revenuMoyenMensuel - depenseMoyenneMensuelle
 
-      // Insert forecast
+      // Get current bank balances for tresorerie
+      const { data: comptes } = await supabase
+        .from('comptes_bancaires')
+        .select('banque, devise, solde_actuel')
+        .eq('societe_id', societe.id)
+
+      const tresorerieConsolidee = comptes?.reduce((sum, c) => sum + (c.solde_actuel || 0), 0) || 0
+      const tresorerieParCompte = (comptes || []).map((c: any) => ({
+        banque: c.banque, devise: c.devise, solde: c.solde_actuel,
+      }))
+
+      // Insert forecast using actual previsionnels schema
+      const dateDebut = `${moisCourant}-01`
+      const dateFin = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10)
+
       const { error: insertError } = await supabase.from('previsionnels').insert({
         societe_id: societe.id,
-        mois: `${moisCourant}-01`,
-        revenu_prevu: Math.round(revenuMoyenMensuel * 100) / 100,
-        depenses_prevues: Math.round(depenseMoyenneMensuelle * 100) / 100,
-        resultat_prevu: Math.round(resultatPrevisionnel * 100) / 100,
-        base_calcul: `Moyenne sur ${nbMoisDonnees} mois`,
-        mois_historiques: nbMoisDonnees,
+        type_periode: 'mensuel',
+        date_debut: dateDebut,
+        date_fin: dateFin,
+        prev_ca: Math.round(revenuMoyenMensuel * 100) / 100,
+        prev_charges: Math.round(depenseMoyenneMensuelle * 100) / 100,
+        prev_resultat: Math.round(resultatPrevisionnel * 100) / 100,
+        prev_tresorerie_consolidee: tresorerieConsolidee,
+        prev_tresorerie_par_compte: tresorerieParCompte,
+        prev_detail_json: { base_calcul: `Moyenne sur ${nbMoisDonnees} mois`, mois_historiques: nbMoisDonnees },
         genere_par: 'cron',
-        created_at: new Date().toISOString(),
       })
 
       if (!insertError) previsionsGenerees++

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import {
   Card,
@@ -18,6 +18,7 @@ import {
   CreditCard,
   Users,
   Archive,
+  Loader2,
 } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
 
@@ -31,89 +32,6 @@ interface AlertItem {
   archivee: boolean
   icon: "alert" | "file" | "payment" | "team" | "clock" | "check"
 }
-
-const mockAlerts: AlertItem[] = [
-  {
-    id: "1",
-    titre: "Déclaration TVA en retard",
-    message: "La déclaration TVA de décembre 2025 pour BPO n'a pas encore été soumise. Une pénalité de 2 500 MUR peut s'appliquer.",
-    date: "2026-03-25T09:00:00",
-    type: "urgente",
-    lue: false,
-    archivee: false,
-    icon: "alert",
-  },
-  {
-    id: "2",
-    titre: "Document à renvoyer",
-    message: "Le fichier facture_electricite.png est illisible. Merci de le scanner à nouveau en meilleure qualité.",
-    date: "2026-03-24T14:30:00",
-    type: "action",
-    lue: false,
-    archivee: false,
-    icon: "file",
-  },
-  {
-    id: "3",
-    titre: "Paiement TVA à effectuer",
-    message: "Vous devez payer 77 250 MUR de TVA pour mars 2026 avant le 20 avril 2026.",
-    date: "2026-03-24T10:00:00",
-    type: "urgente",
-    lue: false,
-    archivee: false,
-    icon: "payment",
-  },
-  {
-    id: "4",
-    titre: "Fiches de paie prêtes",
-    message: "Les fiches de paie de mars 2026 sont disponibles pour vos 5 employés. Vous pouvez les consulter dans la section Salaires.",
-    date: "2026-03-23T16:00:00",
-    type: "info",
-    lue: false,
-    archivee: false,
-    icon: "team",
-  },
-  {
-    id: "5",
-    titre: "Rappel : charges sociales Q1",
-    message: "N'oubliez pas de soumettre vos justificatifs de charges sociales du premier trimestre 2026 avant le 31 mars.",
-    date: "2026-03-22T09:00:00",
-    type: "rappel",
-    lue: true,
-    archivee: false,
-    icon: "clock",
-  },
-  {
-    id: "6",
-    titre: "Rapport mensuel disponible",
-    message: "Votre rapport financier de février 2026 est prêt. Connectez-vous pour le consulter.",
-    date: "2026-03-20T11:00:00",
-    type: "info",
-    lue: true,
-    archivee: false,
-    icon: "check",
-  },
-  {
-    id: "7",
-    titre: "Nouveau document traité",
-    message: "3 documents envoyés le 19 mars ont été traités avec succès et classés automatiquement.",
-    date: "2026-03-19T15:30:00",
-    type: "info",
-    lue: true,
-    archivee: true,
-    icon: "file",
-  },
-  {
-    id: "8",
-    titre: "Bienvenue sur Lexora",
-    message: "Votre compte est configuré. Commencez par envoyer vos premiers documents dans la section Envoi.",
-    date: "2026-03-01T08:00:00",
-    type: "info",
-    lue: true,
-    archivee: true,
-    icon: "check",
-  },
-]
 
 function getAlertIcon(icon: string) {
   switch (icon) {
@@ -163,7 +81,28 @@ function formatDate(dateStr: string) {
 export default function AlertesPage() {
   const { profile } = useProfile()
   const [filter, setFilter] = useState("toutes")
-  const [alerts, setAlerts] = useState(mockAlerts)
+  const [alerts, setAlerts] = useState<AlertItem[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function fetchAlerts() {
+      try {
+        const res = await fetch("/api/client/alertes")
+        if (res.ok) {
+          const data = await res.json()
+          if (Array.isArray(data.alertes)) {
+            setAlerts(data.alertes)
+          }
+        }
+      } catch {
+        // API not available -- leave empty
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchAlerts()
+  }, [])
 
   if (profile?.role === "client_user") {
     return (
@@ -177,6 +116,14 @@ export default function AlertesPage() {
         <Link href="/client/upload" className="text-sm underline" style={{ color: "#C9A84C" }}>
           Retour à l&apos;envoi de documents
         </Link>
+      </div>
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#C9A84C" }} />
       </div>
     )
   }
@@ -286,8 +233,9 @@ export default function AlertesPage() {
           </Card>
         ))}
         {filteredAlerts.length === 0 && (
-          <div className="text-center py-12 text-muted-foreground">
-            Aucune alerte dans cette catégorie.
+          <div className="text-center py-12">
+            <Bell className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
+            <p className="text-muted-foreground">Aucune alerte pour le moment.</p>
           </div>
         )}
       </div>

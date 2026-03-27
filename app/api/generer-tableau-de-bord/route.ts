@@ -65,9 +65,15 @@ export async function POST(request: Request) {
         periode,
         type_periode,
         tresorerie_consolidee: Math.round(tresorerieConsolidee * 100) / 100,
-        detail_comptes: detailParCompte,
-        ratios_financiers: ratios,
-        genere_le: new Date().toISOString(),
+        tresorerie_par_compte: detailParCompte,
+        ratio_liquidite: (ratios as any).ratio_liquidite || null,
+        score_liquidite: null,
+        score_rentabilite: null,
+        score_sante_global: (ratios as any).score_sante || null,
+        marge_nette_pct: (ratios as any).marge_nette || null,
+        recommandations: (ratios as any).recommandations || null,
+        tendance: (ratios as any).tendance || null,
+        genere_par: 'api',
       })
       .select()
       .single()

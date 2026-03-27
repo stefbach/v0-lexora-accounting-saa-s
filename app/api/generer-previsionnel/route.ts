@@ -30,8 +30,8 @@ export async function POST(request: Request) {
       .from('rapports_mensuels')
       .select('*')
       .eq('societe_id', societe_id)
-      .gte('mois', troisMoisAvant.toISOString().slice(0, 10))
-      .order('mois', { ascending: false })
+      .gte('periode', troisMoisAvant.toISOString().slice(0, 10))
+      .order('periode', { ascending: false })
       .limit(3)
 
     if (rapportsError) throw rapportsError
@@ -64,16 +64,38 @@ export async function POST(request: Request) {
       Retourne uniquement le JSON.`
     )
 
-    // Save to previsionnels table
+    // Compute date_fin from date_debut + type_periode
+    const dateDebutObj = new Date(date_debut)
+    let dateFinObj: Date
+    if (type_periode === 'trimestriel') {
+      dateFinObj = new Date(dateDebutObj.getFullYear(), dateDebutObj.getMonth() + 3, 0)
+    } else {
+      dateFinObj = new Date(dateDebutObj.getFullYear(), dateDebutObj.getMonth() + 1, 0)
+    }
+    const dateFin = dateFinObj.toISOString().slice(0, 10)
+
+    // Get comptes bancaires for tresorerie
+    const tresorerieConsolidee = (comptes || []).reduce((sum: number, c: any) => sum + (c.solde_actuel || 0), 0)
+    const tresorerieParCompte = (comptes || []).map((c: any) => ({
+      banque: c.banque, devise: c.devise, solde: c.solde_actuel,
+    }))
+
+    // Save to previsionnels table using actual schema fields
+    const prev = prevision as any
     const { data: saved, error: insertError } = await supabase
       .from('previsionnels')
       .insert({
         societe_id,
         type_periode,
         date_debut,
-        historique_utilise: rapports,
-        previsions: prevision,
-        genere_le: new Date().toISOString(),
+        date_fin: dateFin,
+        prev_ca: prev.prevision_j30?.revenus || null,
+        prev_charges: prev.prevision_j30?.depenses || null,
+        prev_resultat: prev.prevision_j30?.resultat || null,
+        prev_tresorerie_consolidee: tresorerieConsolidee,
+        prev_tresorerie_par_compte: tresorerieParCompte,
+        prev_detail_json: prevision,
+        analyse_ia: JSON.stringify({ tendance: prev.tendance_generale, risques: prev.risques, opportunites: prev.opportunites, confiance: prev.confiance }),
         genere_par: 'api',
       })
       .select()

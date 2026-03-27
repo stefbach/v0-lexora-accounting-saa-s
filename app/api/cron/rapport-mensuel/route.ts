@@ -39,49 +39,58 @@ export async function GET(request: Request) {
     let rapportsGeneres = 0
 
     for (const societe of societes || []) {
-      // Revenue
-      const { data: revenus } = await supabase
-        .from('factures')
-        .select('montant_ht, montant_ttc, tva')
+      // Get dossiers for this société
+      const { data: dossiers } = await supabase
+        .from('dossiers')
+        .select('id')
         .eq('societe_id', societe.id)
-        .gte('date_facture', debutMois)
-        .lte('date_facture', finMois)
 
-      const totalRevenusHT = revenus?.reduce((sum, f) => sum + (f.montant_ht || 0), 0) || 0
-      const totalRevenusTTC = revenus?.reduce((sum, f) => sum + (f.montant_ttc || 0), 0) || 0
-      const totalTVACollectee = revenus?.reduce((sum, f) => sum + (f.tva || 0), 0) || 0
+      const dossierIds = (dossiers || []).map((d: any) => d.id)
 
-      // Expenses
-      const { data: depenses } = await supabase
-        .from('depenses')
-        .select('montant, categorie')
-        .eq('societe_id', societe.id)
-        .gte('date_depense', debutMois)
-        .lte('date_depense', finMois)
-
-      const totalDepenses = depenses?.reduce((sum, d) => sum + (d.montant || 0), 0) || 0
-
-      // Group expenses by category
-      const depensesParCategorie: Record<string, number> = {}
-      for (const d of depenses || []) {
-        const cat = d.categorie || 'Autres'
-        depensesParCategorie[cat] = (depensesParCategorie[cat] || 0) + (d.montant || 0)
+      // Get ecritures comptables for the period via dossiers
+      let ecritures: any[] = []
+      if (dossierIds.length > 0) {
+        const { data: ecrituresData } = await supabase
+          .from('ecritures_comptables')
+          .select('montant, compte_debit, compte_credit, journal, libelle')
+          .in('dossier_id', dossierIds)
+          .gte('date_ecriture', debutMois)
+          .lte('date_ecriture', finMois)
+        ecritures = ecrituresData || []
       }
 
-      // Insert rapport
+      // Classify revenue (credit on class 7 accounts) and expenses (debit on class 6 accounts)
+      const totalRevenus = ecritures
+        .filter(e => e.compte_credit?.startsWith('7'))
+        .reduce((sum, e) => sum + (e.montant || 0), 0)
+
+      const totalDepenses = ecritures
+        .filter(e => e.compte_debit?.startsWith('6'))
+        .reduce((sum, e) => sum + (e.montant || 0), 0)
+
+      const resultatNet = totalRevenus - totalDepenses
+
+      // Group expenses by journal
+      const depensesParJournal: Record<string, number> = {}
+      for (const e of ecritures.filter(e => e.compte_debit?.startsWith('6'))) {
+        const cat = e.journal || 'Autres'
+        depensesParJournal[cat] = (depensesParJournal[cat] || 0) + (e.montant || 0)
+      }
+
+      // Insert rapport using actual schema (periode + data JSONB)
       const { error: insertError } = await supabase.from('rapports_mensuels').insert({
+        client_id: societe.client_id,
         societe_id: societe.id,
-        mois: debutMois,
-        revenus_ht: totalRevenusHT,
-        revenus_ttc: totalRevenusTTC,
-        tva_collectee: totalTVACollectee,
-        depenses_total: totalDepenses,
-        resultat_net: totalRevenusHT - totalDepenses,
-        depenses_par_categorie: depensesParCategorie,
-        nombre_factures: revenus?.length || 0,
-        nombre_depenses: depenses?.length || 0,
-        genere_par: 'cron',
-        created_at: new Date().toISOString(),
+        periode: debutMois,
+        type_rapport: 'mensuel',
+        data: {
+          revenus: totalRevenus,
+          depenses: totalDepenses,
+          resultat_net: resultatNet,
+          depenses_par_journal: depensesParJournal,
+          nombre_ecritures: ecritures.length,
+          genere_par: 'cron',
+        },
       })
 
       if (!insertError) rapportsGeneres++

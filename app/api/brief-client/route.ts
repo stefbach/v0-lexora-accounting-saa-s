@@ -27,12 +27,12 @@ export async function POST(request: Request) {
       .from('rapports_mensuels')
       .select('*')
       .eq('societe_id', societe_id)
-      .eq('mois', periode)
+      .eq('periode', periode)
       .single()
 
     // Get TVA
     const { data: tva } = await supabase
-      .from('tva')
+      .from('tva_mensuelle')
       .select('*')
       .eq('societe_id', societe_id)
       .order('periode', { ascending: false })

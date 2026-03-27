@@ -38,53 +38,63 @@ export async function GET(request: Request) {
     let tableauxMisAJour = 0
 
     for (const societe of societes || []) {
-      // Weekly revenue
-      const { data: factures } = await supabase
-        .from('factures')
-        .select('montant_ttc')
+      // Get dossiers for this société
+      const { data: dossiers } = await supabase
+        .from('dossiers')
+        .select('id')
         .eq('societe_id', societe.id)
-        .gte('date_facture', debutSemaineStr)
-        .lte('date_facture', finSemaineStr)
 
-      const revenuSemaine = factures?.reduce((sum, f) => sum + (f.montant_ttc || 0), 0) || 0
+      const dossierIds = (dossiers || []).map((d: any) => d.id)
 
-      // Weekly expenses
-      const { data: depenses } = await supabase
-        .from('depenses')
-        .select('montant')
-        .eq('societe_id', societe.id)
-        .gte('date_depense', debutSemaineStr)
-        .lte('date_depense', finSemaineStr)
+      // Get ecritures comptables for the week via dossiers
+      let ecritures: any[] = []
+      if (dossierIds.length > 0) {
+        const { data: ecrituresData } = await supabase
+          .from('ecritures_comptables')
+          .select('montant, compte_debit, compte_credit')
+          .in('dossier_id', dossierIds)
+          .gte('date_ecriture', debutSemaineStr)
+          .lte('date_ecriture', finSemaineStr)
+        ecritures = ecrituresData || []
+      }
 
-      const depensesSemaine = depenses?.reduce((sum, d) => sum + (d.montant || 0), 0) || 0
+      // Revenue (credit on class 7) and expenses (debit on class 6)
+      const revenuSemaine = ecritures
+        .filter(e => e.compte_credit?.startsWith('7'))
+        .reduce((sum, e) => sum + (e.montant || 0), 0)
 
-      // Pending invoices
-      const { count: facturesImpayees } = await supabase
-        .from('factures')
-        .select('id', { count: 'exact', head: true })
-        .eq('societe_id', societe.id)
-        .eq('statut', 'impayee')
+      const depensesSemaine = ecritures
+        .filter(e => e.compte_debit?.startsWith('6'))
+        .reduce((sum, e) => sum + (e.montant || 0), 0)
 
-      // Current bank balance
+      // Current bank balances
       const { data: comptes } = await supabase
         .from('comptes_bancaires')
-        .select('solde_actuel')
+        .select('banque, devise, solde_actuel')
         .eq('societe_id', societe.id)
 
-      const soldeTotalBancaire = comptes?.reduce((sum, c) => sum + (c.solde_actuel || 0), 0) || 0
+      const tresorerieParCompte = (comptes || []).map((c: any) => ({
+        banque: c.banque,
+        devise: c.devise,
+        solde: c.solde_actuel,
+      }))
+      const tresorerieConsolidee = comptes?.reduce((sum, c) => sum + (c.solde_actuel || 0), 0) || 0
 
-      // Upsert dashboard snapshot
-      const { error: upsertError } = await supabase.from('tableau_de_bord').upsert({
+      // Insert weekly dashboard using actual tableaux_de_bord schema
+      const periodeStr = `${debutSemaineStr}/${finSemaineStr}`
+      const { error: upsertError } = await supabase.from('tableaux_de_bord').insert({
         societe_id: societe.id,
-        semaine_du: debutSemaineStr,
-        revenu_semaine: revenuSemaine,
-        depenses_semaine: depensesSemaine,
-        factures_impayees: facturesImpayees || 0,
-        solde_bancaire_total: soldeTotalBancaire,
-        nombre_factures_semaine: factures?.length || 0,
-        nombre_depenses_semaine: depenses?.length || 0,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'societe_id,semaine_du' })
+        periode: periodeStr,
+        type_periode: 'hebdomadaire',
+        tresorerie_consolidee: tresorerieConsolidee,
+        tresorerie_par_compte: tresorerieParCompte,
+        ca_ht: revenuSemaine,
+        benefice_net: revenuSemaine - depensesSemaine,
+        score_sante_global: null,
+        recommandations: null,
+        tendance: null,
+        genere_par: 'cron',
+      })
 
       if (!upsertError) tableauxMisAJour++
     }
