@@ -153,7 +153,7 @@ export default function SocieteContextPage() {
             fournisseur: inv.emetteur || '—', numero: inv.numero || '—',
             date: inv.date || '—', ht: inv.montant_ht || 0, tva: inv.montant_tva || 0,
             ttc: inv.montant_ttc_mur || inv.montant_ttc || 0, echeance: '—',
-            statut: 'paye', compte: '401',
+            statut: 'en_attente', compte: '401',
           }))
 
         const facturesClients = (fin.extractedInvoices || [])
@@ -162,7 +162,7 @@ export default function SocieteContextPage() {
             client: inv.destinataire || inv.emetteur || '—', numero: inv.numero || '—',
             date: inv.date || '—', ht: inv.montant_ht || 0, tva: inv.montant_tva || 0,
             ttc: inv.montant_ttc_mur || inv.montant_ttc || 0, echeance: '—',
-            statut: 'paye', jours: 0,
+            statut: 'en_attente', jours: 0,
           }))
 
         const kpis: KPI[] = [
@@ -241,13 +241,13 @@ export default function SocieteContextPage() {
           salaires: fin.salaires ? [{
             employe: 'Total masse salariale', brut: fin.salaires, csg: 0, nsf: 0,
             paye: 0, net: fin.salaires, cout: fin.salaires + (fin.chargesSociales || 0),
-            statut: 'paye',
+            statut: 'a_verifier',
           }] : [],
           charges: fin.chargesSociales ? [{
             periode: fin.currentMonth || '—',
             csg_e: 0, csg_p: 0, nsf_e: 0, nsf_p: 0, training: 0,
             paye: 0, total: fin.chargesSociales,
-            statut: 'paye',
+            statut: 'a_verifier',
           }] : [],
           tva: tvaRows,
           dossiers: [],
