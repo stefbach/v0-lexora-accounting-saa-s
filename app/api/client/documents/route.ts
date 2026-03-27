@@ -23,17 +23,26 @@ export async function GET() {
     // Use admin client to bypass RLS
     const supabase = getAdminClient()
 
-    // Get all dossiers for this user
-    const { data: dossiers } = await supabase
-      .from('dossiers')
-      .select('id')
-      .eq('client_id', user.id)
+    // Get dossiers for this user
+    const { data: myDossiers } = await supabase
+      .from('dossiers').select('id, societe_id').eq('client_id', user.id)
 
-    if (!dossiers || dossiers.length === 0) {
-      return NextResponse.json({ documents: [] })
+    // Also get dossiers from the same sociétés (shared with client_admin)
+    let dossierIds: string[] = (myDossiers || []).map(d => d.id)
+
+    if (myDossiers && myDossiers.length > 0) {
+      const societeIds = [...new Set(myDossiers.map(d => d.societe_id))]
+      const { data: sharedDossiers } = await supabase
+        .from('dossiers').select('id').in('societe_id', societeIds)
+      if (sharedDossiers) {
+        const sharedIds = sharedDossiers.map(d => d.id)
+        dossierIds = [...new Set([...dossierIds, ...sharedIds])]
+      }
     }
 
-    const dossierIds = dossiers.map(d => d.id)
+    if (dossierIds.length === 0) {
+      return NextResponse.json({ documents: [] })
+    }
 
     // Get all documents in those dossiers
     const { data: documents, error } = await supabase

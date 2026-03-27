@@ -52,12 +52,24 @@ export async function GET(request: Request) {
     if (requestedSocieteId) dossierQuery = dossierQuery.eq('societe_id', requestedSocieteId)
     const { data: dossiers } = await dossierQuery
 
-    if (!dossiers || dossiers.length === 0) {
+    // Also include dossiers from the same sociétés (shared between client_admin and client_user)
+    let allDossierIds: string[] = (dossiers || []).map(d => d.id)
+    let societeIds = [...new Set((dossiers || []).map(d => d.societe_id))]
+
+    if (dossiers && dossiers.length > 0) {
+      const { data: sharedDossiers } = await supabase
+        .from('dossiers').select('id, societe_id').in('societe_id', societeIds)
+      if (sharedDossiers) {
+        allDossierIds = [...new Set([...allDossierIds, ...sharedDossiers.map(d => d.id)])]
+        societeIds = [...new Set([...societeIds, ...sharedDossiers.map(d => d.societe_id)])]
+      }
+    }
+
+    if (allDossierIds.length === 0) {
       return NextResponse.json({ financial: emptyFinancial() })
     }
 
-    const dossierIds = dossiers.map(d => d.id)
-    const societeIds = [...new Set(dossiers.map(d => d.societe_id))]
+    const dossierIds = allDossierIds
 
     // Get all société names for the filter dropdown
     const { data: allClientDossiers } = await supabase
