@@ -48,24 +48,7 @@ interface TeamMember {
   statut: "actif" | "invite"
 }
 
-const mockTeam: TeamMember[] = [
-  {
-    id: "1",
-    nom: "Raj Doobur",
-    email: "raj@tibok.mu",
-    poste: "Directeur général",
-    acces: "admin",
-    statut: "actif",
-  },
-  {
-    id: "2",
-    nom: "Nisha Doobur",
-    email: "nisha@tibok.mu",
-    poste: "Assistante administrative",
-    acces: "upload",
-    statut: "actif",
-  },
-]
+const initialTeam: TeamMember[] = []
 
 function getAccessBadge(acces: string) {
   switch (acces) {
@@ -99,7 +82,7 @@ function getStatutBadge(statut: string) {
 
 export default function EquipePage() {
   const { profile } = useProfile()
-  const [team, setTeam] = useState(mockTeam)
+  const [team, setTeam] = useState(initialTeam)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [newNom, setNewNom] = useState("")
   const [newEmail, setNewEmail] = useState("")
@@ -255,7 +238,7 @@ export default function EquipePage() {
               {team.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                    Aucun membre dans l&apos;équipe.
+                    Aucun membre dans l&apos;équipe. Cliquez sur &quot;Ajouter un accès&quot; pour inviter quelqu&apos;un.
                   </TableCell>
                 </TableRow>
               )}

@@ -15,104 +15,18 @@ function formatMUR(amount: number) {
   return amount.toLocaleString("fr-FR") + " MUR"
 }
 
-const mockData = [
-  {
-    id: "1",
-    employe: "Raj Doobur",
-    societe: "TIBOK",
-    periode: "Mars 2026",
-    brut: 85000,
-    npfSalarie: 2550,
-    paye: 8500,
-    netAPayer: 73950,
-    coutEmployeur: 92650,
-    statut: "Payé" as const,
-  },
-  {
-    id: "2",
-    employe: "Nisha Doobur",
-    societe: "TIBOK",
-    periode: "Mars 2026",
-    brut: 72000,
-    npfSalarie: 2160,
-    paye: 6200,
-    netAPayer: 63640,
-    coutEmployeur: 78480,
-    statut: "Payé" as const,
-  },
-  {
-    id: "3",
-    employe: "Anand Doorgakant",
-    societe: "BPO Services",
-    periode: "Mars 2026",
-    brut: 55000,
-    npfSalarie: 1650,
-    paye: 3750,
-    netAPayer: 49600,
-    coutEmployeur: 60050,
-    statut: "À payer" as const,
-  },
-  {
-    id: "4",
-    employe: "Marie Cupidon",
-    societe: "BPO Services",
-    periode: "Mars 2026",
-    brut: 48000,
-    npfSalarie: 1440,
-    paye: 2800,
-    netAPayer: 43760,
-    coutEmployeur: 52560,
-    statut: "À payer" as const,
-  },
-  {
-    id: "5",
-    employe: "Dev Doobur",
-    societe: "TIBOK",
-    periode: "Février 2026",
-    brut: 85000,
-    npfSalarie: 2550,
-    paye: 8500,
-    netAPayer: 73950,
-    coutEmployeur: 92650,
-    statut: "Payé" as const,
-  },
-  {
-    id: "6",
-    employe: "Sophie Ramdin",
-    societe: "BPO Services",
-    periode: "Février 2026",
-    brut: 62000,
-    npfSalarie: 1860,
-    paye: 4900,
-    netAPayer: 55240,
-    coutEmployeur: 67780,
-    statut: "Payé" as const,
-  },
-  {
-    id: "7",
-    employe: "Vikash Doobur",
-    societe: "TIBOK",
-    periode: "Février 2026",
-    brut: 95000,
-    npfSalarie: 2850,
-    paye: 10500,
-    netAPayer: 81650,
-    coutEmployeur: 103550,
-    statut: "Payé" as const,
-  },
-  {
-    id: "8",
-    employe: "Priya Doobur",
-    societe: "BPO Services",
-    periode: "Mars 2026",
-    brut: 42000,
-    npfSalarie: 1260,
-    paye: 2100,
-    netAPayer: 38640,
-    coutEmployeur: 46140,
-    statut: "À payer" as const,
-  },
-]
+const payrollData: {
+  id: string
+  employe: string
+  societe: string
+  periode: string
+  brut: number
+  npfSalarie: number
+  paye: number
+  netAPayer: number
+  coutEmployeur: number
+  statut: "Payé" | "À payer"
+}[] = []
 
 function getStatutBadge(statut: string) {
   switch (statut) {
@@ -144,7 +58,7 @@ export default function ClientSalairesPage() {
     )
   }
 
-  const filtered = mockData.filter(
+  const filtered = payrollData.filter(
     (row) =>
       row.employe.toLowerCase().includes(search.toLowerCase()) ||
       row.societe.toLowerCase().includes(search.toLowerCase()) ||
@@ -214,7 +128,9 @@ export default function ClientSalairesPage() {
               {filtered.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
-                    Aucune fiche de paie trouvée.
+                    {search
+                      ? "Aucune fiche de paie trouvée pour cette recherche."
+                      : "Aucune fiche de paie disponible. Les données apparaîtront ici une fois les salaires traités."}
                   </TableCell>
                 </TableRow>
               )}

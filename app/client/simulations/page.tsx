@@ -50,26 +50,7 @@ interface Simulation {
   direction: "up" | "down"
 }
 
-const mockSimulations: Simulation[] = [
-  {
-    id: 1,
-    titre: "Nouveau contrat IBL Operations",
-    type: "Nouveau client",
-    impact: "Si vous signez ce contrat : +305 000 MUR/mois de revenus",
-    score: 85,
-    badge: { label: "Opportunité", color: "green" },
-    direction: "up",
-  },
-  {
-    id: 2,
-    titre: "Recruter un développeur",
-    type: "Embauche",
-    impact: "Si vous recrutez : -80 000 MUR/mois de charges",
-    score: 62,
-    badge: { label: "À réfléchir", color: "orange" },
-    direction: "down",
-  },
-]
+const simulations: Simulation[] = []
 
 const simulationTypes = [
   "Nouveau client",
@@ -171,66 +152,77 @@ export default function SimulationsPage() {
       </div>
 
       {/* Simulation cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {mockSimulations.map((sim) => {
-          const isGreen = sim.badge.color === "green"
-          const DirectionIcon = sim.direction === "up" ? TrendingUp : TrendingDown
-          return (
-            <Card
-              key={sim.id}
-              className={isGreen ? "border-green-200" : "border-orange-200"}
-            >
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
-                    {sim.type}
-                  </Badge>
-                  <Badge
-                    className={
-                      isGreen
-                        ? "bg-green-100 text-green-700 border-green-200"
-                        : "bg-orange-100 text-orange-700 border-orange-200"
-                    }
-                  >
-                    {sim.badge.label}
-                  </Badge>
-                </div>
-                <CardTitle className="text-base mt-2" style={{ color: "#1E2A4A" }}>
-                  {sim.titre}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-start gap-3">
-                  <DirectionIcon
-                    className="h-5 w-5 mt-0.5 shrink-0"
-                    style={{ color: isGreen ? "#16a34a" : "#ea580c" }}
-                  />
-                  <p className="text-sm text-muted-foreground">{sim.impact}</p>
-                </div>
-
-                {/* Score bar */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">Score</span>
-                    <span className="font-semibold" style={{ color: "#1E2A4A" }}>
-                      {sim.score}/100
-                    </span>
+      {simulations.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <Sparkles className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
+            <p className="text-muted-foreground">
+              Aucune simulation pour le moment. Cliquez sur &quot;Nouvelle simulation&quot; pour tester l&apos;impact d&apos;une décision.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {simulations.map((sim) => {
+            const isGreen = sim.badge.color === "green"
+            const DirectionIcon = sim.direction === "up" ? TrendingUp : TrendingDown
+            return (
+              <Card
+                key={sim.id}
+                className={isGreen ? "border-green-200" : "border-orange-200"}
+              >
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
+                      {sim.type}
+                    </Badge>
+                    <Badge
+                      className={
+                        isGreen
+                          ? "bg-green-100 text-green-700 border-green-200"
+                          : "bg-orange-100 text-orange-700 border-orange-200"
+                      }
+                    >
+                      {sim.badge.label}
+                    </Badge>
                   </div>
-                  <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all"
-                      style={{
-                        width: `${sim.score}%`,
-                        backgroundColor: isGreen ? "#16a34a" : "#ea580c",
-                      }}
+                  <CardTitle className="text-base mt-2" style={{ color: "#1E2A4A" }}>
+                    {sim.titre}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-start gap-3">
+                    <DirectionIcon
+                      className="h-5 w-5 mt-0.5 shrink-0"
+                      style={{ color: isGreen ? "#16a34a" : "#ea580c" }}
                     />
+                    <p className="text-sm text-muted-foreground">{sim.impact}</p>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          )
-        })}
-      </div>
+
+                  {/* Score bar */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">Score</span>
+                      <span className="font-semibold" style={{ color: "#1E2A4A" }}>
+                        {sim.score}/100
+                      </span>
+                    </div>
+                    <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{
+                          width: `${sim.score}%`,
+                          backgroundColor: isGreen ? "#16a34a" : "#ea580c",
+                        }}
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
+      )}
 
       {/* Footer badge */}
       <div className="flex items-center gap-2">

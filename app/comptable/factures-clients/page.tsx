@@ -7,119 +7,26 @@ import { Input } from "@/components/ui/input"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
-import { Search } from "lucide-react"
+import { Search, FileText } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
 
 function formatMUR(amount: number) {
   return amount.toLocaleString("fr-FR") + " MUR"
 }
 
-const mockData = [
-  {
-    id: "1",
-    client: "Raj Doobur",
-    societe: "TIBOK",
-    numFacture: "FC-2026-0201",
-    dateEmission: "01/03/2026",
-    montantHT: 350000,
-    tva: 52500,
-    ttc: 402500,
-    echeance: "31/03/2026",
-    statut: "Soldé" as const,
-    joursRetard: 0,
-  },
-  {
-    id: "2",
-    client: "Nisha Doobur",
-    societe: "BPO Services",
-    numFacture: "FC-2026-0202",
-    dateEmission: "05/03/2026",
-    montantHT: 185000,
-    tva: 27750,
-    ttc: 212750,
-    echeance: "05/04/2026",
-    statut: "Impayé" as const,
-    joursRetard: 0,
-  },
-  {
-    id: "3",
-    client: "Jean-Pierre Lagesse",
-    societe: "TIBOK",
-    numFacture: "FC-2026-0185",
-    dateEmission: "15/02/2026",
-    montantHT: 520000,
-    tva: 78000,
-    ttc: 598000,
-    echeance: "15/03/2026",
-    statut: "Impayé" as const,
-    joursRetard: 11,
-  },
-  {
-    id: "4",
-    client: "Anand Doorgakant",
-    societe: "TIBOK",
-    numFacture: "FC-2026-0190",
-    dateEmission: "20/02/2026",
-    montantHT: 98000,
-    tva: 14700,
-    ttc: 112700,
-    echeance: "20/03/2026",
-    statut: "Partiellement payé" as const,
-    joursRetard: 6,
-  },
-  {
-    id: "5",
-    client: "Marie Cupidon",
-    societe: "BPO Services",
-    numFacture: "FC-2026-0175",
-    dateEmission: "01/02/2026",
-    montantHT: 275000,
-    tva: 41250,
-    ttc: 316250,
-    echeance: "01/03/2026",
-    statut: "Soldé" as const,
-    joursRetard: 0,
-  },
-  {
-    id: "6",
-    client: "Dev Doobur",
-    societe: "TIBOK",
-    numFacture: "FC-2026-0210",
-    dateEmission: "12/03/2026",
-    montantHT: 145000,
-    tva: 21750,
-    ttc: 166750,
-    echeance: "12/04/2026",
-    statut: "Impayé" as const,
-    joursRetard: 0,
-  },
-  {
-    id: "7",
-    client: "Sophie Ramdin",
-    societe: "BPO Services",
-    numFacture: "FC-2026-0160",
-    dateEmission: "20/01/2026",
-    montantHT: 68000,
-    tva: 10200,
-    ttc: 78200,
-    echeance: "20/02/2026",
-    statut: "Impayé" as const,
-    joursRetard: 34,
-  },
-  {
-    id: "8",
-    client: "Vikash Doobur",
-    societe: "TIBOK",
-    numFacture: "FC-2026-0215",
-    dateEmission: "20/03/2026",
-    montantHT: 420000,
-    tva: 63000,
-    ttc: 483000,
-    echeance: "20/04/2026",
-    statut: "Impayé" as const,
-    joursRetard: 0,
-  },
-]
+interface Invoice {
+  id: string
+  client: string
+  societe: string
+  numFacture: string
+  dateEmission: string
+  montantHT: number
+  tva: number
+  ttc: number
+  echeance: string
+  statut: "Soldé" | "Impayé" | "Partiellement payé"
+  joursRetard: number
+}
 
 function getStatutBadge(statut: string) {
   switch (statut) {
@@ -138,7 +45,9 @@ export default function ComptableFacturesClientsPage() {
   const [search, setSearch] = useState("")
   const { profile } = useProfile()
 
-  const filtered = mockData.filter(
+  const invoices: Invoice[] = []
+
+  const filtered = invoices.filter(
     (row) =>
       row.client.toLowerCase().includes(search.toLowerCase()) ||
       row.societe.toLowerCase().includes(search.toLowerCase()) ||
@@ -216,8 +125,12 @@ export default function ComptableFacturesClientsPage() {
               ))}
               {filtered.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
-                    Aucune facture client trouvée.
+                  <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
+                    <div className="flex flex-col items-center gap-2">
+                      <FileText className="h-10 w-10 text-muted-foreground/40" />
+                      <p className="font-medium">Aucune facture client</p>
+                      <p className="text-sm">Les factures émises apparaîtront ici une fois créées.</p>
+                    </div>
                   </TableCell>
                 </TableRow>
               )}
