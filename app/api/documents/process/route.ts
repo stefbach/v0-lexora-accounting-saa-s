@@ -258,114 +258,87 @@ export async function POST(request: NextRequest) {
       textContent = await fileData.text()
     }
 
-    // ---- 5. Step 1 — Routing with Prompt 7 ---------------------------------
-    console.log(`[documents/process] Étape 1 – Détection du type de document et de la société`)
+    // ---- 5. Single AI call — classify + extract in one shot (fast!) ----------
+    // Use Haiku for speed (must fit within Vercel 10s timeout)
+    const FAST_MODEL = 'claude-haiku-4-5-20251001'
 
-    const routingMessages = buildMessages(
-      'Analyse ce document pour détecter la société et le type de document.',
+    const COMBINED_PROMPT = `Tu es un assistant comptable expert. Analyse ce document et retourne UN SEUL JSON avec:
+1. "routing": classification du document
+2. "extraction": données extraites
+
+IMPORTANT: Réponds UNIQUEMENT en JSON valide. Pas de markdown, pas de backticks.
+{
+  "routing": {
+    "societe": "<nom de la société/personne détectée ou INCONNU>",
+    "type_document": "<facture_fournisseur|facture_client|releve_bancaire|charges_sociales|fiche_paie|contrat|autre>",
+    "confiance_type": <0-100>,
+    "indices": "<éléments clés détectés>"
+  },
+  "extraction": {
+    "emetteur": "<nom de l'émetteur>",
+    "destinataire": "<nom du destinataire>",
+    "date": "<date du document>",
+    "numero": "<numéro de facture/document>",
+    "devise": "<EUR|MUR|GBP|USD>",
+    "montant_total": <montant total>,
+    "montant_ht": <montant HT si applicable>,
+    "montant_tva": <montant TVA si applicable>,
+    "lignes": [{"description": "", "quantite": 0, "montant": 0}],
+    "ecritures_suggerees": [{"compte": "", "libelle": "", "debit": 0, "credit": 0}]
+  }
+}`
+
+    console.log(`[documents/process] Analyse avec ${FAST_MODEL}...`)
+
+    const messages = buildMessages(
+      'Analyse ce document comptable. Classifie-le et extrais les données.',
       fileBase64,
       nom_fichier,
       textContent,
     )
 
-    const routingResponse = await callWithRetry(anthropic, {
-      model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6',
-      max_tokens: 4096,
+    const response = await callWithRetry(anthropic, {
+      model: FAST_MODEL,
+      max_tokens: 2048,
       temperature: 0,
-      system: PROMPT_ROUTING,
-      messages: routingMessages,
+      system: COMBINED_PROMPT,
+      messages,
     })
 
-    const routingText = routingResponse.content
+    const responseText = response.content
       .filter((block): block is Anthropic.TextBlock => block.type === 'text')
       .map((block) => block.text)
       .join('')
 
-    console.log(`[documents/process] Résultat routing : ${routingText.substring(0, 200)}`)
+    console.log(`[documents/process] Résultat : ${responseText.substring(0, 300)}`)
 
-    let routingResult: {
-      societe: string
-      type_document: string
-      confiance_societe: number
-      confiance_type: number
-      indices: string
-    }
-
+    let parsed: { routing?: any; extraction?: any } = {}
     try {
-      // Strip markdown backticks if Claude wraps the response
-      const cleanedText = routingText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
-      routingResult = JSON.parse(cleanedText)
+      const cleaned = responseText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
+      parsed = JSON.parse(cleaned)
     } catch {
-      console.error(`[documents/process] Échec du parsing du routing : ${routingText}`)
-      // Try to salvage: default to "autre" type so document is still saved
-      routingResult = {
-        societe: 'INCONNU',
-        type_document: 'autre',
-        confiance_societe: 0,
-        confiance_type: 0,
-        indices: `Parsing failed. Raw response: ${routingText.substring(0, 200)}`,
+      console.error(`[documents/process] Parsing failed: ${responseText.substring(0, 200)}`)
+      parsed = {
+        routing: { societe: 'INCONNU', type_document: 'autre', confiance_type: 0, indices: 'parsing failed' },
+        extraction: { raw_response: responseText },
       }
     }
 
-    const detectedSociete = (societe || routingResult.societe) as Societe | 'INCONNU'
-    const detectedType = routingResult.type_document as DocumentType
+    const routingResult = parsed.routing || { societe: 'INCONNU', type_document: 'autre', confiance_type: 0, indices: '' }
+    const processingResult = parsed.extraction || {}
+    const detectedSociete = (societe || routingResult.societe || 'INCONNU') as string
+    const detectedType = (routingResult.type_document || 'autre') as DocumentType
 
-    console.log(
-      `[documents/process] Détecté – société=${detectedSociete}, type=${detectedType}, ` +
-      `confiance_société=${routingResult.confiance_societe}%, confiance_type=${routingResult.confiance_type}%`,
-    )
+    console.log(`[documents/process] Classifié: type=${detectedType}, société=${detectedSociete}, confiance=${routingResult.confiance_type}%`)
 
-    // ---- 6. Step 2 — Processing with type-specific prompt -------------------
-    const processingPrompt = PROCESSING_PROMPTS[detectedType]
-
-    let processingResult: Record<string, unknown> | null = null
-
-    if (processingPrompt) {
-      console.log(`[documents/process] Étape 2 – Extraction des données (${detectedType})`)
-
-      const processingMessages = buildMessages(
-        `Extrais toutes les données comptables de ce document (${detectedType}).`,
-        fileBase64,
-        nom_fichier,
-        textContent,
-      )
-
-      const processingResponse = await callWithRetry(anthropic, {
-        model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6',
-        max_tokens: 4096,
-        temperature: 0,
-        system: processingPrompt,
-        messages: processingMessages,
-      })
-
-      const processingText = processingResponse.content
-        .filter((block): block is Anthropic.TextBlock => block.type === 'text')
-        .map((block) => block.text)
-        .join('')
-
-      console.log(`[documents/process] Résultat extraction : ${processingText.substring(0, 200)}...`)
-
-      try {
-        const cleanedExtraction = processingText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
-        processingResult = JSON.parse(cleanedExtraction)
-      } catch {
-        console.error(`[documents/process] Échec du parsing de l'extraction : ${processingText}`)
-        // Continue – we still save the raw text as n8n_result
-        processingResult = { raw_response: processingText, parsing_error: true }
-      }
-    } else {
-      console.warn(`[documents/process] Pas de prompt d'extraction pour le type : ${detectedType}`)
-      processingResult = { message: `Aucun prompt d'extraction pour le type "${detectedType}"` }
-    }
-
-    // ---- 7. Save results to database ---------------------------------------
+    // ---- 6. Save results to database ---------------------------------------
     const n8nResult = {
       routing: routingResult,
       extraction: processingResult,
       metadata: {
         processed_at: new Date().toISOString(),
         processing_time_ms: Date.now() - startTime,
-        model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6',
+        model: FAST_MODEL,
         nom_fichier,
       },
     }
