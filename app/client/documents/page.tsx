@@ -358,7 +358,7 @@ export default function ClientDocumentsPage() {
                   <TableCell>
                     <div className="flex gap-1">
                       <Button variant="ghost" size="sm"><Download className="h-3.5 w-3.5" /></Button>
-                      {(doc.statut === "erreur" || doc.statut === "en_attente") && doc.storage_path && (
+                      {(doc.statut === "erreur" || doc.statut === "en_attente" || doc.statut === "en_cours") && doc.storage_path && (
                         <Button
                           variant="ghost"
                           size="sm"
