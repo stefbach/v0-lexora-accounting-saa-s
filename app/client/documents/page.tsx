@@ -163,26 +163,15 @@ export default function ClientDocumentsPage() {
       formData.append("societe_id", uploadSocieteId)
 
       try {
-        // Step 1: Upload (fast — just saves file)
         const res = await fetch("/api/documents/upload", { method: "POST", body: formData })
         const data = await res.json()
         if (res.ok && data.document) {
           const doc = data.document
-          const docType = doc.type_document || null
-          const docStatut = doc.statut || "en_attente"
-          setDocuments(prev => [{
-            id: doc.id,
-            nom_fichier: file.name,
-            type_fichier: file.type.split("/").pop() || "pdf",
-            type_document: docType,
-            statut: docStatut,
-            storage_path: doc.storage_path || null,
-            created_at: new Date().toISOString(),
-            societe_detectee: doc.societe_detectee || null,
-          }, ...prev])
-          if (docStatut === "traite" && docType) {
-            const folderLabel = FOLDERS.find(f => f.key === docType)?.label || docType
+          if (doc.statut === "traite" && doc.type_document) {
+            const folderLabel = FOLDERS.find(f => f.key === doc.type_document)?.label || doc.type_document
             setUploadSuccess(`${file.name} analysé et classé dans "${folderLabel}" !`)
+          } else if (doc.statut === "erreur") {
+            setUploadError(`${file.name} : erreur d'analyse. Utilisez Réessayer.`)
           } else {
             setUploadSuccess(`${file.name} envoyé !`)
           }
@@ -193,6 +182,8 @@ export default function ClientDocumentsPage() {
         setUploadError("Erreur de connexion au serveur")
       }
     }
+    // Always refresh from DB — no local state manipulation
+    await fetchDocuments()
     setUploading(false)
     setSelectedFolder("recent")
     setTimeout(() => { setUploadSuccess(null); setUploadError(null) }, 6000)

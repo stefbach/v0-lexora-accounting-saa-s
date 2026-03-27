@@ -128,15 +128,26 @@ export async function POST(request: NextRequest) {
         if (entries.length > 0) await supabase.from('ecritures_comptables').insert(entries)
       }
     } catch (processError: any) {
-      console.error('[upload] Processing error:', processError.message)
+      const errMsg = processError?.message || String(processError)
+      console.error('[upload] Processing error:', errMsg, processError?.stack)
+      typeDocument = 'erreur'
       await supabase.from('documents').update({
-        statut: 'erreur', n8n_result: { error: processError.message }
+        statut: 'erreur', n8n_result: { error: errMsg, stack: processError?.stack?.split('\n').slice(0, 3) }
       }).eq('id', doc.id)
     }
 
+    // Fetch the final document state from DB
+    const { data: finalDoc } = await supabase.from('documents')
+      .select('id, nom_fichier, type_fichier, type_document, statut, storage_path, created_at, societe_detectee')
+      .eq('id', doc.id).single()
+
     return NextResponse.json({
-      document: { ...doc, statut: typeDocument !== 'autre' ? 'traite' : doc.statut, type_document: typeDocument },
-      message: `Document uploadé et classé: ${typeDocument}`,
+      document: finalDoc || doc,
+      message: finalDoc?.statut === 'traite'
+        ? `Document uploadé et classé: ${finalDoc.type_document}`
+        : finalDoc?.statut === 'erreur'
+        ? `Document uploadé. Erreur d'analyse.`
+        : `Document uploadé.`,
     })
   } catch (e: unknown) {
     console.error('Upload error:', e)
