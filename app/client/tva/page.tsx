@@ -19,14 +19,19 @@ import {
   FileText,
   CheckCircle,
   XCircle,
-  Clock,
   CalendarClock,
+  Building2,
+  Globe,
+  MapPin,
+  Info,
 } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
 import Link from "next/link"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 const NAVY = "#1E2A4A"
 const GOLD = "#C9A84C"
+const TVA_RATE = 0.15
 
 function formatMUR(n: number) {
   return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " MUR"
@@ -50,19 +55,42 @@ function getDeadlineInfo() {
   }
 }
 
+// Known foreign suppliers (no MRA TVA number)
+const FOREIGN_SUPPLIERS = [
+  "openai", "aws", "amazon web services", "vercel", "google cloud",
+  "microsoft", "azure", "stripe", "digitalocean", "heroku", "netlify",
+  "github", "gitlab", "cloudflare", "twilio", "sendgrid", "mailgun",
+  "atlassian", "slack", "zoom", "notion", "figma", "adobe",
+]
+
+function isForeignSupplier(emetteur: string): boolean {
+  if (!emetteur) return false
+  const lower = emetteur.toLowerCase()
+  return FOREIGN_SUPPLIERS.some(f => lower.includes(f))
+}
+
 export default function TVAPage() {
   const { profile, loading } = useProfile()
   const [data, setData] = useState<any>(null)
   const [fetching, setFetching] = useState(true)
   const [computing, setComputing] = useState(false)
+  const [selectedSociete, setSelectedSociete] = useState<string>("all")
+  const [societes, setSocietes] = useState<{ id: string; nom: string }[]>([])
 
   useEffect(() => {
-    fetch("/api/client/financial")
+    setFetching(true)
+    const url = selectedSociete !== "all"
+      ? `/api/client/financial?societe_id=${selectedSociete}`
+      : "/api/client/financial"
+    fetch(url)
       .then((res) => res.json())
-      .then((json) => setData(json.financial))
+      .then((json) => {
+        setData(json.financial)
+        if (json.financial?.availableSocietes) setSocietes(json.financial.availableSocietes)
+      })
       .catch(() => setData(null))
       .finally(() => setFetching(false))
-  }, [])
+  }, [selectedSociete])
 
   if (loading || fetching) {
     return (
@@ -87,34 +115,51 @@ export default function TVAPage() {
 
   const tvaCollectee = data?.tvaCollectee ?? 0
   const tvaDeductible = data?.tvaDeductible ?? 0
-  const tvaNette = data?.tvaNette ?? 0
   const tvaRecords: any[] = data?.tvaRecords ?? []
   const invoices: any[] = data?.extractedInvoices ?? []
-  const creditReporte = 0 // From previous period, would come from tvaRecords
+  const creditReporte = 0
 
-  // Separate collectee (client invoices) and deductible (supplier invoices)
+  // Separate client invoices (TVA collectee) and supplier invoices
   const clientInvoices = invoices.filter((inv: any) => inv.type === "facture_client")
   const supplierInvoices = invoices.filter((inv: any) => inv.type === "facture_fournisseur")
 
-  // Valid invoices for TVA deduction: must have TVA amount and valid fields
-  const validSupplierInvoices = supplierInvoices.filter(
+  // Classify supplier invoices: local vs foreign
+  const localSupplierInvoices = supplierInvoices.filter(
+    (inv: any) => !isForeignSupplier(inv.emetteur) && inv.devise === "MUR"
+  )
+  const foreignSupplierInvoices = supplierInvoices.filter(
+    (inv: any) => isForeignSupplier(inv.emetteur) || (inv.devise && inv.devise !== "MUR")
+  )
+
+  // Local valid: must have TVA amount, emetteur, and numero (implies MRA TVA number)
+  const validLocalInvoices = localSupplierInvoices.filter(
     (inv: any) => (inv.montant_tva ?? 0) > 0 && inv.emetteur && inv.numero
   )
-  const rejectedSupplierInvoices = supplierInvoices.filter(
+  const rejectedLocalInvoices = localSupplierInvoices.filter(
     (inv: any) => (inv.montant_tva ?? 0) > 0 && (!inv.emetteur || !inv.numero)
   )
 
+  // TVA collectee from client invoices
   const totalTvaCollecteeFromInvoices = clientInvoices.reduce(
     (s: number, inv: any) => s + (inv.montant_tva_mur ?? inv.montant_tva ?? 0), 0
   )
-  const totalTvaDeductibleFromInvoices = validSupplierInvoices.reduce(
+
+  // TVA deductible ONLY from local valid invoices
+  const totalTvaDeductibleLocale = validLocalInvoices.reduce(
     (s: number, inv: any) => s + (inv.montant_tva_mur ?? inv.montant_tva ?? 0), 0
   )
 
-  // Use ecritures-based values if available, else invoices
+  // Reverse charge on foreign invoices: output + input = net 0
+  const totalReverseChargeBase = foreignSupplierInvoices.reduce(
+    (s: number, inv: any) => s + (inv.montant_ht_mur ?? inv.montant_ht ?? 0), 0
+  )
+  const reverseChargeTVA = totalReverseChargeBase * TVA_RATE
+
+  // Use ecritures-based values if available, else computed from invoices
   const effectiveCollectee = tvaCollectee || totalTvaCollecteeFromInvoices
-  const effectiveDeductible = tvaDeductible || totalTvaDeductibleFromInvoices
-  const effectiveNette = tvaNette || (effectiveCollectee - effectiveDeductible - creditReporte)
+  const effectiveDeductible = tvaDeductible || totalTvaDeductibleLocale
+  // TVA a payer = collectee - deductible locale (reverse charge nets to 0)
+  const effectiveNette = effectiveCollectee - effectiveDeductible - creditReporte
   const tvaAPayer = Math.max(0, effectiveNette)
   const creditTVA = effectiveNette < 0 ? Math.abs(effectiveNette) : 0
 
@@ -122,14 +167,13 @@ export default function TVAPage() {
 
   const handleCalculerTVA = async () => {
     setComputing(true)
-    // Simulate computation delay - in production this would call an AI endpoint
     await new Promise((r) => setTimeout(r, 1500))
     setComputing(false)
   }
 
   const summaryCards = [
-    { title: "TVA Collect\u00e9e", value: effectiveCollectee, icon: TrendingUp, color: NAVY, bg: "bg-blue-50" },
-    { title: "TVA D\u00e9ductible", value: effectiveDeductible, icon: TrendingDown, color: GOLD, bg: "bg-amber-50" },
+    { title: "TVA Collect\u00e9e (ventes)", value: effectiveCollectee, icon: TrendingUp, color: NAVY, bg: "bg-blue-50" },
+    { title: "TVA D\u00e9ductible (local)", value: effectiveDeductible, icon: TrendingDown, color: GOLD, bg: "bg-amber-50" },
     { title: "TVA Nette \u00e0 payer", value: tvaAPayer, icon: Calculator, color: "#DC2626", bg: "bg-red-50" },
     { title: "Cr\u00e9dit TVA", value: creditTVA, icon: AlertTriangle, color: "#22C55E", bg: "bg-green-50" },
   ]
@@ -146,23 +190,37 @@ export default function TVAPage() {
             Suivi de vos d&eacute;clarations TVA et obligations fiscales aupr&egrave;s de la MRA.
           </p>
         </div>
-        {/* Deadline indicator */}
-        <Card className={`border-2 ${deadline.isOverdue ? "border-red-500" : deadline.isUrgent ? "border-orange-400" : "border-gray-200"}`}>
-          <CardContent className="py-3 px-4 flex items-center gap-3">
-            <CalendarClock className="h-5 w-5" style={{ color: deadline.isOverdue ? "#EF4444" : deadline.isUrgent ? "#F59E0B" : NAVY }} />
-            <div>
-              <p className="text-xs text-muted-foreground">Prochaine &eacute;ch&eacute;ance TVA</p>
-              <p className="text-sm font-semibold" style={{ color: deadline.isOverdue ? "#EF4444" : NAVY }}>
-                {deadline.deadlineStr}
-              </p>
-              <p className="text-xs" style={{ color: deadline.isOverdue ? "#EF4444" : deadline.isUrgent ? "#F59E0B" : "#6B7280" }}>
-                {deadline.isOverdue
-                  ? `En retard de ${Math.abs(deadline.daysLeft)} jour(s)`
-                  : `${deadline.daysLeft} jour(s) restant(s)`}
-              </p>
+        <div className="flex items-center gap-3">
+          {societes.length > 1 && (
+            <div className="flex items-center gap-2">
+              <Building2 className="h-4 w-4 text-muted-foreground" />
+              <Select value={selectedSociete} onValueChange={setSelectedSociete}>
+                <SelectTrigger className="w-[220px] h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toutes les soci&eacute;t&eacute;s</SelectItem>
+                  {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
-          </CardContent>
-        </Card>
+          )}
+          {/* Deadline indicator */}
+          <Card className={`border-2 ${deadline.isOverdue ? "border-red-500" : deadline.isUrgent ? "border-orange-400" : "border-gray-200"}`}>
+            <CardContent className="py-3 px-4 flex items-center gap-3">
+              <CalendarClock className="h-5 w-5" style={{ color: deadline.isOverdue ? "#EF4444" : deadline.isUrgent ? "#F59E0B" : NAVY }} />
+              <div>
+                <p className="text-xs text-muted-foreground">Prochaine &eacute;ch&eacute;ance TVA</p>
+                <p className="text-sm font-semibold" style={{ color: deadline.isOverdue ? "#EF4444" : NAVY }}>
+                  {deadline.deadlineStr}
+                </p>
+                <p className="text-xs" style={{ color: deadline.isOverdue ? "#EF4444" : deadline.isUrgent ? "#F59E0B" : "#6B7280" }}>
+                  {deadline.isOverdue
+                    ? `En retard de ${Math.abs(deadline.daysLeft)} jour(s)`
+                    : `${deadline.daysLeft} jour(s) restant(s)`}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* Calculate button */}
@@ -203,6 +261,30 @@ export default function TVAPage() {
         ))}
       </div>
 
+      {/* Reverse Charge Warning */}
+      {foreignSupplierInvoices.length > 0 && (
+        <Card className="border-2 border-amber-300 bg-amber-50">
+          <CardContent className="py-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-amber-800">
+                  Reverse Charge (R5) applicable sur {foreignSupplierInvoices.length} facture(s) &eacute;trang&egrave;re(s)
+                </p>
+                <p className="text-xs text-amber-700 mt-1">
+                  Les factures de fournisseurs &eacute;trangers (sans num&eacute;ro TVA MRA) sont soumises au m&eacute;canisme de Reverse Charge :
+                  TVA de sortie 15% (4457) + TVA d&apos;entr&eacute;e 15% (4456) = effet net 0 MUR.
+                  Ces montants ne sont PAS inclus dans la TVA &agrave; payer.
+                </p>
+                <p className="text-xs text-amber-700 mt-1 font-medium">
+                  Base Reverse Charge : {formatMUR(totalReverseChargeBase)} — TVA (15%) : {formatMUR(reverseChargeTVA)}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* MRA Declaration Form (Box 1-9) */}
       <Card>
         <CardHeader>
@@ -235,12 +317,20 @@ export default function TVAPage() {
               <tr className="border-b border-gray-100">
                 <td className="py-2 font-medium" style={{ color: NAVY }}>3</td>
                 <td className="py-2">Achats locaux taxables</td>
-                <td className="py-2 text-right font-medium">{formatMUR(data?.totalExpenses ?? 0)}</td>
+                <td className="py-2 text-right font-medium">{formatMUR(validLocalInvoices.reduce((s: number, inv: any) => s + (inv.montant_ht_mur ?? inv.montant_ht ?? 0), 0))}</td>
               </tr>
               <tr className="border-b border-gray-100">
                 <td className="py-2 font-medium" style={{ color: NAVY }}>4</td>
-                <td className="py-2">TVA sur achats (Input Tax)</td>
+                <td className="py-2">TVA sur achats locaux (Input Tax)</td>
                 <td className="py-2 text-right font-medium">{formatMUR(effectiveDeductible)}</td>
+              </tr>
+              <tr className="border-b border-gray-100 bg-amber-50/50">
+                <td className="py-2 font-medium" style={{ color: NAVY }}>R5</td>
+                <td className="py-2">
+                  Reverse Charge — services import&eacute;s
+                  <span className="text-xs text-muted-foreground ml-2">(output + input = net 0)</span>
+                </td>
+                <td className="py-2 text-right font-medium text-amber-600">{formatMUR(reverseChargeTVA)}</td>
               </tr>
               <tr className="border-b border-gray-100">
                 <td className="py-2 font-medium" style={{ color: NAVY }}>5</td>
@@ -278,36 +368,38 @@ export default function TVAPage() {
         </CardContent>
       </Card>
 
-      {/* Factures valides vs rejetees */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Valid invoices for TVA deduction */}
+      {/* Three sections: Local sales, Local deductible, Foreign reverse charge */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* TVA sur ventes locales */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base" style={{ color: NAVY }}>
-              <CheckCircle className="h-5 w-5" style={{ color: "#22C55E" }} />
-              Factures valides pour d&eacute;duction TVA ({validSupplierInvoices.length})
+              <TrendingUp className="h-5 w-5" style={{ color: "#22C55E" }} />
+              TVA sur ventes locales ({clientInvoices.length})
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {validSupplierInvoices.length > 0 ? (
+            {clientInvoices.length > 0 ? (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>&Eacute;metteur</TableHead>
+                    <TableHead>Client</TableHead>
                     <TableHead className="text-right">TVA</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {validSupplierInvoices.slice(0, 10).map((inv: any) => (
+                  {clientInvoices.slice(0, 8).map((inv: any) => (
                     <TableRow key={inv.id}>
-                      <TableCell className="font-medium text-xs">{inv.emetteur}</TableCell>
-                      <TableCell className="text-right text-xs">{formatMUR(inv.montant_tva_mur ?? inv.montant_tva ?? 0)}</TableCell>
+                      <TableCell className="font-medium text-xs">{inv.destinataire || inv.emetteur || "\u2014"}</TableCell>
+                      <TableCell className="text-right text-xs" style={{ color: "#22C55E" }}>
+                        {formatMUR(inv.montant_tva_mur ?? inv.montant_tva ?? 0)}
+                      </TableCell>
                     </TableRow>
                   ))}
-                  {validSupplierInvoices.length > 10 && (
+                  {clientInvoices.length > 8 && (
                     <TableRow>
                       <TableCell colSpan={2} className="text-center text-xs text-muted-foreground">
-                        ... et {validSupplierInvoices.length - 10} autres factures
+                        ... et {clientInvoices.length - 8} autres
                       </TableCell>
                     </TableRow>
                   )}
@@ -315,87 +407,121 @@ export default function TVAPage() {
               </Table>
             ) : (
               <p className="text-sm text-muted-foreground py-4 text-center">
-                Aucune facture fournisseur avec TVA d&eacute;ductible
+                Aucune facture client
               </p>
             )}
           </CardContent>
         </Card>
 
-        {/* Rejected invoices */}
+        {/* TVA deductible (fournisseurs locaux) */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base" style={{ color: NAVY }}>
-              <XCircle className="h-5 w-5" style={{ color: "#EF4444" }} />
-              Factures rejet&eacute;es ({rejectedSupplierInvoices.length})
+              <MapPin className="h-5 w-5" style={{ color: GOLD }} />
+              TVA d&eacute;ductible — locaux ({validLocalInvoices.length})
             </CardTitle>
             <p className="text-xs text-muted-foreground">
-              Informations manquantes (&eacute;metteur ou num&eacute;ro de facture)
+              Fournisseurs locaux avec n&deg; TVA MRA valide
             </p>
           </CardHeader>
           <CardContent>
-            {rejectedSupplierInvoices.length > 0 ? (
+            {validLocalInvoices.length > 0 ? (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Fichier</TableHead>
+                    <TableHead>Fournisseur</TableHead>
                     <TableHead className="text-right">TVA</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {rejectedSupplierInvoices.slice(0, 10).map((inv: any) => (
+                  {validLocalInvoices.slice(0, 8).map((inv: any) => (
                     <TableRow key={inv.id}>
-                      <TableCell className="font-medium text-xs">{inv.nom_fichier || "—"}</TableCell>
+                      <TableCell className="font-medium text-xs">{inv.emetteur || "\u2014"}</TableCell>
                       <TableCell className="text-right text-xs">{formatMUR(inv.montant_tva_mur ?? inv.montant_tva ?? 0)}</TableCell>
                     </TableRow>
                   ))}
+                  {validLocalInvoices.length > 8 && (
+                    <TableRow>
+                      <TableCell colSpan={2} className="text-center text-xs text-muted-foreground">
+                        ... et {validLocalInvoices.length - 8} autres
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             ) : (
               <p className="text-sm text-muted-foreground py-4 text-center">
-                Aucune facture rejet&eacute;e
+                Aucune facture locale avec TVA d&eacute;ductible
+              </p>
+            )}
+            {rejectedLocalInvoices.length > 0 && (
+              <div className="mt-3 p-2 rounded bg-red-50 border border-red-200">
+                <p className="text-xs text-red-700 flex items-center gap-1">
+                  <XCircle className="h-3 w-3" />
+                  {rejectedLocalInvoices.length} facture(s) rejet&eacute;e(s) — informations manquantes
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Reverse Charge (fournisseurs etrangers) */}
+        <Card className={foreignSupplierInvoices.length > 0 ? "border-amber-200" : ""}>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base" style={{ color: NAVY }}>
+              <Globe className="h-5 w-5" style={{ color: "#F59E0B" }} />
+              Reverse Charge R5 ({foreignSupplierInvoices.length})
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Fournisseurs &eacute;trangers — TVA net = 0
+            </p>
+          </CardHeader>
+          <CardContent>
+            {foreignSupplierInvoices.length > 0 ? (
+              <>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Fournisseur</TableHead>
+                      <TableHead className="text-right">HT (MUR)</TableHead>
+                      <TableHead className="text-right">TVA 15%</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {foreignSupplierInvoices.slice(0, 8).map((inv: any) => {
+                      const ht = inv.montant_ht_mur ?? inv.montant_ht ?? 0
+                      return (
+                        <TableRow key={inv.id}>
+                          <TableCell className="font-medium text-xs">{inv.emetteur || "\u2014"}</TableCell>
+                          <TableCell className="text-right text-xs">{formatMUR(ht)}</TableCell>
+                          <TableCell className="text-right text-xs text-amber-600">{formatMUR(ht * TVA_RATE)}</TableCell>
+                        </TableRow>
+                      )
+                    })}
+                    {foreignSupplierInvoices.length > 8 && (
+                      <TableRow>
+                        <TableCell colSpan={3} className="text-center text-xs text-muted-foreground">
+                          ... et {foreignSupplierInvoices.length - 8} autres
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+                <div className="mt-3 p-2 rounded bg-blue-50 border border-blue-200">
+                  <p className="text-xs text-blue-700 flex items-center gap-1">
+                    <Info className="h-3 w-3" />
+                    Output TVA (4457) : {formatMUR(reverseChargeTVA)} | Input TVA (4456) : {formatMUR(reverseChargeTVA)} | Net : 0,00 MUR
+                  </p>
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground py-4 text-center">
+                Aucune facture &eacute;trang&egrave;re
               </p>
             )}
           </CardContent>
         </Card>
       </div>
-
-      {/* TVA Collectee detail from invoices */}
-      {clientInvoices.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2" style={{ color: NAVY }}>
-              <TrendingUp className="h-5 w-5" style={{ color: GOLD }} />
-              D&eacute;tail TVA Collect&eacute;e (Factures clients)
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Destinataire</TableHead>
-                  <TableHead>N&deg; Facture</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead className="text-right">HT</TableHead>
-                  <TableHead className="text-right">TVA</TableHead>
-                  <TableHead className="text-right">TTC</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {clientInvoices.map((inv: any) => (
-                  <TableRow key={inv.id}>
-                    <TableCell className="font-medium text-xs">{inv.destinataire || inv.emetteur || "—"}</TableCell>
-                    <TableCell className="text-xs">{inv.numero || "—"}</TableCell>
-                    <TableCell className="text-xs">{inv.date || "—"}</TableCell>
-                    <TableCell className="text-right text-xs">{formatMUR(inv.montant_ht_mur ?? inv.montant_ht ?? 0)}</TableCell>
-                    <TableCell className="text-right text-xs">{formatMUR(inv.montant_tva_mur ?? inv.montant_tva ?? 0)}</TableCell>
-                    <TableCell className="text-right text-xs">{formatMUR(inv.montant_ttc_mur ?? inv.montant_ttc ?? 0)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
 
       {/* TVA Records Table */}
       {tvaRecords.length > 0 && (
@@ -416,7 +542,7 @@ export default function TVAPage() {
               <TableBody>
                 {tvaRecords.map((rec: any, idx: number) => (
                   <TableRow key={idx}>
-                    <TableCell className="font-medium">{rec.periode || rec.month || "—"}</TableCell>
+                    <TableCell className="font-medium">{rec.periode || rec.month || "\u2014"}</TableCell>
                     <TableCell className="text-right">{formatMUR(rec.tvaCollectee ?? rec.collectee ?? 0)}</TableCell>
                     <TableCell className="text-right">{formatMUR(rec.tvaDeductible ?? rec.deductible ?? 0)}</TableCell>
                     <TableCell className="text-right">{formatMUR(rec.tvaNette ?? rec.nette ?? 0)}</TableCell>
