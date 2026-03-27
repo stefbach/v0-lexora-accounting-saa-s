@@ -259,8 +259,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ---- 5. Single AI call — classify + extract in one shot (fast!) ----------
-    // Use Haiku for speed (must fit within Vercel 10s timeout)
-    const FAST_MODEL = 'claude-haiku-4-5-20251001'
+    const FAST_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6'
 
     const COMBINED_PROMPT = `Tu es un assistant comptable expert. Analyse ce document et retourne UN SEUL JSON avec:
 1. "routing": classification du document
