@@ -180,7 +180,7 @@ export default function ClientDocumentsPage() {
           }, ...prev])
           setUploadSuccess(`${file.name} envoyé ! L'analyse va classer automatiquement le document.`)
 
-          // Step 2: Trigger processing separately (don't await — let it run)
+          // Step 2: Trigger processing separately (fire-and-forget from browser)
           fetch("/api/documents/process", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -190,7 +190,7 @@ export default function ClientDocumentsPage() {
               nom_fichier: file.name,
               client_id: profile?.id,
             }),
-          }).then(() => fetchDocuments()).catch(() => fetchDocuments())
+          }).catch(() => {}) // ignore — polling will pick up results
         } else {
           setUploadError(data.error || "Erreur lors de l'envoi")
         }

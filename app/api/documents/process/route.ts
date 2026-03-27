@@ -259,7 +259,8 @@ export async function POST(request: NextRequest) {
     }
 
     // ---- 5. Single AI call — classify + extract in one shot (fast!) ----------
-    const FAST_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6'
+    // Use Haiku for document processing — fast enough for Vercel timeout
+    const FAST_MODEL = 'claude-haiku-4-5-20251001'
 
     const COMBINED_PROMPT = `Tu es un expert-comptable mauricien. Analyse ce document comptable et retourne UN SEUL objet JSON.
 
