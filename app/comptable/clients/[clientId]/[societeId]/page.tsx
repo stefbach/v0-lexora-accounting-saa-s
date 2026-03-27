@@ -719,46 +719,178 @@ export default function SocieteContextPage() {
         {/* États Financiers */}
         <TabsContent value="etats-financiers" className="space-y-4">
           {fin.totalEcritures > 0 ? (() => {
-            const totalActif = (fin.immobilisations || 0) + (fin.stocks || 0) + (fin.creances || 0) + (fin.autresCreances || 0) + (fin.totalBankMUR || 0)
-            const totalPassif = (fin.capitauxPropres || 0) + (fin.emprunts || 0) + (fin.dettesFournisseurs || 0) + (fin.dettesFiscales || 0) + (fin.dettesSociales || 0) + (fin.resultat || 0)
+            const tresorerie = fin.totalBankMUR || 0
+            const creancesClients = fin.creances || 0
+            const autresCreances = fin.autresCreances || 0
+            const stocks = fin.stocks || 0
+            const immobilisations = fin.immobilisations || 0
+            const totalCurrentAssets = tresorerie + creancesClients + autresCreances + stocks
+            const totalNonCurrentAssets = immobilisations
+            const totalAssets = totalCurrentAssets + totalNonCurrentAssets
+
+            const capitauxPropres = fin.capitauxPropres || 0
+            const emprunts = fin.emprunts || 0
+            const dettesFournisseurs = fin.dettesFournisseurs || 0
+            const dettesFiscales = fin.dettesFiscales || 0
+            const dettesSociales = fin.dettesSociales || 0
+            const resultatNet = fin.resultat || 0
+            const totalCurrentLiabilities = dettesFournisseurs + dettesFiscales + dettesSociales
+            const totalLongTermLiabilities = emprunts
+            const totalLiabilities = totalCurrentLiabilities + totalLongTermLiabilities
+            const totalEquity = capitauxPropres + resultatNet
+            const totalLiabilitiesAndEquity = totalLiabilities + totalEquity
+
+            const formattedDate = new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })
+
             return (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Card>
-                  <CardHeader style={{ backgroundColor: `${NAVY}08` }}>
-                    <CardTitle className="text-base" style={{ color: NAVY }}>Actif</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-0">
-                    <Table>
-                      <TableBody>
-                        <TableRow><TableCell className="font-medium">Immobilisations (classe 2)</TableCell><TableCell className="text-right">{fmt(fin.immobilisations || 0)}</TableCell></TableRow>
-                        <TableRow><TableCell className="font-medium">Stocks (classe 3)</TableCell><TableCell className="text-right">{fmt(fin.stocks || 0)}</TableCell></TableRow>
-                        <TableRow><TableCell className="font-medium">Creances clients (41x)</TableCell><TableCell className="text-right">{fmt(fin.creances || 0)}</TableCell></TableRow>
-                        <TableRow><TableCell className="font-medium">Autres creances (46x-47x)</TableCell><TableCell className="text-right">{fmt(fin.autresCreances || 0)}</TableCell></TableRow>
-                        <TableRow><TableCell className="font-medium">Tresorerie (512)</TableCell><TableCell className="text-right">{fmt(fin.totalBankMUR || 0)}</TableCell></TableRow>
-                        <TableRow className="bg-muted/30 font-bold"><TableCell>Total Actif</TableCell><TableCell className="text-right" style={{ color: NAVY }}>{fmt(totalActif)}</TableCell></TableRow>
-                      </TableBody>
-                    </Table>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader style={{ backgroundColor: `${NAVY}08` }}>
-                    <CardTitle className="text-base" style={{ color: NAVY }}>Passif</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-0">
-                    <Table>
-                      <TableBody>
-                        <TableRow><TableCell className="font-medium">Capitaux propres (classe 1)</TableCell><TableCell className="text-right">{fmt(fin.capitauxPropres || 0)}</TableCell></TableRow>
-                        <TableRow><TableCell className="font-medium">Resultat de l&apos;exercice</TableCell><TableCell className="text-right" style={{ color: (fin.resultat || 0) >= 0 ? "#22C55E" : "#EF4444" }}>{fmt(fin.resultat || 0)}</TableCell></TableRow>
-                        <TableRow><TableCell className="font-medium">Emprunts (16x)</TableCell><TableCell className="text-right">{fmt(fin.emprunts || 0)}</TableCell></TableRow>
-                        <TableRow><TableCell className="font-medium">Dettes fournisseurs (40x)</TableCell><TableCell className="text-right">{fmt(fin.dettesFournisseurs || 0)}</TableCell></TableRow>
-                        <TableRow><TableCell className="font-medium">Dettes fiscales (44x)</TableCell><TableCell className="text-right">{fmt(fin.dettesFiscales || 0)}</TableCell></TableRow>
-                        <TableRow><TableCell className="font-medium">Dettes sociales (43x)</TableCell><TableCell className="text-right">{fmt(fin.dettesSociales || 0)}</TableCell></TableRow>
-                        <TableRow className="bg-muted/30 font-bold"><TableCell>Total Passif</TableCell><TableCell className="text-right" style={{ color: NAVY }}>{fmt(totalPassif)}</TableCell></TableRow>
-                      </TableBody>
-                    </Table>
-                  </CardContent>
-                </Card>
-              </div>
+              <Card className="overflow-hidden">
+                <CardHeader className="text-center py-5" style={{ backgroundColor: NAVY }}>
+                  <CardTitle className="text-lg font-bold text-white tracking-wide">
+                    {societeName.toUpperCase()}
+                  </CardTitle>
+                  <p className="text-base font-semibold mt-1" style={{ color: GOLD }}>BILAN</p>
+                  <p className="text-xs text-gray-300 mt-1">Au {formattedDate}</p>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 divide-x">
+                    {/* LEFT: ACTIF */}
+                    <div>
+                      <Table>
+                        <TableHeader>
+                          <TableRow style={{ backgroundColor: NAVY }}>
+                            <TableHead className="text-xs font-bold uppercase tracking-wider" style={{ color: GOLD }}>ACTIF</TableHead>
+                            <TableHead className="text-right text-xs font-bold uppercase tracking-wider" style={{ color: GOLD }}>MUR</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          <TableRow style={{ backgroundColor: "#F4F6FA" }}>
+                            <TableCell colSpan={2} className="text-sm font-bold" style={{ color: NAVY }}>Actif circulant</TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell className="pl-8 text-sm text-muted-foreground">Tresorerie et equivalents</TableCell>
+                            <TableCell className="text-right text-sm font-mono tabular-nums">{fmt2(tresorerie)} MUR</TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell className="pl-8 text-sm text-muted-foreground">Creances clients (411)</TableCell>
+                            <TableCell className="text-right text-sm font-mono tabular-nums">{fmt2(creancesClients)} MUR</TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell className="pl-8 text-sm text-muted-foreground">Autres creances (46, 47)</TableCell>
+                            <TableCell className="text-right text-sm font-mono tabular-nums">{fmt2(autresCreances)} MUR</TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell className="pl-8 text-sm text-muted-foreground">Stocks (classe 3)</TableCell>
+                            <TableCell className="text-right text-sm font-mono tabular-nums">{fmt2(stocks)} MUR</TableCell>
+                          </TableRow>
+                          <TableRow className="bg-gray-50">
+                            <TableCell className="text-sm font-semibold" style={{ color: NAVY }}>Total Actif Circulant</TableCell>
+                            <TableCell className="text-right text-sm font-bold font-mono tabular-nums" style={{ color: NAVY }}>{fmt2(totalCurrentAssets)} MUR</TableCell>
+                          </TableRow>
+
+                          <TableRow style={{ backgroundColor: "#F4F6FA" }}>
+                            <TableCell colSpan={2} className="text-sm font-bold" style={{ color: NAVY }}>Actif immobilise</TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell className="pl-8 text-sm text-muted-foreground">Immobilisations (classe 2)</TableCell>
+                            <TableCell className="text-right text-sm font-mono tabular-nums">{fmt2(immobilisations)} MUR</TableCell>
+                          </TableRow>
+                          <TableRow className="bg-gray-50">
+                            <TableCell className="text-sm font-semibold" style={{ color: NAVY }}>Total Actif Immobilise</TableCell>
+                            <TableCell className="text-right text-sm font-bold font-mono tabular-nums" style={{ color: NAVY }}>{fmt2(totalNonCurrentAssets)} MUR</TableCell>
+                          </TableRow>
+
+                          <TableRow style={{ backgroundColor: NAVY }}>
+                            <TableCell className="text-sm font-bold text-white">TOTAL ACTIF</TableCell>
+                            <TableCell className="text-right text-sm font-bold text-white font-mono tabular-nums">{fmt2(totalAssets)} MUR</TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    {/* RIGHT: PASSIF & CAPITAUX PROPRES */}
+                    <div>
+                      <Table>
+                        <TableHeader>
+                          <TableRow style={{ backgroundColor: NAVY }}>
+                            <TableHead className="text-xs font-bold uppercase tracking-wider" style={{ color: GOLD }}>PASSIF &amp; CAPITAUX PROPRES</TableHead>
+                            <TableHead className="text-right text-xs font-bold uppercase tracking-wider" style={{ color: GOLD }}>MUR</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          <TableRow style={{ backgroundColor: "#F4F6FA" }}>
+                            <TableCell colSpan={2} className="text-sm font-bold" style={{ color: NAVY }}>Dettes a court terme</TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell className="pl-8 text-sm text-muted-foreground">Fournisseurs (401)</TableCell>
+                            <TableCell className="text-right text-sm font-mono tabular-nums">{fmt2(dettesFournisseurs)} MUR</TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell className="pl-8 text-sm text-muted-foreground">Dettes fiscales (44)</TableCell>
+                            <TableCell className="text-right text-sm font-mono tabular-nums">{fmt2(dettesFiscales)} MUR</TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell className="pl-8 text-sm text-muted-foreground">Dettes sociales (43)</TableCell>
+                            <TableCell className="text-right text-sm font-mono tabular-nums">{fmt2(dettesSociales)} MUR</TableCell>
+                          </TableRow>
+                          <TableRow className="bg-gray-50">
+                            <TableCell className="text-sm font-semibold" style={{ color: NAVY }}>Total Dettes Court Terme</TableCell>
+                            <TableCell className="text-right text-sm font-bold font-mono tabular-nums" style={{ color: NAVY }}>{fmt2(totalCurrentLiabilities)} MUR</TableCell>
+                          </TableRow>
+
+                          <TableRow style={{ backgroundColor: "#F4F6FA" }}>
+                            <TableCell colSpan={2} className="text-sm font-bold" style={{ color: NAVY }}>Dettes a long terme</TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell className="pl-8 text-sm text-muted-foreground">Emprunts (16)</TableCell>
+                            <TableCell className="text-right text-sm font-mono tabular-nums">{fmt2(emprunts)} MUR</TableCell>
+                          </TableRow>
+                          <TableRow className="bg-gray-50">
+                            <TableCell className="text-sm font-semibold" style={{ color: NAVY }}>Total Dettes Long Terme</TableCell>
+                            <TableCell className="text-right text-sm font-bold font-mono tabular-nums" style={{ color: NAVY }}>{fmt2(totalLongTermLiabilities)} MUR</TableCell>
+                          </TableRow>
+
+                          <TableRow className="bg-gray-50" style={{ borderTop: `2px solid ${GOLD}` }}>
+                            <TableCell className="text-sm font-semibold" style={{ color: NAVY }}>Total Dettes</TableCell>
+                            <TableCell className="text-right text-sm font-bold font-mono tabular-nums" style={{ color: NAVY }}>{fmt2(totalLiabilities)} MUR</TableCell>
+                          </TableRow>
+
+                          <TableRow style={{ backgroundColor: "#F4F6FA" }}>
+                            <TableCell colSpan={2} className="text-sm font-bold" style={{ color: NAVY }}>Capitaux propres</TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell className="pl-8 text-sm text-muted-foreground">Capital (classe 1)</TableCell>
+                            <TableCell className="text-right text-sm font-mono tabular-nums">{fmt2(capitauxPropres)} MUR</TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell className="pl-8 text-sm text-muted-foreground">Resultat de l&apos;exercice</TableCell>
+                            <TableCell className="text-right text-sm font-mono tabular-nums" style={fmtColor(resultatNet)}>{fmtVal(resultatNet)} MUR</TableCell>
+                          </TableRow>
+                          <TableRow className="bg-gray-50">
+                            <TableCell className="text-sm font-semibold" style={{ color: NAVY }}>Total Capitaux Propres</TableCell>
+                            <TableCell className="text-right text-sm font-bold font-mono tabular-nums" style={{ color: NAVY }}>{fmt2(totalEquity)} MUR</TableCell>
+                          </TableRow>
+
+                          <TableRow style={{ backgroundColor: GOLD }}>
+                            <TableCell className="text-sm font-bold text-white">TOTAL PASSIF &amp; CAPITAUX PROPRES</TableCell>
+                            <TableCell className="text-right text-sm font-bold text-white font-mono tabular-nums">{fmt2(totalLiabilitiesAndEquity)} MUR</TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+
+                  {Math.abs(totalAssets - totalLiabilitiesAndEquity) > 0.01 && (
+                    <div className="m-4 p-3 rounded-lg bg-orange-50 border border-orange-200">
+                      <p className="text-sm text-orange-700 font-medium">
+                        Note : Ecart entre Actif et Passif de {fmt2(Math.abs(totalAssets - totalLiabilitiesAndEquity))} MUR
+                      </p>
+                      <p className="text-xs text-orange-600 mt-1">
+                        Cela peut etre du a des resultats non encore affectes ou des ecarts temporels dans les ecritures.
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             )
           })() : (
             <EmptyTab icon={FileIcon} message="Aucun etat financier disponible" detail="Les etats financiers seront generes a la cloture de l'exercice." />
