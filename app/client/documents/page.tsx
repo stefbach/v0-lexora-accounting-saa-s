@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/table"
 import {
   Upload, FolderOpen, Loader2, FileText, CheckCircle,
-  Clock, Download,
+  Clock, Download, ChevronRight, Lock, AlertTriangle,
 } from "lucide-react"
 
 const NAVY = "#1E2A4A"
@@ -20,17 +20,51 @@ interface Document {
   id: string
   nom_fichier: string
   type_fichier: string
+  type_document: string | null
   statut: string
+  storage_path: string | null
   created_at: string
-  categorie?: string
+  societe_detectee: string | null
 }
 
+interface Folder {
+  key: string
+  label: string
+  readOnly: boolean
+}
+
+const FOLDERS: Folder[] = [
+  { key: "recent", label: "Envois Récents", readOnly: false },
+  { key: "facture_fournisseur", label: "Factures Fournisseurs", readOnly: false },
+  { key: "facture_client", label: "Factures Clients", readOnly: false },
+  { key: "releve_bancaire", label: "Relevés Bancaires", readOnly: false },
+  { key: "fiche_paie", label: "Fiches de Paie", readOnly: false },
+  { key: "charges_sociales", label: "Cotisations Sociales", readOnly: false },
+  { key: "contrat", label: "Contrats", readOnly: false },
+  { key: "rapport", label: "Rapports Mensuels", readOnly: true },
+  { key: "autre", label: "Autres Documents", readOnly: false },
+]
+
 function statutBadge(s: string) {
-  if (s === "traite" || s === "classe") return <Badge className="bg-green-100 text-green-700">Classé</Badge>
-  if (s === "en_cours") return <Badge className="bg-blue-100 text-blue-700">Analyse en cours...</Badge>
-  if (s === "en_attente") return <Badge className="bg-gray-100 text-gray-600">En attente</Badge>
-  if (s === "erreur" || s === "illisible") return <Badge className="bg-red-100 text-red-700">Erreur</Badge>
+  if (s === "traite") return <Badge className="bg-green-100 text-green-700">Classé</Badge>
+  if (s === "en_cours" || s === "en_attente") return <Badge className="bg-blue-100 text-blue-700"><Clock className="h-3 w-3 mr-1" />Analyse en cours...</Badge>
+  if (s === "erreur") return <Badge className="bg-red-100 text-red-700"><AlertTriangle className="h-3 w-3 mr-1" />Erreur</Badge>
   return <Badge variant="outline">{s}</Badge>
+}
+
+function getDocsForFolder(docs: Document[], folderKey: string): Document[] {
+  if (folderKey === "recent") {
+    // Show recent uploads (last 7 days) or unclassified docs
+    const sevenDaysAgo = new Date()
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+    return docs.filter(d =>
+      new Date(d.created_at) >= sevenDaysAgo || !d.type_document || d.statut === "en_attente" || d.statut === "en_cours"
+    )
+  }
+  if (folderKey === "rapport") {
+    return docs.filter(d => d.type_document === "rapport" || d.type_document === "rapport_mensuel")
+  }
+  return docs.filter(d => d.type_document === folderKey)
 }
 
 export default function ClientDocumentsPage() {
@@ -42,43 +76,50 @@ export default function ClientDocumentsPage() {
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [dragActive, setDragActive] = useState(false)
   const [societeId, setSocieteId] = useState<string | null>(null)
+  const [selectedFolder, setSelectedFolder] = useState("recent")
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        // Get client's societes to find the societe_id for uploads
-        const socRes = await fetch("/api/comptable/societes")
-        const socData = await socRes.json()
-        const societes = socData.societes || []
-        if (societes.length > 0) {
-          setSocieteId(societes[0].id)
-        }
+  const fetchDocuments = useCallback(async () => {
+    try {
+      const res = await fetch("/api/client/documents")
+      const data = await res.json()
+      if (data.documents) setDocuments(data.documents)
+    } catch {
+      console.error("Failed to fetch documents")
+    }
+  }, [])
 
-        // Fetch documents (from dossiers linked to this client)
+  useEffect(() => {
+    async function init() {
+      try {
+        // Get societe_id for uploads
         const dosRes = await fetch("/api/admin/dossiers")
         const dosData = await dosRes.json()
         const myDossiers = (dosData.dossiers || []).filter((d: any) => d.client_id === profile?.id)
-        const dossierIds = myDossiers.map((d: any) => d.id)
-
-        if (dossierIds.length > 0) {
-          // Documents would be fetched here once the documents API supports filtering
-          // For now, show empty state
+        if (myDossiers.length > 0) {
+          setSocieteId(myDossiers[0].societe_id)
         }
+
+        await fetchDocuments()
       } catch {
-        console.error("Failed to fetch data")
+        console.error("Failed to init")
       } finally {
         setLoading(false)
       }
     }
-    if (profile?.id) fetchData()
-  }, [profile?.id])
+    if (profile?.id) init()
+  }, [profile?.id, fetchDocuments])
 
-  // Auto-provision a personal société + dossier for individual clients
+  // Auto-refresh documents every 10 seconds to pick up processing results
+  useEffect(() => {
+    if (!profile?.id) return
+    const interval = setInterval(fetchDocuments, 10000)
+    return () => clearInterval(interval)
+  }, [profile?.id, fetchDocuments])
+
   const autoProvision = async (): Promise<string | null> => {
     if (!profile) return null
     try {
-      // Create personal société
       const socRes = await fetch("/api/admin/societes", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ nom: `${profile.full_name || profile.email} — Personnel`, brn: null, numero_tva_mra: null, statut_tva: false }),
@@ -86,7 +127,6 @@ export default function ClientDocumentsPage() {
       const socData = await socRes.json()
       if (!socRes.ok || !socData.societe?.id) return null
 
-      // Create dossier linking client to personal société
       await fetch("/api/admin/dossiers", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ client_id: profile.id, societe_id: socData.societe.id, comptable_id: null }),
@@ -103,8 +143,6 @@ export default function ClientDocumentsPage() {
     if (!files || files.length === 0) return
 
     let uploadSocieteId = societeId
-
-    // If no société, auto-create a personal one
     if (!uploadSocieteId) {
       uploadSocieteId = await autoProvision()
       if (!uploadSocieteId) {
@@ -130,11 +168,14 @@ export default function ClientDocumentsPage() {
           setDocuments(prev => [{
             id: data.document?.id || crypto.randomUUID(),
             nom_fichier: file.name,
-            type_fichier: file.type,
-            statut: "en_cours",
+            type_fichier: file.type.split("/").pop() || "pdf",
+            type_document: null,
+            statut: "en_attente",
+            storage_path: null,
             created_at: new Date().toISOString(),
+            societe_detectee: null,
           }, ...prev])
-          setUploadSuccess(`${file.name} envoyé avec succès ! L'analyse va classer automatiquement le document.`)
+          setUploadSuccess(`${file.name} envoyé ! L'analyse va classer automatiquement le document dans le bon dossier.`)
         } else {
           setUploadError(data.error || "Erreur lors de l'envoi")
         }
@@ -143,6 +184,7 @@ export default function ClientDocumentsPage() {
       }
     }
     setUploading(false)
+    setSelectedFolder("recent")
     setTimeout(() => { setUploadSuccess(null); setUploadError(null) }, 6000)
   }
 
@@ -157,6 +199,9 @@ export default function ClientDocumentsPage() {
       </div>
     )
   }
+
+  const currentFolder = FOLDERS.find(f => f.key === selectedFolder) || FOLDERS[0]
+  const currentDocs = getDocsForFolder(documents, selectedFolder)
 
   return (
     <div className="flex-1 overflow-auto p-6 lg:p-8 space-y-6">
@@ -185,7 +230,7 @@ export default function ClientDocumentsPage() {
             <Upload className="h-8 w-8 text-muted-foreground" />
             <p className="text-sm font-medium">Glissez-déposez vos fichiers ici</p>
             <p className="text-xs text-muted-foreground">PDF, JPEG, PNG, XLSX — max 10 MB</p>
-            <p className="text-xs text-muted-foreground mt-1">Le système analyse automatiquement et classe dans le bon dossier</p>
+            <p className="text-xs text-muted-foreground mt-1">Le système analyse et classe automatiquement dans le bon dossier</p>
             <Button size="sm" variant="outline" className="mt-2" onClick={() => fileInputRef.current?.click()}>Parcourir</Button>
           </div>
         )}
@@ -202,13 +247,64 @@ export default function ClientDocumentsPage() {
         </div>
       )}
 
-      {/* Documents table */}
+      {/* Folder list */}
+      <div>
+        <h3 className="font-semibold mb-3" style={{ color: NAVY }}>Mes Dossiers</h3>
+        <div className="grid gap-2">
+          {FOLDERS.map((folder) => {
+            const count = getDocsForFolder(documents, folder.key).length
+            const isSelected = selectedFolder === folder.key
+            return (
+              <Card
+                key={folder.key}
+                className={`cursor-pointer transition-colors ${count === 0 && !isSelected ? "opacity-60" : ""} ${isSelected ? "ring-2" : "hover:bg-muted/50"}`}
+                style={isSelected ? { borderColor: GOLD } : undefined}
+                onClick={() => setSelectedFolder(folder.key)}
+              >
+                <CardContent className="flex items-center justify-between py-3">
+                  <div className="flex items-center gap-3">
+                    <FolderOpen className="h-5 w-5" style={{ color: GOLD }} />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium">{folder.label}</p>
+                        {folder.readOnly && <Lock className="h-3 w-3 text-muted-foreground" />}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {count} document{count !== 1 ? "s" : ""}{count === 0 ? " — vide" : ""}
+                        {folder.readOnly ? " — rempli par votre comptable" : ""}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {folder.key === "recent" && documents.some(d => d.statut === "en_attente" || d.statut === "en_cours") && (
+                      <Badge className="bg-blue-100 text-blue-700 text-xs">
+                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />En cours
+                      </Badge>
+                    )}
+                    <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform ${isSelected ? "rotate-90" : ""}`} />
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Selected folder content */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center gap-2">
-            <FolderOpen className="h-5 w-5" style={{ color: GOLD }} />
-            Mes Documents
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              <FolderOpen className="h-5 w-5" style={{ color: GOLD }} />
+              {currentFolder.label}
+              {currentFolder.readOnly && <Lock className="h-4 w-4 text-muted-foreground" />}
+            </CardTitle>
+            {!currentFolder.readOnly && (
+              <Button size="sm" style={{ backgroundColor: GOLD }} onClick={() => fileInputRef.current?.click()}>
+                <Upload className="mr-1 h-4 w-4" />Uploader ici
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
@@ -216,29 +312,38 @@ export default function ClientDocumentsPage() {
               <TableRow>
                 <TableHead>Fichier</TableHead>
                 <TableHead>Date</TableHead>
+                <TableHead>Type détecté</TableHead>
                 <TableHead>Statut</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {documents.map((doc) => (
+              {currentDocs.map((doc) => (
                 <TableRow key={doc.id}>
                   <TableCell className="flex items-center gap-2">
                     <FileText className="h-4 w-4 text-muted-foreground" />{doc.nom_fichier}
                   </TableCell>
                   <TableCell>{new Date(doc.created_at).toLocaleDateString("fr-FR")}</TableCell>
+                  <TableCell>
+                    {doc.type_document ? (
+                      <Badge variant="outline" className="text-xs">
+                        {FOLDERS.find(f => f.key === doc.type_document)?.label || doc.type_document}
+                      </Badge>
+                    ) : (
+                      <span className="text-xs text-muted-foreground italic">En attente...</span>
+                    )}
+                  </TableCell>
                   <TableCell>{statutBadge(doc.statut)}</TableCell>
                   <TableCell>
                     <Button variant="ghost" size="sm"><Download className="h-3.5 w-3.5" /></Button>
                   </TableCell>
                 </TableRow>
               ))}
-              {documents.length === 0 && (
+              {currentDocs.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center py-12">
+                  <TableCell colSpan={5} className="text-center py-12">
                     <FileText className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
-                    <p className="text-muted-foreground">Aucun document pour le moment.</p>
-                    <p className="text-sm text-muted-foreground mt-1">Uploadez vos premiers fichiers ci-dessus.</p>
+                    <p className="text-muted-foreground">Aucun document dans ce dossier.</p>
                   </TableCell>
                 </TableRow>
               )}
