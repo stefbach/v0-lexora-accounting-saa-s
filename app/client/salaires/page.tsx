@@ -7,8 +7,9 @@ import { Input } from "@/components/ui/input"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
-import { Search, Loader2, Users, FileText } from "lucide-react"
+import { Search, Loader2, Users, FileText, Building2 } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 function formatMUR(n: number) {
   return n.toLocaleString("fr-FR") + " MUR"
@@ -19,14 +20,23 @@ export default function ClientSalairesPage() {
   const { profile, loading } = useProfile()
   const [data, setData] = useState<any>(null)
   const [fetching, setFetching] = useState(true)
+  const [selectedSociete, setSelectedSociete] = useState<string>("all")
+  const [societes, setSocietes] = useState<{ id: string; nom: string }[]>([])
 
   useEffect(() => {
-    fetch("/api/client/financial")
+    setFetching(true)
+    const url = selectedSociete !== "all"
+      ? `/api/client/financial?societe_id=${selectedSociete}`
+      : "/api/client/financial"
+    fetch(url)
       .then((res) => res.json())
-      .then((json) => setData(json.financial))
+      .then((json) => {
+        setData(json.financial)
+        if (json.financial?.availableSocietes) setSocietes(json.financial.availableSocietes)
+      })
       .catch(() => setData(null))
       .finally(() => setFetching(false))
-  }, [])
+  }, [selectedSociete])
 
   if (loading || fetching) {
     return (
@@ -70,13 +80,27 @@ export default function ClientSalairesPage() {
 
   return (
     <div className="flex-1 overflow-auto p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
-          Salaires
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Gestion des fiches de paie et charges salariales
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
+            Salaires
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Gestion des fiches de paie et charges salariales
+          </p>
+        </div>
+        {societes.length > 1 && (
+          <div className="flex items-center gap-2">
+            <Building2 className="h-4 w-4 text-muted-foreground" />
+            <Select value={selectedSociete} onValueChange={setSelectedSociete}>
+              <SelectTrigger className="w-[220px] h-9"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Toutes les soci&eacute;t&eacute;s</SelectItem>
+                {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
       {/* Summary Cards */}

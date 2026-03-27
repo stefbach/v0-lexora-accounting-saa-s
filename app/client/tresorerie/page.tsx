@@ -21,7 +21,9 @@ import {
   ArrowDownUp,
   AlertTriangle,
   RefreshCw,
+  Building2,
 } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 function formatMUR(n: number) {
   return n.toLocaleString("fr-FR") + " MUR"
@@ -84,13 +86,19 @@ function TresorerieView() {
   const [data, setData] = useState<any>(null)
   const [fetching, setFetching] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [selectedSociete, setSelectedSociete] = useState<string>("all")
+  const [societes, setSocietes] = useState<{ id: string; nom: string }[]>([])
 
-  async function fetchData() {
+  async function fetchData(societeId?: string) {
     try {
-      const res = await fetch("/api/client/financial")
+      const url = societeId && societeId !== "all"
+        ? `/api/client/financial?societe_id=${societeId}`
+        : "/api/client/financial"
+      const res = await fetch(url)
       if (res.ok) {
         const json = await res.json()
         setData(json.financial)
+        if (json.financial?.availableSocietes) setSocietes(json.financial.availableSocietes)
       } else {
         setData(null)
       }
@@ -100,12 +108,13 @@ function TresorerieView() {
   }
 
   useEffect(() => {
-    fetchData().finally(() => setFetching(false))
-  }, [])
+    setFetching(true)
+    fetchData(selectedSociete).finally(() => setFetching(false))
+  }, [selectedSociete])
 
   async function handleRefresh() {
     setRefreshing(true)
-    await fetchData()
+    await fetchData(selectedSociete)
     setRefreshing(false)
   }
 
@@ -168,15 +177,29 @@ function TresorerieView() {
             Votre situation financiere en un coup d{"'"}oeil.
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleRefresh}
-          disabled={refreshing}
-        >
-          <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
-          Mettre a jour
-        </Button>
+        <div className="flex items-center gap-3">
+          {societes.length > 1 && (
+            <div className="flex items-center gap-2">
+              <Building2 className="h-4 w-4 text-muted-foreground" />
+              <Select value={selectedSociete} onValueChange={setSelectedSociete}>
+                <SelectTrigger className="w-[220px] h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toutes les soci&eacute;t&eacute;s</SelectItem>
+                  {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={refreshing}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
+            Mettre a jour
+          </Button>
+        </div>
       </div>
 
       {/* Total */}

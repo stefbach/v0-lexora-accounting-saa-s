@@ -29,7 +29,10 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Minus,
+  AlertTriangle,
+  Building2,
 } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 const NAVY = "#1E2A4A"
 const GOLD = "#C9A84C"
@@ -51,13 +54,15 @@ function formatMonths(n: number) {
   return n.toFixed(1) + " mois"
 }
 
-// Compute a financial health score 0-100
+// Compute a financial health score 0-100, factoring in anomalies
 function computeHealthScore(params: {
   treasury: number
   monthlyExpenses: number
   margin: number
   dso: number
-  revenueTrend: number // percent change
+  revenueTrend: number
+  anomalyCount: number
+  resultat: number
 }): { score: number; label: string; color: string } {
   let score = 50 // base
 
@@ -85,7 +90,17 @@ function computeHealthScore(params: {
   else if (params.revenueTrend < -10) score -= 10
   else if (params.revenueTrend < 0) score -= 3
 
+  // Anomaly penalty
+  if (params.anomalyCount > 0) {
+    score -= Math.min(20, params.anomalyCount * 3)
+  }
+
   score = Math.max(0, Math.min(100, score))
+
+  // Hard caps based on conditions
+  if (params.anomalyCount > 0 && score > 60) score = 60
+  if (params.treasury < 200000 && score > 40) score = 40
+  if (params.resultat < 0 && score > 50) score = 50
 
   let label = "Critique"
   let color = "#EF4444"
@@ -117,14 +132,23 @@ export default function TableauDeBordPage() {
   const { profile, loading } = useProfile()
   const [data, setData] = useState<any>(null)
   const [fetching, setFetching] = useState(true)
+  const [selectedSociete, setSelectedSociete] = useState<string>("all")
+  const [societes, setSocietes] = useState<{ id: string; nom: string }[]>([])
 
   useEffect(() => {
-    fetch("/api/client/financial")
+    setFetching(true)
+    const url = selectedSociete !== "all"
+      ? `/api/client/financial?societe_id=${selectedSociete}`
+      : "/api/client/financial"
+    fetch(url)
       .then((res) => res.json())
-      .then((json) => setData(json.financial))
+      .then((json) => {
+        setData(json.financial)
+        if (json.financial?.availableSocietes) setSocietes(json.financial.availableSocietes)
+      })
       .catch(() => setData(null))
       .finally(() => setFetching(false))
-  }, [])
+  }, [selectedSociete])
 
   // Computed KPIs
   const computed = useMemo(() => {
@@ -159,13 +183,40 @@ export default function TableauDeBordPage() {
       ? ((monthlyRevenue - lastMonthRevenue) / lastMonthRevenue) * 100
       : (monthlyRevenue > 0 ? 100 : 0)
 
-    // Health score
+    // Count anomalies from various sources
+    const extractedInvoices: any[] = data.extractedInvoices ?? []
+    const bankTransactions: any[] = data.bankTransactions ?? []
+
+    // Unreconciled bank transactions
+    const unreconciledCount = bankTransactions.filter(
+      (t: any) => t.statut === 'non_identifie' || t.statut === 'a_verifier'
+    ).length
+
+    // Invoices with unresolved transactions
+    const invoiceAnomalies = extractedInvoices.filter(
+      (inv: any) => inv.statut === 'a_verifier' || (!inv.emetteur && !inv.destinataire)
+    ).length
+
+    // TVA anomalies (negative deductible or mismatch)
+    const tvaAnomalies = (data.tvaDeductible ?? 0) < 0 ? 1 : 0
+
+    // Documents with errors
+    const docErrors = 0 // Would come from documents with statut = 'erreur'
+
+    // Negative cash flow
+    const negativeCashFlow = resultatMensuel < 0 ? 1 : 0
+
+    const anomalyCount = unreconciledCount + invoiceAnomalies + tvaAnomalies + docErrors + negativeCashFlow
+
+    // Health score with anomaly factoring
     const health = computeHealthScore({
       treasury: totalBankMUR,
       monthlyExpenses,
       margin: margeNette,
       dso,
       revenueTrend,
+      anomalyCount,
+      resultat,
     })
 
     // Top expense category
@@ -181,6 +232,14 @@ export default function TableauDeBordPage() {
 
     // Insights
     const insights: { text: string; icon: typeof TrendingUp; color: string }[] = []
+
+    if (anomalyCount > 0) {
+      insights.push({
+        text: `${anomalyCount} anomalie(s) detect\u00e9e(s) : ${unreconciledCount} transaction(s) non rapproch\u00e9e(s)${tvaAnomalies > 0 ? ', anomalie TVA' : ''}${negativeCashFlow > 0 ? ', cash flow n\u00e9gatif' : ''}`,
+        icon: AlertTriangle,
+        color: "#EF4444",
+      })
+    }
 
     if (topExpenseAmount > 0) {
       insights.push({
@@ -230,7 +289,7 @@ export default function TableauDeBordPage() {
     return {
       totalRevenue, totalExpenses, monthlyRevenue, monthlyExpenses,
       resultatMensuel, totalBankMUR, dso, margeNette, burnRate, runway,
-      health, insights, revenueTrend,
+      health, insights, revenueTrend, anomalyCount,
       totalDocuments: data.totalDocuments ?? 0,
       totalEcritures: data.totalEcritures ?? 0,
       currentMonth: data.currentMonth ?? "",
@@ -286,47 +345,106 @@ export default function TableauDeBordPage() {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold" style={{ color: NAVY }}>
-          Mon Tableau de Bord
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Vue d&apos;ensemble de la sant&eacute; financi&egrave;re de votre entreprise
-          {computed.currentMonth ? ` — ${computed.currentMonth}` : ""}
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>
+            Mon Tableau de Bord
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Vue d&apos;ensemble de la sant&eacute; financi&egrave;re de votre entreprise
+            {computed.currentMonth ? ` — ${computed.currentMonth}` : ""}
+          </p>
+        </div>
+        {societes.length > 1 && (
+          <div className="flex items-center gap-2">
+            <Building2 className="h-4 w-4 text-muted-foreground" />
+            <Select value={selectedSociete} onValueChange={setSelectedSociete}>
+              <SelectTrigger className="w-[220px] h-9"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Toutes les soci&eacute;t&eacute;s</SelectItem>
+                {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
-      {/* Health Score */}
-      <Card className="border-2" style={{ borderColor: computed.health.color }}>
-        <CardContent className="py-5">
-          <div className="flex items-center gap-6">
-            <div className="relative flex items-center justify-center">
-              <svg width="80" height="80" viewBox="0 0 80 80">
-                <circle cx="40" cy="40" r="34" fill="none" stroke="#E5E7EB" strokeWidth="6" />
-                <circle
-                  cx="40" cy="40" r="34" fill="none"
-                  stroke={computed.health.color} strokeWidth="6"
-                  strokeDasharray={`${(computed.health.score / 100) * 213.6} 213.6`}
-                  strokeLinecap="round"
-                  transform="rotate(-90 40 40)"
-                />
-              </svg>
-              <span className="absolute text-lg font-bold" style={{ color: computed.health.color }}>
-                {computed.health.score}
-              </span>
+      {/* Health Score + Anomaly count */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Card className="lg:col-span-2 border-2" style={{ borderColor: computed.health.color }}>
+          <CardContent className="py-5">
+            <div className="flex items-center gap-6">
+              <div className="relative flex items-center justify-center">
+                <svg width="80" height="80" viewBox="0 0 80 80">
+                  <circle cx="40" cy="40" r="34" fill="none" stroke="#E5E7EB" strokeWidth="6" />
+                  <circle
+                    cx="40" cy="40" r="34" fill="none"
+                    stroke={computed.health.color} strokeWidth="6"
+                    strokeDasharray={`${(computed.health.score / 100) * 213.6} 213.6`}
+                    strokeLinecap="round"
+                    transform="rotate(-90 40 40)"
+                  />
+                </svg>
+                <span className="absolute text-lg font-bold" style={{ color: computed.health.color }}>
+                  {computed.health.score}
+                </span>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Sant&eacute; financi&egrave;re</p>
+                <p className="text-2xl font-bold" style={{ color: computed.health.color }}>
+                  {computed.health.label}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Bas&eacute; sur : tr&eacute;sorerie, marge, DSO, tendance revenus, anomalies
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Sant&eacute; financi&egrave;re</p>
-              <p className="text-2xl font-bold" style={{ color: computed.health.color }}>
-                {computed.health.label}
+          </CardContent>
+        </Card>
+
+        {/* Anomaly count card */}
+        <Card className={`border-2 ${computed.anomalyCount > 0 ? "border-red-400 bg-red-50" : "border-green-300 bg-green-50"}`}>
+          <CardContent className="py-5 flex flex-col items-center justify-center h-full">
+            <AlertTriangle
+              className="h-8 w-8 mb-2"
+              style={{ color: computed.anomalyCount > 0 ? "#EF4444" : "#22C55E" }}
+            />
+            <p className="text-3xl font-bold" style={{ color: computed.anomalyCount > 0 ? "#EF4444" : "#22C55E" }}>
+              {computed.anomalyCount}
+            </p>
+            <p className="text-sm font-medium" style={{ color: NAVY }}>
+              {computed.anomalyCount === 0 ? "Aucune anomalie" : computed.anomalyCount === 1 ? "Anomalie d\u00e9tect\u00e9e" : "Anomalies d\u00e9tect\u00e9es"}
+            </p>
+            {computed.anomalyCount > 0 && (
+              <p className="text-xs text-red-600 mt-1 text-center">
+                Score plafonn&eacute; &agrave; 60 tant que des anomalies existent
               </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Bas&eacute; sur : tr&eacute;sorerie, marge, DSO, tendance revenus
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Health score capping warnings */}
+      {(computed.totalBankMUR < 200000 || (computed.totalRevenue - computed.totalExpenses) < 0) && (
+        <div className="space-y-2">
+          {computed.totalBankMUR < 200000 && (
+            <div className="p-3 rounded-lg bg-orange-50 border border-orange-200 flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-orange-600 flex-shrink-0" />
+              <p className="text-sm text-orange-700">
+                Tr&eacute;sorerie inf&eacute;rieure &agrave; 200 000 MUR — score plafonn&eacute; &agrave; 40
               </p>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          )}
+          {(computed.totalRevenue - computed.totalExpenses) < 0 && (
+            <div className="p-3 rounded-lg bg-red-50 border border-red-200 flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-red-600 flex-shrink-0" />
+              <p className="text-sm text-red-700">
+                R&eacute;sultat n&eacute;gatif — score plafonn&eacute; &agrave; 50
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 4 Primary KPI cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -426,7 +544,7 @@ export default function TableauDeBordPage() {
         <CardContent>
           {computed.insights.length > 0 ? (
             <ul className="space-y-3">
-              {computed.insights.slice(0, 3).map((insight, idx) => {
+              {computed.insights.slice(0, 4).map((insight, idx) => {
                 const Icon = insight.icon
                 return (
                   <li key={idx} className="flex items-start gap-3 text-sm" style={{ color: NAVY }}>
