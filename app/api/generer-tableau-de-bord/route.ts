@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { callClaudeJSON } from '@/lib/claude'
+import { getTauxChange } from '@/lib/taux-change'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,7 +32,7 @@ export async function POST(request: Request) {
     if (comptesError) throw comptesError
 
     // Calculate trésorerie consolidée in MUR
-    const tauxChange: Record<string, number> = { EUR: 46.5, GBP: 54.2, MUR: 1, USD: 1 }
+    const tauxChange = await getTauxChange()
     let tresorerieConsolidee = 0
     const detailParCompte = (comptes || []).map((c: any) => {
       const taux = tauxChange[c.devise] || 1
@@ -64,9 +65,15 @@ export async function POST(request: Request) {
         periode,
         type_periode,
         tresorerie_consolidee: Math.round(tresorerieConsolidee * 100) / 100,
-        detail_comptes: detailParCompte,
-        ratios_financiers: ratios,
-        genere_le: new Date().toISOString(),
+        tresorerie_par_compte: detailParCompte,
+        ratio_liquidite: (ratios as any).ratio_liquidite || null,
+        score_liquidite: null,
+        score_rentabilite: null,
+        score_sante_global: (ratios as any).score_sante || null,
+        marge_nette_pct: (ratios as any).marge_nette || null,
+        recommandations: (ratios as any).recommandations || null,
+        tendance: (ratios as any).tendance || null,
+        genere_par: 'api',
       })
       .select()
       .single()

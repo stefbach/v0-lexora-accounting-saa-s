@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { useProfile } from "@/hooks/use-profile"
 import {
   Card,
@@ -29,7 +30,7 @@ function fmtMUR(amount: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// Mock recommendations
+// Types
 // ---------------------------------------------------------------------------
 
 interface Conseil {
@@ -39,65 +40,30 @@ interface Conseil {
   montant?: number
   detail: string
   urgence: "haute" | "moyenne" | "basse"
-  icon: React.ReactNode
+  icon: string
   action: string
 }
 
-const mockConseils: Conseil[] = [
-  {
-    id: "c1",
-    titre: "Relancer vos clients",
-    description: "Vous avez des factures impayees depuis plus de 30 jours.",
-    montant: 87_500,
-    detail:
-      "3 factures sont en retard de paiement : Client Dupont (32 000 MUR), Client Martin (25 500 MUR) et Client Ramasamy (30 000 MUR). Plus vous attendez, plus il sera difficile de recuperer ces montants.",
-    urgence: "haute",
-    icon: <Receipt className="h-6 w-6" />,
-    action: "Contacter mon comptable",
-  },
-  {
-    id: "c2",
-    titre: "Anticiper la TVA d'avril",
-    description: "Votre declaration TVA arrive bientot. Mieux vaut preparer le montant a l'avance.",
-    montant: 45_230,
-    detail:
-      "La date limite est le 20 avril. Mettez ce montant de cote des maintenant pour eviter les surprises. Votre comptable peut vous aider a verifier les calculs.",
-    urgence: "haute",
-    icon: <AlertTriangle className="h-6 w-6" />,
-    action: "Contacter mon comptable",
-  },
-  {
-    id: "c3",
-    titre: "Preparer le 13eme mois",
-    description: "Il est temps de commencer a mettre de l'argent de cote pour le bonus de fin d'annee.",
-    detail:
-      "Avec 17 employes, le 13eme mois represente une depense importante en decembre. En commencant a provisionner maintenant (environ 30 000 MUR par mois), vous eviterez un gros impact sur votre tresorerie en fin d'annee.",
-    urgence: "moyenne",
-    icon: <Users className="h-6 w-6" />,
-    action: "Voir le detail",
-  },
-  {
-    id: "c4",
-    titre: "Revoir vos abonnements",
-    description: "Certains abonnements pourraient etre optimises.",
-    montant: 8_200,
-    detail:
-      "Nous avons remarque des abonnements logiciels en double ou peu utilises. En les optimisant, vous pourriez economiser environ 8 200 MUR par mois.",
-    urgence: "basse",
-    icon: <PiggyBank className="h-6 w-6" />,
-    action: "En savoir plus",
-  },
-  {
-    id: "c5",
-    titre: "Profiter du credit d'impot formation",
-    description: "Vous pouvez deduire certains frais de formation de vos impots.",
-    detail:
-      "Si vous avez forme des employes cette annee, certaines depenses sont deductibles. Envoyez les justificatifs a votre comptable pour en beneficier lors de la prochaine declaration.",
-    urgence: "basse",
-    icon: <Lightbulb className="h-6 w-6" />,
-    action: "Contacter mon comptable",
-  },
-]
+// ---------------------------------------------------------------------------
+// Icon resolver
+// ---------------------------------------------------------------------------
+
+function ConseilIcon({ icon }: { icon: string }) {
+  switch (icon) {
+    case "receipt":
+      return <Receipt className="h-6 w-6" />
+    case "alert":
+      return <AlertTriangle className="h-6 w-6" />
+    case "users":
+      return <Users className="h-6 w-6" />
+    case "piggybank":
+      return <PiggyBank className="h-6 w-6" />
+    case "lightbulb":
+      return <Lightbulb className="h-6 w-6" />
+    default:
+      return <Lightbulb className="h-6 w-6" />
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Urgency badge
@@ -154,6 +120,37 @@ function AccessDenied() {
 // ---------------------------------------------------------------------------
 
 function ConseilsView() {
+  const [conseils, setConseils] = useState<Conseil[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function fetchConseils() {
+      try {
+        const res = await fetch("/api/client/conseils")
+        if (res.ok) {
+          const data = await res.json()
+          if (Array.isArray(data.conseils)) {
+            setConseils(data.conseils)
+          }
+        }
+      } catch {
+        // API not available -- leave empty
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchConseils()
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#C9A84C" }} />
+      </div>
+    )
+  }
+
   return (
     <div className="p-6 space-y-6 max-w-4xl mx-auto">
       <div>
@@ -165,64 +162,75 @@ function ConseilsView() {
         </p>
       </div>
 
-      <div className="space-y-4">
-        {mockConseils.map((conseil) => (
-          <Card
-            key={conseil.id}
-            className={`overflow-hidden ${
-              conseil.urgence === "haute"
-                ? "border-red-200"
-                : conseil.urgence === "moyenne"
-                ? "border-orange-200"
-                : "border-gray-200"
-            }`}
-          >
-            <CardHeader className="pb-2">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-start gap-3">
-                  <div
-                    className="mt-0.5 p-2 rounded-lg"
-                    style={{ backgroundColor: "#C9A84C20", color: "#C9A84C" }}
-                  >
-                    {conseil.icon}
+      {conseils.length === 0 ? (
+        <Card className="border-[#C9A84C]/30 bg-[#C9A84C]/5">
+          <CardContent className="py-12 text-center space-y-4">
+            <Lightbulb className="h-12 w-12 mx-auto" style={{ color: "#C9A84C" }} />
+            <p className="text-sm text-muted-foreground max-w-md mx-auto">
+              Les conseils financiers apparaitront ici une fois vos donnees analysees.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-4">
+          {conseils.map((conseil) => (
+            <Card
+              key={conseil.id}
+              className={`overflow-hidden ${
+                conseil.urgence === "haute"
+                  ? "border-red-200"
+                  : conseil.urgence === "moyenne"
+                  ? "border-orange-200"
+                  : "border-gray-200"
+              }`}
+            >
+              <CardHeader className="pb-2">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <div
+                      className="mt-0.5 p-2 rounded-lg"
+                      style={{ backgroundColor: "#C9A84C20", color: "#C9A84C" }}
+                    >
+                      <ConseilIcon icon={conseil.icon} />
+                    </div>
+                    <div>
+                      <CardTitle className="text-base" style={{ color: "#1E2A4A" }}>
+                        {conseil.titre}
+                      </CardTitle>
+                      <p className="text-sm text-muted-foreground mt-0.5">
+                        {conseil.description}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <CardTitle className="text-base" style={{ color: "#1E2A4A" }}>
-                      {conseil.titre}
-                    </CardTitle>
-                    <p className="text-sm text-muted-foreground mt-0.5">
-                      {conseil.description}
-                    </p>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {conseil.montant && (
+                      <span className="text-sm font-bold" style={{ color: "#1E2A4A" }}>
+                        {fmtMUR(conseil.montant)}
+                      </span>
+                    )}
+                    <UrgenceBadge urgence={conseil.urgence} />
                   </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {conseil.montant && (
-                    <span className="text-sm font-bold" style={{ color: "#1E2A4A" }}>
-                      {fmtMUR(conseil.montant)}
-                    </span>
+              </CardHeader>
+              <CardContent className="pt-2">
+                <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+                  {conseil.detail}
+                </p>
+                <Button
+                  size="sm"
+                  className="text-white"
+                  style={{ backgroundColor: "#1E2A4A" }}
+                >
+                  {conseil.action === "Contacter mon comptable" && (
+                    <Phone className="h-4 w-4 mr-2" />
                   )}
-                  <UrgenceBadge urgence={conseil.urgence} />
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-2">
-              <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-                {conseil.detail}
-              </p>
-              <Button
-                size="sm"
-                className="text-white"
-                style={{ backgroundColor: "#1E2A4A" }}
-              >
-                {conseil.action === "Contacter mon comptable" && (
-                  <Phone className="h-4 w-4 mr-2" />
-                )}
-                {conseil.action}
-              </Button>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                  {conseil.action}
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

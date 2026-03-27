@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { useProfile } from "@/hooks/use-profile"
 import Link from "next/link"
 import {
@@ -45,49 +45,48 @@ function fmtMUR(amount: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// Mock data
+// Types
 // ---------------------------------------------------------------------------
 
-const mockAlerts = [
-  {
-    id: "a1",
-    niveau: "red" as const,
-    message: "Votre declaration TVA de mars doit etre soumise avant le 20 avril. Montant estime : 45 230 MUR.",
-  },
-  {
-    id: "a2",
-    niveau: "orange" as const,
-    message: "3 factures clients sont impayees depuis plus de 30 jours. Total : 87 500 MUR.",
-  },
-  {
-    id: "a3",
-    niveau: "blue" as const,
-    message: "Votre rapport mensuel de mars est pret. Consultez-le dans vos documents.",
-  },
-]
+interface AlertData {
+  id: string
+  niveau: "red" | "orange" | "blue"
+  message: string
+}
 
-const mockActions = [
-  { quoi: "Envoyer les factures manquantes a votre comptable", pourQuand: "Avant le 5 avril", combien: "3 factures", fait: false },
-  { quoi: "Payer la TVA du mois de mars", pourQuand: "Avant le 20 avril", combien: "45 230 MUR", fait: false },
-  { quoi: "Verifier les fiches de paie de mars", pourQuand: "Avant le 30 mars", combien: "17 employes", fait: true },
-  { quoi: "Renouveler l'assurance du vehicule", pourQuand: "Avant le 15 avril", combien: "12 800 MUR", fait: false },
-]
+interface ActionData {
+  quoi: string
+  pourQuand: string
+  combien: string
+  fait: boolean
+}
 
-const mockDocuments = [
-  { id: "d1", nom: "Rapport Mars 2026.pdf", date: "25/03/2026", statut: "Classe" },
-  { id: "d2", nom: "Releve MCB Fevrier.pdf", date: "22/03/2026", statut: "Analyse en cours" },
-  { id: "d3", nom: "Facture client #0456.pdf", date: "20/03/2026", statut: "Question du comptable" },
-  { id: "d4", nom: "Fiche paie equipe mars.xlsx", date: "18/03/2026", statut: "Classe" },
-  { id: "d5", nom: "CSG Q1 2026.pdf", date: "15/03/2026", statut: "Classe" },
-]
+interface DocumentData {
+  id: string
+  nom: string
+  date: string
+  statut: string
+}
 
-const mockRecentUploads = [
-  { id: "u1", nom: "facture_mars_2026.pdf", date: "25/03/2026", statut: "Recu" },
-  { id: "u2", nom: "releve_MCB_fev.pdf", date: "22/03/2026", statut: "En cours" },
-  { id: "u3", nom: "facture_orange.jpeg", date: "20/03/2026", statut: "Traite" },
-  { id: "u4", nom: "fiche_paie_mars.xlsx", date: "18/03/2026", statut: "En cours" },
-  { id: "u5", nom: "note_frais.pdf", date: "15/03/2026", statut: "Recu" },
-]
+interface UploadData {
+  id: string
+  nom: string
+  date: string
+  statut: string
+}
+
+interface KpiData {
+  chiffreAffaires: number | null
+  depenses: number | null
+  benefice: number | null
+  tresorerie: number | null
+  tendanceCA: string | null
+}
+
+interface BriefData {
+  resume_texte: string | null
+  conseil_texte: string | null
+}
 
 // ---------------------------------------------------------------------------
 // Doc status badge
@@ -136,11 +135,24 @@ function UploadStatutBadge({ statut }: { statut: string }) {
 }
 
 // ---------------------------------------------------------------------------
-// Client User — simple view
+// Client User -- simple view
 // ---------------------------------------------------------------------------
 
 function ClientUserDashboard({ firstName }: { firstName: string }) {
   const [dragOver, setDragOver] = useState(false)
+  const [recentUploads, setRecentUploads] = useState<UploadData[]>([])
+  const [loadingUploads, setLoadingUploads] = useState(true)
+
+  useEffect(() => {
+    fetch("/api/client/societes")
+      .then((r) => r.json())
+      .then(() => {
+        // No upload-list endpoint yet -- show empty state
+        setRecentUploads([])
+      })
+      .catch(() => setRecentUploads([]))
+      .finally(() => setLoadingUploads(false))
+  }, [])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -201,31 +213,41 @@ function ClientUserDashboard({ firstName }: { firstName: string }) {
         </h2>
         <Card>
           <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Fichier</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Statut</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {mockRecentUploads.map((u) => (
-                  <TableRow key={u.id}>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                        {u.nom}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">{u.date}</TableCell>
-                    <TableCell>
-                      <UploadStatutBadge statut={u.statut} />
-                    </TableCell>
+            {loadingUploads ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-6 w-6 animate-spin" style={{ color: "#C9A84C" }} />
+              </div>
+            ) : recentUploads.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground text-sm">
+                Aucun envoi recent. Deposez vos premiers documents ci-dessus.
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Fichier</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Statut</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {recentUploads.map((u) => (
+                    <TableRow key={u.id}>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                          {u.nom}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{u.date}</TableCell>
+                      <TableCell>
+                        <UploadStatutBadge statut={u.statut} />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -234,14 +256,92 @@ function ClientUserDashboard({ firstName }: { firstName: string }) {
 }
 
 // ---------------------------------------------------------------------------
-// Client Admin — full dashboard with 6 sections
+// Client Admin -- full dashboard with 6 sections
 // ---------------------------------------------------------------------------
 
 function ClientAdminDashboard({ firstName, societe }: { firstName: string; societe: string }) {
+  const [alerts, setAlerts] = useState<AlertData[]>([])
+  const [actions, setActions] = useState<ActionData[]>([])
+  const [documents, setDocuments] = useState<DocumentData[]>([])
+  const [kpis, setKpis] = useState<KpiData>({
+    chiffreAffaires: null,
+    depenses: null,
+    benefice: null,
+    tresorerie: null,
+    tendanceCA: null,
+  })
+  const [brief, setBrief] = useState<BriefData>({ resume_texte: null, conseil_texte: null })
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function fetchDashboardData() {
+      try {
+        // Fetch societes to get dossier context
+        const socRes = await fetch("/api/client/societes")
+        const socData = await socRes.json()
+        const societes = socData.societes || []
+
+        if (societes.length > 0) {
+          const firstSociete = societes[0]
+          const societeId = firstSociete.id
+
+          // Try to fetch brief/summary data
+          try {
+            const now = new Date()
+            const periode = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`
+            const briefRes = await fetch("/api/brief-client", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                client_id: firstSociete.comptable?.id || "",
+                societe_id: societeId,
+                periode,
+              }),
+            })
+            const briefData = await briefRes.json()
+            if (briefData.success) {
+              setBrief({
+                resume_texte: briefData.resume_texte || null,
+                conseil_texte: briefData.conseil_texte || null,
+              })
+              if (briefData.alertes && Array.isArray(briefData.alertes)) {
+                setAlerts(
+                  briefData.alertes.map((msg: string, i: number) => ({
+                    id: `ba-${i}`,
+                    niveau: i === 0 ? "red" as const : i === 1 ? "orange" as const : "blue" as const,
+                    message: msg,
+                  }))
+                )
+              }
+            }
+          } catch {
+            // Brief not available -- leave empty
+          }
+        }
+      } catch {
+        // API errors -- leave defaults
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchDashboardData()
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#C9A84C" }} />
+      </div>
+    )
+  }
+
+  const currentMonth = new Date().toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
+
   return (
     <div className="p-6 space-y-8 max-w-5xl mx-auto">
       {/* ================================================================== */}
-      {/* Section 1 — Resume du mois */}
+      {/* Section 1 -- Resume du mois */}
       {/* ================================================================== */}
       <Card className="overflow-hidden border-0 shadow-md">
         <CardHeader className="py-5 px-6" style={{ backgroundColor: "#1E2A4A" }}>
@@ -249,7 +349,7 @@ function ClientAdminDashboard({ firstName, societe }: { firstName: string; socie
             Bonjour {firstName}
           </CardTitle>
           <p className="text-white/70 text-sm mt-1">
-            {societe} | Mars 2026
+            {societe} | {currentMonth}
           </p>
         </CardHeader>
         <CardContent className="p-6">
@@ -257,17 +357,15 @@ function ClientAdminDashboard({ firstName, societe }: { firstName: string; socie
             Resume du mois
           </h3>
           <p className="text-sm leading-relaxed text-muted-foreground">
-            Ce mois-ci, votre chiffre d{"'"}affaires a augmente de 12% par rapport a fevrier,
-            grace a une bonne performance sur vos factures clients. Vos depenses restent stables.
-            Votre tresorerie est saine avec plus de 2 millions MUR disponibles. Il reste 3 factures
-            impayees a relancer et votre declaration TVA a preparer avant le 20 avril. Dans l{"'"}ensemble,
-            le mois de mars est positif pour votre entreprise.
+            {brief.resume_texte
+              ? brief.resume_texte
+              : "Les donnees de votre tableau de bord seront disponibles une fois vos documents traites par votre comptable."}
           </p>
         </CardContent>
       </Card>
 
       {/* ================================================================== */}
-      {/* Section 2 — Mes 4 chiffres cles */}
+      {/* Section 2 -- Mes 4 chiffres cles */}
       {/* ================================================================== */}
       <div>
         <h2 className="text-lg font-semibold mb-3" style={{ color: "#1E2A4A" }}>
@@ -283,12 +381,16 @@ function ClientAdminDashboard({ firstName, societe }: { firstName: string; socie
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
-                {fmtMUR(650_000)}
+                {kpis.chiffreAffaires !== null ? fmtMUR(kpis.chiffreAffaires) : "\u2014"}
               </div>
-              <div className="flex items-center gap-1 mt-1 text-sm text-green-600">
-                <TrendingUp className="h-4 w-4" />
-                +12% vs fevrier
-              </div>
+              {kpis.tendanceCA ? (
+                <div className="flex items-center gap-1 mt-1 text-sm text-green-600">
+                  <TrendingUp className="h-4 w-4" />
+                  {kpis.tendanceCA}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground mt-1">Pas encore de donnees</p>
+              )}
             </CardContent>
           </Card>
 
@@ -301,10 +403,10 @@ function ClientAdminDashboard({ firstName, societe }: { firstName: string; socie
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
-                {fmtMUR(135_000)}
+                {kpis.depenses !== null ? fmtMUR(kpis.depenses) : "\u2014"}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                Stable par rapport au mois dernier
+                {kpis.depenses !== null ? "" : "Pas encore de donnees"}
               </p>
             </CardContent>
           </Card>
@@ -318,11 +420,15 @@ function ClientAdminDashboard({ firstName, societe }: { firstName: string; socie
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
-                {fmtMUR(515_000)}
+                {kpis.benefice !== null ? fmtMUR(kpis.benefice) : "\u2014"}
               </div>
-              <Badge className="bg-green-100 text-green-700 border-green-200 text-xs mt-1">
-                Positif
-              </Badge>
+              {kpis.benefice !== null ? (
+                <Badge className={`text-xs mt-1 ${kpis.benefice >= 0 ? "bg-green-100 text-green-700 border-green-200" : "bg-red-100 text-red-700 border-red-200"}`}>
+                  {kpis.benefice >= 0 ? "Positif" : "Negatif"}
+                </Badge>
+              ) : (
+                <p className="text-xs text-muted-foreground mt-1">Pas encore de donnees</p>
+              )}
             </CardContent>
           </Card>
 
@@ -335,18 +441,22 @@ function ClientAdminDashboard({ firstName, societe }: { firstName: string; socie
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
-                {fmtMUR(2_150_000)}
+                {kpis.tresorerie !== null ? fmtMUR(kpis.tresorerie) : "\u2014"}
               </div>
-              <Badge className="bg-green-100 text-green-700 border-green-200 text-xs mt-1">
-                Sain
-              </Badge>
+              {kpis.tresorerie !== null ? (
+                <Badge className="bg-green-100 text-green-700 border-green-200 text-xs mt-1">
+                  Sain
+                </Badge>
+              ) : (
+                <p className="text-xs text-muted-foreground mt-1">Pas encore de donnees</p>
+              )}
             </CardContent>
           </Card>
         </div>
       </div>
 
       {/* ================================================================== */}
-      {/* Section 3 — Mes actions ce mois */}
+      {/* Section 3 -- Mes actions ce mois */}
       {/* ================================================================== */}
       <div>
         <h2 className="text-lg font-semibold mb-3" style={{ color: "#1E2A4A" }}>
@@ -354,71 +464,83 @@ function ClientAdminDashboard({ firstName, societe }: { firstName: string; socie
         </h2>
         <Card>
           <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-slate-50">
-                  <TableHead className="font-semibold">Quoi faire</TableHead>
-                  <TableHead className="font-semibold">Pour quand</TableHead>
-                  <TableHead className="font-semibold">Combien</TableHead>
-                  <TableHead className="font-semibold">Fait ?</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {mockActions.map((action, i) => (
-                  <TableRow key={i}>
-                    <TableCell className="font-medium" style={{ color: "#1E2A4A" }}>
-                      {action.quoi}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">{action.pourQuand}</TableCell>
-                    <TableCell className="font-medium">{action.combien}</TableCell>
-                    <TableCell>
-                      {action.fait ? (
-                        <Badge className="bg-green-100 text-green-700 border-green-200 flex items-center gap-1 w-fit">
-                          <Check className="h-3 w-3" /> Fait
-                        </Badge>
-                      ) : (
-                        <Badge className="bg-orange-100 text-orange-700 border-orange-200 flex items-center gap-1 w-fit">
-                          <Clock className="h-3 w-3" /> A faire
-                        </Badge>
-                      )}
-                    </TableCell>
+            {actions.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground text-sm">
+                Aucune action requise pour le moment.
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-slate-50">
+                    <TableHead className="font-semibold">Quoi faire</TableHead>
+                    <TableHead className="font-semibold">Pour quand</TableHead>
+                    <TableHead className="font-semibold">Combien</TableHead>
+                    <TableHead className="font-semibold">Fait ?</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {actions.map((action, i) => (
+                    <TableRow key={i}>
+                      <TableCell className="font-medium" style={{ color: "#1E2A4A" }}>
+                        {action.quoi}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{action.pourQuand}</TableCell>
+                      <TableCell className="font-medium">{action.combien}</TableCell>
+                      <TableCell>
+                        {action.fait ? (
+                          <Badge className="bg-green-100 text-green-700 border-green-200 flex items-center gap-1 w-fit">
+                            <Check className="h-3 w-3" /> Fait
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-orange-100 text-orange-700 border-orange-200 flex items-center gap-1 w-fit">
+                            <Clock className="h-3 w-3" /> A faire
+                          </Badge>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
       </div>
 
       {/* ================================================================== */}
-      {/* Section 4 — Mes alertes */}
+      {/* Section 4 -- Mes alertes */}
       {/* ================================================================== */}
       <div>
         <h2 className="text-lg font-semibold mb-3" style={{ color: "#1E2A4A" }}>
           Mes alertes
         </h2>
-        <div className="space-y-3">
-          {mockAlerts.map((alert) => {
-            const colors = {
-              red: { border: "border-red-300", bg: "bg-red-50", dot: "bg-red-500" },
-              orange: { border: "border-orange-300", bg: "bg-orange-50", dot: "bg-orange-500" },
-              blue: { border: "border-blue-300", bg: "bg-blue-50", dot: "bg-blue-500" },
-            }
-            const c = colors[alert.niveau]
-            return (
-              <Card key={alert.id} className={`${c.border} ${c.bg}`}>
-                <CardContent className="py-4 flex items-center gap-3">
-                  <span className={`inline-block h-3 w-3 rounded-full shrink-0 ${c.dot}`} />
-                  <p className="text-sm">{alert.message}</p>
-                </CardContent>
-              </Card>
-            )
-          })}
-        </div>
+        {alerts.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground text-sm">
+            Aucune alerte pour le moment.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {alerts.map((alert) => {
+              const colors = {
+                red: { border: "border-red-300", bg: "bg-red-50", dot: "bg-red-500" },
+                orange: { border: "border-orange-300", bg: "bg-orange-50", dot: "bg-orange-500" },
+                blue: { border: "border-blue-300", bg: "bg-blue-50", dot: "bg-blue-500" },
+              }
+              const c = colors[alert.niveau]
+              return (
+                <Card key={alert.id} className={`${c.border} ${c.bg}`}>
+                  <CardContent className="py-4 flex items-center gap-3">
+                    <span className={`inline-block h-3 w-3 rounded-full shrink-0 ${c.dot}`} />
+                    <p className="text-sm">{alert.message}</p>
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* ================================================================== */}
-      {/* Section 5 — Conseil du mois */}
+      {/* Section 5 -- Conseil du mois */}
       {/* ================================================================== */}
       <div>
         <h2 className="text-lg font-semibold mb-3" style={{ color: "#1E2A4A" }}>
@@ -428,21 +550,22 @@ function ClientAdminDashboard({ firstName, societe }: { firstName: string; socie
           <CardContent className="py-6 flex gap-4">
             <Lightbulb className="h-6 w-6 shrink-0 mt-0.5" style={{ color: "#C9A84C" }} />
             <div>
-              <p className="text-sm font-semibold mb-1" style={{ color: "#1E2A4A" }}>
-                Pensez a relancer vos clients
-              </p>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Vous avez 87 500 MUR de factures impayees depuis plus de 30 jours. Relancer vos clients
-                rapidement permet de maintenir votre tresorerie en bonne sante. Vous pouvez contacter
-                votre comptable pour qu{"'"}il envoie les rappels a votre place.
-              </p>
+              {brief.conseil_texte ? (
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  {brief.conseil_texte}
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Les conseils personnalises apparaitront ici une fois vos donnees analysees par votre comptable.
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>
       </div>
 
       {/* ================================================================== */}
-      {/* Section 6 — Documents recents */}
+      {/* Section 6 -- Documents recents */}
       {/* ================================================================== */}
       <div>
         <div className="flex items-center justify-between mb-3">
@@ -464,31 +587,37 @@ function ClientAdminDashboard({ firstName, societe }: { firstName: string; socie
         </div>
         <Card>
           <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-slate-50">
-                  <TableHead className="font-semibold">Document</TableHead>
-                  <TableHead className="font-semibold">Date</TableHead>
-                  <TableHead className="font-semibold">Statut</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {mockDocuments.map((doc) => (
-                  <TableRow key={doc.id}>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                        {doc.nom}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">{doc.date}</TableCell>
-                    <TableCell>
-                      <DocStatutBadge statut={doc.statut} />
-                    </TableCell>
+            {documents.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground text-sm">
+                Aucun document disponible pour le moment.
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-slate-50">
+                    <TableHead className="font-semibold">Document</TableHead>
+                    <TableHead className="font-semibold">Date</TableHead>
+                    <TableHead className="font-semibold">Statut</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {documents.map((doc) => (
+                    <TableRow key={doc.id}>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                          {doc.nom}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{doc.date}</TableCell>
+                      <TableCell>
+                        <DocStatutBadge statut={doc.statut} />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -502,8 +631,23 @@ function ClientAdminDashboard({ firstName, societe }: { firstName: string; socie
 
 export default function ClientDashboard() {
   const { profile, loading } = useProfile()
+  const [societe, setSociete] = useState<string>("")
+  const [loadingSociete, setLoadingSociete] = useState(true)
 
-  if (loading) {
+  useEffect(() => {
+    fetch("/api/client/societes")
+      .then((r) => r.json())
+      .then((data) => {
+        const societes = data.societes || []
+        if (societes.length > 0) {
+          setSociete(societes[0].nom || "")
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingSociete(false))
+  }, [])
+
+  if (loading || loadingSociete) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#C9A84C" }} />
@@ -514,11 +658,10 @@ export default function ClientDashboard() {
   const fullName = profile?.full_name || ""
   const firstName = fullName.split(" ")[0] || ""
   const isClientUser = profile?.role === "client_user"
-  const societe = "Ma Societe Ltd"
 
   if (isClientUser) {
     return <ClientUserDashboard firstName={firstName} />
   }
 
-  return <ClientAdminDashboard firstName={firstName} societe={societe} />
+  return <ClientAdminDashboard firstName={firstName} societe={societe || "Mon entreprise"} />
 }

@@ -15,117 +15,19 @@ function formatMUR(amount: number) {
   return amount.toLocaleString("fr-FR") + " MUR"
 }
 
-const summaryCards = [
-  {
-    title: "NPF total",
-    value: 182400,
-    icon: Shield,
-    color: "#1E2A4A",
-    bg: "bg-blue-50",
-  },
-  {
-    title: "HRDC total",
-    value: 24800,
-    icon: GraduationCap,
-    color: "#C9A84C",
-    bg: "bg-amber-50",
-  },
-  {
-    title: "NPS total",
-    value: 37200,
-    icon: PiggyBank,
-    color: "#1E2A4A",
-    bg: "bg-blue-50",
-  },
-  {
-    title: "PAYE total",
-    value: 148500,
-    icon: Receipt,
-    color: "#DC2626",
-    bg: "bg-red-50",
-  },
-]
-
-const mockData = [
-  {
-    id: "1",
-    societe: "TIBOK",
-    periode: "Mars 2026",
-    npfPatronal: 25500,
-    npfSalarie: 17000,
-    hrdc: 5100,
-    nps: 8500,
-    paye: 42500,
-    total: 98600,
-    echeance: "15/04/2026",
-    statut: "Conforme" as const,
-  },
-  {
-    id: "2",
-    societe: "BPO Services",
-    periode: "Mars 2026",
-    npfPatronal: 18600,
-    npfSalarie: 12400,
-    hrdc: 3720,
-    nps: 6200,
-    paye: 28200,
-    total: 69120,
-    echeance: "15/04/2026",
-    statut: "Conforme" as const,
-  },
-  {
-    id: "3",
-    societe: "TIBOK",
-    periode: "Février 2026",
-    npfPatronal: 25500,
-    npfSalarie: 17000,
-    hrdc: 5100,
-    nps: 8500,
-    paye: 42500,
-    total: 98600,
-    echeance: "15/03/2026",
-    statut: "Conforme" as const,
-  },
-  {
-    id: "4",
-    societe: "BPO Services",
-    periode: "Février 2026",
-    npfPatronal: 18600,
-    npfSalarie: 12400,
-    hrdc: 3720,
-    nps: 6200,
-    paye: 28200,
-    total: 69120,
-    echeance: "15/03/2026",
-    statut: "Écart détecté" as const,
-  },
-  {
-    id: "5",
-    societe: "TIBOK",
-    periode: "Janvier 2026",
-    npfPatronal: 24000,
-    npfSalarie: 16000,
-    hrdc: 4800,
-    nps: 8000,
-    paye: 40000,
-    total: 92800,
-    echeance: "15/02/2026",
-    statut: "Conforme" as const,
-  },
-  {
-    id: "6",
-    societe: "BPO Services",
-    periode: "Janvier 2026",
-    npfPatronal: 17400,
-    npfSalarie: 11600,
-    hrdc: 3480,
-    nps: 5800,
-    paye: 26400,
-    total: 64680,
-    echeance: "15/02/2026",
-    statut: "Conforme" as const,
-  },
-]
+const chargesData: {
+  id: string
+  societe: string
+  periode: string
+  npfPatronal: number
+  npfSalarie: number
+  hrdc: number
+  nps: number
+  paye: number
+  total: number
+  echeance: string
+  statut: "Conforme" | "Écart détecté"
+}[] = []
 
 function getStatutBadge(statut: string) {
   switch (statut) {
@@ -157,7 +59,7 @@ export default function ClientChargesSocialesPage() {
     )
   }
 
-  const filtered = mockData.filter(
+  const filtered = chargesData.filter(
     (row) =>
       row.societe.toLowerCase().includes(search.toLowerCase()) ||
       row.periode.toLowerCase().includes(search.toLowerCase())
@@ -176,23 +78,58 @@ export default function ClientChargesSocialesPage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {summaryCards.map((card) => (
-          <Card key={card.title}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {card.title}
-              </CardTitle>
-              <div className={`rounded-lg p-2 ${card.bg}`}>
-                <card.icon className="h-5 w-5" style={{ color: card.color }} />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
-                {formatMUR(card.value)}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">NPF total</CardTitle>
+            <div className="rounded-lg p-2 bg-blue-50">
+              <Shield className="h-5 w-5" style={{ color: "#1E2A4A" }} />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
+              {formatMUR(chargesData.reduce((sum, r) => sum + r.npfPatronal + r.npfSalarie, 0))}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">HRDC total</CardTitle>
+            <div className="rounded-lg p-2 bg-amber-50">
+              <GraduationCap className="h-5 w-5" style={{ color: "#C9A84C" }} />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
+              {formatMUR(chargesData.reduce((sum, r) => sum + r.hrdc, 0))}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">NPS total</CardTitle>
+            <div className="rounded-lg p-2 bg-blue-50">
+              <PiggyBank className="h-5 w-5" style={{ color: "#1E2A4A" }} />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
+              {formatMUR(chargesData.reduce((sum, r) => sum + r.nps, 0))}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">PAYE total</CardTitle>
+            <div className="rounded-lg p-2 bg-red-50">
+              <Receipt className="h-5 w-5" style={{ color: "#DC2626" }} />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
+              {formatMUR(chargesData.reduce((sum, r) => sum + r.paye, 0))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="relative max-w-sm">
@@ -249,7 +186,9 @@ export default function ClientChargesSocialesPage() {
               {filtered.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
-                    Aucune charge sociale trouvée.
+                    {search
+                      ? "Aucune charge sociale trouvée pour cette recherche."
+                      : "Aucune charge sociale disponible. Les données apparaîtront ici une fois les charges traitées."}
                   </TableCell>
                 </TableRow>
               )}

@@ -281,10 +281,10 @@ PATTERNS DE RECONNAISSANCE AUTOMATIQUE:
 - VIREMENT CLIENT, PAYMENT RECEIVED → 411 Clients
 - LOAN, PRET, EMI → 164 Emprunts
 
-TAUX DE CHANGE REFERENCE:
-- EUR/MUR: 46.50
-- GBP/MUR: 54.20
-- USD/MUR: 44.80
+TAUX DE CHANGE REFERENCE (mis à jour quotidiennement):
+- EUR/MUR: {{TAUX_EUR}}
+- GBP/MUR: {{TAUX_GBP}}
+- USD/MUR: {{TAUX_USD}}
 
 REGLES:
 1. Pour chaque ligne du releve, identifie le type de transaction via les patterns ci-dessus
@@ -565,7 +565,7 @@ SEUILS (MUR):
 - 1 000 001 a 3 000 000 : EXCELLENT
 - > 3 000 000 : EXCEPTIONNEL
 
-TAUX BOM: EUR/MUR 46.50, GBP/MUR 54.20, USD/MUR 44.80
+TAUX BOM (mis à jour quotidiennement): EUR/MUR {{TAUX_EUR}}, GBP/MUR {{TAUX_GBP}}, USD/MUR {{TAUX_USD}}
 
 Calcule J+30/J+60/J+90 depuis le solde consolide actuel. Ajoute encaissements previsibles, deduis decaissements certains (salaires, TVA, CSG, loyers). Calcule le runway.
 
@@ -633,13 +633,28 @@ const PROMPT_MAP: Record<PromptId, string> = {
 }
 
 /**
+ * Injects dynamic exchange rates into a prompt string.
+ * Replaces {{TAUX_EUR}}, {{TAUX_GBP}}, {{TAUX_USD}} placeholders.
+ */
+export function injectTauxChange(prompt: string, rates: Record<string, number>): string {
+  return prompt
+    .replace(/\{\{TAUX_EUR\}\}/g, String(rates.EUR ?? 46.50))
+    .replace(/\{\{TAUX_GBP\}\}/g, String(rates.GBP ?? 54.20))
+    .replace(/\{\{TAUX_USD\}\}/g, String(rates.USD ?? 44.80))
+}
+
+/**
  * Returns the full system prompt for a given prompt ID.
+ * If rates are provided, injects dynamic exchange rates.
  * Throws if the ID is not recognised.
  */
-export function getSystemPrompt(id: PromptId): string {
+export function getSystemPrompt(id: PromptId, rates?: Record<string, number>): string {
   const prompt = PROMPT_MAP[id]
   if (!prompt) {
     throw new Error(`Unknown prompt ID: ${id}`)
+  }
+  if (rates) {
+    return injectTauxChange(prompt, rates)
   }
   return prompt
 }

@@ -49,6 +49,7 @@ export default function ComptablesPage() {
   const [formPhone, setFormPhone] = useState("")
   const [formPassword, setFormPassword] = useState("")
   const [formRole, setFormRole] = useState<"comptable" | "comptable_dedie">("comptable")
+  const [formClientIds, setFormClientIds] = useState<string[]>([])
 
   // Assign form
   const [selectedClientIds, setSelectedClientIds] = useState<Set<string>>(new Set())
@@ -68,7 +69,7 @@ export default function ComptablesPage() {
   useEffect(() => { fetchUsers() }, [fetchUsers])
 
   const comptables = allUsers.filter((u) => u.role === "comptable" || u.role === "comptable_dedie")
-  const clients = allUsers.filter((u) => u.role === "client")
+  const clients = allUsers.filter((u) => u.role === "client_admin" || u.role === "client_user" || u.role === "client")
 
   const filtered = comptables.filter(
     (c) =>
@@ -83,7 +84,7 @@ export default function ComptablesPage() {
     clients.filter((c) => c.comptable_id === comptableId)
 
   const resetForm = () => {
-    setFormName(""); setFormEmail(""); setFormPhone(""); setFormPassword(""); setFormRole("comptable"); setError(null)
+    setFormName(""); setFormEmail(""); setFormPhone(""); setFormPassword(""); setFormRole("comptable"); setFormClientIds([]); setError(null)
   }
 
   const handleCreate = async () => {
@@ -103,7 +104,25 @@ export default function ComptablesPage() {
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || "Erreur"); return }
-      setSuccess(`Comptable ${formName} créé avec succès !`)
+
+      const newComptableId = data.user?.id
+
+      // Assign selected clients to this accountant
+      if (newComptableId && formClientIds.length > 0) {
+        await Promise.allSettled(
+          formClientIds.map(clientId =>
+            fetch("/api/admin/users/assign", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ client_id: clientId, comptable_id: newComptableId }),
+            })
+          )
+        )
+        setSuccess(`Comptable ${formName} créé et assigné à ${formClientIds.length} client(s) !`)
+      } else {
+        setSuccess(`Comptable ${formName} créé avec succès !`)
+      }
+
       resetForm(); setDialogOpen(false); fetchUsers()
       setTimeout(() => setSuccess(null), 5000)
     } catch { setError("Erreur de connexion") } finally { setCreating(false) }
@@ -182,7 +201,7 @@ export default function ComptablesPage() {
               Ajouter un comptable
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Nouveau comptable</DialogTitle>
               <DialogDescription>Un compte sera créé automatiquement avec le rôle comptable.</DialogDescription>
@@ -213,6 +232,27 @@ export default function ComptablesPage() {
                     <SelectItem value="comptable_dedie">Comptable dédié (clients assignés uniquement)</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Client(s) à assigner</Label>
+                {clients.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Aucun client disponible.</p>
+                ) : (
+                  <div className="max-h-40 overflow-y-auto rounded-md border p-3 space-y-2">
+                    {clients.map(client => (
+                      <div key={client.id} className="flex items-center gap-2">
+                        <Checkbox
+                          id={`create-comptable-client-${client.id}`}
+                          checked={formClientIds.includes(client.id)}
+                          onCheckedChange={() => setFormClientIds(prev => prev.includes(client.id) ? prev.filter(id => id !== client.id) : [...prev, client.id])}
+                        />
+                        <label htmlFor={`create-comptable-client-${client.id}`} className="text-sm cursor-pointer">
+                          {client.full_name} ({client.email})
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               {error && <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">{error}</div>}
             </div>

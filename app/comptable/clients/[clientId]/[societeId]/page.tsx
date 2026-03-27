@@ -2,7 +2,7 @@
 
 import { useParams } from "next/navigation"
 import Link from "next/link"
-import { useState, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -18,74 +18,13 @@ import {
 
 function fmt(n: number) { return n.toLocaleString("fr-FR") + " MUR" }
 
-const mockFournisseurs = [
-  { fournisseur: "SAS 2E2J", numero: "F-2026-001", date: "2026-03-15", ht: 85000, tva: 12750, ttc: 97750, echeance: "2026-04-15", statut: "en_attente", compte: "622" },
-  { fournisseur: "MCB Card Services", numero: "F-2026-002", date: "2026-03-10", ht: 12500, tva: 1875, ttc: 14375, echeance: "2026-03-31", statut: "paye", compte: "627" },
-  { fournisseur: "Mauritius Telecom", numero: "F-2026-003", date: "2026-03-01", ht: 8900, tva: 1335, ttc: 10235, echeance: "2026-03-20", statut: "en_retard", compte: "626" },
-  { fournisseur: "OpenAI API", numero: "F-2026-004", date: "2026-03-05", ht: 45000, tva: 0, ttc: 45000, echeance: "2026-04-05", statut: "paye", compte: "651" },
-  { fournisseur: "MWPI Domiciliation", numero: "F-2026-005", date: "2026-03-01", ht: 25000, tva: 3750, ttc: 28750, echeance: "2026-04-01", statut: "en_attente", compte: "612" },
-  { fournisseur: "Meta Ads", numero: "F-2026-006", date: "2026-03-12", ht: 32000, tva: 0, ttc: 32000, echeance: "2026-04-12", statut: "paye", compte: "623" },
-]
-
-const mockFacturesClients = [
-  { client: "Mauritius Telecom", numero: "C-2026-001", date: "2026-03-01", ht: 250000, tva: 37500, ttc: 287500, echeance: "2026-04-01", statut: "impaye", jours: 25 },
-  { client: "Rogers Capital", numero: "C-2026-002", date: "2026-03-05", ht: 180000, tva: 27000, ttc: 207000, echeance: "2026-04-05", statut: "solde", jours: 0 },
-  { client: "Swan Insurance", numero: "C-2026-003", date: "2026-02-15", ht: 95000, tva: 14250, ttc: 109250, echeance: "2026-03-15", statut: "impaye", jours: 41 },
-  { client: "Air Mauritius", numero: "C-2026-004", date: "2026-03-10", ht: 320000, tva: 48000, ttc: 368000, echeance: "2026-04-10", statut: "partiel", jours: 0 },
-  { client: "MCB Group", numero: "C-2026-005", date: "2026-03-15", ht: 150000, tva: 22500, ttc: 172500, echeance: "2026-04-15", statut: "solde", jours: 0 },
-]
-
-const mockBanque = [
-  { date: "2026-03-25", libelle: "VIR MAURITIUS TELECOM", debit: 0, credit: 207000, tiers: "Mauritius Telecom", compte: "411", statut: "rapproche" },
-  { date: "2026-03-24", libelle: "PRLV MCB CARD SERVICES", debit: 14375, credit: 0, tiers: "MCB Card Services", compte: "627", statut: "rapproche" },
-  { date: "2026-03-22", libelle: "VIR OPENAI LLC", debit: 45000, credit: 0, tiers: "OpenAI", compte: "651", statut: "rapproche" },
-  { date: "2026-03-20", libelle: "VIR CC CONVENTION TRESO", debit: 0, credit: 500000, tiers: "Inter-sociétés", compte: "451", statut: "a_verifier" },
-  { date: "2026-03-18", libelle: "PRLV MWPI DOMICILIATION", debit: 28750, credit: 0, tiers: "MWPI", compte: "612", statut: "rapproche" },
-  { date: "2026-03-15", libelle: "VIR SALARY MARS", debit: 420000, credit: 0, tiers: "Salaires", compte: "421", statut: "rapproche" },
-  { date: "2026-03-12", libelle: "TRANSACTION INCONNUE", debit: 15600, credit: 0, tiers: "?", compte: "?", statut: "non_identifie" },
-  { date: "2026-03-10", libelle: "FRAIS BANCAIRES MCB", debit: 2500, credit: 0, tiers: "MCB", compte: "627", statut: "rapproche" },
-]
-
-const mockSalaires = [
-  { employe: "Raj Kumar", brut: 85000, csg: 2550, nsf: 1275, paye: 4250, net: 76925, cout: 95750, statut: "paye" },
-  { employe: "Priya Doobur", brut: 65000, csg: 1950, nsf: 975, paye: 2250, net: 59825, cout: 72750, statut: "paye" },
-  { employe: "Vikash Jeetun", brut: 55000, csg: 1650, nsf: 825, paye: 1250, net: 51275, cout: 61750, statut: "paye" },
-  { employe: "Nadia Ramgoolam", brut: 120000, csg: 3600, nsf: 1800, paye: 8750, net: 105850, cout: 134400, statut: "a_payer" },
-  { employe: "Anil Doorgakant", brut: 95000, csg: 2850, nsf: 1425, paye: 5750, net: 84975, cout: 106550, statut: "paye" },
-]
-
-const mockCharges = [
-  { periode: "Mars 2026", csg_e: 12600, csg_p: 25200, nsf_e: 6300, nsf_p: 10500, training: 4200, paye: 22250, total: 81050, statut: "conforme" },
-  { periode: "Fév 2026", csg_e: 12400, csg_p: 24800, nsf_e: 6200, nsf_p: 10330, training: 4130, paye: 21800, total: 79660, statut: "conforme" },
-  { periode: "Jan 2026", csg_e: 12250, csg_p: 24500, nsf_e: 6125, nsf_p: 10210, training: 4080, paye: 21500, total: 78665, statut: "ecart" },
-]
-
-const mockTVA = [
-  { mois: "Mars 2026", collectee: 149250, deductible: 19710, nette: 129540, deadline: "20/04/2026", statut: "a_declarer", ref: "" },
-  { mois: "Fév 2026", collectee: 135000, deductible: 22500, nette: 112500, deadline: "20/03/2026", statut: "declare", ref: "MRA-VAT-2026-0234" },
-  { mois: "Jan 2026", collectee: 128000, deductible: 18900, nette: 109100, deadline: "20/02/2026", statut: "declare", ref: "MRA-VAT-2026-0112" },
-]
-
-const mockDossiers = [
-  { nom: "Factures Fournisseurs", count: 12, anomalies: 0 },
-  { nom: "Factures Clients", count: 8, anomalies: 0 },
-  { nom: "Relevés Bancaires", count: 3, anomalies: 2 },
-  { nom: "Fiches de Paie", count: 17, anomalies: 0 },
-  { nom: "Déclaration CSG/NSF Mensuelle", count: 6, anomalies: 0 },
-  { nom: "Déclarations TVA MRA", count: 4, anomalies: 0 },
-  { nom: "Rapprochement Bancaire", count: 3, anomalies: 1 },
-  { nom: "Grand Livre", count: 45, anomalies: 0 },
-  { nom: "Balance des Comptes", count: 3, anomalies: 0 },
-  { nom: "États Financiers IFRS", count: 2, anomalies: 0 },
-  { nom: "Registre Immobilisations", count: 8, anomalies: 0 },
-  { nom: "Contrats", count: 5, anomalies: 0 },
-  { nom: "Rapports P&L", count: 3, anomalies: 0 },
-  { nom: "ROC Annual Return", count: 1, anomalies: 0 },
-  { nom: "APS Trimestriel", count: 0, anomalies: 0 },
-  { nom: "13ème Mois", count: 0, anomalies: 0 },
-  { nom: "Liasse Fiscale Annuelle", count: 0, anomalies: 0 },
-  { nom: "Divers", count: 2, anomalies: 0 },
-]
+const mockFournisseurs: any[] = []
+const mockFacturesClients: any[] = []
+const mockBanque: any[] = []
+const mockSalaires: any[] = []
+const mockCharges: any[] = []
+const mockTVA: any[] = []
+const mockDossiers: any[] = []
 
 function stBadge(s: string) {
   if (["paye","solde","rapproche","declare","conforme"].includes(s)) return <Badge className="bg-green-100 text-green-700">{({paye:"Payé",solde:"Soldé",rapproche:"Rapproché",declare:"Déclaré",conforme:"Conforme"} as Record<string,string>)[s]}</Badge>
@@ -98,8 +37,22 @@ export default function SocieteContextPage() {
   const params = useParams()
   const clientId = params.clientId as string
   const societeId = params.societeId as string
-  const clientName = "Jean-Marc Dupont"
-  const societeName = "TIBOK Ltd"
+  const [clientName, setClientName] = useState("")
+  const [societeName, setSocieteName] = useState("")
+
+  useEffect(() => {
+    async function fetchNames() {
+      try {
+        const [usersRes, socRes] = await Promise.all([fetch("/api/admin/users"), fetch("/api/admin/societes")])
+        const [usersData, socData] = await Promise.all([usersRes.json(), socRes.json()])
+        const client = usersData.users?.find((u: any) => u.id === clientId)
+        if (client) setClientName(client.full_name)
+        const soc = socData.societes?.find((s: any) => s.id === societeId)
+        if (soc) setSocieteName(soc.nom)
+      } catch {}
+    }
+    fetchNames()
+  }, [clientId, societeId])
 
   // Documents state
   const [uploading, setUploading] = useState(false)
@@ -164,16 +117,16 @@ export default function SocieteContextPage() {
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
-          { label: "CA du mois", value: 995000, icon: TrendingUp, green: true },
-          { label: "Charges", value: 208400, icon: TrendingDown },
-          { label: "Résultat", value: 786600, icon: BarChart3, green: true },
-          { label: "TVA nette", value: 129540, icon: Calculator },
-          { label: "Trésorerie", value: 2340000, icon: Landmark, green: true },
-          { label: "Masse salariale", value: 420000, icon: Wallet },
+          { label: "CA du mois", value: 0, icon: TrendingUp, green: true },
+          { label: "Charges", value: 0, icon: TrendingDown },
+          { label: "Résultat", value: 0, icon: BarChart3, green: true },
+          { label: "TVA nette", value: 0, icon: Calculator },
+          { label: "Trésorerie", value: 0, icon: Landmark, green: true },
+          { label: "Masse salariale", value: 0, icon: Wallet },
         ].map((k) => (
           <Card key={k.label}><CardContent className="pt-4 pb-3">
             <p className="text-xs text-muted-foreground mb-1">{k.label}</p>
-            <p className={`text-lg font-bold ${k.green ? "text-green-700" : ""}`} style={!k.green ? { color: "#1E2A4A" } : undefined}>{fmt(k.value)}</p>
+            <p className={`text-lg font-bold ${k.green ? "text-green-700" : ""}`} style={!k.green ? { color: "#1E2A4A" } : undefined}>{k.value === 0 ? "—" : fmt(k.value)}</p>
           </CardContent></Card>
         ))}
       </div>

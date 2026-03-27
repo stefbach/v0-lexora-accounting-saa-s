@@ -11,17 +11,17 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
-import { FileText, Eye, Search, CheckCircle } from "lucide-react"
+import { FileText, Eye, Search, CheckCircle, FolderOpen } from "lucide-react"
 
-const mockDocuments = [
-  { id: "1", nom_fichier: "facture_fournisseur_001.pdf", client: "Jean-Pierre Dupont", societe: "TIBOK", date: "2026-03-24", type_document: "facture_fournisseur", statut: "traite" },
-  { id: "2", nom_fichier: "releve_mcb_mars.pdf", client: "Jean-Pierre Dupont", societe: "TIBOK", date: "2026-03-22", type_document: "releve_bancaire", statut: "en_cours" },
-  { id: "3", nom_fichier: "fiche_paie_mars.xlsx", client: "Marie Curie", societe: "BPO", date: "2026-03-20", type_document: "fiche_paie", statut: "en_attente" },
-  { id: "4", nom_fichier: "facture_client_XYZ.pdf", client: "Jean-Pierre Dupont", societe: "TIBOK", date: "2026-03-18", type_document: "facture_client", statut: "traite" },
-  { id: "5", nom_fichier: "contrat_bail.pdf", client: "Ahmed Hassan", societe: "Obesity Care Malta", date: "2026-03-15", type_document: "contrat", statut: "en_attente" },
-  { id: "6", nom_fichier: "charges_Q1.xlsx", client: "Marie Curie", societe: "BPO", date: "2026-03-12", type_document: "charges_sociales", statut: "erreur" },
-  { id: "7", nom_fichier: "facture_achat_02.pdf", client: "Sophie Martin", societe: "NHS S2", date: "2026-03-10", type_document: "facture_fournisseur", statut: "traite" },
-]
+interface Document {
+  id: string
+  nom_fichier: string
+  client: string
+  societe: string
+  date: string
+  type_document: string
+  statut: string
+}
 
 function getDocTypeBadge(type: string) {
   const config: Record<string, { label: string; className: string }> = {
@@ -51,14 +51,16 @@ export default function ComptableDocumentsPage() {
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
 
-  const filtered = mockDocuments.filter((doc) => {
+  const documents: Document[] = []
+
+  const filtered = documents.filter((doc) => {
     const matchSearch = doc.nom_fichier.toLowerCase().includes(search.toLowerCase()) || doc.client.toLowerCase().includes(search.toLowerCase())
     const matchStatus = statusFilter === "all" || doc.statut === statusFilter
     return matchSearch && matchStatus
   })
 
-  const pending = mockDocuments.filter((d) => d.statut === "en_attente").length
-  const enCours = mockDocuments.filter((d) => d.statut === "en_cours").length
+  const pending = documents.filter((d) => d.statut === "en_attente").length
+  const enCours = documents.filter((d) => d.statut === "en_cours").length
 
   return (
     <div className="flex-1 overflow-auto p-6 space-y-6">
@@ -68,7 +70,7 @@ export default function ComptableDocumentsPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <Card><CardContent className="pt-6"><div className="text-2xl font-bold">{mockDocuments.length}</div><p className="text-sm text-muted-foreground">Total</p></CardContent></Card>
+        <Card><CardContent className="pt-6"><div className="text-2xl font-bold">{documents.length}</div><p className="text-sm text-muted-foreground">Total</p></CardContent></Card>
         <Card><CardContent className="pt-6"><div className="text-2xl font-bold text-yellow-600">{pending}</div><p className="text-sm text-muted-foreground">En attente de traitement</p></CardContent></Card>
         <Card><CardContent className="pt-6"><div className="text-2xl font-bold text-blue-600">{enCours}</div><p className="text-sm text-muted-foreground">En cours</p></CardContent></Card>
       </div>
@@ -92,37 +94,45 @@ export default function ComptableDocumentsPage() {
 
       <Card>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Fichier</TableHead>
-                <TableHead>Client</TableHead>
-                <TableHead>Société</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Statut</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((doc) => (
-                <TableRow key={doc.id}>
-                  <TableCell className="font-medium"><div className="flex items-center gap-2"><FileText className="h-4 w-4 text-muted-foreground" />{doc.nom_fichier}</div></TableCell>
-                  <TableCell>{doc.client}</TableCell>
-                  <TableCell>{doc.societe}</TableCell>
-                  <TableCell>{doc.date}</TableCell>
-                  <TableCell>{getDocTypeBadge(doc.type_document)}</TableCell>
-                  <TableCell>{getStatusBadge(doc.statut)}</TableCell>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="icon"><Eye className="h-4 w-4" /></Button>
-                      {doc.statut === "en_attente" && <Button variant="ghost" size="icon"><CheckCircle className="h-4 w-4 text-green-600" /></Button>}
-                    </div>
-                  </TableCell>
+          {filtered.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Fichier</TableHead>
+                  <TableHead>Client</TableHead>
+                  <TableHead>Société</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Statut</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {filtered.map((doc) => (
+                  <TableRow key={doc.id}>
+                    <TableCell className="font-medium"><div className="flex items-center gap-2"><FileText className="h-4 w-4 text-muted-foreground" />{doc.nom_fichier}</div></TableCell>
+                    <TableCell>{doc.client}</TableCell>
+                    <TableCell>{doc.societe}</TableCell>
+                    <TableCell>{doc.date}</TableCell>
+                    <TableCell>{getDocTypeBadge(doc.type_document)}</TableCell>
+                    <TableCell>{getStatusBadge(doc.statut)}</TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon"><Eye className="h-4 w-4" /></Button>
+                        {doc.statut === "en_attente" && <Button variant="ghost" size="icon"><CheckCircle className="h-4 w-4 text-green-600" /></Button>}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
+              <FolderOpen className="h-12 w-12 text-muted-foreground/40" />
+              <p className="font-medium text-base">Aucun document</p>
+              <p className="text-sm">Les documents de vos clients apparaîtront ici une fois téléversés.</p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

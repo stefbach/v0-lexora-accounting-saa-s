@@ -15,164 +15,19 @@ function formatMUR(amount: number) {
   return amount.toLocaleString("fr-FR") + " MUR"
 }
 
-const summaryCards = [
-  {
-    title: "Solde total",
-    value: 2845000,
-    icon: Landmark,
-    color: "#1E2A4A",
-    bg: "bg-blue-50",
-  },
-  {
-    title: "Opérations non rapprochées",
-    value: 4,
-    isCount: true,
-    icon: AlertCircle,
-    color: "#DC2626",
-    bg: "bg-red-50",
-  },
-  {
-    title: "Dernière MAJ",
-    value: "25/03/2026",
-    isDate: true,
-    icon: Clock,
-    color: "#C9A84C",
-    bg: "bg-amber-50",
-  },
-]
-
-const mockData = [
-  {
-    id: "1",
-    date: "25/03/2026",
-    banque: "MCB",
-    societe: "TIBOK",
-    libelle: "Virement client — Raj Doobur",
-    debit: 0,
-    credit: 402500,
-    solde: 1850000,
-    tiers: "Raj Doobur",
-    compteImpute: "411100",
-    statut: "Rapproché" as const,
-  },
-  {
-    id: "2",
-    date: "24/03/2026",
-    banque: "MCB",
-    societe: "TIBOK",
-    libelle: "Paiement fournisseur — ABC Supplies",
-    debit: 143750,
-    credit: 0,
-    solde: 1447500,
-    tiers: "ABC Supplies Ltd",
-    compteImpute: "401100",
-    statut: "Rapproché" as const,
-  },
-  {
-    id: "3",
-    date: "23/03/2026",
-    banque: "SBM",
-    societe: "BPO Services",
-    libelle: "Prélèvement NPF — Mars 2026",
-    debit: 85200,
-    credit: 0,
-    solde: 995000,
-    tiers: "MRA/NPF",
-    compteImpute: "431000",
-    statut: "Rapproché" as const,
-  },
-  {
-    id: "4",
-    date: "22/03/2026",
-    banque: "MCB",
-    societe: "TIBOK",
-    libelle: "Virement entrant — REF-29384",
-    debit: 0,
-    credit: 178500,
-    solde: 1626000,
-    tiers: "",
-    compteImpute: "",
-    statut: "Non identifié" as const,
-  },
-  {
-    id: "5",
-    date: "21/03/2026",
-    banque: "SBM",
-    societe: "BPO Services",
-    libelle: "Paiement salaires — Mars 2026",
-    debit: 425000,
-    credit: 0,
-    solde: 1080200,
-    tiers: "Salariés",
-    compteImpute: "421000",
-    statut: "Rapproché" as const,
-  },
-  {
-    id: "6",
-    date: "20/03/2026",
-    banque: "MCB",
-    societe: "TIBOK",
-    libelle: "Frais bancaires — Mars",
-    debit: 3500,
-    credit: 0,
-    solde: 1447500,
-    tiers: "MCB",
-    compteImpute: "627000",
-    statut: "À vérifier" as const,
-  },
-  {
-    id: "7",
-    date: "19/03/2026",
-    banque: "MCB",
-    societe: "TIBOK",
-    libelle: "Encaissement chèque — JP Lagesse",
-    debit: 0,
-    credit: 598000,
-    solde: 1451000,
-    tiers: "Jean-Pierre Lagesse",
-    compteImpute: "411300",
-    statut: "À vérifier" as const,
-  },
-  {
-    id: "8",
-    date: "18/03/2026",
-    banque: "SBM",
-    societe: "BPO Services",
-    libelle: "Virement sortant — REF-88201",
-    debit: 65000,
-    credit: 0,
-    solde: 1505200,
-    tiers: "",
-    compteImpute: "",
-    statut: "Non identifié" as const,
-  },
-  {
-    id: "9",
-    date: "17/03/2026",
-    banque: "MCB",
-    societe: "TIBOK",
-    libelle: "Paiement loyer — Mars 2026",
-    debit: 95000,
-    credit: 0,
-    solde: 853000,
-    tiers: "SCI Moka",
-    compteImpute: "613000",
-    statut: "Rapproché" as const,
-  },
-  {
-    id: "10",
-    date: "16/03/2026",
-    banque: "SBM",
-    societe: "BPO Services",
-    libelle: "Virement client — Marie Cupidon",
-    debit: 0,
-    credit: 316250,
-    solde: 1570200,
-    tiers: "Marie Cupidon",
-    compteImpute: "411500",
-    statut: "Rapproché" as const,
-  },
-]
+const bankOperations: {
+  id: string
+  date: string
+  banque: string
+  societe: string
+  libelle: string
+  debit: number
+  credit: number
+  solde: number
+  tiers: string
+  compteImpute: string
+  statut: "Rapproché" | "À vérifier" | "Non identifié"
+}[] = []
 
 function getStatutBadge(statut: string) {
   switch (statut) {
@@ -206,7 +61,7 @@ export default function ClientBanquePage() {
     )
   }
 
-  const filtered = mockData.filter(
+  const filtered = bankOperations.filter(
     (row) =>
       row.libelle.toLowerCase().includes(search.toLowerCase()) ||
       row.societe.toLowerCase().includes(search.toLowerCase()) ||
@@ -227,27 +82,52 @@ export default function ClientBanquePage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {summaryCards.map((card) => (
-          <Card key={card.title}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {card.title}
-              </CardTitle>
-              <div className={`rounded-lg p-2 ${card.bg}`}>
-                <card.icon className="h-5 w-5" style={{ color: card.color }} />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
-                {"isDate" in card && card.isDate
-                  ? card.value
-                  : "isCount" in card && card.isCount
-                  ? card.value
-                  : formatMUR(card.value as number)}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Solde total
+            </CardTitle>
+            <div className="rounded-lg p-2 bg-blue-50">
+              <Landmark className="h-5 w-5" style={{ color: "#1E2A4A" }} />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
+              {formatMUR(0)}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Aucune donnée disponible</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Opérations non rapprochées
+            </CardTitle>
+            <div className="rounded-lg p-2 bg-red-50">
+              <AlertCircle className="h-5 w-5" style={{ color: "#DC2626" }} />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
+              0
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Dernière MAJ
+            </CardTitle>
+            <div className="rounded-lg p-2 bg-amber-50">
+              <Clock className="h-5 w-5" style={{ color: "#C9A84C" }} />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
+              —
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="relative max-w-sm">
@@ -324,7 +204,9 @@ export default function ClientBanquePage() {
               {filtered.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
-                    Aucune opération trouvée.
+                    {search
+                      ? "Aucune opération trouvée pour cette recherche."
+                      : "Aucune opération bancaire disponible. Les données apparaîtront ici une fois vos relevés bancaires importés."}
                   </TableCell>
                 </TableRow>
               )}

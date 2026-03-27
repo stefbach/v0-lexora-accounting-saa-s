@@ -23,92 +23,7 @@ interface NotificationItem {
   statut: "pending" | "sent" | "failed"
 }
 
-const mockNotifications: NotificationItem[] = [
-  {
-    id: "1",
-    type: "whatsapp",
-    message: "Rappel : Votre déclaration TVA pour TIBOK (Mars 2026) est due le 20 avril 2026.",
-    date: "2026-03-25T09:15:00",
-    statut: "sent",
-  },
-  {
-    id: "2",
-    type: "whatsapp",
-    message: "Nouveau document traité : facture_achats_mars_2026.pdf a été classé comme Facture fournisseur.",
-    date: "2026-03-24T16:30:00",
-    statut: "sent",
-  },
-  {
-    id: "3",
-    type: "email",
-    message: "Votre rapport mensuel de février 2026 est disponible. Connectez-vous pour le consulter.",
-    date: "2026-03-24T10:00:00",
-    statut: "sent",
-  },
-  {
-    id: "4",
-    type: "whatsapp",
-    message: "Erreur de traitement sur le document facture_electricite.png. Veuillez le renvoyer en meilleure qualité.",
-    date: "2026-03-23T14:45:00",
-    statut: "sent",
-  },
-  {
-    id: "5",
-    type: "email",
-    message: "Confirmation de paiement TVA pour TIBOK - Février 2026. Montant : 37 000 MUR.",
-    date: "2026-03-22T11:20:00",
-    statut: "sent",
-  },
-  {
-    id: "6",
-    type: "whatsapp",
-    message: "URGENT : La déclaration TVA de BPO (Décembre 2025) est en retard. Pénalité applicable : 2 500 MUR.",
-    date: "2026-03-21T08:00:00",
-    statut: "sent",
-  },
-  {
-    id: "7",
-    type: "email",
-    message: "Rappel de soumission des fiches de paie de mars 2026 pour toutes vos sociétés.",
-    date: "2026-03-20T09:00:00",
-    statut: "failed",
-  },
-  {
-    id: "8",
-    type: "whatsapp",
-    message: "3 nouveaux documents ont été traités avec succès pour la société TIBOK.",
-    date: "2026-03-19T15:10:00",
-    statut: "sent",
-  },
-  {
-    id: "9",
-    type: "email",
-    message: "Votre comptable Sophie Ramgoolam a validé les écritures comptables de février 2026.",
-    date: "2026-03-18T13:30:00",
-    statut: "pending",
-  },
-  {
-    id: "10",
-    type: "whatsapp",
-    message: "Nouveau relevé bancaire détecté pour BPO. Rapprochement bancaire en cours.",
-    date: "2026-03-17T10:45:00",
-    statut: "sent",
-  },
-  {
-    id: "11",
-    type: "email",
-    message: "Résumé hebdomadaire : 5 documents traités, 1 en attente, 0 erreurs cette semaine.",
-    date: "2026-03-16T08:00:00",
-    statut: "sent",
-  },
-  {
-    id: "12",
-    type: "whatsapp",
-    message: "Rappel : Veuillez soumettre vos justificatifs de charges sociales Q1 2026 avant le 31 mars.",
-    date: "2026-03-15T09:30:00",
-    statut: "pending",
-  },
-]
+const notifications: NotificationItem[] = []
 
 function formatDateTime(dateStr: string) {
   const d = new Date(dateStr)
@@ -181,15 +96,15 @@ export default function NotificationsPage() {
     )
   }
 
-  const filteredNotifications = mockNotifications.filter((n) => {
+  const filteredNotifications = notifications.filter((n) => {
     if (filter === "tous") return true
     return n.type === filter
   })
 
-  const totalCount = mockNotifications.length
-  const whatsappCount = mockNotifications.filter((n) => n.type === "whatsapp").length
-  const emailCount = mockNotifications.filter((n) => n.type === "email").length
-  const pendingCount = mockNotifications.filter((n) => n.statut === "pending").length
+  const totalCount = notifications.length
+  const whatsappCount = notifications.filter((n) => n.type === "whatsapp").length
+  const emailCount = notifications.filter((n) => n.type === "email").length
+  const pendingCount = notifications.filter((n) => n.statut === "pending").length
 
   return (
     <div className="p-6 space-y-6">
@@ -303,8 +218,10 @@ export default function NotificationsPage() {
               </div>
             ))}
             {filteredNotifications.length === 0 && (
-              <div className="text-center py-8 text-muted-foreground">
-                Aucune notification trouvée.
+              <div className="text-center py-12 text-muted-foreground">
+                <Bell className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
+                <p>Aucune notification pour le moment.</p>
+                <p className="text-xs mt-1">Vos notifications WhatsApp et email apparaîtront ici.</p>
               </div>
             )}
           </div>

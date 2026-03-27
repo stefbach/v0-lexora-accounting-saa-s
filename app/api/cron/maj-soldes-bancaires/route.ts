@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     // Get all active bank accounts
     const { data: comptes, error: comptesError } = await supabase
       .from('comptes_bancaires')
-      .select('id, societe_id, nom_banque')
+      .select('id, societe_id, banque')
 
     if (comptesError) throw comptesError
 
@@ -35,7 +35,7 @@ export async function GET(request: Request) {
       // Get the latest bank statement for this account
       const { data: dernier, error: releveError } = await supabase
         .from('releves_bancaires')
-        .select('solde_final, date_fin')
+        .select('solde_cloture, date_fin')
         .eq('compte_bancaire_id', compte.id)
         .order('date_fin', { ascending: false })
         .limit(1)
@@ -47,8 +47,9 @@ export async function GET(request: Request) {
       const { error: updateError } = await supabase
         .from('comptes_bancaires')
         .update({
-          solde_actuel: dernier.solde_final,
-          updated_at: new Date().toISOString(),
+          solde_actuel: dernier.solde_cloture,
+          date_dernier_releve: dernier.date_fin,
+          solde_dernier_releve: dernier.solde_cloture,
         })
         .eq('id', compte.id)
 

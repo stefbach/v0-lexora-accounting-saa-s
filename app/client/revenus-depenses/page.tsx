@@ -52,26 +52,14 @@ interface ExpenseItem {
   montant: number
 }
 
-const mockRevenus: RevenueItem[] = [
-  { id: "1", date: "15/03/2026", client: "ABC Corp", description: "Développement site web", montant: 85000 },
-  { id: "2", date: "10/03/2026", client: "Marie Cupidon", description: "Consultation stratégie digitale", montant: 25000 },
-  { id: "3", date: "05/03/2026", client: "Startup MU", description: "Formation React", montant: 35000 },
-  { id: "4", date: "28/02/2026", client: "Hotel Paradise", description: "Application mobile", montant: 120000 },
-  { id: "5", date: "20/02/2026", client: "BPO Services", description: "Maintenance mensuelle", montant: 15000 },
-]
+const initialRevenus: RevenueItem[] = []
 
-const mockDepenses: ExpenseItem[] = [
-  { id: "1", date: "12/03/2026", fournisseur: "Emtel", description: "Internet fibre", montant: 3500 },
-  { id: "2", date: "10/03/2026", fournisseur: "Amazon AWS", description: "Serveurs cloud", montant: 8500 },
-  { id: "3", date: "05/03/2026", fournisseur: "WeWork", description: "Location bureau", montant: 18000 },
-  { id: "4", date: "01/03/2026", fournisseur: "Adobe", description: "Licence Creative Cloud", montant: 2800 },
-  { id: "5", date: "25/02/2026", fournisseur: "Laptop City", description: "Clavier et souris", montant: 4500 },
-]
+const initialDepenses: ExpenseItem[] = []
 
 export default function RevenusDepensesPage() {
   const { profile } = useProfile()
-  const [revenus, setRevenus] = useState(mockRevenus)
-  const [depenses, setDepenses] = useState(mockDepenses)
+  const [revenus, setRevenus] = useState(initialRevenus)
+  const [depenses, setDepenses] = useState(initialDepenses)
 
   const [revDialogOpen, setRevDialogOpen] = useState(false)
   const [depDialogOpen, setDepDialogOpen] = useState(false)
@@ -240,16 +228,24 @@ export default function RevenusDepensesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {revenus.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell className="text-sm">{row.date}</TableCell>
-                  <TableCell className="font-medium">{row.client}</TableCell>
-                  <TableCell className="text-muted-foreground">{row.description}</TableCell>
-                  <TableCell className="text-right text-green-600 font-semibold">
-                    {formatMUR(row.montant)}
+              {revenus.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                    Aucun revenu enregistré. Cliquez sur &quot;Ajouter&quot; pour commencer.
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                revenus.map((row) => (
+                  <TableRow key={row.id}>
+                    <TableCell className="text-sm">{row.date}</TableCell>
+                    <TableCell className="font-medium">{row.client}</TableCell>
+                    <TableCell className="text-muted-foreground">{row.description}</TableCell>
+                    <TableCell className="text-right text-green-600 font-semibold">
+                      {formatMUR(row.montant)}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>
@@ -339,16 +335,24 @@ export default function RevenusDepensesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {depenses.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell className="text-sm">{row.date}</TableCell>
-                  <TableCell className="font-medium">{row.fournisseur}</TableCell>
-                  <TableCell className="text-muted-foreground">{row.description}</TableCell>
-                  <TableCell className="text-right text-red-600 font-semibold">
-                    {formatMUR(row.montant)}
+              {depenses.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                    Aucune dépense enregistrée. Cliquez sur &quot;Ajouter&quot; pour commencer.
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                depenses.map((row) => (
+                  <TableRow key={row.id}>
+                    <TableCell className="text-sm">{row.date}</TableCell>
+                    <TableCell className="font-medium">{row.fournisseur}</TableCell>
+                    <TableCell className="text-muted-foreground">{row.description}</TableCell>
+                    <TableCell className="text-right text-red-600 font-semibold">
+                      {formatMUR(row.montant)}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>
