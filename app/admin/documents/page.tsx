@@ -22,18 +22,15 @@ import {
 } from "@/components/ui/select"
 import { FileText, Eye, Search, Download } from "lucide-react"
 
-const mockDocuments = [
-  { id: "1", nom_fichier: "facture_fournisseur_001.pdf", client: "Jean-Pierre Dupont", societe: "TIBOK", date: "2026-03-24", type_document: "facture_fournisseur", statut: "traite" },
-  { id: "2", nom_fichier: "releve_mcb_mars.pdf", client: "Jean-Pierre Dupont", societe: "TIBOK", date: "2026-03-22", type_document: "releve_bancaire", statut: "traite" },
-  { id: "3", nom_fichier: "fiche_paie_mars.xlsx", client: "Marie Curie", societe: "BPO", date: "2026-03-20", type_document: "fiche_paie", statut: "en_cours" },
-  { id: "4", nom_fichier: "facture_client_XYZ.pdf", client: "Jean-Pierre Dupont", societe: "TIBOK", date: "2026-03-18", type_document: "facture_client", statut: "traite" },
-  { id: "5", nom_fichier: "contrat_location.pdf", client: "Ahmed Hassan", societe: "Obesity Care Malta", date: "2026-03-15", type_document: "contrat", statut: "traite" },
-  { id: "6", nom_fichier: "charges_Q1_2026.xlsx", client: "Marie Curie", societe: "BPO", date: "2026-03-12", type_document: "charges_sociales", statut: "erreur" },
-  { id: "7", nom_fichier: "facture_achat_matériel.pdf", client: "Sophie Martin", societe: "NHS S2", date: "2026-03-10", type_document: "facture_fournisseur", statut: "traite" },
-  { id: "8", nom_fichier: "releve_sbm_fevrier.pdf", client: "Ahmed Hassan", societe: "Obesity Care Malta", date: "2026-03-08", type_document: "releve_bancaire", statut: "en_attente" },
-  { id: "9", nom_fichier: "facture_service_IT.pdf", client: "Sophie Martin", societe: "NHS S2", date: "2026-03-05", type_document: "facture_fournisseur", statut: "en_cours" },
-  { id: "10", nom_fichier: "fiche_paie_fevrier.xlsx", client: "Jean-Pierre Dupont", societe: "TIBOK", date: "2026-03-01", type_document: "fiche_paie", statut: "traite" },
-]
+const documents: {
+  id: string
+  nom_fichier: string
+  client: string
+  societe: string
+  date: string
+  type_document: string
+  statut: string
+}[] = []
 
 function getDocTypeBadge(type: string) {
   const config: Record<string, { label: string; className: string }> = {
@@ -65,7 +62,7 @@ export default function AdminDocumentsPage() {
   const [typeFilter, setTypeFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
 
-  const filtered = mockDocuments.filter((doc) => {
+  const filtered = documents.filter((doc) => {
     const matchSearch =
       doc.nom_fichier.toLowerCase().includes(search.toLowerCase()) ||
       doc.client.toLowerCase().includes(search.toLowerCase()) ||
@@ -76,10 +73,10 @@ export default function AdminDocumentsPage() {
   })
 
   const stats = {
-    total: mockDocuments.length,
-    traite: mockDocuments.filter((d) => d.statut === "traite").length,
-    en_cours: mockDocuments.filter((d) => d.statut === "en_cours").length,
-    erreur: mockDocuments.filter((d) => d.statut === "erreur").length,
+    total: documents.length,
+    traite: documents.filter((d) => d.statut === "traite").length,
+    en_cours: documents.filter((d) => d.statut === "en_cours").length,
+    erreur: documents.filter((d) => d.statut === "erreur").length,
   }
 
   return (
@@ -200,7 +197,9 @@ export default function AdminDocumentsPage() {
               {filtered.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                    Aucun document trouvé
+                    {search || typeFilter !== "all" || statusFilter !== "all"
+                      ? "Aucun document trouvé pour ces critères de recherche."
+                      : "Aucun document disponible. Les documents soumis par les clients apparaîtront ici."}
                   </TableCell>
                 </TableRow>
               )}
