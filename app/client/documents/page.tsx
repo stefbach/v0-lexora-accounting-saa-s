@@ -25,6 +25,7 @@ interface Document {
   storage_path: string | null
   created_at: string
   societe_detectee: string | null
+  n8n_result?: { error?: string; routing?: any; extraction?: any } | null
 }
 
 interface Folder {
@@ -333,7 +334,12 @@ export default function ClientDocumentsPage() {
                       <span className="text-xs text-muted-foreground italic">En attente...</span>
                     )}
                   </TableCell>
-                  <TableCell>{statutBadge(doc.statut)}</TableCell>
+                  <TableCell>
+                    {statutBadge(doc.statut)}
+                    {doc.statut === "erreur" && doc.n8n_result?.error && (
+                      <p className="text-xs text-red-500 mt-1">{doc.n8n_result.error}</p>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <Button variant="ghost" size="sm"><Download className="h-3.5 w-3.5" /></Button>
                   </TableCell>

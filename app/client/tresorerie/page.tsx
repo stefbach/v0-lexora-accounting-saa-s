@@ -7,36 +7,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import {
   Loader2,
   Banknote,
   ArrowRight,
-  Calendar,
-  ShieldCheck,
-  AlertTriangle,
   Lock,
+  Wallet,
 } from "lucide-react"
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function fmtMUR(amount: number): string {
-  return `${amount.toLocaleString("fr-FR")} MUR`
-}
-
-// ---------------------------------------------------------------------------
-// Mock upcoming expenses for 30-day forecast
-// ---------------------------------------------------------------------------
-
-const upcomingExpenses = [
-  { label: "Salaires employes", montant: 185_000, date: "30 avril" },
-  { label: "Loyer bureau", montant: 45_000, date: "1er avril" },
-  { label: "Declaration TVA", montant: 45_230, date: "20 avril" },
-  { label: "Cotisations CSG/NSF", montant: 8_450, date: "30 avril" },
-  { label: "Facture fournisseur Orange", montant: 12_300, date: "15 avril" },
-]
 
 // ---------------------------------------------------------------------------
 // Access denied view for client_user
@@ -62,7 +39,7 @@ function AccessDenied() {
 }
 
 // ---------------------------------------------------------------------------
-// Main treasury view (client_admin)
+// Main treasury view (client_admin) - empty state
 // ---------------------------------------------------------------------------
 
 function TresorerieView() {
@@ -78,123 +55,65 @@ function TresorerieView() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* ============================================================= */}
-        {/* Card 1 — Situation aujourd'hui */}
-        {/* ============================================================= */}
-        <Card className="border-green-200">
+        {/* Card 1 -- Situation aujourd'hui */}
+        <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
               <Banknote className="h-4 w-4" style={{ color: "#C9A84C" }} />
               Situation aujourd{"'"}hui
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <div className="text-3xl font-bold" style={{ color: "#1E2A4A" }}>
-                {fmtMUR(2_150_000)}
-              </div>
-              <div className="flex items-center gap-2 mt-2">
-                <Badge className="bg-green-100 text-green-700 border-green-200 flex items-center gap-1">
-                  <ShieldCheck className="h-3.5 w-3.5" />
-                  Sain
-                </Badge>
-              </div>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Votre tresorerie est en bonne sante. Vous avez assez d{"'"}argent pour couvrir
-              vos depenses courantes sans difficulte.
-            </p>
-            <div className="text-xs text-muted-foreground flex items-center gap-1">
-              <Calendar className="h-3 w-3" />
-              Mis a jour le 26 mars 2026
+          <CardContent>
+            <div className="flex flex-col items-center justify-center py-6 text-center">
+              <Wallet className="h-10 w-10 text-muted-foreground/40 mb-3" />
+              <p className="text-sm text-muted-foreground">
+                Pas encore de donn&eacute;es de tr&eacute;sorerie.
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Vos soldes appara&icirc;tront ici une fois vos comptes connect&eacute;s.
+              </p>
             </div>
           </CardContent>
         </Card>
 
-        {/* ============================================================= */}
-        {/* Card 2 — Dans 30 jours */}
-        {/* ============================================================= */}
-        <Card className="border-orange-200">
+        {/* Card 2 -- Dans 30 jours */}
+        <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
               <ArrowRight className="h-4 w-4" style={{ color: "#C9A84C" }} />
               Dans 30 jours
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <div className="text-3xl font-bold" style={{ color: "#1E2A4A" }}>
-                {fmtMUR(1_800_000)}
-              </div>
-              <div className="flex items-center gap-2 mt-2">
-                <Badge className="bg-orange-100 text-orange-700 border-orange-200 flex items-center gap-1">
-                  <AlertTriangle className="h-3.5 w-3.5" />
-                  Attention
-                </Badge>
-              </div>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Plusieurs depenses importantes arrivent en avril.
-              Pensez a relancer vos factures impayees pour maintenir votre niveau de tresorerie.
-            </p>
-
-            {/* Upcoming expenses */}
-            <div className="space-y-2 pt-2 border-t">
-              <p className="text-xs font-semibold" style={{ color: "#1E2A4A" }}>
-                Depenses a venir :
+          <CardContent>
+            <div className="flex flex-col items-center justify-center py-6 text-center">
+              <Wallet className="h-10 w-10 text-muted-foreground/40 mb-3" />
+              <p className="text-sm text-muted-foreground">
+                Pas encore de pr&eacute;vision disponible.
               </p>
-              {upcomingExpenses.map((expense, i) => (
-                <div
-                  key={i}
-                  className="flex items-center justify-between text-sm"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-orange-400" />
-                    <span className="text-muted-foreground">{expense.label}</span>
-                  </div>
-                  <div className="text-right">
-                    <span className="font-medium" style={{ color: "#1E2A4A" }}>
-                      {fmtMUR(expense.montant)}
-                    </span>
-                    <span className="text-xs text-muted-foreground ml-2">
-                      {expense.date}
-                    </span>
-                  </div>
-                </div>
-              ))}
+              <p className="text-xs text-muted-foreground mt-1">
+                Les pr&eacute;visions seront calcul&eacute;es &agrave; partir de vos donn&eacute;es comptables.
+              </p>
             </div>
           </CardContent>
         </Card>
 
-        {/* ============================================================= */}
-        {/* Card 3 — Dans 60-90 jours */}
-        {/* ============================================================= */}
-        <Card className="border-green-200">
+        {/* Card 3 -- Dans 60-90 jours */}
+        <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
               <ArrowRight className="h-4 w-4" style={{ color: "#C9A84C" }} />
               Dans 60 a 90 jours
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <div className="text-3xl font-bold" style={{ color: "#1E2A4A" }}>
-                {fmtMUR(2_600_000)}
-              </div>
-              <div className="flex items-center gap-2 mt-2">
-                <Badge className="bg-green-100 text-green-700 border-green-200 flex items-center gap-1">
-                  <ShieldCheck className="h-3.5 w-3.5" />
-                  Sain
-                </Badge>
-              </div>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Sur la base des factures a recevoir et des depenses prevues,
-              votre tresorerie devrait remonter d{"'"}ici juin. La situation reste confortable.
-            </p>
-            <div className="text-xs text-muted-foreground flex items-center gap-1">
-              <Calendar className="h-3 w-3" />
-              Estimation basee sur vos donnees actuelles
+          <CardContent>
+            <div className="flex flex-col items-center justify-center py-6 text-center">
+              <Wallet className="h-10 w-10 text-muted-foreground/40 mb-3" />
+              <p className="text-sm text-muted-foreground">
+                Pas encore de pr&eacute;vision disponible.
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Les estimations &agrave; long terme appara&icirc;tront ici.
+              </p>
             </div>
           </CardContent>
         </Card>

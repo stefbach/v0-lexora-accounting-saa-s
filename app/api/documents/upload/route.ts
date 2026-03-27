@@ -135,19 +135,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Erreur enregistrement : ${docError.message}` }, { status: 500 })
     }
 
-    // Trigger document processing asynchronously (fire and forget)
-    const processUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL ? request.nextUrl.origin : ''}/api/documents/process`
-    fetch(processUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        document_id: doc.id,
-        storage_path: storagePath,
-        nom_fichier: file.name,
-        client_id: user.id,
-        societe: societeId || undefined,
-      }),
-    }).catch(err => console.error('Process trigger failed:', err))
+    // Trigger document processing
+    // Use waitUntil if available (Vercel Edge), otherwise fire-and-forget
+    const processUrl = `${request.nextUrl.origin}/api/documents/process`
+    const processBody = JSON.stringify({
+      document_id: doc.id,
+      storage_path: storagePath,
+      nom_fichier: file.name,
+      client_id: user.id,
+      societe: societeId || undefined,
+    })
+
+    // Try to process in background, but don't block the upload response
+    try {
+      fetch(processUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: processBody,
+      }).catch(err => console.error('Process trigger failed:', err))
+    } catch (err) {
+      console.error('Process trigger error:', err)
+    }
 
     return NextResponse.json({
       document: doc,

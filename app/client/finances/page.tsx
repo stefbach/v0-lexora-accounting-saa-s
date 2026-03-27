@@ -1,6 +1,5 @@
 "use client"
 
-import { useState } from "react"
 import Link from "next/link"
 import {
   Card,
@@ -8,121 +7,43 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { TrendingUp, TrendingDown, DollarSign, Users } from "lucide-react"
+  TrendingUp,
+  TrendingDown,
+  DollarSign,
+  Users,
+  Loader2,
+  FileText,
+} from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
 
-function formatMUR(amount: number) {
-  return amount.toLocaleString("fr-FR") + " MUR"
-}
-
-const months = [
-  "Mars 2026",
-  "Février 2026",
-  "Janvier 2026",
-  "Décembre 2025",
-  "Novembre 2025",
-  "Octobre 2025",
-]
-
-const revenueData = [
-  { categorie: "Consultations B2C", montant: 120000 },
-  { categorie: "Forfaits B2B", montant: 450000 },
-  { categorie: "Autres revenus", montant: 80000 },
-]
-
-const expenseData = [
-  { categorie: "Salaires", montant: 85000 },
-  { categorie: "Technologie", montant: 15000 },
-  { categorie: "Marketing", montant: 10000 },
-  { categorie: "Loyer", montant: 25000 },
-]
-
-const annualRevenues = [
-  { categorie: "Consultations B2C", montant: 1440000 },
-  { categorie: "Forfaits B2B", montant: 5400000 },
-  { categorie: "Autres revenus", montant: 960000 },
-]
-
-const annualExpenses = [
-  { categorie: "Salaires", montant: 1020000 },
-  { categorie: "Technologie", montant: 180000 },
-  { categorie: "Marketing", montant: 120000 },
-  { categorie: "Loyer", montant: 300000 },
-]
-
-const tvaData = [
-  { mois: "Mars 2026", collectee: 97500, deductible: 20250, solde: 77250, statut: "a_payer", deadline: "20 avril 2026" },
-  { mois: "Février 2026", collectee: 91000, deductible: 18900, solde: 72100, statut: "paye", deadline: "20 mars 2026" },
-  { mois: "Janvier 2026", collectee: 88000, deductible: 17500, solde: 70500, statut: "paye", deadline: "20 février 2026" },
-  { mois: "Décembre 2025", collectee: 102000, deductible: 21000, solde: 81000, statut: "paye", deadline: "20 janvier 2026" },
-  { mois: "Novembre 2025", collectee: 85000, deductible: 16800, solde: 68200, statut: "paye", deadline: "20 décembre 2025" },
-  { mois: "Octobre 2025", collectee: 79000, deductible: 15500, solde: 63500, statut: "paye", deadline: "20 novembre 2025" },
-]
-
-const salairesData = [
-  { mois: "Mars 2026", nbEmployes: 5, salairesNets: 310000, csgNsf: 15500, paye: 28500, total: 354000 },
-  { mois: "Février 2026", nbEmployes: 5, salairesNets: 310000, csgNsf: 15500, paye: 28500, total: 354000 },
-  { mois: "Janvier 2026", nbEmployes: 5, salairesNets: 305000, csgNsf: 15250, paye: 27800, total: 348050 },
-  { mois: "Décembre 2025", nbEmployes: 4, salairesNets: 260000, csgNsf: 13000, paye: 23500, total: 296500 },
-  { mois: "Novembre 2025", nbEmployes: 4, salairesNets: 258000, csgNsf: 12900, paye: 23200, total: 294100 },
-  { mois: "Octobre 2025", nbEmployes: 4, salairesNets: 255000, csgNsf: 12750, paye: 22800, total: 290550 },
-]
-
-function getTvaStatutBadge(statut: string) {
-  switch (statut) {
-    case "a_payer":
-      return <Badge className="bg-orange-100 text-orange-700 border-orange-200">A payer</Badge>
-    case "paye":
-      return <Badge className="bg-green-100 text-green-700 border-green-200">Payé</Badge>
-    default:
-      return <Badge variant="secondary">{statut}</Badge>
-  }
-}
-
 export default function FinancesPage() {
-  const { profile } = useProfile()
-  const [selectedMonth, setSelectedMonth] = useState("Mars 2026")
+  const { profile, loading } = useProfile()
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#C9A84C" }} />
+      </div>
+    )
+  }
 
   if (profile?.role === "client_user") {
     return (
       <div className="p-6 flex flex-col items-center justify-center min-h-[50vh] space-y-4">
         <h1 className="text-xl font-bold" style={{ color: "#1E2A4A" }}>
-          Accès non autorisé
+          Acc&egrave;s non autoris&eacute;
         </h1>
         <p className="text-sm text-muted-foreground">
-          Vous n&apos;avez pas la permission d&apos;accéder à cette page.
+          Vous n&apos;avez pas la permission d&apos;acc&eacute;der &agrave; cette page.
         </p>
         <Link href="/client/upload" className="text-sm underline" style={{ color: "#C9A84C" }}>
-          Retour à l&apos;envoi de documents
+          Retour &agrave; l&apos;envoi de documents
         </Link>
       </div>
     )
   }
-
-  const totalRevenues = revenueData.reduce((sum, r) => sum + r.montant, 0)
-  const totalExpenses = expenseData.reduce((sum, e) => sum + e.montant, 0)
-  const result = totalRevenues - totalExpenses
-
-  const totalAnnualRevenues = annualRevenues.reduce((sum, r) => sum + r.montant, 0)
-  const totalAnnualExpenses = annualExpenses.reduce((sum, e) => sum + e.montant, 0)
-  const annualResult = totalAnnualRevenues - totalAnnualExpenses
 
   return (
     <div className="p-6 space-y-6">
@@ -131,7 +52,7 @@ export default function FinancesPage() {
           Mes Chiffres
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Suivez vos revenus, vos dépenses, la TVA et les salaires en un coup d&apos;oeil.
+          Suivez vos revenus, vos d&eacute;penses, la TVA et les salaires en un coup d&apos;oeil.
         </p>
       </div>
 
@@ -144,21 +65,7 @@ export default function FinancesPage() {
 
         {/* Tab 1 - Vue mensuelle */}
         <TabsContent value="mensuel" className="space-y-6">
-          <div className="flex items-center gap-4 mt-4">
-            <span className="text-sm font-medium" style={{ color: "#1E2A4A" }}>Mois :</span>
-            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-              <SelectTrigger className="w-[200px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {months.map((m) => (
-                  <SelectItem key={m} value={m}>{m}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -167,127 +74,43 @@ export default function FinancesPage() {
                 <TrendingUp className="h-5 w-5" style={{ color: "#22C55E" }} />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
-                  {formatMUR(totalRevenues)}
-                </div>
+                <p className="text-sm text-muted-foreground">Pas encore de donn&eacute;es</p>
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Total dépenses
+                  Total d&eacute;penses
                 </CardTitle>
                 <TrendingDown className="h-5 w-5" style={{ color: "#EF4444" }} />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
-                  {formatMUR(totalExpenses)}
-                </div>
+                <p className="text-sm text-muted-foreground">Pas encore de donn&eacute;es</p>
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Résultat du mois
+                  R&eacute;sultat du mois
                 </CardTitle>
                 <DollarSign className="h-5 w-5" style={{ color: "#C9A84C" }} />
               </CardHeader>
               <CardContent>
-                <div
-                  className="text-2xl font-bold"
-                  style={{ color: result >= 0 ? "#22C55E" : "#EF4444" }}
-                >
-                  {result >= 0 ? "+" : ""}{formatMUR(result)}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle style={{ color: "#1E2A4A" }}>
-                  Revenus — {selectedMonth}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Catégorie</TableHead>
-                      <TableHead className="text-right">Montant</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {revenueData.map((row) => (
-                      <TableRow key={row.categorie}>
-                        <TableCell className="font-medium">{row.categorie}</TableCell>
-                        <TableCell className="text-right text-green-600 font-semibold">
-                          {formatMUR(row.montant)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    <TableRow className="border-t-2">
-                      <TableCell className="font-bold" style={{ color: "#1E2A4A" }}>Total</TableCell>
-                      <TableCell className="text-right font-bold text-green-600">
-                        {formatMUR(totalRevenues)}
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle style={{ color: "#1E2A4A" }}>
-                  Dépenses — {selectedMonth}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Catégorie</TableHead>
-                      <TableHead className="text-right">Montant</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {expenseData.map((row) => (
-                      <TableRow key={row.categorie}>
-                        <TableCell className="font-medium">{row.categorie}</TableCell>
-                        <TableCell className="text-right text-red-600 font-semibold">
-                          {formatMUR(row.montant)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    <TableRow className="border-t-2">
-                      <TableCell className="font-bold" style={{ color: "#1E2A4A" }}>Total</TableCell>
-                      <TableCell className="text-right font-bold text-red-600">
-                        {formatMUR(totalExpenses)}
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
+                <p className="text-sm text-muted-foreground">Pas encore de donn&eacute;es</p>
               </CardContent>
             </Card>
           </div>
 
           <Card>
-            <CardContent className="py-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Résultat net du mois</p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Ce que votre société a gagné après avoir payé toutes ses dépenses.
-                  </p>
-                </div>
-                <div
-                  className="text-3xl font-bold"
-                  style={{ color: result >= 0 ? "#22C55E" : "#EF4444" }}
-                >
-                  {result >= 0 ? "+" : ""}{formatMUR(result)}
-                </div>
+            <CardContent className="py-10">
+              <div className="flex flex-col items-center justify-center text-center">
+                <FileText className="h-10 w-10 text-muted-foreground/40 mb-3" />
+                <p className="text-sm text-muted-foreground">
+                  Aucune donn&eacute;e de revenus ou de d&eacute;penses disponible pour le moment.
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Vos chiffres appara&icirc;tront ici une fois vos documents comptables trait&eacute;s.
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -300,49 +123,32 @@ export default function FinancesPage() {
               <CardTitle style={{ color: "#1E2A4A" }}>Suivi de la TVA</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Mois</TableHead>
-                    <TableHead className="text-right">TVA collectée</TableHead>
-                    <TableHead className="text-right">TVA déductible</TableHead>
-                    <TableHead className="text-right">Je dois</TableHead>
-                    <TableHead>Statut</TableHead>
-                    <TableHead>Deadline</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {tvaData.map((row) => (
-                    <TableRow key={row.mois}>
-                      <TableCell className="font-medium">{row.mois}</TableCell>
-                      <TableCell className="text-right">{formatMUR(row.collectee)}</TableCell>
-                      <TableCell className="text-right">{formatMUR(row.deductible)}</TableCell>
-                      <TableCell className="text-right font-semibold" style={{ color: "#1E2A4A" }}>
-                        {formatMUR(row.solde)}
-                      </TableCell>
-                      <TableCell>{getTvaStatutBadge(row.statut)}</TableCell>
-                      <TableCell className="text-sm">{row.deadline}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <div className="flex flex-col items-center justify-center py-10 text-center">
+                <FileText className="h-10 w-10 text-muted-foreground/40 mb-3" />
+                <p className="text-sm text-muted-foreground">
+                  Aucune d&eacute;claration TVA disponible pour le moment.
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Votre comptable remplira cette section au fur et &agrave; mesure des d&eacute;clarations.
+                </p>
+              </div>
 
               <div className="rounded-lg border p-4 bg-blue-50/50">
                 <p className="text-sm" style={{ color: "#1E2A4A" }}>
-                  <strong>Comment ça marche ?</strong>
+                  <strong>Comment &ccedil;a marche ?</strong>
                 </p>
                 <p className="text-sm text-muted-foreground mt-2">
-                  La TVA collectée est celle que vos clients vous ont payée en plus de vos prix.
-                  La TVA déductible est celle que vous avez payée sur vos achats professionnels.
-                  La différence (&quot;Je dois&quot;) est ce que vous devez reverser à la MRA chaque mois.
-                  Votre comptable s&apos;occupe de faire la déclaration pour vous.
+                  La TVA collect&eacute;e est celle que vos clients vous ont pay&eacute;e en plus de vos prix.
+                  La TVA d&eacute;ductible est celle que vous avez pay&eacute;e sur vos achats professionnels.
+                  La diff&eacute;rence (&quot;Je dois&quot;) est ce que vous devez reverser &agrave; la MRA chaque mois.
+                  Votre comptable s&apos;occupe de faire la d&eacute;claration pour vous.
                 </p>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* Tab 4 - Salaires & Charges */}
+        {/* Tab 3 - Salaires & Charges */}
         <TabsContent value="salaires" className="space-y-6 mt-4">
           <Card>
             <CardHeader>
@@ -352,32 +158,15 @@ export default function FinancesPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Mois</TableHead>
-                    <TableHead className="text-right">Nb employés</TableHead>
-                    <TableHead className="text-right">Salaires nets</TableHead>
-                    <TableHead className="text-right">CSG / NSF</TableHead>
-                    <TableHead className="text-right">PAYE</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {salairesData.map((row) => (
-                    <TableRow key={row.mois}>
-                      <TableCell className="font-medium">{row.mois}</TableCell>
-                      <TableCell className="text-right">{row.nbEmployes}</TableCell>
-                      <TableCell className="text-right">{formatMUR(row.salairesNets)}</TableCell>
-                      <TableCell className="text-right">{formatMUR(row.csgNsf)}</TableCell>
-                      <TableCell className="text-right">{formatMUR(row.paye)}</TableCell>
-                      <TableCell className="text-right font-bold" style={{ color: "#1E2A4A" }}>
-                        {formatMUR(row.total)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <div className="flex flex-col items-center justify-center py-10 text-center">
+                <FileText className="h-10 w-10 text-muted-foreground/40 mb-3" />
+                <p className="text-sm text-muted-foreground">
+                  Aucune donn&eacute;e de salaires disponible pour le moment.
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Les informations de paie appara&icirc;tront ici une fois trait&eacute;es par votre comptable.
+                </p>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

@@ -26,7 +26,7 @@ export async function GET() {
     // Get all documents in those dossiers
     const { data: documents, error } = await supabase
       .from('documents')
-      .select('id, nom_fichier, type_fichier, type_document, statut, storage_path, created_at, societe_detectee')
+      .select('id, nom_fichier, type_fichier, type_document, statut, storage_path, created_at, societe_detectee, n8n_result')
       .in('dossier_id', dossierIds)
       .order('created_at', { ascending: false })
 
