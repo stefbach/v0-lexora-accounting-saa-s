@@ -39,8 +39,8 @@ export async function POST(request: NextRequest) {
       const { data: d } = await q.limit(1).single()
       if (d) { resolvedDossierId = d.id }
       else {
-        const { data: any } = await supabase.from('dossiers').select('id').eq('client_id', user.id).limit(1).single()
-        if (any) { resolvedDossierId = any.id }
+        const { data: anyD } = await supabase.from('dossiers').select('id').eq('client_id', user.id).limit(1).single()
+        if (anyD) { resolvedDossierId = anyD.id }
         else {
           const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
           const { data: newSoc } = await supabase.from('societes')
@@ -55,16 +55,21 @@ export async function POST(request: NextRequest) {
       if (!resolvedDossierId) return NextResponse.json({ error: 'Impossible de créer un dossier' }, { status: 400 })
     }
 
-    // Upload to storage
+    // Read file data ONCE — use for both storage upload and AI processing
+    const fileArrayBuffer = await file.arrayBuffer()
+    const fileBuffer = Buffer.from(fileArrayBuffer)
+    const base64 = fileBuffer.toString('base64')
+
     const ext = file.name.split('.').pop()?.toLowerCase() || 'pdf'
     const typeFichier = ext === 'jpg' ? 'jpeg' : ext as 'pdf' | 'jpeg' | 'png' | 'xlsx'
     const storagePath = `${user.id}/${Date.now()}_${file.name}`
 
+    // Upload to storage
     const { error: storageError } = await supabase.storage
-      .from('documents').upload(storagePath, await file.arrayBuffer(), { contentType: file.type, upsert: false })
+      .from('documents').upload(storagePath, fileArrayBuffer, { contentType: file.type, upsert: false })
     if (storageError) return NextResponse.json({ error: `Upload: ${storageError.message}` }, { status: 500 })
 
-    // Create document record
+    // Create document record with initial status
     const { data: doc, error: docError } = await supabase.from('documents').insert({
       dossier_id: resolvedDossierId, uploaded_by: user.id, nom_fichier: file.name,
       type_fichier: typeFichier, statut: 'en_cours', storage_path: storagePath,
@@ -72,15 +77,10 @@ export async function POST(request: NextRequest) {
     }).select().single()
     if (docError) return NextResponse.json({ error: `DB: ${docError.message}` }, { status: 500 })
 
-    // === PROCESS INLINE — download, analyze, save ===
+    // === AI PROCESSING — no re-download needed, use base64 from above ===
     let typeDocument = 'autre'
     let detectedSociete = 'INCONNU'
     try {
-      // Download from storage
-      const { data: fileData } = await supabase.storage.from('documents').download(storagePath)
-      if (!fileData) throw new Error('Download failed')
-
-      const base64 = Buffer.from(await fileData.arrayBuffer()).toString('base64')
       const isVisual = ['pdf', 'jpg', 'jpeg', 'png', 'webp'].includes(ext)
       const mediaType = ext === 'pdf' ? 'application/pdf' : ext === 'png' ? 'image/png' : 'image/jpeg'
 
@@ -93,11 +93,11 @@ export async function POST(request: NextRequest) {
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 2048,
         temperature: 0,
-        system: `Tu es un expert-comptable. Analyse ce document et retourne UN JSON (sans markdown, sans backticks):
-{"routing":{"societe":"<nom ou INCONNU>","type_document":"<facture_fournisseur|facture_client|releve_bancaire|charges_sociales|fiche_paie|contrat|autre>","confiance_type":0},"extraction":{"emetteur":"","destinataire":"","date_document":"","numero_reference":"","devise":"","montant_ht":0,"montant_tva":0,"montant_ttc":0,"lignes":[{"description":"","montant":0}],"ecritures_comptables":[{"compte":"","libelle":"","debit":0,"credit":0}]}}`,
+        system: `Tu es un expert-comptable. Analyse ce document et retourne UNIQUEMENT un JSON valide (pas de markdown, pas de backticks, pas de texte avant ou après):
+{"routing":{"societe":"<nom de la société ou personne ou INCONNU>","type_document":"<facture_fournisseur|facture_client|releve_bancaire|charges_sociales|fiche_paie|contrat|autre>","confiance_type":0},"extraction":{"emetteur":"","destinataire":"","date_document":"YYYY-MM-DD","numero_reference":"","devise":"","montant_ht":0,"montant_tva":0,"montant_ttc":0,"lignes":[{"description":"","montant":0}],"ecritures_comptables":[{"compte":"","libelle":"","debit":0,"credit":0}]}}`,
         messages: [{ role: 'user', content: isVisual
           ? [contentBlock, { type: 'text' as const, text: 'Analyse ce document comptable.' }]
-          : `Analyse: ${await fileData.text()}` }],
+          : `Analyse ce document comptable:\n${fileBuffer.toString('utf-8').substring(0, 5000)}` }],
       })
 
       const text = response.content.filter((b): b is Anthropic.TextBlock => b.type === 'text').map(b => b.text).join('')
@@ -109,14 +109,14 @@ export async function POST(request: NextRequest) {
       const extraction = parsed.extraction || {}
 
       const updateData: any = { type_document: typeDocument, statut: 'traite',
-        n8n_result: { routing: parsed.routing, extraction, metadata: { model: 'claude-haiku-4-5-20251001' } } }
+        n8n_result: { routing: parsed.routing, extraction, metadata: { model: 'claude-haiku-4-5-20251001', processed_at: new Date().toISOString() } } }
       if (detectedSociete !== 'INCONNU') updateData.societe_detectee = detectedSociete
       await supabase.from('documents').update(updateData).eq('id', doc.id)
 
-      // Auto-create accounting entries
+      // Auto-create accounting entries from extracted data
       const ecritures = extraction.ecritures_comptables
       if (Array.isArray(ecritures) && ecritures.length > 0) {
-        const journalMap: Record<string, string> = { facture_fournisseur: 'ACH', facture_client: 'VTE', releve_bancaire: 'BNQ' }
+        const journalMap: Record<string, string> = { facture_fournisseur: 'ACH', facture_client: 'VTE', releve_bancaire: 'BNQ', fiche_paie: 'OD', charges_sociales: 'OD' }
         const entries = ecritures
           .filter((e: any) => e.compte && (e.debit > 0 || e.credit > 0))
           .map((e: any) => ({
@@ -129,14 +129,13 @@ export async function POST(request: NextRequest) {
       }
     } catch (processError: any) {
       const errMsg = processError?.message || String(processError)
-      console.error('[upload] Processing error:', errMsg, processError?.stack)
-      typeDocument = 'erreur'
+      console.error('[upload] Processing error:', errMsg)
       await supabase.from('documents').update({
-        statut: 'erreur', n8n_result: { error: errMsg, stack: processError?.stack?.split('\n').slice(0, 3) }
+        statut: 'erreur', n8n_result: { error: errMsg }
       }).eq('id', doc.id)
     }
 
-    // Fetch the final document state from DB
+    // Return the final document state from DB
     const { data: finalDoc } = await supabase.from('documents')
       .select('id, nom_fichier, type_fichier, type_document, statut, storage_path, created_at, societe_detectee')
       .eq('id', doc.id).single()
@@ -144,10 +143,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       document: finalDoc || doc,
       message: finalDoc?.statut === 'traite'
-        ? `Document uploadé et classé: ${finalDoc.type_document}`
+        ? `Classé: ${finalDoc.type_document}`
         : finalDoc?.statut === 'erreur'
-        ? `Document uploadé. Erreur d'analyse.`
-        : `Document uploadé.`,
+        ? `Erreur d'analyse`
+        : `Envoyé`,
     })
   } catch (e: unknown) {
     console.error('Upload error:', e)
