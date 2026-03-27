@@ -123,6 +123,36 @@ export async function GET(request: Request) {
     }))
     const totalBankMUR = bankAccounts.reduce((s, a) => s + a.solde_mur, 0)
 
+    // Revenue breakdown by account prefix
+    const revenueByAccount: Record<string, number> = {}
+    allEcritures.filter(e => e.compte?.startsWith('7')).forEach(e => {
+      const prefix = (e.compte || '7').substring(0, 3)
+      revenueByAccount[prefix] = (revenueByAccount[prefix] || 0) + (Number(e.credit) || 0) - (Number(e.debit) || 0)
+    })
+
+    // Expense breakdown by account prefix (first 2 digits for grouping into ranges)
+    const expensesByAccount: Record<string, number> = {}
+    allEcritures.filter(e => e.compte?.startsWith('6')).forEach(e => {
+      const prefix = (e.compte || '6').substring(0, 3)
+      expensesByAccount[prefix] = (expensesByAccount[prefix] || 0) + (Number(e.debit) || 0) - (Number(e.credit) || 0)
+    })
+
+    // Creances (class 41 - clients receivables)
+    const creances = allEcritures
+      .filter(e => e.compte?.startsWith('41'))
+      .reduce((sum, e) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
+
+    // Monthly revenue for last 2 months for trend
+    const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const lastMonthStr = `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, '0')}`
+    const lastMonthRevenue = allEcritures
+      .filter(e => e.compte?.startsWith('7') && e.date_ecriture?.startsWith(lastMonthStr))
+      .reduce((sum, e) => sum + (Number(e.credit) || 0) - (Number(e.debit) || 0), 0)
+
+    const lastMonthExpenses = allEcritures
+      .filter(e => e.compte?.startsWith('6') && e.date_ecriture?.startsWith(lastMonthStr))
+      .reduce((sum, e) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
+
     // Payroll
     const salaires = allEcritures
       .filter(e => e.compte?.startsWith('421') || e.compte?.startsWith('42'))
@@ -170,6 +200,11 @@ export async function GET(request: Request) {
         totalBankMUR: Math.round(totalBankMUR * 100) / 100,
         salaires: Math.round(salaires * 100) / 100,
         chargesSociales: Math.round(chargesSociales * 100) / 100,
+        revenueByAccount: Object.fromEntries(Object.entries(revenueByAccount).map(([k, v]) => [k, Math.round(v * 100) / 100])),
+        expensesByAccount: Object.fromEntries(Object.entries(expensesByAccount).map(([k, v]) => [k, Math.round(v * 100) / 100])),
+        creances: Math.round(creances * 100) / 100,
+        lastMonthRevenue: Math.round(lastMonthRevenue * 100) / 100,
+        lastMonthExpenses: Math.round(lastMonthExpenses * 100) / 100,
         docsByType: allDocs.reduce((acc: Record<string, number>, d) => {
           const t = d.type_document || 'autre'; acc[t] = (acc[t] || 0) + 1; return acc
         }, {}),
@@ -193,6 +228,8 @@ function emptyFinancial() {
     tvaCollectee: 0, tvaDeductible: 0, tvaNette: 0, tvaRecords: [],
     bankAccounts: [], totalBankMUR: 0,
     salaires: 0, chargesSociales: 0,
+    revenueByAccount: {}, expensesByAccount: {},
+    creances: 0, lastMonthRevenue: 0, lastMonthExpenses: 0,
     docsByType: {}, totalDocuments: 0, extractedInvoices: [],
     totalEcritures: 0, currentMonth: '', taux_change: {},
   }
