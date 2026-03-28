@@ -62,7 +62,7 @@ export async function POST(request: Request) {
       if (!note) return NextResponse.json({ error: 'message requis' }, { status: 400 })
       const { data: profile2 } = await supabase.from('profiles').select('comptable_id').eq('id', user.id).single()
 
-      const { data, error } = await supabase.from('contact_messages').insert({
+      const { data, error } = await supabase.from('messages_internes').insert({
         sender_id: user.id,
         receiver_id: (profile2 as any)?.comptable_id || null,
         message: note,
