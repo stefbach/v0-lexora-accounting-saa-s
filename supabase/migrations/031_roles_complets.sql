@@ -20,3 +20,11 @@ CREATE POLICY "admin_comptable_full_us" ON public.user_societes FOR ALL USING (
   EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('admin','super_admin','comptable','comptable_dedie','client_admin'))
 );
 CREATE POLICY "user_read_own_us" ON public.user_societes FOR SELECT USING (user_id = auth.uid());
+
+-- Colonne created_by sur societes (propriétaire client)
+ALTER TABLE public.societes ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES public.profiles(id);
+ALTER TABLE public.societes ADD COLUMN IF NOT EXISTS secteur_activite TEXT;
+ALTER TABLE public.societes ADD COLUMN IF NOT EXISTS ern TEXT;
+
+-- Index
+CREATE INDEX IF NOT EXISTS idx_societes_created_by ON public.societes(created_by);

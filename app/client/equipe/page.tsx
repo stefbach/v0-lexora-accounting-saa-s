@@ -1,365 +1,191 @@
 "use client"
-
-import { useState, useEffect, useCallback } from "react"
-import Link from "next/link"
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { useEffect, useState } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { Users, Plus, Loader2 } from "lucide-react"
-import { useProfile } from "@/hooks/use-profile"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { useSearchParams } from "next/navigation"
 
-interface TeamMember {
-  id: string
-  full_name: string
-  email: string
-  role: string
-  created_at: string
+interface Membre { id: string; full_name: string; email: string; role: string; societe_id?: string }
+interface Societe { id: string; nom: string }
+
+const ROLES_CREABLES = [
+  { value: 'rh', label: 'RH', desc: 'Employés, Pointage, Paie, Congés', color: 'bg-orange-100 text-orange-800' },
+  { value: 'juridique', label: 'Juridique', desc: 'Contrats, Documents légaux', color: 'bg-purple-100 text-purple-800' },
+  { value: 'employe', label: 'Employé', desc: 'Portail salarié uniquement', color: 'bg-gray-100 text-gray-700' },
+]
+
+function genPassword() {
+  return Math.random().toString(36).slice(2, 8).toUpperCase() + Math.random().toString(36).slice(2, 8)
 }
 
-function getRoleBadge(role: string) {
-  switch (role) {
-    case "client_admin":
-      return (
-        <Badge style={{ backgroundColor: "#1E2A4A", color: "white" }}>
-          Admin
-        </Badge>
-      )
-    case "client_user":
-      return (
-        <Badge className="bg-blue-100 text-blue-700 border-blue-200">
-          Utilisateur
-        </Badge>
-      )
-    default:
-      return <Badge variant="secondary">{role}</Badge>
-  }
+function RoleBadge({ role }: { role: string }) {
+  const r = ROLES_CREABLES.find(r => r.value === role)
+  return <Badge className={`text-xs ${r?.color || 'bg-gray-100 text-gray-600'}`}>{r?.label || role}</Badge>
 }
 
-export default function EquipePage() {
-  const { profile, loading: profileLoading } = useProfile()
-  const [team, setTeam] = useState<TeamMember[]>([])
+export default function MonEquipePage() {
+  const searchParams = useSearchParams()
+  const societeIdParam = searchParams.get('societe_id')
+  const [membres, setMembres] = useState<Membre[]>([])
+  const [societes, setSocietes] = useState<Societe[]>([])
   const [loading, setLoading] = useState(true)
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
-  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [open, setOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [lastCreds, setLastCreds] = useState<{ email: string; password: string } | null>(null)
+  const [form, setForm] = useState({ prenom: '', nom: '', email: '', role: 'rh', societe_id: societeIdParam || '', password: genPassword() })
 
-  // Form fields
-  const [newNom, setNewNom] = useState("")
-  const [newEmail, setNewEmail] = useState("")
-  const [newPassword, setNewPassword] = useState("")
-  const [newPhone, setNewPhone] = useState("")
-
-  // Track the societe IDs of the current user
-  const [mySocieteIds, setMySocieteIds] = useState<string[]>([])
-
-  const fetchTeam = useCallback(async () => {
-    if (!profile) return
+  const load = async () => {
     setLoading(true)
-    try {
-      // Get all dossiers to find the current user's societes
-      const dossiersRes = await fetch("/api/admin/dossiers")
-      const dossiersData = await dossiersRes.json()
-      const dossiers = dossiersData.dossiers || []
-
-      // Find societes linked to the current user
-      const myDossiers = dossiers.filter((d: any) => d.client_id === profile.id)
-      const societeIds = [...new Set(myDossiers.map((d: any) => d.societe_id))] as string[]
-      setMySocieteIds(societeIds)
-
-      if (societeIds.length === 0) {
-        setTeam([])
-        setLoading(false)
-        return
-      }
-
-      // Find all users who share the same societes
-      const sharedDossiers = dossiers.filter(
-        (d: any) => societeIds.includes(d.societe_id) && d.client_id !== profile.id
-      )
-      const teamUserIds = [...new Set(sharedDossiers.map((d: any) => d.client_id))] as string[]
-
-      if (teamUserIds.length === 0) {
-        setTeam([])
-        setLoading(false)
-        return
-      }
-
-      // Get user profiles
-      const usersRes = await fetch("/api/admin/users")
-      const usersData = await usersRes.json()
-      const allUsers = usersData.users || []
-
-      const teamMembers = allUsers
-        .filter((u: any) => teamUserIds.includes(u.id))
-        .map((u: any) => ({
-          id: u.id,
-          full_name: u.full_name || u.email,
-          email: u.email,
-          role: u.role,
-          created_at: u.created_at,
-        }))
-
-      setTeam(teamMembers)
-    } catch {
-      console.error("Failed to fetch team")
-    } finally {
-      setLoading(false)
-    }
-  }, [profile])
-
-  useEffect(() => {
-    if (profile) fetchTeam()
-  }, [profile, fetchTeam])
-
-  if (profileLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#C9A84C" }} />
-      </div>
-    )
+    const [u, s] = await Promise.all([
+      fetch('/api/admin/users').then(r => r.json()),
+      fetch('/api/client/societes').then(r => r.json()),
+    ])
+    const roles = ['rh', 'juridique', 'employe']
+    setMembres((u.users || []).filter((m: Membre) => roles.includes(m.role)))
+    setSocietes(s.societes || [])
+    setLoading(false)
   }
 
-  if (profile?.role === "client_user") {
-    return (
-      <div className="p-6 flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-        <h1 className="text-xl font-bold" style={{ color: "#1E2A4A" }}>
-          Acces non autorise
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Vous n&apos;avez pas la permission d&apos;acceder a cette page.
-        </p>
-        <Link href="/client/upload" className="text-sm underline" style={{ color: "#C9A84C" }}>
-          Retour a l&apos;envoi de documents
-        </Link>
-      </div>
-    )
-  }
+  useEffect(() => { load() }, [])
 
-  async function handleAddMember() {
-    if (!newNom || !newEmail || !newPassword) return
-    if (newPassword.length < 6) {
-      setSubmitError("Le mot de passe doit contenir au moins 6 caracteres.")
-      return
-    }
-
-    setSubmitting(true)
-    setSubmitError(null)
-
-    try {
-      // 1. Create user via /api/admin/users with role=client_user
-      const createRes = await fetch("/api/admin/users", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: newEmail,
-          password: newPassword,
-          full_name: newNom,
-          role: "client_user",
-          phone: newPhone || null,
-        }),
+  const creer = async () => {
+    if (!form.prenom || !form.nom || !form.email || !form.role || !form.societe_id) return
+    setSaving(true)
+    const res = await fetch('/api/admin/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: form.email,
+        password: form.password,
+        full_name: `${form.prenom} ${form.nom}`,
+        role: form.role,
+        societe_id: form.societe_id
       })
-
-      const createData = await createRes.json()
-      if (!createRes.ok) {
-        setSubmitError(createData.error || "Erreur lors de la creation du compte.")
-        setSubmitting(false)
-        return
-      }
-
-      const newUserId = createData.user?.id
-      if (!newUserId) {
-        setSubmitError("Erreur: ID utilisateur non retourne.")
-        setSubmitting(false)
-        return
-      }
-
-      // 2. Link the new user to the same societes via /api/admin/dossiers
-      for (const societeId of mySocieteIds) {
-        await fetch("/api/admin/dossiers", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            client_id: newUserId,
-            societe_id: societeId,
-          }),
-        })
-      }
-
-      // Reset form and refresh team list
-      setNewNom("")
-      setNewEmail("")
-      setNewPassword("")
-      setNewPhone("")
-      setDialogOpen(false)
-      fetchTeam()
-    } catch {
-      setSubmitError("Erreur de connexion.")
-    } finally {
-      setSubmitting(false)
-    }
+    })
+    const data = await res.json()
+    setSaving(false)
+    if (data.error) { alert(data.error); return }
+    setLastCreds({ email: form.email, password: form.password })
+    setOpen(false)
+    setForm({ prenom: '', nom: '', email: '', role: 'rh', societe_id: societeIdParam || '', password: genPassword() })
+    load()
   }
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
-            Mon Equipe
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Gerez les personnes qui ont acces a votre espace Lexora.
-          </p>
+          <h1 className="text-2xl font-bold text-[#1E2A4A]">Mon Équipe</h1>
+          <p className="text-sm text-gray-500">Gérer les accès RH, Juridique et Employés de vos sociétés</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setSubmitError(null) }}>
+        <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button style={{ backgroundColor: "#C9A84C", color: "white" }}>
-              <Plus className="h-4 w-4 mr-2" />
-              Ajouter un membre
-            </Button>
+            <Button className="bg-[#1E2A4A]">+ Ajouter un membre</Button>
           </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle style={{ color: "#1E2A4A" }}>Ajouter un membre</DialogTitle>
-              <DialogDescription>
-                Creez un compte pour un membre de votre entreprise.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="newNom">Nom complet *</Label>
-                <Input
-                  id="newNom"
-                  placeholder="Ex: Jean Dupont"
-                  value={newNom}
-                  onChange={(e) => setNewNom(e.target.value)}
-                />
+          <DialogContent className="max-w-md">
+            <DialogHeader><DialogTitle>Créer un accès</DialogTitle></DialogHeader>
+            <div className="space-y-4 pt-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label>Prénom</Label><Input value={form.prenom} onChange={e => setForm(f => ({...f, prenom: e.target.value}))} /></div>
+                <div><Label>Nom</Label><Input value={form.nom} onChange={e => setForm(f => ({...f, nom: e.target.value}))} /></div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="newEmail">Adresse email *</Label>
-                <Input
-                  id="newEmail"
-                  type="email"
-                  placeholder="Ex: jean@tibok.mu"
-                  value={newEmail}
-                  onChange={(e) => setNewEmail(e.target.value)}
-                />
+              <div><Label>Email</Label><Input type="email" value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))} /></div>
+              <div>
+                <Label>Rôle</Label>
+                <Select value={form.role} onValueChange={v => setForm(f => ({...f, role: v}))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {ROLES_CREABLES.map(r => (
+                      <SelectItem key={r.value} value={r.value}>
+                        <div><span className="font-medium">{r.label}</span> — <span className="text-xs text-gray-500">{r.desc}</span></div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="newPassword">Mot de passe * (min 6 caracteres)</Label>
-                <Input
-                  id="newPassword"
-                  type="password"
-                  placeholder="Mot de passe"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                />
+              <div>
+                <Label>Société <span className="text-red-500">*</span></Label>
+                <Select value={form.societe_id} onValueChange={v => setForm(f => ({...f, societe_id: v}))}>
+                  <SelectTrigger><SelectValue placeholder="Sélectionner une société" /></SelectTrigger>
+                  <SelectContent>
+                    {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="newPhone">Telephone</Label>
-                <Input
-                  id="newPhone"
-                  type="tel"
-                  placeholder="Ex: +230 5XXX XXXX"
-                  value={newPhone}
-                  onChange={(e) => setNewPhone(e.target.value)}
-                />
+              <div>
+                <Label>Mot de passe</Label>
+                <div className="flex gap-2">
+                  <Input value={form.password} onChange={e => setForm(f => ({...f, password: e.target.value}))} className="font-mono" />
+                  <Button variant="outline" size="sm" onClick={() => setForm(f => ({...f, password: genPassword()}))}>↺</Button>
+                </div>
+                <p className="text-xs text-orange-600 mt-1">⚠️ Notez ce mot de passe avant de confirmer</p>
               </div>
-              {submitError && (
-                <p className="text-sm text-red-600">{submitError}</p>
-              )}
+              <Button onClick={creer} disabled={saving || !form.prenom || !form.nom || !form.email || !form.societe_id} className="w-full bg-[#1E2A4A]">
+                {saving ? 'Création...' : 'Créer le compte'}
+              </Button>
             </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>
-                Annuler
-              </Button>
-              <Button
-                onClick={handleAddMember}
-                disabled={submitting || !newNom || !newEmail || !newPassword}
-                style={{ backgroundColor: "#C9A84C", color: "white" }}
-              >
-                {submitting ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : null}
-                Creer le compte
-              </Button>
-            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <Users className="h-5 w-5" style={{ color: "#1E2A4A" }} />
-            <CardTitle style={{ color: "#1E2A4A" }}>
-              Membres ({team.length})
-            </CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="flex justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin" style={{ color: "#C9A84C" }} />
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nom</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Date d&apos;ajout</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {team.map((member) => (
-                  <TableRow key={member.id}>
-                    <TableCell className="font-medium">{member.full_name}</TableCell>
-                    <TableCell className="text-muted-foreground">{member.email}</TableCell>
-                    <TableCell>{getRoleBadge(member.role)}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {member.created_at
-                        ? new Date(member.created_at).toLocaleDateString("fr-FR")
-                        : "--"}
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {team.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                      Aucun membre dans l&apos;equipe. Cliquez sur &quot;Ajouter un membre&quot; pour creer un compte.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+      {/* Credentials affichés après création */}
+      {lastCreds && (
+        <div className="p-4 bg-yellow-50 border border-yellow-300 rounded-lg">
+          <p className="font-semibold text-yellow-800">✅ Compte créé — communiquez ces identifiants :</p>
+          <p className="text-sm mt-2">Email : <span className="font-mono font-bold">{lastCreds.email}</span></p>
+          <p className="text-sm">Mot de passe : <span className="font-mono font-bold text-lg">{lastCreds.password}</span></p>
+          <Button variant="outline" size="sm" className="mt-2" onClick={() => setLastCreds(null)}>✕ Fermer</Button>
+        </div>
+      )}
+
+      {/* Explication des rôles */}
+      <div className="grid grid-cols-3 gap-3">
+        {ROLES_CREABLES.map(r => (
+          <Card key={r.value} className="border-l-4" style={{borderLeftColor: r.value === 'rh' ? '#f97316' : r.value === 'juridique' ? '#a855f7' : '#9ca3af'}}>
+            <CardContent className="p-4">
+              <Badge className={`${r.color} mb-2`}>{r.label}</Badge>
+              <p className="text-xs text-gray-500">{r.desc}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Liste membres */}
+      {loading ? (
+        <div className="text-center text-gray-400 py-8">Chargement...</div>
+      ) : membres.length === 0 ? (
+        <Card><CardContent className="p-10 text-center text-gray-400">
+          <p className="text-4xl mb-3">👥</p>
+          <p className="font-medium">Aucun membre d'équipe</p>
+          <p className="text-sm mt-1">Créez des accès RH, Juridique ou Employé pour votre société.</p>
+        </CardContent></Card>
+      ) : (
+        <div className="space-y-2">
+          {membres.map(m => (
+            <Card key={m.id}>
+              <CardContent className="p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-[#1E2A4A] flex items-center justify-center text-white font-bold text-sm">
+                    {(m.full_name || m.email).slice(0,2).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="font-medium text-sm">{m.full_name || '—'}</p>
+                    <p className="text-xs text-gray-400">{m.email}</p>
+                  </div>
+                  <RoleBadge role={m.role} />
+                </div>
+                <div className="text-xs text-gray-400">
+                  {societes.find(s => s.id === m.societe_id)?.nom || '—'}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
