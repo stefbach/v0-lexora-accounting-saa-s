@@ -196,6 +196,9 @@ ON CONFLICT (compte) DO NOTHING;
 -- ============================================================
 -- 3. Fonction : générer les écritures de paie automatiquement
 --    À appeler lors de la validation d'un bulletin
+--    Écrit dans ecritures_comptables_v2 (journal SAL)
+--    Colonnes : societe_id, date_ecriture, journal, ref_folio (numero_piece),
+--               numero_compte, nom_compte, description (libelle), debit_mur, credit_mur
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.generer_ecritures_paie(
   p_bulletin_id UUID
@@ -204,15 +207,13 @@ LANGUAGE plpgsql SECURITY DEFINER
 AS $$
 DECLARE
   v_bulletin RECORD;
-  v_employe  RECORD;
-  v_dossier_id UUID;
   v_nb_lignes INTEGER := 0;
-  v_periode_libelle TEXT;
-  v_journal TEXT := 'OD-PAIE';
+  v_journal TEXT := 'SAL';
+  v_piece TEXT;
   v_salaire_base NUMERIC;
 BEGIN
-  -- Récupérer le bulletin
-  SELECT b.*, e.nom, e.prenom, e.code, e.dossier_id AS emp_dossier_id, e.societe_id
+  -- Récupérer le bulletin avec les données employé
+  SELECT b.*, e.nom, e.prenom, e.code, e.societe_id AS emp_societe_id
   INTO v_bulletin
   FROM public.bulletins_paie b
   JOIN public.employes e ON e.id = b.employe_id
@@ -222,167 +223,159 @@ BEGIN
     RAISE EXCEPTION 'Bulletin % introuvable', p_bulletin_id;
   END IF;
 
-  -- Trouver le dossier comptable de la société
-  SELECT d.id INTO v_dossier_id
-  FROM public.dossiers d
-  WHERE d.societe_id = v_bulletin.societe_id
-  ORDER BY d.created_at DESC
-  LIMIT 1;
-
-  IF v_dossier_id IS NULL THEN
-    RETURN 0; -- Pas de dossier comptable, on ne génère pas
-  END IF;
-
-  -- Libellé de période
-  v_periode_libelle := TO_CHAR(v_bulletin.periode::DATE, 'Month YYYY');
+  v_piece := 'BP-' || p_bulletin_id::TEXT;
   v_salaire_base := COALESCE(v_bulletin.salaire_base, 0);
 
-  -- Supprimer les anciennes écritures de ce bulletin (si recalcul)
-  DELETE FROM public.ecritures_comptables
-  WHERE dossier_id = v_dossier_id
+  -- Supprimer les anciennes écritures v2 de ce bulletin (si recalcul)
+  DELETE FROM public.ecritures_comptables_v2
+  WHERE societe_id = v_bulletin.societe_id
     AND journal = v_journal
-    AND numero_piece = 'BP-' || p_bulletin_id::TEXT;
+    AND ref_folio = v_piece;
 
-  -- ── ÉCRITURES DÉBIT (Charges) ──
+  -- ── ÉCRITURES DÉBIT (Charges 6xx) — écriture dans ecritures_comptables_v2 ──
 
   -- 6411 : Salaire de base
   IF v_salaire_base > 0 THEN
-    INSERT INTO public.ecritures_comptables (dossier_id, date_ecriture, journal, numero_piece, compte, libelle, debit, credit)
-    VALUES (v_dossier_id, v_bulletin.periode::DATE, v_journal, 'BP-'||p_bulletin_id,
-      '6411', 'Salaire base — '||v_bulletin.prenom||' '||v_bulletin.nom, v_salaire_base, 0);
+    INSERT INTO public.ecritures_comptables_v2
+      (societe_id, date_ecriture, journal, ref_folio, numero_compte, nom_compte, description, debit_mur, credit_mur)
+    VALUES (v_bulletin.societe_id, v_bulletin.periode::DATE, v_journal, v_piece,
+      '6411', 'Rémunérations du personnel',
+      'Salaire base — '||v_bulletin.prenom||' '||v_bulletin.nom, v_salaire_base, 0);
     v_nb_lignes := v_nb_lignes + 1;
   END IF;
 
   -- 6412 : Transport allowance
   IF COALESCE(v_bulletin.transport_allowance, 0) > 0 THEN
-    INSERT INTO public.ecritures_comptables (dossier_id, date_ecriture, journal, numero_piece, compte, libelle, debit, credit)
-    VALUES (v_dossier_id, v_bulletin.periode::DATE, v_journal, 'BP-'||p_bulletin_id,
-      '6412', 'Transport — '||v_bulletin.prenom||' '||v_bulletin.nom, v_bulletin.transport_allowance, 0);
+    INSERT INTO public.ecritures_comptables_v2
+      (societe_id, date_ecriture, journal, ref_folio, numero_compte, nom_compte, description, debit_mur, credit_mur)
+    VALUES (v_bulletin.societe_id, v_bulletin.periode::DATE, v_journal, v_piece,
+      '6412', 'Transport allowance',
+      'Transport — '||v_bulletin.prenom||' '||v_bulletin.nom, v_bulletin.transport_allowance, 0);
     v_nb_lignes := v_nb_lignes + 1;
   END IF;
 
   -- 6413 : Petrol allowance
   IF COALESCE(v_bulletin.petrol_allowance, 0) > 0 THEN
-    INSERT INTO public.ecritures_comptables (dossier_id, date_ecriture, journal, numero_piece, compte, libelle, debit, credit)
-    VALUES (v_dossier_id, v_bulletin.periode::DATE, v_journal, 'BP-'||p_bulletin_id,
-      '6413', 'Petrol — '||v_bulletin.prenom||' '||v_bulletin.nom, v_bulletin.petrol_allowance, 0);
+    INSERT INTO public.ecritures_comptables_v2
+      (societe_id, date_ecriture, journal, ref_folio, numero_compte, nom_compte, description, debit_mur, credit_mur)
+    VALUES (v_bulletin.societe_id, v_bulletin.periode::DATE, v_journal, v_piece,
+      '6413', 'Petrol allowance',
+      'Petrol — '||v_bulletin.prenom||' '||v_bulletin.nom, v_bulletin.petrol_allowance, 0);
     v_nb_lignes := v_nb_lignes + 1;
   END IF;
 
-  -- 6414 : Heures sup
+  -- 6414 : Heures supplémentaires
   IF COALESCE(v_bulletin.heures_sup_montant, 0) > 0 THEN
-    INSERT INTO public.ecritures_comptables (dossier_id, date_ecriture, journal, numero_piece, compte, libelle, debit, credit)
-    VALUES (v_dossier_id, v_bulletin.periode::DATE, v_journal, 'BP-'||p_bulletin_id,
-      '6414', 'Heures sup — '||v_bulletin.prenom||' '||v_bulletin.nom, v_bulletin.heures_sup_montant, 0);
+    INSERT INTO public.ecritures_comptables_v2
+      (societe_id, date_ecriture, journal, ref_folio, numero_compte, nom_compte, description, debit_mur, credit_mur)
+    VALUES (v_bulletin.societe_id, v_bulletin.periode::DATE, v_journal, v_piece,
+      '6414', 'Heures supplémentaires',
+      'Heures sup — '||v_bulletin.prenom||' '||v_bulletin.nom, v_bulletin.heures_sup_montant, 0);
     v_nb_lignes := v_nb_lignes + 1;
   END IF;
 
-  -- 6416/6417 : 13ème mois EOY Bonus
+  -- 6416 : EOY Bonus (13ème mois)
   IF COALESCE(v_bulletin.eoy_bonus, 0) > 0 THEN
-    INSERT INTO public.ecritures_comptables (dossier_id, date_ecriture, journal, numero_piece, compte, libelle, debit, credit)
-    VALUES (v_dossier_id, v_bulletin.periode::DATE, v_journal, 'BP-'||p_bulletin_id,
-      '6416', '13ème mois — '||v_bulletin.prenom||' '||v_bulletin.nom, v_bulletin.eoy_bonus, 0);
+    INSERT INTO public.ecritures_comptables_v2
+      (societe_id, date_ecriture, journal, ref_folio, numero_compte, nom_compte, description, debit_mur, credit_mur)
+    VALUES (v_bulletin.societe_id, v_bulletin.periode::DATE, v_journal, v_piece,
+      '6416', '13ème mois EOY Bonus',
+      '13ème mois — '||v_bulletin.prenom||' '||v_bulletin.nom, v_bulletin.eoy_bonus, 0);
     v_nb_lignes := v_nb_lignes + 1;
   END IF;
 
-  -- 6451 : CSG patronal
+  -- 6451 : CSG patronal (débit charge)
   IF COALESCE(v_bulletin.csg_patronal, 0) + COALESCE(v_bulletin.csg_patronal_bonus, 0) > 0 THEN
-    INSERT INTO public.ecritures_comptables (dossier_id, date_ecriture, journal, numero_piece, compte, libelle, debit, credit)
-    VALUES (v_dossier_id, v_bulletin.periode::DATE, v_journal, 'BP-'||p_bulletin_id,
-      '6451', 'CSG patronal — '||v_bulletin.prenom||' '||v_bulletin.nom,
+    INSERT INTO public.ecritures_comptables_v2
+      (societe_id, date_ecriture, journal, ref_folio, numero_compte, nom_compte, description, debit_mur, credit_mur)
+    VALUES (v_bulletin.societe_id, v_bulletin.periode::DATE, v_journal, v_piece,
+      '6451', 'CSG patronal',
+      'CSG patronal — '||v_bulletin.prenom||' '||v_bulletin.nom,
       COALESCE(v_bulletin.csg_patronal, 0) + COALESCE(v_bulletin.csg_patronal_bonus, 0), 0);
     v_nb_lignes := v_nb_lignes + 1;
   END IF;
 
-  -- 6452 : NSF patronal
+  -- 6452 : NSF patronal (débit charge)
   IF COALESCE(v_bulletin.nsf_patronal, 0) > 0 THEN
-    INSERT INTO public.ecritures_comptables (dossier_id, date_ecriture, journal, numero_piece, compte, libelle, debit, credit)
-    VALUES (v_dossier_id, v_bulletin.periode::DATE, v_journal, 'BP-'||p_bulletin_id,
-      '6452', 'NSF patronal — '||v_bulletin.prenom||' '||v_bulletin.nom, v_bulletin.nsf_patronal, 0);
+    INSERT INTO public.ecritures_comptables_v2
+      (societe_id, date_ecriture, journal, ref_folio, numero_compte, nom_compte, description, debit_mur, credit_mur)
+    VALUES (v_bulletin.societe_id, v_bulletin.periode::DATE, v_journal, v_piece,
+      '6452', 'NSF patronal',
+      'NSF patronal — '||v_bulletin.prenom||' '||v_bulletin.nom, v_bulletin.nsf_patronal, 0);
     v_nb_lignes := v_nb_lignes + 1;
   END IF;
 
-  -- 6453 : PRGF
+  -- 6453 : PRGF (débit charge)
   IF COALESCE(v_bulletin.prgf, 0) > 0 THEN
-    INSERT INTO public.ecritures_comptables (dossier_id, date_ecriture, journal, numero_piece, compte, libelle, debit, credit)
-    VALUES (v_dossier_id, v_bulletin.periode::DATE, v_journal, 'BP-'||p_bulletin_id,
-      '6453', 'PRGF — '||v_bulletin.prenom||' '||v_bulletin.nom, v_bulletin.prgf, 0);
+    INSERT INTO public.ecritures_comptables_v2
+      (societe_id, date_ecriture, journal, ref_folio, numero_compte, nom_compte, description, debit_mur, credit_mur)
+    VALUES (v_bulletin.societe_id, v_bulletin.periode::DATE, v_journal, v_piece,
+      '6453', 'PRGF',
+      'PRGF — '||v_bulletin.prenom||' '||v_bulletin.nom, v_bulletin.prgf, 0);
     v_nb_lignes := v_nb_lignes + 1;
   END IF;
 
-  -- 6454 : Training Levy
+  -- 6454 : Training Levy (débit charge)
   IF COALESCE(v_bulletin.training_levy, 0) > 0 THEN
-    INSERT INTO public.ecritures_comptables (dossier_id, date_ecriture, journal, numero_piece, compte, libelle, debit, credit)
-    VALUES (v_dossier_id, v_bulletin.periode::DATE, v_journal, 'BP-'||p_bulletin_id,
-      '6454', 'Training Levy HRDC — '||v_bulletin.prenom||' '||v_bulletin.nom, v_bulletin.training_levy, 0);
+    INSERT INTO public.ecritures_comptables_v2
+      (societe_id, date_ecriture, journal, ref_folio, numero_compte, nom_compte, description, debit_mur, credit_mur)
+    VALUES (v_bulletin.societe_id, v_bulletin.periode::DATE, v_journal, v_piece,
+      '6454', 'Training Levy HRDC',
+      'Training Levy — '||v_bulletin.prenom||' '||v_bulletin.nom, v_bulletin.training_levy, 0);
     v_nb_lignes := v_nb_lignes + 1;
   END IF;
 
-  -- ── ÉCRITURES CRÉDIT (Passifs) ──
+  -- ── ÉCRITURES CRÉDIT (Passifs 4xx) ──
 
-  -- 4210 : Net à payer salarié
+  -- 421 : Personnel net à payer (crédit)
   IF COALESCE(v_bulletin.salaire_net, 0) > 0 THEN
-    INSERT INTO public.ecritures_comptables (dossier_id, date_ecriture, journal, numero_piece, compte, libelle, debit, credit)
-    VALUES (v_dossier_id, v_bulletin.periode::DATE, v_journal, 'BP-'||p_bulletin_id,
-      '4210', 'Net à payer — '||v_bulletin.prenom||' '||v_bulletin.nom, 0, v_bulletin.salaire_net);
+    INSERT INTO public.ecritures_comptables_v2
+      (societe_id, date_ecriture, journal, ref_folio, numero_compte, nom_compte, description, debit_mur, credit_mur)
+    VALUES (v_bulletin.societe_id, v_bulletin.periode::DATE, v_journal, v_piece,
+      '421', 'Personnel net à payer',
+      'Net à payer — '||v_bulletin.prenom||' '||v_bulletin.nom, 0, v_bulletin.salaire_net);
     v_nb_lignes := v_nb_lignes + 1;
   END IF;
 
-  -- 4311 : CSG salarié
-  IF COALESCE(v_bulletin.csg_salarie, 0) + COALESCE(v_bulletin.csg_bonus, 0) > 0 THEN
-    INSERT INTO public.ecritures_comptables (dossier_id, date_ecriture, journal, numero_piece, compte, libelle, debit, credit)
-    VALUES (v_dossier_id, v_bulletin.periode::DATE, v_journal, 'BP-'||p_bulletin_id,
-      '4311', 'CSG salarié — '||v_bulletin.prenom||' '||v_bulletin.nom,
-      0, COALESCE(v_bulletin.csg_salarie, 0) + COALESCE(v_bulletin.csg_bonus, 0));
-    v_nb_lignes := v_nb_lignes + 1;
-  END IF;
-
-  -- 4312 : NSF salarié
-  IF COALESCE(v_bulletin.nsf_salarie, 0) > 0 THEN
-    INSERT INTO public.ecritures_comptables (dossier_id, date_ecriture, journal, numero_piece, compte, libelle, debit, credit)
-    VALUES (v_dossier_id, v_bulletin.periode::DATE, v_journal, 'BP-'||p_bulletin_id,
-      '4312', 'NSF salarié — '||v_bulletin.prenom||' '||v_bulletin.nom, 0, v_bulletin.nsf_salarie);
-    v_nb_lignes := v_nb_lignes + 1;
-  END IF;
-
-  -- 4330 : PAYE à reverser MRA
-  IF COALESCE(v_bulletin.paye, 0) > 0 THEN
-    INSERT INTO public.ecritures_comptables (dossier_id, date_ecriture, journal, numero_piece, compte, libelle, debit, credit)
-    VALUES (v_dossier_id, v_bulletin.periode::DATE, v_journal, 'BP-'||p_bulletin_id,
-      '4330', 'PAYE MRA — '||v_bulletin.prenom||' '||v_bulletin.nom, 0, v_bulletin.paye);
-    v_nb_lignes := v_nb_lignes + 1;
-  END IF;
-
-  -- 4321 : CSG patronal à verser
+  -- 431 : CSG patronal à verser (crédit)
   IF COALESCE(v_bulletin.csg_patronal, 0) + COALESCE(v_bulletin.csg_patronal_bonus, 0) > 0 THEN
-    INSERT INTO public.ecritures_comptables (dossier_id, date_ecriture, journal, numero_piece, compte, libelle, debit, credit)
-    VALUES (v_dossier_id, v_bulletin.periode::DATE, v_journal, 'BP-'||p_bulletin_id,
-      '4321', 'CSG patronal MRA — '||v_bulletin.prenom||' '||v_bulletin.nom,
+    INSERT INTO public.ecritures_comptables_v2
+      (societe_id, date_ecriture, journal, ref_folio, numero_compte, nom_compte, description, debit_mur, credit_mur)
+    VALUES (v_bulletin.societe_id, v_bulletin.periode::DATE, v_journal, v_piece,
+      '431', 'CSG patronal à verser MRA',
+      'CSG patronal MRA — '||v_bulletin.prenom||' '||v_bulletin.nom,
       0, COALESCE(v_bulletin.csg_patronal, 0) + COALESCE(v_bulletin.csg_patronal_bonus, 0));
     v_nb_lignes := v_nb_lignes + 1;
   END IF;
 
-  -- 4322 : NSF patronal
+  -- 431 : NSF patronal à verser (crédit)
   IF COALESCE(v_bulletin.nsf_patronal, 0) > 0 THEN
-    INSERT INTO public.ecritures_comptables (dossier_id, date_ecriture, journal, numero_piece, compte, libelle, debit, credit)
-    VALUES (v_dossier_id, v_bulletin.periode::DATE, v_journal, 'BP-'||p_bulletin_id,
-      '4322', 'NSF patronal MRA — '||v_bulletin.prenom||' '||v_bulletin.nom, 0, v_bulletin.nsf_patronal);
+    INSERT INTO public.ecritures_comptables_v2
+      (societe_id, date_ecriture, journal, ref_folio, numero_compte, nom_compte, description, debit_mur, credit_mur)
+    VALUES (v_bulletin.societe_id, v_bulletin.periode::DATE, v_journal, v_piece,
+      '431', 'NSF patronal à verser MRA',
+      'NSF patronal MRA — '||v_bulletin.prenom||' '||v_bulletin.nom, 0, v_bulletin.nsf_patronal);
     v_nb_lignes := v_nb_lignes + 1;
   END IF;
 
-  -- 4323 : PRGF
-  IF COALESCE(v_bulletin.prgf, 0) > 0 THEN
-    INSERT INTO public.ecritures_comptables (dossier_id, date_ecriture, journal, numero_piece, compte, libelle, debit, credit)
-    VALUES (v_dossier_id, v_bulletin.periode::DATE, v_journal, 'BP-'||p_bulletin_id,
-      '4323', 'PRGF MRA — '||v_bulletin.prenom||' '||v_bulletin.nom, 0, v_bulletin.prgf);
-    v_nb_lignes := v_nb_lignes + 1;
-  END IF;
-
-  -- 4324 : Training Levy
+  -- 432 : Training Levy à verser (crédit)
   IF COALESCE(v_bulletin.training_levy, 0) > 0 THEN
-    INSERT INTO public.ecritures_comptables (dossier_id, date_ecriture, journal, numero_piece, compte, libelle, debit, credit)
-    VALUES (v_dossier_id, v_bulletin.periode::DATE, v_journal, 'BP-'||p_bulletin_id,
-      '4324', 'Training Levy HRDC — '||v_bulletin.prenom||' '||v_bulletin.nom, 0, v_bulletin.training_levy);
+    INSERT INTO public.ecritures_comptables_v2
+      (societe_id, date_ecriture, journal, ref_folio, numero_compte, nom_compte, description, debit_mur, credit_mur)
+    VALUES (v_bulletin.societe_id, v_bulletin.periode::DATE, v_journal, v_piece,
+      '432', 'Training Levy HRDC à verser',
+      'Training Levy — '||v_bulletin.prenom||' '||v_bulletin.nom, 0, v_bulletin.training_levy);
+    v_nb_lignes := v_nb_lignes + 1;
+  END IF;
+
+  -- 431 : CSG salarié retenu (crédit)
+  IF COALESCE(v_bulletin.csg_salarie, 0) + COALESCE(v_bulletin.csg_bonus, 0) > 0 THEN
+    INSERT INTO public.ecritures_comptables_v2
+      (societe_id, date_ecriture, journal, ref_folio, numero_compte, nom_compte, description, debit_mur, credit_mur)
+    VALUES (v_bulletin.societe_id, v_bulletin.periode::DATE, v_journal, v_piece,
+      '431', 'CSG salarié retenu',
+      'CSG salarié — '||v_bulletin.prenom||' '||v_bulletin.nom,
+      0, COALESCE(v_bulletin.csg_salarie, 0) + COALESCE(v_bulletin.csg_bonus, 0));
     v_nb_lignes := v_nb_lignes + 1;
   END IF;
 
@@ -431,11 +424,11 @@ SELECT
   pc.type_compte,
   pc.sens_normal,
   COUNT(ec.id) AS nb_ecritures,
-  SUM(ec.debit)  AS total_debit,
-  SUM(ec.credit) AS total_credit,
-  SUM(ec.debit) - SUM(ec.credit) AS solde
+  SUM(ec.debit_mur)  AS total_debit,
+  SUM(ec.credit_mur) AS total_credit,
+  SUM(ec.debit_mur) - SUM(ec.credit_mur) AS solde
 FROM public.plan_comptable pc
-LEFT JOIN public.ecritures_comptables ec ON ec.compte = pc.compte
+LEFT JOIN public.ecritures_comptables_v2 ec ON ec.numero_compte = pc.compte
 GROUP BY pc.compte, pc.libelle, pc.type_compte, pc.sens_normal
 ORDER BY pc.compte;
 

@@ -81,11 +81,25 @@ export async function POST(request: Request) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
-    const { employe_id, type_pointage, methode = 'manuel', latitude, longitude, heure_forcee } = await request.json()
+    const body = await request.json()
+    const { employe_id, type_pointage, methode = 'manuel', latitude, longitude, heure_forcee, motif_absence, type_absence } = body
     if (!employe_id || !type_pointage) return NextResponse.json({ error: 'employe_id et type_pointage requis' }, { status: 400 })
 
     const today = new Date().toISOString().split('T')[0]
     const now = heure_forcee || new Date().toTimeString().split(' ')[0]
+
+    // Cas spécial : enregistrement d'une absence justifiée
+    if (type_pointage === 'absence_justifiee') {
+      const { data, error } = await supabase.from('pointages').upsert({
+        employe_id,
+        date_pointage: today,
+        absent_justifie: true,
+        motif_absence: motif_absence || null,
+        type_absence: type_absence || null,
+      }, { onConflict: 'employe_id,date_pointage' }).select().single()
+      if (error) throw error
+      return NextResponse.json({ pointage: data, message: 'Absence justifiée enregistrée' })
+    }
 
     const { data: existing } = await supabase.from('pointages').select('*').eq('employe_id', employe_id).eq('date_pointage', today).maybeSingle()
 

@@ -41,6 +41,47 @@ export async function POST(request: Request) {
     const periodeDate = new Date(bulletin.periode + 'T12:00:00')
     const moisLabel = `${MOIS_FR[periodeDate.getMonth()]} ${periodeDate.getFullYear()}`
 
+    // Récupérer les primes individuelles de la période (intégrées dans ce bulletin)
+    const { data: primesMois } = await supabase
+      .from('primes_variables_mois')
+      .select('type_prime, montant, description')
+      .eq('employe_id', bulletin.employe_id)
+      .eq('periode', bulletin.periode)
+      .eq('integre_paie', true)
+
+    // Récupérer les détails OT depuis les pointages du mois
+    const periodeStr = bulletin.periode.slice(0, 7)
+    const { data: pointagesMois } = await supabase
+      .from('pointages')
+      .select('heure_entree, heure_sortie, date_pointage')
+      .eq('employe_id', bulletin.employe_id)
+      .gte('date_pointage', `${periodeStr}-01`)
+      .lte('date_pointage', `${periodeStr}-31`)
+
+    const JOURS_FERIES_MU = ["01-01","02-01","12-03","01-05","09-05","15-08","02-11","25-12"]
+    function isFeriePdf(dateStr: string): boolean { return JOURS_FERIES_MU.includes(dateStr.slice(5)) }
+    function calcOTPdf(hEntree: string, hSortie: string, ferieDay: boolean) {
+      if (!hEntree || !hSortie) return { ot15: 0, ot2: 0 }
+      const debut = new Date(`1970-01-01T${hEntree}`)
+      const fin = new Date(`1970-01-01T${hSortie}`)
+      let totalH = (fin.getTime() - debut.getTime()) / 3600000 - 1
+      if (totalH <= 0) totalH = 0
+      if (ferieDay) return { ot15: 0, ot2: totalH }
+      const reste = Math.max(totalH - 9, 0)
+      return { ot15: Math.min(reste, 2), ot2: Math.max(reste - 2, 0) }
+    }
+
+    let totalH15 = 0, totalH2 = 0
+    const taux_horaire = Number(emp?.salaire_base || 0) / (45 * 52 / 12)
+    for (const pt of pointagesMois || []) {
+      if (!pt.heure_entree) continue
+      const ot = calcOTPdf(pt.heure_entree, pt.heure_sortie || '', isFeriePdf(pt.date_pointage))
+      totalH15 += ot.ot15
+      totalH2 += ot.ot2
+    }
+    const montant15 = Math.round(totalH15 * taux_horaire * 1.5)
+    const montant2 = Math.round(totalH2 * taux_horaire * 2)
+
     const csg_taux_pct = ((Number(bulletin.csg_taux) || 0) * 100).toFixed(1)
 
     const conditionalRow = (condition: boolean, label: string, value: number) =>
@@ -120,12 +161,24 @@ export async function POST(request: Request) {
 
   <div class="section">
     <h3>ÉLÉMENTS DE RÉMUNÉRATION</h3>
+    ${emp?.devise_salaire === 'EUR' ? `
+    <div class="row" style="background:#eff6ff; border-left:3px solid #3b82f6; padding-left:12px;">
+      <span>Salaire EUR → MUR</span>
+      <span style="color:#1d4ed8; font-size:11px;">
+        EUR ${new Intl.NumberFormat('fr-FR').format(Math.round(Number(emp?.salaire_base || 0)))} × ${Number(emp?.taux_change_eur) || 46.50} = ${fmt(bulletin.salaire_base)} MUR
+      </span>
+    </div>
+    ` : ''}
     <div class="row"><span>Salaire de base</span><span>${fmt(bulletin.salaire_base)} MUR</span></div>
     ${conditionalRow(Number(bulletin.transport_allowance) > 0, 'Transport Allowance', bulletin.transport_allowance)}
     ${conditionalRow(Number(bulletin.petrol_allowance) > 0, 'Petrol Allowance', bulletin.petrol_allowance)}
     ${conditionalRow(Number(bulletin.increment_salaire) > 0, 'Incrément de salaire', bulletin.increment_salaire)}
-    ${conditionalRow(Number(bulletin.heures_sup_montant) > 0, 'Heures supplémentaires', bulletin.heures_sup_montant)}
-    ${conditionalRow(Number(bulletin.special_allowance_1) > 0, 'Primes du mois', bulletin.special_allowance_1)}
+    ${totalH15 > 0 ? `<div class="row"><span>Heures sup (1.5×) — ${totalH15.toFixed(1)}h</span><span>${fmt(montant15)} MUR</span></div>` : ''}
+    ${totalH2 > 0 ? `<div class="row"><span>Heures sup (2×) — ${totalH2.toFixed(1)}h (férié/nuit)</span><span>${fmt(montant2)} MUR</span></div>` : ''}
+    ${totalH15 === 0 && totalH2 === 0 && Number(bulletin.heures_sup_montant) > 0 ? `<div class="row"><span>Heures supplémentaires</span><span>${fmt(bulletin.heures_sup_montant)} MUR</span></div>` : ''}
+    ${(primesMois && primesMois.length > 0)
+      ? primesMois.map((p: any) => `<div class="row" style="color:#7c3aed"><span>Prime — ${p.type_prime || p.description || 'Variable'}</span><span>${fmt(Number(p.montant))} MUR</span></div>`).join('')
+      : conditionalRow(Number(bulletin.special_allowance_1) > 0, 'Primes du mois', bulletin.special_allowance_1)}
     ${conditionalRow(Number(bulletin.special_allowance_2) > 0, 'Allocation spéciale 2', bulletin.special_allowance_2)}
     ${conditionalRow(Number(bulletin.special_allowance_3) > 0, 'Allocation spéciale 3', bulletin.special_allowance_3)}
     ${conditionalRow(Number(bulletin.other_refund) > 0, 'Autres remboursements', bulletin.other_refund)}

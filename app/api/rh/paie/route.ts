@@ -129,7 +129,7 @@ export async function POST(request: Request) {
       for (const pt of pointagesMois || []) {
         if (isWeekend(pt.date_pointage)) continue
         const enConge = (congesApprouves || []).some(c => pt.date_pointage >= c.date_debut && pt.date_pointage <= c.date_fin)
-        if (!pt.heure_entree && !enConge && !pt.absent_justifie) jours_absence_injust++
+        if (!pt.heure_entree && !enConge && pt.absent_justifie !== true) jours_absence_injust++
       }
       const montant_absence = Math.round(jours_absence_injust * (Number(emp.salaire_base) / 26) * 100) / 100
 
@@ -179,9 +179,11 @@ export async function POST(request: Request) {
       const { data, error } = await supabase.from('bulletins_paie').upsert(bulletin, { onConflict: 'employe_id,periode' }).select().single()
       if (error) throw error
 
-      // Marquer les primes comme intégrées
+      // Marquer les primes comme intégrées (colonne integre_paie + date_integration ajoutées en migration 028)
       if (primesMois && primesMois.length > 0) {
-        await supabase.from('primes_variables_mois').update({ integre_paie: true }).in('id', primesMois.map(p => p.id))
+        await supabase.from('primes_variables_mois')
+          .update({ integre_paie: true, date_integration: new Date().toISOString() })
+          .in('id', primesMois.map(p => p.id))
       }
 
       return NextResponse.json({ bulletin: data, simulation: { ...resultat, total_ot_montant, total_primes, montant_absence, jours_travailles } })
@@ -225,7 +227,7 @@ export async function POST(request: Request) {
         for (const pt of pointagesMois || []) {
           if (isWeekend(pt.date_pointage)) continue
           const enConge = (congesApprouves || []).some(c => pt.date_pointage >= c.date_debut && pt.date_pointage <= c.date_fin)
-          if (!pt.heure_entree && !enConge && !pt.absent_justifie) jours_absence_injust++
+          if (!pt.heure_entree && !enConge && pt.absent_justifie !== true) jours_absence_injust++
         }
         const montant_absence = Math.round(jours_absence_injust * (Number(emp.salaire_base) / 26) * 100) / 100
 
@@ -248,12 +250,16 @@ export async function POST(request: Request) {
         const resultat = calculerBulletin(elements, params, jt, Number(emp.pct_refacturation) || 0)
         const salaire_net_final = Math.round((resultat.salaire_net - montant_absence) * 100) / 100
 
+        // Résumé notes pour le bulletin
+        const notesResume = `OT: ${Math.round(total_ot_montant)} MUR, Primes: ${Math.round(total_primes)} MUR, Absences: ${jours_absence_injust} jours`
+
         const bulletin = {
           employe_id: emp.id,
           societe_id,
           periode: periodeDate,
           jours_absence: jours_absence_injust,
           montant_absence,
+          notes: notesResume,
           ...elements, ...resultat,
           salaire_net: salaire_net_final,
           total_deductions: Math.round((resultat.total_deductions + montant_absence) * 100) / 100,
@@ -267,9 +273,11 @@ export async function POST(request: Request) {
         const { data: saved, error } = await supabase.from('bulletins_paie').upsert(bulletin, { onConflict: 'employe_id,periode' }).select().single()
         if (!error && saved) {
           bulletinsSauvegardes.push({ ...saved, employe: { id: emp.id, code: emp.code, nom: emp.nom, prenom: emp.prenom, poste: emp.poste } })
-          // Marquer primes intégrées
+          // Marquer primes intégrées (colonne integre_paie + date_integration ajoutées en migration 028)
           if (primesMois && primesMois.length > 0) {
-            await supabase.from('primes_variables_mois').update({ integre_paie: true }).in('id', primesMois.map((p: any) => p.id))
+            await supabase.from('primes_variables_mois')
+              .update({ integre_paie: true, date_integration: new Date().toISOString() })
+              .in('id', primesMois.map((p: any) => p.id))
           }
         }
       }

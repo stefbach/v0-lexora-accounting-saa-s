@@ -66,6 +66,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     // Absence
     if (body.absent_justifie !== undefined) updates.absent_justifie = body.absent_justifie
     if (body.motif_absence !== undefined) updates.motif_absence = body.motif_absence
+    if (body.type_absence !== undefined) updates.type_absence = body.type_absence
 
     // Recalcul durée
     const hEntree = body.heure_entree !== undefined ? body.heure_entree : existing.heure_entree

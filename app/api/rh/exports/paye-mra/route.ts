@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     const { societe_id, periode } = await request.json()
     if (!societe_id || !periode) return NextResponse.json({ error: 'societe_id et periode requis' }, { status: 400 })
 
-    const { data: societe } = await supabase.from('societes').select('nom, brn, ern').eq('id', societe_id).single()
+    const { data: societe } = await supabase.from('societes').select('nom, brn, ern, tan_societe').eq('id', societe_id).single()
 
     const { data: bulletins, error } = await supabase
       .from('bulletins_paie')
@@ -38,8 +38,11 @@ export async function POST(request: Request) {
       total_salaires_bruts += sb
       total_paye_retenu += paye
 
+      // TAN : fallback NIC → TAN_MANQUANT
+      const tanValue = b.employe?.tan || b.employe?.nic || 'TAN_MANQUANT'
+
       detailLines.push([
-        b.employe?.tan || b.employe?.nic || '',
+        tanValue,
         b.employe?.nom || '',
         b.employe?.prenom || '',
         b.employe?.nic || '',
@@ -50,10 +53,11 @@ export async function POST(request: Request) {
       ].join(';'))
     }
 
+    const ernPaye = societe?.ern || 'ERN_NON_RENSEIGNE'
     const recapLines = [
       'ERN;Période;Nb_Employés;Total_Salaires_Bruts;Total_PAYE_Retenu',
       [
-        societe?.ern || '',
+        ernPaye,
         periode,
         bulletins.length,
         total_salaires_bruts.toFixed(2),
