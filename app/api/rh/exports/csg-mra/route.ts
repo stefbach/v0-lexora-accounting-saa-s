@@ -70,15 +70,15 @@ export async function POST(request: Request) {
 
     const total_mra = total_csg_sal + total_csg_pat + total_nsf_sal + total_nsf_pat + total_training + total_prgf
 
-    // ERN : si null, afficher placeholder avec commentaire
-    const ernValue = societe?.ern || 'ERN_NON_RENSEIGNE'
+    // ERN : fallback explicite avec BRN si ERN manquant
+    const ern_csv = societe?.ern || `[ERN_MANQUANT_-_BRN:${societe?.brn || '?'}]`
     const ernComment = !societe?.ern ? ' # ATTENTION: ERN manquant — à renseigner dans la fiche société' : ''
 
     // CSV Récapitulatif
     const recapLines = [
       'ERN;Période;Nb_Employés;Masse_Salariale;CSG_Salarié;CSG_Patronal;NSF_Salarié;NSF_Patronal;Training_Levy;PRGF;Total_MRA',
       [
-        ernValue + ernComment,
+        ern_csv + ernComment,
         periode,
         bulletins.length,
         total_masse_salariale.toFixed(2),

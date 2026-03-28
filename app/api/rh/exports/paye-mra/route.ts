@@ -53,11 +53,11 @@ export async function POST(request: Request) {
       ].join(';'))
     }
 
-    const ernPaye = societe?.ern || 'ERN_NON_RENSEIGNE'
+    const ern_csv = societe?.ern || `[ERN_MANQUANT_-_BRN:${societe?.brn || '?'}]`
     const recapLines = [
       'ERN;Période;Nb_Employés;Total_Salaires_Bruts;Total_PAYE_Retenu',
       [
-        ernPaye,
+        ern_csv,
         periode,
         bulletins.length,
         total_salaires_bruts.toFixed(2),

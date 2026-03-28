@@ -31,12 +31,12 @@ export default function CerveauTIBOK({
   societeId,
   employeId,
   mode = 'floating',
-  titre = 'Cerveau TIBOK'
+  titre = 'Assistant LEXORA'
 }: CerveauTIBOKProps) {
   const [ouvert, setOuvert] = useState(mode !== 'floating');
   const [messages, setMessages] = useState<Message[]>([{
     role: 'assistant',
-    content: `👋 Bonjour ! Je suis le **Cerveau TIBOK** — votre expert en droit du travail mauricien, paie, RH et pilotage.\n\nJe peux répondre à toute question sur :\n- 📋 **Contrats** (CDI, CDD, clauses WRA)\n- 💰 **Paie** (calculs CSG, PAYE, OT, 13ème mois)\n- 🏖️ **Congés** (droits, calculs, maternité/paternité)\n- ⚖️ **Droit social** (licenciement, préavis, indemnités)\n- 📊 **Pilotage** (présences, conformité, alertes)\n\nQue puis-je faire pour vous ?`,
+    content: `👋 Bonjour ! Je suis l'**Assistant IA LEXORA** — votre expert en droit du travail mauricien, paie, RH et pilotage.\n\nJe peux répondre à toute question sur :\n- 📋 **Contrats** (CDI, CDD, clauses WRA)\n- 💰 **Paie** (calculs CSG, PAYE, OT, 13ème mois)\n- 🏖️ **Congés** (droits, calculs, maternité/paternité)\n- ⚖️ **Droit social** (licenciement, préavis, indemnités)\n- 📊 **Pilotage** (présences, conformité, alertes)\n\nQue puis-je faire pour vous ?`,
     timestamp: new Date()
   }]);
   const [input, setInput] = useState('');
@@ -124,7 +124,7 @@ export default function CerveauTIBOK({
         className="fixed bottom-6 right-6 z-50 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full p-4 shadow-lg flex items-center gap-2 transition-all"
       >
         <span className="text-2xl">🧠</span>
-        <span className="font-semibold">Cerveau TIBOK</span>
+        <span className="font-semibold">Assistant LEXORA</span>
       </button>
     );
   }

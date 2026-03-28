@@ -66,7 +66,7 @@ export default function DirectionPage() {
       <div className="bg-[#1E2A4A] text-white px-6 py-4 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2"><Building2 className="w-5 h-5 text-[#C9A84C]"/>Direction — Vue Groupe</h1>
-          <p className="text-white/60 text-sm">Consolidation multi-sociétés TIBOK Group</p>
+          <p className="text-white/60 text-sm">Consolidation multi-sociétés LEXORA Group</p>
         </div>
         <div className="flex items-center gap-3">
           <Select value={exercice} onValueChange={setExercice}>
@@ -77,7 +77,7 @@ export default function DirectionPage() {
             </SelectContent>
           </Select>
           <Button onClick={() => setCerveauOpen(true)} className="bg-[#C9A84C] text-[#1E2A4A] hover:bg-[#b8973a]">
-            <Brain className="w-4 h-4 mr-2"/>Cerveau TIBOK
+            <Brain className="w-4 h-4 mr-2"/>Assistant LEXORA
           </Button>
         </div>
       </div>
@@ -147,7 +147,7 @@ export default function DirectionPage() {
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between p-4 border-b">
-              <h2 className="font-bold text-[#1E2A4A] flex items-center gap-2"><Brain className="w-4 h-4 text-[#C9A84C]"/>Cerveau TIBOK</h2>
+              <h2 className="font-bold text-[#1E2A4A] flex items-center gap-2"><Brain className="w-4 h-4 text-[#C9A84C]"/>Assistant LEXORA</h2>
               <Button variant="ghost" size="sm" onClick={() => setCerveauOpen(false)}>✕</Button>
             </div>
             <CerveauTIBOK mode="panel" />
