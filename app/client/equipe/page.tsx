@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useState } from "react"
+import { useEffect, useState, Suspense } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -28,6 +28,14 @@ function RoleBadge({ role }: { role: string }) {
 }
 
 export default function MonEquipePage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-gray-400">Chargement...</div>}>
+      <MonEquipeContent />
+    </Suspense>
+  )
+}
+
+function MonEquipeContent() {
   const searchParams = useSearchParams()
   const societeIdParam = searchParams.get('societe_id')
   const [membres, setMembres] = useState<Membre[]>([])
