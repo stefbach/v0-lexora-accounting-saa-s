@@ -15,6 +15,23 @@ export async function POST(request: Request) {
     const { action } = body
 
     if (action === 'generer_contrat') {
+      // Récupérer les vraies infos société depuis Supabase si societe_id fourni
+      let societe_info = { nom: 'Société', brn: '______', adresse: 'Mauritius' }
+      if (body.societe_id) {
+        const { data: soc } = await supabase
+          .from('societes')
+          .select('nom, brn, adresse')
+          .eq('id', body.societe_id)
+          .single()
+        if (soc) {
+          societe_info = {
+            nom: soc.nom || 'Société',
+            brn: soc.brn || '______',
+            adresse: (soc as any).adresse || 'Mauritius',
+          }
+        }
+      }
+
       const html = await genererContrat({
         type: body.type || 'CDI',
         secteur: body.secteur || 'general',
@@ -22,6 +39,9 @@ export async function POST(request: Request) {
         poste: body.poste,
         salaire: body.salaire,
         date_debut: body.date_debut,
+        societe_nom: societe_info.nom,
+        societe_brn: societe_info.brn,
+        societe_adresse: societe_info.adresse,
       })
 
       const { data } = await supabase.from('contrats_employes').insert({

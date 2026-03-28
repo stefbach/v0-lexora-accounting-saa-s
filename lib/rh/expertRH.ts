@@ -10,16 +10,19 @@ RÈGLES : (1) Cite toujours la section exacte (WRA s.52(3)), (2) Distingue oblig
 export async function genererContrat(params: {
   type: string; secteur: string; employe_nom: string; poste: string;
   salaire: number; date_debut: string; langue?: string;
+  societe_nom?: string; societe_brn?: string; societe_adresse?: string;
 }): Promise<string> {
   const { remplirTemplate, getTemplate } = await import('./contratsTemplates');
   const template = getTemplate(params.type, params.secteur);
   return remplirTemplate(template, {
-    societe_nom: 'TIBOK Group', societe_brn: 'C07000000', societe_adresse: 'Port Louis, Mauritius',
+    societe_nom: params.societe_nom || 'Société',
+    societe_brn: params.societe_brn || '______',
+    societe_adresse: params.societe_adresse || 'Mauritius',
     employe_nom: params.employe_nom.split(' ').slice(-1)[0],
     employe_prenom: params.employe_nom.split(' ')[0],
     employe_nic: '______', employe_dob: '______',
     poste: params.poste, salaire_base: params.salaire,
-    date_debut: params.date_debut, lieu_travail: 'Port Louis, Mauritius',
+    date_debut: params.date_debut, lieu_travail: params.societe_adresse || 'Port Louis, Mauritius',
   });
 }
 

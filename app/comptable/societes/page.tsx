@@ -64,6 +64,9 @@ export default function ComptableSocietesPage() {
   const [formBrn, setFormBrn] = useState("")
   const [formTva, setFormTva] = useState("")
   const [formStatutTva, setFormStatutTva] = useState("true")
+  const [formErn, setFormErn] = useState("")
+  const [formTanSociete, setFormTanSociete] = useState("")
+  const [formDateIncorporation, setFormDateIncorporation] = useState("")
   const [formClients, setFormClients] = useState<Set<string>>(new Set())
 
   // Link client dialog
@@ -119,7 +122,9 @@ export default function ComptableSocietesPage() {
   const isComptableAdmin = profile?.role === "comptable"
 
   const resetForm = () => {
-    setFormNom(""); setFormBrn(""); setFormTva(""); setFormStatutTva("true"); setFormClients(new Set()); setError(null)
+    setFormNom(""); setFormBrn(""); setFormTva(""); setFormStatutTva("true")
+    setFormErn(""); setFormTanSociete(""); setFormDateIncorporation("")
+    setFormClients(new Set()); setError(null)
   }
 
   const toggleClient = (clientId: string) => {
@@ -147,6 +152,9 @@ export default function ComptableSocietesPage() {
           numero_tva_mra: formTva || null,
           statut_tva: formStatutTva === "true",
           comptable_id: profile?.id || null,
+          ern: formErn || null,
+          tan: formTanSociete || null,
+          date_incorporation: formDateIncorporation || null,
         }),
       })
       const data = await res.json()
@@ -254,6 +262,20 @@ export default function ComptableSocietesPage() {
                       <SelectItem value="false">Non assujetti</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>ERN (Employer Registration N°)</Label>
+                    <Input placeholder="Ex: C12345678" value={formErn} onChange={(e) => setFormErn(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>TAN Société</Label>
+                    <Input placeholder="Ex: A123456789" value={formTanSociete} onChange={(e) => setFormTanSociete(e.target.value)} />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Date d&apos;incorporation</Label>
+                  <Input type="date" value={formDateIncorporation} onChange={(e) => setFormDateIncorporation(e.target.value)} />
                 </div>
                 {clients.length > 0 && (
                   <div className="space-y-2">

@@ -47,10 +47,19 @@ export async function updateSession(request: NextRequest) {
     (route) => pathname === route
   ) || pathname.startsWith('/api/')
 
+  // Protected routes requiring authentication (explicit list for clarity)
+  // All non-public routes are protected:
+  // /salarie  → employee self-service portal (any authenticated user with employee link)
+  // /rh       → HR module (roles: admin, comptable, rh, manager)
+  // /direction → Direction dashboard (roles: admin, direction)
+  // /comptable → Accounting module
+  // /admin    → Platform administration
+
   // If not authenticated and trying to access a protected route, redirect to login
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
+    url.searchParams.set('next', pathname)
     return NextResponse.redirect(url)
   }
 
@@ -61,7 +70,48 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // No role-based route protection in middleware - let the login page handle redirects
-  // This avoids RLS issues with querying profiles from middleware context
+  // Role-based access control for sensitive routes
+  // We check profile from Supabase to get the role
+  if (user) {
+    // Routes restricted to admin/direction roles
+    const directionRoutes = ['/direction']
+    // Routes restricted to admin/comptable/rh/manager roles
+    const rhRoutes = ['/rh']
+    // Admin-only routes
+    const adminRoutes = ['/admin']
+
+    const isDirectionRoute = directionRoutes.some(r => pathname.startsWith(r))
+    const isRhRoute = rhRoutes.some(r => pathname.startsWith(r))
+    const isAdminRoute = adminRoutes.some(r => pathname.startsWith(r))
+
+    if (isDirectionRoute || isRhRoute || isAdminRoute) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle()
+
+      const role = profile?.role || ''
+
+      if (isAdminRoute && !['admin', 'super_admin'].includes(role)) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/redirect'
+        return NextResponse.redirect(url)
+      }
+
+      if (isDirectionRoute && !['admin', 'super_admin', 'direction'].includes(role)) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/redirect'
+        return NextResponse.redirect(url)
+      }
+
+      if (isRhRoute && !['admin', 'super_admin', 'direction', 'comptable', 'comptable_dedie', 'rh', 'manager'].includes(role)) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/redirect'
+        return NextResponse.redirect(url)
+      }
+    }
+  }
+
   return supabaseResponse
 }
