@@ -1,57 +1,181 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table"
-import { Search, FileText } from "lucide-react"
-import { useProfile } from "@/hooks/use-profile"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Loader2, Users, TrendingUp, Download } from "lucide-react"
 
-export default function ComptableSalairesPage() {
-  const [search, setSearch] = useState("")
-  const { profile } = useProfile()
+interface Societe { id: string; nom: string }
+
+const MOIS = ["Juil","Août","Sep","Oct","Nov","Déc","Jan","Fév","Mar","Avr","Mai","Jun"]
+
+function fmt(n: number) {
+  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "MUR", maximumFractionDigits: 0 }).format(n)
+}
+
+function fmtPct(n: number) {
+  return `${n.toFixed(1)}%`
+}
+
+export default function SalairesPage() {
+  const [societes, setSocietes] = useState<Societe[]>([])
+  const [selectedSociete, setSelectedSociete] = useState("all")
+  const [loading, setLoading] = useState(false)
+  const [ecritures, setEcritures] = useState<any[]>([])
+  const [exercice, setExercice] = useState("2024-2025")
+
+  useEffect(() => {
+    fetch("/api/comptable/societes").then(r => r.json()).then(d => setSocietes(d.societes || []))
+  }, [])
+
+  const fetchData = useCallback(async () => {
+    if (selectedSociete === "all") return
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/comptable/grand-livre?societe_id=${selectedSociete}&classe=6`)
+      const data = await res.json()
+      const salaireComptes = (data.grand_livre || []).filter((c: any) =>
+        c.compte.startsWith("64") || c.compte.startsWith("641") || c.compte.startsWith("645")
+      )
+      setEcritures(salaireComptes)
+    } catch (e) { console.error(e) }
+    finally { setLoading(false) }
+  }, [selectedSociete])
+
+  useEffect(() => { fetchData() }, [fetchData])
+
+  // Calcul charges sociales estimées (taux légaux Maurice)
+  const totalSalaires = ecritures
+    .filter(e => e.compte.startsWith("641"))
+    .reduce((s: number, e: any) => s + e.total_debit, 0)
+
+  const chargesSociales = {
+    csg_patronal: totalSalaires > 0 ? totalSalaires * 0.045 : 0, // ~4.5% moyen (3% ou 6% selon seuil)
+    nsf_patronal: totalSalaires * 0.025,
+    hrdc: totalSalaires * 0.01,
+  }
+  const totalChargesPatronales = Object.values(chargesSociales).reduce((s, v) => s + v, 0)
 
   return (
-    <div className="flex-1 overflow-auto p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
-          Salaires
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Gestion des fiches de paie et charges salariales
-          {profile?.role === "comptable_dedie" && " — Dossiers assignés"}
-        </p>
+    <div className="p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-[#1E2A4A]">Salaires & Charges Sociales</h1>
+          <p className="text-sm text-gray-500 mt-1">Masse salariale et charges patronales</p>
+        </div>
+        <Button variant="outline" className="gap-2"><Download className="w-4 h-4" /> Exporter</Button>
       </div>
 
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Rechercher employé, société, période..."
-          className="pl-9"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
+      <Card><CardContent className="p-4 flex flex-wrap gap-3">
+        <Select value={selectedSociete} onValueChange={setSelectedSociete}>
+          <SelectTrigger className="w-56"><SelectValue placeholder="Choisir une société..." /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">-- Choisir une société --</SelectItem>
+            {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={exercice} onValueChange={setExercice}>
+          <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="2024-2025">2024–2025</SelectItem>
+            <SelectItem value="2023-2024">2023–2024</SelectItem>
+          </SelectContent>
+        </Select>
+      </CardContent></Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle style={{ color: "#1E2A4A" }}>
-            Fiches de paie (0)
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <FileText className="h-12 w-12 text-muted-foreground/40 mb-4" />
-            <p className="text-sm font-medium text-muted-foreground">Aucune donnée disponible</p>
-            <p className="text-xs text-muted-foreground mt-2 max-w-md">
-              Les fiches de paie apparaitront ici une fois les documents traités.
-            </p>
+      {selectedSociete === "all" ? (
+        <Card><CardContent className="text-center py-12 text-gray-500">Sélectionnez une société</CardContent></Card>
+      ) : loading ? (
+        <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-[#1E2A4A]" /></div>
+      ) : (
+        <>
+          {/* KPIs */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[
+              { label: "Salaires bruts", value: fmt(totalSalaires), icon: Users, color: "text-blue-600" },
+              { label: "CSG patronale (moy.)", value: fmt(chargesSociales.csg_patronal), icon: TrendingUp, color: "text-orange-500" },
+              { label: "NSF patronal (2.5%)", value: fmt(chargesSociales.nsf_patronal), icon: TrendingUp, color: "text-orange-500" },
+              { label: "Coût total employeur", value: fmt(totalSalaires + totalChargesPatronales), icon: TrendingUp, color: "text-red-600" },
+            ].map(k => (
+              <Card key={k.label}><CardContent className="p-4 flex items-center gap-3">
+                <k.icon className={`w-8 h-8 ${k.color}`} />
+                <div><p className="text-xs text-gray-500">{k.label}</p><p className="text-xl font-bold text-[#1E2A4A]">{k.value}</p></div>
+              </CardContent></Card>
+            ))}
           </div>
-        </CardContent>
-      </Card>
+
+          {/* Tableau charges sociales */}
+          <Card>
+            <CardHeader><CardTitle className="text-[#1E2A4A]">Décomposition des charges — Taux légaux Maurice</CardTitle></CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Charge</TableHead>
+                    <TableHead>Taux légal</TableHead>
+                    <TableHead>Qui paie</TableHead>
+                    <TableHead className="text-right">Montant estimé</TableHead>
+                    <TableHead>Note</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {[
+                    { label: "CSG salariale", taux: "1.5% ou 3%", qui: "Salarié", montant: totalSalaires * 0.03, note: "1.5% si brut ≤50K MUR, 3% si >50K" },
+                    { label: "CSG patronale", taux: "3% ou 6%", qui: "Employeur", montant: chargesSociales.csg_patronal, note: "3% si brut ≤50K MUR, 6% si >50K" },
+                    { label: "NSF salariale", taux: "1%", qui: "Salarié", montant: totalSalaires * 0.01, note: "National Savings Fund" },
+                    { label: "NSF patronale", taux: "2.5%", qui: "Employeur", montant: chargesSociales.nsf_patronal, note: "National Savings Fund" },
+                    { label: "HRDC (Training Levy)", taux: "1%", qui: "Employeur", montant: chargesSociales.hrdc, note: "Sur masse salariale >1.5M MUR" },
+                    { label: "PAYE", taux: "0% / 10% / 15%", qui: "Salarié", montant: 0, note: "Retenu à la source — barème progressif MRA" },
+                  ].map(r => (
+                    <TableRow key={r.label}>
+                      <TableCell className="font-medium">{r.label}</TableCell>
+                      <TableCell><span className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded">{r.taux}</span></TableCell>
+                      <TableCell className="text-sm text-gray-600">{r.qui}</TableCell>
+                      <TableCell className="text-right font-semibold">{r.montant > 0 ? fmt(r.montant) : "—"}</TableCell>
+                      <TableCell className="text-xs text-gray-500">{r.note}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <p className="text-xs text-gray-400 mt-3">* Montants estimés basés sur les écritures comptables. Pour le calcul exact par employé, importez le fichier de paie.</p>
+            </CardContent>
+          </Card>
+
+          {/* Comptes comptables */}
+          {ecritures.length > 0 && (
+            <Card>
+              <CardHeader><CardTitle className="text-[#1E2A4A]">Comptes de personnel (Classe 6)</CardTitle></CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Compte</TableHead>
+                      <TableHead>Libellé</TableHead>
+                      <TableHead className="text-right">Total Débit</TableHead>
+                      <TableHead className="text-right">Total Crédit</TableHead>
+                      <TableHead className="text-right">Solde</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {ecritures.map(e => (
+                      <TableRow key={e.compte}>
+                        <TableCell className="font-mono text-sm font-bold">{e.compte}</TableCell>
+                        <TableCell className="text-sm">{e.libelle_compte}</TableCell>
+                        <TableCell className="text-right">{fmt(e.total_debit)}</TableCell>
+                        <TableCell className="text-right">{fmt(e.total_credit)}</TableCell>
+                        <TableCell className="text-right font-semibold">{fmt(e.solde)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+        </>
+      )}
     </div>
   )
 }
