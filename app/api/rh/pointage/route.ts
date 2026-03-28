@@ -12,15 +12,63 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const date = searchParams.get('date') || new Date().toISOString().split('T')[0]
     const societe_id = searchParams.get('societe_id')
+    const employe_id = searchParams.get('employe_id')
+    const mensuel = searchParams.get('mensuel') === '1'
+    const periode = searchParams.get('periode') // YYYY-MM
 
-    let query = supabase.from('pointages').select('*, employe:employes(nom,prenom,poste,photo_url)').eq('date_pointage', date)
+    // Récupérer la liste des employés filtrés par société
+    let empIds: string[] | null = null
     if (societe_id) {
       const { data: emps } = await supabase.from('employes').select('id').eq('societe_id', societe_id)
-      const ids = emps?.map(e => e.id) || []
-      if (ids.length) query = query.in('employe_id', ids)
+      empIds = emps?.map(e => e.id) || []
     }
+
+    if (mensuel || periode) {
+      // Vue mensuelle : retourner tous les pointages du mois
+      const mois = periode || date.slice(0, 7)
+      const [annee, moisNum] = mois.split('-').map(Number)
+      const nbJours = new Date(annee, moisNum, 0).getDate()
+      const dateDebut = `${mois}-01`
+      const dateFin = `${mois}-${String(nbJours).padStart(2, '0')}`
+
+      let query = supabase
+        .from('pointages')
+        .select('*, employe:employes(nom,prenom,poste,photo_url)')
+        .gte('date_pointage', dateDebut)
+        .lte('date_pointage', dateFin)
+        .order('date_pointage', { ascending: true })
+
+      if (employe_id) query = query.eq('employe_id', employe_id)
+      else if (empIds && empIds.length > 0) query = query.in('employe_id', empIds)
+      else if (empIds && empIds.length === 0) return NextResponse.json({ pointages: [], mois })
+
+      const { data, error } = await query
+      if (error) throw error
+
+      // Ajouter des infos calculées
+      const enriched = (data || []).map(p => ({
+        ...p,
+        date: p.date_pointage,
+        absence_injustifiee: !p.heure_entree && !p.absent_justifie,
+      }))
+
+      return NextResponse.json({ pointages: enriched, mois, nb: enriched.length })
+    }
+
+    // Vue journalière (défaut)
+    let query = supabase
+      .from('pointages')
+      .select('*, employe:employes(nom,prenom,poste,photo_url)')
+      .eq('date_pointage', date)
+      .order('heure_entree', { ascending: true })
+
+    if (employe_id) query = query.eq('employe_id', employe_id)
+    else if (empIds && empIds.length > 0) query = query.in('employe_id', empIds)
+    else if (empIds && empIds.length === 0) return NextResponse.json({ pointages: [], date })
+
     const { data, error } = await query
     if (error) throw error
+
     return NextResponse.json({ pointages: data, date })
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
@@ -33,11 +81,11 @@ export async function POST(request: Request) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
-    const { employe_id, type_pointage, methode = 'manuel', latitude, longitude } = await request.json()
+    const { employe_id, type_pointage, methode = 'manuel', latitude, longitude, heure_forcee } = await request.json()
     if (!employe_id || !type_pointage) return NextResponse.json({ error: 'employe_id et type_pointage requis' }, { status: 400 })
 
     const today = new Date().toISOString().split('T')[0]
-    const now = new Date().toTimeString().split(' ')[0]
+    const now = heure_forcee || new Date().toTimeString().split(' ')[0]
 
     const { data: existing } = await supabase.from('pointages').select('*').eq('employe_id', employe_id).eq('date_pointage', today).maybeSingle()
 

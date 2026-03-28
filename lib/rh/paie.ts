@@ -166,6 +166,42 @@ export function calculerSalaireBrut(employe: {
     ((employe.heures_sup || 0) * (employe.taux_horaire_sup || 0))
 }
 
+// ══════════════════════════════════════════════════════════════════
+// Moteur paie multi-devises — Salaires EUR avec conversion MUR
+// ══════════════════════════════════════════════════════════════════
+
+export interface DeviseInfo {
+  devise: 'MUR' | 'EUR'
+  montant_eur: number
+  taux_applique: number
+}
+
+export async function calculerBulletinDevise(
+  elements: ElementsBrut,
+  devise_salaire: 'MUR' | 'EUR' = 'MUR',
+  taux_change_eur: number = 46.50,
+  params: ParametresPaieMRA = PARAMS_MRA_DEFAUT,
+  joursTravailles: number = 26,
+  pctRefacturation: number = 0
+): Promise<ResultatPaie & { devise_info: DeviseInfo }> {
+  const salaire_eur = devise_salaire === 'EUR' ? elements.salaire_base : 0
+  const salaire_mur = devise_salaire === 'EUR'
+    ? Math.round(elements.salaire_base * taux_change_eur)
+    : elements.salaire_base
+
+  const elementsConverted: ElementsBrut = { ...elements, salaire_base: salaire_mur }
+  const resultat = calculerBulletin(elementsConverted, params, joursTravailles, pctRefacturation)
+
+  return {
+    ...resultat,
+    devise_info: {
+      devise: devise_salaire,
+      montant_eur: salaire_eur,
+      taux_applique: taux_change_eur,
+    }
+  }
+}
+
 // Calcul 13ème mois (EOY Bonus) — WRA Section 52
 export function calculerTreizMois(
   salaire_base: number,
