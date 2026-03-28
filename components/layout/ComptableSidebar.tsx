@@ -29,6 +29,7 @@ const dashboardNavItems: NavItem[] = [
 
 // ── SECTION "Clients & Sociétés" ─────────────────────────────────────────────
 const clientsNavItems: NavItem[] = [
+  { href: "/comptable/mes-clients", label: "Mes Clients",   icon: UsersRound, section: "Clients & Sociétés" },
   { href: "/comptable/clients",  label: "Liste clients", icon: Users,     section: "Clients & Sociétés" },
   { href: "/comptable/societes", label: "Sociétés",      icon: Building2, section: "Clients & Sociétés" },
 ]
