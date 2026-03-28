@@ -11,57 +11,116 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url)
     const societe_id = searchParams.get('societe_id')
-    const date_fin = searchParams.get('date_fin')
+    const date_debut = searchParams.get('date_debut')
+    const date_fin   = searchParams.get('date_fin')
+    const exercice   = searchParams.get('exercice')
 
-    if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
+    if (!societe_id) {
+      return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
+    }
 
-    const { data: dossiers } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id)
-    const dossierIds = dossiers?.map(d => d.id) || []
-    if (!dossierIds.length) return NextResponse.json({ balance: [], totaux: {} })
+    // Résoudre les dates depuis l'exercice
+    let dDebut = date_debut
+    let dFin   = date_fin
 
+    if (exercice && !dDebut && !dFin) {
+      const { data: ex } = await supabase
+        .from('exercices_fiscaux')
+        .select('date_debut, date_fin')
+        .eq('societe_id', societe_id)
+        .eq('annee', exercice)
+        .single()
+      if (ex) { dDebut = ex.date_debut; dFin = ex.date_fin }
+    }
+
+    // Récupérer toutes les écritures
     let query = supabase
-      .from('ecritures_comptables')
-      .select('compte, libelle, debit, credit, date_ecriture')
-      .in('dossier_id', dossierIds)
-    if (date_fin) query = query.lte('date_ecriture', date_fin)
+      .from('ecritures_comptables_v2')
+      .select('numero_compte, debit_mur, credit_mur, nom_compte')
+      .eq('societe_id', societe_id)
+
+    if (dDebut) query = query.gte('date_ecriture', dDebut)
+    if (dFin)   query = query.lte('date_ecriture', dFin)
 
     const { data: ecritures, error } = await query
     if (error) throw error
 
-    // Calculer balance par compte
-    const balance: Record<string, { compte: string, total_debit: number, total_credit: number }> = {}
-    for (const e of ecritures || []) {
-      if (!balance[e.compte]) balance[e.compte] = { compte: e.compte, total_debit: 0, total_credit: 0 }
-      balance[e.compte].total_debit += e.debit || 0
-      balance[e.compte].total_credit += e.credit || 0
+    if (!ecritures || ecritures.length === 0) {
+      return NextResponse.json({
+        comptes: [], par_classe: {}, total_debit: 0, total_credit: 0,
+        equilibre: true, message: 'Aucune écriture comptabilisée',
+      })
     }
 
-    const lignes = Object.values(balance)
-      .map(l => ({
-        ...l,
-        classe: l.compte[0],
-        solde: l.total_debit - l.total_credit,
-        solde_debiteur: Math.max(0, l.total_debit - l.total_credit),
-        solde_crediteur: Math.max(0, l.total_credit - l.total_debit),
-      }))
-      .sort((a, b) => a.compte.localeCompare(b.compte))
+    // Plan comptable pour les libellés
+    const compteNums = [...new Set(ecritures.map(e => e.numero_compte))]
+    const { data: planComptable } = await supabase
+      .from('plan_comptable')
+      .select('compte, libelle, type_compte, sens_normal')
+      .in('compte', compteNums)
 
-    const totaux = {
-      total_debit: lignes.reduce((s, l) => s + l.total_debit, 0),
-      total_credit: lignes.reduce((s, l) => s + l.total_credit, 0),
-      total_solde_debiteur: lignes.reduce((s, l) => s + l.solde_debiteur, 0),
-      total_solde_crediteur: lignes.reduce((s, l) => s + l.solde_crediteur, 0),
+    const planMap: Record<string, { libelle: string; type_compte: string; sens_normal: string }> = {}
+    for (const pc of planComptable || []) {
+      planMap[pc.compte] = { libelle: pc.libelle, type_compte: pc.type_compte, sens_normal: pc.sens_normal }
     }
 
-    // Regrouper par classe
-    const par_classe: Record<string, typeof lignes> = {}
-    for (const l of lignes) {
-      if (!par_classe[l.classe]) par_classe[l.classe] = []
-      par_classe[l.classe].push(l)
+    const classeLabels: Record<string, string> = {
+      '1': 'Capitaux propres', '2': 'Immobilisations', '3': 'Stocks',
+      '4': 'Tiers', '5': 'Finances', '6': 'Charges', '7': 'Produits',
     }
 
-    return NextResponse.json({ balance: lignes, par_classe, totaux })
+    // Agréger par compte
+    const aggregat: Record<string, {
+      numero_compte: string; libelle: string; type_compte: string
+      sens_normal: string; classe: string; libelle_classe: string
+      total_debit: number; total_credit: number; solde: number
+      solde_debiteur: number; solde_crediteur: number
+    }> = {}
+
+    for (const e of ecritures) {
+      const c = e.numero_compte
+      if (!aggregat[c]) {
+        const pc = planMap[c]
+        const classe = c[0] || '?'
+        aggregat[c] = {
+          numero_compte: c,
+          libelle: pc?.libelle || e.nom_compte || c,
+          type_compte: pc?.type_compte || (['6'].includes(classe) ? 'charge' : ['7'].includes(classe) ? 'produit' : 'bilan'),
+          sens_normal: pc?.sens_normal || (['1','4','5','7'].includes(classe) ? 'C' : 'D'),
+          classe,
+          libelle_classe: classeLabels[classe] || 'Autres',
+          total_debit: 0, total_credit: 0, solde: 0,
+          solde_debiteur: 0, solde_crediteur: 0,
+        }
+      }
+      aggregat[c].total_debit  += e.debit_mur  || 0
+      aggregat[c].total_credit += e.credit_mur || 0
+      aggregat[c].solde         = aggregat[c].total_debit - aggregat[c].total_credit
+      aggregat[c].solde_debiteur  = Math.max(0,  aggregat[c].solde)
+      aggregat[c].solde_crediteur = Math.max(0, -aggregat[c].solde)
+    }
+
+    const comptes = Object.values(aggregat).sort((a, b) => a.numero_compte.localeCompare(b.numero_compte))
+
+    const total_debit  = comptes.reduce((s, c) => s + c.total_debit,  0)
+    const total_credit = comptes.reduce((s, c) => s + c.total_credit, 0)
+    const delta        = Math.abs(total_debit - total_credit)
+    const equilibre    = delta < 0.01
+
+    const par_classe: Record<string, typeof comptes> = {}
+    for (const c of comptes) {
+      if (!par_classe[c.classe]) par_classe[c.classe] = []
+      par_classe[c.classe].push(c)
+    }
+
+    return NextResponse.json({
+      comptes, par_classe, total_debit, total_credit,
+      equilibre, delta_desequilibre: equilibre ? 0 : delta,
+      nb_comptes: comptes.length,
+      periode: { date_debut: dDebut, date_fin: dFin, exercice },
+    })
   } catch (e: unknown) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
+    console.error('[balance]', e)
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur serveur' }, { status: 500 })
   }
 }

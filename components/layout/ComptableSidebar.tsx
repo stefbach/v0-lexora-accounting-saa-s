@@ -21,10 +21,11 @@ const navItems: NavItem[] = [
   { href: "/comptable/equipe",  label: "Mon Équipe",      icon: UsersRound },
   { href: "/comptable/alertes", label: "Alertes",         icon: AlertTriangle },
   // ── Modules comptables ──
-  { href: "/comptable/clients", label: "Grand Livre",         icon: BookOpen,         section: "Comptabilité" },
-  { href: "/comptable/clients", label: "Balance",             icon: Scale,            section: "Comptabilité" },
-  { href: "/comptable/clients", label: "IT Form 3 / IS",      icon: FileText,         section: "Comptabilité" },
-  { href: "/comptable/clients", label: "FAR / Amortissements",icon: TrendingUp,       section: "Comptabilité" },
+  { href: "/comptable/tva",     label: "TVA MRA",             icon: FileSpreadsheet,  section: "Comptabilité" },
+  { href: "/comptable/clients", label: "Grand Livre ↗",       icon: BookOpen,         section: "Comptabilité" },
+  { href: "/comptable/clients", label: "Balance ↗",           icon: Scale,            section: "Comptabilité" },
+  { href: "/comptable/clients", label: "IT Form 3 / IS ↗",   icon: FileText,         section: "Comptabilité" },
+  { href: "/comptable/clients", label: "FAR / Amortissements ↗",icon: TrendingUp,    section: "Comptabilité" },
   { href: "/comptable/clients", label: "Annual Return ROC",   icon: RotateCcw,        section: "Comptabilité" },
   // ── Multi-société ──
   { href: "/comptable/interco", label: "INTERCO",             icon: ArrowLeftRight,   section: "Consolidation" },

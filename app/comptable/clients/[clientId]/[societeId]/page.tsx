@@ -198,6 +198,49 @@ export default function SocieteContextPage() {
         const finData = finRes.ok ? await finRes.json() : { financial: null }
         const fin = finData.financial || {}
 
+        // S4-G: Fetch real P&L and Bilan from ecritures_comptables_v2
+        let pnlReal: any = null
+        let bilanReal: any = null
+        try {
+          const [pnlRes, bilanRes] = await Promise.all([
+            fetch(`/api/comptable/etats-financiers?societe_id=${societeId}&type=pnl`),
+            fetch(`/api/comptable/etats-financiers?societe_id=${societeId}&type=bilan`),
+          ])
+          pnlReal   = pnlRes.ok   ? await pnlRes.json()   : null
+          bilanReal = bilanRes.ok ? await bilanRes.json()  : null
+        } catch { /* silently fail */ }
+
+        // Enrich fin with real P&L data if available
+        if (pnlReal && pnlReal.produits) {
+          fin.totalRevenue   = pnlReal.produits.total || fin.totalRevenue || 0
+          fin.totalExpenses  = pnlReal.charges.total  || fin.totalExpenses || 0
+          fin.resultat       = pnlReal.resultats.resultat_net || fin.resultat || 0
+          fin.totalEcritures = (fin.totalEcritures || 0) + 1 // force show
+          // Build revenueByAccount from P&L details
+          if (!fin.revenueByAccount || Object.keys(fin.revenueByAccount).length === 0) {
+            fin.revenueByAccount = {
+              "706": pnlReal.produits.ca_services || 0,
+              "707": pnlReal.produits.ca_ventes   || 0,
+              "708": pnlReal.produits.autres_produits || 0,
+            }
+          }
+          if (!fin.expensesByAccount || Object.keys(fin.expensesByAccount).length === 0) {
+            fin.expensesByAccount = {
+              "601": pnlReal.charges.achats         || 0,
+              "641": pnlReal.charges.charges_perso  || 0,
+              "621": pnlReal.charges.autres_charges || 0,
+              "681": pnlReal.charges.dotations      || 0,
+            }
+          }
+        }
+        if (bilanReal && bilanReal.actif) {
+          fin.immobilisations     = bilanReal.actif.non_courant.immo_corp + bilanReal.actif.non_courant.immo_incorp || fin.immobilisations || 0
+          fin.stocks              = bilanReal.actif.courant.stocks          || fin.stocks              || 0
+          fin.creances            = bilanReal.actif.courant.clients         || fin.creances            || 0
+          fin.capitauxPropres     = bilanReal.passif.capitaux_propres.total || fin.capitauxPropres     || 0
+          fin.dettesFournisseurs  = bilanReal.passif.dettes_ct.fournisseurs || fin.dettesFournisseurs  || 0
+        }
+
         // Build fournisseurs from extracted invoices
         const fournisseurs = (fin.extractedInvoices || [])
           .filter((inv: any) => inv.type === 'facture_fournisseur')
@@ -480,6 +523,18 @@ export default function SocieteContextPage() {
           </Link>
           <Link href={`/comptable/clients/${clientId}/${societeId}/simulations`}>
             <Button variant="outline" size="sm" className="text-xs gap-1"><Calculator className="h-3 w-3" />Simulations</Button>
+          </Link>
+          <Link href={`/comptable/clients/${clientId}/${societeId}/grand-livre`}>
+            <Button variant="outline" size="sm" className="text-xs gap-1"><BarChart3 className="h-3 w-3" />Grand Livre</Button>
+          </Link>
+          <Link href={`/comptable/clients/${clientId}/${societeId}/balance`}>
+            <Button variant="outline" size="sm" className="text-xs gap-1"><Landmark className="h-3 w-3" />Balance</Button>
+          </Link>
+          <Link href={`/comptable/clients/${clientId}/${societeId}/far`}>
+            <Button variant="outline" size="sm" className="text-xs gap-1"><Building2 className="h-3 w-3" />FAR / Immo</Button>
+          </Link>
+          <Link href={`/comptable/clients/${clientId}/${societeId}/it-form3`}>
+            <Button variant="outline" size="sm" className="text-xs gap-1"><FileIcon className="h-3 w-3" />IT Form 3</Button>
           </Link>
         </div>
 
