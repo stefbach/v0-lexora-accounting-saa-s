@@ -41,9 +41,9 @@ export async function GET() {
     // Merge and deduplicate
     const societeMap = new Map<string, unknown>()
 
-    directSocietes?.forEach(s => societeMap.set(s.id, s))
+    directSocietes?.forEach((s: any) => societeMap.set(s.id, s))
     dossiers?.forEach(d => {
-      if (d.societe) societeMap.set(d.societe.id, d.societe)
+      if (d.societe) societeMap.set((d.societe as any).id, d.societe)
     })
 
     return NextResponse.json({ societes: Array.from(societeMap.values()) })

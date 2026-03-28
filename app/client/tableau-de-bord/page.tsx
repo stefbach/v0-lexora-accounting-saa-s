@@ -275,7 +275,7 @@ export default function TableauDeBordPage() {
     if (tvaNette > 0) {
       insights.push({
         text: `TVA nette \u00e0 payer : ${formatMUR(tvaNette)}`,
-        icon: AlertIcon,
+        icon: AlertTriangle,
         color: "#F59E0B",
       })
     } else if (tvaNette < 0) {

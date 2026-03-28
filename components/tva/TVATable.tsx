@@ -56,14 +56,14 @@ export function TVATable({ data }: TVATableProps) {
             <TableCell className="font-medium capitalize">
               {formatPeriode(row.periode)}
             </TableCell>
-            <TableCell>{row.societe}</TableCell>
+            <TableCell>{(row as any).societe}</TableCell>
             <TableCell className="text-right">{formatMUR(row.tva_collectee)}</TableCell>
             <TableCell className="text-right">{formatMUR(row.tva_deductible)}</TableCell>
             <TableCell className="text-right font-medium">
               {formatMUR(row.tva_nette)}
             </TableCell>
             <TableCell>
-              <TVAStatusBadge statut={row.statut} montant={Math.abs(row.tva_nette)} />
+              <TVAStatusBadge statut={(row.statut ?? "a_payer") as any} montant={Math.abs(row.tva_nette)} />
             </TableCell>
             <TableCell>
               {new Date(row.date_limite).toLocaleDateString("fr-FR")}
@@ -100,9 +100,9 @@ export function TVATable({ data }: TVATableProps) {
                   >
                     En retard
                   </Badge>
-                  {row.penalites > 0 && (
+                  {((row as any).penalites ?? 0) > 0 && (
                     <span className="text-xs text-red-600">
-                      Pénalité: {formatMUR(row.penalites)}
+                      Pénalité: {formatMUR(((row as any).penalites ?? 0))}
                     </span>
                   )}
                 </div>

@@ -76,8 +76,8 @@ export async function POST(request: NextRequest) {
       const { data: updated, error: updateError } = await supabase
         .from('tiers_patterns')
         .update({
-          tiers_identifie: tiers_identifie || existing.tiers_identifie,
-          compte_comptable: compte_comptable || existing.compte_comptable,
+          tiers_identifie: tiers_identifie || (existing as any)?.tiers_identifie,
+          compte_comptable: compte_comptable || (existing as any)?.compte_comptable,
           nb_utilisations: (existing.nb_utilisations || 1) + 1,
         })
         .eq('id', existing.id)

@@ -19,6 +19,7 @@ const navItems: NavItem[] = [
   { href: "/comptable/clients", label: "Mes Clients",     icon: Users },
   { href: "/comptable/equipe",  label: "Mon Équipe",      icon: UsersRound },
   { href: "/comptable/alertes", label: "Alertes",         icon: AlertTriangle },
+  { href: "/rh",                 label: "RH & Paie",       icon: Users },
 ]
 
 export function ComptableSidebar() {

@@ -366,3 +366,84 @@ export interface Assignation {
   type: 'client' | 'societe'
   created_at: string
 }
+
+// ============================================================
+// TYPES RH / PAIE — Fusion TIBOK-COMPTA
+// ============================================================
+
+export type RoleEmploye = 'salarie' | 'manager' | 'rh' | 'admin' | 'direction'
+export type StatutBulletin = 'brouillon' | 'valide' | 'paye' | 'declare_mra'
+export type StatutConge = 'en_attente' | 'approuve' | 'refuse' | 'annule'
+export type TypeConge = 'AL' | 'SL' | 'UL' | 'MAT' | 'PAT' | 'CAR' | 'ABS'
+export type TypePointage = 'qr_code' | 'gps' | 'manuel' | 'badge'
+
+export interface Employe {
+  id: string
+  societe_id: string
+  code?: string
+  nom: string
+  prenom: string
+  poste?: string
+  date_arrivee: string
+  date_depart?: string | null
+  actif?: boolean
+  salaire_base: number
+  devise: string
+  transport_allowance: number
+  petrol_allowance: number
+  role: RoleEmploye
+  email?: string
+  telephone?: string
+  photo_url?: string
+  bank_account?: string
+  bank_name?: string
+  csg_categorie: 'A' | 'B'
+}
+
+export interface BulletinPaie {
+  id: string
+  employe_id: string
+  societe_id: string
+  periode: string
+  jours_travailles: number
+  salaire_base: number
+  salaire_brut: number
+  csg_salarie: number
+  nsf_salarie: number
+  paye: number
+  total_deductions: number
+  salaire_net: number
+  csg_patronal: number
+  nsf_patronal: number
+  training_levy: number
+  prgf: number
+  total_charges_patronales: number
+  cout_total_employeur: number
+  statut: StatutBulletin
+}
+
+export interface DemandeConge {
+  id: string
+  employe_id: string
+  type_conge: TypeConge
+  date_debut: string
+  date_fin: string
+  nb_jours: number
+  motif?: string
+  statut: StatutConge
+}
+
+export interface ParametresPaieMRA {
+  csg_seuil_taux_reduit: number
+  csg_salarie_taux_reduit: number
+  csg_salarie_taux_plein: number
+  csg_patronal: number
+  nsf_salarie: number
+  nsf_patronal: number
+  training_levy: number
+  prgf_patronal_par_jour: number
+  paye_seuil_exoneration: number
+  paye_taux_1: number
+  paye_seuil_taux_2: number
+  paye_taux_2: number
+}
