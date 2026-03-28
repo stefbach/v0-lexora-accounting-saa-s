@@ -12,15 +12,15 @@ export default function PortailSalariePage() {
   const [loading, setLoading] = useState(true)
   const [pointageLoading, setPointageLoading] = useState(false)
   const [employe, setEmploye] = useState<any>(null)
+  const [emailConnecte, setEmailConnecte] = useState<string>("")
 
   useEffect(() => {
     const load = async () => {
       setLoading(true)
       try {
-        // Pour le portail salarié, on suppose que l'utilisateur connecté est un employé
-        // Récupérer l'employé lié au compte connecté
         const res = await fetch("/api/rh/employes/me")
         const d = await res.json()
+        if (d.email) setEmailConnecte(d.email)
         if (d.employe) {
           setEmploye(d.employe)
           const detail = await fetch(`/api/rh/employes/${d.employe.id}`).then(r => r.json())
@@ -52,11 +52,43 @@ export default function PortailSalariePage() {
   if (loading) return <div className="flex justify-center items-center h-screen"><Loader2 className="w-8 h-8 animate-spin text-[#1E2A4A]"/></div>
 
   if (!employe) return (
-    <div className="flex items-center justify-center h-screen">
-      <Card className="max-w-sm w-full"><CardContent className="p-8 text-center">
-        <p className="text-gray-500">Aucun dossier employé lié à votre compte.</p>
-        <p className="text-sm text-gray-400 mt-2">Contactez votre responsable RH.</p>
-      </CardContent></Card>
+    <div className="flex items-center justify-center min-h-screen bg-gray-50 p-4">
+      <Card className="max-w-md w-full shadow-md">
+        <CardContent className="p-8 text-center space-y-4">
+          <div className="flex justify-center">
+            <div className="w-16 h-16 rounded-full bg-orange-100 flex items-center justify-center text-3xl">👤</div>
+          </div>
+          <h2 className="text-lg font-semibold text-[#1E2A4A]">Compte non lié à un employé</h2>
+          <p className="text-sm text-gray-600">
+            Votre compte n'est pas encore associé à un dossier employé dans le système.
+          </p>
+          <div className="bg-blue-50 rounded-lg p-4 text-left space-y-2 text-sm text-blue-800">
+            <p className="font-medium">Pour activer votre accès :</p>
+            <ol className="list-decimal list-inside space-y-1 text-xs">
+              <li>Contactez votre responsable RH ou administrateur.</li>
+              <li>Communiquez l'adresse e-mail de votre compte : <strong className="break-all">{emailConnecte || "—"}</strong></li>
+              <li>Demandez à l'admin de lier votre profil à votre fiche employé.</li>
+            </ol>
+          </div>
+          {emailConnecte && (
+            <a
+              href={`mailto:rh@lexora.mu?subject=Liaison compte employé&body=Bonjour, merci de lier mon compte (${emailConnecte}) à ma fiche employé. Merci.`}
+              className="inline-flex items-center gap-2 rounded-lg bg-[#1E2A4A] px-4 py-2 text-sm font-medium text-white hover:bg-[#C9A84C] transition-colors"
+            >
+              📧 Contacter le RH
+            </a>
+          )}
+          <p className="text-xs text-gray-400">
+            Si vous pensez qu'il s'agit d'une erreur, déconnectez-vous et reconnectez-vous puis réessayez.
+          </p>
+          <button
+            onClick={async () => { const { createClient } = await import("@/lib/supabase/client"); const sb = createClient(); await sb.auth.signOut(); window.location.href = "/auth/login" }}
+            className="text-sm text-[#1E2A4A] underline hover:text-[#C9A84C] transition-colors"
+          >
+            Se déconnecter
+          </button>
+        </CardContent>
+      </Card>
     </div>
   )
 

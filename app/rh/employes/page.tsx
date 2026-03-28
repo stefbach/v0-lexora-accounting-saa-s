@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Search, Plus, Loader2, Users } from "lucide-react"
+import { BANQUES_MAURITIUS } from "@/lib/rh/banques-mauritius"
 
 function fmt(n: number) { return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "MUR", maximumFractionDigits: 0 }).format(n) }
 
@@ -21,7 +22,7 @@ export default function EmployesPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string|null>(null)
-  const [form, setForm] = useState({ societe_id:"",nom:"",prenom:"",poste:"",email:"",telephone:"",salaire_base:"",transport_allowance:"0",petrol_allowance:"0",date_arrivee:"",role:"salarie",csg_categorie:"A",bank_account:"",bank_name:"" })
+  const [form, setForm] = useState({ societe_id:"",nom:"",prenom:"",poste:"",email:"",telephone:"",salaire_base:"",transport_allowance:"0",petrol_allowance:"0",date_arrivee:"",role:"salarie",csg_categorie:"A",bank_account:"",bank_name:"",nic:"",tan:"",iban:"" })
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -72,8 +73,11 @@ export default function EmployesPage() {
               <div><Label>Salaire de base MUR *</Label><Input type="number" value={form.salaire_base} onChange={e=>setForm(f=>({...f,salaire_base:e.target.value}))}/></div>
               <div><Label>Transport allowance</Label><Input type="number" value={form.transport_allowance} onChange={e=>setForm(f=>({...f,transport_allowance:e.target.value}))}/></div>
               <div><Label>Petrol allowance</Label><Input type="number" value={form.petrol_allowance} onChange={e=>setForm(f=>({...f,petrol_allowance:e.target.value}))}/></div>
-              <div><Label>Banque</Label><Input value={form.bank_name} onChange={e=>setForm(f=>({...f,bank_name:e.target.value}))} placeholder="MCB"/></div>
-              <div><Label>N° compte bancaire</Label><Input value={form.bank_account} onChange={e=>setForm(f=>({...f,bank_account:e.target.value}))}/></div>
+              <div><Label>NIC (National ID Card)</Label><Input value={form.nic} onChange={e=>setForm(f=>({...f,nic:e.target.value}))} placeholder="Ex: A1234567890123"/></div>
+              <div><Label>TAN (Tax Account Number)</Label><Input value={form.tan} onChange={e=>setForm(f=>({...f,tan:e.target.value}))} placeholder="A123456789"/></div>
+              <div><Label>Banque</Label><Select value={form.bank_name} onValueChange={v=>setForm(f=>({...f,bank_name:v}))}><SelectTrigger><SelectValue placeholder="Choisir banque..."/></SelectTrigger><SelectContent>{BANQUES_MAURITIUS.map(b=><SelectItem key={b.code} value={b.code}>{b.nom}</SelectItem>)}</SelectContent></Select></div>
+              <div><Label>N° compte bancaire</Label><Input value={form.bank_account} onChange={e=>setForm(f=>({...f,bank_account:e.target.value}))} placeholder="Ex: 000012345678"/></div>
+              <div><Label>IBAN (optionnel)</Label><Input value={form.iban} onChange={e=>setForm(f=>({...f,iban:e.target.value}))} placeholder="MU17BOMM0101101030300200000MUR"/></div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={()=>setDialogOpen(false)}>Annuler</Button>
