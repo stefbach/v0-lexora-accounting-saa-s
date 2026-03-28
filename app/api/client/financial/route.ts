@@ -52,9 +52,18 @@ export async function GET(request: Request) {
     if (requestedSocieteId) dossierQuery = dossierQuery.eq('societe_id', requestedSocieteId)
     const { data: dossiers } = await dossierQuery
 
+    // Also include sociétés owned by client (created_by)
+    const { data: ownedSocietes } = await supabase
+      .from('societes').select('id')
+      .eq('created_by', targetClientId)
+
     // Also include dossiers from the same sociétés (shared between client_admin and client_user)
     let allDossierIds: string[] = (dossiers || []).map(d => d.id)
-    let societeIds = [...new Set((dossiers || []).map(d => d.societe_id))]
+    let societeIds = [...new Set([
+      ...(dossiers || []).map(d => d.societe_id),
+      ...(ownedSocietes || []).map(s => s.id),
+      ...(requestedSocieteId ? [requestedSocieteId] : [])
+    ].filter(Boolean))]
 
     if (dossiers && dossiers.length > 0) {
       const { data: sharedDossiers } = await supabase
@@ -65,25 +74,41 @@ export async function GET(request: Request) {
       }
     }
 
-    if (allDossierIds.length === 0) {
+    if (societeIds.length === 0) {
       return NextResponse.json({ financial: emptyFinancial() })
     }
 
     const dossierIds = allDossierIds
 
     // Get all société names for the filter dropdown
-    const { data: allClientDossiers } = await supabase
-      .from('dossiers').select('societe_id, societe:societes(id, nom)')
-      .eq('client_id', targetClientId)
-    const availableSocietes = (allClientDossiers || [])
-      .filter((d: any) => d.societe && !(d.societe as any).nom?.endsWith('— Personnel'))
-      .map((d: any) => ({ id: d.societe_id, nom: (d.societe as any).nom }))
-      .filter((s: any, i: number, arr: any[]) => arr.findIndex((x: any) => x.id === s.id) === i)
+    const { data: ownedSocietesInfo } = await supabase
+      .from('societes').select('id, nom').in('id', societeIds)
+    const availableSocietes = (ownedSocietesInfo || [])
+      .map((s: any) => ({ id: s.id, nom: s.nom }))
 
-    // Get all accounting entries
-    const { data: ecritures } = await supabase
-      .from('ecritures_comptables').select('*').in('dossier_id', dossierIds)
+    // Get all accounting entries — depuis v2 en priorité, sinon v1
+    const { data: ecrituresV2 } = await supabase
+      .from('ecritures_comptables_v2').select('*').in('societe_id', societeIds)
       .order('date_ecriture', { ascending: false })
+
+    const { data: ecrituresV1 } = allDossierIds.length > 0 ? await supabase
+      .from('ecritures_comptables').select('*').in('dossier_id', allDossierIds)
+      .order('date_ecriture', { ascending: false }) : { data: [] }
+
+    // Fusionner v1 + v2 (v2 prioritaire, normaliser les noms de colonnes)
+    const ecrituresFromV2 = (ecrituresV2 || []).map((e: any) => ({
+      ...e,
+      compte: e.numero_compte,
+      debit: e.debit_mur,
+      credit: e.credit_mur,
+    }))
+    const ecrituresFromV1 = (ecrituresV1 || []).map((e: any) => ({
+      ...e,
+      numero_compte: e.compte,
+      debit_mur: e.debit,
+      credit_mur: e.credit,
+    }))
+    const ecritures = ecrituresV2 && ecrituresV2.length > 0 ? ecrituresFromV2 : ecrituresFromV1
 
     // Get processed documents
     const { data: documents } = await supabase
