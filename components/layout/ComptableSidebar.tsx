@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client"
 import { useProfile } from "@/hooks/use-profile"
 import { Button } from "@/components/ui/button"
 import {
-  LayoutDashboard, Users, UsersRound, AlertTriangle, LogOut, Building2,
+  LayoutDashboard, Users, UsersRound, AlertTriangle, LogOut, Building2, GitMerge,
   ChevronLeft, ChevronRight,
 } from "lucide-react"
 import { useState } from "react"
@@ -21,6 +21,7 @@ const navItems: NavItem[] = [
   { href: "/comptable/alertes", label: "Alertes",         icon: AlertTriangle },
   { href: "/rh",                 label: "RH & Paie",       icon: Users },
   { href: "/direction",          label: "Direction",       icon: Building2 },
+  { href: "/comptable/rapprochement", label: "Rapprochement", icon: GitMerge },
 ]
 
 export function ComptableSidebar() {
