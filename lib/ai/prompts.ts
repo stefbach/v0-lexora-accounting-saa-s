@@ -5,6 +5,7 @@
 export const CLAUDE_CONFIG = {
   model: (process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6") as string,
   max_tokens: 4096,
+  max_tokens_releve_bancaire: 16384,
   temperature: 0,
 }
 
@@ -89,8 +90,13 @@ export interface ReleveBancaireLigne {
   compte_credit: string
   libelle_ecriture: string
   reference: string
+  tiers_detecte: string
   confiance: number
   alerte: string | null
+  // Devise étrangère
+  devise_origine?: string | null
+  montant_origine?: number | null
+  taux_change_applique?: number | null
 }
 
 export interface ReleveBancaireResult {
@@ -100,8 +106,13 @@ export interface ReleveBancaireResult {
   devise: string
   solde_debut: number
   solde_fin: number
+  total_debits: number
+  total_credits: number
   lignes: ReleveBancaireLigne[]
   ecritures_non_rapprochees: number
+  // Vérification cohérence soldes
+  lignes_manquantes?: boolean
+  ecart_solde?: number
 }
 
 export interface FichePaieResult {
@@ -261,6 +272,8 @@ REPONSE en JSON strict selon le format FactureClientResult.`
 
 export const SYSTEM_PROMPT_RELEVE_BANCAIRE = `Tu es un expert-comptable mauricien specialise dans le rapprochement bancaire.
 
+INSTRUCTION CRITIQUE: Lis ABSOLUMENT TOUTES les lignes du releve sans exception ni resume. Ne saute aucune transaction, meme si le releve est long.
+
 COMPTES BANCAIRES:
 - MCB (Mauritius Commercial Bank) → 511 - Banque MCB
 - SBM (State Bank of Mauritius) → 512 - Banque SBM
@@ -268,34 +281,93 @@ COMPTES BANCAIRES:
 - Barclays UK → 514 - Banque Barclays
 - BOV (Bank of Valletta, Malta) → 515 - Banque BOV
 
-PATTERNS DE RECONNAISSANCE AUTOMATIQUE:
+PATTERNS MCB ETENDUS — IDENTIFICATION OBLIGATOIRE:
+1. 'IB Account Transfer' + 'FT' → 581 (virement interne entre comptes propres — NE PAS generer de charge)
+2. 'PAIEMENT MCB-[0-9]+' → 581 virement interne inter-comptes (NE PAS generer d'ecriture de charge)
+3. 'Direct Debit Scheme MAURITIUS REVENUE AUTHORITY' → analyser le montant:
+   - Si montant correspond a TVA declaree → 4457 TVA collectee
+   - Si montant correspond a CSG → 431 CSG a payer
+   - Si montant correspond a PAYE → 444 PAYE retenue
+   - Si montant correspond a Training Levy → 432 Training Levy
+4. 'Forex Difference' → 766 Produit de change (si credit) ou 666 Perte de change (si debit)
+5. 'Bulk Payment SALARY' → 421 Personnel remunerations dues
+6. 'Standing Order' → identifier le beneficiaire depuis le libelle
+7. 'Charge' ou 'Commission' ou 'Fee' (hors 'Forex') → 627 Frais bancaires
+8. 'International Transfer' ou 'SWIFT' → identifier devise et tiers (compte 401 ou 411)
+9. 'NHS' → 753 Commissions NHS
+10. 'Fast Click' → 651 Fournitures informatiques
+11. 'Nimerik Solutions' → 651 Materiel informatique
+
+PATTERNS GENERAUX DE RECONNAISSANCE:
 - 2E2J, E2J → 622 Honoraires (cabinet comptable E2J)
 - MWPI, MW PROP → 612 Loyer (MW Properties)
-- OPENAI, VERCEL, SUPABASE, AWS, GITHUB → 651 SaaS
+- OPENAI, VERCEL, SUPABASE, AWS, GITHUB, ANTHROPIC, STRIPE, ADOBE, ZOOM, SLACK, WATI, MICROSOFT → 651 SaaS
 - META, FACEBOOK, GOOGLE ADS → 623 Publicite
 - CEB, EMTEL, MTML, ORANGE → 626 Telecom/Electricite
 - UBER, BOLT, TAXI → 624 Transport
-- MRA, MAURITIUS REVENUE → 4457/4456 TVA
+- MRA, MAURITIUS REVENUE → analyser selon contexte (TVA, CSG, PAYE)
 - CSG, NATIONAL PENSIONS → 431 CSG
 - SALARY, SALAIRE → 421 Remuneration personnel
-- VIREMENT CLIENT, PAYMENT RECEIVED → 411 Clients
 - LOAN, PRET, EMI → 164 Emprunts
 
-TAUX DE CHANGE REFERENCE (mis à jour quotidiennement):
+IDENTIFICATION CREDITS (ENCAISSEMENTS):
+Pour chaque credit, extraire le nom du client/payeur depuis le libelle:
+- 'VIREMENT DE: <NOM>' → 411 Clients + tiers_detecte = NOM
+- 'PAYMENT FROM: <NOM>' → 411 Clients + tiers_detecte = NOM
+- 'TRANSFER FROM: <NOM>' → identifier si client (411) ou virement interne (581)
+- 'REF', 'INV', '#' dans le libelle → extraire la reference facture
+
+TAUX DE CHANGE REFERENCE (mis a jour quotidiennement):
 - EUR/MUR: {{TAUX_EUR}}
 - GBP/MUR: {{TAUX_GBP}}
 - USD/MUR: {{TAUX_USD}}
 
-REGLES:
-1. Pour chaque ligne du releve, identifie le type de transaction via les patterns ci-dessus
-2. Attribue le compte comptable correspondant
-3. Pour les debits bancaires: credit le compte banque, debit le compte de charge/tiers
-4. Pour les credits bancaires: debit le compte banque, credit le compte de produit/tiers
-5. Convertis les devises etrangeres en MUR au taux de reference
-6. Attribue un score de confiance (0-100) a chaque rapprochement
-7. Signale les transactions non identifiees (confiance < 50)
+REGLES DE TRAITEMENT:
+1. Pour CHAQUE ligne du releve: identifier type, tiers, compte comptable, sens
+2. Debits bancaires: credit 51x, debit le compte de charge/tiers/401
+3. Credits bancaires: debit 51x, credit le compte de produit/tiers/411
+4. Convertir les devises etrangeres en MUR au taux de reference
+5. Pour transactions en devise etrangere: stocker devise_origine, montant_origine, taux_change_applique
+6. Attribuer un score de confiance (0-100) a chaque transaction
+7. Signaler les transactions non identifiees (confiance < 50)
 
-REPONSE en JSON strict selon le format ReleveBancaireResult.`
+VERIFICATION OBLIGATOIRE:
+Apres traitement de toutes les lignes, verifier:
+solde_ouverture + total_credits - total_debits = solde_cloture (tolerance 1 MUR)
+- Si ecart > 1 MUR: ajouter 'lignes_manquantes: true' et 'ecart_solde: X' dans le JSON
+
+FORMAT REPONSE JSON strict:
+{
+  "banque": "",
+  "compte_bancaire": "",
+  "periode": "",
+  "devise": "MUR",
+  "solde_debut": 0,
+  "solde_fin": 0,
+  "total_debits": 0,
+  "total_credits": 0,
+  "lignes_manquantes": false,
+  "ecart_solde": 0,
+  "lignes": [
+    {
+      "date": "YYYY-MM-DD",
+      "libelle": "",
+      "montant": 0,
+      "sens": "debit|credit",
+      "compte_debit": "",
+      "compte_credit": "",
+      "libelle_ecriture": "",
+      "reference": "",
+      "tiers_detecte": "",
+      "confiance": 0,
+      "alerte": null,
+      "devise_origine": null,
+      "montant_origine": null,
+      "taux_change_applique": null
+    }
+  ],
+  "ecritures_non_rapprochees": 0
+}`
 
 export const SYSTEM_PROMPT_CHARGES_SOCIALES = `Tu es un expert en droit social mauricien specialise dans les charges sociales et cotisations.
 

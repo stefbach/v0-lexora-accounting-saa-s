@@ -1,10 +1,11 @@
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { getSystemPrompt, injectTauxChange, CLAUDE_CONFIG } from '@/lib/ai/prompts'
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !serviceKey) throw new Error('Missing Supabase admin credentials')
   return createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
 }
@@ -80,6 +81,16 @@ export async function POST(request: NextRequest) {
     const { default: Anthropic } = await import('@anthropic-ai/sdk')
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
+    // Fetch live exchange rates for injection into prompts
+    let tauxChange: Record<string, number> = { EUR: 46.50, GBP: 54.20, USD: 44.80 }
+    try {
+      const tauxRes = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/taux-change`)
+      if (tauxRes.ok) {
+        const tauxData = await tauxRes.json()
+        if (tauxData.rates) tauxChange = tauxData.rates
+      }
+    } catch { /* use defaults */ }
+
     const isImage = ['jpg', 'jpeg', 'png', 'webp'].includes(ext)
     const isPdf = ext === 'pdf'
 
@@ -99,11 +110,19 @@ export async function POST(request: NextRequest) {
       messageContent = 'Analyse ce document:\n' + Buffer.from(fileArrayBuffer).toString('utf-8').substring(0, 5000)
     }
 
+    // First pass: detect document type if not already known
+    // We use the main inline prompt for the first analysis
+    // For bank statements, we'll use the specialized prompt with higher max_tokens
+
+    // Determine max_tokens based on expected document type hint
+    // Default analysis uses 4096, bank statements need 16384
+    const detectionMaxTokens = CLAUDE_CONFIG.max_tokens
+
     const aiResponse = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 4096,
-      temperature: 0,
-      system: `Tu es un expert-comptable mauricien. Analyse ce document et retourne UNIQUEMENT un JSON valide (pas de markdown, pas de backticks).
+      model: CLAUDE_CONFIG.model,
+      max_tokens: detectionMaxTokens,
+      temperature: CLAUDE_CONFIG.temperature,
+      system: injectTauxChange(`Tu es un expert-comptable mauricien. Analyse ce document et retourne UNIQUEMENT un JSON valide (pas de markdown, pas de backticks).
 
 === DETECTION DU TYPE ===
 Determine d'abord le type: facture_fournisseur, facture_client, releve_bancaire, fiche_paie, charges_sociales, contrat, ou autre.
@@ -143,62 +162,25 @@ TVA export: ventes hors Maurice → TVA 0% (zero-rated).
 Detecter B2B (entreprise avec BRN/VAT) vs B2C (particulier).
 
 --- RELEVE BANCAIRE ---
-Format: {"routing":{"societe":"<banque>","type_document":"releve_bancaire","confiance_type":0-100},"extraction":{"banque":"","numero_compte":"","devise":"EUR|USD|GBP|MUR","periode_debut":"YYYY-MM-DD","periode_fin":"YYYY-MM-DD","solde_ouverture":0,"solde_cloture":0,"total_debits":0,"total_credits":0,"transactions":[{"date":"YYYY-MM-DD","libelle":"","debit":0,"credit":0,"tiers_detecte":"","compte_comptable":""}],"ecritures_comptables":[{"compte":"51x","libelle":"","debit":0,"credit":0}]}}
+Format: {"routing":{"societe":"<banque>","type_document":"releve_bancaire","confiance_type":0-100},"extraction":{"banque":"","numero_compte":"","devise":"EUR|USD|GBP|MUR","periode_debut":"YYYY-MM-DD","periode_fin":"YYYY-MM-DD","solde_ouverture":0,"solde_cloture":0,"total_debits":0,"total_credits":0,"lignes_manquantes":false,"ecart_solde":0,"transactions":[{"date":"YYYY-MM-DD","libelle":"","debit":0,"credit":0,"tiers_detecte":"","compte_comptable":"","devise_origine":null,"montant_origine":null,"taux_change_applique":null}],"ecritures_comptables":[{"compte":"51x","libelle":"","debit":0,"credit":0}]}}
+INSTRUCTION CRITIQUE: Lis TOUTES les lignes du releve sans exception.
 Comptes bancaires: MCB→511, SBM→512, CIC→513, Barclays→514, BOV→515.
-Patterns de reconnaissance des tiers:
-- 2E2J, E2J → 622 Honoraires
-- MWPI, MW PROP → 612 Loyer
-- OPENAI, VERCEL, SUPABASE, AWS, GITHUB → 651 SaaS
-- META, FACEBOOK, GOOGLE ADS → 623 Publicite
-- CEB, EMTEL, MTML, ORANGE → 626 Telecom
-- UBER, BOLT, TAXI → 624 Transport
-- MRA, MAURITIUS REVENUE → 4457/4456 TVA
-- CSG, NATIONAL PENSIONS → 431 CSG
-- SALARY, SALAIRE → 421 Remuneration personnel
-- VIREMENT CLIENT, PAYMENT RECEIVED → 411 Clients
-- LOAN, PRET, EMI → 164 Emprunts
-Pour chaque transaction, identifier le tiers et attribuer le compte comptable.
-Debits bancaires: credit 51x, debit compte charge/tiers.
-Credits bancaires: debit 51x, credit compte produit/tiers.
+Patterns MCB: 'IB Account Transfer'+'FT'→581 interne, 'PAIEMENT MCB-NNN'→581, 'Direct Debit Scheme MRA'→analyser, 'Forex Difference'→766/666, 'Bulk Payment SALARY'→421, 'Charge/Commission/Fee'→627.
+Credits: extraire tiers depuis 'VIREMENT DE:', 'PAYMENT FROM:', 'TRANSFER FROM:'.
+Verifier: solde_ouverture + total_credits - total_debits = solde_cloture (tolerance 1 MUR). Si ecart>1: lignes_manquantes=true.
+TAUX EUR: {{TAUX_EUR}}, GBP: {{TAUX_GBP}}, USD: {{TAUX_USD}}.
 
 --- FICHE DE PAIE ---
 Format: {"routing":{"societe":"<employeur>","type_document":"fiche_paie","confiance_type":0-100},"extraction":{"employe":"","employeur":"","date_document":"YYYY-MM-DD","periode":"","salaire_brut":0,"salaire_net":0,"npf_salarie_3pct":0,"npf_patronal_6pct":0,"hrdc_1pct":0,"paye":0,"nps_salarie":0,"nps_employeur":0,"cotisations_salariales":0,"cotisations_patronales":0,"ecritures_comptables":[{"compte":"641|421|431|444|432|645","libelle":"","debit":0,"credit":0}]}}
-Ecritures:
-- 641 Remunerations (debit salaire brut)
-- 645 Charges sociales patronales (debit CSG patronal + Training Levy + NPS employeur)
-- 421 Personnel remunerations dues (credit net a payer)
-- 444 PAYE retenue (credit)
-- 431 CSG a payer (credit part salariale + patronale)
-- 432 Training Levy a payer (credit)
-Calcul net: Brut - CSG salariale 3% - PAYE - NPS salarie = Net a payer.
+Ecritures: 641 Remunerations (debit brut), 645 Charges patronales (debit CSG patron+TL+NSF patron), 421 Net a payer (credit), 444 PAYE (credit), 431 CSG (credit), 432 Training Levy (credit).
 
 --- CHARGES SOCIALES ---
-Format: {"routing":{"societe":"<nom>","type_document":"charges_sociales","confiance_type":0-100},"extraction":{"organisme":"","date_document":"YYYY-MM-DD","periode":"","montant_total":0,"detail":[{"type":"NPF_patronal_6pct|NPF_salarie_3pct|HRDC_1pct|NPS|PAYE","montant":0}],"ecritures_comptables":[{"compte":"431|432|433|444|645","libelle":"","debit":0,"credit":0}]}}
-Comptes:
-- 431: CSG a payer (NPF patronal + salarie)
-- 432: Training Levy (HRDC) a payer
-- 433: NPS a payer
-- 444: PAYE retenue a la source
-- 645: Charges sociales patronales (debit)
+Format: {"routing":{"societe":"<nom>","type_document":"charges_sociales","confiance_type":0-100},"extraction":{"organisme":"","date_document":"YYYY-MM-DD","periode":"","montant_total":0,"detail":[{"type":"CSG_patronal_6pct|CSG_salarie_3pct|Training_Levy_1pct|NSF|PAYE","montant":0}],"ecritures_comptables":[{"compte":"431|432|433|444|645","libelle":"","debit":0,"credit":0}]}}
 
 === REGLES TRANSVERSALES ===
-
-CONVERSION DEVISES (si document en devise etrangere):
-- EUR/MUR: ~46.50, GBP/MUR: ~54.20, USD/MUR: ~44.80, AUD/MUR: ~29.50
-- Convertir tous les montants en MUR pour les ecritures comptables.
-- Conserver la devise et montants originaux dans l'extraction.
-
-REVERSE CHARGE (achat SaaS etranger):
-- Si facture fournisseur d'un prestataire SaaS etranger (OpenAI, AWS, Vercel, Supabase, Stripe, Meta Ads, Google Ads, Microsoft, Adobe, Zoom, Slack, WATI, Anthropic, etc.):
-  → Appliquer le mecanisme de reverse charge (R5): Output TVA 15% sur montant HT converti en MUR + Input TVA 15% identique → net TVA = 0
-  → Ajouter dans ecritures: debit 4456 + credit 4457 pour le montant TVA reverse charge
-
-TVA VALIDATION:
-- Verifier la presence d'un numero d'enregistrement TVA MRA sur les factures fournisseurs.
-- Si absent: TVA non deductible, ne pas generer d'ecriture 4456.
-- Taux normal Maurice: 15%. Zero-rated pour exports.
-
-Pour tout autre type: utilise type_document="autre" ou "contrat".`,
+CONVERSION DEVISES: EUR/MUR: {{TAUX_EUR}}, GBP/MUR: {{TAUX_GBP}}, USD/MUR: {{TAUX_USD}}, AUD/MUR: ~29.50
+REVERSE CHARGE (achat SaaS etranger): Output TVA 15% + Input TVA 15% → net=0. Ajouter ecriture debit 4456 + credit 4457.
+Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
       messages: [{ role: 'user', content: messageContent }],
     })
 
@@ -209,7 +191,39 @@ Pour tout autre type: utilise type_document="autre" ou "contrat".`,
 
     const typeDocument = parsed.routing?.type_document || 'autre'
     const detectedSociete = parsed.routing?.societe || 'INCONNU'
-    const extraction = parsed.extraction || {}
+    const confianceType = parsed.routing?.confiance_type || null
+    let extraction = parsed.extraction || {}
+
+    // For bank statements: if initial analysis truncated, re-analyze with specialized prompt + 16384 tokens
+    if (typeDocument === 'releve_bancaire' && isPdf) {
+      const bankSystemPrompt = getSystemPrompt('releve_bancaire', tauxChange)
+      const bankResponse = await anthropic.messages.create({
+        model: CLAUDE_CONFIG.model,
+        max_tokens: CLAUDE_CONFIG.max_tokens_releve_bancaire,
+        temperature: CLAUDE_CONFIG.temperature,
+        system: bankSystemPrompt,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
+              { type: 'text', text: 'Analyse ce releve bancaire complet. Lis TOUTES les lignes sans exception.' },
+            ],
+          },
+        ],
+      })
+      const bankText = bankResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
+      const bankCleaned = bankText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
+      try {
+        const bankParsed = JSON.parse(bankCleaned)
+        extraction = bankParsed
+      } catch { /* keep initial extraction */ }
+    }
+
+    // Check bank statement coherence and create alert if needed
+    if (typeDocument === 'releve_bancaire' && extraction.lignes_manquantes && Math.abs(extraction.ecart_solde || 0) > 1) {
+      console.warn(`[upload] Bank statement coherence issue: ecart_solde=${extraction.ecart_solde} for doc ${docId}`)
+    }
 
     // Try to match detected société to client's known sociétés and re-route if needed
     let finalDossierId = resolvedDossierId
@@ -236,7 +250,8 @@ Pour tout autre type: utilise type_document="autre" ou "contrat".`,
     const updateData: any = {
       type_document: typeDocument, statut: 'traite',
       societe_detectee: detectedSociete !== 'INCONNU' ? detectedSociete : null,
-      n8n_result: { routing: parsed.routing, extraction, metadata: { model: 'claude-sonnet-4-6', processed_at: new Date().toISOString() } },
+      confiance_type: confianceType,
+      n8n_result: { routing: parsed.routing, extraction, metadata: { model: CLAUDE_CONFIG.model, processed_at: new Date().toISOString() } },
     }
     const { error: updateError } = await supabase.from('documents').update(updateData).eq('id', doc.id)
     if (updateError) console.error('[upload] DB UPDATE FAILED:', updateError.message)

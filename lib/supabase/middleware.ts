@@ -45,7 +45,7 @@ export async function updateSession(request: NextRequest) {
   const publicRoutes = ['/', '/auth/login', '/login', '/redirect']
   const isPublicRoute = publicRoutes.some(
     (route) => pathname === route
-  ) || pathname.startsWith('/api/') || pathname.startsWith('/dashboard')
+  ) || pathname.startsWith('/api/')
 
   // If not authenticated and trying to access a protected route, redirect to login
   if (!user && !isPublicRoute) {

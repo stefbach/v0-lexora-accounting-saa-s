@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useProfile } from "@/hooks/use-profile"
+import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -16,7 +17,7 @@ import {
 } from "@/components/ui/dialog"
 import {
   Upload, FolderOpen, Loader2, FileText, CheckCircle,
-  Clock, Download, ChevronRight, Lock, AlertTriangle, Building2,
+  Clock, Download, ChevronRight, Lock, AlertTriangle, Building2, RefreshCw,
 } from "lucide-react"
 
 const NAVY = "#1E2A4A"
@@ -31,6 +32,7 @@ interface Document {
   storage_path: string | null
   created_at: string
   societe_detectee: string | null
+  confiance_type?: number | null
   n8n_result?: { error?: string; routing?: any; extraction?: any } | null
 }
 
@@ -57,6 +59,13 @@ function statutBadge(s: string) {
   if (s === "en_cours" || s === "en_attente") return <Badge className="bg-blue-100 text-blue-700"><Clock className="h-3 w-3 mr-1" />Analyse en cours...</Badge>
   if (s === "erreur") return <Badge className="bg-red-100 text-red-700"><AlertTriangle className="h-3 w-3 mr-1" />Erreur</Badge>
   return <Badge variant="outline">{s}</Badge>
+}
+
+function confianceBadge(confiance: number | undefined | null) {
+  if (confiance == null) return null
+  if (confiance >= 80) return <Badge className="bg-green-100 text-green-700 text-xs">{confiance}%</Badge>
+  if (confiance >= 50) return <Badge className="bg-orange-100 text-orange-700 text-xs">{confiance}%</Badge>
+  return <Badge className="bg-red-100 text-red-700 text-xs">{confiance}%</Badge>
 }
 
 function getDocsForFolder(docs: Document[], folderKey: string): Document[] {
@@ -239,18 +248,35 @@ export default function ClientDocumentsPage() {
   const handleReassign = async () => {
     if (!reassignDoc || !reassignSocieteId) return
     try {
-      // Move the document to the selected société's dossier
+      // Find the dossier_id for the target société + client
       const dosRes = await fetch("/api/admin/dossiers")
       const dosData = await dosRes.json()
       const targetDossier = (dosData.dossiers || []).find(
         (d: any) => d.societe_id === reassignSocieteId && d.client_id === profile?.id
       )
       if (targetDossier) {
-        // Update document's dossier_id via a direct Supabase call through our API
-        // For now, just close the dialog — the document is already saved
-        setUploadSuccess(`Document réassigné avec succès.`)
+        // Call PATCH /api/documents/[id] to update dossier_id
+        const patchRes = await fetch(`/api/documents/${reassignDoc.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            societe_id: reassignSocieteId,
+            dossier_id: targetDossier.id,
+            corrige_manuellement: true,
+          }),
+        })
+        if (patchRes.ok) {
+          setUploadSuccess(`Document réassigné avec succès à la société sélectionnée.`)
+        } else {
+          const errData = await patchRes.json()
+          setUploadError(errData.error || "Erreur lors de la réassignation")
+        }
+      } else {
+        setUploadError("Dossier introuvable pour cette société")
       }
-    } catch {}
+    } catch {
+      setUploadError("Erreur lors de la réassignation")
+    }
     setReassignDoc(null)
     setReassignSocieteId("")
     await fetchDocuments()
@@ -401,14 +427,25 @@ export default function ClientDocumentsPage() {
                 <TableHead>Date</TableHead>
                 <TableHead>Type détecté</TableHead>
                 <TableHead>Statut</TableHead>
+                <TableHead>Confiance IA</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {currentDocs.map((doc) => (
+              {currentDocs.map((doc) => {
+                const confiance = doc.confiance_type ?? doc.n8n_result?.routing?.confiance_type ?? null
+                return (
                 <TableRow key={doc.id}>
                   <TableCell className="flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-muted-foreground" />{doc.nom_fichier}
+                    <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <Link
+                      href={`/client/documents/${doc.id}`}
+                      className="hover:underline text-sm font-medium truncate max-w-[200px]"
+                      style={{ color: NAVY }}
+                      title={doc.nom_fichier}
+                    >
+                      {doc.nom_fichier}
+                    </Link>
                   </TableCell>
                   <TableCell>{new Date(doc.created_at).toLocaleDateString("fr-FR")}</TableCell>
                   <TableCell>
@@ -427,6 +464,9 @@ export default function ClientDocumentsPage() {
                     )}
                   </TableCell>
                   <TableCell>
+                    {confianceBadge(confiance)}
+                  </TableCell>
+                  <TableCell>
                     <div className="flex gap-1">
                       <Button variant="ghost" size="sm"><Download className="h-3.5 w-3.5" /></Button>
                       {(doc.statut === "erreur" || doc.statut === "en_attente" || doc.statut === "en_cours") && doc.storage_path && (
@@ -438,19 +478,13 @@ export default function ClientDocumentsPage() {
                           onClick={async () => {
                             setDocuments(prev => prev.map(d => d.id === doc.id ? { ...d, statut: "en_cours" } : d))
                             try {
-                              const res = await fetch("/api/documents/process", {
+                              const res = await fetch(`/api/documents/${doc.id}/reanalyze`, {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({
-                                  document_id: doc.id,
-                                  storage_path: doc.storage_path,
-                                  nom_fichier: doc.nom_fichier,
-                                  client_id: profile?.id,
-                                }),
+                                body: JSON.stringify({}),
                               })
                               const data = await res.json()
                               if (data.success) {
-                                // Refresh documents list to get updated data
                                 await fetchDocuments()
                               }
                             } catch {
@@ -458,16 +492,17 @@ export default function ClientDocumentsPage() {
                             }
                           }}
                         >
-                          Réessayer
+                          <RefreshCw className="h-3 w-3 mr-1" />Réessayer
                         </Button>
                       )}
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
+                )
+              })}
               {currentDocs.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-12">
+                  <TableCell colSpan={6} className="text-center py-12">
                     <FileText className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
                     <p className="text-muted-foreground">Aucun document dans ce dossier.</p>
                   </TableCell>

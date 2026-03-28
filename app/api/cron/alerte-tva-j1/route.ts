@@ -30,7 +30,7 @@ export async function GET(request: Request) {
 
     const { data: societes, error: societesError } = await supabase
       .from('societes')
-      .select('id, nom, comptable_id')
+      .select('id, nom, client_id, comptable_id')
       .eq('statut_tva', true)
 
     if (societesError) throw societesError
@@ -48,6 +48,7 @@ export async function GET(request: Request) {
       if (!existing) {
         await supabase.from('tva_mensuelle').insert({
           societe_id: societe.id,
+          client_id: societe.client_id,
           periode,
           date_limite: dateLimit,
           statut_declaration: 'a_faire',

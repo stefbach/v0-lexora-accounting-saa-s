@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server'
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !serviceKey) throw new Error('Missing Supabase admin credentials')
   return createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
 }

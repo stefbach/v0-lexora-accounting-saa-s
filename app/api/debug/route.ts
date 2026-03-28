@@ -6,14 +6,14 @@ export async function GET() {
 
   // Check env vars
   checks.NEXT_PUBLIC_SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ? 'SET' : 'MISSING'
-  checks.SUPABASE_SERVICE_ROLE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY) ? 'SET' : 'MISSING'
+  checks.SUPABASE_SERVICE_ROLE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY) ? 'SET' : 'MISSING'
   checks.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ? 'SET' : 'MISSING'
   checks.ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'not set (default)'
 
   // Test Supabase connection
   try {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY
     if (url && key) {
       const supabase = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
       const { data, error } = await supabase.from('profiles').select('id').limit(1)

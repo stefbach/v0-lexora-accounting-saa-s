@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 // Use service role key to bypass RLS and create users
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !serviceKey) {
     throw new Error('Missing Supabase admin credentials')
   }

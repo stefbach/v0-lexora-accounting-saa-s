@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 function getServiceClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
 }
@@ -27,27 +27,25 @@ export async function GET(request: Request) {
     const moisSuivant = new Date(now.getFullYear(), now.getMonth() + 1, 1)
     const moisLabel = moisSuivant.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
 
-    // Get societies with employees (subject to CSG/NSF)
+    // Get all societies with client_id — pas de filtre statut/nombre_employes (colonnes inexistantes)
     const { data: societes, error: societesError } = await supabase
       .from('societes')
-      .select('id, nom, client_id, comptable_id, nombre_employes')
-      .eq('statut', 'active')
-      .gt('nombre_employes', 0)
+      .select('id, nom, client_id, comptable_id')
 
     if (societesError) throw societesError
 
     let alertesEnvoyees = 0
 
     for (const societe of societes || []) {
-      // Check if CSG declaration already exists
+      if (!societe.client_id) continue
+
+      // Check if CSG declaration already exists for this month in declarations_annuelles
       const { data: declaration } = await supabase
-        .from('declarations_fiscales')
+        .from('declarations_annuelles')
         .select('id')
         .eq('societe_id', societe.id)
-        .in('type', ['CSG', 'NSF'])
-        .gte('date_echeance', new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10))
-        .lte('date_echeance', new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10))
-        .eq('statut', 'soumise')
+        .gte('created_at', new Date(now.getFullYear(), now.getMonth(), 1).toISOString())
+        .lte('created_at', new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString())
         .maybeSingle()
 
       if (declaration) continue
@@ -71,7 +69,7 @@ export async function GET(request: Request) {
           societe_id: societe.id,
           type: 'alerte_csg_nsf',
           titre: `CSG/NSF — ${societe.nom}`,
-          message: `Préparer les déclarations CSG/NSF pour ${societe.nom} (${societe.nombre_employes} employés). Échéance début ${moisLabel}.`,
+          message: `Préparer les déclarations CSG/NSF pour ${societe.nom}. Échéance début ${moisLabel}.`,
           niveau: 'important',
           canaux: ['app'],
           cron_name: cronName,
@@ -84,14 +82,14 @@ export async function GET(request: Request) {
     await supabase.from('cron_logs').insert({
       cron_name: cronName,
       statut: 'success',
-      details: { societes_avec_employes: societes?.length || 0, alertes_envoyees: alertesEnvoyees },
+      details: { societes_traitees: societes?.length || 0, alertes_envoyees: alertesEnvoyees },
       executed_at: new Date().toISOString(),
     })
 
     return NextResponse.json({
       success: true,
       timestamp: new Date().toISOString(),
-      details: { societes_avec_employes: societes?.length || 0, alertes_envoyees: alertesEnvoyees },
+      details: { societes_traitees: societes?.length || 0, alertes_envoyees: alertesEnvoyees },
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Erreur inconnue'
