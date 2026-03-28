@@ -1,7 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
-import { CLAUDE_MODEL } from '@/lib/claude'
 
 export const maxDuration = 60
 
@@ -57,7 +56,7 @@ export async function POST(request: NextRequest) {
       : { type: 'image' as const, source: { type: 'base64' as const, media_type: mediaType as 'image/jpeg' | 'image/png', data: base64 } }
 
     const response = await anthropic.messages.create({
-      model: CLAUDE_MODEL,
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 2048,
       temperature: 0,
       system: `Tu es un expert-comptable. Analyse ce document et retourne UN JSON (sans markdown, sans backticks):
@@ -108,7 +107,7 @@ export async function POST(request: NextRequest) {
     const updateData: any = {
       type_document: typeDoc,
       statut: 'traite',
-      n8n_result: { routing: parsed.routing, extraction, metadata: { processing_time_ms: duration, model: CLAUDE_MODEL } },
+      n8n_result: { routing: parsed.routing, extraction, metadata: { processing_time_ms: duration, model: 'claude-haiku-4-5-20251001' } },
     }
     if (societe !== 'INCONNU') updateData.societe_detectee = societe
 
@@ -147,7 +146,7 @@ export async function POST(request: NextRequest) {
 
     if (documentId) {
       const supabase = getSupabase()
-      await supabase.from('documents').update({ statut: 'erreur', n8n_result: { error: msg } }).eq('id', documentId)
+      await supabase.from('documents').update({ statut: 'erreur', n8n_result: { error: msg } }).eq('id', documentId).catch(() => {})
     }
 
     return NextResponse.json({ error: msg, stack: e?.stack?.split('\n').slice(0, 5) }, { status: 500 })

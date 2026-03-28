@@ -1,79 +1,114 @@
-import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
+import { NextRequest, NextResponse } from 'next/server'
 
-export const dynamic = 'force-dynamic'
+// Use service role key to bypass RLS and create users
+function getAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !serviceKey) {
+    throw new Error('Missing Supabase admin credentials')
+  }
+  return createClient(url, serviceKey, {
+    auth: { autoRefreshToken: false, persistSession: false }
+  })
+}
 
-const ROLES_DISPONIBLES = [
-  { value: 'admin', label: 'Administrateur plateforme' },
-  { value: 'direction', label: 'Direction / PDG' },
-  { value: 'comptable', label: 'Comptable (multi-clients)' },
-  { value: 'comptable_dedie', label: 'Comptable dédié (interne)' },
-  { value: 'rh_manager', label: 'Responsable RH & Paie' },
-  { value: 'juridique', label: 'Juriste' },
-  { value: 'client_admin', label: 'Dirigeant client' },
-  { value: 'client_user', label: 'Collaborateur client' },
-  { value: 'salarie', label: 'Employé (portail salarié)' },
-]
-
-export async function GET(request: Request) {
+// GET — List all users from profiles
+export async function GET() {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    const supabase = getAdminClient()
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .order('created_at', { ascending: false })
 
-    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-    if (profile?.role !== 'admin') return NextResponse.json({ error: 'Accès admin requis' }, { status: 403 })
-
-    const { searchParams } = new URL(request.url)
-    const role = searchParams.get('role')
-    const q = searchParams.get('q')
-
-    let query = supabase.from('profiles').select('*').order('created_at', { ascending: false })
-    if (role) query = query.eq('role', role)
-    if (q) query = query.or(`email.ilike.%${q}%,full_name.ilike.%${q}%`)
-
-    const { data, error } = await query.limit(100)
-    if (error) throw error
-
-    // Stats par rôle
-    const stats: Record<string, number> = {}
-    for (const u of data || []) {
-      stats[u.role] = (stats[u.role] || 0) + 1
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ users: data, total: data?.length, stats, roles: ROLES_DISPONIBLES })
+    return NextResponse.json({ users: data })
   } catch (e: unknown) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
+    const message = e instanceof Error ? e.message : 'Unknown error'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
 
-export async function PATCH(request: Request) {
+// POST — Create a new user
+export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
-
-    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-    if (profile?.role !== 'admin') return NextResponse.json({ error: 'Accès admin requis' }, { status: 403 })
-
     const body = await request.json()
-    const { user_id, role, full_name, module_acces, societe_ids, permissions } = body
+    const { email, password, full_name, role, phone, comptable_id } = body
 
-    if (!user_id) return NextResponse.json({ error: 'user_id requis' }, { status: 400 })
+    if (!email || !password || !full_name || !role) {
+      return NextResponse.json(
+        { error: 'Email, mot de passe, nom complet et rôle sont requis' },
+        { status: 400 }
+      )
+    }
 
-    const updates: Record<string, unknown> = {}
-    if (role) updates.role = role
-    if (full_name) updates.full_name = full_name
-    if (module_acces) updates.module_acces = module_acces
-    if (societe_ids) updates.societe_ids = societe_ids
-    if (permissions) updates.permissions = permissions
+    const validRoles = ['admin', 'client_admin', 'client_user', 'comptable', 'comptable_dedie']
+    if (!validRoles.includes(role)) {
+      return NextResponse.json(
+        { error: `Rôle invalide. Les rôles acceptés sont : ${validRoles.join(', ')}` },
+        { status: 400 }
+      )
+    }
 
-    const { data, error } = await supabase
-      .from('profiles').update(updates).eq('id', user_id).select().single()
-    if (error) throw error
+    const supabase = getAdminClient()
 
-    return NextResponse.json({ user: data, message: 'Profil mis à jour' })
+    // Create the user in Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        full_name,
+        role,
+      },
+    })
+
+    if (authError) {
+      return NextResponse.json({ error: authError.message }, { status: 400 })
+    }
+
+    if (!authData.user) {
+      return NextResponse.json({ error: 'Échec de la création du compte' }, { status: 500 })
+    }
+
+    // Update the profile with additional info (trigger creates it with defaults)
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update({
+        full_name,
+        role,
+        phone: phone || null,
+        comptable_id: comptable_id || null,
+      })
+      .eq('id', authData.user.id)
+
+    if (profileError) {
+      // Profile might not exist yet if trigger hasn't fired, try insert
+      await supabase.from('profiles').upsert({
+        id: authData.user.id,
+        email,
+        full_name,
+        role,
+        phone: phone || null,
+        comptable_id: comptable_id || null,
+      })
+    }
+
+    return NextResponse.json({
+      user: {
+        id: authData.user.id,
+        email,
+        full_name,
+        role,
+        phone,
+      },
+    })
   } catch (e: unknown) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
+    const message = e instanceof Error ? e.message : 'Unknown error'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

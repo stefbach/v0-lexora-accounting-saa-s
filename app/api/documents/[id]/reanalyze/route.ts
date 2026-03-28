@@ -179,7 +179,7 @@ Taux: EUR={{TAUX_EUR}}, GBP={{TAUX_GBP}}, USD={{TAUX_USD}}`, tauxChange)
         .delete()
         .eq('dossier_id', doc.dossier_id)
         .eq('piece_justificative', id)
-        
+        .catch(() => {})
     }
 
     // Update document
@@ -243,7 +243,7 @@ Taux: EUR={{TAUX_EUR}}, GBP={{TAUX_GBP}}, USD={{TAUX_USD}}`, tauxChange)
           piece_justificative: id,
         }))
       if (entries.length > 0) {
-        await supabase.from('ecritures_comptables').insert(entries)
+        await supabase.from('ecritures_comptables').insert(entries).catch(console.error)
       }
     }
 

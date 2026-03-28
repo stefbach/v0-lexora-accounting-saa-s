@@ -24,60 +24,41 @@ CREATE INDEX IF NOT EXISTS idx_ecritures_comptables_dossier_societe
   ON ecritures_comptables(dossier_id, societe_id);
 
 -- -----------------------------------------------------------------------------
--- S0-1b : Mettre à jour la table ecritures_comptables_v2 si elle n'existe pas
+-- S0-1b : Compléter ecritures_comptables_v2 (existe déjà via migration 007)
+-- Migration 007 utilise : numero_compte, debit_mur, credit_mur, solde_mur, ref_folio, nom_compte, description, exercice
+-- On ajoute les colonnes manquantes pour compatibilité avec le code Sprint 1
 -- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS ecritures_comptables_v2 (
-  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  societe_id       UUID NOT NULL REFERENCES societes(id),
-  dossier_id       UUID REFERENCES dossiers(id),
-  document_id      UUID REFERENCES documents(id),
-  date_ecriture    DATE NOT NULL,
-  journal          TEXT NOT NULL,   -- ACH, VTE, BNQ, OD, SAL
-  numero_piece     TEXT,
-  compte           TEXT NOT NULL,
-  libelle          TEXT,
-  debit            NUMERIC(15,2) NOT NULL DEFAULT 0,
-  credit           NUMERIC(15,2) NOT NULL DEFAULT 0,
-  piece_justificative UUID,
-  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+ALTER TABLE public.ecritures_comptables_v2
+  ADD COLUMN IF NOT EXISTS dossier_id       UUID REFERENCES public.dossiers(id),
+  ADD COLUMN IF NOT EXISTS numero_piece     TEXT,
+  ADD COLUMN IF NOT EXISTS libelle          TEXT,
+  ADD COLUMN IF NOT EXISTS piece_justificative UUID;
+
+-- Alias pour compatibilité code (colonne virtuelle via vue ou on garde numero_compte)
+-- Les index existent déjà (migration 007), on ajoute ceux manquants
+CREATE INDEX IF NOT EXISTS idx_ecritures_v2_dossier_id
+  ON public.ecritures_comptables_v2(dossier_id);
 
 CREATE INDEX IF NOT EXISTS idx_ecritures_v2_societe_id
-  ON ecritures_comptables_v2(societe_id);
+  ON public.ecritures_comptables_v2(societe_id);
 
 CREATE INDEX IF NOT EXISTS idx_ecritures_v2_date_ecriture
-  ON ecritures_comptables_v2(date_ecriture);
+  ON public.ecritures_comptables_v2(date_ecriture);
 
-CREATE INDEX IF NOT EXISTS idx_ecritures_v2_compte
-  ON ecritures_comptables_v2(compte);
-
--- RLS pour ecritures_comptables_v2
-ALTER TABLE ecritures_comptables_v2 ENABLE ROW LEVEL SECURITY;
-
+-- RLS pour ecritures_comptables_v2 (déjà activé en migration 007)
+-- Ajout policy client_read si manquante
 DO $$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_policies
-    WHERE tablename = 'ecritures_comptables_v2' AND policyname = 'ecritures_v2_admin_comptable'
+    WHERE schemaname = 'public' AND tablename = 'ecritures_comptables_v2' AND policyname = 'ecritures_v2_client_read'
   ) THEN
-    CREATE POLICY ecritures_v2_admin_comptable ON ecritures_comptables_v2
-      FOR ALL
-      USING (public.get_my_role() IN ('admin', 'comptable', 'comptable_dedie'));
-  END IF;
-END $$;
-
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE tablename = 'ecritures_comptables_v2' AND policyname = 'ecritures_v2_client_read'
-  ) THEN
-    CREATE POLICY ecritures_v2_client_read ON ecritures_comptables_v2
+    CREATE POLICY ecritures_v2_client_read ON public.ecritures_comptables_v2
       FOR SELECT
       USING (
         societe_id IN (
-          SELECT s.id FROM societes s
-          JOIN dossiers d ON d.societe_id = s.id
+          SELECT s.id FROM public.societes s
+          JOIN public.dossiers d ON d.societe_id = s.id
           WHERE d.client_id = auth.uid()
         )
       );

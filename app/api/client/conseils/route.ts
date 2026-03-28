@@ -1,5 +1,4 @@
 import { createClient } from '@supabase/supabase-js'
-import { CLAUDE_MODEL } from '@/lib/claude'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { getTauxChange } from '@/lib/taux-change'
@@ -152,7 +151,7 @@ export async function GET(request: Request) {
     const { default: Anthropic } = await import('@anthropic-ai/sdk')
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
     const response = await anthropic.messages.create({
-      model: CLAUDE_MODEL,
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 4096,
       temperature: 0,
       system: SYSTEM_PROMPT_RECOMMANDATIONS_CFO,

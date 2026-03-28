@@ -280,17 +280,10 @@ COMPTES BANCAIRES:
 - CIC (Credit Industriel et Commercial, France) → 513 - Banque CIC
 - Barclays UK → 514 - Banque Barclays
 - BOV (Bank of Valletta, Malta) → 515 - Banque BOV
-- AfrAsia Bank → 516 - Banque AfrAsia
-- BNI Madagascar → 517 - Banque BNI
-- HSBC Mauritius → 518 - Banque HSBC
-- Standard Bank → 519 - Banque Standard
 
 PATTERNS MCB ETENDUS — IDENTIFICATION OBLIGATOIRE:
 1. 'IB Account Transfer' + 'FT' → 581 (virement interne entre comptes propres — NE PAS generer de charge)
 2. 'PAIEMENT MCB-[0-9]+' → 581 virement interne inter-comptes (NE PAS generer d'ecriture de charge)
-2b. 'ONLINE TRANSFER' → verifier si tiers interne (581) ou externe (selon tiers)
-2c. 'MCB JuicePro' ou 'JuicePro' → identifier tiers depuis libelle (paiement mobile)
-2d. 'CHARGEBACK' → 411 Clients (remboursement client) ou 401 (remboursement fournisseur)
 3. 'Direct Debit Scheme MAURITIUS REVENUE AUTHORITY' → analyser le montant:
    - Si montant correspond a TVA declaree → 4457 TVA collectee
    - Si montant correspond a CSG → 431 CSG a payer
@@ -328,7 +321,6 @@ TAUX DE CHANGE REFERENCE (mis a jour quotidiennement):
 - EUR/MUR: {{TAUX_EUR}}
 - GBP/MUR: {{TAUX_GBP}}
 - USD/MUR: {{TAUX_USD}}
-- AUD/MUR: {{TAUX_AUD}}
 
 REGLES DE TRAITEMENT:
 1. Pour CHAQUE ligne du releve: identifier type, tiers, compte comptable, sens
@@ -381,8 +373,8 @@ export const SYSTEM_PROMPT_CHARGES_SOCIALES = `Tu es un expert en droit social m
 
 COTISATIONS OBLIGATOIRES MAURICE:
 1. CSG (Contribution Sociale Generalisee):
-   - Part salariale: 1.5% si salaire brut <= 50,000 MUR/mois, 3% si > 50,000 MUR
-   - Part patronale: 3% si salaire brut <= 50,000 MUR/mois, 6% si > 50,000 MUR
+   - Part patronale: 6% du salaire brut
+   - Part salariale: 3% du salaire brut
    - Plafond: pas de plafond
    - Echeance: 15 du mois suivant
 
@@ -396,8 +388,8 @@ COTISATIONS OBLIGATOIRES MAURICE:
 
 4. PAYE (Pay As You Earn - impot sur le revenu):
    - Bareme annuel:
-     - 0 a 390,000 MUR: 0%
-     - 390,001 a 650,000 MUR: 10%
+     - 0 a 650,000 MUR: 0%
+     - 650,001 a 700,000 MUR: 10%
      - Au-dessus de 700,000 MUR: 15%
    - Prelevement mensuel a la source par l'employeur
    - Declaration et paiement au MRA avant le 20 du mois suivant
@@ -423,8 +415,8 @@ export const SYSTEM_PROMPT_FICHE_PAIE = `Tu es un expert en paie mauricien speci
 
 REGLES DE PAIE MAURICE:
 - Salaire minimum national: MUR 11,575 par mois (Workers' Rights Act 2019, revise)
-- CSG salariale: 1.5% (<=50K MUR) ou 3% (>50K MUR)
-- CSG patronale: 3% (<=50K MUR) ou 6% (>50K MUR) (charge employeur, pas deduit du net)
+- CSG salariale: 3% du salaire brut
+- CSG patronale: 6% du salaire brut (charge employeur, pas deduit du net)
 - Training Levy: 1% du salaire brut (charge employeur)
 - NPS employe: MUR 1.00/mois, NPS employeur: MUR 2.50/mois
 - PAYE: selon bareme progressif (0%/10%/15%)
@@ -434,7 +426,7 @@ REGLES DE PAIE MAURICE:
 
 CALCUL DU NET:
 Salaire brut
-- CSG salariale (1.5% ou 3% selon seuil 50K MUR)
+- CSG salariale (3%)
 - PAYE (selon bareme)
 - NPS salarie (MUR 1)
 = Net a payer
@@ -721,7 +713,6 @@ export function injectTauxChange(prompt: string, rates: Record<string, number>):
     .replace(/\{\{TAUX_EUR\}\}/g, String(rates.EUR ?? 46.50))
     .replace(/\{\{TAUX_GBP\}\}/g, String(rates.GBP ?? 54.20))
     .replace(/\{\{TAUX_USD\}\}/g, String(rates.USD ?? 44.80))
-    .replace(/\{\{TAUX_AUD\}\}/g, String(rates.AUD ?? 29.50))
 }
 
 /**
