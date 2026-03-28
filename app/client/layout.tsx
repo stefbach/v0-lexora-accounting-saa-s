@@ -1,18 +1,11 @@
 "use client"
+import { ClientSidebarFull } from "@/components/layout/ClientSidebarFull"
 
-import { ClientSidebar } from "@/components/layout/ClientSidebar"
-
-export default function ClientLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function ClientLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen bg-gray-50">
-      <ClientSidebar />
-      <main className="flex-1 overflow-auto">
-        {children}
-      </main>
+      <ClientSidebarFull />
+      <main className="flex-1 overflow-auto ml-64">{children}</main>
     </div>
   )
 }
