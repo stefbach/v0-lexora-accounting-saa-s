@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import {
   genererVirementBanque,
+  genererVirementMCB_BPV1,
   grouperParBanque,
   BANQUES_MAURITIUS,
   type LigneBulletin
@@ -144,23 +145,48 @@ export async function POST(request: Request) {
       nom_compte: compteEmetteur?.nom_compte || '',
     }
 
-    // Générer fichiers MUR
-    for (const [banqueCode, lgnes] of groupesMUR.entries()) {
-      const nomBanque = BANQUES_MAURITIUS.find(b => b.code === banqueCode)?.nom || banqueCode
-      const { content, extension } = genererVirementBanque(lgnes, banqueCode, date, infoEmetteur)
-      const total = lgnes.reduce((s, l) => s + l.salaire_net, 0)
-      const filename = `virement_salaires_${periode}_${banqueCode}_MUR.${extension}`
-
+    // MCB → utiliser le format officiel BP-V1
+    if (infoEmetteur.banque === 'MCB' && infoEmetteur.numero_compte) {
+      // Générer UN SEUL fichier BP-V1 qui contient lignes 1 (MCB interne) + lignes 2 (inter-bancaire)
+      const { content, extension, filename_suggestion } = genererVirementMCB_BPV1(
+        lignesMUR,
+        infoEmetteur.numero_compte,
+        date,
+        `SALARY ${periode.slice(0,4)}-${periode.slice(5,7)}`
+          .replace(/(\d{4})-(\d{2})/, (_, y, m) => {
+            const mois = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+            return `SALARY ${mois[parseInt(m)-1]} ${y}`
+          })
+      )
+      const total = lignesMUR.reduce((s, l) => s + l.salaire_net, 0)
       fichiersGeneres.push({
-        banque: banqueCode,
-        nom_banque: nomBanque,
+        banque: 'MCB',
+        nom_banque: 'Mauritius Commercial Bank (BP-V1)',
         devise: 'MUR',
-        nb_employes: lgnes.length,
+        nb_employes: lignesMUR.length,
         montant_total: Math.round(total * 100) / 100,
-        filename,
+        filename: filename_suggestion,
         content,
-        employes: lgnes.map(l => `${l.prenom} ${l.nom} (${l.bank_account || 'N/A'})`),
+        employes: lignesMUR.map(l => `${l.prenom} ${l.nom} (${l.bank_account || 'N/A'})`),
       })
+    } else {
+      // Autres banques émettrices — grouper par banque bénéficiaire
+      for (const [banqueCode, lgnes] of groupesMUR.entries()) {
+        const nomBanque = BANQUES_MAURITIUS.find(b => b.code === banqueCode)?.nom || banqueCode
+        const { content, extension } = genererVirementBanque(lgnes, banqueCode, date, infoEmetteur)
+        const total = lgnes.reduce((s, l) => s + l.salaire_net, 0)
+        const filename = `virement_salaires_${periode}_${banqueCode}_MUR.${extension}`
+        fichiersGeneres.push({
+          banque: banqueCode,
+          nom_banque: nomBanque,
+          devise: 'MUR',
+          nb_employes: lgnes.length,
+          montant_total: Math.round(total * 100) / 100,
+          filename,
+          content,
+          employes: lgnes.map(l => `${l.prenom} ${l.nom} (${l.bank_account || 'N/A'})`),
+        })
+      }
     }
 
     // Générer fichiers EUR

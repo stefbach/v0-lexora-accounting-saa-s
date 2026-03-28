@@ -4,6 +4,95 @@
  * À utiliser dans app/api/rh/exports/virement/route.ts
  */
 
+/**
+ * Codes banques MCB pour les virements inter-bancaires (lignes type 2)
+ * Source : format officiel MCB BP-V1 — validé sur fichier réel BP-1920430.txt
+ */
+export const MCB_BANK_CODES: Record<string, string> = {
+  'MCB':     '01',  // MCB interne → ligne type 1 (pas de code)
+  'SBM':     '03',  // State Bank of Mauritius — confirmé fichier réel
+  'ABC':     '11',  // ABC Banking Corporation — confirmé fichier réel (compte 14 chiffres)
+  'AFRASIA': '05',  // AfrAsia Bank
+  'MAUBANK': '06',  // MauBank (ex-MPCB)
+  'BANKONE': '08',  // Bank One (CIEL)
+  'ABSA':    '04',  // ABSA / Barclays Mauritius
+  'SCB':     '07',  // Standard Chartered Mauritius
+  'HSBC':    '09',  // HSBC Mauritius
+  'BCP':     '10',  // BCP / Banque des Mascareignes
+  'BDM':     '10',
+  'CIM':     '12',
+  'AUTRE':   '99',
+}
+
+/**
+ * Générer le fichier MCB BP-V1 (format officiel Bulk Payment MCB)
+ * Validé sur fichier réel BP-1920430.txt (OCC, mars 2026)
+ *
+ * Structure :
+ *   Ligne 0  : en-tête batch (1 ligne)
+ *   Ligne 9  : compte débiteur employeur (1 ligne)
+ *   Lignes 1 : virements MCB→MCB (même banque, numéro 12 chiffres)
+ *   Lignes 2 : virements MCB→Autre banque (code banque MCB + numéro compte)
+ *
+ * Exemple réel :
+ *   0|BP-V1|20260328|02|1|501858.14|16|501858.14|MUR|20260328180545
+ *   9|501858.14|000447954555|SALARY Mar 2026
+ *   1|24863.27|000183552032|SALARY Mar 2026
+ *   2|36850.55|03|191079310|LALANE Melanie|SALARY Mar 2026|N
+ */
+export function genererVirementMCB_BPV1(
+  lignes: LigneBulletin[],
+  compteDebiteur: string,     // Numéro compte MCB employeur (ex: 000447954555)
+  dateValeur: string,          // YYYY-MM-DD
+  referenceLabel?: string      // Ex: "SALARY Mar 2026"
+): { content: string; extension: string; filename_suggestion: string } {
+
+  const dateYYYYMMDD = dateValeur.replace(/-/g, '')
+  const now = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const timestamp = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
+
+  // Construire référence "SALARY Mmm YYYY"
+  const moisNoms = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+  const d = new Date(dateValeur)
+  const ref = referenceLabel || `SALARY ${moisNoms[d.getMonth()]} ${d.getFullYear()}`
+
+  // Séparer MCB interne (type 1) vs autres banques (type 2)
+  const lignesMCB    = lignes.filter(l => (l.bank_code || normaliserCodeBanque(l.bank_name)) === 'MCB')
+  const lignesAutres = lignes.filter(l => (l.bank_code || normaliserCodeBanque(l.bank_name)) !== 'MCB')
+
+  const totalGeneral = lignes.reduce((s, l) => s + l.salaire_net, 0)
+  const nbTransactions = lignes.length
+
+  let content = ''
+
+  // LIGNE 0 — En-tête batch
+  content += `0|BP-V1|${dateYYYYMMDD}|02|1|${totalGeneral.toFixed(2)}|${nbTransactions}|${totalGeneral.toFixed(2)}|MUR|${timestamp}\r\n`
+
+  // LIGNE 9 — Compte débiteur employeur
+  content += `9|${totalGeneral.toFixed(2)}|${compteDebiteur}|${ref}\r\n`
+
+  // LIGNES 1 — Virements MCB→MCB
+  for (const l of lignesMCB) {
+    content += `1|${l.salaire_net.toFixed(2)}|${l.bank_account}|${ref}\r\n`
+  }
+
+  // LIGNES 2 — Virements MCB→Autre banque
+  for (const l of lignesAutres) {
+    const bankCode = l.bank_code || normaliserCodeBanque(l.bank_name)
+    const mcbCode  = MCB_BANK_CODES[bankCode] || MCB_BANK_CODES['AUTRE']
+    const nomBenef = (l.bank_account_name || `${l.nom} ${l.prenom}`).toUpperCase().slice(0, 30)
+    content += `2|${l.salaire_net.toFixed(2)}|${mcbCode}|${l.bank_account}|${nomBenef}|${ref}|N\r\n`
+  }
+
+  const moisRef = dateValeur.slice(0, 7)
+  return {
+    content,
+    extension: 'txt',
+    filename_suggestion: `BP-SALARY-${moisRef}.txt`
+  }
+}
+
 export const BANQUES_MAURITIUS = [
   { code: 'MCB',   nom: 'Mauritius Commercial Bank',    swift: 'MCBLMUMU' },
   { code: 'SBM',   nom: 'State Bank of Mauritius',      swift: 'STCBMUMU' },
