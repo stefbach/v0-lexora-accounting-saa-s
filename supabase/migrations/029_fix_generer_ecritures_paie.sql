@@ -368,7 +368,4 @@ CREATE TRIGGER trig_ecritures_paie
   EXECUTE FUNCTION public.trigger_ecritures_paie();
 
 COMMENT ON FUNCTION public.generer_ecritures_paie(UUID) IS
-  'Migration 029 — écrit dans ecritures_comptables (v1, compat) ET ecritures_comptables_v2 (Grand Livre). '
-  'Journal OD-PAIE. Couvre : 6411 sal, 6412 transport, 6413 petrol, 6414 OT, 6416 EOY, '
-  '6451 CSG-pat, 6452 NSF-pat, 6453 PRGF, 6454 Training Levy, '
-  '421 net-à-payer, 431 CSG/NSF, 432 Training/PRGF, 444 PAYE.';
+  'Migration 029 - ecrit dans ecritures_comptables (v1) ET ecritures_comptables_v2 (Grand Livre). Journal OD-PAIE. Comptes: 6411 salaire, 6412 transport, 6413 petrol, 6414 OT, 6416 EOY, 6451 CSG-pat, 6452 NSF-pat, 6453 PRGF, 6454 Training Levy, 421 net-a-payer, 431 CSG/NSF, 432 Training/PRGF, 444 PAYE.';

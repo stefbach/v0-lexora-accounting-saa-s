@@ -14,3 +14,16 @@ next.user-config.*
 node_modules
 .next/
 .DS_Store
+# Fichiers d analyse agents
+ANALYSIS_INDEX.md
+CODEBASE_ANALYSIS.md
+CODEBASE_EXPLORATION_COMPLETE.md
+EXPLORATION_COMPLETE.md
+EXPLORATION_INDEX.md
+FILE_LISTING.md
+LIRE_D_ABORD.txt
+QUICK_REFERENCE.md
+RH_MODULE_OVERVIEW.md
+mig029_final.sql
+migration029_supabase.sql
+screen_supabase.png
