@@ -1,421 +1,165 @@
 "use client"
-
 import { useState, useEffect, useCallback } from "react"
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-  Plus,
-  Search,
-  UserCog,
-  Users,
-  Loader2,
-} from "lucide-react"
+import { Loader2, Search, UserCog, Users, Shield, Edit2, CheckCircle } from "lucide-react"
 
-interface UserProfile {
-  id: string
-  email: string
-  full_name: string
-  role: string
-  phone: string | null
-  comptable_id: string | null
-  is_active: boolean
-  created_at: string
+const ROLE_COLORS: Record<string, string> = {
+  admin: "bg-red-100 text-red-700",
+  direction: "bg-purple-100 text-purple-700",
+  comptable: "bg-blue-100 text-blue-700",
+  comptable_dedie: "bg-indigo-100 text-indigo-700",
+  rh_manager: "bg-green-100 text-green-700",
+  juridique: "bg-amber-100 text-amber-700",
+  client_admin: "bg-orange-100 text-orange-700",
+  client_user: "bg-gray-100 text-gray-700",
+  salarie: "bg-teal-100 text-teal-700",
 }
 
-export default function UsersPage() {
-  const [search, setSearch] = useState("")
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [users, setUsers] = useState<UserProfile[]>([])
+export default function AdminUsersPage() {
+  const [users, setUsers] = useState<any[]>([])
+  const [roles, setRoles] = useState<any[]>([])
+  const [stats, setStats] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
-  const [creating, setCreating] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
+  const [q, setQ] = useState("")
+  const [filterRole, setFilterRole] = useState("")
+  const [editUser, setEditUser] = useState<any>(null)
+  const [editRole, setEditRole] = useState("")
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
 
-  // Form state
-  const [formName, setFormName] = useState("")
-  const [formEmail, setFormEmail] = useState("")
-  const [formPhone, setFormPhone] = useState("")
-  const [formPassword, setFormPassword] = useState("")
-  const [formRole, setFormRole] = useState("")
-  const [formComptable, setFormComptable] = useState("")
+  const load = useCallback(async () => {
+    setLoading(true)
+    const params = new URLSearchParams()
+    if (q) params.set('q', q)
+    if (filterRole) params.set('role', filterRole)
+    const res = await fetch(`/api/admin/users?${params}`)
+    const d = await res.json()
+    setUsers(d.users || [])
+    setRoles(d.roles || [])
+    setStats(d.stats || {})
+    setLoading(false)
+  }, [q, filterRole])
 
-  const fetchUsers = useCallback(async () => {
-    try {
-      const res = await fetch("/api/admin/users")
-      const data = await res.json()
-      if (data.users) {
-        setUsers(data.users)
-      }
-    } catch {
-      console.error("Failed to fetch users")
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  useEffect(() => { load() }, [load])
 
-  useEffect(() => {
-    fetchUsers()
-  }, [fetchUsers])
-
-  const comptables = users.filter((u) => u.role === "comptable" || u.role === "comptable_dedie")
-  const clients = users.filter((u) => u.role === "client_admin" || u.role === "client_user")
-
-  const filteredComptables = comptables.filter(
-    (u) =>
-      u.full_name.toLowerCase().includes(search.toLowerCase()) ||
-      u.email.toLowerCase().includes(search.toLowerCase())
-  )
-
-  const filteredClients = clients.filter(
-    (u) =>
-      u.full_name.toLowerCase().includes(search.toLowerCase()) ||
-      u.email.toLowerCase().includes(search.toLowerCase())
-  )
-
-  const resetForm = () => {
-    setFormName("")
-    setFormEmail("")
-    setFormPhone("")
-    setFormPassword("")
-    setFormRole("")
-    setFormComptable("")
-    setError(null)
-    setSuccess(null)
-  }
-
-  const handleCreate = async () => {
-    setError(null)
-    setSuccess(null)
-
-    if (!formName || !formEmail || !formPassword || !formRole) {
-      setError("Veuillez remplir tous les champs obligatoires.")
-      return
-    }
-
-    if (formPassword.length < 6) {
-      setError("Le mot de passe doit contenir au moins 6 caractères.")
-      return
-    }
-
-    setCreating(true)
-    try {
-      const res = await fetch("/api/admin/users", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: formEmail,
-          password: formPassword,
-          full_name: formName,
-          role: formRole,
-          phone: formPhone || null,
-          comptable_id: formComptable || null,
-        }),
-      })
-
-      const data = await res.json()
-
-      if (!res.ok) {
-        setError(data.error || "Erreur lors de la création")
-        return
-      }
-
-      setSuccess(`Utilisateur ${formName} créé avec succès !`)
-      resetForm()
-      setDialogOpen(false)
-      fetchUsers()
-    } catch {
-      setError("Erreur de connexion au serveur")
-    } finally {
-      setCreating(false)
-    }
-  }
-
-  const getComptableName = (comptableId: string | null) => {
-    if (!comptableId) return "—"
-    const comptable = users.find((u) => u.id === comptableId)
-    return comptable?.full_name || "—"
+  const saveRole = async () => {
+    if (!editUser || !editRole) return
+    setSaving(true)
+    await fetch('/api/admin/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: editUser.id, role: editRole }) })
+    setSaving(false); setSaved(true)
+    setTimeout(() => { setSaved(false); setEditUser(null); load() }, 1000)
   }
 
   return (
     <div className="p-6 space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
-            Utilisateurs
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Gestion des comptables et clients de la plateforme
-          </p>
+        <div><h1 className="text-2xl font-bold text-[#1E2A4A]">Gestion des utilisateurs</h1>
+        <p className="text-sm text-gray-500">Niveaux d'accès et rôles</p></div>
+      </div>
+
+      {/* Stats par rôle */}
+      <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
+        {Object.entries(stats).map(([role, count]) => (
+          <Card key={role} className="cursor-pointer hover:shadow" onClick={() => setFilterRole(filterRole === role ? '' : role)}>
+            <CardContent className="p-3 text-center">
+              <p className="text-lg font-bold text-[#1E2A4A]">{count}</p>
+              <Badge className={`text-xs mt-1 ${ROLE_COLORS[role] || 'bg-gray-100 text-gray-700'}`}>{role}</Badge>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Filtres */}
+      <div className="flex gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"/>
+          <Input placeholder="Rechercher par nom ou email..." className="pl-9" value={q} onChange={e => setQ(e.target.value)}/>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm() }}>
-          <DialogTrigger asChild>
-            <Button style={{ backgroundColor: "#1E2A4A" }}>
-              <Plus className="mr-2 h-4 w-4" />
-              Ajouter un utilisateur
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Nouvel utilisateur</DialogTitle>
-              <DialogDescription>
-                Renseignez les informations du nouvel utilisateur. Un compte Supabase sera créé automatiquement.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>Nom complet *</Label>
-                <Input
-                  placeholder="Ex: Marie Dupont"
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Email *</Label>
-                <Input
-                  type="email"
-                  placeholder="Ex: marie@lexora.mu"
-                  value={formEmail}
-                  onChange={(e) => setFormEmail(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Mot de passe *</Label>
-                <Input
-                  type="password"
-                  placeholder="Minimum 6 caractères"
-                  value={formPassword}
-                  onChange={(e) => setFormPassword(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Téléphone</Label>
-                <Input
-                  placeholder="Ex: +230 5234 5678"
-                  value={formPhone}
-                  onChange={(e) => setFormPhone(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
+        <Select value={filterRole || "all"} onValueChange={v => setFilterRole(v === 'all' ? '' : v)}>
+          <SelectTrigger className="w-52"><SelectValue placeholder="Tous les rôles"/></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tous les rôles</SelectItem>
+            {roles.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Table */}
+      <Card>
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="flex justify-center p-12"><Loader2 className="w-8 h-8 animate-spin text-[#1E2A4A]"/></div>
+          ) : (
+            <Table>
+              <TableHeader><TableRow>
+                <TableHead>Utilisateur</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Rôle</TableHead>
+                <TableHead>Modules</TableHead>
+                <TableHead>Depuis</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow></TableHeader>
+              <TableBody>
+                {users.map(u => (
+                  <TableRow key={u.id}>
+                    <TableCell className="font-medium">{u.full_name || '—'}</TableCell>
+                    <TableCell className="text-sm text-gray-500">{u.email}</TableCell>
+                    <TableCell><Badge className={`text-xs ${ROLE_COLORS[u.role] || 'bg-gray-100 text-gray-700'}`}><Shield className="w-3 h-3 mr-1"/>{u.role}</Badge></TableCell>
+                    <TableCell className="text-xs text-gray-400">{(u.module_acces || []).join(', ') || '—'}</TableCell>
+                    <TableCell className="text-xs text-gray-400">{new Date(u.created_at).toLocaleDateString('fr-FR')}</TableCell>
+                    <TableCell>
+                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { setEditUser(u); setEditRole(u.role) }}>
+                        <Edit2 className="w-3 h-3 mr-1"/>Modifier
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {!users.length && <TableRow><TableCell colSpan={6} className="text-center text-gray-400 py-8">Aucun utilisateur</TableCell></TableRow>}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Dialog modification rôle */}
+      <Dialog open={!!editUser} onOpenChange={o => { if (!o) setEditUser(null) }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><UserCog className="w-5 h-5"/>Modifier le rôle</DialogTitle></DialogHeader>
+          {editUser && (
+            <div className="space-y-4 py-2">
+              <div><p className="text-sm text-gray-500">Utilisateur</p><p className="font-semibold">{editUser.full_name || editUser.email}</p></div>
+              <div>
                 <Label>Rôle *</Label>
-                <Select value={formRole} onValueChange={setFormRole}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sélectionner un rôle" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="comptable">Comptable (tous les clients)</SelectItem>
-                    <SelectItem value="comptable_dedie">Comptable dédié (clients assignés)</SelectItem>
-                    <SelectItem value="client_admin">Client Admin</SelectItem>
-                    <SelectItem value="client_user">Client Utilisateur</SelectItem>
-                  </SelectContent>
+                <Select value={editRole} onValueChange={setEditRole}>
+                  <SelectTrigger><SelectValue/></SelectTrigger>
+                  <SelectContent>{roles.map(r => <SelectItem key={r.value} value={r.value}><span className="text-sm">{r.label}</span></SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              {(formRole === "client_admin" || formRole === "client_user") && comptables.length > 0 && (
-                <div className="space-y-2">
-                  <Label>Comptable assigné</Label>
-                  <Select value={formComptable} onValueChange={setFormComptable}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sélectionner un comptable" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {comptables.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.full_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
-              {error && (
-                <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
-                  {error}
-                </div>
-              )}
+              <div className="bg-blue-50 rounded p-3 text-xs text-blue-700">
+                {editRole === 'admin' && "⚠️ Accès total à la plateforme"}
+                {editRole === 'direction' && "Vue consolidée groupe, management accounts, Cerveau TIBOK"}
+                {editRole === 'comptable' && "Gestion multi-clients, dossiers, documents, grand livre"}
+                {editRole === 'rh_manager' && "Module RH: employés, paie, congés, pointage, CLARA"}
+                {editRole === 'juridique' && "Génération contrats, KYC, Due Diligence"}
+                {editRole === 'client_admin' && "Accès complet à sa société: upload docs, factures, rapports"}
+                {editRole === 'client_user' && "Upload documents, consultation rapports, tableau de bord"}
+                {editRole === 'salarie' && "Portail salarié: pointage GPS, bulletins, congés uniquement"}
+              </div>
+              <Button onClick={saveRole} disabled={saving || saved} className="w-full bg-[#1E2A4A] text-white">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : saved ? <CheckCircle className="w-4 h-4 mr-2 text-green-400"/> : null}
+                {saved ? "Rôle mis à jour !" : "Enregistrer"}
+              </Button>
             </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => { setDialogOpen(false); resetForm() }}>
-                Annuler
-              </Button>
-              <Button
-                style={{ backgroundColor: "#C9A84C" }}
-                onClick={handleCreate}
-                disabled={creating}
-              >
-                {creating ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Création...
-                  </>
-                ) : (
-                  "Créer l'utilisateur"
-                )}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {success && (
-        <div className="rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800">
-          {success}
-        </div>
-      )}
-
-      {/* Search */}
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Rechercher par nom ou email..."
-          className="pl-9"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
-
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      ) : (
-        <Tabs defaultValue="comptables">
-          <TabsList>
-            <TabsTrigger value="comptables" className="gap-1.5">
-              <UserCog className="h-4 w-4" />
-              Comptables ({filteredComptables.length})
-            </TabsTrigger>
-            <TabsTrigger value="clients" className="gap-1.5">
-              <Users className="h-4 w-4" />
-              Clients ({filteredClients.length})
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="comptables">
-            <Card>
-              <CardHeader>
-                <CardTitle style={{ color: "#1E2A4A" }}>Comptables</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nom</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Téléphone</TableHead>
-                      <TableHead>Rôle</TableHead>
-                      <TableHead>Statut</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredComptables.map((u) => (
-                      <TableRow key={u.id}>
-                        <TableCell className="font-medium">{u.full_name}</TableCell>
-                        <TableCell>{u.email}</TableCell>
-                        <TableCell>{u.phone || "—"}</TableCell>
-                        <TableCell>
-                          <Badge className="border-transparent" style={{ backgroundColor: "#1E2A4A15", color: "#1E2A4A" }}>
-                            Comptable
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={u.is_active !== false ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-600"}>
-                            {u.is_active !== false ? "Actif" : "Inactif"}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    {filteredComptables.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                          Aucun comptable trouvé.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="clients">
-            <Card>
-              <CardHeader>
-                <CardTitle style={{ color: "#1E2A4A" }}>Clients</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nom</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Téléphone</TableHead>
-                      <TableHead>Comptable assigné</TableHead>
-                      <TableHead>Statut</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredClients.map((u) => (
-                      <TableRow key={u.id}>
-                        <TableCell className="font-medium">{u.full_name}</TableCell>
-                        <TableCell>{u.email}</TableCell>
-                        <TableCell>{u.phone || "—"}</TableCell>
-                        <TableCell>{getComptableName(u.comptable_id)}</TableCell>
-                        <TableCell>
-                          <Badge className={u.is_active !== false ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-600"}>
-                            {u.is_active !== false ? "Actif" : "Inactif"}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    {filteredClients.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                          Aucun client trouvé.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-      )}
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

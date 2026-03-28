@@ -8,10 +8,14 @@
 // ---------------------------------------------------------------------------
 export type Role =
   | 'admin'
-  | 'client_admin'
-  | 'client_user'
-  | 'comptable'
-  | 'comptable_dedie'
+  | 'direction'         // PDG / Directeur général — vue groupe complète
+  | 'comptable'         // Comptable externe — gère plusieurs clients
+  | 'comptable_dedie'   // Comptable interne dédié à une société
+  | 'rh_manager'        // Responsable RH & Paie
+  | 'juridique'         // Juriste — accès module juridique
+  | 'client_admin'      // Dirigeant client — accès complet à sa société
+  | 'client_user'       // Employé client — accès lecture + upload docs
+  | 'salarie'           // Employé — portail salarié uniquement
 
 // ---------------------------------------------------------------------------
 // Types de documents
