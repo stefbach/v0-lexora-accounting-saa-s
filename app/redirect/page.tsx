@@ -3,44 +3,39 @@ import { useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Loader2 } from "lucide-react"
 
-// Mapping rôle → route dashboard
 const ROLE_DASHBOARD: Record<string, string> = {
   admin:             '/admin',
-  direction:         '/direction',
+  super_admin:       '/admin',
   comptable:         '/comptable',
   comptable_dedie:   '/comptable',
-  rh_manager:        '/rh',
-  juridique:         '/rh/juridique',
   client_admin:      '/client/tableau-de-bord',
   client_user:       '/client/tableau-de-bord',
+  rh:                '/rh',
+  juridique:         '/juridique',
+  employe:           '/salarie',
+  direction:         '/direction',
+  rh_manager:        '/rh',
   salarie:           '/salarie',
 }
 
 export default function RedirectPage() {
   useEffect(() => {
-    async function redirect() {
+    async function go() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { window.location.href = '/auth/login'; return }
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single()
-
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
       const role = profile?.role || 'client_user'
-      const destination = ROLE_DASHBOARD[role] || '/client/tableau-de-bord'
-      window.location.href = destination
+      window.location.href = ROLE_DASHBOARD[role] || '/client/tableau-de-bord'
     }
-    redirect()
+    go()
   }, [])
 
   return (
-    <div className="flex items-center justify-center h-screen">
-      <div className="flex flex-col items-center gap-3">
-        <Loader2 className="w-8 h-8 animate-spin text-[#1E2A4A]"/>
-        <p className="text-sm text-gray-500">Chargement de votre espace...</p>
+    <div className="flex items-center justify-center h-screen bg-[#1E2A4A]">
+      <div className="text-center text-white">
+        <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-[#C9A84C]" />
+        <p className="font-medium">Redirection en cours...</p>
       </div>
     </div>
   )

@@ -1,165 +1,216 @@
 "use client"
-import { useState, useEffect, useCallback } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { useEffect, useState, useCallback } from "react"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Loader2, Search, UserCog, Users, Shield, Edit2, CheckCircle } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 
-const ROLE_COLORS: Record<string, string> = {
-  admin: "bg-red-100 text-red-700",
-  direction: "bg-purple-100 text-purple-700",
-  comptable: "bg-blue-100 text-blue-700",
-  comptable_dedie: "bg-indigo-100 text-indigo-700",
-  rh_manager: "bg-green-100 text-green-700",
-  juridique: "bg-amber-100 text-amber-700",
-  client_admin: "bg-orange-100 text-orange-700",
-  client_user: "bg-gray-100 text-gray-700",
-  salarie: "bg-teal-100 text-teal-700",
+interface User { id: string; email: string; full_name: string; role: string; societe_id?: string; created_at: string }
+interface Societe { id: string; nom: string; brn: string }
+
+const ROLES = [
+  { value: 'admin', label: 'Admin Plateforme', color: 'bg-red-100 text-red-800' },
+  { value: 'comptable', label: 'Comptable', color: 'bg-blue-100 text-blue-800' },
+  { value: 'comptable_dedie', label: 'Comptable Dédié', color: 'bg-blue-100 text-blue-800' },
+  { value: 'client_admin', label: 'Client (Dirigeant)', color: 'bg-green-100 text-green-800' },
+  { value: 'rh', label: 'RH', color: 'bg-orange-100 text-orange-800' },
+  { value: 'juridique', label: 'Juridique', color: 'bg-purple-100 text-purple-800' },
+  { value: 'employe', label: 'Employé', color: 'bg-gray-100 text-gray-700' },
+]
+
+const NEEDS_SOCIETE = ['rh', 'juridique', 'employe']
+
+function genPassword() {
+  return Math.random().toString(36).slice(2, 8).toUpperCase() + Math.random().toString(36).slice(2, 8)
 }
 
-export default function AdminUsersPage() {
-  const [users, setUsers] = useState<any[]>([])
-  const [roles, setRoles] = useState<any[]>([])
-  const [stats, setStats] = useState<Record<string, number>>({})
+function RoleBadge({ role }: { role: string }) {
+  const r = ROLES.find(r => r.value === role)
+  return <Badge className={`text-xs ${r?.color || 'bg-gray-100 text-gray-700'}`}>{r?.label || role}</Badge>
+}
+
+export default function UsersPage() {
+  const [users, setUsers] = useState<User[]>([])
+  const [societes, setSocietes] = useState<Societe[]>([])
   const [loading, setLoading] = useState(true)
-  const [q, setQ] = useState("")
-  const [filterRole, setFilterRole] = useState("")
-  const [editUser, setEditUser] = useState<any>(null)
-  const [editRole, setEditRole] = useState("")
+  const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
+  const [lastPassword, setLastPassword] = useState("")
+  const [filterRole, setFilterRole] = useState("all")
+  const [form, setForm] = useState({
+    prenom: '', nom: '', email: '', password: genPassword(),
+    role: 'client_admin', societe_id: '', comptable_id: ''
+  })
 
   const load = useCallback(async () => {
     setLoading(true)
-    const params = new URLSearchParams()
-    if (q) params.set('q', q)
-    if (filterRole) params.set('role', filterRole)
-    const res = await fetch(`/api/admin/users?${params}`)
-    const d = await res.json()
-    setUsers(d.users || [])
-    setRoles(d.roles || [])
-    setStats(d.stats || {})
+    const [u, s] = await Promise.all([
+      fetch('/api/admin/users').then(r => r.json()),
+      fetch('/api/comptable/societes').then(r => r.json()),
+    ])
+    setUsers(u.users || [])
+    setSocietes(s.societes || [])
     setLoading(false)
-  }, [q, filterRole])
+  }, [])
 
   useEffect(() => { load() }, [load])
 
-  const saveRole = async () => {
-    if (!editUser || !editRole) return
+  const creer = async () => {
+    if (!form.prenom || !form.nom || !form.email || !form.role) return
+    if (NEEDS_SOCIETE.includes(form.role) && !form.societe_id) return
     setSaving(true)
-    await fetch('/api/admin/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: editUser.id, role: editRole }) })
-    setSaving(false); setSaved(true)
-    setTimeout(() => { setSaved(false); setEditUser(null); load() }, 1000)
+    const res = await fetch('/api/admin/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: form.email,
+        password: form.password,
+        full_name: `${form.prenom} ${form.nom}`,
+        role: form.role,
+        societe_id: form.societe_id || undefined,
+        comptable_id: form.comptable_id || undefined,
+      })
+    })
+    const data = await res.json()
+    setSaving(false)
+    if (data.error) { alert(data.error); return }
+    setLastPassword(form.password)
+    setOpen(false)
+    setForm({ prenom: '', nom: '', email: '', password: genPassword(), role: 'client_admin', societe_id: '', comptable_id: '' })
+    load()
   }
+
+  const changeRole = async (user_id: string, role: string) => {
+    await fetch('/api/admin/users', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id, role })
+    })
+    load()
+  }
+
+  const filtered = filterRole === 'all' ? users : users.filter(u => u.role === filterRole)
+  const stats = ROLES.map(r => ({ ...r, count: users.filter(u => u.role === r.value).length }))
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <div><h1 className="text-2xl font-bold text-[#1E2A4A]">Gestion des utilisateurs</h1>
-        <p className="text-sm text-gray-500">Niveaux d'accès et rôles</p></div>
+        <div>
+          <h1 className="text-2xl font-bold text-[#1E2A4A]">Utilisateurs</h1>
+          <p className="text-sm text-gray-500">{users.length} compte{users.length !== 1 ? 's' : ''} au total</p>
+        </div>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-[#1E2A4A]">+ Créer un compte</Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-md">
+            <DialogHeader><DialogTitle>Créer un compte utilisateur</DialogTitle></DialogHeader>
+            <div className="space-y-4 pt-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label>Prénom</Label><Input value={form.prenom} onChange={e => setForm(f => ({...f, prenom: e.target.value}))} placeholder="Jean" /></div>
+                <div><Label>Nom</Label><Input value={form.nom} onChange={e => setForm(f => ({...f, nom: e.target.value}))} placeholder="Dupont" /></div>
+              </div>
+              <div><Label>Email</Label><Input type="email" value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))} placeholder="jean.dupont@email.com" /></div>
+              <div>
+                <Label>Rôle</Label>
+                <Select value={form.role} onValueChange={v => setForm(f => ({...f, role: v, societe_id: ''}))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {ROLES.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              {NEEDS_SOCIETE.includes(form.role) && (
+                <div>
+                  <Label>Société <span className="text-red-500">*</span></Label>
+                  <Select value={form.societe_id} onValueChange={v => setForm(f => ({...f, societe_id: v}))}>
+                    <SelectTrigger><SelectValue placeholder="Sélectionner une société" /></SelectTrigger>
+                    <SelectContent>
+                      {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom} {s.brn ? `— ${s.brn}` : ''}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              <div>
+                <Label>Mot de passe généré</Label>
+                <div className="flex gap-2">
+                  <Input value={form.password} onChange={e => setForm(f => ({...f, password: e.target.value}))} className="font-mono" />
+                  <Button variant="outline" size="sm" onClick={() => setForm(f => ({...f, password: genPassword()}))}>↺</Button>
+                </div>
+                <p className="text-xs text-orange-600 mt-1">⚠️ Notez ce mot de passe — il ne sera plus affiché après création</p>
+              </div>
+              <Button onClick={creer} disabled={saving || !form.prenom || !form.nom || !form.email || (NEEDS_SOCIETE.includes(form.role) && !form.societe_id)} className="w-full bg-[#1E2A4A]">
+                {saving ? 'Création...' : 'Créer le compte'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
+      {/* Dernier mot de passe */}
+      {lastPassword && (
+        <div className="p-4 bg-yellow-50 border border-yellow-300 rounded-lg flex items-center justify-between">
+          <div>
+            <p className="font-semibold text-yellow-800">✅ Compte créé — mot de passe à communiquer :</p>
+            <p className="font-mono text-lg text-yellow-900 mt-1">{lastPassword}</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => setLastPassword('')}>✕</Button>
+        </div>
+      )}
+
       {/* Stats par rôle */}
-      <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
-        {Object.entries(stats).map(([role, count]) => (
-          <Card key={role} className="cursor-pointer hover:shadow" onClick={() => setFilterRole(filterRole === role ? '' : role)}>
-            <CardContent className="p-3 text-center">
-              <p className="text-lg font-bold text-[#1E2A4A]">{count}</p>
-              <Badge className={`text-xs mt-1 ${ROLE_COLORS[role] || 'bg-gray-100 text-gray-700'}`}>{role}</Badge>
-            </CardContent>
-          </Card>
+      <div className="flex flex-wrap gap-2">
+        <button onClick={() => setFilterRole('all')} className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${filterRole === 'all' ? 'bg-[#1E2A4A] text-white border-[#1E2A4A]' : 'border-gray-200 hover:border-gray-300'}`}>
+          Tous ({users.length})
+        </button>
+        {stats.filter(s => s.count > 0).map(s => (
+          <button key={s.value} onClick={() => setFilterRole(s.value)}
+            className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${filterRole === s.value ? 'bg-[#1E2A4A] text-white border-[#1E2A4A]' : 'border-gray-200 hover:border-gray-300'}`}>
+            {s.label} ({s.count})
+          </button>
         ))}
       </div>
 
-      {/* Filtres */}
-      <div className="flex gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"/>
-          <Input placeholder="Rechercher par nom ou email..." className="pl-9" value={q} onChange={e => setQ(e.target.value)}/>
+      {/* Liste utilisateurs */}
+      {loading ? (
+        <div className="text-center text-gray-400 py-12">Chargement...</div>
+      ) : filtered.length === 0 ? (
+        <Card><CardContent className="p-12 text-center text-gray-400">
+          <p className="text-4xl mb-3">👤</p>
+          <p className="font-medium">Aucun utilisateur</p>
+          <p className="text-sm mt-1">Créez votre premier compte avec le bouton ci-dessus.</p>
+        </CardContent></Card>
+      ) : (
+        <div className="space-y-2">
+          {filtered.map(u => (
+            <Card key={u.id}>
+              <CardContent className="p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-[#1E2A4A] flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                    {(u.full_name || u.email).slice(0,2).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="font-medium text-sm">{u.full_name || '—'}</p>
+                    <p className="text-xs text-gray-400">{u.email}</p>
+                  </div>
+                  <RoleBadge role={u.role} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Select value={u.role} onValueChange={v => changeRole(u.id, v)}>
+                    <SelectTrigger className="h-8 text-xs w-40"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {ROLES.map(r => <SelectItem key={r.value} value={r.value} className="text-xs">{r.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
-        <Select value={filterRole || "all"} onValueChange={v => setFilterRole(v === 'all' ? '' : v)}>
-          <SelectTrigger className="w-52"><SelectValue placeholder="Tous les rôles"/></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Tous les rôles</SelectItem>
-            {roles.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Table */}
-      <Card>
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="flex justify-center p-12"><Loader2 className="w-8 h-8 animate-spin text-[#1E2A4A]"/></div>
-          ) : (
-            <Table>
-              <TableHeader><TableRow>
-                <TableHead>Utilisateur</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Rôle</TableHead>
-                <TableHead>Modules</TableHead>
-                <TableHead>Depuis</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow></TableHeader>
-              <TableBody>
-                {users.map(u => (
-                  <TableRow key={u.id}>
-                    <TableCell className="font-medium">{u.full_name || '—'}</TableCell>
-                    <TableCell className="text-sm text-gray-500">{u.email}</TableCell>
-                    <TableCell><Badge className={`text-xs ${ROLE_COLORS[u.role] || 'bg-gray-100 text-gray-700'}`}><Shield className="w-3 h-3 mr-1"/>{u.role}</Badge></TableCell>
-                    <TableCell className="text-xs text-gray-400">{(u.module_acces || []).join(', ') || '—'}</TableCell>
-                    <TableCell className="text-xs text-gray-400">{new Date(u.created_at).toLocaleDateString('fr-FR')}</TableCell>
-                    <TableCell>
-                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { setEditUser(u); setEditRole(u.role) }}>
-                        <Edit2 className="w-3 h-3 mr-1"/>Modifier
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {!users.length && <TableRow><TableCell colSpan={6} className="text-center text-gray-400 py-8">Aucun utilisateur</TableCell></TableRow>}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Dialog modification rôle */}
-      <Dialog open={!!editUser} onOpenChange={o => { if (!o) setEditUser(null) }}>
-        <DialogContent>
-          <DialogHeader><DialogTitle className="flex items-center gap-2"><UserCog className="w-5 h-5"/>Modifier le rôle</DialogTitle></DialogHeader>
-          {editUser && (
-            <div className="space-y-4 py-2">
-              <div><p className="text-sm text-gray-500">Utilisateur</p><p className="font-semibold">{editUser.full_name || editUser.email}</p></div>
-              <div>
-                <Label>Rôle *</Label>
-                <Select value={editRole} onValueChange={setEditRole}>
-                  <SelectTrigger><SelectValue/></SelectTrigger>
-                  <SelectContent>{roles.map(r => <SelectItem key={r.value} value={r.value}><span className="text-sm">{r.label}</span></SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div className="bg-blue-50 rounded p-3 text-xs text-blue-700">
-                {editRole === 'admin' && "⚠️ Accès total à la plateforme"}
-                {editRole === 'direction' && "Vue consolidée groupe, management accounts, Cerveau TIBOK"}
-                {editRole === 'comptable' && "Gestion multi-clients, dossiers, documents, grand livre"}
-                {editRole === 'rh_manager' && "Module RH: employés, paie, congés, pointage, CLARA"}
-                {editRole === 'juridique' && "Génération contrats, KYC, Due Diligence"}
-                {editRole === 'client_admin' && "Accès complet à sa société: upload docs, factures, rapports"}
-                {editRole === 'client_user' && "Upload documents, consultation rapports, tableau de bord"}
-                {editRole === 'salarie' && "Portail salarié: pointage GPS, bulletins, congés uniquement"}
-              </div>
-              <Button onClick={saveRole} disabled={saving || saved} className="w-full bg-[#1E2A4A] text-white">
-                {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : saved ? <CheckCircle className="w-4 h-4 mr-2 text-green-400"/> : null}
-                {saved ? "Rôle mis à jour !" : "Enregistrer"}
-              </Button>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      )}
     </div>
   )
 }

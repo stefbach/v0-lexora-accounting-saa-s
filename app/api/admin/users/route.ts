@@ -1,114 +1,90 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 
-// Use service role key to bypass RLS and create users
 function getAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !serviceKey) {
-    throw new Error('Missing Supabase admin credentials')
-  }
-  return createClient(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false }
-  })
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+  return createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
-// GET — List all users from profiles
+const VALID_ROLES = ['admin', 'super_admin', 'client_admin', 'client_user', 'comptable', 'comptable_dedie', 'rh', 'juridique', 'employe']
+
 export async function GET() {
   try {
     const supabase = getAdminClient()
     const { data, error } = await supabase
       .from('profiles')
-      .select('*')
+      .select('*, societes(nom)')
       .order('created_at', { ascending: false })
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-
-    return NextResponse.json({ users: data })
+    if (error) throw error
+    return NextResponse.json({ users: data || [] })
   } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : 'Unknown error'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
 
-// POST — Create a new user
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { email, password, full_name, role, phone, comptable_id } = body
+    const { email, password, full_name, role, phone, societe_id, comptable_id } = body
 
     if (!email || !password || !full_name || !role) {
-      return NextResponse.json(
-        { error: 'Email, mot de passe, nom complet et rôle sont requis' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Email, mot de passe, nom et rôle requis' }, { status: 400 })
     }
-
-    const validRoles = ['admin', 'client_admin', 'client_user', 'comptable', 'comptable_dedie']
-    if (!validRoles.includes(role)) {
-      return NextResponse.json(
-        { error: `Rôle invalide. Les rôles acceptés sont : ${validRoles.join(', ')}` },
-        { status: 400 }
-      )
+    if (!VALID_ROLES.includes(role)) {
+      return NextResponse.json({ error: `Rôle invalide: ${role}` }, { status: 400 })
     }
 
     const supabase = getAdminClient()
 
-    // Create the user in Supabase Auth
+    // Créer dans Supabase Auth
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
-      user_metadata: {
-        full_name,
-        role,
-      },
+      user_metadata: { full_name, role },
+    })
+    if (authError) return NextResponse.json({ error: authError.message }, { status: 400 })
+    if (!authData.user) return NextResponse.json({ error: 'Échec création' }, { status: 500 })
+
+    // Upsert profil
+    await supabase.from('profiles').upsert({
+      id: authData.user.id,
+      email,
+      full_name,
+      role,
+      phone: phone || null,
+      societe_id: societe_id || null,
+      comptable_id: comptable_id || null,
     })
 
-    if (authError) {
-      return NextResponse.json({ error: authError.message }, { status: 400 })
-    }
-
-    if (!authData.user) {
-      return NextResponse.json({ error: 'Échec de la création du compte' }, { status: 500 })
-    }
-
-    // Update the profile with additional info (trigger creates it with defaults)
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .update({
-        full_name,
+    // Si société associée → insérer dans user_societes
+    if (societe_id) {
+      await supabase.from('user_societes').upsert({
+        user_id: authData.user.id,
+        societe_id,
         role,
-        phone: phone || null,
-        comptable_id: comptable_id || null,
-      })
-      .eq('id', authData.user.id)
-
-    if (profileError) {
-      // Profile might not exist yet if trigger hasn't fired, try insert
-      await supabase.from('profiles').upsert({
-        id: authData.user.id,
-        email,
-        full_name,
-        role,
-        phone: phone || null,
-        comptable_id: comptable_id || null,
+        actif: true
       })
     }
 
-    return NextResponse.json({
-      user: {
-        id: authData.user.id,
-        email,
-        full_name,
-        role,
-        phone,
-      },
-    })
+    return NextResponse.json({ user: { id: authData.user.id, email, full_name, role } })
   } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : 'Unknown error'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const { user_id, role, actif } = await request.json()
+    const supabase = getAdminClient()
+    const updates: Record<string, unknown> = {}
+    if (role) updates.role = role
+    if (actif !== undefined) updates.actif = actif
+    const { error } = await supabase.from('profiles').update(updates).eq('id', user_id)
+    if (error) throw error
+    return NextResponse.json({ success: true })
+  } catch (e: unknown) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
