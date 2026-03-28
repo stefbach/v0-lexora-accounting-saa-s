@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client"
 import { useProfile } from "@/hooks/use-profile"
 import { Button } from "@/components/ui/button"
 import {
-  LayoutDashboard, Users, UsersRound, AlertTriangle, LogOut,
+  LayoutDashboard, Users, UsersRound, AlertTriangle, LogOut, Building2,
   ChevronLeft, ChevronRight,
 } from "lucide-react"
 import { useState } from "react"
