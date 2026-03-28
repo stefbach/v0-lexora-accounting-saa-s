@@ -1,260 +1,152 @@
 "use client"
-
-import { useState, useEffect, useCallback } from "react"
-import Link from "next/link"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { useEffect, useState } from "react"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table"
-import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
-} from "@/components/ui/dialog"
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select"
-import { Plus, Search, Loader2, Building2 } from "lucide-react"
-import { useProfile } from "@/hooks/use-profile"
+import { Badge } from "@/components/ui/badge"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Building2, Plus, FileText, Users, BookOpen, Edit } from "lucide-react"
 
 interface Societe {
-  id: string
-  nom: string
-  brn: string | null
-  numero_tva_mra: string | null
-  statut_tva: boolean
-  comptable?: { id: string; full_name: string; email: string } | null
+  id: string; nom: string; brn: string; ern: string
+  numero_tva_mra: string; secteur_activite: string
+  adresse: string; telephone: string; email: string; statut_tva: boolean
 }
 
-export default function ClientSocietesPage() {
-  const [search, setSearch] = useState("")
+const SECTEURS = ['Technologies de l\'information','Santé','Commerce','Finance','Immobilier','Tourisme','Transport','Agriculture','Éducation','Autre']
+
+const EMPTY = { nom:'', brn:'', ern:'', numero_tva_mra:'', secteur_activite:'', adresse:'', telephone:'', email:'', statut_tva: false }
+
+export default function SocietesPage() {
   const [societes, setSocietes] = useState<Societe[]>([])
   const [loading, setLoading] = useState(true)
-  const { profile } = useProfile()
+  const [open, setOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState(EMPTY)
+  const [editId, setEditId] = useState<string|null>(null)
 
-  // Create dialog
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [creating, setCreating] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
+  const load = async () => {
+    setLoading(true)
+    const d = await fetch('/api/client/societes').then(r=>r.json())
+    setSocietes(d.societes || [])
+    setLoading(false)
+  }
+  useEffect(()=>{ load() },[])
 
-  // Form
-  const [formNom, setFormNom] = useState("")
-  const [formBrn, setFormBrn] = useState("")
-  const [formTva, setFormTva] = useState("")
-  const [formStatutTva, setFormStatutTva] = useState("true")
-
-  const fetchSocietes = useCallback(async () => {
-    try {
-      const res = await fetch("/api/client/societes")
-      const data = await res.json()
-      if (data.societes) setSocietes(data.societes)
-    } catch {
-      console.error("Failed to fetch societes")
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => { fetchSocietes() }, [fetchSocietes])
-
-  useEffect(() => {
-    if (success) {
-      const timer = setTimeout(() => setSuccess(null), 5000)
-      return () => clearTimeout(timer)
-    }
-  }, [success])
-
-  if (profile?.role === "client_user") {
-    return (
-      <div className="flex-1 overflow-auto p-6">
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground mb-4">Vous n&apos;avez pas accès à cette section.</p>
-            <Button variant="outline" asChild><Link href="/client">Retour au tableau de bord</Link></Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
+  const save = async () => {
+    if (!form.nom) return
+    setSaving(true)
+    const method = editId ? 'PATCH' : 'POST'
+    const url = editId ? `/api/client/societes?id=${editId}` : '/api/client/societes'
+    const res = await fetch(url, { method, headers:{'Content-Type':'application/json'}, body: JSON.stringify(form) })
+    const d = await res.json()
+    setSaving(false)
+    if (d.error) { alert(d.error); return }
+    setOpen(false); setForm(EMPTY); setEditId(null); load()
   }
 
-  const filtered = societes.filter(
-    (s) =>
-      s.nom.toLowerCase().includes(search.toLowerCase()) ||
-      (s.brn && s.brn.toLowerCase().includes(search.toLowerCase()))
-  )
-
-  const resetForm = () => {
-    setFormNom(""); setFormBrn(""); setFormTva(""); setFormStatutTva("true"); setError(null)
+  const openEdit = (s: Societe) => {
+    setForm({ nom:s.nom, brn:s.brn||'', ern:s.ern||'', numero_tva_mra:s.numero_tva_mra||'', secteur_activite:s.secteur_activite||'', adresse:s.adresse||'', telephone:s.telephone||'', email:s.email||'', statut_tva:s.statut_tva||false })
+    setEditId(s.id); setOpen(true)
   }
 
-  const handleCreate = async () => {
-    setError(null)
-    if (!formNom) { setError("Le nom de la société est requis."); return }
-
-    setCreating(true)
-    try {
-      // Create the société
-      const res = await fetch("/api/admin/societes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          nom: formNom,
-          brn: formBrn || null,
-          numero_tva_mra: formTva || null,
-          statut_tva: formStatutTva === "true",
-          comptable_id: null,
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) { setError(data.error || "Erreur lors de la création"); return }
-
-      const newSocieteId = data.societe?.id
-
-      // Create a dossier to link this client to the new société
-      if (newSocieteId && profile?.id) {
-        await fetch("/api/admin/dossiers", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            client_id: profile.id,
-            societe_id: newSocieteId,
-            comptable_id: profile.id, // temporary — comptable will be assigned later
-          }),
-        })
-      }
-
-      setSuccess(`Société ${formNom} créée et affiliée avec succès !`)
-      resetForm(); setDialogOpen(false); fetchSocietes()
-    } catch {
-      setError("Erreur de connexion au serveur")
-    } finally {
-      setCreating(false)
-    }
-  }
+  const F = (k: keyof typeof EMPTY) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f=>({...f,[k]:e.target.value}))
 
   return (
-    <div className="flex-1 overflow-auto p-6 space-y-6">
+    <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>Mes Sociétés</h1>
-          <p className="text-muted-foreground">Sociétés affiliées à votre compte</p>
+          <h1 className="text-2xl font-bold text-[#1E2A4A]">Mes Sociétés</h1>
+          <p className="text-sm text-gray-500">{societes.length} société{societes.length!==1?'s':''}</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm() }}>
+        <Dialog open={open} onOpenChange={o=>{ setOpen(o); if(!o){setForm(EMPTY);setEditId(null)} }}>
           <DialogTrigger asChild>
-            <Button style={{ backgroundColor: "#1E2A4A" }}>
-              <Plus className="mr-2 h-4 w-4" />
-              Ajouter une société
-            </Button>
+            <Button className="bg-[#1E2A4A]"><Plus className="w-4 h-4 mr-2"/>Nouvelle société</Button>
           </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Nouvelle société</DialogTitle>
-              <DialogDescription>Créez une société et affiliez-la à votre compte.</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>Nom de la société *</Label>
-                <Input placeholder="Ex: Ma Société Ltd" value={formNom} onChange={(e) => setFormNom(e.target.value)} />
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogHeader><DialogTitle>{editId?'Modifier':'Créer'} une société</DialogTitle></DialogHeader>
+            <div className="space-y-3 pt-2">
+              <div><Label>Nom de la société <span className="text-red-500">*</span></Label><Input value={form.nom} onChange={F('nom')} placeholder="Digital Data Solutions Ltd"/></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label>BRN</Label><Input value={form.brn} onChange={F('brn')} placeholder="C20173522"/></div>
+                <div><Label>ERN (MRA)</Label><Input value={form.ern} onChange={F('ern')} placeholder="ERN-xxx"/></div>
               </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>BRN</Label>
-                  <Input placeholder="Ex: C12345678" value={formBrn} onChange={(e) => setFormBrn(e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label>N° TVA MRA</Label>
-                  <Input placeholder="Ex: VAT-20230001" value={formTva} onChange={(e) => setFormTva(e.target.value)} />
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label>N° TVA MRA</Label><Input value={form.numero_tva_mra} onChange={F('numero_tva_mra')} placeholder="27816949"/></div>
+                <div>
+                  <Label>TVA assujetti</Label>
+                  <Select value={form.statut_tva?'oui':'non'} onValueChange={v=>setForm(f=>({...f,statut_tva:v==='oui'}))}>
+                    <SelectTrigger><SelectValue/></SelectTrigger>
+                    <SelectContent><SelectItem value="oui">Oui</SelectItem><SelectItem value="non">Non</SelectItem></SelectContent>
+                  </Select>
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label>Statut TVA</Label>
-                <Select value={formStatutTva} onValueChange={setFormStatutTva}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="true">Assujetti à la TVA</SelectItem>
-                    <SelectItem value="false">Non assujetti</SelectItem>
-                  </SelectContent>
+              <div>
+                <Label>Secteur d'activité</Label>
+                <Select value={form.secteur_activite} onValueChange={v=>setForm(f=>({...f,secteur_activite:v}))}>
+                  <SelectTrigger><SelectValue placeholder="Sélectionner"/></SelectTrigger>
+                  <SelectContent>{SECTEURS.map(s=><SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              {error && <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">{error}</div>}
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => { setDialogOpen(false); resetForm() }}>Annuler</Button>
-              <Button style={{ backgroundColor: "#C9A84C" }} onClick={handleCreate} disabled={creating}>
-                {creating ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Création...</> : "Créer la société"}
+              <div><Label>Adresse</Label><Input value={form.adresse} onChange={F('adresse')} placeholder="Port Louis, Maurice"/></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label>Téléphone</Label><Input value={form.telephone} onChange={F('telephone')} placeholder="+230 xxx xxxx"/></div>
+                <div><Label>Email</Label><Input value={form.email} onChange={F('email')} placeholder="contact@société.mu"/></div>
+              </div>
+              <Button onClick={save} disabled={saving||!form.nom} className="w-full bg-[#1E2A4A]">
+                {saving?'Enregistrement...':editId?'Modifier':'Créer la société'}
               </Button>
-            </DialogFooter>
+            </div>
           </DialogContent>
         </Dialog>
       </div>
 
-      {success && <div className="rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800">{success}</div>}
-
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input placeholder="Rechercher par nom ou BRN..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
-      </div>
-
       {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      ) : filtered.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <Building2 className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-            <h2 className="text-lg font-semibold mb-2">Aucune société affiliée</h2>
-            <p className="text-muted-foreground">Créez une société pour commencer.</p>
+        <div className="text-center text-gray-400 py-12">Chargement...</div>
+      ) : societes.length === 0 ? (
+        <Card className="border-2 border-dashed border-[#C9A84C]/40 bg-[#C9A84C]/5">
+          <CardContent className="p-10 text-center space-y-4">
+            <Building2 className="w-12 h-12 mx-auto text-[#C9A84C]"/>
+            <div>
+              <p className="text-lg font-bold text-[#1E2A4A]">Aucune société</p>
+              <p className="text-sm text-gray-500 mt-1">Créez votre première société pour commencer.</p>
+            </div>
           </CardContent>
         </Card>
       ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle style={{ color: "#1E2A4A" }}>
-              <div className="flex items-center gap-2">
-                <Building2 className="h-5 w-5" />
-                Mes Sociétés ({filtered.length})
-              </div>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nom</TableHead>
-                  <TableHead>BRN</TableHead>
-                  <TableHead>N° TVA MRA</TableHead>
-                  <TableHead>Statut TVA</TableHead>
-                  <TableHead>Comptable</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((societe) => (
-                  <TableRow key={societe.id}>
-                    <TableCell className="font-medium">{societe.nom}</TableCell>
-                    <TableCell>{societe.brn || "—"}</TableCell>
-                    <TableCell>{societe.numero_tva_mra || "—"}</TableCell>
-                    <TableCell>
-                      <Badge className={societe.statut_tva ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}>
-                        {societe.statut_tva ? "Active" : "Inactive"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {societe.comptable ? (
-                        <span>{societe.comptable.full_name}</span>
-                      ) : (
-                        <span className="text-muted-foreground text-sm">Non assigné</span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {societes.map(s=>(
+            <Card key={s.id} className="border-l-4 border-l-[#1E2A4A] hover:shadow-md transition-shadow">
+              <CardContent className="p-5 space-y-3">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="font-bold text-[#1E2A4A]">{s.nom}</p>
+                    <div className="flex gap-2 mt-1 flex-wrap">
+                      {s.brn && <span className="text-xs text-gray-400">BRN: {s.brn}</span>}
+                      {s.ern && <span className="text-xs text-gray-400">ERN: {s.ern}</span>}
+                      {s.statut_tva && <Badge className="bg-green-100 text-green-700 text-xs">TVA</Badge>}
+                    </div>
+                    {s.secteur_activite && <p className="text-xs text-gray-500 mt-1">{s.secteur_activite}</p>}
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={()=>openEdit(s)}><Edit className="w-4 h-4"/></Button>
+                </div>
+                <div className="grid grid-cols-3 gap-2 pt-1">
+                  <a href={`/client/documents?societe_id=${s.id}`} className="flex flex-col items-center p-2 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors text-xs text-gray-600 gap-1">
+                    <FileText className="w-4 h-4"/><span>Documents</span>
+                  </a>
+                  <a href={`/rh/employes?societe_id=${s.id}`} className="flex flex-col items-center p-2 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors text-xs text-gray-600 gap-1">
+                    <Users className="w-4 h-4"/><span>Employés</span>
+                  </a>
+                  <a href={`/client/mes-comptes?societe_id=${s.id}`} className="flex flex-col items-center p-2 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors text-xs text-gray-600 gap-1">
+                    <BookOpen className="w-4 h-4"/><span>Grand Livre</span>
+                  </a>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       )}
     </div>
   )
