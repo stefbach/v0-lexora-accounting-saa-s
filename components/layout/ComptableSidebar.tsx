@@ -22,6 +22,7 @@ const navItems: NavItem[] = [
   { href: "/rh",                 label: "RH & Paie",       icon: Users },
   { href: "/direction",          label: "Direction",       icon: Building2 },
   { href: "/comptable/rapprochement", label: "Rapprochement", icon: GitMerge },
+  { href: "/profil",                  label: "Mon Profil",      icon: UsersRound },
 ]
 
 export function ComptableSidebar() {
