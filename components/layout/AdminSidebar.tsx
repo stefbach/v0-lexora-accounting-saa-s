@@ -10,6 +10,9 @@ import {
   UserCog,
   Users,
   Settings,
+  BookOpen,
+  ClipboardList,
+  Building2,
   LogOut,
   ChevronLeft,
   ChevronRight,
@@ -20,7 +23,10 @@ const navItems = [
   { href: "/admin", label: "Tableau de bord", icon: LayoutDashboard },
   { href: "/admin/clients", label: "Clients", icon: Users },
   { href: "/admin/comptables", label: "Comptables", icon: UserCog },
+  { href: "/admin/societes", label: "Sociétés", icon: Building2 },
   { href: "/admin/parametres", label: "Paramètres", icon: Settings },
+  { href: "/comptable", label: "→ Comptabilité", icon: BookOpen },
+  { href: "/rh", label: "→ RH & Paie", icon: ClipboardList },
 ]
 
 export function AdminSidebar() {
