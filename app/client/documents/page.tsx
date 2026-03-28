@@ -233,7 +233,11 @@ export default function ClientDocumentsPage() {
             setUploadSuccess(`${file.name} envoyé !`)
           }
         } else {
-          setUploadError(data.error || "Erreur lors de l'envoi")
+          if (res.status === 409 && data.doublon) {
+            setUploadError(`⚠️ Doublon : "${file.name}" a déjà été uploadé. Supprimez-le d'abord si vous souhaitez le réimporter.`)
+          } else {
+            setUploadError(data.error || "Erreur lors de l'envoi")
+          }
         }
       } catch {
         setUploadError("Erreur de connexion au serveur")
@@ -495,6 +499,28 @@ export default function ClientDocumentsPage() {
                           <RefreshCw className="h-3 w-3 mr-1" />Réessayer
                         </Button>
                       )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-400 hover:text-red-600 hover:bg-red-50"
+                        title="Supprimer ce document"
+                        onClick={async () => {
+                          if (!confirm(`Supprimer "${doc.nom_fichier}" ? Cette action est irréversible.`)) return
+                          try {
+                            const res = await fetch(`/api/documents/${doc.id}`, { method: 'DELETE' })
+                            if (res.ok) {
+                              setDocuments(prev => prev.filter(d => d.id !== doc.id))
+                            } else {
+                              const d = await res.json()
+                              alert(d.error || 'Erreur suppression')
+                            }
+                          } catch {
+                            alert('Erreur de connexion')
+                          }
+                        }}
+                      >
+                        🗑️
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>

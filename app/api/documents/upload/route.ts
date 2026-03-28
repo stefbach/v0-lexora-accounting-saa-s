@@ -28,9 +28,35 @@ export async function POST(request: NextRequest) {
 
     if (!file) return NextResponse.json({ error: 'Aucun fichier fourni' }, { status: 400 })
 
-    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
-    if (!allowedTypes.includes(file.type)) return NextResponse.json({ error: 'Type non supporté' }, { status: 400 })
-    if (file.size > 10 * 1024 * 1024) return NextResponse.json({ error: 'Fichier trop volumineux' }, { status: 400 })
+    const allowedTypes = [
+      'application/pdf',
+      'image/jpeg', 'image/png', 'image/webp',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-excel',
+      'application/octet-stream', // certains xlsx envoyés avec ce type
+    ]
+    const ext = file.name.split('.').pop()?.toLowerCase() || ''
+    const isXlsx = ext === 'xlsx' || ext === 'xls'
+    if (!allowedTypes.includes(file.type) && !isXlsx) {
+      return NextResponse.json({ error: `Type non supporté: ${file.type} (.${ext})` }, { status: 400 })
+    }
+    if (file.size > 20 * 1024 * 1024) return NextResponse.json({ error: 'Fichier trop volumineux (max 20MB)' }, { status: 400 })
+
+    // Détection doublons par nom + taille
+    const { data: existingDoc } = await supabase
+      .from('documents')
+      .select('id, nom_fichier, statut')
+      .eq('nom_fichier', file.name)
+      .eq('taille_fichier', file.size)
+      .limit(1)
+      .maybeSingle()
+    if (existingDoc) {
+      return NextResponse.json({
+        error: `Doublon détecté : "${file.name}" a déjà été uploadé (ID: ${existingDoc.id}, statut: ${existingDoc.statut})`,
+        doublon: true,
+        doc_id: existingDoc.id
+      }, { status: 409 })
+    }
 
     // Resolve dossier_id
     let resolvedDossierId = dossierId
@@ -93,6 +119,7 @@ export async function POST(request: NextRequest) {
 
     const isImage = ['jpg', 'jpeg', 'png', 'webp'].includes(ext)
     const isPdf = ext === 'pdf'
+    const isExcel = ext === 'xlsx' || ext === 'xls'
 
     let messageContent: any
     if (isImage) {
@@ -106,6 +133,21 @@ export async function POST(request: NextRequest) {
         { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
         { type: 'text', text: 'Analyse ce document comptable.' },
       ]
+    } else if (isExcel) {
+      // Extraire le contenu texte du fichier Excel pour l'envoyer à Claude
+      let xlsxText = ''
+      try {
+        const XLSX = await import('xlsx')
+        const wb = XLSX.read(fileArrayBuffer, { type: 'array', cellText: true, cellDates: true })
+        for (const sheetName of wb.SheetNames.slice(0, 3)) {
+          const ws = wb.Sheets[sheetName]
+          const csv = XLSX.utils.sheet_to_csv(ws, { blankrows: false })
+          xlsxText += `\n=== Feuille: ${sheetName} ===\n${csv.substring(0, 3000)}\n`
+        }
+      } catch {
+        xlsxText = Buffer.from(fileArrayBuffer).toString('utf-8', 0, 5000)
+      }
+      messageContent = `Analyse ce document Excel comptable et extrais toutes les informations (facture, montants, TVA, dates, fournisseur, client, numéro de facture):\n\n${xlsxText}`
     } else {
       messageContent = 'Analyse ce document:\n' + Buffer.from(fileArrayBuffer).toString('utf-8').substring(0, 5000)
     }

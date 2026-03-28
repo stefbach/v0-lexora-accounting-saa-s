@@ -214,3 +214,38 @@ export async function PATCH(
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
 }
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const supabaseAuth = await createServerClient()
+    const { data: { user } } = await supabaseAuth.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+
+    const supabase = getAdminClient()
+
+    // Récupérer le document pour avoir le storage_path
+    const { data: doc, error: fetchErr } = await supabase
+      .from('documents').select('id, storage_path, uploaded_by').eq('id', params.id).single()
+    if (fetchErr || !doc) return NextResponse.json({ error: 'Document introuvable' }, { status: 404 })
+
+    // Supprimer du storage
+    if (doc.storage_path) {
+      await supabase.storage.from('documents').remove([doc.storage_path])
+    }
+
+    // Supprimer les écritures liées
+    await supabase.from('ecritures_comptables').delete().eq('document_id', params.id)
+    await supabase.from('ecritures_comptables_v2').delete().eq('document_source_id', params.id)
+
+    // Supprimer le document
+    const { error: delErr } = await supabase.from('documents').delete().eq('id', params.id)
+    if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 })
+
+    return NextResponse.json({ success: true })
+  } catch (e: unknown) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
+  }
+}
