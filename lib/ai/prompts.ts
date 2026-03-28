@@ -280,10 +280,17 @@ COMPTES BANCAIRES:
 - CIC (Credit Industriel et Commercial, France) → 513 - Banque CIC
 - Barclays UK → 514 - Banque Barclays
 - BOV (Bank of Valletta, Malta) → 515 - Banque BOV
+- AfrAsia Bank → 516 - Banque AfrAsia
+- BNI Madagascar → 517 - Banque BNI
+- HSBC Mauritius → 518 - Banque HSBC
+- Standard Bank → 519 - Banque Standard
 
 PATTERNS MCB ETENDUS — IDENTIFICATION OBLIGATOIRE:
 1. 'IB Account Transfer' + 'FT' → 581 (virement interne entre comptes propres — NE PAS generer de charge)
 2. 'PAIEMENT MCB-[0-9]+' → 581 virement interne inter-comptes (NE PAS generer d'ecriture de charge)
+2b. 'ONLINE TRANSFER' → verifier si tiers interne (581) ou externe (selon tiers)
+2c. 'MCB JuicePro' ou 'JuicePro' → identifier tiers depuis libelle (paiement mobile)
+2d. 'CHARGEBACK' → 411 Clients (remboursement client) ou 401 (remboursement fournisseur)
 3. 'Direct Debit Scheme MAURITIUS REVENUE AUTHORITY' → analyser le montant:
    - Si montant correspond a TVA declaree → 4457 TVA collectee
    - Si montant correspond a CSG → 431 CSG a payer
@@ -321,6 +328,7 @@ TAUX DE CHANGE REFERENCE (mis a jour quotidiennement):
 - EUR/MUR: {{TAUX_EUR}}
 - GBP/MUR: {{TAUX_GBP}}
 - USD/MUR: {{TAUX_USD}}
+- AUD/MUR: {{TAUX_AUD}}
 
 REGLES DE TRAITEMENT:
 1. Pour CHAQUE ligne du releve: identifier type, tiers, compte comptable, sens
@@ -713,6 +721,7 @@ export function injectTauxChange(prompt: string, rates: Record<string, number>):
     .replace(/\{\{TAUX_EUR\}\}/g, String(rates.EUR ?? 46.50))
     .replace(/\{\{TAUX_GBP\}\}/g, String(rates.GBP ?? 54.20))
     .replace(/\{\{TAUX_USD\}\}/g, String(rates.USD ?? 44.80))
+    .replace(/\{\{TAUX_AUD\}\}/g, String(rates.AUD ?? 29.50))
 }
 
 /**

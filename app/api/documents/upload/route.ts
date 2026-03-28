@@ -10,7 +10,7 @@ function getAdminClient() {
   return createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
-export const maxDuration = 60
+export const maxDuration = 300
 
 export async function POST(request: NextRequest) {
   const supabase = getAdminClient()
@@ -257,18 +257,40 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
     if (updateError) console.error('[upload] DB UPDATE FAILED:', updateError.message)
 
     // Auto-create accounting entries (use the matched dossier)
-    const ecritures = extraction.ecritures_comptables
-    if (Array.isArray(ecritures) && ecritures.length > 0) {
+    // Générer les écritures comptables (depuis ecritures_comptables OU depuis lignes de relevé)
+    let ecrituresSource = extraction.ecritures_comptables
+    
+    // Pour les relevés bancaires: générer les écritures depuis les lignes si ecritures_comptables est vide
+    if (typeDocument === 'releve_bancaire' && (!Array.isArray(ecrituresSource) || ecrituresSource.length === 0)) {
+      const lignes = extraction.lignes || extraction.transactions || []
+      ecrituresSource = lignes
+        .filter((l: any) => l.compte_debit && l.compte_credit && l.montant > 0)
+        .flatMap((l: any) => [
+          { compte: l.compte_debit, libelle: l.libelle || 'Transaction', debit: l.sens === 'debit' ? Math.abs(l.montant) : 0, credit: l.sens === 'credit' ? Math.abs(l.montant) : 0 },
+          { compte: l.compte_credit, libelle: l.libelle || 'Transaction', debit: l.sens === 'credit' ? Math.abs(l.montant) : 0, credit: l.sens === 'debit' ? Math.abs(l.montant) : 0 },
+        ])
+    }
+
+    if (Array.isArray(ecrituresSource) && ecrituresSource.length > 0) {
       const journalMap: Record<string, string> = { facture_fournisseur: 'ACH', facture_client: 'VTE', releve_bancaire: 'BNQ', fiche_paie: 'OD', charges_sociales: 'OD' }
-      const entries = ecritures
-        .filter((e: any) => e.compte && (e.debit > 0 || e.credit > 0))
+      const entries = ecrituresSource
+        .filter((e: any) => e.compte && (Number(e.debit) > 0 || Number(e.credit) > 0))
         .map((e: any) => ({
-          dossier_id: finalDossierId, date_ecriture: extraction.date_document || new Date().toISOString().split('T')[0],
-          journal: journalMap[typeDocument] || 'OD', numero_piece: extraction.numero_reference || null,
-          compte: String(e.compte), libelle: e.libelle || file.name,
-          debit: Number(e.debit) || 0, credit: Number(e.credit) || 0, piece_justificative: doc.id,
+          dossier_id: finalDossierId,
+          date_ecriture: extraction.date_document || extraction.periode_fin || new Date().toISOString().split('T')[0],
+          journal: journalMap[typeDocument] || 'OD',
+          numero_piece: extraction.numero_reference || extraction.numero_compte || null,
+          compte: String(e.compte),
+          libelle: e.libelle || file.name,
+          debit: Number(e.debit) || 0,
+          credit: Number(e.credit) || 0,
+          piece_justificative: doc.id,
         }))
-      if (entries.length > 0) await supabase.from('ecritures_comptables').insert(entries)
+      if (entries.length > 0) {
+        const { error: ecrituresError } = await supabase.from('ecritures_comptables').insert(entries)
+        if (ecrituresError) console.error('[upload] Ecritures insert error:', ecrituresError.message)
+        else console.log('[upload] Inserted', entries.length, 'ecritures for', typeDocument)
+      }
     }
 
     // Handle bank statement: create/update bank account + store statement
@@ -324,7 +346,7 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
             total_debits: Number(extraction.total_debits) || 0,
             total_credits: Number(extraction.total_credits) || 0,
             document_id: doc.id,
-            transactions_json: extraction.transactions || [],
+            transactions_json: extraction.transactions || extraction.lignes || [],
             statut_rapprochement: 'en_attente',
           })
         }
