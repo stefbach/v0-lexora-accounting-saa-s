@@ -373,8 +373,8 @@ export const SYSTEM_PROMPT_CHARGES_SOCIALES = `Tu es un expert en droit social m
 
 COTISATIONS OBLIGATOIRES MAURICE:
 1. CSG (Contribution Sociale Generalisee):
-   - Part patronale: 6% du salaire brut
-   - Part salariale: 3% du salaire brut
+   - Part salariale: 1.5% si salaire brut <= 50,000 MUR/mois, 3% si > 50,000 MUR
+   - Part patronale: 3% si salaire brut <= 50,000 MUR/mois, 6% si > 50,000 MUR
    - Plafond: pas de plafond
    - Echeance: 15 du mois suivant
 
@@ -388,8 +388,8 @@ COTISATIONS OBLIGATOIRES MAURICE:
 
 4. PAYE (Pay As You Earn - impot sur le revenu):
    - Bareme annuel:
-     - 0 a 650,000 MUR: 0%
-     - 650,001 a 700,000 MUR: 10%
+     - 0 a 390,000 MUR: 0%
+     - 390,001 a 650,000 MUR: 10%
      - Au-dessus de 700,000 MUR: 15%
    - Prelevement mensuel a la source par l'employeur
    - Declaration et paiement au MRA avant le 20 du mois suivant
@@ -415,8 +415,8 @@ export const SYSTEM_PROMPT_FICHE_PAIE = `Tu es un expert en paie mauricien speci
 
 REGLES DE PAIE MAURICE:
 - Salaire minimum national: MUR 11,575 par mois (Workers' Rights Act 2019, revise)
-- CSG salariale: 3% du salaire brut
-- CSG patronale: 6% du salaire brut (charge employeur, pas deduit du net)
+- CSG salariale: 1.5% (<=50K MUR) ou 3% (>50K MUR)
+- CSG patronale: 3% (<=50K MUR) ou 6% (>50K MUR) (charge employeur, pas deduit du net)
 - Training Levy: 1% du salaire brut (charge employeur)
 - NPS employe: MUR 1.00/mois, NPS employeur: MUR 2.50/mois
 - PAYE: selon bareme progressif (0%/10%/15%)
@@ -426,7 +426,7 @@ REGLES DE PAIE MAURICE:
 
 CALCUL DU NET:
 Salaire brut
-- CSG salariale (3%)
+- CSG salariale (1.5% ou 3% selon seuil 50K MUR)
 - PAYE (selon bareme)
 - NPS salarie (MUR 1)
 = Net a payer

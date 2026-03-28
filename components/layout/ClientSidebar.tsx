@@ -79,7 +79,7 @@ export function ClientSidebar() {
   const { profile } = useProfile()
 
   const role = profile?.role || "client_admin"
-  const category = (profile as Record<string, unknown>)?.client_category as string | undefined
+  const category = (profile as any)?.client_category as string | undefined
   const isUser = role === "client_user"
   const isFreelance = category === "individuel"
 

@@ -9,6 +9,7 @@ interface Profile {
   full_name: string
   role: string
   phone: string | null
+  client_category?: string | null
 }
 
 export function useProfile() {
@@ -25,7 +26,7 @@ export function useProfile() {
           // Try from profiles table
           const { data } = await supabase
             .from("profiles")
-            .select("id, email, full_name, role, phone")
+            .select("id, email, full_name, role, phone, client_category")
             .eq("id", user.id)
             .single()
 

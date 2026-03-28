@@ -326,7 +326,7 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
             document_id: doc.id,
             transactions_json: extraction.transactions || [],
             statut_rapprochement: 'en_attente',
-          }).catch(e => console.error('[upload] releves_bancaires insert error:', e))
+          })
         }
       }
     }
@@ -344,7 +344,7 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
 
     // Try to mark document as error
     if (docId) {
-      await supabase.from('documents').update({ statut: 'erreur', n8n_result: { error: errMsg } }).eq('id', docId).catch(() => {})
+      await supabase.from('documents').update({ statut: 'erreur', n8n_result: { error: errMsg } }).eq('id', docId)
     }
 
     return NextResponse.json({ error: errMsg, processing_error: errMsg }, { status: 500 })

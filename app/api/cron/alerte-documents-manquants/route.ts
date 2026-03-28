@@ -31,7 +31,7 @@ export async function GET(request: Request) {
     const { data: societes, error: societesError } = await supabase
       .from('societes')
       .select('id, nom, client_id, comptable_id')
-      .eq('statut', 'active')
+      .eq('statut', 'actif')
 
     if (societesError) throw societesError
 
@@ -123,7 +123,7 @@ export async function GET(request: Request) {
       statut: 'error',
       details: { error: message },
       executed_at: new Date().toISOString(),
-    }).catch(() => {})
+    })
 
     return NextResponse.json({ success: false, error: message }, { status: 500 })
   }
