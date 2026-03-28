@@ -1,0 +1,863 @@
+'use client'
+
+import { useState, useEffect, useCallback } from 'react'
+import { useParams } from 'next/navigation'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue
+} from '@/components/ui/select'
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger
+} from '@/components/ui/dialog'
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow
+} from '@/components/ui/table'
+import { Building2, Users, UserCog, TrendingUp, CalendarDays, Plus, AlertTriangle, CheckCircle2, Clock } from 'lucide-react'
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+interface Societe {
+  id: string
+  nom: string
+  numero_registre?: string
+  registered_office?: string
+  date_incorporation?: string
+  nature_activite?: string
+  capital_social?: number
+  nb_actions_total?: number
+}
+
+interface Actionnaire {
+  id: string
+  nom: string
+  prenom?: string
+  type_personne: string
+  nationalite?: string
+  nb_actions: number
+  type_actions: string
+  valeur_nominale: number
+  pourcentage?: number
+  date_entree?: string
+  actif: boolean
+}
+
+interface Administrateur {
+  id: string
+  nom: string
+  prenom?: string
+  type: string
+  nationalite?: string
+  nic?: string
+  date_nomination?: string
+  date_fin?: string
+  actif: boolean
+}
+
+interface AnnualReturn {
+  id: string
+  annee: number
+  date_agm?: string
+  date_echeance?: string
+  date_soumission?: string
+  reference_roc?: string
+  statut: string
+  actif_total: number
+  passif_total: number
+  chiffre_affaires: number
+  resultat_net: number
+  notes?: string
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const fmt = (n: number) =>
+  new Intl.NumberFormat('fr-MU', { style: 'currency', currency: 'MUR', minimumFractionDigits: 0 }).format(n)
+
+const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString('fr-FR') : '—'
+
+function getDeadlineStatus(echeance?: string) {
+  if (!echeance) return null
+  const today = new Date()
+  const deadline = new Date(echeance)
+  const diffDays = Math.ceil((deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+  if (diffDays < 0) return 'depasse'
+  if (diffDays <= 7) return 'urgent'
+  return 'ok'
+}
+
+const TYPE_LABELS: Record<string, string> = {
+  director: 'Director',
+  secretary: 'Secretary',
+  chairperson: 'Chairperson',
+  ceo: 'CEO',
+  cfo: 'CFO'
+}
+
+const STATUT_LABELS: Record<string, string> = {
+  a_faire: 'À faire',
+  en_cours: 'En cours',
+  soumis: 'Soumis',
+  accepte: 'Accepté',
+  rejete: 'Rejeté'
+}
+
+const STATUT_COLORS: Record<string, string> = {
+  a_faire: 'bg-gray-100 text-gray-700',
+  en_cours: 'bg-blue-100 text-blue-700',
+  soumis: 'bg-yellow-100 text-yellow-700',
+  accepte: 'bg-green-100 text-green-700',
+  rejete: 'bg-red-100 text-red-700'
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
+
+export default function AnnualReturnPage() {
+  const params = useParams()
+  const societeId = params?.societeId as string
+
+  const [societe, setSociete] = useState<Societe | null>(null)
+  const [actionnaires, setActionnaires] = useState<Actionnaire[]>([])
+  const [administrateurs, setAdministrateurs] = useState<Administrateur[]>([])
+  const [annualReturn, setAnnualReturn] = useState<AnnualReturn | null>(null)
+  const [annee, setAnnee] = useState(new Date().getFullYear())
+  const [loading, setLoading] = useState(true)
+
+  // Formulaires
+  const [showActionnaire, setShowActionnaire] = useState(false)
+  const [showAdministrateur, setShowAdministrateur] = useState(false)
+  const [showSocieteEdit, setShowSocieteEdit] = useState(false)
+  const [savingReturn, setSavingReturn] = useState(false)
+
+  const [newActionnaire, setNewActionnaire] = useState({
+    nom: '', prenom: '', type_personne: 'physique', nationalite: 'mauricienne',
+    nb_actions: 0, type_actions: 'ordinaires', valeur_nominale: 1, pourcentage: 0,
+    date_entree: ''
+  })
+
+  const [newAdmin, setNewAdmin] = useState({
+    nom: '', prenom: '', type: 'director', nationalite: 'mauricienne',
+    nic: '', date_nomination: ''
+  })
+
+  const [returnForm, setReturnForm] = useState({
+    date_agm: '', statut: 'a_faire', reference_roc: '',
+    actif_total: 0, passif_total: 0, chiffre_affaires: 0, resultat_net: 0, notes: ''
+  })
+
+  const [societeForm, setSocieteForm] = useState({
+    registered_office: '', date_incorporation: '',
+    nature_activite: '', capital_social: 0, nb_actions_total: 0
+  })
+
+  const fetchData = useCallback(async () => {
+    if (!societeId) return
+    setLoading(true)
+    try {
+      const [sRes, actRes, admRes, arRes] = await Promise.all([
+        fetch(`/api/comptable/societes?id=${societeId}`),
+        fetch(`/api/comptable/roc/actionnaires?societe_id=${societeId}`),
+        fetch(`/api/comptable/roc/administrateurs?societe_id=${societeId}`),
+        fetch(`/api/comptable/roc/annual-return?societe_id=${societeId}&annee=${annee}`)
+      ])
+
+      if (sRes.ok) {
+        const sData = await sRes.json()
+        const s = Array.isArray(sData) ? sData[0] : (sData.societes?.[0] || sData)
+        if (s) {
+          setSociete(s)
+          setSocieteForm({
+            registered_office: s.registered_office || '',
+            date_incorporation: s.date_incorporation || '',
+            nature_activite: s.nature_activite || '',
+            capital_social: s.capital_social || 0,
+            nb_actions_total: s.nb_actions_total || 0
+          })
+        }
+      }
+
+      if (actRes.ok) {
+        const d = await actRes.json()
+        setActionnaires(d.actionnaires || [])
+      }
+
+      if (admRes.ok) {
+        const d = await admRes.json()
+        setAdministrateurs(d.administrateurs || [])
+      }
+
+      if (arRes.ok) {
+        const d = await arRes.json()
+        const ar = d.annual_returns?.[0]
+        if (ar) {
+          setAnnualReturn(ar)
+          setReturnForm({
+            date_agm: ar.date_agm || '',
+            statut: ar.statut || 'a_faire',
+            reference_roc: ar.reference_roc || '',
+            actif_total: ar.actif_total || 0,
+            passif_total: ar.passif_total || 0,
+            chiffre_affaires: ar.chiffre_affaires || 0,
+            resultat_net: ar.resultat_net || 0,
+            notes: ar.notes || ''
+          })
+        }
+      }
+    } finally {
+      setLoading(false)
+    }
+  }, [societeId, annee])
+
+  useEffect(() => { fetchData() }, [fetchData])
+
+  const handleAddActionnaire = async () => {
+    const res = await fetch('/api/comptable/roc/actionnaires', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...newActionnaire, societe_id: societeId })
+    })
+    if (res.ok) {
+      setShowActionnaire(false)
+      setNewActionnaire({
+        nom: '', prenom: '', type_personne: 'physique', nationalite: 'mauricienne',
+        nb_actions: 0, type_actions: 'ordinaires', valeur_nominale: 1, pourcentage: 0,
+        date_entree: ''
+      })
+      fetchData()
+    }
+  }
+
+  const handleAddAdmin = async () => {
+    const res = await fetch('/api/comptable/roc/administrateurs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...newAdmin, societe_id: societeId })
+    })
+    if (res.ok) {
+      setShowAdministrateur(false)
+      setNewAdmin({ nom: '', prenom: '', type: 'director', nationalite: 'mauricienne', nic: '', date_nomination: '' })
+      fetchData()
+    }
+  }
+
+  const handleSaveReturn = async () => {
+    setSavingReturn(true)
+    try {
+      const method = annualReturn ? 'PATCH' : 'POST'
+      const url = annualReturn
+        ? `/api/comptable/roc/annual-return?id=${annualReturn.id}`
+        : '/api/comptable/roc/annual-return'
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...returnForm, societe_id: societeId, annee })
+      })
+      if (res.ok) fetchData()
+    } finally {
+      setSavingReturn(false)
+    }
+  }
+
+  const handleDeleteActionnaire = async (id: string) => {
+    await fetch(`/api/comptable/roc/actionnaires?id=${id}`, { method: 'DELETE' })
+    fetchData()
+  }
+
+  const handleDeleteAdmin = async (id: string) => {
+    await fetch(`/api/comptable/roc/administrateurs?id=${id}`, { method: 'DELETE' })
+    fetchData()
+  }
+
+  const deadlineStatus = getDeadlineStatus(annualReturn?.date_echeance)
+  const totalActions = actionnaires.filter(a => a.actif).reduce((s, a) => s + (a.nb_actions || 0), 0)
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: '#C9A84C' }} />
+      </div>
+    )
+  }
+
+  return (
+    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold" style={{ color: '#1E2A4A' }}>
+            Annual Return ROC
+          </h1>
+          <p className="text-muted-foreground mt-1">{societe?.nom} — Exercice {annee}</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Select value={String(annee)} onValueChange={v => setAnnee(parseInt(v))}>
+            <SelectTrigger className="w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {[2023, 2024, 2025, 2026].map(y => (
+                <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {annualReturn && (
+            <Badge className={STATUT_COLORS[annualReturn.statut]}>
+              {STATUT_LABELS[annualReturn.statut]}
+            </Badge>
+          )}
+        </div>
+      </div>
+
+      {/* Alerte deadline */}
+      {deadlineStatus === 'depasse' && (
+        <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700">
+          <AlertTriangle className="h-5 w-5" />
+          <span className="font-medium">
+            Deadline ROC dépassée ! Soumission requise avant le {fmtDate(annualReturn?.date_echeance)}
+          </span>
+        </div>
+      )}
+      {deadlineStatus === 'urgent' && (
+        <div className="flex items-center gap-2 p-3 bg-orange-50 border border-orange-200 rounded-lg text-orange-700">
+          <Clock className="h-5 w-5" />
+          <span className="font-medium">
+            Deadline ROC dans moins de 7 jours : {fmtDate(annualReturn?.date_echeance)}
+          </span>
+        </div>
+      )}
+
+      {/* ── Section 1 : Infos société ─────────────────────────────────────── */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Building2 className="h-5 w-5" style={{ color: '#C9A84C' }} />
+              <CardTitle className="text-base">Informations légales société</CardTitle>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setShowSocieteEdit(!showSocieteEdit)}>
+              {showSocieteEdit ? 'Masquer' : 'Modifier'}
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div>
+              <p className="text-xs text-muted-foreground">Registered Office</p>
+              <p className="font-medium">{societe?.registered_office || '—'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Date d&apos;incorporation</p>
+              <p className="font-medium">{fmtDate(societe?.date_incorporation)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Nature d&apos;activité</p>
+              <p className="font-medium">{societe?.nature_activite || '—'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Capital social</p>
+              <p className="font-medium">{societe?.capital_social ? fmt(societe.capital_social) : '—'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Nb actions total</p>
+              <p className="font-medium">{societe?.nb_actions_total?.toLocaleString('fr-FR') || '—'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">BRN</p>
+              <p className="font-medium">{societe?.numero_registre || '—'}</p>
+            </div>
+          </div>
+
+          {showSocieteEdit && (
+            <div className="mt-4 pt-4 border-t space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2">
+                  <Label>Registered Office</Label>
+                  <Input
+                    value={societeForm.registered_office}
+                    onChange={e => setSocieteForm(f => ({ ...f, registered_office: e.target.value }))}
+                    placeholder="Adresse du siège social"
+                  />
+                </div>
+                <div>
+                  <Label>Date d&apos;incorporation</Label>
+                  <Input
+                    type="date"
+                    value={societeForm.date_incorporation}
+                    onChange={e => setSocieteForm(f => ({ ...f, date_incorporation: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label>Nature d&apos;activité</Label>
+                  <Input
+                    value={societeForm.nature_activite}
+                    onChange={e => setSocieteForm(f => ({ ...f, nature_activite: e.target.value }))}
+                    placeholder="Ex: Consulting, Commerce..."
+                  />
+                </div>
+                <div>
+                  <Label>Capital social (MUR)</Label>
+                  <Input
+                    type="number"
+                    value={societeForm.capital_social}
+                    onChange={e => setSocieteForm(f => ({ ...f, capital_social: parseFloat(e.target.value) || 0 }))}
+                  />
+                </div>
+                <div>
+                  <Label>Nb actions total</Label>
+                  <Input
+                    type="number"
+                    value={societeForm.nb_actions_total}
+                    onChange={e => setSocieteForm(f => ({ ...f, nb_actions_total: parseInt(e.target.value) || 0 }))}
+                  />
+                </div>
+              </div>
+              <Button
+                onClick={async () => {
+                  await fetch(`/api/comptable/societes/${societeId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(societeForm)
+                  })
+                  setShowSocieteEdit(false)
+                  fetchData()
+                }}
+                style={{ backgroundColor: '#1E2A4A', color: 'white' }}
+              >
+                Enregistrer
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── Section 2 : Actionnariat ──────────────────────────────────────── */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Users className="h-5 w-5" style={{ color: '#C9A84C' }} />
+              <CardTitle className="text-base">Actionnariat</CardTitle>
+              <Badge variant="secondary">{actionnaires.filter(a => a.actif).length} actionnaire(s)</Badge>
+            </div>
+            <Dialog open={showActionnaire} onOpenChange={setShowActionnaire}>
+              <DialogTrigger asChild>
+                <Button size="sm" style={{ backgroundColor: '#C9A84C', color: 'white' }}>
+                  <Plus className="h-4 w-4 mr-1" /> Ajouter
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Nouvel actionnaire</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Nom *</Label>
+                      <Input value={newActionnaire.nom} onChange={e => setNewActionnaire(f => ({ ...f, nom: e.target.value }))} />
+                    </div>
+                    <div>
+                      <Label>Prénom</Label>
+                      <Input value={newActionnaire.prenom} onChange={e => setNewActionnaire(f => ({ ...f, prenom: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Type de personne</Label>
+                      <Select value={newActionnaire.type_personne} onValueChange={v => setNewActionnaire(f => ({ ...f, type_personne: v }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="physique">Physique</SelectItem>
+                          <SelectItem value="morale">Morale</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Nationalité</Label>
+                      <Input value={newActionnaire.nationalite} onChange={e => setNewActionnaire(f => ({ ...f, nationalite: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <Label>Nb actions</Label>
+                      <Input type="number" value={newActionnaire.nb_actions} onChange={e => setNewActionnaire(f => ({ ...f, nb_actions: parseInt(e.target.value) || 0 }))} />
+                    </div>
+                    <div>
+                      <Label>Type actions</Label>
+                      <Select value={newActionnaire.type_actions} onValueChange={v => setNewActionnaire(f => ({ ...f, type_actions: v }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ordinaires">Ordinaires</SelectItem>
+                          <SelectItem value="preferentielles">Préférentielles</SelectItem>
+                          <SelectItem value="rerachetables">Rachetables</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Val. nominale</Label>
+                      <Input type="number" step="0.01" value={newActionnaire.valeur_nominale} onChange={e => setNewActionnaire(f => ({ ...f, valeur_nominale: parseFloat(e.target.value) || 1 }))} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>% détenu</Label>
+                      <Input type="number" step="0.01" max="100" value={newActionnaire.pourcentage} onChange={e => setNewActionnaire(f => ({ ...f, pourcentage: parseFloat(e.target.value) || 0 }))} />
+                    </div>
+                    <div>
+                      <Label>Date d&apos;entrée</Label>
+                      <Input type="date" value={newActionnaire.date_entree} onChange={e => setNewActionnaire(f => ({ ...f, date_entree: e.target.value }))} />
+                    </div>
+                  </div>
+                  <Button onClick={handleAddActionnaire} className="w-full" style={{ backgroundColor: '#1E2A4A', color: 'white' }}>
+                    Ajouter l&apos;actionnaire
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nom</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead className="text-right">Nb actions</TableHead>
+                <TableHead className="text-right">%</TableHead>
+                <TableHead>Type actions</TableHead>
+                <TableHead>Date entrée</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {actionnaires.filter(a => a.actif).map(a => (
+                <TableRow key={a.id}>
+                  <TableCell className="font-medium">{a.prenom ? `${a.prenom} ${a.nom}` : a.nom}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline">
+                      {a.type_personne === 'physique' ? 'Personne physique' : 'Personne morale'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">{a.nb_actions?.toLocaleString('fr-FR')}</TableCell>
+                  <TableCell className="text-right">
+                    {totalActions > 0
+                      ? `${((a.nb_actions / totalActions) * 100).toFixed(1)}%`
+                      : a.pourcentage ? `${a.pourcentage}%` : '—'}
+                  </TableCell>
+                  <TableCell>{a.type_actions}</TableCell>
+                  <TableCell>{fmtDate(a.date_entree)}</TableCell>
+                  <TableCell>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-red-500 hover:text-red-700"
+                      onClick={() => handleDeleteActionnaire(a.id)}
+                    >
+                      Retirer
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {actionnaires.filter(a => a.actif).length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                    Aucun actionnaire enregistré
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* ── Section 3 : Administrateurs ──────────────────────────────────── */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <UserCog className="h-5 w-5" style={{ color: '#C9A84C' }} />
+              <CardTitle className="text-base">Administrateurs & Dirigeants</CardTitle>
+              <Badge variant="secondary">{administrateurs.filter(a => a.actif).length} actif(s)</Badge>
+            </div>
+            <Dialog open={showAdministrateur} onOpenChange={setShowAdministrateur}>
+              <DialogTrigger asChild>
+                <Button size="sm" style={{ backgroundColor: '#C9A84C', color: 'white' }}>
+                  <Plus className="h-4 w-4 mr-1" /> Ajouter
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Nouvel administrateur</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Nom *</Label>
+                      <Input value={newAdmin.nom} onChange={e => setNewAdmin(f => ({ ...f, nom: e.target.value }))} />
+                    </div>
+                    <div>
+                      <Label>Prénom</Label>
+                      <Input value={newAdmin.prenom} onChange={e => setNewAdmin(f => ({ ...f, prenom: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Fonction</Label>
+                      <Select value={newAdmin.type} onValueChange={v => setNewAdmin(f => ({ ...f, type: v }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="director">Director</SelectItem>
+                          <SelectItem value="secretary">Secretary</SelectItem>
+                          <SelectItem value="chairperson">Chairperson</SelectItem>
+                          <SelectItem value="ceo">CEO</SelectItem>
+                          <SelectItem value="cfo">CFO</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Nationalité</Label>
+                      <Input value={newAdmin.nationalite} onChange={e => setNewAdmin(f => ({ ...f, nationalite: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>NIC</Label>
+                      <Input value={newAdmin.nic} onChange={e => setNewAdmin(f => ({ ...f, nic: e.target.value }))} placeholder="National ID Card" />
+                    </div>
+                    <div>
+                      <Label>Date de nomination</Label>
+                      <Input type="date" value={newAdmin.date_nomination} onChange={e => setNewAdmin(f => ({ ...f, date_nomination: e.target.value }))} />
+                    </div>
+                  </div>
+                  <Button onClick={handleAddAdmin} className="w-full" style={{ backgroundColor: '#1E2A4A', color: 'white' }}>
+                    Ajouter l&apos;administrateur
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nom</TableHead>
+                <TableHead>Fonction</TableHead>
+                <TableHead>Nationalité</TableHead>
+                <TableHead>NIC</TableHead>
+                <TableHead>Date nomination</TableHead>
+                <TableHead>Statut</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {administrateurs.map(a => (
+                <TableRow key={a.id}>
+                  <TableCell className="font-medium">{a.prenom ? `${a.prenom} ${a.nom}` : a.nom}</TableCell>
+                  <TableCell>
+                    <Badge style={{ backgroundColor: '#1E2A4A15', color: '#1E2A4A' }}>
+                      {TYPE_LABELS[a.type] || a.type}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{a.nationalite || '—'}</TableCell>
+                  <TableCell className="font-mono text-sm">{a.nic || '—'}</TableCell>
+                  <TableCell>{fmtDate(a.date_nomination)}</TableCell>
+                  <TableCell>
+                    {a.actif
+                      ? <Badge className="bg-green-100 text-green-700">Actif</Badge>
+                      : <Badge className="bg-gray-100 text-gray-600">Inactif</Badge>}
+                  </TableCell>
+                  <TableCell>
+                    {a.actif && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-500 hover:text-red-700"
+                        onClick={() => handleDeleteAdmin(a.id)}
+                      >
+                        Retirer
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+              {administrateurs.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                    Aucun administrateur enregistré
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* ── Section 4 : États financiers ─────────────────────────────────── */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <TrendingUp className="h-5 w-5" style={{ color: '#C9A84C' }} />
+            <CardTitle className="text-base">États financiers simplifiés</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <Label className="text-xs text-muted-foreground">Actif total</Label>
+              <Input
+                type="number"
+                value={returnForm.actif_total}
+                onChange={e => setReturnForm(f => ({ ...f, actif_total: parseFloat(e.target.value) || 0 }))}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Passif total</Label>
+              <Input
+                type="number"
+                value={returnForm.passif_total}
+                onChange={e => setReturnForm(f => ({ ...f, passif_total: parseFloat(e.target.value) || 0 }))}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Chiffre d&apos;affaires</Label>
+              <Input
+                type="number"
+                value={returnForm.chiffre_affaires}
+                onChange={e => setReturnForm(f => ({ ...f, chiffre_affaires: parseFloat(e.target.value) || 0 }))}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Résultat net</Label>
+              <Input
+                type="number"
+                value={returnForm.resultat_net}
+                onChange={e => setReturnForm(f => ({ ...f, resultat_net: parseFloat(e.target.value) || 0 }))}
+                className="mt-1"
+              />
+            </div>
+          </div>
+          {annualReturn && (
+            <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4 bg-gray-50 rounded-lg p-3">
+              <div><p className="text-xs text-muted-foreground">Actif total</p><p className="font-bold">{fmt(annualReturn.actif_total)}</p></div>
+              <div><p className="text-xs text-muted-foreground">Passif total</p><p className="font-bold">{fmt(annualReturn.passif_total)}</p></div>
+              <div><p className="text-xs text-muted-foreground">CA</p><p className="font-bold">{fmt(annualReturn.chiffre_affaires)}</p></div>
+              <div>
+                <p className="text-xs text-muted-foreground">Résultat net</p>
+                <p className={`font-bold ${annualReturn.resultat_net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {fmt(annualReturn.resultat_net)}
+                </p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── Section 5 : Statut soumission ────────────────────────────────── */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <CalendarDays className="h-5 w-5" style={{ color: '#C9A84C' }} />
+            <CardTitle className="text-base">Soumission ROC</CardTitle>
+            {annualReturn && (
+              <Badge className={STATUT_COLORS[annualReturn.statut]}>
+                {STATUT_LABELS[annualReturn.statut]}
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div>
+              <Label>Date AGM</Label>
+              <Input
+                type="date"
+                value={returnForm.date_agm}
+                onChange={e => setReturnForm(f => ({ ...f, date_agm: e.target.value }))}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label>Statut</Label>
+              <Select value={returnForm.statut} onValueChange={v => setReturnForm(f => ({ ...f, statut: v }))}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(STATUT_LABELS).map(([v, l]) => (
+                    <SelectItem key={v} value={v}>{l}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Référence ROC</Label>
+              <Input
+                value={returnForm.reference_roc}
+                onChange={e => setReturnForm(f => ({ ...f, reference_roc: e.target.value }))}
+                placeholder="ROC-XXXX-YYYY"
+                className="mt-1"
+              />
+            </div>
+          </div>
+
+          {annualReturn?.date_echeance && (
+            <div className="mt-4 flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Deadline (AGM + 28 jours) :</span>
+              <span className={`font-semibold ${
+                deadlineStatus === 'depasse' ? 'text-red-600' :
+                deadlineStatus === 'urgent' ? 'text-orange-600' : 'text-green-600'
+              }`}>
+                {fmtDate(annualReturn.date_echeance)}
+              </span>
+              {deadlineStatus === 'depasse' && <AlertTriangle className="h-4 w-4 text-red-500" />}
+              {deadlineStatus === 'ok' && <CheckCircle2 className="h-4 w-4 text-green-500" />}
+            </div>
+          )}
+
+          <div className="mt-4">
+            <Label>Notes</Label>
+            <Textarea
+              value={returnForm.notes}
+              onChange={e => setReturnForm(f => ({ ...f, notes: e.target.value }))}
+              placeholder="Observations, commentaires..."
+              className="mt-1"
+              rows={3}
+            />
+          </div>
+
+          <div className="mt-4 flex gap-3">
+            <Button
+              onClick={handleSaveReturn}
+              disabled={savingReturn}
+              style={{ backgroundColor: '#1E2A4A', color: 'white' }}
+            >
+              {savingReturn ? 'Enregistrement...' : annualReturn ? 'Mettre à jour' : 'Créer Annual Return'}
+            </Button>
+            {annualReturn && annualReturn.statut !== 'soumis' && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setReturnForm(f => ({
+                    ...f,
+                    statut: 'soumis',
+                    // date soumission automatique
+                  }))
+                  setTimeout(handleSaveReturn, 100)
+                }}
+              >
+                Marquer soumis
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}

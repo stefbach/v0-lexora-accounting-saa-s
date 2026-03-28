@@ -8,21 +8,32 @@ import { useProfile } from "@/hooks/use-profile"
 import { Button } from "@/components/ui/button"
 import {
   LayoutDashboard, Users, UsersRound, AlertTriangle, LogOut, Building2, GitMerge,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, BookOpen, Scale, FileText, TrendingUp, ArrowLeftRight,
+  FileSpreadsheet, RotateCcw,
 } from "lucide-react"
 import { useState } from "react"
 
-interface NavItem { href: string; label: string; icon: React.ComponentType<{ className?: string }> }
+interface NavItem { href: string; label: string; icon: React.ComponentType<{ className?: string }>; section?: string }
 
 const navItems: NavItem[] = [
   { href: "/comptable",         label: "Tableau de bord", icon: LayoutDashboard },
   { href: "/comptable/clients", label: "Mes Clients",     icon: Users },
   { href: "/comptable/equipe",  label: "Mon Équipe",      icon: UsersRound },
   { href: "/comptable/alertes", label: "Alertes",         icon: AlertTriangle },
-  { href: "/rh",                 label: "RH & Paie",       icon: Users },
-  { href: "/direction",          label: "Direction",       icon: Building2 },
+  // ── Modules comptables ──
+  { href: "/comptable/clients", label: "Grand Livre",         icon: BookOpen,         section: "Comptabilité" },
+  { href: "/comptable/clients", label: "Balance",             icon: Scale,            section: "Comptabilité" },
+  { href: "/comptable/clients", label: "IT Form 3 / IS",      icon: FileText,         section: "Comptabilité" },
+  { href: "/comptable/clients", label: "FAR / Amortissements",icon: TrendingUp,       section: "Comptabilité" },
+  { href: "/comptable/clients", label: "Annual Return ROC",   icon: RotateCcw,        section: "Comptabilité" },
+  // ── Multi-société ──
+  { href: "/comptable/interco", label: "INTERCO",             icon: ArrowLeftRight,   section: "Consolidation" },
+  // ── RH ──
+  { href: "/rh",                label: "RH & Paie",           icon: Users },
+  { href: "/rh/paie/edf",       label: "EDF Annuel MRA",      icon: FileSpreadsheet,  section: "RH" },
+  { href: "/direction",         label: "Direction",           icon: Building2 },
   { href: "/comptable/rapprochement", label: "Rapprochement", icon: GitMerge },
-  { href: "/profil",                  label: "Mon Profil",      icon: UsersRound },
+  { href: "/profil",            label: "Mon Profil",          icon: UsersRound },
 ]
 
 export function ComptableSidebar() {
@@ -68,17 +79,29 @@ export function ComptableSidebar() {
           </div>
         )}
         <nav className="flex flex-col gap-1">
-          {navItems.map((item) => {
+          {navItems.map((item, index) => {
             const isActive = item.href === "/comptable" ? pathname === "/comptable" : pathname.startsWith(item.href)
+            // Afficher l'en-tête de section si c'est le premier item de la section
+            const prevItem = navItems[index - 1]
+            const showSectionHeader = !collapsed && item.section && item.section !== prevItem?.section
             return (
-              <Link key={item.href} href={item.href}
-                className={cn("flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
-                  isActive ? "bg-white/10 shadow-sm" : "text-white/70 hover:bg-white/5 hover:text-white",
-                  collapsed && "justify-center")}
-                style={isActive ? { color: "#C9A84C" } : undefined}>
-                <item.icon className="h-4 w-4 shrink-0" />
-                {!collapsed && <span>{item.label}</span>}
-              </Link>
+              <div key={`${item.href}-${item.label}`}>
+                {showSectionHeader && (
+                  <div className="mt-3 mb-1 px-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-white/30">
+                      {item.section}
+                    </p>
+                  </div>
+                )}
+                <Link href={item.href}
+                  className={cn("flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
+                    isActive ? "bg-white/10 shadow-sm" : "text-white/70 hover:bg-white/5 hover:text-white",
+                    collapsed && "justify-center")}
+                  style={isActive ? { color: "#C9A84C" } : undefined}>
+                  <item.icon className="h-4 w-4 shrink-0" />
+                  {!collapsed && <span>{item.label}</span>}
+                </Link>
+              </div>
             )
           })}
         </nav>
