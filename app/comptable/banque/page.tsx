@@ -59,7 +59,11 @@ export default function ComptableBanquePage() {
   const [totalBankMUR, setTotalBankMUR] = useState(0)
 
   useEffect(() => {
-    fetch("/api/comptable/societes").then(r => r.json()).then(d => setSocietes(d.societes || []))
+    fetch("/api/comptable/societes").then(r => r.json()).then(d => {
+      const s = d.societes || []
+      setSocietes(s)
+      if (s.length === 1) setSelectedSociete(s[0].id)
+    })
   }, [])
 
   const load = useCallback(async () => {

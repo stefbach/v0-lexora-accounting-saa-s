@@ -30,20 +30,39 @@ export async function GET() {
       const { data: direct } = await admin.from('societes').select('*').eq('comptable_id', user.id)
       ;(direct || []).forEach((s: any) => societeMap.set(s.id, s))
       // Via dossiers
-      const { data: viaDossiers } = await admin.from('dossiers').select('societe_id, societes(*)').eq('comptable_id', user.id)
-      ;(viaDossiers || []).forEach((d: any) => { if (d.societes) societeMap.set(d.societes.id, d.societes) })
-      // Via comptable_societes
-      const { data: viaCS } = await admin.from('comptable_societes').select('societe_id, societes(*)').eq('comptable_id', user.id).eq('actif', true)
-      ;(viaCS || []).forEach((r: any) => { if (r.societes) societeMap.set(r.societes.id, r.societes) })
+      const { data: dossiers } = await admin.from('dossiers').select('societe_id').eq('comptable_id', user.id)
+      if (dossiers && dossiers.length > 0) {
+        const sIds = dossiers.map(d => d.societe_id).filter(Boolean)
+        if (sIds.length > 0) {
+          const { data: linked } = await admin.from('societes').select('*').in('id', sIds)
+          ;(linked || []).forEach((s: any) => societeMap.set(s.id, s))
+        }
+      }
+      // Via comptable_societes (table may not exist)
+      try {
+        const { data: viaCS, error: csErr } = await admin.from('comptable_societes').select('societe_id').eq('comptable_id', user.id).eq('actif', true)
+        if (!csErr && viaCS && viaCS.length > 0) {
+          const csIds = viaCS.map((r: any) => r.societe_id).filter(Boolean)
+          if (csIds.length > 0) {
+            const { data: csSocietes } = await admin.from('societes').select('*').in('id', csIds)
+            ;(csSocietes || []).forEach((s: any) => societeMap.set(s.id, s))
+          }
+        }
+      } catch { /* table may not exist */ }
 
     } else if (['client_admin', 'client_user'].includes(role)) {
       // Sociétés créées par le client + via dossiers
-      const [{ data: owned }, { data: viaDossiers }] = await Promise.all([
-        admin.from('societes').select('*').eq('created_by', user.id),
-        admin.from('dossiers').select('societe_id, societes(*)').eq('client_id', user.id),
-      ])
+      const { data: owned } = await admin.from('societes').select('*').eq('created_by', user.id)
       ;(owned || []).forEach((s: any) => societeMap.set(s.id, s))
-      ;(viaDossiers || []).forEach((d: any) => { if (d.societes) societeMap.set(d.societes.id, d.societes) })
+
+      const { data: dossiers } = await admin.from('dossiers').select('societe_id').eq('client_id', user.id)
+      if (dossiers && dossiers.length > 0) {
+        const societeIds = dossiers.map(d => d.societe_id).filter(Boolean)
+        if (societeIds.length > 0) {
+          const { data: linkedSocietes } = await admin.from('societes').select('*').in('id', societeIds)
+          ;(linkedSocietes || []).forEach((s: any) => societeMap.set(s.id, s))
+        }
+      }
 
     } else if (['rh', 'juridique', 'employe', 'manager', 'direction'].includes(role)) {
       if (profile?.societe_id) {
