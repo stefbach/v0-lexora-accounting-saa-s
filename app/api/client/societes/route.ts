@@ -60,13 +60,33 @@ export async function POST(request: Request) {
     if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
 
     const body = await request.json()
+    if (!body.nom) return NextResponse.json({ error: 'Le nom est requis' }, { status: 400 })
+
     const admin = getAdmin()
     const { data, error } = await admin.from('societes').insert({
-      ...body,
-      created_by: user.id
+      nom: body.nom,
+      brn: body.brn || null,
+      ern: body.ern || null,
+      numero_tva_mra: body.numero_tva_mra || null,
+      statut_tva: body.statut_tva || false,
+      secteur_activite: body.secteur_activite || null,
+      adresse: body.adresse || null,
+      telephone: body.telephone || null,
+      email: body.email || null,
+      created_by: user.id,
     }).select().single()
 
     if (error) throw error
+
+    // Auto-créer un dossier pour lier le client à sa nouvelle société
+    if (data?.id) {
+      await admin.from('dossiers').insert({
+        client_id: user.id,
+        societe_id: data.id,
+        comptable_id: null,
+      }).catch(() => {})
+    }
+
     return NextResponse.json({ societe: data })
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
@@ -83,7 +103,17 @@ export async function PATCH(request: Request) {
     if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
     const body = await request.json()
     const admin = getAdmin()
-    const { data, error } = await admin.from('societes').update(body).eq('id', id).select().single()
+    const updateData: Record<string, unknown> = {}
+    if (body.nom !== undefined) updateData.nom = body.nom
+    if (body.brn !== undefined) updateData.brn = body.brn || null
+    if (body.ern !== undefined) updateData.ern = body.ern || null
+    if (body.numero_tva_mra !== undefined) updateData.numero_tva_mra = body.numero_tva_mra || null
+    if (body.statut_tva !== undefined) updateData.statut_tva = body.statut_tva
+    if (body.secteur_activite !== undefined) updateData.secteur_activite = body.secteur_activite || null
+    if (body.adresse !== undefined) updateData.adresse = body.adresse || null
+    if (body.telephone !== undefined) updateData.telephone = body.telephone || null
+    if (body.email !== undefined) updateData.email = body.email || null
+    const { data, error } = await admin.from('societes').update(updateData).eq('id', id).select().single()
     if (error) throw error
     return NextResponse.json({ societe: data })
   } catch (e: unknown) {
