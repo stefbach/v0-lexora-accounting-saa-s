@@ -10,7 +10,7 @@ function getAdminClient() {
   return createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
-export const maxDuration = 60
+export const maxDuration = 300
 
 export async function POST(request: NextRequest) {
   const supabase = getAdminClient()
@@ -153,19 +153,50 @@ export async function POST(request: NextRequest) {
       messageContent = 'Analyse ce document:\n' + Buffer.from(fileArrayBuffer).toString('utf-8').substring(0, 5000)
     }
 
-    // First pass: detect document type if not already known
-    // We use the main inline prompt for the first analysis
-    // For bank statements, we'll use the specialized prompt with higher max_tokens
+    // Pour les PDFs : détection rapide du type en 1 seul appel si possible
+    // Si PDF → tenter détection rapide d'abord (512 tokens)
+    let isLikelyBankStatement = false
+    if (isPdf && typeof messageContent !== 'string') {
+      try {
+        const quickDetect = await anthropic.messages.create({
+          model: CLAUDE_CONFIG.model,
+          max_tokens: 256,
+          temperature: 0,
+          messages: [{ role: 'user', content: [...(messageContent as any[]), { type: 'text', text: 'Réponds en 1 mot : facture_client, facture_fournisseur, releve_bancaire, fiche_paie, ou autre ?' }] }],
+        })
+        const quickText = quickDetect.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('').toLowerCase()
+        isLikelyBankStatement = quickText.includes('releve_bancaire') || quickText.includes('relevé') || quickText.includes('bank')
+      } catch { /* continue */ }
+    }
 
-    // Determine max_tokens based on expected document type hint
-    // Default analysis uses 4096, bank statements need 16384
-    const detectionMaxTokens = CLAUDE_CONFIG.max_tokens
+    // Si relevé bancaire détecté → aller directement au prompt spécialisé (évite double appel)
+    let aiResponse: any
+    let parsed: any = {}
 
-    const aiResponse = await anthropic.messages.create({
-      model: CLAUDE_CONFIG.model,
-      max_tokens: detectionMaxTokens,
-      temperature: CLAUDE_CONFIG.temperature,
-      system: injectTauxChange(`Tu es un expert-comptable mauricien. Analyse ce document et retourne UNIQUEMENT un JSON valide (pas de markdown, pas de backticks).
+    if (isLikelyBankStatement && isPdf) {
+      const bankSystemPrompt = getSystemPrompt('releve_bancaire', tauxChange)
+      aiResponse = await anthropic.messages.create({
+        model: CLAUDE_CONFIG.model,
+        max_tokens: CLAUDE_CONFIG.max_tokens_releve_bancaire,
+        temperature: CLAUDE_CONFIG.temperature,
+        system: bankSystemPrompt,
+        messages: [{ role: 'user', content: [
+          { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
+          { type: 'text', text: 'Analyse ce releve bancaire complet. Lis TOUTES les lignes sans exception.' },
+        ]}],
+      })
+      const bankText = aiResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
+      const bankCleaned = bankText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
+      try {
+        const bankParsed = JSON.parse(bankCleaned)
+        parsed = { routing: { type_document: 'releve_bancaire', societe: bankParsed.banque || 'MCB', confiance_type: 95 }, extraction: bankParsed }
+      } catch { parsed = { routing: { type_document: 'releve_bancaire', confiance_type: 50 }, extraction: {} } }
+    } else {
+      aiResponse = await anthropic.messages.create({
+        model: CLAUDE_CONFIG.model,
+        max_tokens: CLAUDE_CONFIG.max_tokens,
+        temperature: CLAUDE_CONFIG.temperature,
+        system: injectTauxChange(`Tu es un expert-comptable mauricien. Analyse ce document et retourne UNIQUEMENT un JSON valide (pas de markdown, pas de backticks).
 
 === DETECTION DU TYPE ===
 Determine d'abord le type: facture_fournisseur, facture_client, releve_bancaire, fiche_paie, charges_sociales, contrat, ou autre.
@@ -224,44 +255,20 @@ Format: {"routing":{"societe":"<nom>","type_document":"charges_sociales","confia
 CONVERSION DEVISES: EUR/MUR: {{TAUX_EUR}}, GBP/MUR: {{TAUX_GBP}}, USD/MUR: {{TAUX_USD}}, AUD/MUR: ~29.50
 REVERSE CHARGE (achat SaaS etranger): Output TVA 15% + Input TVA 15% → net=0. Ajouter ecriture debit 4456 + credit 4457.
 Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
-      messages: [{ role: 'user', content: messageContent }],
-    })
+        messages: [{ role: 'user', content: messageContent }],
+      })
 
-    const text = aiResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
-    const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
-    let parsed: any = {}
-    try { parsed = JSON.parse(cleaned) } catch { parsed = { routing: { type_document: 'autre', societe: 'INCONNU' }, extraction: {} } }
+      const text = aiResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
+      const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
+      try { parsed = JSON.parse(cleaned) } catch { parsed = { routing: { type_document: 'autre', societe: 'INCONNU' }, extraction: {} } }
+    }
 
     const typeDocument = parsed.routing?.type_document || 'autre'
     const detectedSociete = parsed.routing?.societe || 'INCONNU'
     const confianceType = parsed.routing?.confiance_type || null
     let extraction = parsed.extraction || {}
 
-    // For bank statements: if initial analysis truncated, re-analyze with specialized prompt + 16384 tokens
-    if (typeDocument === 'releve_bancaire' && isPdf) {
-      const bankSystemPrompt = getSystemPrompt('releve_bancaire', tauxChange)
-      const bankResponse = await anthropic.messages.create({
-        model: CLAUDE_CONFIG.model,
-        max_tokens: CLAUDE_CONFIG.max_tokens_releve_bancaire,
-        temperature: CLAUDE_CONFIG.temperature,
-        system: bankSystemPrompt,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
-              { type: 'text', text: 'Analyse ce releve bancaire complet. Lis TOUTES les lignes sans exception.' },
-            ],
-          },
-        ],
-      })
-      const bankText = bankResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
-      const bankCleaned = bankText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
-      try {
-        const bankParsed = JSON.parse(bankCleaned)
-        extraction = bankParsed
-      } catch { /* keep initial extraction */ }
-    }
+    // Relevé bancaire déjà traité dans le bloc isLikelyBankStatement ci-dessus
 
     // Check bank statement coherence and create alert if needed
     if (typeDocument === 'releve_bancaire' && extraction.lignes_manquantes && Math.abs(extraction.ecart_solde || 0) > 1) {
