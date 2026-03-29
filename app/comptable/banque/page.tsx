@@ -356,15 +356,32 @@ export default function ComptableBanquePage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredTxs.map(tx => (
+                      {filteredTxs.map(tx => {
+                        const isFC = tx.devise && tx.devise !== "MUR"
+                        return (
                         <TableRow key={tx.id}>
                           <TableCell className="whitespace-nowrap text-sm">{formatDate(tx.date)}</TableCell>
+                          <TableCell>
+                            {tx.banque ? (
+                              <Badge variant="outline" style={{ borderColor: "#C9A84C", color: "#C9A84C" }}>{tx.banque}</Badge>
+                            ) : "—"}
+                          </TableCell>
                           <TableCell className="text-sm max-w-[240px] truncate">{tx.libelle}</TableCell>
                           <TableCell className="text-right text-red-600 font-medium">
-                            {tx.debit > 0 ? fmt(tx.debit) : "—"}
+                            {tx.debit > 0 ? (
+                              <div>
+                                <span>{fmt(tx.debit, isFC ? tx.devise : undefined)}</span>
+                                {isFC && <div className="text-xs text-gray-400">{fmtMUR(tx.debit_mur)}</div>}
+                              </div>
+                            ) : "—"}
                           </TableCell>
                           <TableCell className="text-right text-green-600 font-medium">
-                            {tx.credit > 0 ? fmt(tx.credit) : "—"}
+                            {tx.credit > 0 ? (
+                              <div>
+                                <span>{fmt(tx.credit, isFC ? tx.devise : undefined)}</span>
+                                {isFC && <div className="text-xs text-gray-400">{fmtMUR(tx.credit_mur)}</div>}
+                              </div>
+                            ) : "—"}
                           </TableCell>
                           <TableCell className="text-right font-mono text-sm">
                             {tx.solde_apres != null ? fmt(tx.solde_apres) : "—"}
@@ -376,8 +393,16 @@ export default function ComptableBanquePage() {
                             {tx.compte_comptable || "—"}
                           </TableCell>
                           <TableCell>{getStatutBadge(tx.statut)}</TableCell>
+                          <TableCell>
+                            {tx.lettre ? (
+                              <Badge className="bg-green-100 text-green-700 border-green-200">{tx.lettre}</Badge>
+                            ) : (
+                              <Badge className="bg-gray-100 text-gray-400 border-gray-200">—</Badge>
+                            )}
+                          </TableCell>
                         </TableRow>
-                      ))}
+                        )
+                      })}
                     </TableBody>
                   </Table>
                 </div>
