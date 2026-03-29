@@ -59,9 +59,9 @@ export async function POST(request: NextRequest) {
     }
     // Si le document existe mais en erreur ou en_attente, supprimer l'ancien pour permettre le re-upload
     if (existingDoc && existingDoc.statut !== 'traite') {
-      await supabase.from('ecritures_comptables').delete().eq('piece_justificative', existingDoc.id).catch(() => {})
-      await supabase.from('releves_bancaires').delete().eq('document_id', existingDoc.id).catch(() => {})
-      await supabase.from('documents').delete().eq('id', existingDoc.id).catch(() => {})
+      await supabase.from('ecritures_comptables').delete().eq('piece_justificative', existingDoc.id)
+      await supabase.from('releves_bancaires').delete().eq('document_id', existingDoc.id)
+      await supabase.from('documents').delete().eq('id', existingDoc.id)
     }
 
     // Resolve dossier_id
@@ -529,7 +529,7 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
 
     // Try to mark document as error
     if (docId) {
-      await supabase.from('documents').update({ statut: 'erreur', n8n_result: { error: errMsg } }).eq('id', docId).catch(() => {})
+      await supabase.from('documents').update({ statut: 'erreur', n8n_result: { error: errMsg } }).eq('id', docId)
     }
 
     return NextResponse.json({ error: errMsg, processing_error: errMsg }, { status: 500 })

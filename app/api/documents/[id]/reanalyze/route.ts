@@ -179,7 +179,7 @@ Taux: EUR={{TAUX_EUR}}, GBP={{TAUX_GBP}}, USD={{TAUX_USD}}`, tauxChange)
         .delete()
         .eq('dossier_id', doc.dossier_id)
         .eq('piece_justificative', id)
-        .catch(() => {})
+
     }
 
     // Update document
@@ -243,7 +243,8 @@ Taux: EUR={{TAUX_EUR}}, GBP={{TAUX_GBP}}, USD={{TAUX_USD}}`, tauxChange)
           piece_justificative: id,
         }))
       if (entries.length > 0) {
-        await supabase.from('ecritures_comptables').insert(entries).catch(console.error)
+        const { error: insertErr } = await supabase.from('ecritures_comptables').insert(entries)
+        if (insertErr) console.error('[reanalyze] ecritures insert error:', insertErr.message)
       }
     }
 
@@ -320,7 +321,7 @@ Taux: EUR={{TAUX_EUR}}, GBP={{TAUX_GBP}}, USD={{TAUX_USD}}`, tauxChange)
       const soldeCloture = solde || Number(finalExtraction.solde_fin) || 0
 
       // Delete old releve for this document
-      await supabase.from('releves_bancaires').delete().eq('document_id', id).catch(() => {})
+      await supabase.from('releves_bancaires').delete().eq('document_id', id)
 
       // Get bank account ID
       const { data: bankAccount } = await supabase.from('comptes_bancaires')
@@ -367,8 +368,10 @@ Taux: EUR={{TAUX_EUR}}, GBP={{TAUX_GBP}}, USD={{TAUX_USD}}`, tauxChange)
     // Try to mark as error
     try {
       const supabase = getAdminClient()
-      const resolvedId = await params.then(p => p.id).catch(() => '')
-      if (resolvedId) await supabase.from('documents').update({ statut: 'erreur' }).eq('id', resolvedId)
+      try {
+        const { id: resolvedId } = await params
+        if (resolvedId) await supabase.from('documents').update({ statut: 'erreur' }).eq('id', resolvedId)
+      } catch {}
     } catch {}
     return NextResponse.json({ error: errMsg }, { status: 500 })
   }

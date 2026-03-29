@@ -238,10 +238,10 @@ export async function DELETE(
     }
 
     // Supprimer les données bancaires liées
-    await supabase.from('releves_bancaires').delete().eq('document_id', id).catch(() => {})
+    await supabase.from('releves_bancaires').delete().eq('document_id', id)
 
     // Supprimer les écritures liées
-    await supabase.from('ecritures_comptables').delete().eq('piece_justificative', id).catch(() => {})
+    await supabase.from('ecritures_comptables').delete().eq('piece_justificative', id)
 
     // Supprimer le document
     const { error: delErr } = await supabase.from('documents').delete().eq('id', id)

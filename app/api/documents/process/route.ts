@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
 
     if (documentId) {
       const supabase = getSupabase()
-      await supabase.from('documents').update({ statut: 'erreur', n8n_result: { error: msg } }).eq('id', documentId).catch(() => {})
+      await supabase.from('documents').update({ statut: 'erreur', n8n_result: { error: msg } }).eq('id', documentId)
     }
 
     return NextResponse.json({ error: msg, stack: e?.stack?.split('\n').slice(0, 5) }, { status: 500 })
