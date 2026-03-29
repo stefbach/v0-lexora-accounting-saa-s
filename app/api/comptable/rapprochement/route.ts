@@ -181,9 +181,39 @@ export async function POST(request: Request) {
               return Math.abs(txAmount - fAmount) <= Math.max(fAmount * 0.01, 1)
             })
             if (matchedFacture) {
-              updatedTxs[i] = { ...tx, facture_id: matchedFacture.id, lettre: `R${String(matchCount + 1).padStart(3, '0')}`, statut: 'rapproche' }
+              const code = `R${String(matchCount + 1).padStart(3, '0')}`
+              updatedTxs[i] = { ...tx, facture_id: matchedFacture.id, lettre: code, statut: 'rapproche' }
               await supabase.from('factures').update({ statut: 'paye' }).eq('id', matchedFacture.id)
-              matches.push({ type: 'facture', transaction: tx.libelle, facture: matchedFacture.numero_facture, montant: txAmount })
+
+              // IAS 21: calculer l'écart de change si devise étrangère
+              const fDevise = matchedFacture.devise || 'MUR'
+              const fTauxFacture = Number(matchedFacture.taux_change) || 1
+              let ecartChange = 0
+              if (fDevise !== 'MUR' && fTauxFacture > 0) {
+                const { data: currentRates } = await supabase
+                  .from('taux_change').select('taux').eq('devise', fDevise).order('date_taux', { ascending: false }).limit(1).maybeSingle()
+                const tauxPaiement = currentRates?.taux || fTauxFacture
+                const fMontant = Number(matchedFacture.montant_ttc) || 0
+                const valeurFacture = fMontant * fTauxFacture  // MUR au taux facture
+                const valeurPaiement = fMontant * tauxPaiement  // MUR au taux paiement
+                ecartChange = Math.round((valeurPaiement - valeurFacture) * 100) / 100
+
+                if (Math.abs(ecartChange) > 1) {
+                  // Créer une écriture de gain/perte de change
+                  const { data: dossiers } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
+                  if (dossiers) {
+                    const gainOuPerte = ecartChange > 0 ? { compte: '766', libelle: `Gain de change — ${matchedFacture.tiers || matchedFacture.numero_facture}`, debit: ecartChange, credit: 0 }
+                      : { compte: '666', libelle: `Perte de change — ${matchedFacture.tiers || matchedFacture.numero_facture}`, debit: 0, credit: Math.abs(ecartChange) }
+                    await supabase.from('ecritures_comptables').insert({
+                      dossier_id: dossiers.id, date_ecriture: new Date().toISOString().split('T')[0],
+                      journal: 'OD', compte: gainOuPerte.compte, libelle: gainOuPerte.libelle,
+                      debit: gainOuPerte.debit, credit: gainOuPerte.credit,
+                    })
+                  }
+                }
+              }
+
+              matches.push({ type: 'facture', transaction: tx.libelle, facture: matchedFacture.numero_facture, montant: txAmount, ecart_change: ecartChange })
               factures = factures.filter(f => f.id !== matchedFacture.id)
               matched = true; changed = true; matchCount++
             }

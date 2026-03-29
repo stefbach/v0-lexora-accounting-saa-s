@@ -187,19 +187,33 @@ export async function GET(request: Request) {
     }))
     const totalBankMUR = bankAccounts.reduce((s, a) => s + a.solde_mur, 0)
 
-    // Revenue breakdown by account prefix
-    const revenueByAccount: Record<string, number> = {}
-    allEcritures.filter(e => e.compte?.startsWith('7')).forEach(e => {
-      const prefix = (e.compte || '7').substring(0, 3)
-      revenueByAccount[prefix] = (revenueByAccount[prefix] || 0) + (Number(e.credit) || 0) - (Number(e.debit) || 0)
-    })
+    // Revenue breakdown by account prefix — from factures if available, else from écritures
+    let revenueByAccount: Record<string, number> = {}
+    let expensesByAccount: Record<string, number> = {}
 
-    // Expense breakdown by account prefix (first 2 digits for grouping into ranges)
-    const expensesByAccount: Record<string, number> = {}
-    allEcritures.filter(e => e.compte?.startsWith('6')).forEach(e => {
-      const prefix = (e.compte || '6').substring(0, 3)
-      expensesByAccount[prefix] = (expensesByAccount[prefix] || 0) + (Number(e.debit) || 0) - (Number(e.credit) || 0)
-    })
+    if (facturesFromTable.length > 0) {
+      // Build revenue/expense breakdown from factures (amounts already in MUR)
+      facturesFromTable.filter(f => f.type_facture === 'client' && f.statut !== 'annule').forEach(f => {
+        const prefix = '706' // Default: prestations de services
+        const mur = Number(f.montant_mur) || convertToMUR(Number(f.montant_ht) || 0, f.devise || 'MUR', rates)
+        revenueByAccount[prefix] = (revenueByAccount[prefix] || 0) + mur
+      })
+      facturesFromTable.filter(f => f.type_facture === 'fournisseur' && f.statut !== 'annule').forEach(f => {
+        const prefix = '628' // Default: charges diverses
+        const mur = Number(f.montant_mur) || convertToMUR(Number(f.montant_ht) || 0, f.devise || 'MUR', rates)
+        expensesByAccount[prefix] = (expensesByAccount[prefix] || 0) + mur
+      })
+    } else {
+      // Fallback: from écritures (may be in foreign currency — not ideal)
+      allEcritures.filter(e => e.compte?.startsWith('7')).forEach(e => {
+        const prefix = (e.compte || '7').substring(0, 3)
+        revenueByAccount[prefix] = (revenueByAccount[prefix] || 0) + (Number(e.credit) || 0) - (Number(e.debit) || 0)
+      })
+      allEcritures.filter(e => e.compte?.startsWith('6')).forEach(e => {
+        const prefix = (e.compte || '6').substring(0, 3)
+        expensesByAccount[prefix] = (expensesByAccount[prefix] || 0) + (Number(e.debit) || 0) - (Number(e.credit) || 0)
+      })
+    }
 
     // Creances (class 41 - clients receivables)
     const creances = allEcritures
