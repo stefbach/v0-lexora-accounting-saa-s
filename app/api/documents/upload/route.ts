@@ -50,12 +50,18 @@ export async function POST(request: NextRequest) {
       .eq('taille_fichier', file.size)
       .limit(1)
       .maybeSingle()
-    if (existingDoc) {
+    if (existingDoc && existingDoc.statut === 'traite') {
       return NextResponse.json({
-        error: `Doublon détecté : "${file.name}" a déjà été uploadé (ID: ${existingDoc.id}, statut: ${existingDoc.statut})`,
+        error: `Doublon détecté : "${file.name}" a déjà été uploadé (ID: ${existingDoc.id}). Utilisez "Réanalyser" pour retraiter ce document.`,
         doublon: true,
         doc_id: existingDoc.id
       }, { status: 409 })
+    }
+    // Si le document existe mais en erreur ou en_attente, supprimer l'ancien pour permettre le re-upload
+    if (existingDoc && existingDoc.statut !== 'traite') {
+      await supabase.from('ecritures_comptables').delete().eq('piece_justificative', existingDoc.id).catch(() => {})
+      await supabase.from('releves_bancaires').delete().eq('document_id', existingDoc.id).catch(() => {})
+      await supabase.from('documents').delete().eq('id', existingDoc.id).catch(() => {})
     }
 
     // Resolve dossier_id
