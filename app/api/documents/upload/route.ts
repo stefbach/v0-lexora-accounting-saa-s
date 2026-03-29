@@ -87,7 +87,8 @@ export async function POST(request: NextRequest) {
     const base64 = Buffer.from(fileArrayBuffer).toString('base64')
     const ext2 = file.name.split('.').pop()?.toLowerCase() || 'pdf'
     const typeFichier = ext2 === 'jpg' ? 'jpeg' : ext2 as 'pdf' | 'jpeg' | 'png' | 'xlsx'
-    const storagePath = `${user.id}/${Date.now()}_${file.name}`
+    const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+    const storagePath = `${user.id}/${Date.now()}_${safeFileName}`
 
     // Upload to storage
     const { error: storageError } = await supabase.storage
