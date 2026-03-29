@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     // Récupérer les bulletins du mois
     const { data: bulletins, error } = await supabase
       .from('bulletins_paie')
-      .select('*, employe:employes(code, nom, prenom, nic)')
+      .select('*, employe:employes(code, nom, prenom, nic_number)')
       .eq('societe_id', societe_id)
       .ilike('periode', `${periode}%`)
 
@@ -57,7 +57,7 @@ export async function POST(request: Request) {
         b.employe?.code || '',
         b.employe?.nom || '',
         b.employe?.prenom || '',
-        b.employe?.nic || '',
+        b.employe?.nic_number || '',
         sb.toFixed(2),
         (csg_sal + csg_bon).toFixed(2),
         (csg_pat + csg_pat_bon).toFixed(2),

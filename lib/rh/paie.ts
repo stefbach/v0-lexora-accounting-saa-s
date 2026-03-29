@@ -95,7 +95,8 @@ export function calculerBulletin(
   const nsf_salarie = Math.round(salaire_brut * params.nsf_salarie)
 
   // PAYE — barème progressif annuel MRA 2024/25
-  const salaireAnnuel = salaire_brut_base * 12
+  // EOY Bonus (13th month) is EXEMPT from PAYE in Mauritius (but subject to CSG)
+  const salaireAnnuel = salaire_brut_base * 12 // eoy_bonus excluded from PAYE base
   let payeAnnuel = 0
   if (salaireAnnuel > params.paye_seuil_exoneration) {
     const tranche1 = Math.min(salaireAnnuel, params.paye_seuil_taux_2) - params.paye_seuil_exoneration
