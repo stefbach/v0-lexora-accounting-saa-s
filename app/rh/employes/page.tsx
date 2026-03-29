@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Search, Plus, Loader2, Users } from "lucide-react"
+import { Search, Plus, Loader2, Users, Upload, Download, FileSpreadsheet } from "lucide-react"
 import { BANQUES_MAURITIUS } from "@/lib/rh/banques-mauritius"
 
 function fmt(n: number) { return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "MUR", maximumFractionDigits: 0 }).format(n) }
@@ -23,6 +23,12 @@ export default function EmployesPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string|null>(null)
   const [form, setForm] = useState({ societe_id:"",nom:"",prenom:"",poste:"",email:"",telephone:"",salaire_base:"",transport_allowance:"0",petrol_allowance:"0",date_arrivee:"",role:"salarie",csg_categorie:"A",bank_account:"",bank_name:"",nic:"",tan:"",iban:"" })
+  const [importOpen, setImportOpen] = useState(false)
+  const [importFile, setImportFile] = useState<File|null>(null)
+  const [importSociete, setImportSociete] = useState("")
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState<{imported:number,errors:{row:number,message:string}[],total_rows:number}|null>(null)
+  const [importError, setImportError] = useState<string|null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -50,12 +56,75 @@ export default function EmployesPage() {
     finally { setSaving(false) }
   }
 
+  const handleImport = async () => {
+    if (!importFile || !importSociete) { setImportError("Fichier et société requis"); return }
+    setImporting(true); setImportError(null); setImportResult(null)
+    try {
+      const fd = new FormData()
+      fd.append("file", importFile)
+      fd.append("societe_id", importSociete)
+      const res = await fetch("/api/rh/employes/import", { method: "POST", body: fd })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setImportResult(data)
+      if (data.imported > 0) load()
+    } catch (e: unknown) { setImportError(e instanceof Error ? e.message : "Erreur import") }
+    finally { setImporting(false) }
+  }
+
+  const downloadTemplate = () => {
+    const csv = "nom;prenom;email;poste;salaire_base;devise_salaire;date_arrivee;nic;bank_name;bank_account;telephone;role\nDUPONT;Jean;jean@example.com;Comptable;35000;MUR;2024-01-15;A1234567890123;MCB;000012345678;+230 5123 4567;salarie"
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url; a.download = "modele_employes.csv"; a.click()
+    URL.revokeObjectURL(url)
+  }
+
   const filtered = employes.filter(e => !search || `${e.nom} ${e.prenom} ${e.poste||""}`.toLowerCase().includes(search.toLowerCase()))
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div><h1 className="text-2xl font-bold text-[#1E2A4A]">Employés</h1><p className="text-sm text-gray-500">{employes.length} employé(s) actif(s)</p></div>
+        <div className="flex gap-2">
+        <Dialog open={importOpen} onOpenChange={(v) => { setImportOpen(v); if(!v){ setImportFile(null); setImportResult(null); setImportError(null) } }}>
+          <DialogTrigger asChild><Button variant="outline" className="border-[#1E2A4A] text-[#1E2A4A]"><Upload className="w-4 h-4 mr-2"/>Importer CSV</Button></DialogTrigger>
+          <DialogContent className="max-w-lg">
+            <DialogHeader><DialogTitle className="flex items-center gap-2"><FileSpreadsheet className="w-5 h-5"/>Importer des employés</DialogTitle></DialogHeader>
+            <div className="space-y-4 py-2">
+              {importError && <p className="text-sm text-red-600 bg-red-50 p-2 rounded">{importError}</p>}
+              {importResult && (
+                <div className="space-y-2">
+                  <p className="text-sm text-green-700 bg-green-50 p-2 rounded">{importResult.imported} employé(s) importé(s) sur {importResult.total_rows} ligne(s)</p>
+                  {importResult.errors.length > 0 && (
+                    <div className="bg-yellow-50 p-2 rounded max-h-32 overflow-y-auto">
+                      <p className="text-sm font-medium text-yellow-800 mb-1">Erreurs ({importResult.errors.length}):</p>
+                      {importResult.errors.map((err, i) => <p key={i} className="text-xs text-yellow-700">Ligne {err.row}: {err.message}</p>)}
+                    </div>
+                  )}
+                </div>
+              )}
+              <div>
+                <Label>Société *</Label>
+                <Select value={importSociete} onValueChange={setImportSociete}>
+                  <SelectTrigger><SelectValue placeholder="Choisir la société..."/></SelectTrigger>
+                  <SelectContent>{societes.map(s=><SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Fichier CSV ou Excel *</Label>
+                <Input type="file" accept=".csv,.xlsx,.xls" onChange={e => setImportFile(e.target.files?.[0] || null)} className="mt-1"/>
+                <p className="text-xs text-gray-500 mt-1">Colonnes: nom, prenom, email, poste, salaire_base, devise_salaire, date_arrivee, nic, bank_name, bank_account</p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={downloadTemplate} className="text-[#1E2A4A]"><Download className="w-4 h-4 mr-2"/>Télécharger modèle CSV</Button>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={()=>setImportOpen(false)}>Fermer</Button>
+              <Button onClick={handleImport} disabled={importing || !importFile || !importSociete} className="bg-[#1E2A4A] text-white">{importing&&<Loader2 className="w-4 h-4 animate-spin mr-2"/>}Importer</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild><Button className="bg-[#1E2A4A] text-white"><Plus className="w-4 h-4 mr-2"/>Nouvel employé</Button></DialogTrigger>
           <DialogContent className="max-w-2xl">
@@ -85,6 +154,7 @@ export default function EmployesPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       <Card><CardContent className="p-4 flex gap-3">

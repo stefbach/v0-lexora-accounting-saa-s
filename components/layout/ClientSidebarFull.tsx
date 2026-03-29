@@ -56,6 +56,9 @@ const MENU = [
     section: "RH & Paie",
     items: [
       { href: "/client/salaires", label: "Paie & Bulletins", icon: CreditCard },
+      { href: "/rh/employes", label: "Employés", icon: Users },
+      { href: "/rh/pointage", label: "Pointage", icon: Clock },
+      { href: "/rh/conges", label: "Congés", icon: Scale },
     ]
   },
   {
