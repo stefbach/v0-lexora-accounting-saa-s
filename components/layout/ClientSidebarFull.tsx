@@ -26,7 +26,8 @@ const MENU = [
   {
     section: "Comptabilité",
     items: [
-      { href: "/client/banque", label: "Banque & Rapprochement", icon: Banknote },
+      { href: "/client/banque", label: "Banque", icon: Banknote },
+      { href: "/comptable/rapprochement", label: "Rapprochement & Lettrage", icon: CreditCard },
       { href: "/client/tresorerie", label: "Trésorerie", icon: Banknote },
       { href: "/client/finances", label: "Mes Chiffres", icon: BarChart3 },
       { href: "/client/fournisseurs", label: "Fournisseurs", icon: FileSpreadsheet },
@@ -47,7 +48,7 @@ const MENU = [
     items: [
       { href: "/client/tva", label: "TVA MRA", icon: Receipt },
       { href: "/client/charges-sociales", label: "CSG / NSF / PAYE", icon: Calculator },
-      { href: "/client/mes-comptes", label: "Grand Livre", icon: BookOpen },
+      { href: "/client/grand-livre", label: "Grand Livre", icon: BookOpen },
     ]
   },
   {
