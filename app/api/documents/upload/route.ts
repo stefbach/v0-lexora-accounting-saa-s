@@ -312,8 +312,12 @@ ANALYSE TVA FOURNISSEUR — OBLIGATOIRE:
 5. Si montant_tva=0 mais taux_tva=15: VERIFIER — probablement erreur, mettre montant_tva = montant_ht * 0.15
 6. Remplir analyse_tva avec: "TVA 15% applicable — VAT Number: XXXXX" ou "Pas de TVA — fournisseur non enregistre" ou "Export — zero-rated"
 
-Ecritures AVEC TVA: debit 6xx (charge HT) + debit 4456 (TVA deductible) / credit 401 (TTC)
-Ecritures SANS TVA: debit 6xx (charge = TTC) / credit 401 (TTC). PAS de 4456.
+REGLE ECRITURES FACTURE FOURNISSEUR:
+Generer EXACTEMENT 2 ecritures (ou 3 si TVA):
+- 1 ecriture debit 6xx = montant_ht TOTAL (pas les sous-lignes)
+- Si TVA applicable: 1 ecriture debit 4456 = montant_tva TOTAL
+- 1 ecriture credit 401 = montant_ttc TOTAL
+NE PAS generer une ecriture par ligne de detail de la facture.
 
 --- FACTURE CLIENT ---
 Format: {"routing":{"societe":"<nom>","type_document":"facture_client","confiance_type":0-100},"extraction":{"emetteur":"","destinataire":"","date_document":"YYYY-MM-DD","numero_reference":"","devise":"EUR|USD|GBP|MUR|AUD","montant_ht":0,"montant_tva":0,"montant_ttc":0,"taux_tva":15,"tva_applicable":true,"tva_exonere":false,"type_client":"B2B|B2C","analyse_tva":"","lignes":[{"description":"","montant":0}],"ecritures_comptables":[{"compte":"7xx","libelle":"","debit":0,"credit":0}]}}
@@ -322,6 +326,13 @@ Comptes de produits:
 - 707: Ventes de marchandises
 - 753: Commissions et courtages (NHS S2 referrals)
 - 701: Ventes de produits finis
+
+REGLE ECRITURES FACTURE CLIENT:
+Generer EXACTEMENT 2 ecritures (ou 3 si TVA):
+- 1 ecriture debit 411 = montant_ttc TOTAL (pas les sous-lignes)
+- 1 ecriture credit 7xx = montant_ht TOTAL
+- Si TVA applicable: 1 ecriture credit 4457 = montant_tva TOTAL
+NE PAS generer une ecriture par ligne de detail de la facture.
 
 ANALYSE TVA CLIENT — OBLIGATOIRE:
 1. Chercher sur la facture: numero TVA emetteur, mention TVA, taux, montant TVA
