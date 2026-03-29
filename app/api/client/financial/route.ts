@@ -215,10 +215,29 @@ export async function GET(request: Request) {
       })
     }
 
-    // Creances (class 41 - clients receivables)
-    const creances = allEcritures
-      .filter(e => e.compte?.startsWith('41'))
-      .reduce((sum, e) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
+    // === BILAN: calculate from factures (MUR) when available, else from écritures ===
+
+    // Créances clients (compte 411) — from unpaid factures client (montant_mur)
+    let creances = 0
+    const facturesClientImpayees = facturesFromTable.filter(f => f.type_facture === 'client' && f.statut !== 'paye' && f.statut !== 'annule')
+    if (facturesClientImpayees.length > 0) {
+      creances = facturesClientImpayees.reduce((s, f) => s + (Number(f.montant_mur) || convertToMUR(Number(f.montant_ttc) || 0, f.devise || 'MUR', rates)), 0)
+    } else {
+      creances = allEcritures
+        .filter(e => e.compte?.startsWith('41'))
+        .reduce((sum, e) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
+    }
+
+    // Dettes fournisseurs (compte 401) — from unpaid factures fournisseur
+    let dettesFournisseurs = 0
+    const facturesFournImpayees = facturesFromTable.filter(f => f.type_facture === 'fournisseur' && f.statut !== 'paye' && f.statut !== 'annule')
+    if (facturesFournImpayees.length > 0) {
+      dettesFournisseurs = facturesFournImpayees.reduce((s, f) => s + (Number(f.montant_mur) || convertToMUR(Number(f.montant_ttc) || 0, f.devise || 'MUR', rates)), 0)
+    } else {
+      dettesFournisseurs = allEcritures
+        .filter(e => e.compte?.startsWith('40'))
+        .reduce((sum, e) => sum + (Number(e.credit) || 0) - (Number(e.debit) || 0), 0)
+    }
 
     // Monthly revenue for last 2 months for trend
     const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
@@ -240,7 +259,7 @@ export async function GET(request: Request) {
       .filter(e => e.compte?.startsWith('43'))
       .reduce((sum, e) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
 
-    // Balance sheet items
+    // Balance sheet items (from écritures — these are less impacted by currency)
     const immobilisations = allEcritures
       .filter(e => e.compte?.startsWith('2'))
       .reduce((sum, e) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
@@ -261,9 +280,7 @@ export async function GET(request: Request) {
       .filter(e => e.compte?.startsWith('16'))
       .reduce((sum, e) => sum + (Number(e.credit) || 0) - (Number(e.debit) || 0), 0)
 
-    const dettesFournisseurs = allEcritures
-      .filter(e => e.compte?.startsWith('40'))
-      .reduce((sum, e) => sum + (Number(e.credit) || 0) - (Number(e.debit) || 0), 0)
+    // dettesFournisseurs already computed above from factures
 
     const dettesFiscales = allEcritures
       .filter(e => e.compte?.startsWith('44'))
