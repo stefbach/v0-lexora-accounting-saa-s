@@ -89,6 +89,9 @@ export async function GET() {
           nb_ecritures: Array.isArray(ext.ecritures_comptables) ? ext.ecritures_comptables.length : 0,
           has_routing: !!d.n8n_result?.routing,
           model: d.n8n_result?.metadata?.model,
+          _raw_response_preview: d.n8n_result?._raw_response
+            ? d.n8n_result._raw_response.substring(0, 300)
+            : null,
         },
       }
     })

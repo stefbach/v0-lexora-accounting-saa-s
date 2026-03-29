@@ -200,11 +200,44 @@ export async function POST(request: NextRequest) {
         ]}],
       })
       const bankText = aiResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
+      console.log('[upload] Raw Claude bank response length:', bankText.length, 'first 500 chars:', bankText.substring(0, 500))
+
+      // Robust JSON extraction: try multiple strategies
+      let bankParsed: any = null
       const bankCleaned = bankText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
-      try {
-        const bankParsed = JSON.parse(bankCleaned)
+
+      // Strategy 1: direct parse
+      try { bankParsed = JSON.parse(bankCleaned) } catch {}
+
+      // Strategy 2: find JSON object in text (Claude sometimes adds text before/after JSON)
+      if (!bankParsed) {
+        const jsonMatch = bankText.match(/\{[\s\S]*\}/)
+        if (jsonMatch) {
+          try { bankParsed = JSON.parse(jsonMatch[0]) } catch {}
+        }
+      }
+
+      // Strategy 3: find JSON between code fences
+      if (!bankParsed) {
+        const fenceMatch = bankText.match(/```(?:json)?\s*([\s\S]*?)```/)
+        if (fenceMatch) {
+          try { bankParsed = JSON.parse(fenceMatch[1].trim()) } catch {}
+        }
+      }
+
+      if (bankParsed && typeof bankParsed === 'object') {
+        console.log('[upload] Bank JSON parsed OK. Keys:', Object.keys(bankParsed).join(', '),
+          'lignes:', Array.isArray(bankParsed.lignes) ? bankParsed.lignes.length : 0,
+          'transactions:', Array.isArray(bankParsed.transactions) ? bankParsed.transactions.length : 0)
         parsed = { routing: { type_document: 'releve_bancaire', societe: bankParsed.banque || 'MCB', confiance_type: 95 }, extraction: bankParsed }
-      } catch { parsed = { routing: { type_document: 'releve_bancaire', confiance_type: 50 }, extraction: {} } }
+      } else {
+        console.error('[upload] FAILED to parse bank JSON. Raw text:', bankText.substring(0, 1000))
+        parsed = {
+          routing: { type_document: 'releve_bancaire', confiance_type: 20 },
+          extraction: {},
+          _raw_response: bankText.substring(0, 2000),
+        }
+      }
     } else {
       aiResponse = await anthropic.messages.create({
         model: CLAUDE_CONFIG.model,
@@ -299,13 +332,19 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
           ]}],
         })
         const bankText = bankResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
+        let bankParsed: any = null
         const bankCleaned = bankText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
-        const bankParsed = JSON.parse(bankCleaned)
-        // Merge: garder le routing du premier appel, remplacer l'extraction par la version spécialisée
-        extraction = bankParsed
-        if (!extraction.banque && detectedSociete !== 'INCONNU') extraction.banque = detectedSociete
+        try { bankParsed = JSON.parse(bankCleaned) } catch {}
+        if (!bankParsed) {
+          const m = bankText.match(/\{[\s\S]*\}/)
+          if (m) try { bankParsed = JSON.parse(m[0]) } catch {}
+        }
+        if (bankParsed) {
+          extraction = bankParsed
+          if (!extraction.banque && detectedSociete !== 'INCONNU') extraction.banque = detectedSociete
+        }
       } catch (e) {
-        console.warn('[upload] Retraitement spécialisé relevé bancaire échoué, on garde extraction générique:', e)
+        console.warn('[upload] Retraitement spécialisé relevé bancaire échoué:', e)
       }
     }
 
@@ -358,7 +397,12 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
       type_document: typeDocument, statut: 'traite',
       societe_detectee: detectedSociete !== 'INCONNU' ? detectedSociete : null,
       confiance_type: confianceType,
-      n8n_result: { routing: parsed.routing, extraction, metadata: { model: CLAUDE_CONFIG.model, processed_at: new Date().toISOString() } },
+      n8n_result: {
+        routing: parsed.routing,
+        extraction,
+        metadata: { model: CLAUDE_CONFIG.model, processed_at: new Date().toISOString() },
+        ...(parsed._raw_response ? { _raw_response: parsed._raw_response } : {}),
+      },
     }
     const { error: updateError } = await supabase.from('documents').update(updateData).eq('id', doc.id)
     if (updateError) console.error('[upload] DB UPDATE FAILED:', updateError.message)
