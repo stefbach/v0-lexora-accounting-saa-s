@@ -14,6 +14,7 @@ interface Societe { id: string; nom: string }
 
 const ROLES_CREABLES = [
   { value: 'rh', label: 'RH', desc: 'Employés, Pointage, Paie, Congés', color: 'bg-orange-100 text-orange-800' },
+  { value: 'manager', label: 'Manager', desc: 'Supervision équipe, validation', color: 'bg-teal-100 text-teal-800' },
   { value: 'juridique', label: 'Juridique', desc: 'Contrats, Documents légaux', color: 'bg-purple-100 text-purple-800' },
   { value: 'employe', label: 'Employé', desc: 'Portail salarié uniquement', color: 'bg-gray-100 text-gray-700' },
 ]

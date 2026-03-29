@@ -7,7 +7,7 @@ function getAdminClient() {
   return createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
-const VALID_ROLES = ['admin', 'super_admin', 'client_admin', 'client_user', 'comptable', 'comptable_dedie', 'rh', 'juridique', 'employe']
+const VALID_ROLES = ['admin', 'super_admin', 'client_admin', 'client_user', 'comptable', 'comptable_dedie', 'rh', 'juridique', 'employe', 'manager', 'direction']
 
 export async function GET() {
   try {
@@ -47,8 +47,8 @@ export async function POST(request: NextRequest) {
     if (authError) return NextResponse.json({ error: authError.message }, { status: 400 })
     if (!authData.user) return NextResponse.json({ error: 'Échec création' }, { status: 500 })
 
-    // Upsert profil
-    await supabase.from('profiles').upsert({
+    // Upsert profil — le trigger handle_new_user peut déjà l'avoir créé
+    const { error: profileError } = await supabase.from('profiles').upsert({
       id: authData.user.id,
       email,
       full_name,
@@ -56,16 +56,25 @@ export async function POST(request: NextRequest) {
       phone: phone || null,
       societe_id: societe_id || null,
       comptable_id: comptable_id || null,
-    })
+    }, { onConflict: 'id' })
+
+    if (profileError) {
+      console.error('[admin/users] Profile upsert error:', profileError.message)
+      return NextResponse.json({ error: `Erreur profil: ${profileError.message}` }, { status: 500 })
+    }
 
     // Si société associée → insérer dans user_societes
     if (societe_id) {
-      await supabase.from('user_societes').upsert({
+      const { error: usError } = await supabase.from('user_societes').upsert({
         user_id: authData.user.id,
         societe_id,
         role,
         actif: true
-      })
+      }, { onConflict: 'user_id,societe_id' })
+
+      if (usError) {
+        console.error('[admin/users] user_societes upsert error:', usError.message)
+      }
     }
 
     return NextResponse.json({ user: { id: authData.user.id, email, full_name, role } })

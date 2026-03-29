@@ -13,15 +13,19 @@ interface Societe { id: string; nom: string; brn: string }
 
 const ROLES = [
   { value: 'admin', label: 'Admin Plateforme', color: 'bg-red-100 text-red-800' },
+  { value: 'super_admin', label: 'Super Admin', color: 'bg-red-200 text-red-900' },
   { value: 'comptable', label: 'Comptable', color: 'bg-blue-100 text-blue-800' },
   { value: 'comptable_dedie', label: 'Comptable Dédié', color: 'bg-blue-100 text-blue-800' },
   { value: 'client_admin', label: 'Client (Dirigeant)', color: 'bg-green-100 text-green-800' },
+  { value: 'client_user', label: 'Client (Utilisateur)', color: 'bg-green-50 text-green-700' },
   { value: 'rh', label: 'RH', color: 'bg-orange-100 text-orange-800' },
   { value: 'juridique', label: 'Juridique', color: 'bg-purple-100 text-purple-800' },
+  { value: 'manager', label: 'Manager', color: 'bg-teal-100 text-teal-800' },
+  { value: 'direction', label: 'Direction', color: 'bg-indigo-100 text-indigo-800' },
   { value: 'employe', label: 'Employé', color: 'bg-gray-100 text-gray-700' },
 ]
 
-const NEEDS_SOCIETE = ['rh', 'juridique', 'employe']
+const NEEDS_SOCIETE = ['rh', 'juridique', 'employe', 'manager', 'direction']
 
 function genPassword() {
   return Math.random().toString(36).slice(2, 8).toUpperCase() + Math.random().toString(36).slice(2, 8)
