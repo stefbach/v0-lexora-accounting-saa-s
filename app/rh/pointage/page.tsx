@@ -1,326 +1,683 @@
 "use client"
-import { useState, useEffect, useCallback } from "react"
+
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Loader2, RefreshCw, UserCheck, UserX, Clock, AlertTriangle, LogIn, LogOut } from "lucide-react"
+import { Loader2, Clock, LogIn, LogOut, Users, Calendar, ChevronLeft, ChevronRight, X } from "lucide-react"
 
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 interface Pointage {
   id: string
   employe_id: string
+  date_pointage?: string
   heure_entree: string | null
   heure_sortie: string | null
   duree_minutes: number | null
   absent_justifie?: boolean
-  motif_absence?: string
-  employe?: { nom: string; prenom: string; poste?: string; photo_url?: string }
+  employe?: { nom: string; prenom: string; poste?: string }
 }
 
-interface Employe { id: string; nom: string; prenom: string; poste?: string; societe_id: string }
-
-function fmt_heure(h: string | null) { return h ? h.slice(0, 5) : "—" }
-function duree_fmt(min: number | null) { if (!min) return "—"; return `${Math.floor(min / 60)}h${String(min % 60).padStart(2, "0")}` }
-
-function getStatut(p: Pointage) {
-  if (!p.heure_entree && !p.heure_sortie) return { label: "Absent", color: "bg-red-100 text-red-700" }
-  if (p.absent_justifie) return { label: "Absent justifié", color: "bg-blue-100 text-blue-700" }
-  if (p.heure_sortie) return { label: "Parti", color: "bg-gray-100 text-gray-600" }
-  if (p.heure_entree) {
-    const arrivee = parseInt(p.heure_entree.replace(":", ""), 10)
-    if (arrivee > 900) return { label: "Retard", color: "bg-orange-100 text-orange-700" }
-    return { label: "En poste", color: "bg-green-100 text-green-700" }
-  }
-  return { label: "—", color: "bg-gray-100 text-gray-500" }
+interface Employe {
+  id: string
+  nom: string
+  prenom: string
+  poste?: string
+  societe_id: string
 }
 
-function isAnormal(p: Pointage) {
-  if (!p.duree_minutes) return false
-  return p.duree_minutes > 660 || (p.duree_minutes < 120 && p.duree_minutes > 0)
+interface Societe {
+  id: string
+  nom: string
 }
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+function fmtHeure(h: string | null): string {
+  return h ? h.slice(0, 5) : "--:--"
+}
+
+function dureeFmt(min: number | null): string {
+  if (!min && min !== 0) return "--"
+  const hrs = Math.floor(min / 60)
+  const mins = min % 60
+  return `${hrs}h${String(mins).padStart(2, "0")}`
+}
+
+function statutLabel(p: Pointage): { text: string; variant: "present" | "absent" | "none" } {
+  if (p.heure_entree && !p.heure_sortie) return { text: "Present", variant: "present" }
+  if (p.heure_entree && p.heure_sortie) return { text: "Present", variant: "present" }
+  if (p.absent_justifie) return { text: "Absent", variant: "absent" }
+  if (!p.heure_entree) return { text: "Non pointe", variant: "none" }
+  return { text: "--", variant: "none" }
+}
+
+const BADGE_CLASSES: Record<string, string> = {
+  present: "bg-emerald-100 text-emerald-800 border-emerald-200",
+  absent: "bg-red-100 text-red-800 border-red-200",
+  none: "bg-gray-100 text-gray-600 border-gray-200",
+}
+
+function todayISO(): string {
+  return new Date().toISOString().split("T")[0]
+}
+
+function frenchDate(d: Date): string {
+  return d.toLocaleDateString("fr-FR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 export default function PointagePage() {
-  const [pointages, setPointages] = useState<Pointage[]>([])
+  // Clock
+  const [now, setNow] = useState(new Date())
+
+  // Data
+  const [societes, setSocietes] = useState<Societe[]>([])
   const [employes, setEmployes] = useState<Employe[]>([])
-  const [societes, setSocietes] = useState<any[]>([])
-  const [societe, setSociete] = useState("all")
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0])
+  const [pointages, setPointages] = useState<Pointage[]>([])
   const [loading, setLoading] = useState(true)
-
-  // Pointage manuel
-  const [selectedEmp, setSelectedEmp] = useState("")
-  const [heureManuelle, setHeureManuelle] = useState("")
   const [doingPointage, setDoingPointage] = useState(false)
+  const [lastAction, setLastAction] = useState<string | null>(null)
 
-  // Dialog correction
-  const [corrDialog, setCorrDialog] = useState<Pointage | null>(null)
-  const [corrEntree, setCorrEntree] = useState("")
-  const [corrSortie, setCorrSortie] = useState("")
-  const [corrMotif, setCorrMotif] = useState("")
-  const [saving, setSaving] = useState(false)
+  // Selectors
+  const [societeId, setSocieteId] = useState<string>("")
+  const [employeId, setEmployeId] = useState<string>("")
 
-  const load = useCallback(async () => {
+  // Calendar
+  const [showCalendar, setShowCalendar] = useState(false)
+  const [calMonth, setCalMonth] = useState<string>(() => todayISO().slice(0, 7)) // YYYY-MM
+  const [calPointages, setCalPointages] = useState<Pointage[]>([])
+  const [calLoading, setCalLoading] = useState(false)
+  const [selectedCalDay, setSelectedCalDay] = useState<string | null>(null)
+
+  // ---------------------------------------------------------------------------
+  // Live clock — updates every second
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  // ---------------------------------------------------------------------------
+  // Load societes on mount
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    fetch("/api/comptable/societes")
+      .then((r) => r.json())
+      .then((d) => {
+        const list: Societe[] = d.societes || []
+        setSocietes(list)
+        if (list.length === 1) setSocieteId(list[0].id)
+      })
+      .catch(console.error)
+  }, [])
+
+  // ---------------------------------------------------------------------------
+  // Load employes when societe changes
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (!societeId) {
+      setEmployes([])
+      return
+    }
+    fetch(`/api/rh/employes?societe_id=${societeId}`)
+      .then((r) => r.json())
+      .then((d) => {
+        const list: Employe[] = d.employes || []
+        setEmployes(list.sort((a, b) => `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`)))
+      })
+      .catch(console.error)
+  }, [societeId])
+
+  // ---------------------------------------------------------------------------
+  // Load today's pointages
+  // ---------------------------------------------------------------------------
+  const loadPointages = useCallback(async () => {
     setLoading(true)
     try {
-      const params = new URLSearchParams({ date })
-      if (societe !== "all") params.set("societe_id", societe)
-      const [ptRes, socRes] = await Promise.all([
-        fetch(`/api/rh/pointage?${params}`),
-        fetch("/api/comptable/societes")
-      ])
-      setPointages((await ptRes.json()).pointages || [])
-      setSocietes((await socRes.json()).societes || [])
-    } catch (e) { console.error(e) } finally { setLoading(false) }
-  }, [societe, date])
-
-  useEffect(() => { load() }, [load])
-  // Auto-refresh toutes les 60s
-  useEffect(() => {
-    const iv = setInterval(load, 60000)
-    return () => clearInterval(iv)
-  }, [load])
-
-  useEffect(() => {
-    if (societe !== "all") {
-      fetch(`/api/rh/employes?societe_id=${societe}`).then(r => r.json()).then(d => setEmployes(d.employes || []))
+      const params = new URLSearchParams({ date: todayISO() })
+      if (societeId) params.set("societe_id", societeId)
+      const res = await fetch(`/api/rh/pointage?${params}`)
+      const data = await res.json()
+      setPointages(data.pointages || [])
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoading(false)
     }
-  }, [societe])
+  }, [societeId])
 
-  const presents = pointages.filter(p => p.heure_entree && !p.heure_sortie).length
-  const partis = pointages.filter(p => p.heure_sortie).length
-  const absents = pointages.filter(p => !p.heure_entree).length
-  const retards = pointages.filter(p => p.heure_entree && parseInt(p.heure_entree.replace(":", ""), 10) > 900).length
-  const anormaux = pointages.filter(isAnormal).length
+  useEffect(() => {
+    loadPointages()
+  }, [loadPointages])
 
+  // Auto-refresh every 30s
+  useEffect(() => {
+    const iv = setInterval(loadPointages, 30000)
+    return () => clearInterval(iv)
+  }, [loadPointages])
+
+  // ---------------------------------------------------------------------------
+  // Load monthly data for calendar
+  // ---------------------------------------------------------------------------
+  const loadCalendar = useCallback(async () => {
+    if (!showCalendar || !employeId) return
+    setCalLoading(true)
+    try {
+      const params = new URLSearchParams({ mensuel: "1", periode: calMonth, employe_id: employeId })
+      const res = await fetch(`/api/rh/pointage?${params}`)
+      const data = await res.json()
+      setCalPointages(data.pointages || [])
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setCalLoading(false)
+    }
+  }, [showCalendar, employeId, calMonth])
+
+  useEffect(() => {
+    loadCalendar()
+  }, [loadCalendar])
+
+  // ---------------------------------------------------------------------------
+  // Pointage action
+  // ---------------------------------------------------------------------------
   const doPointage = async (type: "entree" | "sortie") => {
-    if (!selectedEmp) return alert("Sélectionnez un employé")
+    if (!employeId) return
+    if (!societeId) return
     setDoingPointage(true)
+    setLastAction(null)
     try {
-      const body: any = { employe_id: selectedEmp, type_pointage: type, methode: "manuel" }
-      if (heureManuelle) body.heure_forcee = heureManuelle
-      await fetch("/api/rh/pointage", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
-      load()
-      setSelectedEmp("")
-      setHeureManuelle("")
-    } catch (e) { console.error(e) } finally { setDoingPointage(false) }
-  }
-
-  const marquerAbsence = async (id: string, justifie: boolean) => {
-    await fetch(`/api/rh/pointage/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ absent_justifie: justifie, motif_absence: justifie ? "Justifié par manager" : undefined })
-    })
-    load()
-  }
-
-  const openCorr = (p: Pointage) => {
-    setCorrDialog(p)
-    setCorrEntree(p.heure_entree?.slice(0, 5) || "")
-    setCorrSortie(p.heure_sortie?.slice(0, 5) || "")
-    setCorrMotif("")
-  }
-
-  const saveCorr = async () => {
-    if (!corrDialog) return
-    setSaving(true)
-    try {
-      await fetch(`/api/rh/pointage/${corrDialog.id}`, {
-        method: "PATCH",
+      const body = { employe_id: employeId, type_pointage: type, societe_id: societeId }
+      const res = await fetch("/api/rh/pointage", {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ heure_entree: corrEntree || null, heure_sortie: corrSortie || null, motif_correction: corrMotif })
+        body: JSON.stringify(body),
       })
-      setCorrDialog(null)
-      load()
-    } catch (e) { console.error(e) } finally { setSaving(false) }
+      if (res.ok) {
+        const emp = employes.find((e) => e.id === employeId)
+        const name = emp ? `${emp.prenom} ${emp.nom}` : ""
+        setLastAction(
+          type === "entree"
+            ? `Entree enregistree pour ${name} a ${now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`
+            : `Sortie enregistree pour ${name} a ${now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`
+        )
+        loadPointages()
+        if (showCalendar) loadCalendar()
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setDoingPointage(false)
+    }
   }
 
+  // ---------------------------------------------------------------------------
+  // Today's status for selected employee
+  // ---------------------------------------------------------------------------
+  const selectedEmployeePointage = useMemo(() => {
+    if (!employeId) return null
+    return pointages.find((p) => p.employe_id === employeId) || null
+  }, [employeId, pointages])
+
+  // ---------------------------------------------------------------------------
+  // Sorted pointages for daily view
+  // ---------------------------------------------------------------------------
+  const sortedPointages = useMemo(() => {
+    return [...pointages].sort((a, b) => {
+      const nameA = `${a.employe?.nom || ""} ${a.employe?.prenom || ""}`
+      const nameB = `${b.employe?.nom || ""} ${b.employe?.prenom || ""}`
+      return nameA.localeCompare(nameB)
+    })
+  }, [pointages])
+
+  // ---------------------------------------------------------------------------
+  // Calendar helpers
+  // ---------------------------------------------------------------------------
+  const calendarData = useMemo(() => {
+    const [year, month] = calMonth.split("-").map(Number)
+    const firstDay = new Date(year, month - 1, 1)
+    const daysInMonth = new Date(year, month, 0).getDate()
+    // Monday = 0, Sunday = 6
+    let startDow = firstDay.getDay() - 1
+    if (startDow < 0) startDow = 6
+
+    const pointageMap = new Map<string, Pointage>()
+    for (const p of calPointages) {
+      const day = p.date_pointage || ""
+      pointageMap.set(day, p)
+    }
+
+    const weeks: { day: number; date: string; isWeekend: boolean; pointage: Pointage | null }[][] = []
+    let currentWeek: typeof weeks[0] = []
+
+    // Fill leading blanks
+    for (let i = 0; i < startDow; i++) {
+      currentWeek.push({ day: 0, date: "", isWeekend: false, pointage: null })
+    }
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateObj = new Date(year, month - 1, d)
+      const dow = dateObj.getDay()
+      const isWeekend = dow === 0 || dow === 6
+      const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`
+      currentWeek.push({ day: d, date: dateStr, isWeekend, pointage: pointageMap.get(dateStr) || null })
+
+      if (dow === 0 || d === daysInMonth) {
+        // Fill trailing blanks
+        while (currentWeek.length < 7) {
+          currentWeek.push({ day: 0, date: "", isWeekend: false, pointage: null })
+        }
+        weeks.push(currentWeek)
+        currentWeek = []
+      }
+    }
+
+    return { weeks, monthLabel: firstDay.toLocaleDateString("fr-FR", { month: "long", year: "numeric" }) }
+  }, [calMonth, calPointages])
+
+  const navigateMonth = (delta: number) => {
+    const [y, m] = calMonth.split("-").map(Number)
+    const d = new Date(y, m - 1 + delta, 1)
+    setCalMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`)
+    setSelectedCalDay(null)
+  }
+
+  const selectedDayPointage = useMemo(() => {
+    if (!selectedCalDay) return null
+    return calPointages.find((p) => p.date_pointage === selectedCalDay) || null
+  }, [selectedCalDay, calPointages])
+
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
   return (
-    <div className="p-6 space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-[#1E2A4A]">Pointage — Aujourd'hui</h1>
-          <p className="text-sm text-gray-500">Présences en temps réel (actualisation auto 60s)</p>
+    <div className="min-h-screen bg-gray-50 p-4 md:p-8 space-y-6 max-w-6xl mx-auto">
+      {/* ================================================================== */}
+      {/* TOP SECTION: Clock + Punch buttons                                  */}
+      {/* ================================================================== */}
+      <Card className="border-0 shadow-lg overflow-hidden">
+        <div className="bg-[#1E2A4A] text-white p-6 md:p-10 text-center">
+          {/* Live clock */}
+          <div className="flex items-center justify-center gap-3 mb-2">
+            <Clock className="w-8 h-8 text-[#C9A84C]" />
+            <span className="text-5xl md:text-7xl font-mono font-bold tracking-wider">
+              {now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+            </span>
+          </div>
+          <p className="text-lg text-gray-300 capitalize">{frenchDate(now)}</p>
         </div>
-        <div className="flex gap-2">
-          <a href="/rh/pointage/mensuel"><Button variant="outline" size="sm">📅 Vue mensuelle</Button></a>
-          <Button onClick={load} variant="outline" size="sm"><RefreshCw className="w-4 h-4 mr-2" />Actualiser</Button>
-        </div>
-      </div>
 
-      {/* Résumé cartes */}
-      <div className="grid grid-cols-5 gap-3">
-        {[
-          { label: "Présents", value: presents, icon: UserCheck, color: "text-green-600 bg-green-50" },
-          { label: "Partis", value: partis, icon: LogOut, color: "text-gray-500 bg-gray-50" },
-          { label: "Absents", value: absents, icon: UserX, color: "text-red-600 bg-red-50" },
-          { label: "Retardataires", value: retards, icon: Clock, color: "text-orange-600 bg-orange-50" },
-          { label: "Pointages anormaux", value: anormaux, icon: AlertTriangle, color: "text-yellow-600 bg-yellow-50" },
-        ].map(k => (
-          <Card key={k.label}>
-            <CardContent className={`p-4 flex items-center gap-3 rounded-lg ${k.color.split(" ")[1]}`}>
-              <k.icon className={`w-7 h-7 ${k.color.split(" ")[0]}`} />
-              <div>
-                <p className="text-xs text-gray-500">{k.label}</p>
-                <p className={`text-2xl font-bold ${k.color.split(" ")[0]}`}>{loading ? "…" : k.value}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+        <CardContent className="p-6 space-y-5">
+          {/* Selectors */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Societe */}
+            <div>
+              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 block">
+                Societe
+              </label>
+              <Select value={societeId} onValueChange={(v) => { setSocieteId(v); setEmployeId("") }}>
+                <SelectTrigger className="h-12 text-base">
+                  <SelectValue placeholder="Choisir une societe..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {societes.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-      {/* Filtres */}
-      <Card>
-        <CardContent className="p-4 flex gap-3">
-          <Input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-40" />
-          <Select value={societe} onValueChange={setSociete}>
-            <SelectTrigger className="w-52"><SelectValue placeholder="Toutes sociétés" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Toutes</SelectItem>
-              {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </CardContent>
-      </Card>
+            {/* Employe */}
+            <div>
+              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 block">
+                Employe
+              </label>
+              <Select value={employeId} onValueChange={setEmployeId} disabled={!societeId}>
+                <SelectTrigger className="h-12 text-base">
+                  <SelectValue placeholder={societeId ? "Choisir un employe..." : "Selectionnez d'abord une societe"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {employes.map((e) => (
+                    <SelectItem key={e.id} value={e.id}>
+                      {e.prenom} {e.nom}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
 
-      {/* Tableau présences */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-[#1E2A4A] flex items-center gap-2">
-            Présences du {new Date(date + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin" /></div>
-          ) : pointages.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">Aucun pointage pour cette date</div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Employé</TableHead>
-                  <TableHead>Poste</TableHead>
-                  <TableHead>Arrivée</TableHead>
-                  <TableHead>Départ</TableHead>
-                  <TableHead>Durée</TableHead>
-                  <TableHead>Statut</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pointages.map(p => {
-                  const statut = getStatut(p)
-                  const anormal = isAnormal(p)
-                  return (
-                    <TableRow key={p.id} className={anormal ? "bg-orange-50" : ""}>
-                      <TableCell className="font-medium">
-                        {p.employe?.prenom} {p.employe?.nom}
-                      </TableCell>
-                      <TableCell className="text-sm text-gray-500">{p.employe?.poste || "—"}</TableCell>
-                      <TableCell className="font-mono text-sm text-green-700">
-                        {fmt_heure(p.heure_entree)}
-                        {p.heure_entree && parseInt(p.heure_entree.replace(":", ""), 10) > 900 && (
-                          <span className="ml-1 text-xs text-orange-600">⚠ Retard</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="font-mono text-sm text-red-600">{fmt_heure(p.heure_sortie)}</TableCell>
-                      <TableCell className="text-sm">
-                        {anormal ? (
-                          <span className="text-orange-600 font-medium">{duree_fmt(p.duree_minutes)} ⚠</span>
-                        ) : duree_fmt(p.duree_minutes)}
-                      </TableCell>
-                      <TableCell>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${statut.color}`}>
-                          {statut.label}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-1 flex-wrap">
-                          {!p.heure_entree && (
-                            <>
-                              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => marquerAbsence(p.id, true)}>✅ Justifié</Button>
-                              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => marquerAbsence(p.id, false)}>🤒 SL</Button>
-                            </>
-                          )}
-                          {p.heure_entree && (
-                            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => openCorr(p)}>✏️ Corriger</Button>
-                          )}
-                          {anormal && (
-                            <Button size="sm" variant="outline" className="h-7 text-xs border-orange-300 text-orange-700" onClick={() => openCorr(p)}>Valider</Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
+          {/* Punch buttons */}
+          <div className="grid grid-cols-2 gap-4">
+            <Button
+              onClick={() => doPointage("entree")}
+              disabled={!employeId || doingPointage}
+              className="h-16 md:h-20 text-lg md:text-xl font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-md transition-all active:scale-95"
+            >
+              {doingPointage ? (
+                <Loader2 className="w-6 h-6 animate-spin mr-3" />
+              ) : (
+                <LogIn className="w-6 h-6 mr-3" />
+              )}
+              Pointer Entree
+            </Button>
+            <Button
+              onClick={() => doPointage("sortie")}
+              disabled={!employeId || doingPointage}
+              className="h-16 md:h-20 text-lg md:text-xl font-semibold bg-red-600 hover:bg-red-700 text-white rounded-xl shadow-md transition-all active:scale-95"
+            >
+              {doingPointage ? (
+                <Loader2 className="w-6 h-6 animate-spin mr-3" />
+              ) : (
+                <LogOut className="w-6 h-6 mr-3" />
+              )}
+              Pointer Sortie
+            </Button>
+          </div>
+
+          {/* Feedback */}
+          {lastAction && (
+            <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-4 py-3 text-center text-sm font-medium">
+              {lastAction}
+            </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Pointage manuel rapide */}
-      {societe !== "all" && (
-        <Card>
-          <CardHeader><CardTitle className="text-[#1E2A4A] text-base">⚡ Pointage manuel rapide</CardTitle></CardHeader>
+      {/* ================================================================== */}
+      {/* TODAY'S STATUS for selected employee                                */}
+      {/* ================================================================== */}
+      {employeId && (
+        <Card className="border shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2">
+              <Clock className="w-5 h-5 text-[#C9A84C]" />
+              Statut du jour
+              {(() => {
+                const emp = employes.find((e) => e.id === employeId)
+                return emp ? ` -- ${emp.prenom} ${emp.nom}` : ""
+              })()}
+            </CardTitle>
+          </CardHeader>
           <CardContent>
-            <div className="flex gap-3 items-end">
-              <div className="flex-1">
-                <Label className="text-xs text-gray-500 mb-1 block">Employé</Label>
-                <Select value={selectedEmp} onValueChange={setSelectedEmp}>
-                  <SelectTrigger><SelectValue placeholder="Sélectionner un employé..." /></SelectTrigger>
-                  <SelectContent>
-                    {employes.map(e => <SelectItem key={e.id} value={e.id}>{e.prenom} {e.nom}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+            {selectedEmployeePointage ? (
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                <div className="flex-1 grid grid-cols-3 gap-4 text-center">
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Entree</p>
+                    <p className="text-2xl font-mono font-semibold text-emerald-700">
+                      {fmtHeure(selectedEmployeePointage.heure_entree)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Sortie</p>
+                    <p className="text-2xl font-mono font-semibold text-red-600">
+                      {fmtHeure(selectedEmployeePointage.heure_sortie)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Duree</p>
+                    <p className="text-2xl font-mono font-semibold text-[#1E2A4A]">
+                      {dureeFmt(selectedEmployeePointage.duree_minutes)}
+                    </p>
+                  </div>
+                </div>
+                <div>
+                  {(() => {
+                    const s = statutLabel(selectedEmployeePointage)
+                    return (
+                      <span className={`inline-block px-4 py-2 rounded-full text-sm font-semibold border ${BADGE_CLASSES[s.variant]}`}>
+                        {s.text}
+                      </span>
+                    )
+                  })()}
+                </div>
               </div>
-              <div>
-                <Label className="text-xs text-gray-500 mb-1 block">Heure (optionnel)</Label>
-                <Input type="time" value={heureManuelle} onChange={e => setHeureManuelle(e.target.value)} className="w-32" />
+            ) : (
+              <div className="text-center py-4">
+                <span className={`inline-block px-4 py-2 rounded-full text-sm font-semibold border ${BADGE_CLASSES.none}`}>
+                  Non pointe
+                </span>
+                <p className="text-sm text-gray-400 mt-2">Aucun pointage enregistre aujourd'hui</p>
               </div>
-              <Button onClick={() => doPointage("entree")} disabled={doingPointage || !selectedEmp} className="bg-green-600 hover:bg-green-700 text-white">
-                <LogIn className="w-4 h-4 mr-2" />Entrée
-              </Button>
-              <Button onClick={() => doPointage("sortie")} disabled={doingPointage || !selectedEmp} className="bg-red-600 hover:bg-red-700 text-white">
-                <LogOut className="w-4 h-4 mr-2" />Sortie
-              </Button>
-            </div>
+            )}
           </CardContent>
         </Card>
       )}
 
-      {/* Dialog correction */}
-      <Dialog open={!!corrDialog} onOpenChange={open => !open && setCorrDialog(null)}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Corriger le pointage — {corrDialog?.employe?.prenom} {corrDialog?.employe?.nom}</DialogTitle></DialogHeader>
-          <div className="grid gap-4 py-2">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Heure d'entrée</Label>
-                <Input type="time" value={corrEntree} onChange={e => setCorrEntree(e.target.value)} />
-              </div>
-              <div>
-                <Label>Heure de sortie</Label>
-                <Input type="time" value={corrSortie} onChange={e => setCorrSortie(e.target.value)} />
-              </div>
-            </div>
-            <div>
-              <Label>Motif de correction *</Label>
-              <Input value={corrMotif} onChange={e => setCorrMotif(e.target.value)} placeholder="Ex: Erreur saisie, retour tardif..." />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCorrDialog(null)}>Annuler</Button>
-            <Button onClick={saveCorr} disabled={saving || !corrMotif} className="bg-[#1E2A4A] text-white">
-              {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}Sauvegarder
+      {/* ================================================================== */}
+      {/* DAILY VIEW: All employees today                                     */}
+      {/* ================================================================== */}
+      <Card className="border shadow-sm">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2">
+              <Users className="w-5 h-5 text-[#C9A84C]" />
+              Tous les employes -- Aujourd'hui
+            </CardTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowCalendar(!showCalendar)}
+              className="text-[#1E2A4A] border-[#1E2A4A]/20"
+            >
+              <Calendar className="w-4 h-4 mr-2" />
+              {showCalendar ? "Masquer calendrier" : "Vue mensuelle"}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="w-6 h-6 animate-spin text-[#1E2A4A]" />
+            </div>
+          ) : sortedPointages.length === 0 ? (
+            <div className="text-center py-12 text-gray-400">Aucun pointage aujourd'hui</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-gray-50">
+                    <TableHead className="font-semibold text-[#1E2A4A]">Employe</TableHead>
+                    <TableHead className="font-semibold text-[#1E2A4A] text-center">Entree</TableHead>
+                    <TableHead className="font-semibold text-[#1E2A4A] text-center">Sortie</TableHead>
+                    <TableHead className="font-semibold text-[#1E2A4A] text-center">Heures</TableHead>
+                    <TableHead className="font-semibold text-[#1E2A4A] text-center">Statut</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sortedPointages.map((p) => {
+                    const s = statutLabel(p)
+                    return (
+                      <TableRow
+                        key={p.id}
+                        className={
+                          s.variant === "present"
+                            ? "bg-emerald-50/30"
+                            : s.variant === "absent"
+                            ? "bg-red-50/30"
+                            : ""
+                        }
+                      >
+                        <TableCell className="font-medium">
+                          {p.employe?.prenom} {p.employe?.nom}
+                        </TableCell>
+                        <TableCell className="text-center font-mono text-emerald-700">
+                          {fmtHeure(p.heure_entree)}
+                        </TableCell>
+                        <TableCell className="text-center font-mono text-red-600">
+                          {fmtHeure(p.heure_sortie)}
+                        </TableCell>
+                        <TableCell className="text-center font-mono">
+                          {dureeFmt(p.duree_minutes)}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold border ${BADGE_CLASSES[s.variant]}`}>
+                            {s.text}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ================================================================== */}
+      {/* MONTHLY CALENDAR (toggleable)                                       */}
+      {/* ================================================================== */}
+      {showCalendar && (
+        <Card className="border shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-[#C9A84C]" />
+              Calendrier mensuel
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {!employeId ? (
+              <div className="text-center py-8 text-gray-400">
+                Selectionnez un employe pour afficher son calendrier mensuel
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Month navigation */}
+                <div className="flex items-center justify-between">
+                  <Button variant="outline" size="sm" onClick={() => navigateMonth(-1)}>
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                  <span className="text-lg font-semibold text-[#1E2A4A] capitalize">
+                    {calendarData.monthLabel}
+                  </span>
+                  <Button variant="outline" size="sm" onClick={() => navigateMonth(1)}>
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
+
+                {calLoading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-[#1E2A4A]" />
+                  </div>
+                ) : (
+                  <>
+                    {/* Calendar grid */}
+                    <div className="grid grid-cols-7 gap-1">
+                      {["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map((d) => (
+                        <div key={d} className="text-center text-xs font-semibold text-gray-500 py-2">
+                          {d}
+                        </div>
+                      ))}
+                      {calendarData.weeks.flat().map((cell, i) => {
+                        if (cell.day === 0) {
+                          return <div key={`empty-${i}`} className="aspect-square" />
+                        }
+
+                        const isToday = cell.date === todayISO()
+                        const hasEntry = cell.pointage?.heure_entree
+                        const isAbsent = cell.pointage && !cell.pointage.heure_entree
+                        const isFuture = cell.date > todayISO()
+
+                        let bg = "bg-white hover:bg-gray-50"
+                        if (cell.isWeekend) bg = "bg-gray-100"
+                        else if (isFuture) bg = "bg-white"
+                        else if (hasEntry) bg = "bg-emerald-100 hover:bg-emerald-200"
+                        else if (isAbsent) bg = "bg-red-100 hover:bg-red-200"
+
+                        return (
+                          <button
+                            key={cell.date}
+                            onClick={() => setSelectedCalDay(cell.date === selectedCalDay ? null : cell.date)}
+                            className={`aspect-square flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${bg} ${
+                              isToday ? "ring-2 ring-[#C9A84C] ring-offset-1" : ""
+                            } ${selectedCalDay === cell.date ? "ring-2 ring-[#1E2A4A]" : ""}`}
+                          >
+                            {cell.day}
+                          </button>
+                        )
+                      })}
+                    </div>
+
+                    {/* Legend */}
+                    <div className="flex items-center justify-center gap-6 text-xs text-gray-500">
+                      <span className="flex items-center gap-1">
+                        <span className="w-3 h-3 rounded bg-emerald-100 border border-emerald-200" /> Present
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="w-3 h-3 rounded bg-red-100 border border-red-200" /> Absent
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="w-3 h-3 rounded bg-gray-100 border border-gray-200" /> Weekend
+                      </span>
+                    </div>
+
+                    {/* Day detail on click */}
+                    {selectedCalDay && (
+                      <div className="border rounded-lg p-4 bg-gray-50">
+                        <div className="flex items-center justify-between mb-3">
+                          <p className="font-semibold text-[#1E2A4A] capitalize">
+                            {new Date(selectedCalDay + "T12:00:00").toLocaleDateString("fr-FR", {
+                              weekday: "long",
+                              day: "numeric",
+                              month: "long",
+                            })}
+                          </p>
+                          <Button variant="ghost" size="sm" onClick={() => setSelectedCalDay(null)}>
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
+                        {selectedDayPointage ? (
+                          <div className="grid grid-cols-3 gap-4 text-center">
+                            <div>
+                              <p className="text-xs text-gray-500 mb-1">Entree</p>
+                              <p className="text-lg font-mono font-semibold text-emerald-700">
+                                {fmtHeure(selectedDayPointage.heure_entree)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 mb-1">Sortie</p>
+                              <p className="text-lg font-mono font-semibold text-red-600">
+                                {fmtHeure(selectedDayPointage.heure_sortie)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 mb-1">Duree</p>
+                              <p className="text-lg font-mono font-semibold text-[#1E2A4A]">
+                                {dureeFmt(selectedDayPointage.duree_minutes)}
+                              </p>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-center text-gray-400 text-sm">Aucun pointage ce jour</p>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Footer */}
+      <p className="text-center text-xs text-gray-400">
+        Actualisation automatique toutes les 30 secondes
+      </p>
     </div>
   )
 }

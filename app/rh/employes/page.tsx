@@ -1,5 +1,6 @@
 "use client"
 import { useState, useEffect, useCallback } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -8,12 +9,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Search, Plus, Loader2, Users, Upload, Download, FileSpreadsheet, Pencil } from "lucide-react"
+import { Search, Plus, Loader2, Users, Upload, Download, FileSpreadsheet, Pencil, ExternalLink } from "lucide-react"
 import { BANQUES_MAURITIUS } from "@/lib/rh/banques-mauritius"
 
 function fmt(n: number) { return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "MUR", maximumFractionDigits: 0 }).format(n) }
 
 export default function EmployesPage() {
+  const router = useRouter()
   const [employes, setEmployes] = useState<any[]>([])
   const [societes, setSocietes] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -203,7 +205,7 @@ export default function EmployesPage() {
               <TableHeader><TableRow><TableHead>Code</TableHead><TableHead>Nom</TableHead><TableHead>Poste</TableHead><TableHead>Email</TableHead><TableHead className="text-right">Salaire base</TableHead><TableHead>Banque</TableHead><TableHead>NIC</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
               <TableBody>
                 {filtered.map(e=>(
-                  <TableRow key={e.id} className="hover:bg-gray-50">
+                  <TableRow key={e.id} className="hover:bg-gray-50 cursor-pointer" onClick={()=>router.push(`/rh/employes/${e.id}`)}>
                     <TableCell className="font-mono text-xs">{e.code||"—"}</TableCell>
                     <TableCell className="font-medium">{e.prenom} {e.nom}</TableCell>
                     <TableCell className="text-sm text-gray-600">{e.poste||"—"}</TableCell>
@@ -211,7 +213,12 @@ export default function EmployesPage() {
                     <TableCell className="text-right">{fmt(e.salaire_base)}</TableCell>
                     <TableCell className="text-sm text-gray-500">{e.bank_name||"—"}</TableCell>
                     <TableCell className="text-xs text-gray-500">{e.nic_number||"—"}</TableCell>
-                    <TableCell><Button variant="ghost" size="sm" onClick={()=>openEdit(e)}><Pencil className="w-4 h-4 text-[#C9A84C]"/></Button></TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="sm" onClick={(ev)=>{ev.stopPropagation();router.push(`/rh/employes/${e.id}`)}} title="Voir fiche"><ExternalLink className="w-4 h-4 text-[#1E2A4A]"/></Button>
+                        <Button variant="ghost" size="sm" onClick={(ev)=>{ev.stopPropagation();openEdit(e)}} title="Modifier"><Pencil className="w-4 h-4 text-[#C9A84C]"/></Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
