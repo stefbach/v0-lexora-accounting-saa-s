@@ -50,6 +50,7 @@ const MENU = [
       { href: "/client/tva", label: "TVA MRA", icon: Receipt },
       { href: "/client/charges-sociales", label: "CSG / NSF / PAYE", icon: Calculator },
       { href: "/client/annual-return", label: "Annual Return (ROC)", icon: ClipboardList },
+      { href: "/client/it-form3", label: "IT Form 3 (MRA)", icon: FileText },
     ]
   },
   {
