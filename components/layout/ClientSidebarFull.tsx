@@ -27,7 +27,7 @@ const MENU = [
     section: "Comptabilité",
     items: [
       { href: "/client/banque", label: "Banque", icon: Banknote },
-      { href: "/comptable/rapprochement", label: "Rapprochement & Lettrage", icon: CreditCard },
+      { href: "/client/rapprochement", label: "Rapprochement & Lettrage", icon: CreditCard },
       { href: "/client/tresorerie", label: "Trésorerie", icon: Banknote },
       { href: "/client/finances", label: "Mes Chiffres", icon: BarChart3 },
       { href: "/comptable/factures-clients", label: "Factures Clients", icon: Receipt },
