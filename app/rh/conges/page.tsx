@@ -11,8 +11,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { Loader2, Plus, CheckCircle, XCircle, AlertTriangle } from "lucide-react"
 
 const TYPE_LABELS: Record<string, string> = {
-  AL: "Congé annuel", SL: "Congé maladie", UL: "Congé urgent",
-  MAT: "Maternité", PAT: "Paternité", CAR: "Soins famille", ABS: "Absence"
+  AL: "Congé annuel", SL: "Congé maladie", UL: "Sans solde",
+  MAT: "Maternité (14 sem.)", PAT: "Paternité (5j)", CAR: "Soins famille",
+  WI: "Accident travail", COM: "Décès proche", PH: "Jour férié travaillé", ABS: "Absence"
 }
 const TYPE_COLORS: Record<string, string> = {
   AL: "bg-blue-100 text-blue-800", SL: "bg-orange-100 text-orange-800",
