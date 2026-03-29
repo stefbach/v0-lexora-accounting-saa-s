@@ -125,6 +125,22 @@ export async function GET(request: Request) {
       .from('tva_mensuelle').select('*').in('societe_id', societeIds)
       .order('periode', { ascending: false })
 
+    // Get factures from table (source of truth for CA/dépenses)
+    let facturesFromTable: any[] = []
+    const { data: facturesData, error: facturesErr } = await supabase
+      .from('factures').select('*').in('societe_id', societeIds)
+      .order('date_facture', { ascending: false })
+    if (!facturesErr) facturesFromTable = facturesData || []
+
+    // Compute CA and dépenses from factures table (more reliable than écritures)
+    const caFromFactures = facturesFromTable
+      .filter(f => f.type_facture === 'client' && f.statut !== 'annule')
+      .reduce((s, f) => s + (Number(f.montant_mur) || convertToMUR(Number(f.montant_ttc) || 0, f.devise || 'MUR', rates)), 0)
+
+    const depensesFromFactures = facturesFromTable
+      .filter(f => f.type_facture === 'fournisseur' && f.statut !== 'annule')
+      .reduce((s, f) => s + (Number(f.montant_mur) || convertToMUR(Number(f.montant_ttc) || 0, f.devise || 'MUR', rates)), 0)
+
     const allEcritures = ecritures || []
     const allDocs = documents || []
 
@@ -370,14 +386,27 @@ export async function GET(request: Request) {
         }
       })
 
+    // Use factures as source of truth for CA/dépenses, fallback to écritures
+    const finalCA = caFromFactures > 0 ? caFromFactures : totalRevenue
+    const finalDepenses = depensesFromFactures > 0 ? depensesFromFactures : totalExpenses
+    const finalResultat = finalCA - finalDepenses
+
     return NextResponse.json({
       financial: {
-        totalRevenue: Math.round(totalRevenue * 100) / 100,
+        // CA/Dépenses: factures table (MUR) prend priorité sur écritures comptables
+        totalRevenue: Math.round(finalCA * 100) / 100,
         monthlyRevenue: Math.round(monthlyRevenue * 100) / 100,
-        totalExpenses: Math.round(totalExpenses * 100) / 100,
+        totalExpenses: Math.round(finalDepenses * 100) / 100,
         monthlyExpenses: Math.round(monthlyExpenses * 100) / 100,
-        resultat: Math.round((totalRevenue - totalExpenses) * 100) / 100,
+        resultat: Math.round(finalResultat * 100) / 100,
         resultatMensuel: Math.round((monthlyRevenue - monthlyExpenses) * 100) / 100,
+        // Source info
+        caSource: caFromFactures > 0 ? 'factures' : 'ecritures',
+        caFromFactures: Math.round(caFromFactures * 100) / 100,
+        caFromEcritures: Math.round(totalRevenue * 100) / 100,
+        depensesFromFactures: Math.round(depensesFromFactures * 100) / 100,
+        depensesFromEcritures: Math.round(totalExpenses * 100) / 100,
+        factures: facturesFromTable,
         tvaCollectee: Math.round(tvaCollectee * 100) / 100,
         tvaDeductible: Math.round(tvaDeductible * 100) / 100,
         tvaNette: Math.round(tvaNette * 100) / 100,
