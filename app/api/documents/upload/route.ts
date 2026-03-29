@@ -182,14 +182,17 @@ export async function POST(request: NextRequest) {
         system: bankSystemPrompt,
         messages: [{ role: 'user', content: [
           { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
-          { type: 'text', text: 'Analyse ce releve bancaire complet. Lis TOUTES les lignes sans exception.' },
+          { type: 'text', text: 'Analyse ce releve bancaire complet. Lis TOUTES les lignes sans exception. IMPORTANT: identifie aussi le nom du TITULAIRE du compte (la société cliente, pas la banque). Retourne le champ "titulaire_compte" dans le JSON.' },
         ]}],
       })
       const bankText = aiResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
       const bankCleaned = bankText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
       try {
         const bankParsed = JSON.parse(bankCleaned)
-        parsed = { routing: { type_document: 'releve_bancaire', societe: bankParsed.banque || 'MCB', confiance_type: 95 }, extraction: bankParsed }
+        // Use compte_bancaire (account holder) as société, NOT banque (bank name)
+        // The AI returns banque='MCB' but the société is the account holder (e.g. 'DDS', 'TIBOK')
+        const holderName = bankParsed.titulaire_compte || bankParsed.nom_societe || bankParsed.client || null
+        parsed = { routing: { type_document: 'releve_bancaire', societe: holderName || 'INCONNU', banque: bankParsed.banque || 'MCB', confiance_type: 95 }, extraction: bankParsed }
       } catch { parsed = { routing: { type_document: 'releve_bancaire', confiance_type: 50 }, extraction: {} } }
     } else {
       aiResponse = await anthropic.messages.create({
@@ -281,7 +284,7 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
           system: bankSystemPrompt,
           messages: [{ role: 'user', content: [
             { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
-            { type: 'text', text: 'Analyse ce releve bancaire complet. Lis TOUTES les lignes sans exception.' },
+            { type: 'text', text: 'Analyse ce releve bancaire complet. Lis TOUTES les lignes sans exception. IMPORTANT: identifie aussi le nom du TITULAIRE du compte (la société cliente, pas la banque). Retourne le champ "titulaire_compte" dans le JSON.' },
           ]}],
         })
         const bankText = bankResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
@@ -320,65 +323,124 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
 
     // Try to match detected société to client's known sociétés and re-route if needed
     let finalDossierId = resolvedDossierId
-    if (detectedSociete && detectedSociete !== 'INCONNU') {
-      // Get all sociétés linked to this client
-      const { data: clientDossiers } = await supabase
-        .from('dossiers').select('id, societe_id, societe:societes(nom)')
-        .eq('client_id', user.id)
-      if (clientDossiers && clientDossiers.length > 1) {
-        const matched = clientDossiers.find((d: any) => {
-          const socName = (d.societe as any)?.nom?.toLowerCase() || ''
-          const detected = detectedSociete.toLowerCase()
-          return socName.includes(detected) || detected.includes(socName.replace(' — personnel', ''))
-        })
-        if (matched && matched.id !== resolvedDossierId) {
-          finalDossierId = matched.id
-          // Move document to the correct dossier
-          await supabase.from('documents').update({ dossier_id: matched.id }).eq('id', doc.id)
+    {
+      // Build a list of candidate names to match against client's sociétés
+      const candidateNames: string[] = []
+      if (detectedSociete && detectedSociete !== 'INCONNU') candidateNames.push(detectedSociete)
+      // For bank statements, also try the account holder / titulaire
+      if (typeDocument === 'releve_bancaire') {
+        const holder = extraction.titulaire_compte || extraction.nom_societe || extraction.client || extraction.compte_bancaire || null
+        if (holder && typeof holder === 'string') candidateNames.push(holder)
+        // Also try the file name (e.g., "fev 2026 DDS.pdf" → "DDS")
+        const fnParts = file.name.replace(/\.[^.]+$/, '').split(/[\s_-]+/)
+        fnParts.forEach((p: string) => { if (p.length >= 2 && !/^\d+$/.test(p)) candidateNames.push(p) })
+      }
+
+      if (candidateNames.length > 0) {
+        const { data: clientDossiers } = await supabase
+          .from('dossiers').select('id, societe_id, societe:societes(nom)')
+          .eq('client_id', user.id)
+        if (clientDossiers && clientDossiers.length > 0) {
+          // Try each candidate name against each société
+          let matched: any = null
+          for (const candidate of candidateNames) {
+            if (matched) break
+            const lower = candidate.toLowerCase()
+            // Skip common bank names — we want the client company, not the bank
+            if (['mcb', 'sbm', 'afrasia', 'bni', 'hsbc', 'barclays', 'bov', 'cic', 'standard bank', 'banque'].includes(lower)) continue
+            matched = clientDossiers.find((d: any) => {
+              const socName = (d.societe as any)?.nom?.toLowerCase() || ''
+              return socName.includes(lower) || lower.includes(socName.replace(' — personnel', '').toLowerCase())
+            })
+          }
+          if (matched && matched.id !== resolvedDossierId) {
+            finalDossierId = matched.id
+            await supabase.from('documents').update({ dossier_id: matched.id }).eq('id', doc.id)
+          }
         }
       }
     }
 
     // Update document as processed
+    // For bank statements, store the account holder as societe_detectee (not the bank name)
+    let societeDetecteeForDoc = detectedSociete !== 'INCONNU' ? detectedSociete : null
+    if (typeDocument === 'releve_bancaire') {
+      const holder = extraction.titulaire_compte || extraction.nom_societe || extraction.client || null
+      if (holder) societeDetecteeForDoc = holder
+    }
     const updateData: any = {
       type_document: typeDocument, statut: 'traite',
-      societe_detectee: detectedSociete !== 'INCONNU' ? detectedSociete : null,
+      societe_detectee: societeDetecteeForDoc,
       confiance_type: confianceType,
       n8n_result: { routing: parsed.routing, extraction, metadata: { model: CLAUDE_CONFIG.model, processed_at: new Date().toISOString() } },
     }
     const { error: updateError } = await supabase.from('documents').update(updateData).eq('id', doc.id)
     if (updateError) console.error('[upload] DB UPDATE FAILED:', updateError.message)
 
-    // Auto-create accounting entries (use the matched dossier)
+    // ═══════════════════════════════════════════════════════════════
+    // Resolve societe_id from the final dossier (needed for v2 + bank)
+    // ═══════════════════════════════════════════════════════════════
+    const { data: dossierForSociete } = await supabase.from('dossiers').select('societe_id').eq('id', finalDossierId).single()
+    const resolvedSocieteId = societeId || dossierForSociete?.societe_id || null
+
+    // ═══════════════════════════════════════════════════════════════
+    // Auto-create accounting entries in BOTH v1 AND v2
+    // ═══════════════════════════════════════════════════════════════
     const ecritures = extraction.ecritures_comptables
     if (Array.isArray(ecritures) && ecritures.length > 0) {
-      const journalMap: Record<string, string> = { facture_fournisseur: 'ACH', facture_client: 'VTE', releve_bancaire: 'BNQ', fiche_paie: 'OD', charges_sociales: 'OD' }
-      const entries = ecritures
+      const journalMap: Record<string, string> = { facture_fournisseur: 'ACH', facture_client: 'VTE', releve_bancaire: 'BNQ', fiche_paie: 'SAL', charges_sociales: 'OD' }
+      const dateEcriture = extraction.date_document || extraction.periode_fin || new Date().toISOString().split('T')[0]
+      const journalCode = journalMap[typeDocument] || 'OD'
+
+      // --- V1 entries (legacy, dossier_id based) ---
+      const entriesV1 = ecritures
         .filter((e: any) => e.compte && (e.debit > 0 || e.credit > 0))
         .map((e: any) => ({
-          dossier_id: finalDossierId, date_ecriture: extraction.date_document || new Date().toISOString().split('T')[0],
-          journal: journalMap[typeDocument] || 'OD', numero_piece: extraction.numero_reference || null,
+          dossier_id: finalDossierId, date_ecriture: dateEcriture,
+          journal: journalCode, numero_piece: extraction.numero_reference || null,
           compte: String(e.compte), libelle: e.libelle || file.name,
           debit: Number(e.debit) || 0, credit: Number(e.credit) || 0, piece_justificative: doc.id,
         }))
-      if (entries.length > 0) await supabase.from('ecritures_comptables').insert(entries)
+      if (entriesV1.length > 0) {
+        await supabase.from('ecritures_comptables').insert(entriesV1).catch(err => console.error('[upload] v1 insert error:', err))
+      }
+
+      // --- V2 entries (societe_id based, with debit_mur/credit_mur) ---
+      if (resolvedSocieteId) {
+        const entriesV2 = ecritures
+          .filter((e: any) => e.compte && (e.debit > 0 || e.credit > 0))
+          .map((e: any) => ({
+            societe_id: resolvedSocieteId,
+            date_ecriture: dateEcriture,
+            journal: journalCode,
+            ref_folio: extraction.numero_reference || null,
+            numero_compte: String(e.compte),
+            nom_compte: e.libelle || file.name,
+            description: e.libelle || `${typeDocument} - ${file.name}`,
+            debit_mur: Number(e.debit) || 0,
+            credit_mur: Number(e.credit) || 0,
+            document_id: doc.id,
+          }))
+        if (entriesV2.length > 0) {
+          await supabase.from('ecritures_comptables_v2').insert(entriesV2).catch(err => console.error('[upload] v2 insert error:', err))
+        }
+      }
     }
 
-    // Handle bank statement: create/update bank account + store statement
+    // Handle bank statement: create/update bank account + store statement + individual transactions
     if (typeDocument === 'releve_bancaire') {
-      // Ensure we have at least a bank name (fallback to detected société name)
+      // Ensure we have at least a bank name
+      // Priority: extraction.banque > routing.banque > file name detection > fallback
       if (!extraction.banque && !extraction.compte_bancaire) {
-        extraction.banque = detectedSociete !== 'INCONNU' ? detectedSociete : 'Banque'
+        extraction.banque = parsed.routing?.banque || 'Banque'
       }
       const bankDevise = extraction.devise || 'MUR'
       const bankName = extraction.banque || extraction.compte_bancaire || 'Banque'
       // Support both field names: solde_cloture (prompt inline) and solde_fin (SYSTEM_PROMPT_RELEVE_BANCAIRE)
       const solde = Number(extraction.solde_cloture) || Number(extraction.solde_fin) || 0
 
-      // Find or create bank account
-      // Get the societe_id from the FINAL dossier (after possible société re-routing by AI)
-      const { data: dossierData } = await supabase.from('dossiers').select('societe_id').eq('id', finalDossierId).single()
-      const bankSocieteId = dossierData?.societe_id
+      // Use the already-resolved societe_id (avoids duplicate query)
+      const bankSocieteId = resolvedSocieteId
 
       if (bankSocieteId) {
         // Normalize date fields: support periode_debut/fin AND date_debut/fin patterns
@@ -464,6 +526,77 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
             transactions_json: normalizedTransactions,
             statut_rapprochement: statutRapprochement,
           }).catch(e => console.error('[upload] releves_bancaires insert error:', e))
+
+          // ═══════════════════════════════════════════════════════════
+          // Store individual transactions in transactions_bancaires
+          // so they appear in rapprochement and banque pages
+          // ═══════════════════════════════════════════════════════════
+          if (normalizedTransactions.length > 0) {
+            const txRows = normalizedTransactions.map((tx: any) => ({
+              compte_bancaire_id: bankAccount.id,
+              societe_id: bankSocieteId,
+              date_transaction: tx.date || normPeriodeFin,
+              libelle_banque: tx.libelle || 'Transaction',
+              debit: Number(tx.debit) || 0,
+              credit: Number(tx.credit) || 0,
+              tiers_identifie: tx.tiers_detecte || null,
+              compte_comptable: tx.compte_comptable || null,
+              statut_lettrage: 'a_lettrer',
+              document_lie_id: doc.id,
+              devise_origine: tx.devise_origine || (bankDevise !== 'MUR' ? bankDevise : null),
+              montant_origine: tx.montant_origine || null,
+              taux_change_applique: tx.taux_change_applique || null,
+            }))
+            await supabase.from('transactions_bancaires').insert(txRows)
+              .catch(e => console.error('[upload] transactions_bancaires insert error:', e))
+          }
+
+          // ═══════════════════════════════════════════════════════════
+          // Also write bank transactions as v2 accounting entries
+          // (so Grand Livre / Balance / Etats financiers see them)
+          // ═══════════════════════════════════════════════════════════
+          if (normalizedTransactions.length > 0 && bankSocieteId) {
+            const bankCompte = bankDevise === 'EUR' ? '511' : bankDevise === 'GBP' ? '514' : '512'
+            const v2BankEntries: any[] = []
+            for (const tx of normalizedTransactions) {
+              const debit = Number(tx.debit) || 0
+              const credit = Number(tx.credit) || 0
+              if (debit === 0 && credit === 0) continue
+              const txDate = tx.date || normPeriodeFin
+              const counterCompte = tx.compte_comptable || '471' // 471 = compte d'attente
+
+              if (debit > 0) {
+                // Debit on bank = money going out → credit bank, debit expense/tiers
+                v2BankEntries.push({
+                  societe_id: bankSocieteId, date_ecriture: txDate, journal: 'BNQ',
+                  numero_compte: counterCompte, nom_compte: tx.tiers_detecte || tx.libelle || 'Tiers',
+                  description: tx.libelle || '', debit_mur: debit, credit_mur: 0, document_id: doc.id,
+                })
+                v2BankEntries.push({
+                  societe_id: bankSocieteId, date_ecriture: txDate, journal: 'BNQ',
+                  numero_compte: bankCompte, nom_compte: `Banque ${bankName}`,
+                  description: tx.libelle || '', debit_mur: 0, credit_mur: debit, document_id: doc.id,
+                })
+              }
+              if (credit > 0) {
+                // Credit on bank = money coming in → debit bank, credit income/tiers
+                v2BankEntries.push({
+                  societe_id: bankSocieteId, date_ecriture: txDate, journal: 'BNQ',
+                  numero_compte: bankCompte, nom_compte: `Banque ${bankName}`,
+                  description: tx.libelle || '', debit_mur: credit, credit_mur: 0, document_id: doc.id,
+                })
+                v2BankEntries.push({
+                  societe_id: bankSocieteId, date_ecriture: txDate, journal: 'BNQ',
+                  numero_compte: counterCompte, nom_compte: tx.tiers_detecte || tx.libelle || 'Tiers',
+                  description: tx.libelle || '', debit_mur: 0, credit_mur: credit, document_id: doc.id,
+                })
+              }
+            }
+            if (v2BankEntries.length > 0) {
+              await supabase.from('ecritures_comptables_v2').insert(v2BankEntries)
+                .catch(err => console.error('[upload] v2 bank entries insert error:', err))
+            }
+          }
         }
       }
     }

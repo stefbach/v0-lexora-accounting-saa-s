@@ -172,7 +172,7 @@ export default function GrandLivrePage() {
                 <SelectItem value="all">Tous</SelectItem>
                 <SelectItem value="ACH">ACH — Achats</SelectItem>
                 <SelectItem value="VTE">VTE — Ventes</SelectItem>
-                <SelectItem value="BQ">BQ — Banque</SelectItem>
+                <SelectItem value="BNQ">BNQ — Banque</SelectItem>
                 <SelectItem value="OD">OD — Opérations diverses</SelectItem>
                 <SelectItem value="SAL">SAL — Salaires</SelectItem>
                 <SelectItem value="AN">AN — À-nouveau</SelectItem>

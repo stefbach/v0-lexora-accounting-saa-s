@@ -50,10 +50,57 @@ export async function GET(request: Request) {
 
     if (relevesError) throw relevesError
 
+    // Fetch individual transactions from transactions_bancaires table
+    // (these are the properly structured rows inserted during upload)
+    const { data: txBancaires, error: txError } = await supabase
+      .from('transactions_bancaires')
+      .select('*')
+      .eq('societe_id', societe_id)
+      .order('date_transaction', { ascending: false })
+
+    if (txError) console.error('[banque] transactions_bancaires query error:', txError)
+
+    // Build transactions list: prefer transactions_bancaires table, fallback to releves JSON
+    let allTransactions: any[] = []
+
+    if (txBancaires && txBancaires.length > 0) {
+      // Use structured transactions from the table
+      allTransactions = txBancaires.map((tx: any) => ({
+        id: tx.id,
+        date: tx.date_transaction || '',
+        libelle: tx.libelle_banque || '',
+        debit: Number(tx.debit) || 0,
+        credit: Number(tx.credit) || 0,
+        solde_apres: tx.solde_apres ?? null,
+        tiers_detecte: tx.tiers_identifie || null,
+        compte_comptable: tx.compte_comptable || null,
+        statut: tx.statut_lettrage || 'a_lettrer',
+        document_lie_id: tx.document_lie_id || null,
+      }))
+    } else if (releves && releves.length > 0) {
+      // Fallback: extract from releves_bancaires JSONB
+      releves.forEach((r: any) => {
+        const txs: any[] = r.transactions_json || []
+        txs.forEach((tx: any, idx: number) => {
+          allTransactions.push({
+            id: `${r.id}-tx-${idx}`,
+            date: tx.date || '',
+            libelle: tx.libelle || tx.description || '',
+            debit: Number(tx.debit) || 0,
+            credit: Number(tx.credit) || 0,
+            solde_apres: tx.solde_apres ?? tx.solde ?? null,
+            tiers_detecte: tx.tiers_detecte || tx.tiers || null,
+            compte_comptable: tx.compte_comptable || null,
+            statut: tx.statut || 'non_identifie',
+          })
+        })
+      })
+    }
+
     // Also try to pull transactions from documents (n8n_result fallback)
-    // In case releves_bancaires is empty but documents exist
+    // In case both releves_bancaires and transactions_bancaires are empty
     let documentsTransactions: any[] = []
-    if ((!releves || releves.length === 0)) {
+    if (allTransactions.length === 0 && (!releves || releves.length === 0)) {
       // Get dossiers for this société
       const { data: dossiers } = await supabase
         .from('dossiers').select('id').eq('societe_id', societe_id)
@@ -108,6 +155,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       comptes: comptes || [],
       releves: releves || [],
+      transactions: allTransactions,
       documentsTransactions,
     })
   } catch (e: unknown) {

@@ -65,32 +65,46 @@ export default function ComptableBanquePage() {
       const d = await res.json()
       setComptes(d.comptes || [])
       setReleves(d.releves || [])
-      // Flatten transactions from releves
-      const txs: Transaction[] = []
-      ;(d.releves || []).forEach((r: Releve) => {
-        const banque = (d.comptes || []).find((c: CompteBancaire) =>
-          r.id.includes(c.id) || true  // best effort
-        )?.banque || "—"
-        ;(r.transactions_json || []).forEach((tx: any, idx: number) => {
-          txs.push({
-            id: `${r.id}-${idx}`,
-            date: tx.date || tx.date_operation || "",
-            libelle: tx.libelle || tx.description || "",
-            debit: Number(tx.debit) || 0,
-            credit: Number(tx.credit) || 0,
-            solde_apres: tx.solde_apres ?? tx.solde ?? null,
-            tiers: tx.tiers_detecte || tx.tiers || null,
-            compte_comptable: tx.compte_comptable || null,
-            statut: tx.statut || "non_identifie",
-            banque,
+      // Use structured transactions from API (from transactions_bancaires table or releves JSON fallback)
+      const apiTxs: Transaction[] = (d.transactions || []).map((tx: any) => ({
+        id: tx.id || `tx-${Math.random()}`,
+        date: tx.date || '',
+        libelle: tx.libelle || '',
+        debit: Number(tx.debit) || 0,
+        credit: Number(tx.credit) || 0,
+        solde_apres: tx.solde_apres ?? null,
+        tiers: tx.tiers_detecte || tx.tiers || null,
+        compte_comptable: tx.compte_comptable || null,
+        statut: tx.statut || 'non_identifie',
+        banque: '—',
+      }))
+      // If no structured transactions, fall back to extracting from releves JSON
+      if (apiTxs.length === 0) {
+        ;(d.releves || []).forEach((r: Releve) => {
+          const banque = (d.comptes || []).find((c: CompteBancaire) =>
+            r.id.includes(c.id) || true
+          )?.banque || "—"
+          ;(r.transactions_json || []).forEach((tx: any, idx: number) => {
+            apiTxs.push({
+              id: `${r.id}-${idx}`,
+              date: tx.date || tx.date_operation || "",
+              libelle: tx.libelle || tx.description || "",
+              debit: Number(tx.debit) || 0,
+              credit: Number(tx.credit) || 0,
+              solde_apres: tx.solde_apres ?? tx.solde ?? null,
+              tiers: tx.tiers_detecte || tx.tiers || null,
+              compte_comptable: tx.compte_comptable || null,
+              statut: tx.statut || "non_identifie",
+              banque,
+            })
           })
         })
-      })
-      txs.sort((a, b) => {
+      }
+      apiTxs.sort((a, b) => {
         if (!a.date) return 1; if (!b.date) return -1
         return new Date(b.date).getTime() - new Date(a.date).getTime()
       })
-      setTransactions(txs)
+      setTransactions(apiTxs)
     } catch (e) { console.error(e) }
     finally { setLoading(false) }
   }, [selectedSociete])
