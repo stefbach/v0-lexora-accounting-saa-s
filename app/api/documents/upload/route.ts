@@ -268,7 +268,50 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
     const confianceType = parsed.routing?.confiance_type || null
     let extraction = parsed.extraction || {}
 
-    // Relevé bancaire déjà traité dans le bloc isLikelyBankStatement ci-dessus
+    // Si le prompt générique a détecté un relevé bancaire mais n'a pas utilisé le prompt spécialisé
+    // (isLikelyBankStatement était false), on relance avec le prompt spécialisé pour avoir les transactions
+    if (typeDocument === 'releve_bancaire' && !isLikelyBankStatement && isPdf) {
+      console.log('[upload] Relevé bancaire détecté via prompt générique → retraitement spécialisé')
+      try {
+        const bankSystemPrompt = getSystemPrompt('releve_bancaire', tauxChange)
+        const bankResponse = await anthropic.messages.create({
+          model: CLAUDE_CONFIG.model,
+          max_tokens: CLAUDE_CONFIG.max_tokens_releve_bancaire,
+          temperature: CLAUDE_CONFIG.temperature,
+          system: bankSystemPrompt,
+          messages: [{ role: 'user', content: [
+            { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
+            { type: 'text', text: 'Analyse ce releve bancaire complet. Lis TOUTES les lignes sans exception.' },
+          ]}],
+        })
+        const bankText = bankResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
+        const bankCleaned = bankText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
+        const bankParsed = JSON.parse(bankCleaned)
+        // Merge: garder le routing du premier appel, remplacer l'extraction par la version spécialisée
+        extraction = bankParsed
+        if (!extraction.banque && detectedSociete !== 'INCONNU') extraction.banque = detectedSociete
+      } catch (e) {
+        console.warn('[upload] Retraitement spécialisé relevé bancaire échoué, on garde extraction générique:', e)
+      }
+    }
+
+    // Relevé bancaire : si transactions[] est vide mais lignes[] existe, convertir
+    if (typeDocument === 'releve_bancaire') {
+      const rawLignes: any[] = extraction.lignes || []
+      const rawTransactions: any[] = extraction.transactions || []
+      if (rawTransactions.length === 0 && rawLignes.length > 0) {
+        extraction.transactions = rawLignes.map((l: any) => ({
+          date: l.date || '',
+          libelle: l.libelle || '',
+          debit: l.sens === 'debit' ? (Number(l.montant) || 0) : 0,
+          credit: l.sens === 'credit' ? (Number(l.montant) || 0) : 0,
+          solde_apres: null,
+          tiers_detecte: l.tiers_detecte || null,
+          compte_comptable: l.sens === 'debit' ? (l.compte_debit || null) : (l.compte_credit || null),
+          statut: (l.confiance || 0) >= 70 ? 'identifie' : ((l.confiance || 0) >= 40 ? 'a_verifier' : 'non_identifie'),
+        }))
+      }
+    }
 
     // Check bank statement coherence and create alert if needed
     if (typeDocument === 'releve_bancaire' && extraction.lignes_manquantes && Math.abs(extraction.ecart_solde || 0) > 1) {
@@ -322,15 +365,19 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
     }
 
     // Handle bank statement: create/update bank account + store statement
-    if (typeDocument === 'releve_bancaire' && (extraction.banque || extraction.compte_bancaire)) {
+    if (typeDocument === 'releve_bancaire') {
+      // Ensure we have at least a bank name (fallback to detected société name)
+      if (!extraction.banque && !extraction.compte_bancaire) {
+        extraction.banque = detectedSociete !== 'INCONNU' ? detectedSociete : 'Banque'
+      }
       const bankDevise = extraction.devise || 'MUR'
       const bankName = extraction.banque || extraction.compte_bancaire || 'Banque'
       // Support both field names: solde_cloture (prompt inline) and solde_fin (SYSTEM_PROMPT_RELEVE_BANCAIRE)
       const solde = Number(extraction.solde_cloture) || Number(extraction.solde_fin) || 0
 
       // Find or create bank account
-      // Get the societe_id from the dossier
-      const { data: dossierData } = await supabase.from('dossiers').select('societe_id').eq('id', resolvedDossierId).single()
+      // Get the societe_id from the FINAL dossier (after possible société re-routing by AI)
+      const { data: dossierData } = await supabase.from('dossiers').select('societe_id').eq('id', finalDossierId).single()
       const bankSocieteId = dossierData?.societe_id
 
       if (bankSocieteId) {
