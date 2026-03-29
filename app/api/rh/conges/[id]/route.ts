@@ -3,8 +3,9 @@ import { createClient } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
 
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
@@ -13,7 +14,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     const statut = action === 'approuver' ? 'approuve' : action === 'refuser' ? 'refuse' : 'annule'
     const { data, error } = await supabase.from('demandes_conges')
       .update({ statut, commentaire_manager: commentaire, date_approbation: new Date().toISOString() })
-      .eq('id', params.id).select().single()
+      .eq('id', id).select().single()
     if (error) throw error
 
     // Si approuvé, décrémenter le solde

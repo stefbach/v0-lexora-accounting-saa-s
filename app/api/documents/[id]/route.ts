@@ -14,7 +14,7 @@ function getAdminClient() {
 // ---------------------------------------------------------------------------
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabaseAuth = await createServerClient()
@@ -22,7 +22,7 @@ export async function GET(
     if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
 
     const supabase = getAdminClient()
-    const { id } = params
+    const { id } = await params
 
     // Fetch document with dossier join for access control
     const { data: doc, error } = await supabase
@@ -98,7 +98,7 @@ export async function GET(
 // ---------------------------------------------------------------------------
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabaseAuth = await createServerClient()
@@ -106,7 +106,7 @@ export async function PATCH(
     if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
 
     const supabase = getAdminClient()
-    const { id } = params
+    const { id } = await params
 
     // Fetch document for access check
     const { data: existingDoc, error: fetchError } = await supabase
@@ -217,7 +217,7 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabaseAuth = await createServerClient()
@@ -225,10 +225,11 @@ export async function DELETE(
     if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
 
     const supabase = getAdminClient()
+    const { id } = await params
 
     // Récupérer le document pour avoir le storage_path
     const { data: doc, error: fetchErr } = await supabase
-      .from('documents').select('id, storage_path, uploaded_by').eq('id', params.id).single()
+      .from('documents').select('id, storage_path, uploaded_by').eq('id', id).single()
     if (fetchErr || !doc) return NextResponse.json({ error: 'Document introuvable' }, { status: 404 })
 
     // Supprimer du storage
@@ -236,12 +237,14 @@ export async function DELETE(
       await supabase.storage.from('documents').remove([doc.storage_path])
     }
 
+    // Supprimer les données bancaires liées
+    await supabase.from('releves_bancaires').delete().eq('document_id', id).catch(() => {})
+
     // Supprimer les écritures liées
-    await supabase.from('ecritures_comptables').delete().eq('document_id', params.id)
-    await supabase.from('ecritures_comptables_v2').delete().eq('document_source_id', params.id)
+    await supabase.from('ecritures_comptables').delete().eq('piece_justificative', id).catch(() => {})
 
     // Supprimer le document
-    const { error: delErr } = await supabase.from('documents').delete().eq('id', params.id)
+    const { error: delErr } = await supabase.from('documents').delete().eq('id', id)
     if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 })
 
     return NextResponse.json({ success: true })

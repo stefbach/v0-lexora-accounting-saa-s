@@ -24,7 +24,7 @@ const TYPE_TO_PROMPT_ID: Record<string, PromptId> = {
 // ---------------------------------------------------------------------------
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabaseAuth = await createServerClient()
@@ -32,7 +32,7 @@ export async function POST(
     if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
 
     const supabase = getAdminClient()
-    const { id } = params
+    const { id } = await params
 
     // Fetch document
     const { data: doc, error: fetchError } = await supabase
@@ -367,7 +367,8 @@ Taux: EUR={{TAUX_EUR}}, GBP={{TAUX_GBP}}, USD={{TAUX_USD}}`, tauxChange)
     // Try to mark as error
     try {
       const supabase = getAdminClient()
-      await supabase.from('documents').update({ statut: 'erreur' }).eq('id', params.id)
+      const resolvedId = await params.then(p => p.id).catch(() => '')
+      if (resolvedId) await supabase.from('documents').update({ statut: 'erreur' }).eq('id', resolvedId)
     } catch {}
     return NextResponse.json({ error: errMsg }, { status: 500 })
   }
