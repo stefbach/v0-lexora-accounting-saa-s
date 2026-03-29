@@ -46,8 +46,22 @@ export default function TableauDeBord() {
     fetch(url)
       .then(r => r.json())
       .then(d => {
-        if (d && !d.error) setStats(d)
-        else setStats(null)
+        if (d && !d.error) {
+          const f = d.financial || d
+          setStats({
+            ca: f.totalRevenue || 0,
+            depenses: f.totalExpenses || 0,
+            benefice: f.resultat || (f.totalRevenue || 0) - (f.totalExpenses || 0),
+            tresorerie: f.totalBankMUR || 0,
+            nb_employes: 0,
+            nb_documents: f.totalDocuments || 0,
+            nb_docs_en_attente: 0,
+            tva_due: f.tvaNette || 0,
+            derniere_ecriture: null,
+          })
+        } else {
+          setStats(null)
+        }
         setLoading(false)
       })
       .catch(() => { setStats(null); setLoading(false) })
