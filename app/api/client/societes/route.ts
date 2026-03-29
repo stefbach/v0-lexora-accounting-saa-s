@@ -15,40 +15,54 @@ export async function GET() {
     if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
 
     const admin = getAdmin()
-    const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single()
+    const { data: profile } = await admin.from('profiles').select('role, societe_id').eq('id', user.id).maybeSingle()
     const role = profile?.role || ''
 
-    let societes = []
+    let societes: any[] = []
 
     if (['admin', 'super_admin'].includes(role)) {
-      // Admin : toutes les sociétés
-      const { data } = await admin.from('societes').select('id, nom, brn, ern, statut_tva, secteur_activite, created_by').order('nom')
+      const { data } = await admin.from('societes').select('*').order('nom')
       societes = data || []
+
     } else if (['comptable', 'comptable_dedie'].includes(role)) {
-      // Comptable : ses sociétés assignées
-      const { data } = await admin.from('comptable_societes').select('societe_id, societes(id, nom, brn, ern, statut_tva, secteur_activite)').eq('comptable_id', user.id).eq('actif', true)
-      societes = (data || []).map((r: { societes: unknown }) => r.societes).filter(Boolean)
-    } else if (['client_admin', 'client_user'].includes(role)) {
-      // Client : ses propres sociétés (créées par lui) + via dossiers
-      const [{ data: owned }, { data: viaDossiers }] = await Promise.all([
-        admin.from('societes').select('id, nom, brn, ern, statut_tva, secteur_activite').eq('created_by', user.id),
-        admin.from('dossiers').select('societe_id, societes(id, nom, brn, ern, statut_tva, secteur_activite)').eq('client_id', user.id).eq('statut', 'actif')
+      // Via comptable_societes + via dossiers
+      const [{ data: viaCS }, { data: viaDossiers }] = await Promise.all([
+        admin.from('comptable_societes').select('societe_id, societes(*)').eq('comptable_id', user.id).eq('actif', true),
+        admin.from('dossiers').select('societe_id, societes(*)').eq('comptable_id', user.id).eq('statut', 'actif'),
       ])
       const map = new Map()
-      ;(owned || []).forEach((s: { id: string }) => map.set(s.id, s))
-      ;(viaDossiers || []).forEach((d: { societes: { id: string } | null }) => { if (d.societes) map.set(d.societes.id, d.societes) })
+      ;(viaCS || []).forEach((r: any) => { if (r.societes) map.set(r.societes.id, r.societes) })
+      ;(viaDossiers || []).forEach((d: any) => { if (d.societes) map.set(d.societes.id, d.societes) })
       societes = Array.from(map.values())
-    } else if (['rh', 'juridique', 'employe'].includes(role)) {
-      // RH/Juridique/Employé : leur société principale
-      const { data: p } = await admin.from('profiles').select('societe_id').eq('id', user.id).single()
-      if (p?.societe_id) {
-        const { data } = await admin.from('societes').select('id, nom, brn, ern, statut_tva').eq('id', p.societe_id)
+
+    } else if (['client_admin', 'client_user'].includes(role)) {
+      // Via created_by + via dossiers (couvre tous les cas)
+      const [{ data: owned }, { data: viaDossiers }] = await Promise.all([
+        admin.from('societes').select('*').eq('created_by', user.id),
+        admin.from('dossiers').select('societe_id, societes(*)').eq('client_id', user.id),
+      ])
+      const map = new Map()
+      ;(owned || []).forEach((s: any) => map.set(s.id, s))
+      ;(viaDossiers || []).forEach((d: any) => { if (d.societes) map.set(d.societes.id, d.societes) })
+      societes = Array.from(map.values())
+
+    } else if (['rh', 'juridique', 'employe', 'manager', 'direction'].includes(role)) {
+      if (profile?.societe_id) {
+        const { data } = await admin.from('societes').select('*').eq('id', profile.societe_id)
         societes = data || []
       }
+
+    } else {
+      // Rôle inconnu ou profil manquant — chercher via dossiers en dernier recours
+      const { data: viaDossiers } = await admin.from('dossiers').select('societe_id, societes(*)').eq('client_id', user.id)
+      const map = new Map()
+      ;(viaDossiers || []).forEach((d: any) => { if (d.societes) map.set(d.societes.id, d.societes) })
+      societes = Array.from(map.values())
     }
 
     return NextResponse.json({ societes })
   } catch (e: unknown) {
+    console.error('[client/societes] GET error:', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -64,8 +78,8 @@ export async function POST(request: Request) {
 
     const admin = getAdmin()
 
-    // Build insert object with core fields
-    const coreData: Record<string, unknown> = {
+    // Insert société — include created_by so the client can see it
+    const insertData: Record<string, unknown> = {
       nom: body.nom,
       brn: body.brn || null,
       numero_tva_mra: body.numero_tva_mra || null,
@@ -73,40 +87,60 @@ export async function POST(request: Request) {
       adresse: body.adresse || null,
       telephone: body.telephone || null,
       email: body.email || null,
-    }
-
-    // Try with extended fields first (created_by, ern, secteur_activite)
-    const extendedData = {
-      ...coreData,
       created_by: user.id,
-      ...(body.ern ? { ern: body.ern } : {}),
-      ...(body.secteur_activite ? { secteur_activite: body.secteur_activite } : {}),
     }
+    if (body.ern) insertData.ern = body.ern
+    if (body.secteur_activite) insertData.secteur_activite = body.secteur_activite
 
-    let { data, error } = await admin.from('societes').insert(extendedData).select().single()
-
-    // If it fails (possibly due to missing columns), retry with core fields only
-    if (error) {
-      console.error('[client/societes] POST extended insert failed, retrying core:', error.message)
-      const retry = await admin.from('societes').insert(coreData).select().single()
-      data = retry.data
-      error = retry.error
-    }
+    const { data, error } = await admin.from('societes').insert(insertData).select().single()
 
     if (error) {
-      console.error('[client/societes] POST error:', error.message, error.details, error.hint)
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      console.error('[client/societes] POST insert error:', error.message, error.details, error.hint)
+      // Retry without optional columns
+      const fallbackData: Record<string, unknown> = {
+        nom: body.nom,
+        brn: body.brn || null,
+        numero_tva_mra: body.numero_tva_mra || null,
+        statut_tva: body.statut_tva || false,
+        adresse: body.adresse || null,
+        telephone: body.telephone || null,
+        email: body.email || null,
+      }
+      const retry = await admin.from('societes').insert(fallbackData).select().single()
+      if (retry.error) {
+        console.error('[client/societes] POST fallback error:', retry.error.message)
+        return NextResponse.json({ error: retry.error.message }, { status: 500 })
+      }
+
+      // Société created without created_by — create dossier to ensure visibility
+      if (retry.data?.id) {
+        await admin.from('dossiers').upsert({
+          client_id: user.id,
+          societe_id: retry.data.id,
+          comptable_id: user.id, // fallback if NOT NULL
+          statut: 'actif',
+        }, { onConflict: 'client_id,societe_id', ignoreDuplicates: true }).catch(() => {})
+      }
+      return NextResponse.json({ societe: retry.data })
     }
 
-    // Auto-créer un dossier pour lier le client à sa nouvelle société
+    // Société created with created_by — also create a dossier as backup visibility path
     if (data?.id) {
       const { error: dossierError } = await admin.from('dossiers').insert({
         client_id: user.id,
         societe_id: data.id,
-        comptable_id: null,
+        comptable_id: user.id, // use self as fallback if NOT NULL required
+        statut: 'actif',
       })
       if (dossierError) {
-        console.error('[client/societes] dossier creation error:', dossierError.message)
+        console.error('[client/societes] dossier error:', dossierError.message)
+        // Try with null comptable_id (if column is nullable)
+        await admin.from('dossiers').insert({
+          client_id: user.id,
+          societe_id: data.id,
+          comptable_id: null,
+          statut: 'actif',
+        }).catch(() => {})
       }
     }
 
