@@ -278,7 +278,7 @@ export async function POST(request: Request) {
           nom: nom || 'INCONNU', prenom: prenom || '',
           poste: String(row.poste || '').trim() || null,
           salaire_base: parseNumber(row.salaire_base),
-          devise_salaire: 'MUR', statut: 'actif',
+          devise_salaire: 'MUR', actif: true,
           date_arrivee: parseDate(row.date_arrivee) || new Date().toISOString().split('T')[0],
         }
         const { data: created_emp, error: empErr } = await supabase

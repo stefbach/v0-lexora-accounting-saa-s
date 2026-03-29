@@ -152,7 +152,7 @@ export async function POST(request: NextRequest) {
         societe_id, code,
         nom: nom || 'INCONNU', prenom: prenom || '',
         salaire_base: parseNumber(row.salaire_base) || 0,
-        actif: true, statut: 'actif',
+        actif: true,
       }
 
       if (row.email) record.email = String(row.email).trim()
