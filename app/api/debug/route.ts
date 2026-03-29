@@ -60,11 +60,38 @@ export async function GET() {
       result.releves_bancaires = 'NO_SOCIETE_IDS'
     }
 
-    // 6. Documents bancaires
+    // 6. Documents bancaires (avec n8n_result pour diagnostiquer l'OCR)
     const { data: bankDocs } = await supabase
-      .from('documents').select('id, nom_fichier, type_document, statut, societe_detectee, dossier_id')
-      .eq('type_document', 'releve_bancaire').limit(5)
-    result.bank_documents = bankDocs || []
+      .from('documents').select('id, nom_fichier, type_document, statut, societe_detectee, dossier_id, n8n_result')
+      .eq('type_document', 'releve_bancaire').order('created_at', { ascending: false }).limit(3)
+    result.bank_documents = (bankDocs || []).map((d: any) => {
+      const ext = d.n8n_result?.extraction || {}
+      return {
+        id: d.id,
+        nom_fichier: d.nom_fichier,
+        statut: d.statut,
+        societe_detectee: d.societe_detectee,
+        dossier_id: d.dossier_id,
+        extraction_summary: {
+          banque: ext.banque,
+          devise: ext.devise,
+          periode: ext.periode,
+          periode_debut: ext.periode_debut,
+          periode_fin: ext.periode_fin,
+          solde_debut: ext.solde_debut,
+          solde_fin: ext.solde_fin,
+          solde_ouverture: ext.solde_ouverture,
+          solde_cloture: ext.solde_cloture,
+          total_debits: ext.total_debits,
+          total_credits: ext.total_credits,
+          nb_lignes: Array.isArray(ext.lignes) ? ext.lignes.length : 0,
+          nb_transactions: Array.isArray(ext.transactions) ? ext.transactions.length : 0,
+          nb_ecritures: Array.isArray(ext.ecritures_comptables) ? ext.ecritures_comptables.length : 0,
+          has_routing: !!d.n8n_result?.routing,
+          model: d.n8n_result?.metadata?.model,
+        },
+      }
+    })
 
     return NextResponse.json(result, { status: 200 })
   } catch (e: any) {
