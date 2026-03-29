@@ -1,53 +1,73 @@
 import { createClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
-  const checks: Record<string, string> = {}
-
-  // Check env vars
-  checks.NEXT_PUBLIC_SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ? 'SET' : 'MISSING'
-  checks.SUPABASE_SERVICE_ROLE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY) ? 'SET' : 'MISSING'
-  checks.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ? 'SET' : 'MISSING'
-  checks.ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'not set (default)'
-
-  // Test Supabase connection
   try {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (url && key) {
-      const supabase = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
-      const { data, error } = await supabase.from('profiles').select('id').limit(1)
-      checks.supabase_db = error ? `ERROR: ${error.message}` : `OK (${data?.length} rows)`
+    const supabaseAuth = await createServerClient()
+    const { data: { user } } = await supabaseAuth.auth.getUser()
 
-      // Test storage bucket
-      const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets()
-      if (bucketsError) {
-        checks.supabase_storage = `ERROR: ${bucketsError.message}`
-      } else {
-        const bucketNames = buckets?.map(b => b.name) || []
-        checks.supabase_storage_buckets = bucketNames.join(', ') || 'NONE'
-        checks.documents_bucket = bucketNames.includes('documents') ? 'EXISTS' : 'MISSING — CREATE IT IN SUPABASE DASHBOARD'
-      }
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    )
+
+    const userId = user?.id || 'NOT_LOGGED_IN'
+    const result: Record<string, any> = { userId }
+
+    // 1. Profil
+    const { data: profile, error: profileErr } = await supabase
+      .from('profiles').select('id, email, role, societe_id').eq('id', userId).maybeSingle()
+    result.profile = profile || `MISSING (${profileErr?.message || 'no row'})`
+
+    // 2. Sociétés créées par le user
+    const { data: ownedSocietes } = await supabase
+      .from('societes').select('id, nom, created_by').eq('created_by', userId)
+    result.owned_societes = ownedSocietes || []
+
+    // 3. Dossiers du user
+    const { data: dossiers } = await supabase
+      .from('dossiers').select('id, client_id, societe_id, comptable_id, statut').eq('client_id', userId)
+    result.dossiers_as_client = dossiers || []
+
+    // 4. Toutes les sociétés
+    const { data: allSocietes } = await supabase
+      .from('societes').select('id, nom').limit(10)
+    result.all_societes = allSocietes || []
+
+    // 5. Comptes bancaires
+    const societeIds = [
+      ...(ownedSocietes || []).map(s => s.id),
+      ...(dossiers || []).map(d => d.societe_id),
+    ]
+    if (societeIds.length > 0) {
+      const { data: comptes } = await supabase
+        .from('comptes_bancaires').select('id, banque, devise, solde_actuel, societe_id').in('societe_id', societeIds)
+      result.comptes_bancaires = comptes || []
+
+      const { data: releves } = await supabase
+        .from('releves_bancaires').select('id, societe_id, periode, solde_cloture, statut_rapprochement, transactions_json').in('societe_id', societeIds)
+      result.releves_bancaires = (releves || []).map(r => ({
+        ...r,
+        nb_transactions: Array.isArray(r.transactions_json) ? r.transactions_json.length : 0,
+        transactions_json: undefined, // don't dump all transactions
+      }))
+    } else {
+      result.comptes_bancaires = 'NO_SOCIETE_IDS'
+      result.releves_bancaires = 'NO_SOCIETE_IDS'
     }
-  } catch (e: any) {
-    checks.supabase_connection = `FAILED: ${e.message}`
-  }
 
-  // Test Anthropic
-  try {
-    if (process.env.ANTHROPIC_API_KEY) {
-      const Anthropic = (await import('@anthropic-ai/sdk')).default
-      const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-      const res = await anthropic.messages.create({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 10,
-        messages: [{ role: 'user', content: 'Say OK' }],
-      })
-      checks.anthropic_api = `OK (${res.model})`
-    }
-  } catch (e: any) {
-    checks.anthropic_api = `FAILED: ${e.message}`
-  }
+    // 6. Documents bancaires
+    const { data: bankDocs } = await supabase
+      .from('documents').select('id, nom_fichier, type_document, statut, societe_detectee, dossier_id')
+      .eq('type_document', 'releve_bancaire').limit(5)
+    result.bank_documents = bankDocs || []
 
-  return NextResponse.json({ status: 'debug', checks })
+    return NextResponse.json(result, { status: 200 })
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 })
+  }
 }
