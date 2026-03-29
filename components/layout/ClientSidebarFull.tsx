@@ -29,16 +29,16 @@ const MENU = [
       { href: "/client/banque", label: "Banque", icon: Banknote },
       { href: "/client/rapprochement", label: "Rapprochement & Lettrage", icon: CreditCard },
       { href: "/client/tresorerie", label: "Trésorerie", icon: Banknote },
-      { href: "/client/finances", label: "Mes Chiffres", icon: BarChart3 },
-      { href: "/comptable/factures-clients", label: "Factures Clients", icon: Receipt },
+      { href: "/client/factures", label: "Factures Clients", icon: Receipt },
       { href: "/client/fournisseurs", label: "Fournisseurs", icon: FileSpreadsheet },
+      { href: "/client/finances", label: "Mes Chiffres", icon: BarChart3 },
     ]
   },
   {
     section: "États Financiers",
     items: [
       { href: "/client/bilan", label: "Bilan & P&L", icon: BookOpen },
-      { href: "/client/tableau-de-bord-financier", label: "Dashboard Financier", icon: BarChart3 },
+      { href: "/client/grand-livre", label: "Grand Livre", icon: BookOpen },
       { href: "/client/previsionnel", label: "Prévisionnel", icon: TrendingUp },
       { href: "/client/simulations", label: "Simulations", icon: Target },
       { href: "/client/conseils", label: "Conseils IA", icon: Lightbulb },
@@ -49,25 +49,12 @@ const MENU = [
     items: [
       { href: "/client/tva", label: "TVA MRA", icon: Receipt },
       { href: "/client/charges-sociales", label: "CSG / NSF / PAYE", icon: Calculator },
-      { href: "/client/grand-livre", label: "Grand Livre", icon: BookOpen },
     ]
   },
   {
     section: "RH & Paie",
     items: [
-      { href: "/rh/employes", label: "Employés", icon: Users },
-      { href: "/rh/pointage", label: "Pointage", icon: Clock },
-      { href: "/rh/conges", label: "Absences & Congés", icon: Clock },
-      { href: "/rh/paie", label: "Paie & Bulletins", icon: CreditCard },
-      { href: "/rh/paie/exports-mra", label: "Exports MRA", icon: FileText },
-      { href: "/rh/exports/virement", label: "Virements bancaires", icon: Banknote },
-    ]
-  },
-  {
-    section: "Juridique",
-    items: [
-      { href: "/juridique", label: "Module Juridique", icon: Scale },
-      { href: "/rh/juridique", label: "Contrats RH", icon: Gavel },
+      { href: "/client/salaires", label: "Paie & Bulletins", icon: CreditCard },
     ]
   },
   {
