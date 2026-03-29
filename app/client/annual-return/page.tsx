@@ -452,6 +452,49 @@ export default function AnnualReturnPage() {
         </div>
       </div>
 
+      {/* PDF Import Section */}
+      <Card className="border-2 border-dashed print:hidden" style={{ borderColor: GOLD }}>
+        <CardContent className="py-4">
+          <div className="flex flex-col sm:flex-row items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Upload className="w-5 h-5" style={{ color: GOLD }} />
+              <div>
+                <p className="text-sm font-semibold" style={{ color: NAVY }}>Importer PDF officiel</p>
+                <p className="text-xs text-gray-500">Importez votre Annual Return officiel (PDF) pour pre-remplir automatiquement le formulaire</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="file"
+                accept=".pdf"
+                id="pdf-import-annual-return"
+                className="hidden"
+                onChange={e => {
+                  const file = e.target.files?.[0]
+                  if (file) handleImportPdf(file)
+                  e.target.value = ""
+                }}
+              />
+              <Button
+                variant="outline"
+                onClick={() => document.getElementById("pdf-import-annual-return")?.click()}
+                disabled={importingPdf}
+                style={{ borderColor: GOLD, color: NAVY }}
+                className="flex items-center gap-2"
+              >
+                {importingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                {importingPdf ? "Import en cours..." : "Choisir un PDF"}
+              </Button>
+            </div>
+          </div>
+          {importMessage && (
+            <p className={`text-sm mt-2 ${importMessage.includes("Erreur") ? "text-red-600" : "text-green-600"}`}>
+              {importMessage}
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Status messages */}
       {saved && (
         <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
