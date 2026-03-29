@@ -63,17 +63,17 @@ export async function POST(request: NextRequest) {
     if (!resolvedDossierId) {
       // 1. Si societe_id fourni, chercher un dossier pour cette société (peu importe le client)
       if (societeId) {
-        const { data: d } = await supabase.from('dossiers').select('id').eq('societe_id', societeId).limit(1).single()
+        const { data: d } = await supabase.from('dossiers').select('id').eq('societe_id', societeId).limit(1).maybeSingle()
         if (d) { resolvedDossierId = d.id }
       }
       // 2. Sinon chercher un dossier du user (en tant que client)
       if (!resolvedDossierId) {
-        const { data: d } = await supabase.from('dossiers').select('id').eq('client_id', user.id).limit(1).single()
+        const { data: d } = await supabase.from('dossiers').select('id').eq('client_id', user.id).limit(1).maybeSingle()
         if (d) { resolvedDossierId = d.id }
       }
       // 3. Si le user est comptable, chercher un dossier où il est assigné
       if (!resolvedDossierId) {
-        const { data: d } = await supabase.from('dossiers').select('id').eq('comptable_id', user.id).limit(1).single()
+        const { data: d } = await supabase.from('dossiers').select('id').eq('comptable_id', user.id).limit(1).maybeSingle()
         if (d) { resolvedDossierId = d.id }
       }
       // 4. Dernier recours : créer un dossier personnel
@@ -386,29 +386,53 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
       // Get the societe_id: prefer explicit societeId from form, then from dossier
       let bankSocieteId = societeId || null
       if (!bankSocieteId) {
-        const { data: dossierData } = await supabase.from('dossiers').select('societe_id').eq('id', finalDossierId).single()
+        const { data: dossierData } = await supabase.from('dossiers').select('societe_id').eq('id', finalDossierId).maybeSingle()
         bankSocieteId = dossierData?.societe_id || null
       }
+      console.log(`[upload] Bank statement: bankName=${bankName}, bankSocieteId=${bankSocieteId}, devise=${bankDevise}, solde=${solde}`)
 
       if (bankSocieteId) {
-        // Normalize date fields: support periode_debut/fin AND date_debut/fin patterns
-        const normPeriodeFin = extraction.periode_fin || extraction.date_fin || new Date().toISOString().split('T')[0]
-        const normPeriodeDebut = extraction.periode_debut || extraction.date_debut || normPeriodeFin
+        // Normalize date fields: support all naming variants from both prompts
+        // periode_fin (inline) | date_fin | periode (YYYY-MM → YYYY-MM-last_day)
+        let normPeriodeFin = extraction.periode_fin || extraction.date_fin || null
+        if (!normPeriodeFin && extraction.periode) {
+          // Convert YYYY-MM → YYYY-MM-28 (safe last day approximation)
+          const p = extraction.periode
+          if (/^\d{4}-\d{2}$/.test(p)) {
+            const [y, m] = p.split('-').map(Number)
+            const lastDay = new Date(y, m, 0).getDate()
+            normPeriodeFin = `${p}-${String(lastDay).padStart(2, '0')}`
+          } else {
+            normPeriodeFin = p
+          }
+        }
+        if (!normPeriodeFin) normPeriodeFin = new Date().toISOString().split('T')[0]
+
+        let normPeriodeDebut = extraction.periode_debut || extraction.date_debut || null
+        if (!normPeriodeDebut && extraction.periode) {
+          if (/^\d{4}-\d{2}$/.test(extraction.periode)) {
+            normPeriodeDebut = `${extraction.periode}-01`
+          }
+        }
+        if (!normPeriodeDebut) normPeriodeDebut = normPeriodeFin
+
         const normNumeroCompte = extraction.numero_compte || extraction.compte_bancaire || null
 
         // Check if bank account exists
         const { data: existingBank } = await supabase.from('comptes_bancaires')
-          .select('id').eq('societe_id', bankSocieteId).eq('banque', bankName).limit(1).single()
+          .select('id').eq('societe_id', bankSocieteId).eq('banque', bankName).limit(1).maybeSingle()
 
         if (existingBank) {
           // Update balance
+          console.log(`[upload] Updating existing bank account ${existingBank.id}: solde=${solde}, date=${normPeriodeFin}`)
           await supabase.from('comptes_bancaires').update({
             solde_actuel: solde,
             date_dernier_releve: normPeriodeFin,
           }).eq('id', existingBank.id)
         } else {
           // Create new bank account
-          await supabase.from('comptes_bancaires').insert({
+          console.log(`[upload] Creating new bank account: ${bankName} for societe=${bankSocieteId}`)
+          const { error: bankInsertError } = await supabase.from('comptes_bancaires').insert({
             societe_id: bankSocieteId,
             banque: bankName,
             nom_compte: normNumeroCompte || bankName,
@@ -419,11 +443,14 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
             date_dernier_releve: normPeriodeFin,
             actif: true,
           })
+          if (bankInsertError) {
+            console.error('[upload] comptes_bancaires insert FAILED:', bankInsertError.message)
+          }
         }
 
         // Store bank statement record
         const { data: bankAccount } = await supabase.from('comptes_bancaires')
-          .select('id').eq('societe_id', bankSocieteId).eq('banque', bankName).limit(1).single()
+          .select('id').eq('societe_id', bankSocieteId).eq('banque', bankName).limit(1).maybeSingle()
 
         if (bankAccount) {
           // Normalize transactions: support both "transactions[]" (prompt inline)

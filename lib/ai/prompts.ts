@@ -340,10 +340,15 @@ FORMAT REPONSE JSON strict:
 {
   "banque": "",
   "compte_bancaire": "",
+  "numero_compte": "",
   "periode": "",
+  "periode_debut": "YYYY-MM-DD",
+  "periode_fin": "YYYY-MM-DD",
   "devise": "MUR",
   "solde_debut": 0,
   "solde_fin": 0,
+  "solde_ouverture": 0,
+  "solde_cloture": 0,
   "total_debits": 0,
   "total_credits": 0,
   "lignes_manquantes": false,
@@ -366,8 +371,17 @@ FORMAT REPONSE JSON strict:
       "taux_change_applique": null
     }
   ],
+  "ecritures_comptables": [
+    {"compte": "51x", "libelle": "", "debit": 0, "credit": 0}
+  ],
   "ecritures_non_rapprochees": 0
-}`
+}
+
+REGLES CHAMPS OBLIGATOIRES:
+- periode_debut et periode_fin: TOUJOURS en format YYYY-MM-DD (date exacte du premier et dernier jour du releve)
+- solde_ouverture = solde_debut, solde_cloture = solde_fin (inclure les deux paires)
+- numero_compte = compte_bancaire (inclure les deux)
+- ecritures_comptables: generer les ecritures comptables (debit charge/credit banque pour les debits, debit banque/credit produit pour les credits)`
 
 export const SYSTEM_PROMPT_CHARGES_SOCIALES = `Tu es un expert en droit social mauricien specialise dans les charges sociales et cotisations.
 
