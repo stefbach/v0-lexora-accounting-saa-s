@@ -243,28 +243,88 @@ export async function GET(request: Request) {
       .filter(e => e.compte?.startsWith('43'))
       .reduce((sum, e) => sum + (Number(e.credit) || 0) - (Number(e.debit) || 0), 0)
 
-    // Extract bank transactions from releve_bancaire documents
+    // Extract bank transactions — source 1: releves_bancaires table (transactions_json)
     const bankTransactions: any[] = []
-    allDocs
-      .filter(d => d.type_document === 'releve_bancaire')
-      .forEach(d => {
-        const extraction = d.n8n_result?.extraction || {}
-        const transactions = extraction.transactions || []
-        transactions.forEach((tx: any, idx: number) => {
+
+    const { data: relevesDB } = await supabase
+      .from('releves_bancaires')
+      .select('id, transactions_json, date_debut, date_fin')
+      .in('societe_id', societeIds)
+      .order('date_fin', { ascending: false })
+
+    if (relevesDB && relevesDB.length > 0) {
+      relevesDB.forEach((releve: any) => {
+        const txs: any[] = releve.transactions_json || []
+        txs.forEach((tx: any, idx: number) => {
           bankTransactions.push({
-            id: `${d.id}-tx-${idx}`,
-            document_id: d.id,
+            id: `releve-${releve.id}-tx-${idx}`,
             date: tx.date || tx.date_operation || '',
             libelle: tx.libelle || tx.description || '',
             debit: Number(tx.debit) || 0,
             credit: Number(tx.credit) || 0,
             solde_apres: tx.solde_apres ?? tx.solde ?? null,
-            tiers: tx.tiers || tx.tiers_identifie || null,
+            tiers: tx.tiers_detecte || tx.tiers || tx.tiers_identifie || null,
             compte_comptable: tx.compte_comptable || tx.compte || null,
             statut: tx.statut || 'non_identifie',
           })
         })
       })
+    }
+
+    // Source 2: fallback from documents n8n_result (if releves_bancaires is empty)
+    if (bankTransactions.length === 0) {
+      allDocs
+        .filter(d => d.type_document === 'releve_bancaire')
+        .forEach(d => {
+          const extraction = d.n8n_result?.extraction || {}
+          const transactions = extraction.transactions || []
+          transactions.forEach((tx: any, idx: number) => {
+            bankTransactions.push({
+              id: `${d.id}-tx-${idx}`,
+              document_id: d.id,
+              date: tx.date || tx.date_operation || '',
+              libelle: tx.libelle || tx.description || '',
+              debit: Number(tx.debit) || 0,
+              credit: Number(tx.credit) || 0,
+              solde_apres: tx.solde_apres ?? tx.solde ?? null,
+              tiers: tx.tiers_detecte || tx.tiers || tx.tiers_identifie || null,
+              compte_comptable: tx.compte_comptable || tx.compte || null,
+              statut: tx.statut || 'non_identifie',
+            })
+          })
+        })
+    }
+
+    // Also update bankAccounts from releves_bancaires solde_cloture if comptes_bancaires is empty
+    if (bankAccounts.length === 0 && relevesDB && relevesDB.length > 0) {
+      // Get latest releve per societe to build synthetic bank accounts
+      const latestReleve = relevesDB[0] as any
+      if (latestReleve) {
+        const { data: docsForBankName } = await supabase
+          .from('documents')
+          .select('n8n_result')
+          .in('dossier_id', dossierIds)
+          .eq('type_document', 'releve_bancaire')
+          .eq('statut', 'traite')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        const bankName = docsForBankName?.n8n_result?.extraction?.banque || 'Banque'
+        const socleCloture = (docsForBankName?.n8n_result?.extraction?.solde_cloture) ?? 0
+        if (socleCloture !== 0 || bankName !== 'Banque') {
+          bankAccounts.push({
+            id: 'synthetic',
+            banque: bankName,
+            nom_compte: bankName,
+            devise: docsForBankName?.n8n_result?.extraction?.devise || 'MUR',
+            solde_actuel: Number(socleCloture),
+            solde_mur: Number(socleCloture),
+            date_dernier_releve: docsForBankName?.n8n_result?.extraction?.periode_fin || null,
+          })
+        }
+      }
+    }
 
     // Sort bank transactions by date descending
     bankTransactions.sort((a, b) => {

@@ -322,10 +322,11 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
     }
 
     // Handle bank statement: create/update bank account + store statement
-    if (typeDocument === 'releve_bancaire' && extraction.banque) {
+    if (typeDocument === 'releve_bancaire' && (extraction.banque || extraction.compte_bancaire)) {
       const bankDevise = extraction.devise || 'MUR'
-      const bankName = extraction.banque
-      const solde = Number(extraction.solde_cloture) || 0
+      const bankName = extraction.banque || extraction.compte_bancaire || 'Banque'
+      // Support both field names: solde_cloture (prompt inline) and solde_fin (SYSTEM_PROMPT_RELEVE_BANCAIRE)
+      const solde = Number(extraction.solde_cloture) || Number(extraction.solde_fin) || 0
 
       // Find or create bank account
       // Get the societe_id from the dossier
@@ -333,6 +334,11 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
       const bankSocieteId = dossierData?.societe_id
 
       if (bankSocieteId) {
+        // Normalize date fields: support periode_debut/fin AND date_debut/fin patterns
+        const normPeriodeFin = extraction.periode_fin || extraction.date_fin || new Date().toISOString().split('T')[0]
+        const normPeriodeDebut = extraction.periode_debut || extraction.date_debut || normPeriodeFin
+        const normNumeroCompte = extraction.numero_compte || extraction.compte_bancaire || null
+
         // Check if bank account exists
         const { data: existingBank } = await supabase.from('comptes_bancaires')
           .select('id').eq('societe_id', bankSocieteId).eq('banque', bankName).limit(1).single()
@@ -341,19 +347,19 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
           // Update balance
           await supabase.from('comptes_bancaires').update({
             solde_actuel: solde,
-            date_dernier_releve: extraction.periode_fin || new Date().toISOString().split('T')[0],
+            date_dernier_releve: normPeriodeFin,
           }).eq('id', existingBank.id)
         } else {
           // Create new bank account
           await supabase.from('comptes_bancaires').insert({
             societe_id: bankSocieteId,
             banque: bankName,
-            nom_compte: extraction.numero_compte || bankName,
-            numero_compte: extraction.numero_compte || null,
+            nom_compte: normNumeroCompte || bankName,
+            numero_compte: normNumeroCompte,
             devise: bankDevise,
             solde_actuel: solde,
             solde_dernier_releve: solde,
-            date_dernier_releve: extraction.periode_fin || new Date().toISOString().split('T')[0],
+            date_dernier_releve: normPeriodeFin,
             actif: true,
           })
         }
@@ -363,19 +369,53 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
           .select('id').eq('societe_id', bankSocieteId).eq('banque', bankName).limit(1).single()
 
         if (bankAccount) {
+          // Normalize transactions: support both "transactions[]" (prompt inline)
+          // and "lignes[]" (SYSTEM_PROMPT_RELEVE_BANCAIRE from getSystemPrompt)
+          const rawTransactions: any[] = extraction.transactions || []
+          const rawLignes: any[] = extraction.lignes || []
+
+          // Convert lignes[] format → transactions[] format
+          const lignesAsTransactions = rawLignes.map((l: any) => ({
+            date: l.date || '',
+            libelle: l.libelle || '',
+            debit: l.sens === 'debit' ? (Number(l.montant) || 0) : 0,
+            credit: l.sens === 'credit' ? (Number(l.montant) || 0) : 0,
+            solde_apres: null,
+            tiers_detecte: l.tiers_detecte || null,
+            compte_comptable: l.sens === 'debit' ? (l.compte_debit || null) : (l.compte_credit || null),
+            statut: l.confiance >= 70 ? 'identifie' : (l.confiance >= 40 ? 'a_verifier' : 'non_identifie'),
+          }))
+
+          // Merge: prefer explicit transactions[], fall back to converted lignes[]
+          const normalizedTransactions = rawTransactions.length > 0
+            ? rawTransactions
+            : lignesAsTransactions
+
+          // Compute totals if missing
+          const totalDebits = Number(extraction.total_debits) ||
+            normalizedTransactions.reduce((s: number, t: any) => s + (Number(t.debit) || 0), 0)
+          const totalCredits = Number(extraction.total_credits) ||
+            normalizedTransactions.reduce((s: number, t: any) => s + (Number(t.credit) || 0), 0)
+
+          // Detect ecart
+          const soldeOuverture = Number(extraction.solde_ouverture) || Number(extraction.solde_debut) || 0
+          const soldeCloture = solde || Number(extraction.solde_fin) || 0
+          const ecartSolde = Math.abs((soldeOuverture + totalCredits - totalDebits) - soldeCloture)
+          const statutRapprochement = ecartSolde > 1 ? 'ecart_detecte' : 'en_attente'
+
           await supabase.from('releves_bancaires').insert({
             compte_bancaire_id: bankAccount.id,
             societe_id: bankSocieteId,
-            periode: extraction.periode_fin?.substring(0, 7) || new Date().toISOString().substring(0, 7),
-            date_debut: extraction.periode_debut || extraction.periode_fin || new Date().toISOString().split('T')[0],
-            date_fin: extraction.periode_fin || new Date().toISOString().split('T')[0],
-            solde_ouverture: Number(extraction.solde_ouverture) || 0,
-            solde_cloture: solde,
-            total_debits: Number(extraction.total_debits) || 0,
-            total_credits: Number(extraction.total_credits) || 0,
+            periode: normPeriodeFin.substring(0, 7),
+            date_debut: normPeriodeDebut,
+            date_fin: normPeriodeFin,
+            solde_ouverture: soldeOuverture,
+            solde_cloture: soldeCloture,
+            total_debits: totalDebits,
+            total_credits: totalCredits,
             document_id: doc.id,
-            transactions_json: extraction.transactions || [],
-            statut_rapprochement: 'en_attente',
+            transactions_json: normalizedTransactions,
+            statut_rapprochement: statutRapprochement,
           }).catch(e => console.error('[upload] releves_bancaires insert error:', e))
         }
       }
