@@ -123,6 +123,16 @@ export async function GET() {
       .limit(5)
     result.factures = { count: factures?.length || 0, error: facErr?.message || null, sample: factures?.slice(0, 2) }
 
+    // 11. Test comptable/societes API response
+    try {
+      const { data: testProfile } = await supabase.from('profiles').select('role').eq('id', userId).maybeSingle()
+      result.user_role_check = testProfile?.role || 'NO_PROFILE'
+    } catch (e: any) { result.user_role_check = 'ERROR: ' + e.message }
+
+    // 12. Test comptable_societes table exists
+    const { error: csTableErr } = await supabase.from('comptable_societes').select('id').limit(1)
+    result.comptable_societes_table = csTableErr ? 'MISSING: ' + csTableErr.message : 'EXISTS'
+
     return NextResponse.json(result, { status: 200 })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
