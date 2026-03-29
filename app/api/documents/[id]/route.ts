@@ -237,11 +237,15 @@ export async function DELETE(
       await supabase.storage.from('documents').remove([doc.storage_path])
     }
 
-    // Supprimer les données bancaires liées
+    // Supprimer toutes les données liées (FK vers documents)
     await supabase.from('releves_bancaires').delete().eq('document_id', id)
-
-    // Supprimer les écritures liées
+    await supabase.from('factures').delete().eq('document_id', id)
     await supabase.from('ecritures_comptables').delete().eq('piece_justificative', id)
+    await supabase.from('ecritures_comptables_v2').delete().eq('document_id', id)
+    await supabase.from('transactions_bancaires').delete().eq('document_lie_id', id)
+    await supabase.from('messages_document').delete().eq('document_id', id)
+    await supabase.from('immobilisations').delete().eq('document_id', id)
+    await supabase.from('depenses').delete().eq('document_id', id)
 
     // Supprimer le document
     const { error: delErr } = await supabase.from('documents').delete().eq('id', id)
