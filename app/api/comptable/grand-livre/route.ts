@@ -36,19 +36,30 @@ export async function GET(request: Request) {
     let useV2 = false
 
     // --- Try V2 first ---
-    let v2Query = supabase
-      .from('ecritures_comptables_v2')
-      .select('id, numero_compte, nom_compte, description, debit_mur, credit_mur, date_ecriture, journal, ref_folio, lettre, date_lettrage')
-      .eq('societe_id', societe_id)
-      .order('numero_compte').order('date_ecriture').order('id')
-
+    // Try v2 with lettrage columns, fallback without
+    let v2Select = 'id, numero_compte, nom_compte, description, debit_mur, credit_mur, date_ecriture, journal, ref_folio, lettre, date_lettrage'
+    let v2Query = supabase.from('ecritures_comptables_v2').select(v2Select)
+      .eq('societe_id', societe_id).order('numero_compte').order('date_ecriture').order('id')
     if (compte_debut) v2Query = v2Query.gte('numero_compte', compte_debut)
     if (compte_fin)   v2Query = v2Query.lte('numero_compte', compte_fin)
     if (date_debut)   v2Query = v2Query.gte('date_ecriture', date_debut)
     if (date_fin)     v2Query = v2Query.lte('date_ecriture', date_fin)
     if (journal)      v2Query = v2Query.eq('journal', journal)
 
-    const { data: v2Data } = await v2Query
+    let { data: v2Data, error: v2Err } = await v2Query
+    if (v2Err) {
+      // Retry without lettrage columns
+      let v2Fallback = supabase.from('ecritures_comptables_v2')
+        .select('id, numero_compte, nom_compte, description, debit_mur, credit_mur, date_ecriture, journal, ref_folio')
+        .eq('societe_id', societe_id).order('numero_compte').order('date_ecriture').order('id')
+      if (compte_debut) v2Fallback = v2Fallback.gte('numero_compte', compte_debut)
+      if (compte_fin)   v2Fallback = v2Fallback.lte('numero_compte', compte_fin)
+      if (date_debut)   v2Fallback = v2Fallback.gte('date_ecriture', date_debut)
+      if (date_fin)     v2Fallback = v2Fallback.lte('date_ecriture', date_fin)
+      if (journal)      v2Fallback = v2Fallback.eq('journal', journal)
+      const fb = await v2Fallback
+      v2Data = fb.data
+    }
     if (v2Data && v2Data.length > 0) {
       allEntries = v2Data.map(e => ({
         id: e.id, numero_compte: e.numero_compte, nom_compte: e.nom_compte || '',
@@ -67,6 +78,7 @@ export async function GET(request: Request) {
       const dossierIds = (dossiers || []).map((d: any) => d.id)
 
       if (dossierIds.length > 0) {
+        // Try with lettrage columns first, fallback without them
         let v1Query = supabase
           .from('ecritures_comptables')
           .select('id, compte, libelle, debit, credit, date_ecriture, journal, numero_piece, lettre, date_lettrage')
@@ -79,14 +91,36 @@ export async function GET(request: Request) {
         if (date_fin)     v1Query = v1Query.lte('date_ecriture', date_fin)
         if (journal)      v1Query = v1Query.eq('journal', journal)
 
-        const { data: v1Data } = await v1Query
-        allEntries = (v1Data || []).map(e => ({
+        let { data: v1Data, error: v1Err } = await v1Query
+
+        // If query failed (probably missing columns), retry without lettrage columns
+        if (v1Err) {
+          console.error('[grand-livre] v1 with lettrage columns failed:', v1Err.message, '— retrying without')
+          let v1FallbackQuery = supabase
+            .from('ecritures_comptables')
+            .select('id, compte, libelle, debit, credit, date_ecriture, journal, numero_piece')
+            .in('dossier_id', dossierIds)
+            .order('compte').order('date_ecriture').order('id')
+
+          if (compte_debut) v1FallbackQuery = v1FallbackQuery.gte('compte', compte_debut)
+          if (compte_fin)   v1FallbackQuery = v1FallbackQuery.lte('compte', compte_fin)
+          if (date_debut)   v1FallbackQuery = v1FallbackQuery.gte('date_ecriture', date_debut)
+          if (date_fin)     v1FallbackQuery = v1FallbackQuery.lte('date_ecriture', date_fin)
+          if (journal)      v1FallbackQuery = v1FallbackQuery.eq('journal', journal)
+
+          const fallback = await v1FallbackQuery
+          v1Data = fallback.data
+          if (fallback.error) console.error('[grand-livre] v1 fallback also failed:', fallback.error.message)
+        }
+
+        allEntries = (v1Data || []).map((e: any) => ({
           id: e.id, numero_compte: e.compte || '', nom_compte: '',
           description: e.libelle || '', debit_mur: Number(e.debit) || 0,
           credit_mur: Number(e.credit) || 0, date_ecriture: e.date_ecriture,
           journal: e.journal || '', ref_folio: e.numero_piece || '',
-          lettre: e.lettre || null, date_lettrage: e.date_lettrage || null,
+          lettre: e.lettre ?? null, date_lettrage: e.date_lettrage ?? null,
         }))
+        console.log(`[grand-livre] v1 loaded: ${allEntries.length} entries from ${dossierIds.length} dossier(s)`)
       }
     }
 
