@@ -133,7 +133,7 @@ export default function ExportsMRAPage() {
           {checkingBulletins && <Loader2 className="w-4 h-4 animate-spin text-gray-400" />}
           {bulletinsCount !== null && (
             <span className={`text-sm px-3 py-1 rounded-full ${bulletinsCount > 0 ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>
-              {bulletinsCount > 0 ? `✅ ${bulletinsCount} bulletin(s) calculés` : "⚠️ Aucun bulletin — calculez la paie d'abord"}
+              {bulletinsCount > 0 ? `${bulletinsCount} bulletin(s) calcules` : "Aucun bulletin -- calculez la paie d'abord"}
             </span>
           )}
         </CardContent>
