@@ -40,10 +40,17 @@ export default function SocietesPage() {
     setSaving(true)
     const method = editId ? 'PATCH' : 'POST'
     const url = editId ? `/api/client/societes?id=${editId}` : '/api/client/societes'
-    const res = await fetch(url, { method, headers:{'Content-Type':'application/json'}, body: JSON.stringify(form) })
-    const d = await res.json()
+    let d: any
+    try {
+      const res = await fetch(url, { method, headers:{'Content-Type':'application/json'}, body: JSON.stringify(form) })
+      d = await res.json()
+    } catch (e) {
+      setSaving(false)
+      alert('Erreur réseau : ' + (e instanceof Error ? e.message : String(e)))
+      return
+    }
     setSaving(false)
-    if (d.error) { alert(d.error); return }
+    if (d.error) { alert('Erreur : ' + d.error); return }
     setOpen(false); setForm(EMPTY); setEditId(null); load()
   }
 

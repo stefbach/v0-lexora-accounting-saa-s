@@ -63,32 +63,56 @@ export async function POST(request: Request) {
     if (!body.nom) return NextResponse.json({ error: 'Le nom est requis' }, { status: 400 })
 
     const admin = getAdmin()
-    const { data, error } = await admin.from('societes').insert({
+
+    // Build insert object with core fields
+    const coreData: Record<string, unknown> = {
       nom: body.nom,
       brn: body.brn || null,
-      ern: body.ern || null,
       numero_tva_mra: body.numero_tva_mra || null,
       statut_tva: body.statut_tva || false,
-      secteur_activite: body.secteur_activite || null,
       adresse: body.adresse || null,
       telephone: body.telephone || null,
       email: body.email || null,
-      created_by: user.id,
-    }).select().single()
+    }
 
-    if (error) throw error
+    // Try with extended fields first (created_by, ern, secteur_activite)
+    const extendedData = {
+      ...coreData,
+      created_by: user.id,
+      ...(body.ern ? { ern: body.ern } : {}),
+      ...(body.secteur_activite ? { secteur_activite: body.secteur_activite } : {}),
+    }
+
+    let { data, error } = await admin.from('societes').insert(extendedData).select().single()
+
+    // If it fails (possibly due to missing columns), retry with core fields only
+    if (error) {
+      console.error('[client/societes] POST extended insert failed, retrying core:', error.message)
+      const retry = await admin.from('societes').insert(coreData).select().single()
+      data = retry.data
+      error = retry.error
+    }
+
+    if (error) {
+      console.error('[client/societes] POST error:', error.message, error.details, error.hint)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
 
     // Auto-créer un dossier pour lier le client à sa nouvelle société
     if (data?.id) {
-      await admin.from('dossiers').insert({
+      const { error: dossierError } = await admin.from('dossiers').insert({
         client_id: user.id,
         societe_id: data.id,
         comptable_id: null,
-      }).catch(() => {})
+      })
+      if (dossierError) {
+        console.error('[client/societes] dossier creation error:', dossierError.message)
+      }
     }
 
     return NextResponse.json({ societe: data })
   } catch (e: unknown) {
+    console.error('[client/societes] POST fatal:', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
