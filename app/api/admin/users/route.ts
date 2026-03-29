@@ -85,11 +85,15 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const { user_id, role, actif } = await request.json()
+    const { user_id, role, actif, full_name, email, phone, societe_id } = await request.json()
     const supabase = getAdminClient()
     const updates: Record<string, unknown> = {}
     if (role) updates.role = role
     if (actif !== undefined) updates.actif = actif
+    if (full_name !== undefined) updates.full_name = full_name
+    if (email !== undefined) updates.email = email
+    if (phone !== undefined) updates.phone = phone
+    if (societe_id !== undefined) updates.societe_id = societe_id || null
     const { error } = await supabase.from('profiles').update(updates).eq('id', user_id)
     if (error) throw error
     return NextResponse.json({ success: true })
