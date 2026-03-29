@@ -85,8 +85,8 @@ export async function POST(request: NextRequest) {
     // Read file ONCE
     const fileArrayBuffer = await file.arrayBuffer()
     const base64 = Buffer.from(fileArrayBuffer).toString('base64')
-    const ext = file.name.split('.').pop()?.toLowerCase() || 'pdf'
-    const typeFichier = ext === 'jpg' ? 'jpeg' : ext as 'pdf' | 'jpeg' | 'png' | 'xlsx'
+    const ext2 = file.name.split('.').pop()?.toLowerCase() || 'pdf'
+    const typeFichier = ext2 === 'jpg' ? 'jpeg' : ext2 as 'pdf' | 'jpeg' | 'png' | 'xlsx'
     const storagePath = `${user.id}/${Date.now()}_${file.name}`
 
     // Upload to storage
