@@ -122,15 +122,15 @@ export async function POST(request: NextRequest) {
     const { default: Anthropic } = await import('@anthropic-ai/sdk')
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
-    // Fetch live exchange rates for injection into prompts
-    let tauxChange: Record<string, number> = { EUR: 46.50, GBP: 54.20, USD: 44.80 }
-    try {
-      const tauxRes = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/taux-change`)
-      if (tauxRes.ok) {
-        const tauxData = await tauxRes.json()
-        if (tauxData.rates) tauxChange = tauxData.rates
-      }
-    } catch { /* use defaults */ }
+    // Fetch live exchange rates — direct from lib (not via HTTP to avoid self-call issues)
+    const { getTauxChange, fetchAndStoreRates } = await import('@/lib/taux-change')
+    let tauxChange = await getTauxChange()
+    // If we only got fallback rates (no DB data), try to fetch from API and store
+    if (!tauxChange.EUR || tauxChange.EUR === 46.50) {
+      const fresh = await fetchAndStoreRates()
+      if (fresh.success) tauxChange = fresh.rates
+    }
+    console.log('[upload] Exchange rates:', JSON.stringify(tauxChange))
 
     const isImage = ['jpg', 'jpeg', 'png', 'webp'].includes(ext)
     const isPdf = ext === 'pdf'

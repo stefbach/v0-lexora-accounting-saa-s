@@ -133,6 +133,16 @@ export async function GET() {
     const { error: csTableErr } = await supabase.from('comptable_societes').select('id').limit(1)
     result.comptable_societes_table = csTableErr ? 'MISSING: ' + csTableErr.message : 'EXISTS'
 
+    // 13. Taux de change — vérifier si les taux sont en base et à jour
+    const { data: tauxData } = await supabase
+      .from('taux_change').select('devise, taux, date_taux, source')
+      .order('date_taux', { ascending: false }).limit(5)
+    result.taux_change = {
+      in_database: (tauxData || []).length,
+      rates: tauxData || [],
+      api_key_configured: !!process.env.EXCHANGE_RATE_API_KEY,
+    }
+
     return NextResponse.json(result, { status: 200 })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
