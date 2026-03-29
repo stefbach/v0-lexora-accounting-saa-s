@@ -172,12 +172,13 @@ export async function POST(request: NextRequest) {
     let isLikelyBankStatement = false
     if (isPdf && typeof messageContent !== 'string') {
       try {
-        const quickDetect = await anthropic.messages.create({
+        const quickStream = anthropic.messages.stream({
           model: CLAUDE_CONFIG.model,
           max_tokens: 256,
           temperature: 0,
           messages: [{ role: 'user', content: [...(messageContent as any[]), { type: 'text', text: 'Réponds en 1 mot : facture_client, facture_fournisseur, releve_bancaire, fiche_paie, ou autre ?' }] }],
         })
+        const quickDetect = await quickStream.finalMessage()
         const quickText = quickDetect.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('').toLowerCase()
         isLikelyBankStatement = quickText.includes('releve_bancaire') || quickText.includes('relevé') || quickText.includes('bank')
       } catch { /* continue */ }
@@ -189,7 +190,7 @@ export async function POST(request: NextRequest) {
 
     if (isLikelyBankStatement && isPdf) {
       const bankSystemPrompt = getSystemPrompt('releve_bancaire', tauxChange)
-      aiResponse = await anthropic.messages.create({
+      const bankStream = anthropic.messages.stream({
         model: CLAUDE_CONFIG.model,
         max_tokens: CLAUDE_CONFIG.max_tokens_releve_bancaire,
         temperature: CLAUDE_CONFIG.temperature,
@@ -199,6 +200,7 @@ export async function POST(request: NextRequest) {
           { type: 'text', text: 'Retourne UNIQUEMENT un JSON valide (pas de markdown). Lis TOUTES les lignes du releve sans exception.' },
         ]}],
       })
+      aiResponse = await bankStream.finalMessage()
       const bankText = aiResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
       console.log('[upload] Raw Claude bank response length:', bankText.length, 'first 500 chars:', bankText.substring(0, 500))
 
@@ -275,7 +277,7 @@ export async function POST(request: NextRequest) {
         }
       }
     } else {
-      aiResponse = await anthropic.messages.create({
+      const genericStream = anthropic.messages.stream({
         model: CLAUDE_CONFIG.model,
         max_tokens: CLAUDE_CONFIG.max_tokens,
         temperature: CLAUDE_CONFIG.temperature,
@@ -340,6 +342,7 @@ REVERSE CHARGE (achat SaaS etranger): Output TVA 15% + Input TVA 15% → net=0. 
 Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
         messages: [{ role: 'user', content: messageContent }],
       })
+      aiResponse = await genericStream.finalMessage()
 
       const text = aiResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
       const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
@@ -357,7 +360,7 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
       console.log('[upload] Relevé bancaire détecté via prompt générique → retraitement spécialisé')
       try {
         const bankSystemPrompt = getSystemPrompt('releve_bancaire', tauxChange)
-        const bankResponse = await anthropic.messages.create({
+        const bankStream2 = anthropic.messages.stream({
           model: CLAUDE_CONFIG.model,
           max_tokens: CLAUDE_CONFIG.max_tokens_releve_bancaire,
           temperature: CLAUDE_CONFIG.temperature,
@@ -367,6 +370,7 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
             { type: 'text', text: 'Retourne UNIQUEMENT un JSON valide (pas de markdown). Lis TOUTES les lignes du releve sans exception.' },
           ]}],
         })
+        const bankResponse = await bankStream2.finalMessage()
         const bankText = bankResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
         let bankParsed: any = null
         const bankCleaned = bankText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()

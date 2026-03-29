@@ -139,13 +139,14 @@ Taux: EUR={{TAUX_EUR}}, GBP={{TAUX_GBP}}, USD={{TAUX_USD}}`, tauxChange)
     const { default: Anthropic } = await import('@anthropic-ai/sdk')
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
-    const aiResponse = await anthropic.messages.create({
+    const stream = anthropic.messages.stream({
       model: CLAUDE_CONFIG.model,
       max_tokens: maxTokensOverride,
       temperature: CLAUDE_CONFIG.temperature,
       system: systemPrompt,
       messages: [{ role: 'user', content: messageContent }],
     })
+    const aiResponse = await stream.finalMessage()
 
     const text = aiResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
     const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
