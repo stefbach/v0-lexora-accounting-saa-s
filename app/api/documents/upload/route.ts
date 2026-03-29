@@ -451,15 +451,69 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
     const ecritures = extraction.ecritures_comptables
     if (Array.isArray(ecritures) && ecritures.length > 0) {
       const journalMap: Record<string, string> = { facture_fournisseur: 'ACH', facture_client: 'VTE', releve_bancaire: 'BNQ', fiche_paie: 'OD', charges_sociales: 'OD' }
+
+      // Determine the correct date based on document type
+      let dateEcriture = extraction.date_document || extraction.date_facture || null
+      if (!dateEcriture && typeDocument === 'releve_bancaire') {
+        dateEcriture = extraction.periode_fin || extraction.date_fin || extraction.periode_debut || extraction.date_debut || null
+      }
+      if (!dateEcriture) dateEcriture = new Date().toISOString().split('T')[0]
+
       const entries = ecritures
         .filter((e: any) => e.compte && (e.debit > 0 || e.credit > 0))
         .map((e: any) => ({
-          dossier_id: finalDossierId, date_ecriture: extraction.date_document || new Date().toISOString().split('T')[0],
-          journal: journalMap[typeDocument] || 'OD', numero_piece: extraction.numero_reference || null,
+          dossier_id: finalDossierId,
+          // Use transaction-level date if available, otherwise document-level date
+          date_ecriture: e.date || dateEcriture,
+          journal: journalMap[typeDocument] || 'OD',
+          numero_piece: e.reference || extraction.numero_reference || null,
           compte: String(e.compte), libelle: e.libelle || file.name,
           debit: Number(e.debit) || 0, credit: Number(e.credit) || 0, piece_justificative: doc.id,
         }))
       if (entries.length > 0) await supabase.from('ecritures_comptables').insert(entries)
+    }
+
+    // Auto-create facture record for client/fournisseur invoices
+    if ((typeDocument === 'facture_client' || typeDocument === 'facture_fournisseur') && finalDossierId) {
+      const { data: dossierForFacture } = await supabase
+        .from('dossiers').select('societe_id').eq('id', finalDossierId).maybeSingle()
+      const factureSocieteId = societeId || dossierForFacture?.societe_id
+
+      if (factureSocieteId) {
+        const montantHT = Number(extraction.montant_ht) || 0
+        const montantTVA = Number(extraction.montant_tva) || 0
+        const montantTTC = Number(extraction.montant_ttc) || montantHT + montantTVA
+        const devise = extraction.devise || 'MUR'
+        const fxRate = (devise !== 'MUR') ? (tauxChange[devise] || 1) : 1
+
+        const factureData: Record<string, unknown> = {
+          societe_id: factureSocieteId,
+          dossier_id: finalDossierId,
+          numero_facture: extraction.numero_reference || extraction.numero_facture || null,
+          type_facture: typeDocument === 'facture_client' ? 'client' : 'fournisseur',
+          tiers: typeDocument === 'facture_client'
+            ? (extraction.destinataire || extraction.client || null)
+            : (extraction.emetteur || extraction.fournisseur || null),
+          description: extraction.description || extraction.objet || file.name,
+          date_facture: extraction.date_document || extraction.date_facture || new Date().toISOString().split('T')[0],
+          date_echeance: extraction.date_echeance || null,
+          devise,
+          montant_ht: montantHT,
+          montant_tva: montantTVA,
+          montant_ttc: montantTTC,
+          taux_tva: Number(extraction.taux_tva) || 0,
+          montant_mur: Math.round(montantTTC * fxRate * 100) / 100,
+          statut: 'en_attente',
+          document_id: doc.id,
+        }
+
+        const { error: factureError } = await supabase.from('factures').insert(factureData)
+        if (factureError) {
+          console.error('[upload] facture insert error:', factureError.message)
+        } else {
+          console.log(`[upload] Facture ${typeDocument} created: ${extraction.numero_reference || 'sans numéro'} — ${montantTTC} ${devise}`)
+        }
+      }
     }
 
     // Handle bank statement: create/update bank account + store statement
