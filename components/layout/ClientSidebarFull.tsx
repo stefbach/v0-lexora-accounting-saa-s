@@ -9,7 +9,7 @@ import {
   Receipt, Calculator, BarChart3, TrendingUp, Target,
   Users, Clock, CreditCard, Gavel, Scale, Bell,
   Settings, LogOut, ChevronDown, ChevronRight, FileSpreadsheet,
-  UserCog, Globe, Lightbulb
+  UserCog, Globe, Lightbulb, ClipboardList
 } from "lucide-react"
 
 const MENU = [
@@ -49,6 +49,7 @@ const MENU = [
     items: [
       { href: "/client/tva", label: "TVA MRA", icon: Receipt },
       { href: "/client/charges-sociales", label: "CSG / NSF / PAYE", icon: Calculator },
+      { href: "/client/annual-return", label: "Annual Return (ROC)", icon: ClipboardList },
     ]
   },
   {
