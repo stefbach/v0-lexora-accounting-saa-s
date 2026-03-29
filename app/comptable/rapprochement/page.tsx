@@ -53,11 +53,18 @@ export default function RapprochementPage() {
     finally { setAutoMatching(false) }
   }
 
-  const handleManualLink = async (tx: any, facture: any) => {
+  const handleManualLink = async (tx: any, target: any, type: 'facture' | 'ecriture') => {
     try {
       await fetch("/api/comptable/rapprochement", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "lettrer_manuel", transaction_id: tx.id, releve_id: tx.releve_id, facture_id: facture.id, societe_id: selectedSociete }),
+        body: JSON.stringify({
+          action: "lettrer_manuel",
+          transaction_id: tx.id,
+          releve_id: tx.releve_id,
+          facture_id: type === 'facture' ? target.id : undefined,
+          ecriture_id: type === 'ecriture' ? target.id : undefined,
+          societe_id: selectedSociete,
+        }),
       })
       setLinkDialog(null)
       load()
@@ -76,6 +83,7 @@ export default function RapprochementPage() {
 
   const transactions = data?.bankTransactions || []
   const factures = data?.factures || []
+  const ecritures = (data?.ecritures || []).filter((e: any) => !e.lettre)
   const matched = transactions.filter((t: any) => t.facture_id)
   const unmatched = transactions.filter((t: any) => !t.facture_id)
 
@@ -211,25 +219,55 @@ export default function RapprochementPage() {
                 <p className="text-gray-500">{formatDate(linkDialog.date)} — {linkDialog.debit > 0 ? `-${fmt(linkDialog.debit)}` : `+${fmt(linkDialog.credit)}`} {linkDialog.devise}</p>
                 {linkDialog.tiers_detecte && <p className="text-gray-500">Tiers: {linkDialog.tiers_detecte}</p>}
               </div>
-              <p className="text-sm font-medium">Selectionnez la facture correspondante :</p>
-              {factures.length === 0 ? (
-                <p className="text-sm text-gray-400">Aucune facture en attente</p>
+              {/* Factures */}
+              {factures.length > 0 && (
+                <>
+                  <p className="text-sm font-medium">Factures en attente :</p>
+                  <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                    {factures.map((f: any) => {
+                      const txAmount = linkDialog.debit > 0 ? linkDialog.debit : linkDialog.credit
+                      const fAmount = Number(f.montant_ttc) || 0
+                      const isClose = Math.abs(txAmount - fAmount) <= fAmount * 0.02
+                      return (
+                        <div key={f.id} onClick={() => handleManualLink(linkDialog, f, 'facture')}
+                          className={`p-3 border rounded-lg cursor-pointer transition-colors hover:bg-blue-50 ${isClose ? "border-green-300 bg-green-50" : "border-gray-200"}`}>
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <p className="font-medium text-sm">{f.numero_facture || "Sans numero"} <Badge className="bg-blue-100 text-blue-700 text-xs ml-1">{f.type_facture}</Badge></p>
+                              <p className="text-xs text-gray-500">{f.tiers || "—"} — {formatDate(f.date_facture)}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-bold text-sm">{fmt(fAmount)} {f.devise || "MUR"}</p>
+                              {isClose && <Badge className="bg-green-100 text-green-700 text-xs">Montant proche</Badge>}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
+
+              {/* Ecritures comptables */}
+              <p className="text-sm font-medium mt-2">Ecritures comptables non lettrees :</p>
+              {ecritures.length === 0 ? (
+                <p className="text-sm text-gray-400">Aucune ecriture non lettree</p>
               ) : (
-                <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                  {factures.map((f: any) => {
+                <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                  {ecritures.map((e: any) => {
                     const txAmount = linkDialog.debit > 0 ? linkDialog.debit : linkDialog.credit
-                    const fAmount = Number(f.montant_ttc) || 0
-                    const isClose = Math.abs(txAmount - fAmount) <= fAmount * 0.02
+                    const eAmount = Number(e.debit) > 0 ? Number(e.debit) : Number(e.credit)
+                    const isClose = Math.abs(txAmount - eAmount) <= Math.max(eAmount * 0.02, 1)
                     return (
-                      <div key={f.id} onClick={() => handleManualLink(linkDialog, f)}
-                        className={`p-3 border rounded-lg cursor-pointer transition-colors hover:bg-blue-50 ${isClose ? "border-green-300 bg-green-50" : "border-gray-200"}`}>
+                      <div key={e.id} onClick={() => handleManualLink(linkDialog, e, 'ecriture')}
+                        className={`p-3 border rounded-lg cursor-pointer transition-colors hover:bg-purple-50 ${isClose ? "border-green-300 bg-green-50" : "border-gray-200"}`}>
                         <div className="flex justify-between items-center">
                           <div>
-                            <p className="font-medium text-sm">{f.numero_facture || "Sans numero"}</p>
-                            <p className="text-xs text-gray-500">{f.tiers || "—"} — {formatDate(f.date_facture)}</p>
+                            <p className="font-medium text-sm">{e.compte} — {e.libelle || "—"}</p>
+                            <p className="text-xs text-gray-500">{formatDate(e.date_ecriture)} — {e.journal || "—"}</p>
                           </div>
                           <div className="text-right">
-                            <p className="font-bold text-sm">{fmt(fAmount)} {f.devise || "MUR"}</p>
+                            <p className="font-bold text-sm">{Number(e.debit) > 0 ? fmt(Number(e.debit)) + " D" : fmt(Number(e.credit)) + " C"}</p>
                             {isClose && <Badge className="bg-green-100 text-green-700 text-xs">Montant proche</Badge>}
                           </div>
                         </div>
