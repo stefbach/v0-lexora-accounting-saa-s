@@ -289,7 +289,7 @@ Determine d'abord le type: facture_fournisseur, facture_client, releve_bancaire,
 === REGLES PAR TYPE ===
 
 --- FACTURE FOURNISSEUR ---
-Format: {"routing":{"societe":"<nom>","type_document":"facture_fournisseur","confiance_type":0-100},"extraction":{"emetteur":"","destinataire":"","date_document":"YYYY-MM-DD","numero_reference":"","devise":"EUR|USD|GBP|MUR|AUD","montant_ht":0,"montant_tva":0,"montant_ttc":0,"taux_tva":15,"tva_exonere":false,"fournisseur_vat_number":"","lignes":[{"description":"","montant":0}],"ecritures_comptables":[{"compte":"6xx","libelle":"","debit":0,"credit":0}]}}
+Format: {"routing":{"societe":"<nom>","type_document":"facture_fournisseur","confiance_type":0-100},"extraction":{"emetteur":"","destinataire":"","date_document":"YYYY-MM-DD","numero_reference":"","devise":"EUR|USD|GBP|MUR|AUD","montant_ht":0,"montant_tva":0,"montant_ttc":0,"taux_tva":15,"tva_exonere":false,"tva_applicable":true,"fournisseur_vat_number":"","analyse_tva":"","lignes":[{"description":"","montant":0}],"ecritures_comptables":[{"compte":"6xx","libelle":"","debit":0,"credit":0}]}}
 Comptes de charges:
 - 622: Honoraires et fees (avocats, comptables, consultants, 2E2J)
 - 612: Loyer et charges locatives (MWPI, MW PROP)
@@ -303,22 +303,36 @@ Comptes de charges:
 - 602: Achats pharmacie, fournitures medicales
 - 611: Sous-traitance
 - 628: Charges diverses
-TVA: 4456 deductible. Fournisseur: 401 au credit.
-Ecritures: debit compte charge + debit 4456 TVA / credit 401.
-Si TVA exoneree (pas de numero TVA MRA valide sur la facture): tva_exonere=true, pas de 4456.
-Verifier si le fournisseur a un numero d'enregistrement TVA MRA — si absent, TVA non deductible.
+
+ANALYSE TVA FOURNISSEUR — OBLIGATOIRE:
+1. Chercher sur la facture: numero TVA MRA, mention "VAT", "TVA", "Tax", taux TVA, montant TVA
+2. Si numero TVA MRA present ET montant TVA > 0: tva_applicable=true, tva_exonere=false, taux_tva=15
+3. Si PAS de numero TVA MRA ou TVA=0 ou mention "exempt"/"exonere"/"zero-rated": tva_applicable=false, tva_exonere=true, taux_tva=0
+4. Si facture etrangere (EUR/USD/GBP) sans TVA locale: tva_exonere=true (reverse charge possible)
+5. Si montant_tva=0 mais taux_tva=15: VERIFIER — probablement erreur, mettre montant_tva = montant_ht * 0.15
+6. Remplir analyse_tva avec: "TVA 15% applicable — VAT Number: XXXXX" ou "Pas de TVA — fournisseur non enregistre" ou "Export — zero-rated"
+
+Ecritures AVEC TVA: debit 6xx (charge HT) + debit 4456 (TVA deductible) / credit 401 (TTC)
+Ecritures SANS TVA: debit 6xx (charge = TTC) / credit 401 (TTC). PAS de 4456.
 
 --- FACTURE CLIENT ---
-Format: {"routing":{"societe":"<nom>","type_document":"facture_client","confiance_type":0-100},"extraction":{"emetteur":"","destinataire":"","date_document":"YYYY-MM-DD","numero_reference":"","devise":"EUR|USD|GBP|MUR|AUD","montant_ht":0,"montant_tva":0,"montant_ttc":0,"taux_tva":15,"type_client":"B2B|B2C","lignes":[{"description":"","montant":0}],"ecritures_comptables":[{"compte":"7xx","libelle":"","debit":0,"credit":0}]}}
+Format: {"routing":{"societe":"<nom>","type_document":"facture_client","confiance_type":0-100},"extraction":{"emetteur":"","destinataire":"","date_document":"YYYY-MM-DD","numero_reference":"","devise":"EUR|USD|GBP|MUR|AUD","montant_ht":0,"montant_tva":0,"montant_ttc":0,"taux_tva":15,"tva_applicable":true,"tva_exonere":false,"type_client":"B2B|B2C","analyse_tva":"","lignes":[{"description":"","montant":0}],"ecritures_comptables":[{"compte":"7xx","libelle":"","debit":0,"credit":0}]}}
 Comptes de produits:
 - 706: Prestations de services (telemedicine, BPO, consulting)
 - 707: Ventes de marchandises
 - 753: Commissions et courtages (NHS S2 referrals)
 - 701: Ventes de produits finis
-Client: 411 au debit. TVA collectee: 4457.
-Ecritures: debit 411 / credit compte produit + credit 4457 TVA.
-TVA export: ventes hors Maurice → TVA 0% (zero-rated).
-Detecter B2B (entreprise avec BRN/VAT) vs B2C (particulier).
+
+ANALYSE TVA CLIENT — OBLIGATOIRE:
+1. Chercher sur la facture: numero TVA emetteur, mention TVA, taux, montant TVA
+2. Vente locale Maurice avec TVA: tva_applicable=true, taux_tva=15, TVA collectee 4457
+3. Export de services hors Maurice: tva_applicable=false, tva_exonere=true, taux_tva=0 (zero-rated)
+4. Vente intra-EU depuis Malte: regles TVA EU applicables
+5. Si montant_tva=0 et vente locale: SIGNALER "Attention: pas de TVA sur vente locale"
+6. Remplir analyse_tva: "TVA 15% collectee" ou "Export zero-rated" ou "Exonere — service international"
+
+Ecritures AVEC TVA: debit 411 (TTC) / credit 7xx (HT) + credit 4457 (TVA collectee)
+Ecritures SANS TVA: debit 411 (TTC=HT) / credit 7xx (HT). PAS de 4457.
 
 --- RELEVE BANCAIRE ---
 Format: {"routing":{"societe":"<banque>","type_document":"releve_bancaire","confiance_type":0-100},"extraction":{"banque":"","numero_compte":"","devise":"EUR|USD|GBP|MUR","periode_debut":"YYYY-MM-DD","periode_fin":"YYYY-MM-DD","solde_ouverture":0,"solde_cloture":0,"total_debits":0,"total_credits":0,"lignes_manquantes":false,"ecart_solde":0,"transactions":[{"date":"YYYY-MM-DD","libelle":"","debit":0,"credit":0,"tiers_detecte":"","compte_comptable":"","devise_origine":null,"montant_origine":null,"taux_change_applique":null}],"ecritures_comptables":[{"compte":"51x","libelle":"","debit":0,"credit":0}]}}
@@ -486,6 +500,25 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
         const devise = extraction.devise || 'MUR'
         const fxRate = (devise !== 'MUR') ? (tauxChange[devise] || 1) : 1
 
+        // Vérification TVA
+        const tvaApplicable = extraction.tva_applicable !== false && !extraction.tva_exonere
+        const tauxTva = tvaApplicable ? (Number(extraction.taux_tva) || 15) : 0
+        let montantTVAFinal = montantTVA
+
+        // Si TVA applicable mais montant_tva=0, recalculer
+        if (tvaApplicable && montantTVA === 0 && montantHT > 0) {
+          montantTVAFinal = Math.round(montantHT * tauxTva / 100 * 100) / 100
+          console.log(`[upload] TVA recalculée: ${montantHT} × ${tauxTva}% = ${montantTVAFinal}`)
+        }
+        // Si TVA non applicable, forcer à 0
+        if (!tvaApplicable) {
+          montantTVAFinal = 0
+        }
+
+        const montantTTCFinal = montantTVAFinal > 0 ? montantHT + montantTVAFinal : montantTTC
+
+        console.log(`[upload] Facture TVA: applicable=${tvaApplicable}, taux=${tauxTva}%, HT=${montantHT}, TVA=${montantTVAFinal}, TTC=${montantTTCFinal}, devise=${devise}, analyse="${extraction.analyse_tva || 'non fournie'}"`)
+
         const factureData: Record<string, unknown> = {
           societe_id: factureSocieteId,
           dossier_id: finalDossierId,
@@ -499,12 +532,13 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
           date_echeance: extraction.date_echeance || null,
           devise,
           montant_ht: montantHT,
-          montant_tva: montantTVA,
-          montant_ttc: montantTTC,
-          taux_tva: Number(extraction.taux_tva) || 0,
-          montant_mur: Math.round(montantTTC * fxRate * 100) / 100,
+          montant_tva: montantTVAFinal,
+          montant_ttc: montantTTCFinal,
+          taux_tva: tauxTva,
+          montant_mur: Math.round(montantTTCFinal * fxRate * 100) / 100,
           statut: 'en_attente',
           document_id: doc.id,
+          notes: extraction.analyse_tva || (tvaApplicable ? `TVA ${tauxTva}% applicable` : 'Pas de TVA'),
         }
 
         const { error: factureError } = await supabase.from('factures').insert(factureData)
