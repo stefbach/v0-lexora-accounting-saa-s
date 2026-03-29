@@ -61,22 +61,30 @@ export async function POST(request: NextRequest) {
     // Resolve dossier_id
     let resolvedDossierId = dossierId
     if (!resolvedDossierId) {
-      let q = supabase.from('dossiers').select('id').eq('client_id', user.id)
-      if (societeId) q = q.eq('societe_id', societeId)
-      const { data: d } = await q.limit(1).single()
-      if (d) { resolvedDossierId = d.id }
-      else {
-        const { data: anyD } = await supabase.from('dossiers').select('id').eq('client_id', user.id).limit(1).single()
-        if (anyD) { resolvedDossierId = anyD.id }
-        else {
-          const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
-          const { data: newSoc } = await supabase.from('societes')
-            .insert({ nom: `${profile?.full_name || user.email} — Personnel`, statut_tva: false }).select('id').single()
-          if (newSoc) {
-            const { data: nd } = await supabase.from('dossiers')
-              .insert({ client_id: user.id, societe_id: newSoc.id, comptable_id: null }).select('id').single()
-            resolvedDossierId = nd?.id || null
-          }
+      // 1. Si societe_id fourni, chercher un dossier pour cette société (peu importe le client)
+      if (societeId) {
+        const { data: d } = await supabase.from('dossiers').select('id').eq('societe_id', societeId).limit(1).single()
+        if (d) { resolvedDossierId = d.id }
+      }
+      // 2. Sinon chercher un dossier du user (en tant que client)
+      if (!resolvedDossierId) {
+        const { data: d } = await supabase.from('dossiers').select('id').eq('client_id', user.id).limit(1).single()
+        if (d) { resolvedDossierId = d.id }
+      }
+      // 3. Si le user est comptable, chercher un dossier où il est assigné
+      if (!resolvedDossierId) {
+        const { data: d } = await supabase.from('dossiers').select('id').eq('comptable_id', user.id).limit(1).single()
+        if (d) { resolvedDossierId = d.id }
+      }
+      // 4. Dernier recours : créer un dossier personnel
+      if (!resolvedDossierId) {
+        const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
+        const { data: newSoc } = await supabase.from('societes')
+          .insert({ nom: `${profile?.full_name || user.email} — Personnel`, statut_tva: false }).select('id').single()
+        if (newSoc) {
+          const { data: nd } = await supabase.from('dossiers')
+            .insert({ client_id: user.id, societe_id: newSoc.id, comptable_id: null }).select('id').single()
+          resolvedDossierId = nd?.id || null
         }
       }
       if (!resolvedDossierId) return NextResponse.json({ error: 'Impossible de créer un dossier' }, { status: 400 })
@@ -375,10 +383,12 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
       // Support both field names: solde_cloture (prompt inline) and solde_fin (SYSTEM_PROMPT_RELEVE_BANCAIRE)
       const solde = Number(extraction.solde_cloture) || Number(extraction.solde_fin) || 0
 
-      // Find or create bank account
-      // Get the societe_id from the FINAL dossier (after possible société re-routing by AI)
-      const { data: dossierData } = await supabase.from('dossiers').select('societe_id').eq('id', finalDossierId).single()
-      const bankSocieteId = dossierData?.societe_id
+      // Get the societe_id: prefer explicit societeId from form, then from dossier
+      let bankSocieteId = societeId || null
+      if (!bankSocieteId) {
+        const { data: dossierData } = await supabase.from('dossiers').select('societe_id').eq('id', finalDossierId).single()
+        bankSocieteId = dossierData?.societe_id || null
+      }
 
       if (bankSocieteId) {
         // Normalize date fields: support periode_debut/fin AND date_debut/fin patterns
@@ -450,7 +460,7 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
           const ecartSolde = Math.abs((soldeOuverture + totalCredits - totalDebits) - soldeCloture)
           const statutRapprochement = ecartSolde > 1 ? 'ecart_detecte' : 'en_attente'
 
-          await supabase.from('releves_bancaires').insert({
+          const { error: releveError } = await supabase.from('releves_bancaires').insert({
             compte_bancaire_id: bankAccount.id,
             societe_id: bankSocieteId,
             periode: normPeriodeFin.substring(0, 7),
@@ -463,7 +473,12 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
             document_id: doc.id,
             transactions_json: normalizedTransactions,
             statut_rapprochement: statutRapprochement,
-          }).catch(e => console.error('[upload] releves_bancaires insert error:', e))
+          })
+          if (releveError) {
+            console.error('[upload] releves_bancaires insert FAILED:', releveError.message, releveError.details)
+          } else {
+            console.log(`[upload] releve_bancaire stored: ${normalizedTransactions.length} transactions, societe=${bankSocieteId}`)
+          }
         }
       }
     }
