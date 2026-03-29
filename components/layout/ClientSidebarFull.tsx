@@ -19,6 +19,7 @@ const MENU = [
       { href: "/client/tableau-de-bord", label: "Tableau de bord", icon: LayoutDashboard },
       { href: "/client/societes", label: "Mes Sociétés", icon: Building2 },
       { href: "/client/documents", label: "Documents & OCR", icon: FileText },
+      { href: "/client/utilisateurs", label: "Utilisateurs", icon: Users },
       { href: "/client/equipe", label: "Mon Équipe", icon: UserCog },
       { href: "/client/alertes", label: "Alertes", icon: Bell },
     ]
