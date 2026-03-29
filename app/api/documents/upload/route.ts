@@ -468,9 +468,18 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
 
         const normNumeroCompte = extraction.numero_compte || extraction.compte_bancaire || null
 
-        // Check if bank account exists
-        const { data: existingBank } = await supabase.from('comptes_bancaires')
-          .select('id').eq('societe_id', bankSocieteId).eq('banque', bankName).limit(1).maybeSingle()
+        // Check if bank account exists — match by numero_compte first, then by banque+devise
+        let existingBank: any = null
+        if (normNumeroCompte) {
+          const { data: byNum } = await supabase.from('comptes_bancaires')
+            .select('id').eq('societe_id', bankSocieteId).eq('numero_compte', normNumeroCompte).limit(1).maybeSingle()
+          existingBank = byNum
+        }
+        if (!existingBank) {
+          const { data: byName } = await supabase.from('comptes_bancaires')
+            .select('id').eq('societe_id', bankSocieteId).eq('banque', bankName).eq('devise', bankDevise).limit(1).maybeSingle()
+          existingBank = byName
+        }
 
         if (existingBank) {
           // Update balance
@@ -498,9 +507,18 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
           }
         }
 
-        // Store bank statement record
-        const { data: bankAccount } = await supabase.from('comptes_bancaires')
-          .select('id').eq('societe_id', bankSocieteId).eq('banque', bankName).limit(1).maybeSingle()
+        // Store bank statement record — find the account we just created/updated
+        let bankAccount: any = null
+        if (normNumeroCompte) {
+          const { data: byNum } = await supabase.from('comptes_bancaires')
+            .select('id').eq('societe_id', bankSocieteId).eq('numero_compte', normNumeroCompte).limit(1).maybeSingle()
+          bankAccount = byNum
+        }
+        if (!bankAccount) {
+          const { data: byName } = await supabase.from('comptes_bancaires')
+            .select('id').eq('societe_id', bankSocieteId).eq('banque', bankName).eq('devise', bankDevise).limit(1).maybeSingle()
+          bankAccount = byName
+        }
 
         if (bankAccount) {
           // Normalize transactions: support both "transactions[]" (prompt inline)

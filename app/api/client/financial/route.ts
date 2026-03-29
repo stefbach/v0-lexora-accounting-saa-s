@@ -248,24 +248,39 @@ export async function GET(request: Request) {
 
     const { data: relevesDB } = await supabase
       .from('releves_bancaires')
-      .select('id, transactions_json, date_debut, date_fin')
+      .select('id, transactions_json, date_debut, date_fin, compte_bancaire_id')
       .in('societe_id', societeIds)
       .order('date_fin', { ascending: false })
 
+    // Build a map of compte_bancaire_id → { banque, devise }
+    const compteBankMap: Record<string, { banque: string; devise: string }> = {}
+    ;(comptesBank || []).forEach((c: any) => {
+      compteBankMap[c.id] = { banque: c.banque, devise: c.devise || 'MUR' }
+    })
+
     if (relevesDB && relevesDB.length > 0) {
       relevesDB.forEach((releve: any) => {
+        const compteInfo = compteBankMap[releve.compte_bancaire_id] || { banque: '—', devise: 'MUR' }
+        const txDevise = compteInfo.devise || 'MUR'
+        const txRate = rates[txDevise] || 1
         const txs: any[] = releve.transactions_json || []
         txs.forEach((tx: any, idx: number) => {
+          const debit = Number(tx.debit) || 0
+          const credit = Number(tx.credit) || 0
           bankTransactions.push({
             id: `releve-${releve.id}-tx-${idx}`,
             date: tx.date || tx.date_operation || '',
             libelle: tx.libelle || tx.description || '',
-            debit: Number(tx.debit) || 0,
-            credit: Number(tx.credit) || 0,
+            debit,
+            credit,
+            debit_mur: Math.round(debit * txRate * 100) / 100,
+            credit_mur: Math.round(credit * txRate * 100) / 100,
+            devise: txDevise,
             solde_apres: tx.solde_apres ?? tx.solde ?? null,
             tiers: tx.tiers_detecte || tx.tiers || tx.tiers_identifie || null,
             compte_comptable: tx.compte_comptable || tx.compte || null,
             statut: tx.statut || 'non_identifie',
+            banque: compteInfo.banque,
           })
         })
       })

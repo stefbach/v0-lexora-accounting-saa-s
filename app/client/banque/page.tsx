@@ -13,8 +13,12 @@ import {
 import { Search, Landmark, AlertCircle, Clock, RefreshCw, Loader2, Building2 } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
 
+function formatAmount(amount: number, devise?: string) {
+  const d = devise || "MUR"
+  return amount.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + d
+}
 function formatMUR(amount: number) {
-  return amount.toLocaleString("fr-FR") + " MUR"
+  return formatAmount(amount, "MUR")
 }
 
 function formatDate(dateStr: string) {
@@ -100,6 +104,9 @@ export default function ClientBanquePage() {
     libelle: tx.libelle || "",
     debit: Number(tx.debit) || 0,
     credit: Number(tx.credit) || 0,
+    debit_mur: Number(tx.debit_mur) || Number(tx.debit) || 0,
+    credit_mur: Number(tx.credit_mur) || Number(tx.credit) || 0,
+    devise: tx.devise || "MUR",
     solde_apres: tx.solde_apres ?? null,
     tiers: tx.tiers || tx.tiers_detecte || null,
     compte_comptable: tx.compte_comptable || null,
@@ -243,7 +250,10 @@ export default function ClientBanquePage() {
                     <TableCell className="font-mono text-sm text-muted-foreground">{acc.numero_compte || "—"}</TableCell>
                     <TableCell>{acc.devise || "MUR"}</TableCell>
                     <TableCell className="text-right font-bold" style={{ color: "#1E2A4A" }}>
-                      {(acc.solde_actuel ?? 0).toLocaleString("fr-FR")} {acc.devise || "MUR"}
+                      <div>{formatAmount(acc.solde_actuel ?? 0, acc.devise)}</div>
+                      {acc.devise && acc.devise !== "MUR" && acc.solde_mur != null && (
+                        <div className="text-xs text-muted-foreground font-normal">≈ {formatMUR(acc.solde_mur)}</div>
+                      )}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {acc.date_dernier_releve ? formatDate(acc.date_dernier_releve) : "—"}
@@ -279,12 +289,13 @@ export default function ClientBanquePage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Date</TableHead>
+                <TableHead>Banque</TableHead>
                 <TableHead>Libellé</TableHead>
                 <TableHead className="text-right">Débit</TableHead>
                 <TableHead className="text-right">Crédit</TableHead>
                 <TableHead className="text-right">Solde après</TableHead>
                 <TableHead>Tiers identifié</TableHead>
-                <TableHead>Compte imputé</TableHead>
+                <TableHead>Compte</TableHead>
                 <TableHead>Statut</TableHead>
               </TableRow>
             </TableHeader>
@@ -292,23 +303,37 @@ export default function ClientBanquePage() {
               {filtered.map((row) => (
                 <TableRow key={row.id}>
                   <TableCell className="whitespace-nowrap">{formatDate(row.date)}</TableCell>
+                  <TableCell className="text-xs">
+                    <Badge variant="outline" className="text-xs" style={{ borderColor: "#C9A84C" }}>{row.banque}</Badge>
+                    {row.devise !== "MUR" && <span className="ml-1 text-muted-foreground">{row.devise}</span>}
+                  </TableCell>
                   <TableCell className="max-w-[220px] truncate">{row.libelle}</TableCell>
                   <TableCell className="text-right">
                     {row.debit > 0 ? (
-                      <span className="text-red-600 font-medium">{formatMUR(row.debit)}</span>
+                      <div>
+                        <span className="text-red-600 font-medium">{formatAmount(row.debit, row.devise)}</span>
+                        {row.devise && row.devise !== "MUR" && row.debit_mur > 0 && (
+                          <div className="text-xs text-muted-foreground">≈ {formatMUR(row.debit_mur)}</div>
+                        )}
+                      </div>
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}
                   </TableCell>
                   <TableCell className="text-right">
                     {row.credit > 0 ? (
-                      <span className="text-green-600 font-medium">{formatMUR(row.credit)}</span>
+                      <div>
+                        <span className="text-green-600 font-medium">{formatAmount(row.credit, row.devise)}</span>
+                        {row.devise && row.devise !== "MUR" && row.credit_mur > 0 && (
+                          <div className="text-xs text-muted-foreground">≈ {formatMUR(row.credit_mur)}</div>
+                        )}
+                      </div>
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}
                   </TableCell>
                   <TableCell className="text-right font-semibold">
-                    {row.solde_apres != null ? formatMUR(row.solde_apres) : "—"}
+                    {row.solde_apres != null ? formatAmount(row.solde_apres, row.devise) : "—"}
                   </TableCell>
                   <TableCell>
                     {row.tiers || <span className="text-muted-foreground italic">Non identifié</span>}
@@ -321,7 +346,7 @@ export default function ClientBanquePage() {
               ))}
               {filtered.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-10 text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center py-10 text-muted-foreground">
                     {search
                       ? "Aucune opération trouvée pour cette recherche."
                       : "Aucune opération bancaire disponible. Importez un relevé bancaire dans Mes Documents pour voir vos données ici."}
