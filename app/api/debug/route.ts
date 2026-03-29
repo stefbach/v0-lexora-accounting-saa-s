@@ -96,6 +96,33 @@ export async function GET() {
       }
     })
 
+    // 7. Test comptable/societes API (the one that was blocking client_admin)
+    const { data: comptableSocietes, error: csErr } = await supabase
+      .from('societes').select('id, nom').limit(5)
+    result.all_societes_check = comptableSocietes || []
+    if (csErr) result.societes_error = csErr.message
+
+    // 8. Écritures comptables (v1)
+    const { data: ecrituresV1, error: ecV1Err } = await supabase
+      .from('ecritures_comptables')
+      .select('id, compte, libelle, debit, credit, journal')
+      .limit(5)
+    result.ecritures_v1 = { count: ecrituresV1?.length || 0, error: ecV1Err?.message || null, sample: ecrituresV1?.slice(0, 2) }
+
+    // 9. Écritures comptables (v2)
+    const { data: ecrituresV2, error: ecV2Err } = await supabase
+      .from('ecritures_comptables_v2')
+      .select('id, numero_compte, debit_mur, credit_mur, journal')
+      .limit(5)
+    result.ecritures_v2 = { count: ecrituresV2?.length || 0, error: ecV2Err?.message || null, sample: ecrituresV2?.slice(0, 2) }
+
+    // 10. Factures
+    const { data: factures, error: facErr } = await supabase
+      .from('factures')
+      .select('id, numero_facture, tiers, montant_ttc, type_facture, statut')
+      .limit(5)
+    result.factures = { count: factures?.length || 0, error: facErr?.message || null, sample: factures?.slice(0, 2) }
+
     return NextResponse.json(result, { status: 200 })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
