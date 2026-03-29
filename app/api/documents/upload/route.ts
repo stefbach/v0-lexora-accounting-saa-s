@@ -196,7 +196,7 @@ export async function POST(request: NextRequest) {
         system: bankSystemPrompt,
         messages: [{ role: 'user', content: [
           { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
-          { type: 'text', text: 'Analyse ce releve bancaire complet. Lis TOUTES les lignes sans exception.' },
+          { type: 'text', text: 'Retourne UNIQUEMENT un JSON valide (pas de markdown). Lis TOUTES les lignes du releve sans exception.' },
         ]}],
       })
       const bankText = aiResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
@@ -204,24 +204,60 @@ export async function POST(request: NextRequest) {
 
       // Robust JSON extraction: try multiple strategies
       let bankParsed: any = null
-      const bankCleaned = bankText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
 
-      // Strategy 1: direct parse
-      try { bankParsed = JSON.parse(bankCleaned) } catch {}
+      // Strategy 1: direct parse (response is pure JSON)
+      try { bankParsed = JSON.parse(bankText.trim()) } catch {}
 
-      // Strategy 2: find JSON object in text (Claude sometimes adds text before/after JSON)
-      if (!bankParsed) {
-        const jsonMatch = bankText.match(/\{[\s\S]*\}/)
-        if (jsonMatch) {
-          try { bankParsed = JSON.parse(jsonMatch[0]) } catch {}
-        }
-      }
-
-      // Strategy 3: find JSON between code fences
+      // Strategy 2: extract from code fences ```json ... ```
       if (!bankParsed) {
         const fenceMatch = bankText.match(/```(?:json)?\s*([\s\S]*?)```/)
         if (fenceMatch) {
           try { bankParsed = JSON.parse(fenceMatch[1].trim()) } catch {}
+        }
+      }
+
+      // Strategy 3: find first { to last } in text
+      if (!bankParsed) {
+        const firstBrace = bankText.indexOf('{')
+        const lastBrace = bankText.lastIndexOf('}')
+        if (firstBrace !== -1 && lastBrace > firstBrace) {
+          try { bankParsed = JSON.parse(bankText.substring(firstBrace, lastBrace + 1)) } catch {}
+        }
+      }
+
+      // Strategy 4: JSON truncated by token limit — try to repair
+      if (!bankParsed) {
+        const firstBrace = bankText.indexOf('{')
+        if (firstBrace !== -1) {
+          let jsonCandidate = bankText.substring(firstBrace)
+          // Remove trailing markdown
+          jsonCandidate = jsonCandidate.replace(/```\s*$/, '').trim()
+          // Count open/close braces and brackets to close them
+          let openBraces = 0, openBrackets = 0
+          let inString = false, escaped = false
+          for (const ch of jsonCandidate) {
+            if (escaped) { escaped = false; continue }
+            if (ch === '\\') { escaped = true; continue }
+            if (ch === '"') { inString = !inString; continue }
+            if (inString) continue
+            if (ch === '{') openBraces++
+            if (ch === '}') openBraces--
+            if (ch === '[') openBrackets++
+            if (ch === ']') openBrackets--
+          }
+          // Remove trailing incomplete value (after last comma)
+          if (openBraces > 0 || openBrackets > 0) {
+            jsonCandidate = jsonCandidate.replace(/,\s*"[^"]*"?\s*:?\s*[^,}\]]*$/, '')
+            jsonCandidate = jsonCandidate.replace(/,\s*\{[^}]*$/, '')
+            jsonCandidate = jsonCandidate.replace(/,\s*$/, '')
+          }
+          // Close unclosed brackets and braces
+          for (let i = 0; i < openBrackets; i++) jsonCandidate += ']'
+          for (let i = 0; i < openBraces; i++) jsonCandidate += '}'
+          try {
+            bankParsed = JSON.parse(jsonCandidate)
+            console.log('[upload] Bank JSON repaired from truncated response')
+          } catch {}
         }
       }
 
@@ -328,7 +364,7 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
           system: bankSystemPrompt,
           messages: [{ role: 'user', content: [
             { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
-            { type: 'text', text: 'Analyse ce releve bancaire complet. Lis TOUTES les lignes sans exception.' },
+            { type: 'text', text: 'Retourne UNIQUEMENT un JSON valide (pas de markdown). Lis TOUTES les lignes du releve sans exception.' },
           ]}],
         })
         const bankText = bankResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')

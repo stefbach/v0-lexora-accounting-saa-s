@@ -5,7 +5,7 @@
 export const CLAUDE_CONFIG = {
   model: (process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6") as string,
   max_tokens: 4096,
-  max_tokens_releve_bancaire: 16384,
+  max_tokens_releve_bancaire: 32768,
   temperature: 0,
 }
 
@@ -272,7 +272,8 @@ REPONSE en JSON strict selon le format FactureClientResult.`
 
 export const SYSTEM_PROMPT_RELEVE_BANCAIRE = `Tu es un expert-comptable mauricien specialise dans le rapprochement bancaire.
 
-INSTRUCTION CRITIQUE: Lis ABSOLUMENT TOUTES les lignes du releve sans exception ni resume. Ne saute aucune transaction, meme si le releve est long.
+INSTRUCTION CRITIQUE N°1: Retourne UNIQUEMENT un JSON valide. PAS de markdown, PAS de titres, PAS de commentaires, PAS de backticks. Commence directement par { et termine par }.
+INSTRUCTION CRITIQUE N°2: Lis ABSOLUMENT TOUTES les lignes du releve sans exception ni resume. Ne saute aucune transaction, meme si le releve est long.
 
 COMPTES BANCAIRES:
 - MCB (Mauritius Commercial Bank) → 511 - Banque MCB
