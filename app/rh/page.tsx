@@ -2,18 +2,44 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Users, CreditCard, Clock, Calendar, TrendingUp, AlertTriangle, BarChart3, Target, Settings } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import {
+  Users, CreditCard, Clock, Calendar, TrendingUp, AlertTriangle, Target, Settings,
+  Calculator, FileText, Banknote, CheckCircle, ArrowRight, BarChart3, Building2,
+  ClipboardList, MessageSquare, Upload, CalendarDays, UserPlus, Briefcase
+} from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+
+const NAVY = "#1E2A4A"
+const GOLD = "#C9A84C"
 
 function fmt(n: number) { return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "MUR", maximumFractionDigits: 0 }).format(n) }
 
 type Tab = "dashboard" | "pointages" | "absences" | "primes" | "paie" | "parametres"
 
+const TAB_ICONS: Record<Tab, React.ComponentType<{ className?: string }>> = {
+  dashboard: BarChart3,
+  pointages: Clock,
+  absences: Calendar,
+  primes: Target,
+  paie: Banknote,
+  parametres: Settings,
+}
+
+const TABS: { id: Tab; label: string }[] = [
+  { id: "dashboard", label: "Tableau de bord" },
+  { id: "pointages", label: "Pointages" },
+  { id: "absences", label: "Absences & Conges" },
+  { id: "primes", label: "Primes" },
+  { id: "paie", label: "Paie" },
+  { id: "parametres", label: "Parametres" },
+]
+
 export default function RHDashboard() {
   const [tab, setTab] = useState<Tab>("dashboard")
   const [societes, setSocietes] = useState<any[]>([])
   const [societe, setSociete] = useState("all")
-  const [stats, setStats] = useState({ nb_employes: 0, masse_salariale: 0, conges_attente: 0, absences_today: 0, primes_mois: 0 })
+  const [stats, setStats] = useState({ nb_employes: 0, masse_salariale: 0, charges_patronales: 0, conges_attente: 0, absences_today: 0, primes_mois: 0 })
   const [loading, setLoading] = useState(true)
   const periode = new Date().toISOString().slice(0, 7)
 
@@ -32,9 +58,12 @@ export default function RHDashboard() {
           fetch(`/api/rh/conges?statut=en_attente${societe !== "all" ? `&societe_id=${societe}` : ""}`),
         ])
         const [emp, paie, conges] = await Promise.all([empRes.json(), paieRes.json(), congesRes.json()])
+        const coutTotal = paie.totaux?.cout_total_employeur || 0
+        const masseSalariale = paie.totaux?.salaire_net_total || coutTotal * 0.75
         setStats({
           nb_employes: emp.total || 0,
-          masse_salariale: paie.totaux?.cout_total_employeur || 0,
+          masse_salariale: masseSalariale,
+          charges_patronales: coutTotal - masseSalariale,
           conges_attente: conges.conges?.length || 0,
           absences_today: 0,
           primes_mois: 0,
@@ -45,27 +74,18 @@ export default function RHDashboard() {
     load()
   }, [societe, periode])
 
-  const TABS: { id: Tab; label: string; icon: string }[] = [
-    { id: "dashboard", label: "Tableau de bord", icon: "📊" },
-    { id: "pointages", label: "Pointages", icon: "⏰" },
-    { id: "absences", label: "Absences & Congés", icon: "🏖️" },
-    { id: "primes", label: "Primes", icon: "🎯" },
-    { id: "paie", label: "Paie", icon: "💰" },
-    { id: "parametres", label: "Paramètres", icon: "⚙️" },
-  ]
-
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#1E2A4A]">Tableau de bord RH Manager</h1>
-          <p className="text-sm text-gray-500">{new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
+          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Gestion des Ressources Humaines</h1>
+          <p className="text-sm text-gray-500 mt-0.5">{new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
         </div>
         <Select value={societe} onValueChange={setSociete}>
-          <SelectTrigger className="w-48"><SelectValue placeholder="Toutes sociétés" /></SelectTrigger>
+          <SelectTrigger className="w-52"><SelectValue placeholder="Toutes societes" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Toutes les sociétés</SelectItem>
+            <SelectItem value="all">Toutes les societes</SelectItem>
             {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
           </SelectContent>
         </Select>
@@ -73,25 +93,26 @@ export default function RHDashboard() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200">
-        {TABS.map(t => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-              tab === t.id
-                ? "border-[#1E2A4A] text-[#1E2A4A]"
-                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-            }`}
-          >
-            <span>{t.icon}</span>{t.label}
-          </button>
-        ))}
+        {TABS.map(t => {
+          const Icon = TAB_ICONS[t.id]
+          return (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                tab === t.id
+                  ? "border-[#1E2A4A] text-[#1E2A4A]"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              <Icon className="w-4 h-4" />{t.label}
+            </button>
+          )
+        })}
       </div>
 
       {/* Tab Content */}
-      {tab === "dashboard" && (
-        <DashboardTab stats={stats} loading={loading} />
-      )}
+      {tab === "dashboard" && <DashboardTab stats={stats} loading={loading} />}
       {tab === "pointages" && <PointagesTab />}
       {tab === "absences" && <AbsencesTab />}
       {tab === "primes" && <PrimesTab />}
@@ -102,66 +123,123 @@ export default function RHDashboard() {
 }
 
 function DashboardTab({ stats, loading }: { stats: any; loading: boolean }) {
-  const fmt = (n: number) => new Intl.NumberFormat("fr-FR", { style: "currency", currency: "MUR", maximumFractionDigits: 0 }).format(n)
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: "Employés actifs", value: stats.nb_employes, icon: Users, color: "text-blue-600", href: "/rh/employes" },
-          { label: "Coût employeur (mois)", value: fmt(stats.masse_salariale), icon: CreditCard, color: "text-green-600", href: "/rh/paie" },
-          { label: "Congés en attente", value: stats.conges_attente, icon: Calendar, color: "text-yellow-600", href: "/rh/conges" },
-          { label: "Pointage aujourd'hui", value: "—", icon: Clock, color: "text-purple-600", href: "/rh/pointage" },
-          { label: "Primes ce mois", value: fmt(stats.primes_mois), icon: Target, color: "text-orange-600", href: "/rh/paie/primes" },
+          { label: "Employes actifs", value: String(stats.nb_employes), icon: Users, color: "text-blue-600", bg: "bg-blue-50" },
+          { label: "Masse salariale", value: fmt(stats.masse_salariale), icon: Banknote, color: "text-green-600", bg: "bg-green-50" },
+          { label: "Charges patronales", value: fmt(stats.charges_patronales), icon: CreditCard, color: "text-orange-600", bg: "bg-orange-50" },
+          { label: "Absences ce mois", value: String(stats.conges_attente), icon: Calendar, color: "text-red-500", bg: "bg-red-50" },
         ].map(k => (
-          <a key={k.label} href={k.href}>
-            <Card className="hover:shadow-md transition-shadow cursor-pointer">
-              <CardContent className="p-4 flex items-center gap-3">
-                <k.icon className={`w-9 h-9 ${k.color}`} />
-                <div><p className="text-xs text-gray-500">{k.label}</p><p className="text-xl font-bold text-[#1E2A4A]">{loading ? "..." : k.value}</p></div>
-              </CardContent>
-            </Card>
-          </a>
+          <Card key={k.label} className="border border-gray-200">
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div className={`w-10 h-10 rounded-lg ${k.bg} flex items-center justify-center`}>
+                  <k.icon className={`w-5 h-5 ${k.color}`} />
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 uppercase tracking-wide">{k.label}</p>
+              <p className="text-xl font-bold mt-1" style={{ color: NAVY }}>
+                {loading ? "..." : k.value}
+              </p>
+            </CardContent>
+          </Card>
         ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
-        <Card>
-          <CardHeader><CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2"><TrendingUp className="w-4 h-4" /> Accès rapides</CardTitle></CardHeader>
-          <CardContent className="grid grid-cols-2 gap-3">
+      {/* Quick Actions */}
+      <div>
+        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Actions rapides</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { href: "/rh/paie", label: "Calculer paie", icon: Calculator, color: "text-green-600", bg: "bg-green-50" },
+            { href: "/rh/pointage", label: "Pointage du jour", icon: Clock, color: "text-blue-600", bg: "bg-blue-50" },
+            { href: "/rh/conges", label: "Nouvelle absence", icon: CalendarDays, color: "text-orange-600", bg: "bg-orange-50" },
+            { href: "/rh/paie/exports-mra", label: "Export virement", icon: Upload, color: "text-purple-600", bg: "bg-purple-50" },
+          ].map(a => (
+            <a key={a.href} href={a.href}>
+              <Card className="hover:shadow-md transition-all cursor-pointer group border border-gray-200 hover:border-[#C9A84C]">
+                <CardContent className="p-4 flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-lg ${a.bg} flex items-center justify-center flex-shrink-0`}>
+                    <a.icon className={`w-5 h-5 ${a.color}`} />
+                  </div>
+                  <span className="text-sm font-medium" style={{ color: NAVY }}>{a.label}</span>
+                  <ArrowRight className="w-4 h-4 text-gray-300 ml-auto group-hover:text-[#C9A84C] transition-colors" />
+                </CardContent>
+              </Card>
+            </a>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Acces rapides */}
+        <Card className="border border-gray-200">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold flex items-center gap-2" style={{ color: NAVY }}>
+              <Briefcase className="w-4 h-4" /> Modules RH
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1">
             {[
-              { href: "/rh/pointage", label: "Pointage temps réel", icon: "⏰", desc: "Présences du jour" },
-              { href: "/rh/pointage/mensuel", label: "Pointage mensuel", icon: "📅", desc: "OT + corrections" },
-              { href: "/rh/paie", label: "Calculer la paie", icon: "💰", desc: "Bulletins du mois" },
-              { href: "/rh/paie/primes", label: "Saisir primes", icon: "🎯", desc: "Primes variables" },
-              { href: "/rh/conges", label: "Absences & Congés", icon: "🏖️", desc: "Demandes en cours" },
-              { href: "/rh/paie/exports-mra", label: "Exports MRA", icon: "🏛️", desc: "CSG/NSF/PAYE" },
-              { href: "/rh/employes", label: "Gestion employés", icon: "👥", desc: "Dossiers RH" },
-              { href: "/rh/chat", label: "Chat CLARA", icon: "🤖", desc: "Assistant RH IA" },
+              { href: "/rh/pointage", label: "Pointage temps reel", icon: Clock, desc: "Presences du jour" },
+              { href: "/rh/pointage/mensuel", label: "Pointage mensuel", icon: CalendarDays, desc: "OT + corrections" },
+              { href: "/rh/paie", label: "Calculer la paie", icon: Calculator, desc: "Bulletins du mois" },
+              { href: "/rh/paie/primes", label: "Saisir primes", icon: Target, desc: "Primes variables" },
+              { href: "/rh/conges", label: "Absences & Conges", icon: Calendar, desc: "Demandes en cours" },
+              { href: "/rh/paie/exports-mra", label: "Exports MRA", icon: Building2, desc: "CSG/NSF/PAYE" },
+              { href: "/rh/employes", label: "Gestion employes", icon: Users, desc: "Dossiers RH" },
+              { href: "/rh/chat", label: "Chat CLARA", icon: MessageSquare, desc: "Assistant RH IA" },
             ].map(a => (
-              <a key={a.href} href={a.href} className="flex items-center gap-2 p-3 rounded-lg border hover:bg-gray-50 transition-colors">
-                <span className="text-2xl">{a.icon}</span>
-                <div><p className="text-sm font-medium text-[#1E2A4A]">{a.label}</p><p className="text-xs text-gray-400">{a.desc}</p></div>
+              <a key={a.href} href={a.href} className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors group">
+                <div className="w-8 h-8 rounded-md bg-gray-100 flex items-center justify-center flex-shrink-0 group-hover:bg-[#1E2A4A]/10">
+                  <a.icon className="w-4 h-4 text-gray-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium" style={{ color: NAVY }}>{a.label}</p>
+                  <p className="text-xs text-gray-400">{a.desc}</p>
+                </div>
+                <ArrowRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-[#C9A84C] transition-colors" />
               </a>
             ))}
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader><CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-yellow-500" /> Rappels légaux Maurice</CardTitle></CardHeader>
-          <CardContent className="space-y-2 text-sm">
+        {/* Obligations legales */}
+        <Card className="border border-gray-200">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold flex items-center gap-2" style={{ color: NAVY }}>
+              <AlertTriangle className="w-4 h-4 text-amber-500" /> Obligations legales Maurice
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-0">
             {[
-              { label: "CSG mensuelle", date: "15 du mois suivant", statut: "info" },
-              { label: "PAYE mensuel", date: "20 du mois suivant", statut: "info" },
-              { label: "NSF mensuel", date: "Fin du mois", statut: "info" },
-              { label: "Training Levy", date: "Fin du mois", statut: "info" },
-              { label: "PRGF", date: "Fin du mois", statut: "info" },
-              { label: "13ème mois (75%)", date: "25 décembre", statut: "warning" },
-              { label: "13ème mois (25%)", date: "31 décembre", statut: "warning" },
-              { label: "Déclaration EDF annuelle", date: "30 septembre", statut: "info" },
+              { label: "CSG mensuelle", date: "15 du mois suivant", type: "monthly" },
+              { label: "PAYE mensuel", date: "20 du mois suivant", type: "monthly" },
+              { label: "NSF mensuel", date: "Fin du mois", type: "monthly" },
+              { label: "Training Levy", date: "Fin du mois", type: "monthly" },
+              { label: "PRGF", date: "Fin du mois", type: "monthly" },
+              { label: "13eme mois (75%)", date: "25 decembre", type: "annual" },
+              { label: "13eme mois (25%)", date: "31 decembre", type: "annual" },
+              { label: "Declaration EDF annuelle", date: "30 septembre", type: "annual" },
             ].map(r => (
-              <div key={r.label} className="flex items-center justify-between py-1 border-b border-gray-100 last:border-0">
-                <span className="text-gray-700">{r.label}</span>
-                <span className={`text-xs px-2 py-0.5 rounded-full ${r.statut === "warning" ? "bg-yellow-100 text-yellow-800" : "bg-blue-50 text-blue-700"}`}>{r.date}</span>
+              <div key={r.label} className="flex items-center justify-between py-2.5 border-b border-gray-100 last:border-0">
+                <div className="flex items-center gap-2.5">
+                  {r.type === "monthly"
+                    ? <CheckCircle className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                    : <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                  }
+                  <span className="text-sm text-gray-700">{r.label}</span>
+                </div>
+                <Badge variant="outline" className={`text-xs font-normal ${
+                  r.type === "annual"
+                    ? "border-amber-200 bg-amber-50 text-amber-700"
+                    : "border-blue-200 bg-blue-50 text-blue-700"
+                }`}>
+                  {r.date}
+                </Badge>
               </div>
             ))}
           </CardContent>
@@ -175,14 +253,16 @@ function PointagesTab() {
   return (
     <div className="space-y-4">
       <p className="text-gray-500 text-sm">Raccourcis vers la gestion des pointages :</p>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <a href="/rh/pointage">
           <Card className="hover:shadow-md transition-shadow cursor-pointer border-2 hover:border-[#1E2A4A]">
             <CardContent className="p-6 flex items-center gap-4">
-              <span className="text-4xl">⏰</span>
+              <div className="w-12 h-12 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
+                <Clock className="w-6 h-6 text-blue-600" />
+              </div>
               <div>
-                <p className="font-bold text-[#1E2A4A] text-lg">Pointage temps réel</p>
-                <p className="text-sm text-gray-500">Présences du jour, pointage manuel, corrections immédiates</p>
+                <p className="font-bold text-lg" style={{ color: NAVY }}>Pointage temps reel</p>
+                <p className="text-sm text-gray-500">Presences du jour, pointage manuel, corrections immediates</p>
               </div>
             </CardContent>
           </Card>
@@ -190,10 +270,12 @@ function PointagesTab() {
         <a href="/rh/pointage/mensuel">
           <Card className="hover:shadow-md transition-shadow cursor-pointer border-2 hover:border-[#1E2A4A]">
             <CardContent className="p-6 flex items-center gap-4">
-              <span className="text-4xl">📅</span>
+              <div className="w-12 h-12 rounded-lg bg-purple-50 flex items-center justify-center flex-shrink-0">
+                <CalendarDays className="w-6 h-6 text-purple-600" />
+              </div>
               <div>
-                <p className="font-bold text-[#1E2A4A] text-lg">Pointage mensuel</p>
-                <p className="text-sm text-gray-500">Calendrier mensuel, validation OT, absences injustifiées</p>
+                <p className="font-bold text-lg" style={{ color: NAVY }}>Pointage mensuel</p>
+                <p className="text-sm text-gray-500">Calendrier mensuel, validation OT, absences injustifiees</p>
               </div>
             </CardContent>
           </Card>
@@ -206,14 +288,16 @@ function PointagesTab() {
 function AbsencesTab() {
   return (
     <div className="space-y-4">
-      <p className="text-gray-500 text-sm">Gestion complète des absences et congés :</p>
+      <p className="text-gray-500 text-sm">Gestion complete des absences et conges :</p>
       <a href="/rh/conges">
         <Card className="hover:shadow-md transition-shadow cursor-pointer border-2 hover:border-[#1E2A4A]">
           <CardContent className="p-6 flex items-center gap-4">
-            <span className="text-4xl">🏖️</span>
+            <div className="w-12 h-12 rounded-lg bg-orange-50 flex items-center justify-center flex-shrink-0">
+              <Calendar className="w-6 h-6 text-orange-600" />
+            </div>
             <div>
-              <p className="font-bold text-[#1E2A4A] text-lg">Absences & Congés</p>
-              <p className="text-sm text-gray-500">Demandes en attente, planning, absences non planifiées — validation + impact paie</p>
+              <p className="font-bold text-lg" style={{ color: NAVY }}>Absences & Conges</p>
+              <p className="text-sm text-gray-500">Demandes en attente, planning, absences non planifiees -- validation + impact paie</p>
             </div>
           </CardContent>
         </Card>
@@ -229,10 +313,12 @@ function PrimesTab() {
       <a href="/rh/paie/primes">
         <Card className="hover:shadow-md transition-shadow cursor-pointer border-2 hover:border-[#1E2A4A]">
           <CardContent className="p-6 flex items-center gap-4">
-            <span className="text-4xl">🎯</span>
+            <div className="w-12 h-12 rounded-lg bg-amber-50 flex items-center justify-center flex-shrink-0">
+              <Target className="w-6 h-6 text-amber-600" />
+            </div>
             <div>
-              <p className="font-bold text-[#1E2A4A] text-lg">Primes paramétrables</p>
-              <p className="text-sm text-gray-500">Catalogue primes, saisie mensuelle variable, approbation, intégration automatique dans la paie</p>
+              <p className="font-bold text-lg" style={{ color: NAVY }}>Primes parametrables</p>
+              <p className="text-sm text-gray-500">Catalogue primes, saisie mensuelle variable, approbation, integration automatique dans la paie</p>
             </div>
           </CardContent>
         </Card>
@@ -245,19 +331,21 @@ function PaieTab() {
   return (
     <div className="space-y-4">
       <p className="text-gray-500 text-sm">Module paie complet :</p>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {[
-          { href: "/rh/paie", icon: "💰", label: "Bulletins de paie", desc: "Calcul batch, validation, PDF individuel" },
-          { href: "/rh/paie/exports-mra", icon: "🏛️", label: "Exports MRA", desc: "CSG/NSF, PAYE, PRGF, virements bancaires" },
-          { href: "/rh/paie/primes", icon: "🎯", label: "Primes du mois", desc: "Saisie et approbation des primes variables" },
-          { href: "/rh/paie/parametres", icon: "⚙️", label: "Paramètres paie", desc: "Taux MRA, OT, jours fériés" },
+          { href: "/rh/paie", icon: Calculator, label: "Bulletins de paie", desc: "Calcul batch, validation, PDF individuel", color: "text-green-600", bg: "bg-green-50" },
+          { href: "/rh/paie/exports-mra", icon: Building2, label: "Exports MRA", desc: "CSG/NSF, PAYE, PRGF, virements bancaires", color: "text-blue-600", bg: "bg-blue-50" },
+          { href: "/rh/paie/primes", icon: Target, label: "Primes du mois", desc: "Saisie et approbation des primes variables", color: "text-amber-600", bg: "bg-amber-50" },
+          { href: "/rh/paie/parametres", icon: Settings, label: "Parametres paie", desc: "Taux MRA, OT, jours feries", color: "text-gray-600", bg: "bg-gray-100" },
         ].map(a => (
           <a key={a.href} href={a.href}>
             <Card className="hover:shadow-md transition-shadow cursor-pointer border-2 hover:border-[#1E2A4A]">
               <CardContent className="p-5 flex items-center gap-4">
-                <span className="text-3xl">{a.icon}</span>
+                <div className={`w-12 h-12 rounded-lg ${a.bg} flex items-center justify-center flex-shrink-0`}>
+                  <a.icon className={`w-6 h-6 ${a.color}`} />
+                </div>
                 <div>
-                  <p className="font-bold text-[#1E2A4A]">{a.label}</p>
+                  <p className="font-bold" style={{ color: NAVY }}>{a.label}</p>
                   <p className="text-xs text-gray-500">{a.desc}</p>
                 </div>
               </CardContent>
@@ -276,10 +364,12 @@ function ParametresTab() {
       <a href="/rh/paie/parametres">
         <Card className="hover:shadow-md transition-shadow cursor-pointer border-2 hover:border-[#1E2A4A]">
           <CardContent className="p-6 flex items-center gap-4">
-            <span className="text-4xl">⚙️</span>
+            <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+              <Settings className="w-6 h-6 text-gray-600" />
+            </div>
             <div>
-              <p className="font-bold text-[#1E2A4A] text-lg">Paramètres paie & RH</p>
-              <p className="text-sm text-gray-500">Taux MRA 2024/25, calcul OT (1.5x / 2x), jours fériés Maurice, taux change EUR/MUR</p>
+              <p className="font-bold text-lg" style={{ color: NAVY }}>Parametres paie & RH</p>
+              <p className="text-sm text-gray-500">Taux MRA 2024/25, calcul OT (1.5x / 2x), jours feries Maurice, taux change EUR/MUR</p>
             </div>
           </CardContent>
         </Card>
