@@ -113,6 +113,8 @@ export default function ClientBanquePage() {
     statut: tx.statut || "non_identifie",
     banque: tx.banque || "—",
     societe: tx.societe || "—",
+    lettre: tx.lettre || null,
+    facture_id: tx.facture_id || null,
   }))
 
   allTransactions.sort((a, b) => {
@@ -129,7 +131,7 @@ export default function ClientBanquePage() {
   )
 
   const nonRaprochees = allTransactions.filter(
-    (t) => !t.tiers || t.statut?.includes("non_identifie") || t.statut?.includes("a_verifier")
+    (t) => !t.lettre && (!t.tiers || t.statut?.includes("non_identifie"))
   ).length
 
   const derniereMaj = bankAccounts.length > 0
@@ -297,6 +299,7 @@ export default function ClientBanquePage() {
                 <TableHead>Tiers identifié</TableHead>
                 <TableHead>Compte</TableHead>
                 <TableHead>Statut</TableHead>
+                <TableHead>Lettre</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -342,11 +345,18 @@ export default function ClientBanquePage() {
                     {row.compte_comptable || <span className="text-muted-foreground">—</span>}
                   </TableCell>
                   <TableCell>{getStatutBadge(row.statut)}</TableCell>
+                  <TableCell>
+                    {row.lettre ? (
+                      <Badge className="bg-green-100 text-green-700 border-green-200">{row.lettre}</Badge>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
                 </TableRow>
               ))}
               {filtered.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-10 text-muted-foreground">
+                  <TableCell colSpan={10} className="text-center py-10 text-muted-foreground">
                     {search
                       ? "Aucune opération trouvée pour cette recherche."
                       : "Aucune opération bancaire disponible. Importez un relevé bancaire dans Mes Documents pour voir vos données ici."}

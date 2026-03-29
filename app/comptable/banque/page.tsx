@@ -9,8 +9,13 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Loader2, Search, RefreshCw, Landmark, Download, AlertCircle } from "lucide-react"
 
-function fmt(n: number) {
-  return new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
+function fmt(n: number, devise?: string) {
+  const formatted = new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
+  return devise ? formatted + " " + devise : formatted
+}
+
+function fmtMUR(n: number) {
+  return fmt(n, "MUR")
 }
 
 function formatDate(d: string) {
@@ -21,12 +26,13 @@ function formatDate(d: string) {
 interface Societe { id: string; nom: string }
 interface CompteBancaire {
   id: string; banque: string; nom_compte: string; numero_compte: string
-  devise: string; solde_actuel: number; date_dernier_releve: string | null; actif: boolean
+  devise: string; solde_actuel: number; solde_mur: number; date_dernier_releve: string | null; actif: boolean
 }
 interface Transaction {
   id: string; date: string; libelle: string; debit: number; credit: number
+  debit_mur: number; credit_mur: number; devise: string
   solde_apres: number | null; tiers: string | null; compte_comptable: string | null
-  statut: string; banque?: string
+  statut: string; banque?: string; lettre?: string | null
 }
 interface Releve {
   id: string; periode: string; date_debut: string; date_fin: string
@@ -49,6 +55,8 @@ export default function ComptableBanquePage() {
   const [loading, setLoading] = useState(false)
   const [search, setSearch] = useState("")
   const [selectedCompte, setSelectedCompte] = useState("all")
+  const [rates, setRates] = useState<Record<string, number>>({})
+  const [totalBankMUR, setTotalBankMUR] = useState(0)
 
   useEffect(() => {
     fetch("/api/comptable/societes").then(r => r.json()).then(d => setSocietes(d.societes || []))
@@ -65,12 +73,16 @@ export default function ComptableBanquePage() {
       const d = await res.json()
       setComptes(d.comptes || [])
       setReleves(d.releves || [])
+      setRates(d.rates || {})
+      setTotalBankMUR(d.totalBankMUR || 0)
       // Flatten transactions from releves
       const txs: Transaction[] = []
-      ;(d.releves || []).forEach((r: Releve) => {
-        const banque = (d.comptes || []).find((c: CompteBancaire) =>
-          r.id.includes(c.id) || true  // best effort
-        )?.banque || "—"
+      ;(d.releves || []).forEach((r: any) => {
+        const compte = (d.comptes || []).find((c: CompteBancaire) =>
+          c.id === r.compte_bancaire_id
+        )
+        const banque = compte?.banque || "—"
+        const devise = r.devise || compte?.devise || "MUR"
         ;(r.transactions_json || []).forEach((tx: any, idx: number) => {
           txs.push({
             id: `${r.id}-${idx}`,
@@ -78,11 +90,15 @@ export default function ComptableBanquePage() {
             libelle: tx.libelle || tx.description || "",
             debit: Number(tx.debit) || 0,
             credit: Number(tx.credit) || 0,
+            debit_mur: Number(tx.debit_mur) || Number(tx.debit) || 0,
+            credit_mur: Number(tx.credit_mur) || Number(tx.credit) || 0,
+            devise: tx.devise || devise,
             solde_apres: tx.solde_apres ?? tx.solde ?? null,
             tiers: tx.tiers_detecte || tx.tiers || null,
             compte_comptable: tx.compte_comptable || null,
             statut: tx.statut || "non_identifie",
             banque,
+            lettre: tx.lettre || tx.lettrage || null,
           })
         })
       })
@@ -104,7 +120,7 @@ export default function ComptableBanquePage() {
     return matchSearch
   })
 
-  const totalSolde = comptes.reduce((s, c) => s + (c.solde_actuel || 0), 0)
+  const hasMultiCurrency = comptes.some(c => c.devise && c.devise !== "MUR")
   const nonRaprochees = transactions.filter(t => !t.tiers || t.statut?.includes("non_identifie")).length
 
   return (
@@ -153,9 +169,9 @@ export default function ComptableBanquePage() {
           <div className="grid grid-cols-3 gap-4">
             <Card>
               <CardContent className="p-4">
-                <p className="text-xs text-gray-500">Solde total</p>
+                <p className="text-xs text-gray-500">Solde total (consolidé MUR)</p>
                 <p className="text-2xl font-bold text-[#1E2A4A]">
-                  {totalSolde > 0 ? fmt(totalSolde) + " MUR" : "—"}
+                  {totalBankMUR > 0 ? fmtMUR(totalBankMUR) : "—"}
                 </p>
                 <p className="text-xs text-gray-400 mt-1">{comptes.length} compte{comptes.length > 1 ? "s" : ""}</p>
               </CardContent>
@@ -178,6 +194,24 @@ export default function ComptableBanquePage() {
             </Card>
           </div>
 
+          {/* Taux de change */}
+          {hasMultiCurrency && Object.keys(rates).length > 0 && (
+            <Card className="bg-gradient-to-r from-[#1E2A4A] to-[#2a3d6b]">
+              <CardContent className="py-4">
+                <div className="flex items-center gap-6 flex-wrap">
+                  <p className="text-xs font-semibold text-white/60 uppercase tracking-wider">Taux de change</p>
+                  {["EUR", "GBP", "USD"].map(d => rates[d] ? (
+                    <div key={d} className="flex items-center gap-2">
+                      <span className="text-white font-bold text-sm">1 {d}</span>
+                      <span className="text-white/60">=</span>
+                      <span className="text-[#C9A84C] font-bold text-sm">{rates[d].toFixed(2)} MUR</span>
+                    </div>
+                  ) : null)}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Comptes bancaires */}
           {comptes.length > 0 && (
             <Card>
@@ -195,6 +229,8 @@ export default function ComptableBanquePage() {
                       <TableHead>N° compte</TableHead>
                       <TableHead>Devise</TableHead>
                       <TableHead className="text-right">Solde actuel</TableHead>
+                      <TableHead>Taux appliqué</TableHead>
+                      <TableHead className="text-right">Contre-valeur MUR</TableHead>
                       <TableHead>Dernier relevé</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -208,7 +244,17 @@ export default function ComptableBanquePage() {
                         <TableCell className="font-mono text-sm text-gray-500">{c.numero_compte || "—"}</TableCell>
                         <TableCell>{c.devise || "MUR"}</TableCell>
                         <TableCell className="text-right font-bold text-[#1E2A4A]">
-                          {fmt(c.solde_actuel || 0)} {c.devise || "MUR"}
+                          {fmt(c.solde_actuel || 0, c.devise || "MUR")}
+                        </TableCell>
+                        <TableCell className="text-sm text-gray-500">
+                          {c.devise && c.devise !== "MUR" && rates[c.devise]
+                            ? `1 ${c.devise} = ${rates[c.devise].toFixed(2)} MUR`
+                            : "—"}
+                        </TableCell>
+                        <TableCell className="text-right font-medium text-[#1E2A4A]">
+                          {c.devise && c.devise !== "MUR"
+                            ? fmtMUR(c.solde_mur || 0)
+                            : "—"}
                         </TableCell>
                         <TableCell className="text-sm text-gray-500">
                           {c.date_dernier_releve ? formatDate(c.date_dernier_releve) : "—"}
@@ -298,6 +344,7 @@ export default function ComptableBanquePage() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Date</TableHead>
+                        <TableHead>Banque</TableHead>
                         <TableHead>Libellé</TableHead>
                         <TableHead className="text-right">Débit</TableHead>
                         <TableHead className="text-right">Crédit</TableHead>
@@ -305,6 +352,7 @@ export default function ComptableBanquePage() {
                         <TableHead>Tiers</TableHead>
                         <TableHead>Compte</TableHead>
                         <TableHead>Statut</TableHead>
+                        <TableHead>Lettre</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>

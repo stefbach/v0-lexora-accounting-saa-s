@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { getTauxChange, convertToMUR } from '@/lib/taux-change'
 
 export const dynamic = 'force-dynamic'
 
@@ -105,10 +106,37 @@ export async function GET(request: Request) {
       }
     }
 
+    // Fetch exchange rates
+    const rates = await getTauxChange()
+
+    // Enrich comptes with MUR conversion
+    const enrichedComptes = (comptes || []).map((c: any) => ({
+      ...c,
+      solde_mur: convertToMUR(c.solde_actuel || 0, c.devise || 'MUR', rates),
+    }))
+
+    const totalBankMUR = enrichedComptes.reduce((sum: number, c: any) => sum + (c.solde_mur || 0), 0)
+
+    // Enrich releves transactions with devise and MUR amounts
+    const enrichedReleves = (releves || []).map((r: any) => {
+      // Find the matching compte to get the devise
+      const compte = (comptes || []).find((c: any) => c.id === r.compte_bancaire_id)
+      const devise = compte?.devise || 'MUR'
+      const enrichedTx = (r.transactions_json || []).map((tx: any) => ({
+        ...tx,
+        devise,
+        debit_mur: convertToMUR(Number(tx.debit) || 0, devise, rates),
+        credit_mur: convertToMUR(Number(tx.credit) || 0, devise, rates),
+      }))
+      return { ...r, transactions_json: enrichedTx, devise }
+    })
+
     return NextResponse.json({
-      comptes: comptes || [],
-      releves: releves || [],
+      comptes: enrichedComptes,
+      releves: enrichedReleves,
       documentsTransactions,
+      totalBankMUR,
+      rates,
     })
   } catch (e: unknown) {
     console.error('[banque] error:', e)

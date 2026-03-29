@@ -29,7 +29,7 @@ export async function GET(request: Request) {
     // ----------------------------------------------------------------
     let allQuery = supabase
       .from('ecritures_comptables_v2')
-      .select('id, numero_compte, debit_mur, credit_mur, date_ecriture')
+      .select('id, numero_compte, debit_mur, credit_mur, date_ecriture, lettre, date_lettrage')
       .eq('societe_id', societe_id)
       .order('numero_compte', { ascending: true })
       .order('date_ecriture', { ascending: true })
@@ -95,8 +95,37 @@ export async function GET(request: Request) {
     const solde_ouverture = 0
     const solde_cloture   = total_debit - total_credit
 
+    // ----------------------------------------------------------------
+    // 4. Lettrage stats (v2)
+    // ----------------------------------------------------------------
+    const total_ecritures = (allEcritures || []).length
+    const lettrees = (allEcritures || []).filter(e => !!e.lettre).length
+    const non_lettrees = total_ecritures - lettrees
+
+    // ----------------------------------------------------------------
+    // 5. Écritures v1 (ecritures_comptables) avec lettrage
+    // ----------------------------------------------------------------
+    let v1Query = supabase
+      .from('ecritures_comptables')
+      .select('id, numero_compte, debit_mur, credit_mur, date_ecriture, lettre, date_lettrage, lettrage_auto')
+      .eq('societe_id', societe_id)
+      .order('numero_compte', { ascending: true })
+      .order('date_ecriture', { ascending: true })
+      .order('id', { ascending: true })
+
+    if (compte_debut) v1Query = v1Query.gte('numero_compte', compte_debut)
+    if (compte_fin)   v1Query = v1Query.lte('numero_compte', compte_fin)
+    if (date_debut)   v1Query = v1Query.gte('date_ecriture', date_debut)
+    if (date_fin)     v1Query = v1Query.lte('date_ecriture', date_fin)
+    if (journal)      v1Query = v1Query.eq('journal', journal)
+
+    const { data: ecrituresV1, error: v1Err } = await v1Query
+    // v1 data is optional — ignore errors if the table doesn't exist
+    const ecritures_v1 = v1Err ? [] : (ecrituresV1 || [])
+
     return NextResponse.json({
       ecritures,
+      ecritures_v1,
       total_debit,
       total_credit,
       solde_ouverture,
@@ -105,6 +134,11 @@ export async function GET(request: Request) {
       page,
       limit,
       pages: Math.ceil((count || 0) / limit),
+      lettrage: {
+        lettrees,
+        non_lettrees,
+        total: total_ecritures,
+      },
     })
   } catch (e: unknown) {
     console.error('[grand-livre]', e)
