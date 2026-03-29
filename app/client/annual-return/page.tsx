@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Loader2, Save, FileDown, Building2, Users, Briefcase,
-  DollarSign, BarChart3, CheckCircle, AlertTriangle
+  DollarSign, BarChart3, CheckCircle, AlertTriangle, Upload
 } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
 import Link from "next/link"
@@ -99,38 +99,27 @@ interface AnnualReturnData {
 }
 
 const DEFAULT_DATA: AnnualReturnData = {
-  company_name: "Digital Data Solutions Ltd",
-  company_number: "C173522",
+  company_name: "",
+  company_number: "",
   company_type: "Small Private Company",
   listed_on_exchange: false,
   date_agm: "",
   date_annual_return: new Date().toISOString().split("T")[0],
-  registered_office: "Silicon Avenue 4th Floor, The Catalyst Building, Ebene Ebene, Q. Bornes Wd. 1",
-  postal_address: "Silicon Avenue 4th Floor, The Catalyst Building, Ebene Ebene, Q. Bornes Wd. 1",
+  registered_office: "",
+  postal_address: "",
   par_value_shares: [],
-  no_par_value_shares: [
-    { class: "Ordinary", number: 1000, consideration: "0.00", paid_up: 1000, currency: "MUR" }
-  ],
-  amount_received_on_issue: "1,000.00",
-  stated_capital: "1,000.00",
+  no_par_value_shares: [],
+  amount_received_on_issue: "0.00",
+  stated_capital: "0.00",
   shares_forfeited: 0,
   shares_purchased: 0,
   treasury_shares: 0,
   shares_redeemed: 0,
   total_indebtedness: "0.00",
-  directors: [
-    {
-      name: "BACH STEPHANE HENRI", nationality: "FR", resident: true,
-      citizen: false, occupation: "Director", other_directorship: "No"
-    },
-    {
-      name: "MOCTEE RAYAPEN MARIE MAÏTA", nationality: "MU", resident: true,
-      citizen: true, occupation: "Director", other_directorship: "No"
-    },
-  ],
+  directors: [],
   secretary: {
-    name: "Magellan Hub Ltd",
-    address: "Silicon Avenue 4th Floor, The Catalyst Building, Ebene"
+    name: "",
+    address: ""
   },
   total_revenue: 0,
   total_expenses: 0,
@@ -149,6 +138,49 @@ export default function AnnualReturnPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [importingPdf, setImportingPdf] = useState(false)
+  const [importMessage, setImportMessage] = useState("")
+
+  const handleImportPdf = async (file: File) => {
+    setImportingPdf(true)
+    setImportMessage("")
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      formData.append("hint", "Annual Return - Companies Act - Registrar of Companies Mauritius")
+      const res = await fetch("/api/documents/upload", { method: "POST", body: formData })
+      if (res.ok) {
+        const result = await res.json()
+        const parsed = result?.n8n_result || result?.data || result
+        if (parsed) {
+          setData(prev => ({
+            ...prev,
+            ...(parsed.company_name && { company_name: parsed.company_name }),
+            ...(parsed.company_number && { company_number: parsed.company_number }),
+            ...(parsed.company_type && { company_type: parsed.company_type }),
+            ...(parsed.registered_office && { registered_office: parsed.registered_office }),
+            ...(parsed.postal_address && { postal_address: parsed.postal_address }),
+            ...(parsed.date_agm && { date_agm: parsed.date_agm }),
+            ...(parsed.stated_capital && { stated_capital: parsed.stated_capital }),
+            ...(parsed.total_revenue !== undefined && { total_revenue: Number(parsed.total_revenue) || 0 }),
+            ...(parsed.total_expenses !== undefined && { total_expenses: Number(parsed.total_expenses) || 0 }),
+            ...(parsed.net_profit !== undefined && { net_profit: Number(parsed.net_profit) || 0 }),
+            ...(parsed.total_assets !== undefined && { total_assets: Number(parsed.total_assets) || 0 }),
+            ...(parsed.total_liabilities !== undefined && { total_liabilities: Number(parsed.total_liabilities) || 0 }),
+            ...(parsed.directors && Array.isArray(parsed.directors) && { directors: parsed.directors }),
+            ...(parsed.secretary && { secretary: parsed.secretary }),
+          }))
+        }
+        setImportMessage("PDF importe avec succes. Verifiez les champs pre-remplis.")
+      } else {
+        setImportMessage("Erreur lors de l'import du PDF.")
+      }
+    } catch {
+      setImportMessage("Erreur lors de l'import du PDF.")
+    } finally {
+      setImportingPdf(false)
+    }
+  }
 
   // Fetch societes
   useEffect(() => {
@@ -201,9 +233,7 @@ export default function AnnualReturnPage() {
         }
       })
 
-      const noParShares = shareMap.size > 0
-        ? Array.from(shareMap.values())
-        : DEFAULT_DATA.no_par_value_shares
+      const noParShares = Array.from(shareMap.values())
 
       // Map directors
       const mappedDirectors = directors
@@ -221,27 +251,27 @@ export default function AnnualReturnPage() {
       const sec = directors.find(d => d.type === "secretary")
 
       setData({
-        company_name: soc?.nom || DEFAULT_DATA.company_name,
-        company_number: soc?.brn || DEFAULT_DATA.company_number,
-        company_type: DEFAULT_DATA.company_type,
+        company_name: soc?.nom || "",
+        company_number: soc?.brn || "",
+        company_type: "Small Private Company",
         listed_on_exchange: false,
         date_agm: ar?.date_agm || "",
         date_annual_return: ar?.date_soumission || new Date().toISOString().split("T")[0],
-        registered_office: soc?.registered_office || soc?.adresse || DEFAULT_DATA.registered_office,
-        postal_address: soc?.registered_office || soc?.adresse || DEFAULT_DATA.postal_address,
+        registered_office: soc?.registered_office || soc?.adresse || "",
+        postal_address: soc?.registered_office || soc?.adresse || "",
         par_value_shares: [],
         no_par_value_shares: noParShares,
-        amount_received_on_issue: formatMUR(soc?.capital_social || 1000),
-        stated_capital: formatMUR(soc?.capital_social || 1000),
+        amount_received_on_issue: soc?.capital_social ? formatMUR(soc.capital_social) : "0.00",
+        stated_capital: soc?.capital_social ? formatMUR(soc.capital_social) : "0.00",
         shares_forfeited: 0,
         shares_purchased: 0,
         treasury_shares: 0,
         shares_redeemed: 0,
         total_indebtedness: "0.00",
-        directors: mappedDirectors.length > 0 ? mappedDirectors : DEFAULT_DATA.directors,
+        directors: mappedDirectors,
         secretary: sec
           ? { name: [sec.nom, sec.prenom].filter(Boolean).join(" "), address: sec.adresse || "" }
-          : DEFAULT_DATA.secretary,
+          : { name: "", address: "" },
         total_revenue: ar?.chiffre_affaires || fin?.totalRevenue || 0,
         total_expenses: fin?.totalExpenses || 0,
         net_profit: ar?.resultat_net || fin?.netProfit || 0,

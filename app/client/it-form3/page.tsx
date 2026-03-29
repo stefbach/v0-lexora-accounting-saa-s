@@ -24,7 +24,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs"
-import { Calculator, FileText, Save, Printer, Loader2 } from "lucide-react"
+import { Calculator, FileText, Save, Printer, Loader2, Upload } from "lucide-react"
 
 const NAVY = "#1E2A4A"
 const GOLD = "#C9A84C"
@@ -70,6 +70,13 @@ export default function ITForm3Page() {
   const [mobile, setMobile] = useState("")
   const [assessmentYear, setAssessmentYear] = useState("2026")
   const [closingDate, setClosingDate] = useState("")
+
+  // Accountant
+  const [accountantName, setAccountantName] = useState("")
+
+  // PDF import
+  const [importingPdf, setImportingPdf] = useState(false)
+  const [importMessage, setImportMessage] = useState("")
 
   // Business activity
   const [sector, setSector] = useState("")
@@ -147,6 +154,42 @@ export default function ITForm3Page() {
     fetchData()
   }, [])
 
+  const handleImportPdf = async (file: File) => {
+    setImportingPdf(true)
+    setImportMessage("")
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      formData.append("hint", "IT Form 3 - Return of Income Company - Mauritius Revenue Authority")
+      const res = await fetch("/api/documents/upload", { method: "POST", body: formData })
+      if (res.ok) {
+        const result = await res.json()
+        const parsed = result?.n8n_result || result?.data || result
+        if (parsed) {
+          if (parsed.company_name) setCompanyName(parsed.company_name)
+          if (parsed.brn) setBrn(parsed.brn)
+          if (parsed.tan) setTan(parsed.tan)
+          if (parsed.email) setEmail(parsed.email)
+          if (parsed.phone) setPhone(parsed.phone)
+          if (parsed.mobile) setMobile(parsed.mobile)
+          if (parsed.sector) setSector(parsed.sector)
+          if (parsed.type_activity) setTypeActivity(parsed.type_activity)
+          if (parsed.detail_activity) setDetailActivity(parsed.detail_activity)
+          if (parsed.accountant_name) setAccountantName(parsed.accountant_name)
+          if (parsed.revenue) setRevenuAffaires(Number(parsed.revenue) || 0)
+          if (parsed.assessment_year) setAssessmentYear(parsed.assessment_year)
+        }
+        setImportMessage("PDF importe avec succes. Verifiez les champs pre-remplis.")
+      } else {
+        setImportMessage("Erreur lors de l'import du PDF.")
+      }
+    } catch {
+      setImportMessage("Erreur lors de l'import du PDF.")
+    } finally {
+      setImportingPdf(false)
+    }
+  }
+
   const handleCalculer = () => {
     const totRev = revenuAffaires + revenuEmploi + revenuLocatif + revenuInterets + dividendes + autresRevenus
     const totDed = annualAllowance + autresDeductions
@@ -186,6 +229,7 @@ export default function ITForm3Page() {
         revenus: { revenuAffaires, revenuEmploi, revenuLocatif, revenuInterets, dividendes, autresRevenus, totalRevenus },
         deductions: { annualAllowance, autresDeductions, totalDeductions },
         taxCalculation: { revenuImposable, tauxIS, impotCalcule, apsApplicable, apsQuarterly, csrAmount, apsPayé, soldeAPayer },
+        accountantName,
       }
       await fetch("/api/comptable/it-form3", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
     } catch (e) {
@@ -219,6 +263,49 @@ export default function ITForm3Page() {
           Assessment Year {assessmentYear}
         </Badge>
       </div>
+
+      {/* PDF Import Section */}
+      <Card className="border-2 border-dashed print:hidden" style={{ borderColor: GOLD }}>
+        <CardContent className="py-4">
+          <div className="flex flex-col sm:flex-row items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Upload className="w-5 h-5" style={{ color: GOLD }} />
+              <div>
+                <p className="text-sm font-semibold" style={{ color: NAVY }}>Importer PDF officiel</p>
+                <p className="text-xs text-gray-500">Importez votre IT Form 3 officiel (PDF) pour pre-remplir automatiquement le formulaire</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="file"
+                accept=".pdf"
+                id="pdf-import-itform3"
+                className="hidden"
+                onChange={e => {
+                  const file = e.target.files?.[0]
+                  if (file) handleImportPdf(file)
+                  e.target.value = ""
+                }}
+              />
+              <Button
+                variant="outline"
+                onClick={() => document.getElementById("pdf-import-itform3")?.click()}
+                disabled={importingPdf}
+                style={{ borderColor: GOLD, color: NAVY }}
+                className="flex items-center gap-2"
+              >
+                {importingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                {importingPdf ? "Import en cours..." : "Choisir un PDF"}
+              </Button>
+            </div>
+          </div>
+          {importMessage && (
+            <p className={`text-sm mt-2 ${importMessage.includes("Erreur") ? "text-red-600" : "text-green-600"}`}>
+              {importMessage}
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       <Tabs defaultValue="form" className="w-full">
         <TabsList className="print:hidden">
@@ -464,7 +551,7 @@ export default function ITForm3Page() {
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between gap-4">
                 <Label className="flex-1 text-sm">Nom du comptable</Label>
-                <Input value="MAGELLAN HUB LTD" disabled className="w-56 bg-gray-50 text-right" />
+                <Input value={accountantName} onChange={e => setAccountantName(e.target.value)} className="w-56 text-right" placeholder="Nom du comptable" />
               </div>
               <div className="flex items-center justify-between gap-4">
                 <Label className="flex-1 text-sm">Montant d&apos;impôt à payer</Label>
@@ -554,7 +641,7 @@ export default function ITForm3Page() {
               <div><span className="text-gray-500">BRN:</span> <span className="font-medium">{brn}</span></div>
               <div><span className="text-gray-500">TAN:</span> <span className="font-medium">{tan}</span></div>
               <div><span className="text-gray-500">Assessment Year:</span> <span className="font-medium">{assessmentYear}</span></div>
-              <div><span className="text-gray-500">Comptable:</span> <span className="font-medium">MAGELLAN HUB LTD</span></div>
+              <div><span className="text-gray-500">Comptable:</span> <span className="font-medium">{accountantName || "Non defini"}</span></div>
               <div><span className="text-gray-500">Clôture:</span> <span className="font-medium">{closingDate || "Non définie"}</span></div>
             </CardContent>
           </Card>
