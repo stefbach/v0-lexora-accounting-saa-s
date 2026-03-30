@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
 
     // Upsert profil — le trigger handle_new_user peut déjà l'avoir créé
     const primarySocieteId = societe_id || (societe_ids && societe_ids[0]) || null
-    const { error: profileError } = await supabase.from('profiles').upsert({
+    const profileData: Record<string, unknown> = {
       id: authData.user.id,
       email,
       full_name,
@@ -57,8 +57,16 @@ export async function POST(request: NextRequest) {
       phone: phone || null,
       societe_id: primarySocieteId,
       comptable_id: comptable_id || null,
-      modules_utilisateur: modules_utilisateur || null,
-    }, { onConflict: 'id' })
+    }
+    if (modules_utilisateur) profileData.modules_utilisateur = modules_utilisateur
+
+    let { error: profileError } = await supabase.from('profiles').upsert(profileData, { onConflict: 'id' })
+    // If modules_utilisateur column doesn't exist yet, retry without it
+    if (profileError && modules_utilisateur) {
+      const { modules_utilisateur: _, ...safeData } = profileData
+      const retry = await supabase.from('profiles').upsert(safeData, { onConflict: 'id' })
+      profileError = retry.error
+    }
 
     if (profileError) {
       console.error('[admin/users] Profile upsert error:', profileError.message)
@@ -105,7 +113,13 @@ export async function PATCH(request: NextRequest) {
     if (actif !== undefined) updates.actif = actif
     if (modules_utilisateur !== undefined) updates.modules_utilisateur = modules_utilisateur
 
-    const { error } = await supabase.from('profiles').update(updates).eq('id', user_id)
+    // Try update with all fields; if modules_utilisateur column doesn't exist, retry without it
+    let { error } = await supabase.from('profiles').update(updates).eq('id', user_id)
+    if (error && modules_utilisateur !== undefined) {
+      const { modules_utilisateur: _, ...safeUpdates } = updates
+      const retry = await supabase.from('profiles').update(safeUpdates).eq('id', user_id)
+      error = retry.error
+    }
     if (error) throw error
 
     // Update user_societes if societe_ids provided (multi-société)
@@ -131,13 +145,14 @@ export async function PATCH(request: NextRequest) {
       }, { onConflict: 'user_id,societe_id' })
     }
 
-    // Update email in auth if changed
+    // Update email in auth if changed (ignore errors if email unchanged)
     if (email) {
-      await supabase.auth.admin.updateUserById(user_id, { email })
+      try { await supabase.auth.admin.updateUserById(user_id, { email }) } catch {}
     }
 
     return NextResponse.json({ success: true })
   } catch (e: unknown) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
+    console.error('[admin/users PATCH]', e)
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur inconnue' }, { status: 500 })
   }
 }

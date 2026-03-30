@@ -336,27 +336,31 @@ export default function UtilisateursPage() {
     if (!editUser) return
     setEditSaving(true)
     try {
+      const payload: Record<string, unknown> = {
+        user_id: editUser.id,
+        full_name: editForm.full_name,
+        email: editForm.email,
+        phone: editForm.phone,
+        role: editForm.role,
+        societe_id: editForm.societe_id || null,
+        actif: editForm.actif,
+      }
+      // Only send modules_utilisateur if non-empty
+      if (editForm.modules_utilisateur && Object.keys(editForm.modules_utilisateur).length > 0) {
+        payload.modules_utilisateur = editForm.modules_utilisateur
+      }
       const res = await fetch("/api/admin/users", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: editUser.id,
-          full_name: editForm.full_name,
-          email: editForm.email,
-          phone: editForm.phone,
-          role: editForm.role,
-          societe_id: editForm.societe_id || null,
-          actif: editForm.actif,
-          modules_utilisateur: editForm.modules_utilisateur,
-        }),
+        body: JSON.stringify(payload),
       })
       const data = await res.json()
-      if (data.error) { alert(data.error); setEditSaving(false); return }
+      if (data.error) { alert("Erreur: " + data.error); setEditSaving(false); return }
       setEditOpen(false)
       setEditUser(null)
       load()
-    } catch {
-      alert("Erreur reseau")
+    } catch (e) {
+      alert("Erreur reseau: " + (e instanceof Error ? e.message : ""))
     }
     setEditSaving(false)
   }
