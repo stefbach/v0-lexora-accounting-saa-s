@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Loader2, Clock, LogIn, LogOut, Users, Calendar, ChevronLeft, ChevronRight, X } from "lucide-react"
+import { Loader2, Clock, LogIn, LogOut, Users, Calendar, ChevronLeft, ChevronRight, X, AlertTriangle, CheckCircle } from "lucide-react"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -17,6 +17,8 @@ interface Pointage {
   heure_entree: string | null
   heure_sortie: string | null
   duree_minutes: number | null
+  heures_travaillees?: number | null
+  heures_sup?: number | null
   absent_justifie?: boolean
   employe?: { nom: string; prenom: string; poste?: string }
 }
@@ -48,9 +50,9 @@ function dureeFmt(min: number | null): string {
   return `${hrs}h${String(mins).padStart(2, "0")}`
 }
 
-function statutLabel(p: Pointage): { text: string; variant: "present" | "absent" | "none" } {
+function statutLabel(p: Pointage): { text: string; variant: "present" | "sorti" | "absent" | "none" } {
+  if (p.heure_entree && p.heure_sortie) return { text: "Termine", variant: "sorti" }
   if (p.heure_entree && !p.heure_sortie) return { text: "Present", variant: "present" }
-  if (p.heure_entree && p.heure_sortie) return { text: "Present", variant: "present" }
   if (p.absent_justifie) return { text: "Absent", variant: "absent" }
   if (!p.heure_entree) return { text: "Non pointe", variant: "none" }
   return { text: "--", variant: "none" }
@@ -58,6 +60,7 @@ function statutLabel(p: Pointage): { text: string; variant: "present" | "absent"
 
 const BADGE_CLASSES: Record<string, string> = {
   present: "bg-emerald-100 text-emerald-800 border-emerald-200",
+  sorti: "bg-blue-100 text-blue-800 border-blue-200",
   absent: "bg-red-100 text-red-800 border-red-200",
   none: "bg-gray-100 text-gray-600 border-gray-200",
 }
@@ -88,7 +91,10 @@ export default function PointagePage() {
   const [pointages, setPointages] = useState<Pointage[]>([])
   const [loading, setLoading] = useState(true)
   const [doingPointage, setDoingPointage] = useState(false)
-  const [lastAction, setLastAction] = useState<string | null>(null)
+
+  // Feedback
+  const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null)
+  const [feedbackType, setFeedbackType] = useState<"success" | "error" | "warning">("success")
 
   // Selectors
   const [societeId, setSocieteId] = useState<string>("")
@@ -96,18 +102,25 @@ export default function PointagePage() {
 
   // Calendar
   const [showCalendar, setShowCalendar] = useState(false)
-  const [calMonth, setCalMonth] = useState<string>(() => todayISO().slice(0, 7)) // YYYY-MM
+  const [calMonth, setCalMonth] = useState<string>(() => todayISO().slice(0, 7))
   const [calPointages, setCalPointages] = useState<Pointage[]>([])
   const [calLoading, setCalLoading] = useState(false)
   const [selectedCalDay, setSelectedCalDay] = useState<string | null>(null)
 
   // ---------------------------------------------------------------------------
-  // Live clock — updates every second
+  // Live clock
   // ---------------------------------------------------------------------------
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000)
     return () => clearInterval(timer)
   }, [])
+
+  // Clear feedback after 5 seconds
+  useEffect(() => {
+    if (!feedbackMsg) return
+    const t = setTimeout(() => setFeedbackMsg(null), 5000)
+    return () => clearTimeout(t)
+  }, [feedbackMsg])
 
   // ---------------------------------------------------------------------------
   // Load societes on mount
@@ -194,10 +207,10 @@ export default function PointagePage() {
   // Pointage action
   // ---------------------------------------------------------------------------
   const doPointage = async (type: "entree" | "sortie") => {
-    if (!employeId) return
-    if (!societeId) return
+    if (!employeId || !societeId) return
     setDoingPointage(true)
-    setLastAction(null)
+    setFeedbackMsg(null)
+
     try {
       const body = { employe_id: employeId, type_pointage: type, societe_id: societeId }
       const res = await fetch("/api/rh/pointage", {
@@ -205,19 +218,42 @@ export default function PointagePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       })
-      if (res.ok) {
+
+      const data = await res.json()
+
+      if (res.status === 409) {
+        // Already clocked in/out
+        setFeedbackType("warning")
+        setFeedbackMsg(data.message || "Deja pointe aujourd'hui")
+      } else if (!res.ok) {
+        setFeedbackType("error")
+        setFeedbackMsg(data.message || data.error || "Erreur lors du pointage")
+      } else {
         const emp = employes.find((e) => e.id === employeId)
         const name = emp ? `${emp.prenom} ${emp.nom}` : ""
-        setLastAction(
-          type === "entree"
-            ? `Entree enregistree pour ${name} a ${now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`
-            : `Sortie enregistree pour ${name} a ${now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`
-        )
-        loadPointages()
+        const timeStr = now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+
+        if (type === "entree") {
+          setFeedbackType("success")
+          setFeedbackMsg(`Entree enregistree pour ${name} a ${timeStr}`)
+        } else {
+          const duree = data.pointage?.duree_minutes
+          const dureeStr = duree ? ` -- Duree: ${dureeFmt(duree)}` : ""
+          const otStr = data.pointage?.heures_sup && data.pointage.heures_sup > 0
+            ? ` (dont ${data.pointage.heures_sup.toFixed(1)}h sup.)`
+            : ""
+          setFeedbackType("success")
+          setFeedbackMsg(`Sortie enregistree pour ${name} a ${timeStr}${dureeStr}${otStr}`)
+        }
+
+        // Refresh immediately
+        await loadPointages()
         if (showCalendar) loadCalendar()
       }
     } catch (e) {
       console.error(e)
+      setFeedbackType("error")
+      setFeedbackMsg("Erreur de connexion au serveur")
     } finally {
       setDoingPointage(false)
     }
@@ -230,6 +266,17 @@ export default function PointagePage() {
     if (!employeId) return null
     return pointages.find((p) => p.employe_id === employeId) || null
   }, [employeId, pointages])
+
+  // Determine button states for selected employee
+  const canClockIn = useMemo(() => {
+    if (!selectedEmployeePointage) return true
+    return !selectedEmployeePointage.heure_entree
+  }, [selectedEmployeePointage])
+
+  const canClockOut = useMemo(() => {
+    if (!selectedEmployeePointage) return false
+    return !!selectedEmployeePointage.heure_entree && !selectedEmployeePointage.heure_sortie
+  }, [selectedEmployeePointage])
 
   // ---------------------------------------------------------------------------
   // Sorted pointages for daily view
@@ -249,7 +296,6 @@ export default function PointagePage() {
     const [year, month] = calMonth.split("-").map(Number)
     const firstDay = new Date(year, month - 1, 1)
     const daysInMonth = new Date(year, month, 0).getDate()
-    // Monday = 0, Sunday = 6
     let startDow = firstDay.getDay() - 1
     if (startDow < 0) startDow = 6
 
@@ -262,7 +308,6 @@ export default function PointagePage() {
     const weeks: { day: number; date: string; isWeekend: boolean; pointage: Pointage | null }[][] = []
     let currentWeek: typeof weeks[0] = []
 
-    // Fill leading blanks
     for (let i = 0; i < startDow; i++) {
       currentWeek.push({ day: 0, date: "", isWeekend: false, pointage: null })
     }
@@ -275,7 +320,6 @@ export default function PointagePage() {
       currentWeek.push({ day: d, date: dateStr, isWeekend, pointage: pointageMap.get(dateStr) || null })
 
       if (dow === 0 || d === daysInMonth) {
-        // Fill trailing blanks
         while (currentWeek.length < 7) {
           currentWeek.push({ day: 0, date: "", isWeekend: false, pointage: null })
         }
@@ -304,12 +348,9 @@ export default function PointagePage() {
   // ---------------------------------------------------------------------------
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8 space-y-6 max-w-6xl mx-auto">
-      {/* ================================================================== */}
-      {/* TOP SECTION: Clock + Punch buttons                                  */}
-      {/* ================================================================== */}
+      {/* TOP SECTION: Clock + Punch buttons */}
       <Card className="border-0 shadow-lg overflow-hidden">
         <div className="bg-[#1E2A4A] text-white p-6 md:p-10 text-center">
-          {/* Live clock */}
           <div className="flex items-center justify-center gap-3 mb-2">
             <Clock className="w-8 h-8 text-[#C9A84C]" />
             <span className="text-5xl md:text-7xl font-mono font-bold tracking-wider">
@@ -322,7 +363,6 @@ export default function PointagePage() {
         <CardContent className="p-6 space-y-5">
           {/* Selectors */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Societe */}
             <div>
               <label className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 block">
                 Societe
@@ -338,8 +378,6 @@ export default function PointagePage() {
                 </SelectContent>
               </Select>
             </div>
-
-            {/* Employe */}
             <div>
               <label className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 block">
                 Employe
@@ -359,46 +397,74 @@ export default function PointagePage() {
             </div>
           </div>
 
-          {/* Punch buttons */}
+          {/* Punch buttons with status-aware disabling */}
           <div className="grid grid-cols-2 gap-4">
-            <Button
-              onClick={() => doPointage("entree")}
-              disabled={!employeId || doingPointage}
-              className="h-16 md:h-20 text-lg md:text-xl font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-md transition-all active:scale-95"
-            >
-              {doingPointage ? (
-                <Loader2 className="w-6 h-6 animate-spin mr-3" />
-              ) : (
-                <LogIn className="w-6 h-6 mr-3" />
+            <div className="space-y-1">
+              <Button
+                onClick={() => doPointage("entree")}
+                disabled={!employeId || doingPointage || !canClockIn}
+                className="w-full h-16 md:h-20 text-lg md:text-xl font-semibold bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white rounded-xl shadow-md transition-all active:scale-95"
+              >
+                {doingPointage ? (
+                  <Loader2 className="w-6 h-6 animate-spin mr-3" />
+                ) : (
+                  <LogIn className="w-6 h-6 mr-3" />
+                )}
+                Pointer Entree
+              </Button>
+              {employeId && !canClockIn && (
+                <p className="text-xs text-center text-gray-500">
+                  Deja pointe a {fmtHeure(selectedEmployeePointage?.heure_entree || null)}
+                </p>
               )}
-              Pointer Entree
-            </Button>
-            <Button
-              onClick={() => doPointage("sortie")}
-              disabled={!employeId || doingPointage}
-              className="h-16 md:h-20 text-lg md:text-xl font-semibold bg-red-600 hover:bg-red-700 text-white rounded-xl shadow-md transition-all active:scale-95"
-            >
-              {doingPointage ? (
-                <Loader2 className="w-6 h-6 animate-spin mr-3" />
-              ) : (
-                <LogOut className="w-6 h-6 mr-3" />
+            </div>
+            <div className="space-y-1">
+              <Button
+                onClick={() => doPointage("sortie")}
+                disabled={!employeId || doingPointage || !canClockOut}
+                className="w-full h-16 md:h-20 text-lg md:text-xl font-semibold bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white rounded-xl shadow-md transition-all active:scale-95"
+              >
+                {doingPointage ? (
+                  <Loader2 className="w-6 h-6 animate-spin mr-3" />
+                ) : (
+                  <LogOut className="w-6 h-6 mr-3" />
+                )}
+                Pointer Sortie
+              </Button>
+              {employeId && selectedEmployeePointage?.heure_sortie && (
+                <p className="text-xs text-center text-gray-500">
+                  Deja pointe a {fmtHeure(selectedEmployeePointage.heure_sortie)}
+                </p>
               )}
-              Pointer Sortie
-            </Button>
+              {employeId && !canClockOut && !selectedEmployeePointage?.heure_entree && (
+                <p className="text-xs text-center text-gray-500">Entree requise d'abord</p>
+              )}
+            </div>
           </div>
 
-          {/* Feedback */}
-          {lastAction && (
-            <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-4 py-3 text-center text-sm font-medium">
-              {lastAction}
+          {/* Feedback message */}
+          {feedbackMsg && (
+            <div
+              className={`flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium ${
+                feedbackType === "success"
+                  ? "bg-emerald-50 border border-emerald-200 text-emerald-800"
+                  : feedbackType === "warning"
+                  ? "bg-amber-50 border border-amber-200 text-amber-800"
+                  : "bg-red-50 border border-red-200 text-red-800"
+              }`}
+            >
+              {feedbackType === "success" ? (
+                <CheckCircle className="w-5 h-5 flex-shrink-0" />
+              ) : (
+                <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+              )}
+              <span>{feedbackMsg}</span>
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* ================================================================== */}
-      {/* TODAY'S STATUS for selected employee                                */}
-      {/* ================================================================== */}
+      {/* TODAY'S STATUS for selected employee */}
       {employeId && (
         <Card className="border shadow-sm">
           <CardHeader className="pb-3">
@@ -414,7 +480,7 @@ export default function PointagePage() {
           <CardContent>
             {selectedEmployeePointage ? (
               <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                <div className="flex-1 grid grid-cols-3 gap-4 text-center">
+                <div className="flex-1 grid grid-cols-4 gap-4 text-center">
                   <div>
                     <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Entree</p>
                     <p className="text-2xl font-mono font-semibold text-emerald-700">
@@ -431,6 +497,14 @@ export default function PointagePage() {
                     <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Duree</p>
                     <p className="text-2xl font-mono font-semibold text-[#1E2A4A]">
                       {dureeFmt(selectedEmployeePointage.duree_minutes)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">H. Sup</p>
+                    <p className="text-2xl font-mono font-semibold text-[#C9A84C]">
+                      {selectedEmployeePointage.heures_sup
+                        ? `${selectedEmployeePointage.heures_sup.toFixed(1)}h`
+                        : "--"}
                     </p>
                   </div>
                 </div>
@@ -457,9 +531,7 @@ export default function PointagePage() {
         </Card>
       )}
 
-      {/* ================================================================== */}
-      {/* DAILY VIEW: All employees today                                     */}
-      {/* ================================================================== */}
+      {/* DAILY VIEW: All employees today */}
       <Card className="border shadow-sm">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
@@ -494,6 +566,7 @@ export default function PointagePage() {
                     <TableHead className="font-semibold text-[#1E2A4A] text-center">Entree</TableHead>
                     <TableHead className="font-semibold text-[#1E2A4A] text-center">Sortie</TableHead>
                     <TableHead className="font-semibold text-[#1E2A4A] text-center">Heures</TableHead>
+                    <TableHead className="font-semibold text-[#1E2A4A] text-center">H. Sup</TableHead>
                     <TableHead className="font-semibold text-[#1E2A4A] text-center">Statut</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -506,6 +579,8 @@ export default function PointagePage() {
                         className={
                           s.variant === "present"
                             ? "bg-emerald-50/30"
+                            : s.variant === "sorti"
+                            ? "bg-blue-50/30"
                             : s.variant === "absent"
                             ? "bg-red-50/30"
                             : ""
@@ -523,6 +598,11 @@ export default function PointagePage() {
                         <TableCell className="text-center font-mono">
                           {dureeFmt(p.duree_minutes)}
                         </TableCell>
+                        <TableCell className="text-center font-mono text-[#C9A84C]">
+                          {p.heures_sup && p.heures_sup > 0
+                            ? `${p.heures_sup.toFixed(1)}h`
+                            : "--"}
+                        </TableCell>
                         <TableCell className="text-center">
                           <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold border ${BADGE_CLASSES[s.variant]}`}>
                             {s.text}
@@ -538,9 +618,7 @@ export default function PointagePage() {
         </CardContent>
       </Card>
 
-      {/* ================================================================== */}
-      {/* MONTHLY CALENDAR (toggleable)                                       */}
-      {/* ================================================================== */}
+      {/* MONTHLY CALENDAR */}
       {showCalendar && (
         <Card className="border shadow-sm">
           <CardHeader className="pb-3">
@@ -556,7 +634,6 @@ export default function PointagePage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {/* Month navigation */}
                 <div className="flex items-center justify-between">
                   <Button variant="outline" size="sm" onClick={() => navigateMonth(-1)}>
                     <ChevronLeft className="w-4 h-4" />
@@ -575,7 +652,6 @@ export default function PointagePage() {
                   </div>
                 ) : (
                   <>
-                    {/* Calendar grid */}
                     <div className="grid grid-cols-7 gap-1">
                       {["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map((d) => (
                         <div key={d} className="text-center text-xs font-semibold text-gray-500 py-2">
@@ -612,7 +688,6 @@ export default function PointagePage() {
                       })}
                     </div>
 
-                    {/* Legend */}
                     <div className="flex items-center justify-center gap-6 text-xs text-gray-500">
                       <span className="flex items-center gap-1">
                         <span className="w-3 h-3 rounded bg-emerald-100 border border-emerald-200" /> Present
@@ -625,7 +700,6 @@ export default function PointagePage() {
                       </span>
                     </div>
 
-                    {/* Day detail on click */}
                     {selectedCalDay && (
                       <div className="border rounded-lg p-4 bg-gray-50">
                         <div className="flex items-center justify-between mb-3">
@@ -674,7 +748,6 @@ export default function PointagePage() {
         </Card>
       )}
 
-      {/* Footer */}
       <p className="text-center text-xs text-gray-400">
         Actualisation automatique toutes les 30 secondes
       </p>

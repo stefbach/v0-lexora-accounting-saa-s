@@ -64,28 +64,18 @@ export default function FicheClientPage() {
       setLoading(true)
       setError(null)
       try {
+        // Use comptable/clients API which already returns clients + dossiers + societes
         const results = await Promise.allSettled([
-          fetch("/api/admin/users").then((r) => r.json()),
-          fetch("/api/admin/societes").then((r) => r.json()),
-          fetch("/api/admin/dossiers").then((r) => r.json()),
-          fetch(`/api/client/alertes?client_id=${clientId}`).then((r) =>
-            r.ok ? r.json() : { alertes: [] }
-          ),
+          fetch("/api/comptable/clients").then((r) => r.json()),
+          fetch("/api/comptable/alertes").then((r) => r.ok ? r.json() : { alertes: [] }),
         ])
 
-        const usersData =
-          results[0].status === "fulfilled" ? results[0].value : {}
-        const societesData =
-          results[1].status === "fulfilled" ? results[1].value : {}
-        const dossiersData =
-          results[2].status === "fulfilled" ? results[2].value : {}
-        const alertesData =
-          results[3].status === "fulfilled" ? results[3].value : {}
+        const clientsData = results[0].status === "fulfilled" ? results[0].value : {}
+        const alertesData = results[1].status === "fulfilled" ? results[1].value : {}
 
-        // Find client
-        const user = (usersData.users || []).find(
-          (u: Record<string, unknown>) => u.id === clientId
-        )
+        // Find client in the list
+        const allClients = clientsData.clients || []
+        const user = allClients.find((u: Record<string, unknown>) => u.id === clientId)
         if (!user) throw new Error("Client introuvable")
 
         setClient({
@@ -97,36 +87,41 @@ export default function FicheClientPage() {
           created_at: user.created_at,
         })
 
-        // Get client societes via dossiers
-        const clientDossiers = (dossiersData.dossiers || []).filter(
+        // Get client societes from dossiers
+        const allDossiers = clientsData.dossiers || []
+        const clientDossiers = allDossiers.filter(
           (d: Record<string, unknown>) => d.client_id === clientId
         )
-        const societeIds = [
-          ...new Set(
-            clientDossiers.map(
-              (d: Record<string, unknown>) => d.societe_id as string
-            )
-          ),
-        ]
 
-        const allSocietes = societesData.societes || []
-        const clientSocietes: SocieteCard[] = societeIds
-          .map((sid: string) => {
-            const s = allSocietes.find(
-              (soc: Record<string, unknown>) => soc.id === sid
-            )
-            if (!s) return null
-            return {
-              id: s.id,
-              nom: s.nom,
-              brn: s.brn || null,
-              statut_tva: s.statut_tva || false,
-              nbDocs: 0,
-              derniere_activite: s.updated_at || s.created_at || "",
-            }
+        const clientSocietes: SocieteCard[] = clientDossiers
+          .filter((d: any) => d.societe)
+          .map((d: any) => ({
+            id: d.societe.id || d.societe_id,
+            nom: d.societe.nom || "Sans nom",
+            brn: d.societe.brn || null,
+            statut_tva: d.societe.statut_tva || false,
+            nbDocs: 0,
+            derniere_activite: d.created_at || "",
+          }))
+
+        // Deduplicate by id
+        const uniqueSocietes = Array.from(
+          new Map(clientSocietes.map(s => [s.id, s])).values()
+        )
+
+        // If no societes from dossiers, try to find owned societes
+        if (uniqueSocietes.length === 0) {
+          const socRes = await fetch("/api/admin/societes").then(r => r.json()).catch(() => ({ societes: [] }))
+          const owned = (socRes.societes || []).filter((s: any) => s.created_by === clientId)
+          owned.forEach((s: any) => {
+            uniqueSocietes.push({
+              id: s.id, nom: s.nom, brn: s.brn || null,
+              statut_tva: s.statut_tva || false, nbDocs: 0, derniere_activite: s.created_at || "",
+            })
           })
-          .filter(Boolean) as SocieteCard[]
-        setSocietes(clientSocietes)
+        }
+
+        setSocietes(uniqueSocietes)
 
         // Alertes
         const items = alertesData.alertes || []
