@@ -174,24 +174,35 @@ export async function POST(request: Request) {
       // Déduire absences injustifiées du net
       const salaire_net_final = Math.round((resultat.salaire_net - montant_absence_final) * 100) / 100
 
-      const bulletin = {
+      const bulletin: Record<string, any> = {
         employe_id, societe_id: societe_id || emp.societe_id,
         periode: periodeDate,
-        jours_absence: jours_absence_injust,
-        montant_absence_final,
-        primes_detail: primesMois || [],
-        ...elements, ...resultat,
+        salaire_base: elements.salaire_base,
+        salaire_brut: resultat.salaire_brut,
         salaire_net: salaire_net_final,
+        csg_salarie: resultat.csg_salarie,
+        csg_patronal: resultat.csg_patronal,
+        nsf_salarie: resultat.nsf_salarie,
+        nsf_patronal: resultat.nsf_patronal,
+        paye: resultat.paye,
+        training_levy: resultat.training_levy,
+        prgf: resultat.prgf,
         total_deductions: Math.round((resultat.total_deductions + montant_absence_final) * 100) / 100,
-        pct_refacturation: emp.pct_refacturation || 0,
-        societe_refacturation_id: emp.societe_refacturation_id || null,
-        airbox_mur: body.airbox_mur || 924.48,
-        ordinateur_mur: body.ordinateur_mur || 818.22,
+        total_charges_patronales: resultat.total_charges_patronales,
+        cout_total_employeur: resultat.cout_total_employeur,
+        heures_sup_montant: elements.heures_sup_montant || 0,
+        special_allowance_1: elements.special_allowance_1 || 0,
+        transport_allowance: elements.transport_allowance || 0,
+        petrol_allowance: elements.petrol_allowance || 0,
+        montant_absence: montant_absence_final,
         statut: 'brouillon',
       }
 
       const { data, error } = await supabase.from('bulletins_paie').upsert(bulletin, { onConflict: 'employe_id,periode' }).select().single()
-      if (error) throw error
+      if (error) {
+        console.error('[paie calculer]', error.message)
+        throw error
+      }
 
       // Marquer les primes comme intégrées (colonne integre_paie + date_integration ajoutées en migration 028)
       if (primesMois && primesMois.length > 0) {
@@ -286,26 +297,47 @@ export async function POST(request: Request) {
         // Résumé notes pour le bulletin
         const notesResume = `OT: ${Math.round(total_ot_montant)} MUR, Primes: ${Math.round(total_primes)} MUR, Absences: ${jours_absence_injust} jours`
 
-        const bulletin = {
+        const bulletin: Record<string, any> = {
           employe_id: emp.id,
           societe_id,
           periode: periodeDate,
-          jours_absence: jours_absence_injust,
+          salaire_base: salaire_base_mur,
+          salaire_brut: resultat.salaire_brut,
+          salaire_net: salaire_net_final,
+          csg_salarie: resultat.csg_salarie,
+          csg_patronal: resultat.csg_patronal,
+          nsf_salarie: resultat.nsf_salarie,
+          nsf_patronal: resultat.nsf_patronal,
+          paye: resultat.paye,
+          training_levy: resultat.training_levy,
+          prgf: resultat.prgf,
+          total_deductions: Math.round((resultat.total_deductions + montant_absence_final) * 100) / 100,
+          total_charges_patronales: resultat.total_charges_patronales,
+          cout_total_employeur: resultat.cout_total_employeur,
+          heures_sup_montant: Math.round(total_ot_montant),
+          special_allowance_1: Math.round(total_primes),
+          transport_allowance: Number(emp.transport_allowance) || 0,
+          petrol_allowance: Number(emp.petrol_allowance) || 0,
           montant_absence: montant_absence_final,
           notes: notesResume,
-          ...elements, ...resultat,
-          salaire_net: salaire_net_final,
-          total_deductions: Math.round((resultat.total_deductions + montant_absence_final) * 100) / 100,
-          pct_refacturation: emp.pct_refacturation || 0,
-          societe_refacturation_id: emp.societe_refacturation_id || null,
-          airbox_mur: 924.48,
-          ordinateur_mur: 818.22,
           statut: 'brouillon',
         }
 
+        // Remove fields that may not exist in DB schema (ResultatPaie extras)
+        const fieldsToRemove = [
+          'salary_compensation_montant', 'total_emoluments', 'prgf_pct_emoluments',
+          'prgf_par_jour', 'montant_refacture_mur', 'csg_taux', 'csg_bonus',
+          'salaire_brut_base', 'resultat_net'
+        ]
+        for (const f of fieldsToRemove) delete (bulletin as any)[f]
+        console.log(`[paie batch] ${emp.nom} ${emp.prenom}: base=${salaire_base_mur}, brut=${resultat.salaire_brut}, net=${salaire_net_final}`)
+
         const { data: saved, error } = await supabase.from('bulletins_paie').upsert(bulletin, { onConflict: 'employe_id,periode' }).select().single()
+        if (error) {
+          console.error(`[paie batch] Error for ${emp.nom} ${emp.prenom}:`, error.message)
+        }
         if (!error && saved) {
-          bulletinsSauvegardes.push({ ...saved, employe: { id: emp.id, code: emp.code, nom: emp.nom, prenom: emp.prenom, poste: emp.poste } })
+          bulletinsSauvegardes.push({ ...saved, nom: emp.nom, prenom: emp.prenom, employe: { id: emp.id, code: emp.code, nom: emp.nom, prenom: emp.prenom, poste: emp.poste } })
           // Marquer primes intégrées (colonne integre_paie + date_integration ajoutées en migration 028)
           if (primesMois && primesMois.length > 0) {
             await supabase.from('primes_variables_mois')
