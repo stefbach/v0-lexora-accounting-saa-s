@@ -251,7 +251,7 @@ export async function POST(request: Request) {
         // 2. Primes approuvées
         const { data: primesMois } = await supabase.from('primes_variables_mois')
           .select('*').eq('employe_id', emp.id).eq('periode', periodeDate).eq('approuve', true)
-        const total_primes = (primesMois || []).reduce((s, p) => s + Number(p.montant || 0), 0)
+        let total_primes = (primesMois || []).reduce((s, p) => s + Number(p.montant || 0), 0)
 
         // 3. Absences injustifiées
         const { data: congesApprouves } = await supabase.from('demandes_conges')
