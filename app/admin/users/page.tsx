@@ -168,7 +168,7 @@ export default function UsersPage() {
     if (data.error) { alert(data.error); return }
     setLastPassword(form.password)
     setOpen(false)
-    setForm({ prenom: '', nom: '', email: '', password: genPassword(), role: 'client_admin', societe_id: '', comptable_id: '' })
+    setForm({ prenom: '', nom: '', email: '', password: genPassword(), role: 'client_admin', societe_id: '', comptable_id: '', modules_utilisateur: getDefaultModules('client_admin') })
     load()
   }
 
@@ -177,6 +177,15 @@ export default function UsersPage() {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ user_id, role })
+    })
+    load()
+  }
+
+  const savePermissions = async (user_id: string, modules: ModulesUtilisateur) => {
+    await fetch('/api/admin/users', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id, modules_utilisateur: modules })
     })
     load()
   }
@@ -289,25 +298,32 @@ export default function UsersPage() {
         <div className="space-y-2">
           {filtered.map(u => (
             <Card key={u.id}>
-              <CardContent className="p-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-[#1E2A4A] flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                    {(u.full_name || u.email).slice(0,2).toUpperCase()}
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-[#1E2A4A] flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                      {(u.full_name || u.email).slice(0,2).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm">{u.full_name || '--'}</p>
+                      <p className="text-xs text-gray-400">{u.email}</p>
+                    </div>
+                    <RoleBadge role={u.role} />
                   </div>
-                  <div>
-                    <p className="font-medium text-sm">{u.full_name || '—'}</p>
-                    <p className="text-xs text-gray-400">{u.email}</p>
+                  <div className="flex items-center gap-2">
+                    <Select value={u.role} onValueChange={v => changeRole(u.id, v)}>
+                      <SelectTrigger className="h-8 text-xs w-40"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {ROLES.map(r => <SelectItem key={r.value} value={r.value} className="text-xs">{r.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <RoleBadge role={u.role} />
                 </div>
-                <div className="flex items-center gap-2">
-                  <Select value={u.role} onValueChange={v => changeRole(u.id, v)}>
-                    <SelectTrigger className="h-8 text-xs w-40"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {ROLES.map(r => <SelectItem key={r.value} value={r.value} className="text-xs">{r.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
+                <PermissionsEditor
+                  modules={u.modules_utilisateur || getDefaultModules(u.role)}
+                  onChange={m => savePermissions(u.id, m)}
+                  role={u.role}
+                />
               </CardContent>
             </Card>
           ))}

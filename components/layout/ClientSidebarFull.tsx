@@ -19,10 +19,12 @@ import {
 /* ------------------------------------------------------------------ */
 /*  Module-gated section type                                          */
 /* ------------------------------------------------------------------ */
+type ModuleKey = "comptabilite" | "rh" | "juridique" | "facturation" | "documents" | "fiscal" | "etats_financiers" | "employe_portal"
+
 interface MenuSection {
   section: string
   sectionKey?: string
-  requiredModule?: "comptabilite" | "rh" | "juridique" | "facturation" | "documents"
+  requiredModule?: ModuleKey
   items: { href: string; label: string; labelKey?: string; icon: any }[]
 }
 
@@ -32,6 +34,41 @@ interface ActiveModules {
   juridique: boolean
   facturation: boolean
   documents: boolean
+  fiscal: boolean
+  etats_financiers: boolean
+  employe_portal: boolean
+}
+
+interface UserModules {
+  documents?: boolean
+  comptabilite?: boolean
+  facturation?: boolean
+  rh?: boolean
+  fiscal?: boolean
+  etats_financiers?: boolean
+  employe_portal?: boolean
+}
+
+function getUserDefaultModules(role: string): UserModules {
+  switch (role) {
+    case "client_admin":
+    case "super_admin":
+    case "admin":
+      return { documents: true, comptabilite: true, facturation: true, rh: true, fiscal: true, etats_financiers: true, employe_portal: true }
+    case "client_user":
+      return { documents: true, comptabilite: true, facturation: true, rh: true, fiscal: true, etats_financiers: true, employe_portal: false }
+    case "client_assistant":
+      return { documents: true, comptabilite: false, facturation: false, rh: false, fiscal: false, etats_financiers: false, employe_portal: false }
+    case "rh":
+      return { documents: true, comptabilite: false, facturation: false, rh: true, fiscal: false, etats_financiers: false, employe_portal: false }
+    case "comptable":
+    case "comptable_dedie":
+      return { documents: true, comptabilite: true, facturation: true, rh: false, fiscal: true, etats_financiers: true, employe_portal: false }
+    case "employe":
+      return { documents: false, comptabilite: false, facturation: false, rh: false, fiscal: false, etats_financiers: false, employe_portal: true }
+    default:
+      return { documents: true, comptabilite: false, facturation: false, rh: false, fiscal: false, etats_financiers: false, employe_portal: false }
+  }
 }
 
 const DEFAULT_MODULES: ActiveModules = {
@@ -40,6 +77,9 @@ const DEFAULT_MODULES: ActiveModules = {
   juridique: true,
   facturation: true,
   documents: true,
+  fiscal: true,
+  etats_financiers: true,
+  employe_portal: true,
 }
 
 const MENU: MenuSection[] = [
@@ -78,7 +118,7 @@ const MENU: MenuSection[] = [
   },
   {
     section: "États Financiers", sectionKey: "fin.financial_statements",
-    requiredModule: "comptabilite",
+    requiredModule: "etats_financiers",
     items: [
       { href: "/client/bilan", label: "Bilan & P&L", labelKey: "fin.balance_sheet", icon: BookOpen },
       { href: "/client/grand-livre", label: "Grand Livre", labelKey: "fin.general_ledger", icon: BookOpen },
@@ -91,7 +131,7 @@ const MENU: MenuSection[] = [
   },
   {
     section: "Fiscal MRA", sectionKey: "tax.fiscal_mra",
-    requiredModule: "comptabilite",
+    requiredModule: "fiscal",
     items: [
       { href: "/client/tva", label: "TVA MRA", labelKey: "tax.vat", icon: Receipt },
       { href: "/client/charges-sociales", label: "CSG / NSF / PAYE", labelKey: "tax.social_charges", icon: Calculator },
@@ -125,23 +165,6 @@ const MENU: MenuSection[] = [
   },
 ]
 
-// Restricted menu for client_assistant role — documents & profile only
-const ASSISTANT_MENU: MenuSection[] = [
-  {
-    section: "Mon Espace", sectionKey: "nav.my_space",
-    items: [
-      { href: "/client/tableau-de-bord", label: "Tableau de bord", labelKey: "nav.dashboard", icon: LayoutDashboard },
-      { href: "/client/documents", label: "Documents & OCR", labelKey: "nav.documents", icon: FileText },
-      { href: "/client/assistant", label: "Espace Assistant", labelKey: "nav.assistant", icon: Upload },
-    ]
-  },
-  {
-    section: "Mon Compte", sectionKey: "account.my_account",
-    items: [
-      { href: "/client/profil", label: "Mon Profil", labelKey: "account.my_profile", icon: Settings },
-    ]
-  },
-]
 
 export function ClientSidebarFull() {
   const pathname = usePathname()
@@ -155,7 +178,7 @@ export function ClientSidebarFull() {
   // Close sidebar on navigation
   useEffect(() => { setMobileOpen(false) }, [pathname])
 
-  // Fetch modules_actifs from the user's first societe
+  // Fetch modules_actifs from the user's first societe, then intersect with user permissions
   useEffect(() => {
     const loadModules = async () => {
       try {
@@ -163,22 +186,46 @@ export function ClientSidebarFull() {
         if (!res.ok) return
         const data = await res.json()
         const societes = data.societes || []
+
+        // Step 1: societe plan modules (what the company's plan allows)
+        let planModules: ActiveModules = { ...DEFAULT_MODULES }
         if (societes.length > 0 && societes[0].modules_actifs) {
           const m = societes[0].modules_actifs
-          setActiveModules({
+          planModules = {
             comptabilite: m.comptabilite !== false,
             rh: m.rh !== false,
             juridique: m.juridique !== false,
             facturation: m.facturation !== false,
             documents: m.documents !== false,
-          })
+            fiscal: m.fiscal !== false,
+            etats_financiers: m.etats_financiers !== false,
+            employe_portal: m.employe_portal !== false,
+          }
         }
+
+        // Step 2: per-user permissions (from profile.modules_utilisateur)
+        // If NULL, use role-based defaults; if set, use the explicit values
+        const userModules: UserModules = profile?.modules_utilisateur
+          ? profile.modules_utilisateur
+          : getUserDefaultModules(profile?.role || "client_user")
+
+        // Step 3: intersection — module visible only if BOTH plan allows AND user has permission
+        setActiveModules({
+          comptabilite: planModules.comptabilite && (userModules.comptabilite !== false),
+          rh: planModules.rh && (userModules.rh !== false),
+          juridique: planModules.juridique,
+          facturation: planModules.facturation && (userModules.facturation !== false),
+          documents: planModules.documents && (userModules.documents !== false),
+          fiscal: planModules.fiscal && (userModules.fiscal !== false),
+          etats_financiers: planModules.etats_financiers && (userModules.etats_financiers !== false),
+          employe_portal: planModules.employe_portal && (userModules.employe_portal !== false),
+        })
       } catch {
         // Keep defaults if fetch fails
       }
     }
     loadModules()
-  }, [])
+  }, [profile])
 
   const toggle = (s: string) =>
     setCollapsed(p => p.includes(s) ? p.filter(x => x !== s) : [...p, s])
@@ -191,16 +238,11 @@ export function ClientSidebarFull() {
     router.push('/auth/login')
   }
 
-  // For client_assistant, show only the restricted menu
-  const isAssistant = profile?.role === "client_assistant"
-
-  // Filter menu sections based on active modules
-  const visibleMenu = isAssistant
-    ? ASSISTANT_MENU
-    : MENU.filter(section => {
-        if (!section.requiredModule) return true
-        return activeModules[section.requiredModule]
-      })
+  // Filter menu sections based on active modules (societe plan intersected with user permissions)
+  const visibleMenu = MENU.filter(section => {
+    if (!section.requiredModule) return true
+    return activeModules[section.requiredModule]
+  })
 
   return (
     <>

@@ -7,15 +7,27 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Switch } from "@/components/ui/switch"
 import {
   Users, UserPlus, Shield, Building2, Mail, Phone, Pencil,
   ToggleLeft, ToggleRight, Copy, RefreshCw, Search, ChevronDown,
-  ChevronUp, ChevronRight, Calendar, ArrowUpDown, X, Check
+  ChevronUp, ChevronRight, Calendar, ArrowUpDown, X, Check,
+  FileText, Calculator, Receipt, Scale, BarChart3, UserCheck
 } from "lucide-react"
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+interface ModulesUtilisateur {
+  documents?: boolean
+  comptabilite?: boolean
+  facturation?: boolean
+  rh?: boolean
+  fiscal?: boolean
+  etats_financiers?: boolean
+  employe_portal?: boolean
+}
+
 interface User {
   id: string
   email: string
@@ -28,6 +40,7 @@ interface User {
   last_sign_in_at?: string
   created_by?: string
   societes?: { nom: string } | null
+  modules_utilisateur?: ModulesUtilisateur | null
 }
 
 interface Societe {
@@ -55,6 +68,75 @@ const ROLES = [
 ]
 
 const NEEDS_SOCIETE = ["rh", "juridique", "employe", "manager", "direction"]
+
+const MODULE_DEFS = [
+  { key: "documents", label: "Documents & OCR", icon: FileText },
+  { key: "comptabilite", label: "Comptabilite (Grand Livre, Bilan, Banque, Rapprochement)", icon: Calculator },
+  { key: "facturation", label: "Facturation (Factures, Nouvelle facture)", icon: Receipt },
+  { key: "rh", label: "RH & Paie (Employes, Pointage, Conges, Paie, Primes)", icon: Users },
+  { key: "fiscal", label: "Fiscal MRA (TVA, IT Form 3, Annual Return)", icon: Scale },
+  { key: "etats_financiers", label: "Etats Financiers (Bilan, Previsionnel, Exercices)", icon: BarChart3 },
+  { key: "employe_portal", label: "Portail Employe (bulletins et conges)", icon: UserCheck },
+] as const
+
+function getDefaultModules(role: string): ModulesUtilisateur {
+  switch (role) {
+    case "client_admin":
+    case "super_admin":
+    case "admin":
+      return { documents: true, comptabilite: true, facturation: true, rh: true, fiscal: true, etats_financiers: true, employe_portal: true }
+    case "client_user":
+      return { documents: true, comptabilite: true, facturation: true, rh: true, fiscal: true, etats_financiers: true, employe_portal: false }
+    case "client_assistant":
+      return { documents: true, comptabilite: false, facturation: false, rh: false, fiscal: false, etats_financiers: false, employe_portal: false }
+    case "rh":
+      return { documents: true, comptabilite: false, facturation: false, rh: true, fiscal: false, etats_financiers: false, employe_portal: false }
+    case "comptable":
+    case "comptable_dedie":
+      return { documents: true, comptabilite: true, facturation: true, rh: false, fiscal: true, etats_financiers: true, employe_portal: false }
+    case "employe":
+      return { documents: false, comptabilite: false, facturation: false, rh: false, fiscal: false, etats_financiers: false, employe_portal: true }
+    default:
+      return { documents: true, comptabilite: false, facturation: false, rh: false, fiscal: false, etats_financiers: false, employe_portal: false }
+  }
+}
+
+function PermissionsEditor({ modules, onChange, role }: { modules: ModulesUtilisateur; onChange: (m: ModulesUtilisateur) => void; role: string }) {
+  const [open, setOpen] = useState(false)
+  const defaults = getDefaultModules(role)
+  const isCustom = Object.keys(modules).some(k => (modules as Record<string, boolean>)[k] !== (defaults as Record<string, boolean>)[k])
+  return (
+    <div className="border rounded-lg">
+      <button type="button" onClick={() => setOpen(!open)} className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium text-[#1E2A4A] hover:bg-gray-50 rounded-lg">
+        <span className="flex items-center gap-2">
+          Permissions avancees
+          {isCustom && <Badge className="text-[10px] bg-[#C9A84C]/10 text-[#C9A84C] border-[#C9A84C]/30">Personnalise</Badge>}
+        </span>
+        {open ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+      </button>
+      {open && (
+        <div className="px-3 pb-3 space-y-2 border-t pt-2">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-gray-500">Modules accessibles pour cet utilisateur</p>
+            <button type="button" onClick={() => onChange(getDefaultModules(role))} className="text-xs text-[#C9A84C] hover:underline">Reinitialiser</button>
+          </div>
+          {MODULE_DEFS.map(({ key, label, icon: Icon }) => (
+            <div key={key} className="flex items-center justify-between py-1.5">
+              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                <Icon className="w-4 h-4 text-[#1E2A4A]/60" />
+                {label}
+              </label>
+              <Switch
+                checked={(modules as Record<string, boolean>)[key] ?? false}
+                onCheckedChange={(v) => onChange({ ...modules, [key]: v })}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function genPassword(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"
@@ -122,11 +204,13 @@ export default function UtilisateursPage() {
   const [lastPassword, setLastPassword] = useState("")
   const [createForm, setCreateForm] = useState({
     prenom: "", nom: "", email: "", password: genPassword(), role: "client_admin", societe_id: "",
+    modules_utilisateur: getDefaultModules("client_admin") as ModulesUtilisateur,
   })
 
   // Edit form
   const [editForm, setEditForm] = useState({
     full_name: "", email: "", phone: "", role: "", societe_id: "", actif: true,
+    modules_utilisateur: getDefaultModules("client_admin") as ModulesUtilisateur,
   })
   const [editSaving, setEditSaving] = useState(false)
 
@@ -209,13 +293,14 @@ export default function UtilisateursPage() {
           full_name: `${createForm.prenom} ${createForm.nom}`,
           role: createForm.role,
           societe_id: createForm.societe_id || undefined,
+          modules_utilisateur: createForm.modules_utilisateur,
         }),
       })
       const data = await res.json()
       if (data.error) { alert(data.error); setSaving(false); return }
       setLastPassword(createForm.password)
       setCreateOpen(false)
-      setCreateForm({ prenom: "", nom: "", email: "", password: genPassword(), role: "client_admin", societe_id: "" })
+      setCreateForm({ prenom: "", nom: "", email: "", password: genPassword(), role: "client_admin", societe_id: "", modules_utilisateur: getDefaultModules("client_admin") })
       load()
     } catch {
       alert("Erreur reseau")
@@ -232,6 +317,7 @@ export default function UtilisateursPage() {
       role: user.role,
       societe_id: user.societe_id || "",
       actif: user.actif !== false,
+      modules_utilisateur: user.modules_utilisateur || getDefaultModules(user.role),
     })
     setEditOpen(true)
   }
@@ -251,6 +337,7 @@ export default function UtilisateursPage() {
           role: editForm.role,
           societe_id: editForm.societe_id || null,
           actif: editForm.actif,
+          modules_utilisateur: editForm.modules_utilisateur,
         }),
       })
       const data = await res.json()
@@ -329,7 +416,7 @@ export default function UtilisateursPage() {
               </div>
               <div>
                 <Label className="flex items-center gap-1"><Shield className="w-3.5 h-3.5" /> Role</Label>
-                <Select value={createForm.role} onValueChange={(v) => setCreateForm((f) => ({ ...f, role: v, societe_id: "" }))}>
+                <Select value={createForm.role} onValueChange={(v) => setCreateForm((f) => ({ ...f, role: v, societe_id: "", modules_utilisateur: getDefaultModules(v) }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {ROLES.map((r) => (
@@ -354,6 +441,11 @@ export default function UtilisateursPage() {
                   </Select>
                 </div>
               )}
+              <PermissionsEditor
+                modules={createForm.modules_utilisateur}
+                onChange={(m) => setCreateForm((f) => ({ ...f, modules_utilisateur: m }))}
+                role={createForm.role}
+              />
               <div>
                 <Label>Mot de passe genere</Label>
                 <div className="flex gap-2">
@@ -631,7 +723,7 @@ export default function UtilisateursPage() {
               </div>
               <div>
                 <Label className="flex items-center gap-1"><Shield className="w-3.5 h-3.5" /> Role</Label>
-                <Select value={editForm.role} onValueChange={(v) => setEditForm((f) => ({ ...f, role: v }))}>
+                <Select value={editForm.role} onValueChange={(v) => setEditForm((f) => ({ ...f, role: v, modules_utilisateur: getDefaultModules(v) }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {ROLES.map((r) => (
@@ -652,6 +744,11 @@ export default function UtilisateursPage() {
                   </SelectContent>
                 </Select>
               </div>
+              <PermissionsEditor
+                modules={editForm.modules_utilisateur}
+                onChange={(m) => setEditForm((f) => ({ ...f, modules_utilisateur: m }))}
+                role={editForm.role}
+              />
               <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
                 <div>
                   <p className="font-medium text-sm text-[#1E2A4A]">Statut du compte</p>
