@@ -7,7 +7,7 @@ function getAdminClient() {
   return createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
-const VALID_ROLES = ['admin', 'super_admin', 'client_admin', 'client_user', 'comptable', 'comptable_dedie', 'rh', 'juridique', 'employe', 'manager', 'direction']
+const VALID_ROLES = ['admin', 'super_admin', 'client_admin', 'client_user', 'client_assistant', 'comptable', 'comptable_dedie', 'rh', 'juridique', 'employe', 'manager', 'direction']
 
 export async function GET() {
   try {

@@ -9,7 +9,7 @@ import {
   Receipt, Calculator, BarChart3, TrendingUp, Target,
   Users, Clock, CreditCard, Gavel, Scale, Bell,
   Settings, LogOut, ChevronDown, ChevronRight, FileSpreadsheet,
-  UserCog, Globe, Lightbulb, ClipboardList, Download
+  UserCog, Globe, Lightbulb, ClipboardList, Download, Upload
 } from "lucide-react"
 
 const MENU = [
@@ -22,6 +22,7 @@ const MENU = [
       { href: "/client/utilisateurs", label: "Utilisateurs", icon: Users },
       { href: "/client/equipe", label: "Mon Équipe", icon: UserCog },
       { href: "/client/alertes", label: "Alertes", icon: Bell },
+      { href: "/client/assistant", label: "Espace Assistant", icon: Upload },
     ]
   },
   {
