@@ -18,11 +18,15 @@ export async function GET(request: NextRequest) {
 
     // Fetch societe_ids for a specific user
     if (userId && action === 'societes') {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('user_societes')
         .select('societe_id')
         .eq('user_id', userId)
-        .eq('actif', true)
+      if (error) {
+        console.error('[GET user societes] error:', error.message)
+        // Table might not exist — return empty
+        return NextResponse.json({ societe_ids: [] })
+      }
       return NextResponse.json({ societe_ids: (data || []).map(r => r.societe_id) })
     }
 
@@ -62,10 +66,12 @@ export async function POST(request: NextRequest) {
     if (authError) return NextResponse.json({ error: authError.message }, { status: 400 })
     if (!authData.user) return NextResponse.json({ error: 'Échec création' }, { status: 500 })
 
-    // Upsert profil — le trigger handle_new_user peut déjà l'avoir créé
+    const userId = authData.user.id
     const primarySocieteId = societe_id || (societe_ids && societe_ids[0]) || null
-    const profileData: Record<string, unknown> = {
-      id: authData.user.id,
+
+    // Upsert profil — base fields only (safe)
+    const baseProfile: Record<string, unknown> = {
+      id: userId,
       email,
       full_name,
       role,
@@ -73,41 +79,44 @@ export async function POST(request: NextRequest) {
       societe_id: primarySocieteId,
       comptable_id: comptable_id || null,
     }
-    if (modules_utilisateur) profileData.modules_utilisateur = modules_utilisateur
 
-    let { error: profileError } = await supabase.from('profiles').upsert(profileData, { onConflict: 'id' })
-    // If modules_utilisateur column doesn't exist yet, retry without it
-    if (profileError && modules_utilisateur) {
-      const { modules_utilisateur: _, ...safeData } = profileData
-      const retry = await supabase.from('profiles').upsert(safeData, { onConflict: 'id' })
-      profileError = retry.error
+    // Try with modules_utilisateur first, then without
+    let profileError = null
+    if (modules_utilisateur) {
+      const res1 = await supabase.from('profiles').upsert({ ...baseProfile, modules_utilisateur }, { onConflict: 'id' })
+      if (res1.error) {
+        console.warn('[POST] upsert with modules_utilisateur failed:', res1.error.message)
+        const res2 = await supabase.from('profiles').upsert(baseProfile, { onConflict: 'id' })
+        profileError = res2.error
+      }
+    } else {
+      const res = await supabase.from('profiles').upsert(baseProfile, { onConflict: 'id' })
+      profileError = res.error
     }
 
     if (profileError) {
-      console.error('[admin/users] Profile upsert error:', profileError.message)
+      console.error('[POST] Profile upsert error:', profileError.message)
       return NextResponse.json({ error: `Erreur profil: ${profileError.message}` }, { status: 500 })
     }
 
-    // Multi-société assignments
+    // Multi-société assignments in user_societes
     const allSocieteIds = societe_ids && societe_ids.length > 0
       ? societe_ids
       : societe_id ? [societe_id] : []
 
     for (const sid of allSocieteIds) {
       const { error: usError } = await supabase.from('user_societes').upsert({
-        user_id: authData.user.id,
+        user_id: userId,
         societe_id: sid,
         role,
         actif: true
       }, { onConflict: 'user_id,societe_id' })
-
-      if (usError) {
-        console.error('[admin/users] user_societes upsert error:', usError.message)
-      }
+      if (usError) console.error('[POST] user_societes error:', usError.message)
     }
 
-    return NextResponse.json({ user: { id: authData.user.id, email, full_name, role } })
+    return NextResponse.json({ user: { id: userId, email, full_name, role } })
   } catch (e: unknown) {
+    console.error('[POST] error:', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -119,55 +128,73 @@ export async function PATCH(request: NextRequest) {
     if (!user_id) return NextResponse.json({ error: 'user_id requis' }, { status: 400 })
 
     const supabase = getAdminClient()
+
+    // Build safe update object — only include fields that are provided
     const updates: Record<string, unknown> = {}
     if (full_name !== undefined) updates.full_name = full_name
     if (email !== undefined) updates.email = email
     if (phone !== undefined) updates.phone = phone || null
     if (role !== undefined) updates.role = role
-    if (societe_id !== undefined) updates.societe_id = societe_id || null
     if (actif !== undefined) updates.actif = actif
-    if (modules_utilisateur !== undefined) updates.modules_utilisateur = modules_utilisateur
 
-    // Try update with all fields; if modules_utilisateur column doesn't exist, retry without it
-    let { error } = await supabase.from('profiles').update(updates).eq('id', user_id)
-    if (error && modules_utilisateur !== undefined) {
-      const { modules_utilisateur: _, ...safeUpdates } = updates
-      const retry = await supabase.from('profiles').update(safeUpdates).eq('id', user_id)
-      error = retry.error
-    }
-    if (error) throw error
-
-    // Update user_societes if societe_ids provided (multi-société)
+    // Handle societe_id — set the primary société on profile
     if (societe_ids && Array.isArray(societe_ids) && societe_ids.length > 0) {
-      // Remove old assignments
-      await supabase.from('user_societes').delete().eq('user_id', user_id)
-      // Insert new ones
+      updates.societe_id = societe_ids[0]
+    } else if (societe_id !== undefined) {
+      updates.societe_id = societe_id || null
+    }
+
+    // Step 1: Update profile (without modules_utilisateur first for safety)
+    let profileError = null
+    if (modules_utilisateur !== undefined) {
+      const res1 = await supabase.from('profiles').update({ ...updates, modules_utilisateur }).eq('id', user_id)
+      if (res1.error) {
+        console.warn('[PATCH] update with modules failed:', res1.error.message, '→ retrying without')
+        const res2 = await supabase.from('profiles').update(updates).eq('id', user_id)
+        profileError = res2.error
+      }
+    } else {
+      const res = await supabase.from('profiles').update(updates).eq('id', user_id)
+      profileError = res.error
+    }
+
+    if (profileError) {
+      console.error('[PATCH] Profile update error:', profileError.message)
+      return NextResponse.json({ error: profileError.message }, { status: 500 })
+    }
+
+    // Step 2: Update user_societes
+    if (societe_ids && Array.isArray(societe_ids) && societe_ids.length > 0) {
+      // Delete old, insert new
+      const delRes = await supabase.from('user_societes').delete().eq('user_id', user_id)
+      if (delRes.error) console.warn('[PATCH] delete user_societes:', delRes.error.message)
+
       for (const sid of societe_ids) {
-        await supabase.from('user_societes').upsert({
+        const { error: insErr } = await supabase.from('user_societes').insert({
           user_id,
           societe_id: sid,
-          role: role || body.role,
+          role: role || 'client_user',
           actif: true,
-        }, { onConflict: 'user_id,societe_id' })
+        })
+        if (insErr) console.error('[PATCH] insert user_societes:', insErr.message)
       }
     } else if (societe_id) {
-      // Single société assignment
       await supabase.from('user_societes').upsert({
         user_id,
         societe_id,
-        role: role || body.role,
+        role: role || 'client_user',
         actif: true,
       }, { onConflict: 'user_id,societe_id' })
     }
 
-    // Update email in auth if changed (ignore errors if email unchanged)
+    // Step 3: Update auth email if changed
     if (email) {
       try { await supabase.auth.admin.updateUserById(user_id, { email }) } catch {}
     }
 
     return NextResponse.json({ success: true })
   } catch (e: unknown) {
-    console.error('[admin/users PATCH]', e)
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur inconnue' }, { status: 500 })
+    console.error('[PATCH] error:', e)
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur serveur' }, { status: 500 })
   }
 }
