@@ -16,6 +16,7 @@ interface Facture {
   date_facture: string; date_echeance: string | null; devise: string
   montant_ht: number; montant_tva: number; montant_ttc: number; montant_mur: number
   statut: string; societe_id: string; type_facture: string; notes: string | null
+  mode_paiement: string | null; paye_par: string | null
 }
 interface Societe { id: string; nom: string }
 
@@ -45,6 +46,8 @@ export default function ClientFacturesPage() {
   const [formHT, setFormHT] = useState("")
   const [formTVA, setFormTVA] = useState("")
   const [formDesc, setFormDesc] = useState("")
+  const [formModePaiement, setFormModePaiement] = useState("banque")
+  const [formPayePar, setFormPayePar] = useState("")
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -90,6 +93,8 @@ export default function ClientFacturesPage() {
           numero_facture: formNumero, tiers: formTiers, description: formDesc,
           date_facture: formDate, date_echeance: formEcheance || null,
           devise: formDevise, montant_ht: ht, montant_tva: tva, montant_ttc: ht + tva,
+          mode_paiement: formModePaiement,
+          paye_par: (formModePaiement === 'associe' || formModePaiement === 'collaborateur') ? formPayePar : null,
         }),
       })
       if (!res.ok) { const d = await res.json(); throw new Error(d.error) }
@@ -127,6 +132,27 @@ export default function ClientFacturesPage() {
                 <div><Label>Devise</Label><Select value={formDevise} onValueChange={setFormDevise}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{["MUR","EUR","USD","GBP"].map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select></div>
                 <div><Label>Montant HT</Label><Input type="number" value={formHT} onChange={e => setFormHT(e.target.value)} /></div>
                 <div><Label>TVA</Label><Input type="number" value={formTVA} onChange={e => setFormTVA(e.target.value)} /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Mode de paiement</Label>
+                  <Select value={formModePaiement} onValueChange={(v) => { setFormModePaiement(v); if (v !== 'associe' && v !== 'collaborateur') setFormPayePar("") }}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="banque">Banque (512)</SelectItem>
+                      <SelectItem value="associe">Paye par associe (455)</SelectItem>
+                      <SelectItem value="collaborateur">Paye par collaborateur (467)</SelectItem>
+                      <SelectItem value="especes">Especes (530)</SelectItem>
+                      <SelectItem value="carte">Carte bancaire (512)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {(formModePaiement === 'associe' || formModePaiement === 'collaborateur') && (
+                  <div>
+                    <Label>{formModePaiement === 'associe' ? "Nom de l'associe" : "Nom du collaborateur"}</Label>
+                    <Input value={formPayePar} onChange={e => setFormPayePar(e.target.value)} placeholder={formModePaiement === 'associe' ? "Nom de l'associe" : "Nom du collaborateur"} />
+                  </div>
+                )}
               </div>
             </div>
             <DialogFooter>
@@ -176,7 +202,7 @@ export default function ClientFacturesPage() {
                   <TableHead>N°</TableHead><TableHead>Client</TableHead><TableHead>Date</TableHead>
                   <TableHead className="text-right">HT</TableHead><TableHead className="text-right">TVA</TableHead>
                   <TableHead className="text-right">TTC</TableHead><TableHead>Devise</TableHead>
-                  <TableHead className="text-right">MUR</TableHead><TableHead>Statut</TableHead><TableHead>Notes</TableHead>
+                  <TableHead className="text-right">MUR</TableHead><TableHead>Paiement</TableHead><TableHead>Statut</TableHead><TableHead>Notes</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -190,6 +216,19 @@ export default function ClientFacturesPage() {
                     <TableCell className="text-right font-semibold">{fmt(f.montant_ttc)}</TableCell>
                     <TableCell><Badge variant="outline">{f.devise}</Badge></TableCell>
                     <TableCell className="text-right font-bold text-[#1E2A4A]">{fmt(Number(f.montant_mur) || 0)}</TableCell>
+                    <TableCell>
+                      {f.mode_paiement === 'associe' ? (
+                        <Badge className="bg-purple-100 text-purple-700">Associe{f.paye_par ? ` (${f.paye_par})` : ''}</Badge>
+                      ) : f.mode_paiement === 'collaborateur' ? (
+                        <Badge className="bg-blue-100 text-blue-700">Collaborateur{f.paye_par ? ` (${f.paye_par})` : ''}</Badge>
+                      ) : f.mode_paiement === 'especes' ? (
+                        <Badge className="bg-yellow-100 text-yellow-700">Especes</Badge>
+                      ) : f.mode_paiement === 'carte' ? (
+                        <Badge className="bg-indigo-100 text-indigo-700">Carte</Badge>
+                      ) : (
+                        <Badge variant="outline">Banque</Badge>
+                      )}
+                    </TableCell>
                     <TableCell><span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUT_COLORS[f.statut] || ""}`}>{f.statut.replace("_", " ")}</span></TableCell>
                     <TableCell className="text-xs text-gray-500 max-w-[120px] truncate">{f.notes || "—"}</TableCell>
                   </TableRow>

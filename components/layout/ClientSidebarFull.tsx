@@ -33,6 +33,7 @@ const MENU = [
       { href: "/client/tresorerie", label: "Trésorerie", icon: Banknote },
       { href: "/client/factures", label: "Factures Clients", icon: Receipt },
       { href: "/client/fournisseurs", label: "Fournisseurs", icon: FileSpreadsheet },
+      { href: "/client/compte-courant", label: "Comptes Courants Associes", icon: Users },
       { href: "/client/finances", label: "Mes Chiffres", icon: BarChart3 },
     ]
   },

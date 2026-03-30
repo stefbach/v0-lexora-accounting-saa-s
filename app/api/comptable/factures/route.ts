@@ -56,12 +56,35 @@ export async function POST(request: Request) {
     if (authError || !user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
     const body = await request.json()
+
+    // Handle update_mode_paiement action
+    if (body.action === 'update_mode_paiement') {
+      const { facture_id, mode_paiement, paye_par } = body
+      if (!facture_id) return NextResponse.json({ error: 'facture_id requis' }, { status: 400 })
+
+      const { data, error } = await supabase
+        .from('factures')
+        .update({
+          mode_paiement, paye_par,
+          statut: 'paye',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', facture_id)
+        .select()
+        .single()
+
+      if (error) throw error
+      return NextResponse.json({ facture: data })
+    }
+
+    // Default: create new facture
     const {
       societe_id, dossier_id, numero_facture, type_facture = 'client',
       tiers, description, date_facture, date_echeance,
       devise = 'MUR', taux_change = 1,
       montant_ht = 0, montant_tva = 0, montant_ttc, taux_tva = 0,
-      statut = 'en_attente', document_id, notes
+      statut = 'en_attente', document_id, notes,
+      mode_paiement = 'banque', paye_par = null
     } = body
 
     if (!societe_id || !date_facture) {
@@ -78,7 +101,8 @@ export async function POST(request: Request) {
         tiers, description, date_facture, date_echeance,
         devise, taux_change, montant_ht, montant_tva,
         montant_ttc: ttc, taux_tva, montant_mur: mur,
-        statut, document_id, notes
+        statut, document_id, notes,
+        mode_paiement, paye_par
       })
       .select()
       .single()

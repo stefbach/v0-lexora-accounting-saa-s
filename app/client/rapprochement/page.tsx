@@ -6,7 +6,10 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Loader2, RefreshCw, Link2, Unlink, Zap, CheckCircle2, AlertCircle, ArrowRightLeft } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Loader2, RefreshCw, Link2, Unlink, Zap, CheckCircle2, AlertCircle, ArrowRightLeft, Users } from "lucide-react"
 
 function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 function formatDate(d: string) { return d ? new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" }) : "—" }
@@ -17,6 +20,9 @@ export default function ClientRapprochementPage() {
   const [autoMatching, setAutoMatching] = useState(false)
   const [linkDialog, setLinkDialog] = useState<any>(null)
   const [societeId, setSocieteId] = useState<string | null>(null)
+  const [payeParAssocie, setPayeParAssocie] = useState(false)
+  const [payeParType, setPayeParType] = useState("associe")
+  const [payeParNom, setPayeParNom] = useState("")
 
   // Get societe_id from client/societes
   useEffect(() => {
@@ -76,6 +82,52 @@ export default function ClientRapprochementPage() {
       })
       load()
     } catch { alert("Erreur") }
+  }
+
+  const handlePayeParAssocie = async (facture: any) => {
+    if (!societeId || !payeParNom) return
+    try {
+      // 1. Mark facture as paid by associate/collaborateur
+      await fetch("/api/comptable/factures", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update_mode_paiement", facture_id: facture.id,
+          mode_paiement: payeParType, paye_par: payeParNom,
+        }),
+      })
+
+      // 2. Create or find the compte courant and record the advance
+      await fetch("/api/comptable/compte-courant", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "creer_compte", societe_id: societeId,
+          nom: payeParNom, type: payeParType,
+        }),
+      })
+
+      // Fetch the compte courant id
+      const ccRes = await fetch(`/api/comptable/compte-courant?societe_id=${societeId}`)
+      const ccData = await ccRes.json()
+      const compte = (ccData.comptes || []).find((c: any) => c.nom === payeParNom)
+
+      if (compte) {
+        await fetch("/api/comptable/compte-courant", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "avance", societe_id: societeId,
+            compte_courant_id: compte.id,
+            montant: Number(facture.montant_ttc) || 0,
+            description: `Facture ${facture.numero_facture || facture.tiers || ''} payee par ${payeParNom}`,
+            facture_id: facture.id,
+          }),
+        })
+      }
+
+      setLinkDialog(null)
+      setPayeParAssocie(false)
+      setPayeParNom("")
+      load()
+    } catch { alert("Erreur lors de l'enregistrement") }
   }
 
   const transactions = data?.bankTransactions || []
@@ -208,7 +260,7 @@ export default function ClientRapprochementPage() {
                         <div key={f.id} onClick={() => handleManualLink(linkDialog, f, "facture")}
                           className={`p-3 border rounded-lg cursor-pointer hover:bg-blue-50 ${isClose ? "border-green-300 bg-green-50" : "border-gray-200"}`}>
                           <div className="flex justify-between">
-                            <div><p className="font-medium text-sm">{f.numero_facture || "—"} <Badge className="text-xs ml-1">{f.type_facture}</Badge></p><p className="text-xs text-gray-500">{f.tiers}</p></div>
+                            <div><p className="font-medium text-sm">{f.numero_facture || "---"} <Badge className="text-xs ml-1">{f.type_facture}</Badge></p><p className="text-xs text-gray-500">{f.tiers}</p></div>
                             <div className="text-right"><p className="font-bold text-sm">{fmt(fAmount)} {f.devise}</p>{isClose && <Badge className="bg-green-100 text-green-700 text-xs">Proche</Badge>}</div>
                           </div>
                         </div>
@@ -216,6 +268,55 @@ export default function ClientRapprochementPage() {
                     })}
                   </div>
                 </>
+              )}
+
+              {/* Paye par associe / collaborateur */}
+              {factures.length > 0 && (
+                <div className="border-t pt-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Users className="w-4 h-4 text-purple-600" />
+                    <p className="text-sm font-medium">Facture payee par un associe ou collaborateur</p>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-3">
+                    Si cette facture n'a PAS ete payee via le compte bancaire mais par un associe ou collaborateur
+                    avec ses fonds personnels, selectionnez la facture ci-dessous.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 mb-3">
+                    <div>
+                      <Label className="text-xs">Type</Label>
+                      <Select value={payeParType} onValueChange={setPayeParType}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="associe">Associe (455)</SelectItem>
+                          <SelectItem value="collaborateur">Collaborateur (467)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Nom</Label>
+                      <Input className="h-8 text-xs" value={payeParNom} onChange={e => setPayeParNom(e.target.value)} placeholder="Nom de la personne" />
+                    </div>
+                  </div>
+                  {payeParNom && (
+                    <div className="space-y-2 max-h-[150px] overflow-y-auto">
+                      {factures.map((f: any) => {
+                        const fAmount = Number(f.montant_ttc) || 0
+                        return (
+                          <div key={`cca-${f.id}`} onClick={() => handlePayeParAssocie(f)}
+                            className="p-3 border border-purple-200 rounded-lg cursor-pointer hover:bg-purple-50">
+                            <div className="flex justify-between items-center">
+                              <div>
+                                <p className="font-medium text-sm">{f.numero_facture || "---"} <Badge className="text-xs ml-1 bg-purple-100 text-purple-700">{payeParType === 'associe' ? 'Associe' : 'Collaborateur'}</Badge></p>
+                                <p className="text-xs text-gray-500">{f.tiers} — paye par {payeParNom}</p>
+                              </div>
+                              <p className="font-bold text-sm">{fmt(fAmount)} {f.devise}</p>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
               )}
 
               <p className="text-sm font-medium">Ecritures comptables :</p>
