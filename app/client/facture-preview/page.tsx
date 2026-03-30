@@ -16,6 +16,9 @@ interface InvoiceData {
   termes: string; notes_internes: string; template: string
   tiers: string; logo_url: string
   accent_color?: string
+  irn?: string; qr_code_data?: string; fiscalisation_date?: string
+  mra_status?: string; type_document?: string
+  facture_reference_id?: string
   client: {
     nom: string; entreprise: string; adresse: string; email: string
     vat_number: string; offshore: boolean
@@ -133,8 +136,12 @@ function FacturePreviewContent() {
             </div>
           </div>
           <div className="text-right">
-            <h1 className="text-3xl font-black tracking-tight" style={{ color: colors.primaire }}>FACTURE</h1>
-            <p className="text-sm text-gray-400 mt-0.5">INVOICE</p>
+            <h1 className="text-3xl font-black tracking-tight" style={{ color: data.type_document === 'avoir' ? '#DC2626' : colors.primaire }}>
+              {data.type_document === 'avoir' ? 'AVOIR' : data.type_document === 'note_debit' ? 'NOTE DE DEBIT' : 'FACTURE'}
+            </h1>
+            <p className="text-sm text-gray-400 mt-0.5">
+              {data.type_document === 'avoir' ? 'CREDIT NOTE' : data.type_document === 'note_debit' ? 'DEBIT NOTE' : 'INVOICE'}
+            </p>
           </div>
         </div>
 
@@ -245,6 +252,53 @@ function FacturePreviewContent() {
           <div className="mb-6">
             <h3 className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: colors.primaire }}>Termes et conditions</h3>
             <p className="text-xs text-gray-600 whitespace-pre-line">{data.termes}</p>
+          </div>
+        )}
+
+        {/* MRA Fiscalisation - IRN + QR Code */}
+        {data.irn && (
+          <div className="mb-6 border rounded-lg p-4" style={{ borderColor: colors.primaire + '30', backgroundColor: colors.primaire + '04' }}>
+            <div className="flex items-start justify-between gap-6">
+              <div className="flex-1 space-y-2">
+                <h3 className="text-xs font-bold uppercase tracking-wider" style={{ color: colors.primaire }}>
+                  MRA e-Invoice / Fiscalisation
+                </h3>
+                <div className="space-y-1">
+                  <div className="flex gap-2 text-sm">
+                    <span className="text-gray-500 whitespace-nowrap">Invoice Reference Number (IRN):</span>
+                    <span className="font-mono font-bold" style={{ color: colors.primaire }}>{data.irn}</span>
+                  </div>
+                  {data.fiscalisation_date && (
+                    <div className="flex gap-2 text-sm">
+                      <span className="text-gray-500 whitespace-nowrap">Date de fiscalisation:</span>
+                      <span className="text-sm">{new Date(data.fiscalisation_date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                    </div>
+                  )}
+                  {data.type_document && data.type_document !== 'facture' && (
+                    <div className="flex gap-2 text-sm">
+                      <span className="text-gray-500">Type:</span>
+                      <span className="font-medium" style={{ color: data.type_document === 'avoir' ? '#DC2626' : colors.primaire }}>
+                        {data.type_document === 'avoir' ? 'Avoir / Credit Note' : 'Note de debit / Debit Note'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <p className="text-[10px] text-gray-400 mt-2">
+                  This invoice has been fiscalised with the Mauritius Revenue Authority (MRA) Invoice Fiscalization Platform.
+                </p>
+              </div>
+              {data.qr_code_data && (
+                <div className="flex-shrink-0 text-center">
+                  <img
+                    src={data.qr_code_data}
+                    alt="MRA QR Code"
+                    className="w-24 h-24 border rounded"
+                    style={{ borderColor: colors.primaire + '20' }}
+                  />
+                  <p className="text-[8px] text-gray-400 mt-1">Scan to verify</p>
+                </div>
+              )}
+            </div>
           </div>
         )}
 

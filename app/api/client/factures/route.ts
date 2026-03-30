@@ -172,6 +172,7 @@ export async function POST(request: Request) {
       client_offshore = false, remise_pct = 0, remise_montant = 0,
       recurrent = false, recurrent_frequence, logo_url,
       mode_paiement = 'banque', paye_par, contact_id,
+      type_document = 'facture', facture_reference_id,
     } = body
 
     if (!societe_id || !date_facture) {
@@ -181,7 +182,10 @@ export async function POST(request: Request) {
     // Generate sequential invoice number if not provided
     let finalNumero = numero_facture
     if (!finalNumero) {
-      const { data: lastInvoice } = await supabase
+      const prefix = type_document === 'avoir' ? 'AV-' : type_document === 'note_debit' ? 'ND-' : 'INV-'
+      const filterDoc = type_document || 'facture'
+
+      let query = supabase
         .from('factures')
         .select('numero_facture')
         .eq('societe_id', societe_id)
@@ -189,32 +193,44 @@ export async function POST(request: Request) {
         .not('numero_facture', 'is', null)
         .order('created_at', { ascending: false })
         .limit(1)
-        .single()
+
+      // Filter by type_document if it's an avoir or note_debit
+      if (filterDoc !== 'facture') {
+        query = query.eq('type_document', filterDoc)
+      }
+
+      const { data: lastInvoice } = await query.single()
 
       let nextNum = 1
       if (lastInvoice?.numero_facture) {
         const match = lastInvoice.numero_facture.match(/(\d+)$/)
         if (match) nextNum = parseInt(match[1]) + 1
       }
-      finalNumero = `INV-${String(nextNum).padStart(3, '0')}`
+      finalNumero = `${prefix}${String(nextNum).padStart(3, '0')}`
     }
 
     const ttc = montant_ttc ?? (montant_ht + montant_tva)
     const mur = devise === 'MUR' ? ttc : ttc * (taux_change || 1)
 
+    const insertData: Record<string, unknown> = {
+      societe_id, type_facture: 'client',
+      numero_facture: finalNumero, tiers, description,
+      date_facture, date_echeance, devise, taux_change,
+      montant_ht, montant_tva, montant_ttc: ttc,
+      taux_tva, montant_mur: mur, statut, notes,
+      notes_internes, lignes, conditions_paiement, termes,
+      template, client_offshore, remise_pct, remise_montant,
+      recurrent, recurrent_frequence, logo_url,
+      mode_paiement, paye_par, contact_id,
+      type_document,
+    }
+    if (facture_reference_id) {
+      insertData.facture_reference_id = facture_reference_id
+    }
+
     const { data, error } = await supabase
       .from('factures')
-      .insert({
-        societe_id, type_facture: 'client',
-        numero_facture: finalNumero, tiers, description,
-        date_facture, date_echeance, devise, taux_change,
-        montant_ht, montant_tva, montant_ttc: ttc,
-        taux_tva, montant_mur: mur, statut, notes,
-        notes_internes, lignes, conditions_paiement, termes,
-        template, client_offshore, remise_pct, remise_montant,
-        recurrent, recurrent_frequence, logo_url,
-        mode_paiement, paye_par, contact_id,
-      })
+      .insert(insertData)
       .select()
       .single()
 

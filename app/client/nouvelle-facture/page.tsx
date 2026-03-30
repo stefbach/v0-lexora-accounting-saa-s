@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Plus, Trash2, Eye, Save, Lock, Download, ArrowLeft, FileText, User, ListOrdered, Calculator, CreditCard, StickyNote, Palette, Check } from "lucide-react"
+import { Plus, Trash2, Eye, Save, Lock, Download, ArrowLeft, FileText, User, ListOrdered, Calculator, CreditCard, StickyNote, Palette, Check, FileWarning, FileMinus } from "lucide-react"
 
 interface LigneFacture { id: string; description: string; unite: string; quantite: number; prix_unitaire: number; taux_tva: number; montant_ht: number }
 interface InvoiceClient { id: string; nom: string; entreprise: string; adresse: string; email: string; telephone: string; vat_number: string; devise: string; conditions_paiement: number; offshore: boolean }
@@ -51,6 +51,9 @@ export default function NouvelleFacturePage() {
   const [societeId, setSocieteId] = useState("")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [typeDocument, setTypeDocument] = useState<"facture" | "avoir" | "note_debit">("facture")
+  const [factureReferenceId, setFactureReferenceId] = useState("")
+  const [existingFactures, setExistingFactures] = useState<Array<{ id: string; numero_facture: string; tiers: string; montant_ttc: number; devise: string }>>([])
   const [numeroFacture, setNumeroFacture] = useState("")
   const [dateFacture, setDateFacture] = useState(today())
   const [dateEcheance, setDateEcheance] = useState("")
@@ -95,6 +98,13 @@ export default function NouvelleFacturePage() {
     fetch("/api/client/societes").then(r => r.json()).then(d => {
       setSocietes(d.societes || [])
       if (d.societes?.length === 1) setSocieteId(d.societes[0].id)
+    }).catch(() => {})
+    // Load existing invoices for credit note references
+    fetch("/api/client/factures?statut=en_attente").then(r => r.json()).then(d => {
+      const facs = (d.factures || []).filter((f: { statut: string; type_document?: string }) => f.statut !== "brouillon" && (!f.type_document || f.type_document === "facture"))
+      setExistingFactures(facs.map((f: { id: string; numero_facture: string; tiers: string; montant_ttc: number; devise: string }) => ({
+        id: f.id, numero_facture: f.numero_facture, tiers: f.tiers, montant_ttc: f.montant_ttc, devise: f.devise,
+      })))
     }).catch(() => {})
   }, [])
 
@@ -145,23 +155,32 @@ export default function NouvelleFacturePage() {
 
   const handleEcheancePreset = (val: string) => { const n = parseInt(val); setEcheancePreset(n); if (n > 0) setDateEcheance(addDays(dateFacture, n)) }
 
-  const buildInvoiceData = (statut: string) => ({
-    societe_id: societeId, numero_facture: numeroFacture, reference,
-    tiers: clientNom || clientEntreprise, description: descriptif || lignes.map(l => l.description).filter(Boolean).join(", "),
-    date_facture: dateFacture, date_echeance: dateEcheance, devise, taux_change: tauxChange,
-    montant_ht: totalHTApresRemise, montant_tva: totalTVA, montant_ttc: totalTTC,
-    taux_tva: clientOffshore ? 0 : 15, statut, lignes, mode_paiement: modePaiement,
-    conditions_paiement: echeancePreset > 0 ? echeancePreset : (settings?.conditions_paiement || 30),
-    notes_visibles: notesVisibles, notes_internes: notesInternes,
-    template: localStorage.getItem("lexora_invoice_template") || "standard",
-    client_offshore: clientOffshore, remise_type: remiseType, remise_value: remiseValue, remise_montant: remiseMontant,
-    logo_url: settings?.logo_url || "", contre_valeur_mur: contreValeurMUR,
-    accent_color: accentColor,
-  })
+  const buildInvoiceData = (statut: string) => {
+    const isCredit = typeDocument === "avoir"
+    const signedHT = isCredit ? -Math.abs(totalHTApresRemise) : totalHTApresRemise
+    const signedTVA = isCredit ? -Math.abs(totalTVA) : totalTVA
+    const signedTTC = isCredit ? -Math.abs(totalTTC) : totalTTC
+    return {
+      societe_id: societeId, numero_facture: numeroFacture, reference,
+      tiers: clientNom || clientEntreprise, description: descriptif || lignes.map(l => l.description).filter(Boolean).join(", "),
+      date_facture: dateFacture, date_echeance: dateEcheance, devise, taux_change: tauxChange,
+      montant_ht: signedHT, montant_tva: signedTVA, montant_ttc: signedTTC,
+      taux_tva: clientOffshore ? 0 : 15, statut, lignes, mode_paiement: modePaiement,
+      conditions_paiement: echeancePreset > 0 ? echeancePreset : (settings?.conditions_paiement || 30),
+      notes_visibles: notesVisibles, notes_internes: notesInternes,
+      template: localStorage.getItem("lexora_invoice_template") || "standard",
+      client_offshore: clientOffshore, remise_type: remiseType, remise_value: remiseValue, remise_montant: remiseMontant,
+      logo_url: settings?.logo_url || "", contre_valeur_mur: contreValeurMUR,
+      accent_color: accentColor,
+      type_document: typeDocument,
+      facture_reference_id: factureReferenceId || undefined,
+    }
+  }
 
   const saveToSession = () => {
     sessionStorage.setItem("lexora_facture_preview", JSON.stringify({
       ...buildInvoiceData("brouillon"),
+      type_document: typeDocument,
       client: { nom: clientNom, entreprise: clientEntreprise, adresse: clientAdresse, email: clientEmail, vat_number: clientVat, offshore: clientOffshore },
       settings,
     }))
@@ -190,12 +209,78 @@ export default function NouvelleFacturePage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="sm" onClick={() => router.push("/client/factures")}><ArrowLeft className="w-4 h-4 mr-1" />Retour</Button>
-          <div><h1 className="text-2xl font-bold text-[#1E2A4A]">Nouvelle Facture</h1><p className="text-sm text-gray-500">Conforme MRA - Maurice</p></div>
+          <div>
+            <h1 className="text-2xl font-bold" style={{ color: typeDocument === "avoir" ? "#DC2626" : "#1E2A4A" }}>
+              {typeDocument === "avoir" ? "Nouvel Avoir" : typeDocument === "note_debit" ? "Nouvelle Note de Debit" : "Nouvelle Facture"}
+            </h1>
+            <p className="text-sm text-gray-500">Conforme MRA - Maurice</p>
+          </div>
         </div>
         <Badge className="bg-gray-100 text-gray-600 border border-gray-300">Brouillon</Badge>
       </div>
 
       {error && <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{error}</div>}
+
+      {/* Document type selector */}
+      <Card className={`border-t-4 ${typeDocument === "avoir" ? "border-t-red-500" : typeDocument === "note_debit" ? "border-t-orange-500" : "border-t-[#1E2A4A]"}`}>
+        <CardHeader className="pb-2"><CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2"><FileText className="w-4 h-4" />Type de document</CardTitle></CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-3 gap-3">
+            <button
+              type="button"
+              onClick={() => { setTypeDocument("facture"); setFactureReferenceId("") }}
+              className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all ${typeDocument === "facture" ? "border-[#1E2A4A] bg-[#1E2A4A]/5" : "border-gray-200 hover:border-gray-300"}`}
+            >
+              <FileText className={`w-5 h-5 ${typeDocument === "facture" ? "text-[#1E2A4A]" : "text-gray-400"}`} />
+              <div className="text-left">
+                <p className={`font-medium text-sm ${typeDocument === "facture" ? "text-[#1E2A4A]" : "text-gray-700"}`}>Facture</p>
+                <p className="text-xs text-gray-400">Invoice (code 01)</p>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setTypeDocument("avoir")}
+              className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all ${typeDocument === "avoir" ? "border-red-500 bg-red-50" : "border-gray-200 hover:border-gray-300"}`}
+            >
+              <FileMinus className={`w-5 h-5 ${typeDocument === "avoir" ? "text-red-600" : "text-gray-400"}`} />
+              <div className="text-left">
+                <p className={`font-medium text-sm ${typeDocument === "avoir" ? "text-red-700" : "text-gray-700"}`}>Avoir</p>
+                <p className="text-xs text-gray-400">Credit Note (code 02)</p>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setTypeDocument("note_debit")}
+              className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all ${typeDocument === "note_debit" ? "border-orange-500 bg-orange-50" : "border-gray-200 hover:border-gray-300"}`}
+            >
+              <FileWarning className={`w-5 h-5 ${typeDocument === "note_debit" ? "text-orange-600" : "text-gray-400"}`} />
+              <div className="text-left">
+                <p className={`font-medium text-sm ${typeDocument === "note_debit" ? "text-orange-700" : "text-gray-700"}`}>Note de debit</p>
+                <p className="text-xs text-gray-400">Debit Note (code 03)</p>
+              </div>
+            </button>
+          </div>
+          {typeDocument === "avoir" && (
+            <div className="mt-4 space-y-3">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+                Avoir (Credit Note) : les montants seront enregistres en negatif. Selectionnez la facture d&apos;origine ci-dessous.
+              </div>
+              <Field label="Facture d'origine (reference)">
+                <Sel value={factureReferenceId} onValueChange={setFactureReferenceId} placeholder="Selectionner la facture a crediter...">
+                  {existingFactures.map(f => (
+                    <SelectItem key={f.id} value={f.id}>{f.numero_facture} - {f.tiers} ({f.montant_ttc?.toLocaleString("fr-FR", { minimumFractionDigits: 2 })} {f.devise})</SelectItem>
+                  ))}
+                </Sel>
+              </Field>
+            </div>
+          )}
+          {typeDocument === "note_debit" && (
+            <div className="mt-4 bg-orange-50 border border-orange-200 rounded-lg p-3 text-sm text-orange-700">
+              Note de debit : utilisee pour facturer un complement ou corriger a la hausse une facture existante.
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* 1. Invoice header fields */}
       <Card className="border-t-4 border-t-[#1E2A4A]">

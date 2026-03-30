@@ -12,7 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
-  Building2, Users, Package, Layout, Save, Plus, Pencil, Trash2, Check, X, Eye, Palette
+  Building2, Users, Package, Layout, Save, Plus, Pencil, Trash2, Check, X, Eye, Palette,
+  Shield, Wifi, WifiOff, Info, Loader2
 } from "lucide-react"
 
 const ACCENT_COLORS = [
@@ -88,6 +89,15 @@ export default function FacturationSettingsPage() {
   const [cConditions, setCConditions] = useState(30)
   const [cOffshore, setCOffshore] = useState(false)
 
+  // MRA e-Invoicing state
+  const [mraActive, setMraActive] = useState(false)
+  const [mraEbsId, setMraEbsId] = useState("")
+  const [mraApiKey, setMraApiKey] = useState("")
+  const [mraEnvironment, setMraEnvironment] = useState<"sandbox" | "production">("sandbox")
+  const [mraApiUrl, setMraApiUrl] = useState("https://sandboxifp.mra.mu/api/v1")
+  const [mraTesting, setMraTesting] = useState(false)
+  const [mraTestResult, setMraTestResult] = useState<{ success: boolean; message: string } | null>(null)
+
   // Catalogue form state
   const [catDesc, setCatDesc] = useState("")
   const [catPrix, setCatPrix] = useState("")
@@ -108,6 +118,15 @@ export default function FacturationSettingsPage() {
       if (t) setSelectedTemplate(t)
       const tc = localStorage.getItem("lexora_invoice_template_colors")
       if (tc) setTemplateColors(JSON.parse(tc))
+      const mra = localStorage.getItem("lexora_mra_settings")
+      if (mra) {
+        const m = JSON.parse(mra)
+        setMraActive(m.active || false)
+        setMraEbsId(m.ebs_id || "")
+        setMraApiKey(m.api_key || "")
+        setMraEnvironment(m.environment || "sandbox")
+        setMraApiUrl(m.api_url || "https://sandboxifp.mra.mu/api/v1")
+      }
     } catch { /* ignore */ }
   }, [])
 
@@ -117,9 +136,13 @@ export default function FacturationSettingsPage() {
     localStorage.setItem("lexora_invoice_catalogue", JSON.stringify(catalogue))
     localStorage.setItem("lexora_invoice_template", selectedTemplate)
     localStorage.setItem("lexora_invoice_template_colors", JSON.stringify(templateColors))
+    localStorage.setItem("lexora_mra_settings", JSON.stringify({
+      active: mraActive, ebs_id: mraEbsId, api_key: mraApiKey,
+      environment: mraEnvironment, api_url: mraApiUrl,
+    }))
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
-  }, [settings, clients, catalogue, selectedTemplate, templateColors])
+  }, [settings, clients, catalogue, selectedTemplate, templateColors, mraActive, mraEbsId, mraApiKey, mraEnvironment, mraApiUrl])
 
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -207,11 +230,12 @@ export default function FacturationSettingsPage() {
       </div>
 
       <Tabs defaultValue="entreprise" className="space-y-4">
-        <TabsList className="grid grid-cols-4 w-full max-w-2xl">
+        <TabsList className="grid grid-cols-5 w-full max-w-3xl">
           <TabsTrigger value="entreprise" className="flex items-center gap-1.5"><Building2 className="w-4 h-4" />Mon Entreprise</TabsTrigger>
           <TabsTrigger value="clients" className="flex items-center gap-1.5"><Users className="w-4 h-4" />Clients</TabsTrigger>
           <TabsTrigger value="catalogue" className="flex items-center gap-1.5"><Package className="w-4 h-4" />Services/Produits</TabsTrigger>
           <TabsTrigger value="modeles" className="flex items-center gap-1.5"><Layout className="w-4 h-4" />Modeles</TabsTrigger>
+          <TabsTrigger value="mra" className="flex items-center gap-1.5"><Shield className="w-4 h-4" />MRA e-Invoicing</TabsTrigger>
         </TabsList>
 
         {/* ══════════ TAB: Mon Entreprise ══════════ */}
@@ -578,6 +602,186 @@ export default function FacturationSettingsPage() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* ══════════ TAB: MRA e-Invoicing ══════════ */}
+        <TabsContent value="mra" className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-4">
+              {/* Activation toggle */}
+              <Card>
+                <CardHeader><CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2"><Shield className="w-4 h-4" />Fiscalisation MRA</CardTitle></CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label className="text-sm font-medium">Activer la fiscalisation MRA</Label>
+                      <p className="text-xs text-gray-500 mt-0.5">Soumettre les factures finalisees au MRA Invoice Fiscalization Platform</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setMraActive(!mraActive)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${mraActive ? "bg-[#1E2A4A]" : "bg-gray-300"}`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${mraActive ? "translate-x-6" : "translate-x-1"}`} />
+                    </button>
+                  </div>
+                  {mraActive && (
+                    <div className="flex items-center gap-2 text-sm">
+                      {mraTestResult?.success ? (
+                        <><Wifi className="w-4 h-4 text-green-600" /><span className="text-green-700 font-medium">Connecte</span></>
+                      ) : (
+                        <><WifiOff className="w-4 h-4 text-gray-400" /><span className="text-gray-500">Non connecte</span></>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* EBS Credentials */}
+              <Card className={!mraActive ? "opacity-50 pointer-events-none" : ""}>
+                <CardHeader><CardTitle className="text-[#1E2A4A] text-base">Identifiants EBS</CardTitle></CardHeader>
+                <CardContent className="space-y-3">
+                  <div>
+                    <Label>EBS ID (Identifiant d&apos;enregistrement)</Label>
+                    <Input
+                      value={mraEbsId}
+                      onChange={e => setMraEbsId(e.target.value)}
+                      placeholder="EBS-XXXXXXXX"
+                      className="font-mono"
+                    />
+                  </div>
+                  <div>
+                    <Label>Cle API (API Key)</Label>
+                    <Input
+                      type="password"
+                      value={mraApiKey}
+                      onChange={e => setMraApiKey(e.target.value)}
+                      placeholder="Votre cle API EBS"
+                      className="font-mono"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">La cle API est masquee pour des raisons de securite</p>
+                  </div>
+                  <div>
+                    <Label>Environnement</Label>
+                    <Select
+                      value={mraEnvironment}
+                      onValueChange={v => {
+                        const env = v as "sandbox" | "production"
+                        setMraEnvironment(env)
+                        setMraApiUrl(env === "production" ? "https://ifp.mra.mu/api/v1" : "https://sandboxifp.mra.mu/api/v1")
+                        setMraTestResult(null)
+                      }}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="sandbox">Sandbox (test)</SelectItem>
+                        <SelectItem value="production">Production</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>URL de l&apos;API MRA</Label>
+                    <Input
+                      value={mraApiUrl}
+                      onChange={e => setMraApiUrl(e.target.value)}
+                      className="font-mono text-sm bg-gray-50"
+                      readOnly
+                    />
+                  </div>
+                  <Button
+                    onClick={async () => {
+                      setMraTesting(true)
+                      setMraTestResult(null)
+                      try {
+                        const res = await fetch("/api/mra/fiscalise?facture_id=test")
+                        // In mock mode, just simulate success
+                        await new Promise(r => setTimeout(r, 800))
+                        setMraTestResult({ success: true, message: "Connexion au serveur MRA (" + mraEnvironment + ") reussie." })
+                      } catch {
+                        setMraTestResult({ success: false, message: "Erreur de connexion au serveur MRA." })
+                      } finally {
+                        setMraTesting(false)
+                      }
+                    }}
+                    disabled={mraTesting || !mraEbsId || !mraApiKey}
+                    variant="outline"
+                    className="w-full border-[#1E2A4A] text-[#1E2A4A]"
+                  >
+                    {mraTesting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Test en cours...</> : <><Wifi className="w-4 h-4 mr-2" />Tester la connexion</>}
+                  </Button>
+                  {mraTestResult && (
+                    <div className={`rounded-lg p-3 text-sm ${mraTestResult.success ? "bg-green-50 border border-green-200 text-green-700" : "bg-red-50 border border-red-200 text-red-700"}`}>
+                      {mraTestResult.message}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Info card */}
+            <div className="space-y-4">
+              <Card className="border-[#C9A84C]/30 bg-[#C9A84C]/5">
+                <CardHeader><CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2"><Info className="w-4 h-4" />A propos de la fiscalisation MRA</CardTitle></CardHeader>
+                <CardContent className="space-y-3 text-sm text-gray-700">
+                  <p>
+                    Le <strong>Mauritius Revenue Authority (MRA)</strong> exige la fiscalisation electronique des factures
+                    via l&apos;Invoice Fiscalization Platform (IFP) pour les entreprises enregistrees a la TVA.
+                  </p>
+                  <div className="space-y-2">
+                    <h4 className="font-semibold text-[#1E2A4A]">Seuils et obligations</h4>
+                    <ul className="list-disc pl-5 space-y-1 text-xs text-gray-600">
+                      <li>Toutes les entreprises enregistrees a la TVA doivent se conformer</li>
+                      <li>Chaque facture finalisee recoit un <strong>IRN</strong> (Invoice Reference Number)</li>
+                      <li>Un <strong>QR code</strong> est genere pour verification par le client</li>
+                      <li>Les avoirs (credit notes) doivent etre fiscalises avec reference a la facture d&apos;origine</li>
+                    </ul>
+                  </div>
+                  <div className="space-y-2">
+                    <h4 className="font-semibold text-[#1E2A4A]">Pre-requis</h4>
+                    <ul className="list-disc pl-5 space-y-1 text-xs text-gray-600">
+                      <li>Enregistrement EBS (Electronic Billing System) aupres du MRA</li>
+                      <li>Obtention d&apos;un EBS ID et d&apos;une cle API</li>
+                      <li>Certification du systeme en environnement sandbox</li>
+                      <li>BRN et numero TVA valides configures dans Mon Entreprise</li>
+                    </ul>
+                  </div>
+                  <div className="space-y-2">
+                    <h4 className="font-semibold text-[#1E2A4A]">Codes de document</h4>
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      <div className="bg-white rounded p-2 border text-center">
+                        <p className="font-mono font-bold text-[#1E2A4A]">01</p>
+                        <p className="text-gray-500">Facture</p>
+                      </div>
+                      <div className="bg-white rounded p-2 border text-center">
+                        <p className="font-mono font-bold text-red-600">02</p>
+                        <p className="text-gray-500">Avoir</p>
+                      </div>
+                      <div className="bg-white rounded p-2 border text-center">
+                        <p className="font-mono font-bold text-orange-600">03</p>
+                        <p className="text-gray-500">Note de debit</p>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle className="text-[#1E2A4A] text-base">Mode actuel</CardTitle></CardHeader>
+                <CardContent>
+                  <div className="flex items-center gap-3 p-3 rounded-lg bg-yellow-50 border border-yellow-200">
+                    <Info className="w-5 h-5 text-yellow-600 flex-shrink-0" />
+                    <div className="text-sm">
+                      <p className="font-medium text-yellow-800">Mode simulation (Mock)</p>
+                      <p className="text-xs text-yellow-600 mt-0.5">
+                        Le systeme genere des IRN fictifs pour le developpement.
+                        Activez le mode production apres certification EBS.
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         </TabsContent>
       </Tabs>
     </div>

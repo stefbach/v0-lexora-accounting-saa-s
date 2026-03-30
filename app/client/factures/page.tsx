@@ -13,7 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Search, Plus, Loader2, FileText, TrendingUp, Clock, AlertCircle,
-  Eye, Trash2, RefreshCw, CalendarDays, Settings, Pencil, CheckCircle2
+  Eye, Trash2, RefreshCw, CalendarDays, Settings, Pencil, CheckCircle2,
+  Shield, ShieldCheck, X
 } from "lucide-react"
 
 interface Facture {
@@ -24,6 +25,7 @@ interface Facture {
   mode_paiement: string | null; paye_par: string | null
   lignes: unknown[] | null; client_offshore: boolean
   recurrent: boolean; recurrent_frequence: string | null
+  irn?: string | null; mra_status?: string | null; type_document?: string | null
 }
 interface Societe { id: string; nom: string }
 interface RecurringTemplate {
@@ -74,6 +76,38 @@ export default function ClientFacturesPage() {
   const [rMontant, setRMontant] = useState("")
   const [rDevise, setRDevise] = useState("MUR")
   const [rProchaineDate, setRProchaineDate] = useState("")
+
+  // MRA fiscalisation
+  const [fiscalisingId, setFiscalisingId] = useState<string | null>(null)
+
+  const handleFiscalise = async (f: Facture) => {
+    if (fiscalisingId) return
+    setFiscalisingId(f.id)
+    try {
+      const res = await fetch("/api/mra/fiscalise", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ facture_id: f.id, societe_id: f.societe_id }),
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        // Update the facture in local state
+        setFactures(prev =>
+          prev.map(fac =>
+            fac.id === f.id
+              ? { ...fac, irn: data.irn, mra_status: "fiscalise" }
+              : fac
+          )
+        )
+      } else {
+        alert(data.error || "Erreur de fiscalisation MRA")
+      }
+    } catch {
+      alert("Erreur de connexion au serveur MRA")
+    } finally {
+      setFiscalisingId(null)
+    }
+  }
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -291,7 +325,7 @@ export default function ClientFacturesPage() {
                       <TableHead>N.</TableHead><TableHead>Client</TableHead><TableHead>Date</TableHead>
                       <TableHead className="text-right">HT</TableHead><TableHead className="text-right">TVA</TableHead>
                       <TableHead className="text-right">TTC</TableHead><TableHead>Devise</TableHead>
-                      <TableHead className="text-right">MUR</TableHead><TableHead>Statut</TableHead><TableHead className="text-right">Actions</TableHead>
+                      <TableHead className="text-right">MUR</TableHead><TableHead>Statut</TableHead><TableHead>MRA</TableHead><TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -309,6 +343,30 @@ export default function ClientFacturesPage() {
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUT_COLORS[f.statut] || ""}`}>
                             {f.statut === "en_attente" ? "en attente" : f.statut}
                           </span>
+                        </TableCell>
+                        <TableCell>
+                          {f.irn ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800" title={f.irn}>
+                              <ShieldCheck className="w-3 h-3" />Fiscalise
+                            </span>
+                          ) : (f.statut === "en_attente" || f.statut === "paye") ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleFiscalise(f)}
+                              disabled={fiscalisingId === f.id}
+                              className="text-xs border-[#C9A84C] text-[#C9A84C] hover:bg-[#C9A84C]/10 h-7 px-2"
+                            >
+                              {fiscalisingId === f.id ? (
+                                <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                              ) : (
+                                <Shield className="w-3 h-3 mr-1" />
+                              )}
+                              {fiscalisingId === f.id ? "..." : "Fiscaliser MRA"}
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-gray-400">-</span>
+                          )}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
