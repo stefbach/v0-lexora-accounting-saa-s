@@ -67,7 +67,7 @@ const ROLES = [
   { value: "employe", label: "Employe", color: "bg-gray-100 text-gray-700 border-gray-200" },
 ]
 
-const NEEDS_SOCIETE = ["rh", "juridique", "employe", "manager", "direction", "client_assistant"]
+const NEEDS_SOCIETE = ["rh", "juridique", "employe", "manager", "direction", "client_assistant", "client_admin", "client_user"]
 
 const MODULE_DEFS = [
   { key: "documents", label: "Documents & OCR", icon: FileText },
@@ -209,7 +209,7 @@ export default function UtilisateursPage() {
   })
 
   // Multi-société roles (use checkboxes instead of single select)
-  const MULTI_SOCIETE_ROLES = ["client_assistant", "client_admin"]
+  const MULTI_SOCIETE_ROLES = ["client_assistant", "client_admin", "client_user", "rh", "comptable", "comptable_dedie"]
 
   // Edit form
   const [editForm, setEditForm] = useState({
