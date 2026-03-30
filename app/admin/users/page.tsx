@@ -25,7 +25,7 @@ const ROLES = [
   { value: 'employe', label: 'Employé', color: 'bg-gray-100 text-gray-700' },
 ]
 
-const NEEDS_SOCIETE = ['rh', 'juridique', 'employe', 'manager', 'direction']
+const NEEDS_SOCIETE = ['rh', 'juridique', 'employe', 'manager', 'direction', 'client_admin', 'client_user', 'client_assistant', 'comptable', 'comptable_dedie']
 
 function genPassword() {
   return Math.random().toString(36).slice(2, 8).toUpperCase() + Math.random().toString(36).slice(2, 8)
@@ -53,7 +53,7 @@ export default function UsersPage() {
     setLoading(true)
     const [u, s] = await Promise.all([
       fetch('/api/admin/users').then(r => r.json()),
-      fetch('/api/comptable/societes').then(r => r.json()),
+      fetch('/api/admin/societes').then(r => r.json()),
     ])
     setUsers(u.users || [])
     setSocietes(s.societes || [])
@@ -64,7 +64,8 @@ export default function UsersPage() {
 
   const creer = async () => {
     if (!form.prenom || !form.nom || !form.email || !form.role) return
-    if (NEEDS_SOCIETE.includes(form.role) && !form.societe_id) return
+    const SOCIETE_OBLIGATOIRE = ['rh', 'juridique', 'employe', 'manager', 'direction']
+    if (SOCIETE_OBLIGATOIRE.includes(form.role) && !form.societe_id) return
     setSaving(true)
     const res = await fetch('/api/admin/users', {
       method: 'POST',
@@ -129,13 +130,21 @@ export default function UsersPage() {
               </div>
               {NEEDS_SOCIETE.includes(form.role) && (
                 <div>
-                  <Label>Société <span className="text-red-500">*</span></Label>
+                  <Label>
+                    Société à associer
+                    {['rh','juridique','employe','manager','direction'].includes(form.role) && <span className="text-red-500"> *</span>}
+                  </Label>
                   <Select value={form.societe_id} onValueChange={v => setForm(f => ({...f, societe_id: v}))}>
                     <SelectTrigger><SelectValue placeholder="Sélectionner une société" /></SelectTrigger>
                     <SelectContent>
                       {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom} {s.brn ? `— ${s.brn}` : ''}</SelectItem>)}
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {['client_admin','client_user','client_assistant'].includes(form.role) && "Le client sera lié à cette société via un dossier"}
+                    {['comptable','comptable_dedie'].includes(form.role) && "Le comptable sera assigné à cette société"}
+                    {['rh','juridique','employe','manager','direction'].includes(form.role) && "La société principale de ce collaborateur"}
+                  </p>
                 </div>
               )}
               <div>
@@ -146,7 +155,7 @@ export default function UsersPage() {
                 </div>
                 <p className="text-xs text-orange-600 mt-1">⚠️ Notez ce mot de passe — il ne sera plus affiché après création</p>
               </div>
-              <Button onClick={creer} disabled={saving || !form.prenom || !form.nom || !form.email || (NEEDS_SOCIETE.includes(form.role) && !form.societe_id)} className="w-full bg-[#1E2A4A]">
+              <Button onClick={creer} disabled={saving || !form.prenom || !form.nom || !form.email || (['rh','juridique','employe','manager','direction'].includes(form.role) && !form.societe_id)} className="w-full bg-[#1E2A4A]">
                 {saving ? 'Création...' : 'Créer le compte'}
               </Button>
             </div>
