@@ -175,22 +175,47 @@ export async function POST(request: NextRequest) {
 
     if (isLikelyBankStatement && isPdf) {
       const bankSystemPrompt = getSystemPrompt('releve_bancaire', tauxChange)
-      aiResponse = await anthropic.messages.create({
+      // Use streaming for bank statements to prevent timeout on long PDFs
+      const stream = anthropic.messages.stream({
         model: CLAUDE_CONFIG.model,
         max_tokens: CLAUDE_CONFIG.max_tokens_releve_bancaire,
         temperature: CLAUDE_CONFIG.temperature,
         system: bankSystemPrompt,
         messages: [{ role: 'user', content: [
           { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
-          { type: 'text', text: 'Analyse ce releve bancaire complet. Lis TOUTES les lignes sans exception.' },
+          { type: 'text', text: `Analyse ce releve bancaire COMPLET. C'est un releve de banque MCB en roupies mauriciennes (MUR).
+INSTRUCTION CRITIQUE: Tu DOIS lire et extraire CHAQUE ligne de transaction du releve, page par page, sans en omettre aucune.
+Le document peut avoir plusieurs pages — lis-les TOUTES.
+Pour chaque transaction: date, libelle complet, montant debit OU credit, et le solde resultant.
+Retourne le JSON complet avec TOUTES les lignes dans le tableau "lignes".
+NE RESUME PAS. NE SAUTE AUCUNE LIGNE.` },
         ]}],
       })
+      aiResponse = await stream.finalMessage()
       const bankText = aiResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
       const bankCleaned = bankText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
       try {
         const bankParsed = JSON.parse(bankCleaned)
         parsed = { routing: { type_document: 'releve_bancaire', societe: bankParsed.banque || 'MCB', confiance_type: 95 }, extraction: bankParsed }
-      } catch { parsed = { routing: { type_document: 'releve_bancaire', confiance_type: 50 }, extraction: {} } }
+        console.log(`[upload] Bank statement parsed: ${(bankParsed.lignes || bankParsed.transactions || []).length} transactions found`)
+      } catch (parseErr) {
+        console.error('[upload] Bank JSON parse failed, trying repair...', bankCleaned.substring(0, 200))
+        // Try to repair truncated JSON
+        let repaired = bankCleaned
+        if (!repaired.endsWith('}')) {
+          // Find last complete object in lignes array
+          const lastBracket = repaired.lastIndexOf('}')
+          if (lastBracket > 0) {
+            repaired = repaired.substring(0, lastBracket + 1) + ']}'
+          }
+        }
+        try {
+          const bankParsed = JSON.parse(repaired)
+          parsed = { routing: { type_document: 'releve_bancaire', societe: bankParsed.banque || 'MCB', confiance_type: 80 }, extraction: bankParsed }
+        } catch {
+          parsed = { routing: { type_document: 'releve_bancaire', confiance_type: 50 }, extraction: { raw_text: bankCleaned.substring(0, 500) } }
+        }
+      }
     } else {
       aiResponse = await anthropic.messages.create({
         model: CLAUDE_CONFIG.model,
@@ -274,16 +299,17 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
       console.log('[upload] Relevé bancaire détecté via prompt générique → retraitement spécialisé')
       try {
         const bankSystemPrompt = getSystemPrompt('releve_bancaire', tauxChange)
-        const bankResponse = await anthropic.messages.create({
+        const bankStream = anthropic.messages.stream({
           model: CLAUDE_CONFIG.model,
           max_tokens: CLAUDE_CONFIG.max_tokens_releve_bancaire,
           temperature: CLAUDE_CONFIG.temperature,
           system: bankSystemPrompt,
           messages: [{ role: 'user', content: [
             { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
-            { type: 'text', text: 'Analyse ce releve bancaire complet. Lis TOUTES les lignes sans exception.' },
+            { type: 'text', text: `Analyse ce releve bancaire COMPLET page par page. Extrais CHAQUE transaction sans exception. Retourne le JSON avec TOUTES les lignes.` },
           ]}],
         })
+        const bankResponse = await bankStream.finalMessage()
         const bankText = bankResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
         const bankCleaned = bankText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
         const bankParsed = JSON.parse(bankCleaned)

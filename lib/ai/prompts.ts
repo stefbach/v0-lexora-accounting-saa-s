@@ -5,7 +5,7 @@
 export const CLAUDE_CONFIG = {
   model: (process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6") as string,
   max_tokens: 4096,
-  max_tokens_releve_bancaire: 16384,
+  max_tokens_releve_bancaire: 32768,
   temperature: 0,
 }
 
