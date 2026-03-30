@@ -12,13 +12,32 @@ function getAdminClient() {
 export async function GET() {
   try {
     const supabase = getAdminClient()
-    const { data, error } = await supabase
+
+    // Simple select without FK join (avoids schema cache issues)
+    const { data: societes, error } = await supabase
       .from('societes')
-      .select('*, comptable:profiles!societes_comptable_id_fkey(id, full_name, email)')
+      .select('*')
       .order('created_at', { ascending: false })
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json({ societes: data })
+
+    // Enrich with comptable name separately
+    const comptableIds = [...new Set((societes || []).map(s => s.comptable_id).filter(Boolean))]
+    let comptableMap: Record<string, any> = {}
+    if (comptableIds.length > 0) {
+      const { data: comptables } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .in('id', comptableIds)
+      ;(comptables || []).forEach(c => { comptableMap[c.id] = c })
+    }
+
+    const enriched = (societes || []).map(s => ({
+      ...s,
+      comptable: s.comptable_id ? comptableMap[s.comptable_id] || null : null,
+    }))
+
+    return NextResponse.json({ societes: enriched })
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Unknown error' }, { status: 500 })
   }
