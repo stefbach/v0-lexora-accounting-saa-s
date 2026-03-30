@@ -55,6 +55,8 @@ const MENU = [
       { href: "/rh/paie", label: "Paie & Bulletins", icon: CreditCard },
       { href: "/rh/paie/primes", label: "Primes & OT", icon: TrendingUp },
       { href: "/rh/paie/exports-mra", label: "Exports MRA", icon: FileText },
+      { href: "/client/declarations-sociales", label: "Declarations Sociales", icon: FileText },
+      { href: "/client/demandes-rh", label: "Demandes RH", icon: ClipboardList },
       { href: "/rh/exports/virement", label: "Virements bancaires", icon: Banknote },
       { href: "/rh/juridique", label: "Juridique", icon: Gavel },
       { href: "/rh/paie/edf", label: "EDF Annuel", icon: Receipt },

@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import {
   Users, CreditCard, Clock, Calendar, TrendingUp, AlertTriangle, Target, Settings,
   Calculator, FileText, Banknote, CheckCircle, ArrowRight, BarChart3, Building2,
-  ClipboardList, MessageSquare, Upload, CalendarDays, UserPlus, Briefcase
+  ClipboardList, MessageSquare, Upload, CalendarDays, UserPlus, Briefcase, Bell
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
@@ -122,6 +122,80 @@ export default function RHDashboard() {
   )
 }
 
+function ActualitesRHPanel({ stats }: { stats: any }) {
+  const today = new Date()
+  const dateStr = (d: Date) => d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })
+  const moisNom = today.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
+  const moisNomCap = moisNom.charAt(0).toUpperCase() + moisNom.slice(1)
+  const jour15 = new Date(today.getFullYear(), today.getMonth() + 1, 15)
+  const isDeadlineClose = (jour15.getTime() - today.getTime()) / (1000 * 60 * 60 * 24) < 10
+
+  const newsItems: { date: string; title: string; desc: string; dot: "green" | "orange" | "red" }[] = []
+
+  if (stats.nb_employes > 0) {
+    newsItems.push({
+      date: dateStr(today),
+      title: `Paie ${moisNomCap} calculee`,
+      desc: `${stats.nb_employes}/${stats.nb_employes} bulletins generes`,
+      dot: "green",
+    })
+  }
+
+  newsItems.push({
+    date: "01 Jan 2026",
+    title: "Compensation salariale 2026",
+    desc: "Rs 635 pour les salaires inferieur ou egal a 50,000",
+    dot: "green",
+  })
+
+  newsItems.push({
+    date: dateStr(jour15),
+    title: "Echeance CSG/NSF",
+    desc: "A soumettre avant le 15 du mois suivant",
+    dot: isDeadlineClose ? "red" : "orange",
+  })
+
+  newsItems.push({
+    date: dateStr(today),
+    title: "Import Excel pointages",
+    desc: "Nouveau: import Excel des pointages disponible",
+    dot: "green",
+  })
+
+  newsItems.push({
+    date: "20 " + today.toLocaleDateString("fr-FR", { month: "short" }),
+    title: "Echeance PAYE mensuel",
+    desc: "A soumettre avant le 20 du mois suivant",
+    dot: "orange",
+  })
+
+  const dotColors = { green: "bg-green-500", orange: "bg-amber-500", red: "bg-red-500" }
+
+  return (
+    <Card className="border border-gray-200 h-full">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base font-semibold flex items-center gap-2" style={{ color: NAVY }}>
+          <Bell className="w-4 h-4" style={{ color: GOLD }} /> Actualites RH
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-0 overflow-y-auto max-h-[400px]">
+        {newsItems.slice(0, 5).map((item, i) => (
+          <div key={i} className="flex gap-3 py-3 border-b border-gray-100 last:border-0">
+            <div className="mt-1.5 flex-shrink-0">
+              <div className={`w-2.5 h-2.5 rounded-full ${dotColors[item.dot]}`} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-gray-400">{item.date}</p>
+              <p className="text-sm font-medium mt-0.5" style={{ color: NAVY }}>{item.title}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{item.desc}</p>
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  )
+}
+
 function DashboardTab({ stats, loading }: { stats: any; loading: boolean }) {
   return (
     <div className="space-y-6">
@@ -174,7 +248,7 @@ function DashboardTab({ stats, loading }: { stats: any; loading: boolean }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Acces rapides */}
         <Card className="border border-gray-200">
           <CardHeader className="pb-3">
@@ -244,6 +318,9 @@ function DashboardTab({ stats, loading }: { stats: any; loading: boolean }) {
             ))}
           </CardContent>
         </Card>
+
+        {/* Actualites RH Panel */}
+        <ActualitesRHPanel stats={stats} />
       </div>
     </div>
   )

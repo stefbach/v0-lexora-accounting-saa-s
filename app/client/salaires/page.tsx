@@ -12,7 +12,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Loader2, Users, FileText, Building2, Calculator, Download, Upload,
-  Eye, CheckCircle, DollarSign, TrendingUp, AlertCircle
+  Eye, CheckCircle, DollarSign, TrendingUp, AlertCircle,
+  Clock, Lock, Banknote, ArrowRight, AlertTriangle
 } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
 
@@ -68,6 +69,12 @@ export default function ClientSalairesPage() {
   const [importResult, setImportResult] = useState<any>(null)
   const [importLoading, setImportLoading] = useState(false)
   const [activeTab, setActiveTab] = useState("bulletins")
+  const [periodClosed, setPeriodClosed] = useState(false)
+  const [virementDone, setVirementDone] = useState(false)
+  const [csgExported, setCsgExported] = useState(false)
+  const [payeExported, setPayeExported] = useState(false)
+  const [prgfDone, setPrgfDone] = useState(false)
+  const [prevBulletins, setPrevBulletins] = useState<Bulletin[]>([])
 
   // Fetch societes
   useEffect(() => {
@@ -97,9 +104,19 @@ export default function ClientSalairesPage() {
       setBulletins(bulletinsJson.bulletins || [])
       setTotaux(bulletinsJson.totaux || null)
       setEmployes(employesJson.employes || employesJson.data || [])
+      // Fetch previous period bulletins for variance alerts
+      try {
+        const [y, m] = selectedPeriode.split("-").map(Number)
+        const prevDate = new Date(y, m - 2, 1)
+        const prevPeriode = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, "0")}`
+        const prevRes = await fetch(`/api/rh/paie?societe_id=${selectedSociete}&periode=${prevPeriode}`)
+        const prevJson = await prevRes.json()
+        setPrevBulletins(prevJson.bulletins || [])
+      } catch { setPrevBulletins([]) }
     } catch {
       setBulletins([])
       setEmployes([])
+      setPrevBulletins([])
     } finally {
       setFetching(false)
     }
@@ -190,6 +207,10 @@ export default function ClientSalairesPage() {
         a.click()
         URL.revokeObjectURL(url)
       }
+      // Track workflow step completion
+      if (type === "csg") setCsgExported(true)
+      if (type === "paye") setPayeExported(true)
+      if (type === "virement") setVirementDone(true)
     } catch {
       alert("Erreur export")
     } finally {
@@ -243,6 +264,43 @@ export default function ClientSalairesPage() {
     )
   }
 
+  // Workflow steps computation
+  const hasBulletins = bulletins.length > 0
+  const workflowSteps = [
+    { label: "Pointage", icon: Clock, done: true },
+    { label: "Calcul", icon: Calculator, done: hasBulletins },
+    { label: "Cloture", icon: Lock, done: periodClosed },
+    { label: "Virement", icon: Banknote, done: virementDone },
+    { label: "NSF/CSG", icon: FileText, done: csgExported },
+    { label: "PAYE", icon: FileText, done: payeExported },
+    { label: "PRGF", icon: FileText, done: prgfDone },
+  ]
+  const currentStepIdx = workflowSteps.findIndex(s => !s.done)
+
+  // Net pay variance alerts computation
+  const varianceAlerts: { text: string; color: string }[] = []
+  if (hasBulletins && prevBulletins.length > 0) {
+    const prevMap = new Map<string, Bulletin>()
+    prevBulletins.forEach(b => prevMap.set(b.employe_id, b))
+    let drop20 = 0, drop10 = 0, rise10 = 0
+    const anomalies: string[] = []
+    bulletins.forEach(b => {
+      const prev = prevMap.get(b.employe_id)
+      if (!prev) return
+      const prevNet = Number(prev.salaire_net) || 0
+      const curNet = Number(b.salaire_net) || 0
+      if (prevNet === 0) return
+      const pct = ((curNet - prevNet) / prevNet) * 100
+      if (pct <= -20) { drop20++; anomalies.push(`${b.employe?.nom || ""} ${b.employe?.prenom || ""}`) }
+      else if (pct <= -10) drop10++
+      else if (pct >= 10) rise10++
+    })
+    if (drop20 > 0) varianceAlerts.push({ text: `${drop20} employe(s) avec baisse de net > 20%`, color: "red" })
+    if (drop10 > 0) varianceAlerts.push({ text: `${drop10} employe(s) avec baisse de net > 10%`, color: "orange" })
+    if (rise10 > 0) varianceAlerts.push({ text: `${rise10} employe(s) avec hausse de net > 10%`, color: "green" })
+    anomalies.forEach(name => varianceAlerts.push({ text: `Anomalie salaire de base: ${name} a une diminution anormale`, color: "red" }))
+  }
+
   return (
     <div className="flex-1 overflow-auto p-6 space-y-6">
       {/* Header */}
@@ -281,6 +339,72 @@ export default function ClientSalairesPage() {
           </div>
         </div>
       </div>
+
+      {/* Payroll Workflow Timeline */}
+      <Card className="border border-gray-200">
+        <CardContent className="py-4 px-6">
+          <div className="flex items-center justify-between">
+            {workflowSteps.map((step, idx) => {
+              const StepIcon = step.icon
+              const isDone = step.done
+              const isCurrent = idx === currentStepIdx
+              const bgColor = isDone ? "bg-green-500" : isCurrent ? "bg-[#C9A84C]" : "bg-gray-300"
+              const textColor = isDone ? "text-green-700" : isCurrent ? "text-[#C9A84C]" : "text-gray-400"
+              const toggleStep = () => {
+                if (idx === 2) setPeriodClosed(!periodClosed)
+                else if (idx === 3) setVirementDone(!virementDone)
+                else if (idx === 4) setCsgExported(!csgExported)
+                else if (idx === 5) setPayeExported(!payeExported)
+                else if (idx === 6) setPrgfDone(!prgfDone)
+              }
+              return (
+                <div key={step.label} className="flex items-center">
+                  <div className="flex flex-col items-center cursor-pointer" onClick={toggleStep} title={idx >= 2 ? `Cliquer pour basculer ${step.label}` : ""}>
+                    <div className={`w-10 h-10 rounded-full ${bgColor} flex items-center justify-center transition-colors`}>
+                      {isDone ? (
+                        <CheckCircle className="w-5 h-5 text-white" />
+                      ) : (
+                        <StepIcon className="w-5 h-5 text-white" />
+                      )}
+                    </div>
+                    <span className={`text-xs mt-1.5 font-medium ${textColor}`}>{step.label}</span>
+                  </div>
+                  {idx < workflowSteps.length - 1 && (
+                    <div className={`w-8 h-0.5 mx-1 mt-[-14px] ${idx < currentStepIdx || (currentStepIdx === -1) ? "bg-green-400" : "bg-gray-200"}`} />
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Alertes Paie - Net Pay Variance */}
+      {varianceAlerts.length > 0 && (
+        <Card className="border border-gray-200">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2" style={{ color: "#1E2A4A" }}>
+              <AlertTriangle className="w-4 h-4 text-amber-500" /> Alertes Paie
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {varianceAlerts.map((alert, i) => {
+              const colors = alert.color === "red"
+                ? "bg-red-50 border-red-200 text-red-700"
+                : alert.color === "orange"
+                ? "bg-orange-50 border-orange-200 text-orange-700"
+                : "bg-green-50 border-green-200 text-green-700"
+              const Icon = alert.color === "green" ? TrendingUp : AlertTriangle
+              return (
+                <div key={i} className={`flex items-center gap-2 p-2.5 rounded-lg border text-sm ${colors}`}>
+                  <Icon className="w-4 h-4 flex-shrink-0" />
+                  <span>{alert.text}</span>
+                </div>
+              )
+            })}
+          </CardContent>
+        </Card>
+      )}
 
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

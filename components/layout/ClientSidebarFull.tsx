@@ -66,6 +66,8 @@ const MENU = [
       { href: "/rh/employes", label: "Employés", icon: Users },
       { href: "/rh/pointage", label: "Pointage", icon: Clock },
       { href: "/rh/conges", label: "Congés", icon: Scale },
+      { href: "/client/declarations-sociales", label: "Déclarations Sociales", icon: FileText },
+      { href: "/client/demandes-rh", label: "Demandes RH", icon: ClipboardList },
       { href: "/client/exports-rh", label: "Exports & Virements", icon: Download },
     ]
   },
