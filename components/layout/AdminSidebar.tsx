@@ -5,6 +5,8 @@ import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
+import { t, getLocale } from "@/lib/i18n"
+import { LanguageSwitcher } from "@/components/LanguageSwitcher"
 import {
   LayoutDashboard,
   Users,
