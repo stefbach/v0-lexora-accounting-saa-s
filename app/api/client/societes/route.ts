@@ -35,15 +35,33 @@ export async function GET() {
       ;(viaDossiers || []).forEach((d: any) => { if (d.societes) map.set(d.societes.id, d.societes) })
       societes = Array.from(map.values())
 
-    } else if (['client_admin', 'client_user'].includes(role)) {
-      // Via created_by + via dossiers (couvre tous les cas)
-      const [{ data: owned }, { data: viaDossiers }] = await Promise.all([
-        admin.from('societes').select('*').eq('created_by', user.id),
-        admin.from('dossiers').select('societe_id, societes(*)').eq('client_id', user.id),
-      ])
+    } else if (['client_admin', 'client_user', 'client_assistant'].includes(role)) {
+      // Via created_by + via dossiers + via user_societes
+      const { data: owned } = await admin.from('societes').select('*').eq('created_by', user.id)
+
+      const { data: dossiers } = await admin.from('dossiers').select('societe_id').eq('client_id', user.id)
+      const dossierSocieteIds = (dossiers || []).map(d => d.societe_id).filter(Boolean)
+
+      const { data: userSocietes } = await admin.from('user_societes').select('societe_id').eq('user_id', user.id)
+      const userSocieteIds = (userSocietes || []).map(us => us.societe_id).filter(Boolean)
+
+      // Combine all société IDs
+      const allSocieteIds = [...new Set([
+        ...(owned || []).map((s: any) => s.id),
+        ...dossierSocieteIds,
+        ...userSocieteIds,
+      ])]
+
       const map = new Map()
       ;(owned || []).forEach((s: any) => map.set(s.id, s))
-      ;(viaDossiers || []).forEach((d: any) => { if (d.societes) map.set(d.societes.id, d.societes) })
+
+      // Fetch remaining sociétés by ID
+      const missingIds = allSocieteIds.filter(id => !map.has(id))
+      if (missingIds.length > 0) {
+        const { data: extra } = await admin.from('societes').select('*').in('id', missingIds)
+        ;(extra || []).forEach((s: any) => map.set(s.id, s))
+      }
+
       societes = Array.from(map.values())
 
     } else if (['rh', 'juridique', 'employe', 'manager', 'direction'].includes(role)) {

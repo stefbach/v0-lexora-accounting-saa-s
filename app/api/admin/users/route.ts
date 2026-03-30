@@ -91,12 +91,17 @@ export async function POST(request: NextRequest) {
 
       // Pour les clients/assistants → créer un dossier
       if (['client_admin', 'client_user', 'client_assistant'].includes(role)) {
-        await supabase.from('dossiers').upsert({
-          client_id: authData.user.id,
-          societe_id: sid,
-          comptable_id: comptable_id || authData.user.id,
-          statut: 'actif',
-        }, { onConflict: 'client_id,societe_id', ignoreDuplicates: true })
+        // Check if dossier already exists
+        const { data: existingDossier } = await supabase.from('dossiers')
+          .select('id').eq('client_id', authData.user.id).eq('societe_id', sid).maybeSingle()
+        if (!existingDossier) {
+          await supabase.from('dossiers').insert({
+            client_id: authData.user.id,
+            societe_id: sid,
+            comptable_id: comptable_id || null,
+            statut: 'actif',
+          })
+        }
       }
 
       // Pour les comptables → assigner à la société
