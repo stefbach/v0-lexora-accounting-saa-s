@@ -3,13 +3,13 @@ import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   LayoutDashboard, Building2, Users, FileText, BookOpen,
   Calculator, Receipt, BarChart3, Scale, Clock, CreditCard,
   Settings, LogOut, ChevronDown, ChevronRight, UserCog,
   Banknote, FileSpreadsheet, Gavel, MessageSquare, TrendingUp,
-  ClipboardList, AlertCircle, Globe
+  ClipboardList, AlertCircle, AlertTriangle, Globe
 } from "lucide-react"
 
 const MENU = [
@@ -34,6 +34,7 @@ const MENU = [
       { href: "/comptable/charges-sociales", label: "Charges sociales", icon: Calculator },
       { href: "/comptable/interco", label: "INTERCO", icon: Globe },
       { href: "/comptable/rapports", label: "Rapports", icon: BarChart3 },
+      { href: "/comptable/alertes", label: "Alertes", icon: AlertTriangle, badge: true },
     ]
   },
   {
@@ -89,6 +90,24 @@ export function AdminSidebarUnified() {
   const pathname = usePathname()
   const router = useRouter()
   const [collapsed, setCollapsed] = useState<string[]>([])
+  const [criticalAlertCount, setCriticalAlertCount] = useState(0)
+
+  useEffect(() => {
+    async function fetchAlertCount() {
+      try {
+        const res = await fetch("/api/comptable/alertes")
+        if (res.ok) {
+          const data = await res.json()
+          setCriticalAlertCount(data.counts?.critical || 0)
+        }
+      } catch {
+        // Silently fail — badge simply won't show
+      }
+    }
+    fetchAlertCount()
+    const interval = setInterval(fetchAlertCount, 5 * 60 * 1000)
+    return () => clearInterval(interval)
+  }, [])
 
   const toggleSection = (section: string) => {
     setCollapsed(prev => prev.includes(section) ? prev.filter(s => s !== section) : [...prev, section])
