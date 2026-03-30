@@ -24,12 +24,14 @@ export async function GET(request: Request) {
     const search = searchParams.get('search')
     const actifs = searchParams.get('actifs') !== 'false'
 
-    // If no societe_id filter, find user's sociétés
+    // Build query
     let query = supabase.from('employes').select('*').order('nom')
+
     if (societe_id) {
+      // Filter by specific société
       query = query.eq('societe_id', societe_id)
     } else {
-      // Get user's sociétés
+      // Find user's sociétés
       const { data: profile } = await supabase.from('profiles').select('role, societe_id').eq('id', user.id).maybeSingle()
       if (profile?.societe_id) {
         query = query.eq('societe_id', profile.societe_id)
@@ -40,8 +42,7 @@ export async function GET(request: Request) {
         if (sIds.length > 0) query = query.in('societe_id', sIds)
       }
     }
-    if (societe_id) query = query.eq('societe_id', societe_id)
-    if (actifs) query = query.eq('actif', true)
+    // Don't filter by 'actif' column — it may not exist or be GENERATED
     if (search) query = query.or(`nom.ilike.%${search}%,prenom.ilike.%${search}%,poste.ilike.%${search}%`)
 
     const { data, error } = await query
