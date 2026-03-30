@@ -39,7 +39,15 @@ const MENU = [
     ]
   },
   {
-    section: "États Financiers",
+    section: "Facturation",
+    items: [
+      { href: "/client/factures", label: "Mes Factures", icon: Receipt },
+      { href: "/client/nouvelle-facture", label: "Nouvelle Facture", icon: FilePlus2 },
+      { href: "/client/facturation-settings", label: "Param\u00e8tres Facturation", icon: SlidersHorizontal },
+    ]
+  },
+  {
+    section: "\u00c9tats Financiers",
     items: [
       { href: "/client/bilan", label: "Bilan & P&L", icon: BookOpen },
       { href: "/client/grand-livre", label: "Grand Livre", icon: BookOpen },
