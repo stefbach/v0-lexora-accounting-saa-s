@@ -3,6 +3,16 @@
 import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
 
+export interface ModulesUtilisateur {
+  documents?: boolean
+  comptabilite?: boolean
+  facturation?: boolean
+  rh?: boolean
+  fiscal?: boolean
+  etats_financiers?: boolean
+  employe_portal?: boolean
+}
+
 interface Profile {
   id: string
   email: string
@@ -10,6 +20,7 @@ interface Profile {
   role: string
   phone: string | null
   client_category?: string | null
+  modules_utilisateur?: ModulesUtilisateur | null
 }
 
 export function useProfile() {
@@ -26,7 +37,7 @@ export function useProfile() {
           // Try from profiles table
           const { data } = await supabase
             .from("profiles")
-            .select("id, email, full_name, role, phone, client_category")
+            .select("id, email, full_name, role, phone, client_category, modules_utilisateur")
             .eq("id", user.id)
             .single()
 

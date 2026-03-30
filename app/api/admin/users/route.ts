@@ -40,7 +40,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { email, password, full_name, role, phone, societe_id, comptable_id } = body
+    const { email, password, full_name, role, phone, societe_id, comptable_id, modules_utilisateur } = body
 
     if (!email || !password || !full_name || !role) {
       return NextResponse.json({ error: 'Email, mot de passe, nom et rôle requis' }, { status: 400 })
@@ -70,6 +70,7 @@ export async function POST(request: NextRequest) {
       phone: phone || null,
       societe_id: societe_id || null,
       comptable_id: comptable_id || null,
+      modules_utilisateur: modules_utilisateur || null,
     }, { onConflict: 'id' })
 
     if (profileError) {
@@ -111,7 +112,7 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const { user_id, role, actif, full_name, email, phone, societe_id } = await request.json()
+    const { user_id, role, actif, full_name, email, phone, societe_id, modules_utilisateur } = await request.json()
     const supabase = getAdminClient()
     const updates: Record<string, unknown> = {}
     if (role) updates.role = role
@@ -120,6 +121,7 @@ export async function PATCH(request: NextRequest) {
     if (email !== undefined) updates.email = email
     if (phone !== undefined) updates.phone = phone
     if (societe_id !== undefined) updates.societe_id = societe_id || null
+    if (modules_utilisateur !== undefined) updates.modules_utilisateur = modules_utilisateur
     const { error } = await supabase.from('profiles').update(updates).eq('id', user_id)
     if (error) throw error
     return NextResponse.json({ success: true })

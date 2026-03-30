@@ -7,8 +7,89 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Switch } from "@/components/ui/switch"
+import { ChevronDown, ChevronRight, FileText, Calculator, Receipt, Users as UsersIcon, Scale, BarChart3, UserCheck } from "lucide-react"
 
-interface User { id: string; email: string; full_name: string; role: string; societe_id?: string; created_at: string }
+interface ModulesUtilisateur {
+  documents?: boolean
+  comptabilite?: boolean
+  facturation?: boolean
+  rh?: boolean
+  fiscal?: boolean
+  etats_financiers?: boolean
+  employe_portal?: boolean
+}
+
+interface User { id: string; email: string; full_name: string; role: string; societe_id?: string; created_at: string; modules_utilisateur?: ModulesUtilisateur | null }
+
+const MODULE_DEFS = [
+  { key: "documents", label: "Documents & OCR", icon: FileText },
+  { key: "comptabilite", label: "Comptabilite (Grand Livre, Bilan, Banque, Rapprochement)", icon: Calculator },
+  { key: "facturation", label: "Facturation (Factures, Nouvelle facture)", icon: Receipt },
+  { key: "rh", label: "RH & Paie (Employes, Pointage, Conges, Paie, Primes)", icon: UsersIcon },
+  { key: "fiscal", label: "Fiscal MRA (TVA, IT Form 3, Annual Return)", icon: Scale },
+  { key: "etats_financiers", label: "Etats Financiers (Bilan, Previsionnel, Exercices)", icon: BarChart3 },
+  { key: "employe_portal", label: "Portail Employe (bulletins et conges)", icon: UserCheck },
+] as const
+
+function getDefaultModules(role: string): ModulesUtilisateur {
+  switch (role) {
+    case "client_admin":
+    case "super_admin":
+    case "admin":
+      return { documents: true, comptabilite: true, facturation: true, rh: true, fiscal: true, etats_financiers: true, employe_portal: true }
+    case "client_user":
+      return { documents: true, comptabilite: true, facturation: true, rh: true, fiscal: true, etats_financiers: true, employe_portal: false }
+    case "client_assistant":
+      return { documents: true, comptabilite: false, facturation: false, rh: false, fiscal: false, etats_financiers: false, employe_portal: false }
+    case "rh":
+      return { documents: true, comptabilite: false, facturation: false, rh: true, fiscal: false, etats_financiers: false, employe_portal: false }
+    case "comptable":
+    case "comptable_dedie":
+      return { documents: true, comptabilite: true, facturation: true, rh: false, fiscal: true, etats_financiers: true, employe_portal: false }
+    case "employe":
+      return { documents: false, comptabilite: false, facturation: false, rh: false, fiscal: false, etats_financiers: false, employe_portal: true }
+    default:
+      return { documents: true, comptabilite: false, facturation: false, rh: false, fiscal: false, etats_financiers: false, employe_portal: false }
+  }
+}
+
+function PermissionsEditor({ modules, onChange, role }: { modules: ModulesUtilisateur; onChange: (m: ModulesUtilisateur) => void; role: string }) {
+  const [open, setOpen] = useState(false)
+  const defaults = getDefaultModules(role)
+  const isCustom = Object.keys(modules).some(k => (modules as Record<string, boolean>)[k] !== (defaults as Record<string, boolean>)[k])
+  return (
+    <div className="border rounded-lg">
+      <button type="button" onClick={() => setOpen(!open)} className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium text-[#1E2A4A] hover:bg-gray-50 rounded-lg">
+        <span className="flex items-center gap-2">
+          Permissions avancees
+          {isCustom && <Badge className="text-[10px] bg-[#C9A84C]/10 text-[#C9A84C] border-[#C9A84C]/30">Personnalise</Badge>}
+        </span>
+        {open ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+      </button>
+      {open && (
+        <div className="px-3 pb-3 space-y-2 border-t pt-2">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-gray-500">Modules accessibles pour cet utilisateur</p>
+            <button type="button" onClick={() => onChange(getDefaultModules(role))} className="text-xs text-[#C9A84C] hover:underline">Reinitialiser</button>
+          </div>
+          {MODULE_DEFS.map(({ key, label, icon: Icon }) => (
+            <div key={key} className="flex items-center justify-between py-1.5">
+              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                <Icon className="w-4 h-4 text-[#1E2A4A]/60" />
+                {label}
+              </label>
+              <Switch
+                checked={(modules as Record<string, boolean>)[key] ?? false}
+                onCheckedChange={(v) => onChange({ ...modules, [key]: v })}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 interface Societe { id: string; nom: string; brn: string }
 
 const ROLES = [
@@ -47,7 +128,8 @@ export default function UsersPage() {
   const [filterRole, setFilterRole] = useState("all")
   const [form, setForm] = useState({
     prenom: '', nom: '', email: '', password: genPassword(),
-    role: 'client_admin', societe_id: '', comptable_id: ''
+    role: 'client_admin', societe_id: '', comptable_id: '',
+    modules_utilisateur: getDefaultModules('client_admin') as ModulesUtilisateur,
   })
 
   const load = useCallback(async () => {
