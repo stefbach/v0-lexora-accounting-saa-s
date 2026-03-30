@@ -13,7 +13,7 @@ export const PARAMS_MRA_DEFAUT: ParametresPaieMRA = {
   nsf_salarie: 0.015,               // 1.5% NSF salarié
   nsf_patronal: 0.025,              // 2.5% NSF employeur
   training_levy: 0.010,             // 1% HRDC
-  prgf_patronal_par_jour: 4.50,     // PRGF par jour travaillé
+  prgf_taux: 0.045,                 // 4.5% PRGF patronal sur salaire brut
   paye_seuil_exoneration: 390000,   // 0% jusqu'à 390K MUR/an
   paye_taux_1: 0.10,                // 10% tranche 1
   paye_seuil_taux_2: 650000,        // Seuil tranche 2
@@ -114,7 +114,7 @@ export function calculerBulletin(
   const csg_patronal_bonus = eoy_bonus > 0 ? Math.round(eoy_bonus * params.csg_patronal) : 0
   const nsf_patronal = Math.round(salaire_brut * params.nsf_patronal)
   const training_levy = Math.round(salaire_brut * params.training_levy)
-  const prgf = Math.round(params.prgf_patronal_par_jour * joursTravailles)
+  const prgf = Math.round(salaire_brut * params.prgf_taux)
   const total_charges_patronales = csg_patronal + csg_patronal_bonus + nsf_patronal + training_levy + prgf
 
   const cout_total_employeur = salaire_brut + total_charges_patronales
