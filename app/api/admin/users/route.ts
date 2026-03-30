@@ -14,10 +14,24 @@ export async function GET() {
     const supabase = getAdminClient()
     const { data, error } = await supabase
       .from('profiles')
-      .select('*, societes(nom)')
+      .select('*')
       .order('created_at', { ascending: false })
     if (error) throw error
-    return NextResponse.json({ users: data || [] })
+
+    // Enrich with société names
+    const societeIds = [...new Set((data || []).map(u => u.societe_id).filter(Boolean))]
+    let societeMap: Record<string, string> = {}
+    if (societeIds.length > 0) {
+      const { data: societes } = await supabase.from('societes').select('id, nom').in('id', societeIds)
+      ;(societes || []).forEach(s => { societeMap[s.id] = s.nom })
+    }
+
+    const users = (data || []).map(u => ({
+      ...u,
+      societe_nom: u.societe_id ? societeMap[u.societe_id] || null : null,
+    }))
+
+    return NextResponse.json({ users })
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
