@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -10,42 +10,29 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import {
-  Plus, Trash2, Eye, Save, Send, Download, Lock, ArrowLeft, Calculator
-} from "lucide-react"
+import { Plus, Trash2, Eye, Save, Lock, Download, ArrowLeft, FileText, User, ListOrdered, Calculator, CreditCard, StickyNote } from "lucide-react"
 
-interface LigneFacture {
-  id: string; description: string; quantite: number; prix_unitaire: number
-  taux_tva: number; total: number
-}
-interface InvoiceClient {
-  id: string; nom: string; entreprise: string; adresse: string; email: string
-  telephone: string; vat_number: string; devise: string; conditions_paiement: number
-  offshore: boolean
-}
-interface CatalogueItem {
-  id: string; description: string; prix_unitaire: number; devise: string
-  tva_applicable: boolean; categorie: string
-}
-interface CompanySettings {
-  nom: string; brn: string; vat_number: string; logo_url: string
-  adresse: string; telephone: string; email: string; website: string
-  banque_nom: string; banque_compte: string; banque_iban: string; banque_swift: string
-  devise_defaut: string; prefixe_facture: string; prochain_numero: number
-  conditions_paiement: number; footer_text: string; mention_legale: string
-}
+interface LigneFacture { id: string; description: string; unite: string; quantite: number; prix_unitaire: number; taux_tva: number; montant_ht: number }
+interface InvoiceClient { id: string; nom: string; entreprise: string; adresse: string; email: string; telephone: string; vat_number: string; devise: string; conditions_paiement: number; offshore: boolean }
+interface CatalogueItem { id: string; description: string; prix_unitaire: number; devise: string; tva_applicable: boolean; categorie: string; unite?: string }
+interface CompanySettings { nom: string; brn: string; vat_number: string; logo_url: string; adresse: string; telephone: string; email: string; website: string; banque_nom: string; banque_compte: string; banque_iban: string; banque_swift: string; devise_defaut: string; prefixe_facture: string; prochain_numero: number; conditions_paiement: number; footer_text: string; mention_legale: string }
 interface Societe { id: string; nom: string }
 
-function genId() { return crypto.randomUUID() }
-function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
-function today() { return new Date().toISOString().split("T")[0] }
-function addDays(d: string, days: number) {
-  const dt = new Date(d)
-  dt.setDate(dt.getDate() + days)
-  return dt.toISOString().split("T")[0]
-}
+const genId = () => crypto.randomUUID()
+const fmt = (n: number) => n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const today = () => new Date().toISOString().split("T")[0]
+const addDays = (d: string, days: number) => { const dt = new Date(d); dt.setDate(dt.getDate() + days); return dt.toISOString().split("T")[0] }
+const UNITES = ["Heure", "Jour", "Mois", "Forfait", "Unite"] as const
+const DEVISES = ["MUR", "EUR", "USD", "GBP"] as const
+const MODES_PAIEMENT = ["Virement", "Cheque", "Especes", "Carte"] as const
+const ECHEANCES = [{ label: "30 jours", value: 30 }, { label: "60 jours", value: 60 }, { label: "90 jours", value: 90 }, { label: "Personnalise", value: -1 }] as const
 
-const EXCHANGE_RATES: Record<string, number> = { MUR: 1, EUR: 49.5, USD: 45.8, GBP: 57.2 }
+function Sel({ value, onValueChange, placeholder, children }: { value?: string; onValueChange: (v: string) => void; placeholder?: string; children: React.ReactNode }) {
+  return <Select value={value} onValueChange={onValueChange}><SelectTrigger><SelectValue placeholder={placeholder} /></SelectTrigger><SelectContent>{children}</SelectContent></Select>
+}
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return <div><Label>{label}</Label>{children}</div>
+}
 
 export default function NouvelleFacturePage() {
   const router = useRouter()
@@ -56,15 +43,10 @@ export default function NouvelleFacturePage() {
   const [societeId, setSocieteId] = useState("")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  // Invoice fields
   const [numeroFacture, setNumeroFacture] = useState("")
   const [dateFacture, setDateFacture] = useState(today())
   const [dateEcheance, setDateEcheance] = useState("")
-  const [devise, setDevise] = useState("MUR")
-  const [tauxChange, setTauxChange] = useState(1)
-
-  // Client
+  const [reference, setReference] = useState("")
   const [selectedClientId, setSelectedClientId] = useState("")
   const [clientNom, setClientNom] = useState("")
   const [clientEntreprise, setClientEntreprise] = useState("")
@@ -72,398 +54,353 @@ export default function NouvelleFacturePage() {
   const [clientEmail, setClientEmail] = useState("")
   const [clientVat, setClientVat] = useState("")
   const [clientOffshore, setClientOffshore] = useState(false)
-
-  // Line items
+  const [descriptif, setDescriptif] = useState("")
   const [lignes, setLignes] = useState<LigneFacture[]>([])
-
-  // Discounts
-  const [remisePct, setRemisePct] = useState(0)
-  const [remiseMontant, setRemiseMontant] = useState(0)
-
-  // Notes
+  const [remiseType, setRemiseType] = useState<"pct" | "fixe">("pct")
+  const [remiseValue, setRemiseValue] = useState(0)
+  const [devise, setDevise] = useState("MUR")
+  const [tauxChange, setTauxChange] = useState(1)
+  const [tauxLoading, setTauxLoading] = useState(false)
+  const [modePaiement, setModePaiement] = useState("Virement")
+  const [echeancePreset, setEcheancePreset] = useState(30)
+  const [notesVisibles, setNotesVisibles] = useState("")
   const [notesInternes, setNotesInternes] = useState("")
-  const [termes, setTermes] = useState("")
 
-  // Load settings and societes
   useEffect(() => {
     try {
       const s = localStorage.getItem("lexora_invoice_settings")
       if (s) {
-        const parsed = JSON.parse(s) as CompanySettings
-        setSettings(parsed)
-        setDevise(parsed.devise_defaut)
-        setNumeroFacture(`${parsed.prefixe_facture}${String(parsed.prochain_numero).padStart(3, "0")}`)
-        setDateEcheance(addDays(today(), parsed.conditions_paiement))
-      }
+        const p = JSON.parse(s) as CompanySettings
+        setSettings(p); setDevise(p.devise_defaut || "MUR")
+        setNumeroFacture(`${p.prefixe_facture}${String(p.prochain_numero).padStart(4, "0")}`)
+        setDateEcheance(addDays(today(), p.conditions_paiement || 30))
+        setEcheancePreset(p.conditions_paiement || 30)
+      } else { setDateEcheance(addDays(today(), 30)) }
       const c = localStorage.getItem("lexora_invoice_clients")
       if (c) setClients(JSON.parse(c))
       const cat = localStorage.getItem("lexora_invoice_catalogue")
       if (cat) setCatalogue(JSON.parse(cat))
     } catch { /* ignore */ }
-
-    fetch("/api/client/societes")
-      .then(r => r.json())
-      .then(d => {
-        setSocietes(d.societes || [])
-        if (d.societes?.length === 1) setSocieteId(d.societes[0].id)
-      })
-      .catch(() => {})
+    fetch("/api/client/societes").then(r => r.json()).then(d => {
+      setSocietes(d.societes || [])
+      if (d.societes?.length === 1) setSocieteId(d.societes[0].id)
+    }).catch(() => {})
   }, [])
 
-  // Auto-fill client from selection
+  const fetchTaux = useCallback(async (dev: string) => {
+    if (dev === "MUR") { setTauxChange(1); return }
+    setTauxLoading(true)
+    try {
+      const res = await fetch("/api/taux-change")
+      if (res.ok) { const data = await res.json(); const rate = data.rates?.[dev]; if (rate) { setTauxChange(rate); setTauxLoading(false); return } }
+    } catch { /* fallback */ }
+    setTauxChange({ EUR: 49.5, USD: 45.8, GBP: 57.2 }[dev] || 1)
+    setTauxLoading(false)
+  }, [])
+  useEffect(() => { fetchTaux(devise) }, [devise, fetchTaux])
+
   const handleClientSelect = (id: string) => {
     setSelectedClientId(id)
-    if (id === "manual") {
-      setClientNom(""); setClientEntreprise(""); setClientAdresse("")
-      setClientEmail(""); setClientVat(""); setClientOffshore(false)
-      return
-    }
+    if (id === "manual") { setClientNom(""); setClientEntreprise(""); setClientAdresse(""); setClientEmail(""); setClientVat(""); setClientOffshore(false); return }
     const c = clients.find(cl => cl.id === id)
-    if (c) {
-      setClientNom(c.nom); setClientEntreprise(c.entreprise); setClientAdresse(c.adresse)
-      setClientEmail(c.email); setClientVat(c.vat_number); setClientOffshore(c.offshore)
-      setDevise(c.devise)
-      if (settings) setDateEcheance(addDays(dateFacture, c.conditions_paiement))
-    }
+    if (c) { setClientNom(c.nom); setClientEntreprise(c.entreprise); setClientAdresse(c.adresse); setClientEmail(c.email); setClientVat(c.vat_number); setClientOffshore(c.offshore); if (c.devise) setDevise(c.devise); setDateEcheance(addDays(dateFacture, c.conditions_paiement || 30)) }
   }
 
-  // Line items
-  const addLigne = () => {
-    const tva = clientOffshore ? 0 : 15
-    setLignes(prev => [...prev, { id: genId(), description: "", quantite: 1, prix_unitaire: 0, taux_tva: tva, total: 0 }])
+  const handleOffshoreToggle = (offshore: boolean) => {
+    setClientOffshore(offshore)
+    setLignes(prev => prev.map(l => ({ ...l, taux_tva: offshore ? 0 : 15 })))
   }
+
+  const addLigne = () => setLignes(prev => [...prev, { id: genId(), description: "", unite: "Heure", quantite: 1, prix_unitaire: 0, taux_tva: clientOffshore ? 0 : 15, montant_ht: 0 }])
   const addFromCatalogue = (item: CatalogueItem) => {
     const tva = clientOffshore ? 0 : (item.tva_applicable ? 15 : 0)
-    const total = item.prix_unitaire * (1 + tva / 100)
-    setLignes(prev => [...prev, { id: genId(), description: item.description, quantite: 1, prix_unitaire: item.prix_unitaire, taux_tva: tva, total }])
+    setLignes(prev => [...prev, { id: genId(), description: item.description, unite: item.unite || "Forfait", quantite: 1, prix_unitaire: item.prix_unitaire, taux_tva: tva, montant_ht: item.prix_unitaire }])
   }
   const updateLigne = (id: string, field: keyof LigneFacture, value: string | number) => {
-    setLignes(prev => prev.map(l => {
-      if (l.id !== id) return l
-      const updated = { ...l, [field]: value }
-      updated.total = updated.quantite * updated.prix_unitaire * (1 + updated.taux_tva / 100)
-      return updated
-    }))
+    setLignes(prev => prev.map(l => { if (l.id !== id) return l; const u = { ...l, [field]: value }; u.montant_ht = u.quantite * u.prix_unitaire; return u }))
   }
   const removeLigne = (id: string) => setLignes(prev => prev.filter(l => l.id !== id))
 
-  // Totals
-  const subtotalHT = useMemo(() => lignes.reduce((s, l) => s + l.quantite * l.prix_unitaire, 0), [lignes])
-  const totalTVA = useMemo(() => lignes.reduce((s, l) => s + l.quantite * l.prix_unitaire * l.taux_tva / 100, 0), [lignes])
-  const discountAmount = useMemo(() => remisePct > 0 ? subtotalHT * remisePct / 100 : remiseMontant, [subtotalHT, remisePct, remiseMontant])
-  const grandTotal = useMemo(() => subtotalHT + totalTVA - discountAmount, [subtotalHT, totalTVA, discountAmount])
-  const totalMUR = useMemo(() => devise === "MUR" ? grandTotal : grandTotal * tauxChange, [grandTotal, devise, tauxChange])
+  const sousTotal = useMemo(() => lignes.reduce((s, l) => s + l.montant_ht, 0), [lignes])
+  const remiseMontant = useMemo(() => remiseType === "pct" ? sousTotal * remiseValue / 100 : remiseValue, [sousTotal, remiseType, remiseValue])
+  const totalHTApresRemise = useMemo(() => Math.max(0, sousTotal - remiseMontant), [sousTotal, remiseMontant])
+  const totalTVA = useMemo(() => {
+    if (sousTotal === 0) return 0
+    const ratio = totalHTApresRemise / sousTotal
+    return lignes.reduce((s, l) => s + l.montant_ht * ratio * l.taux_tva / 100, 0)
+  }, [lignes, totalHTApresRemise, sousTotal])
+  const totalTTC = useMemo(() => totalHTApresRemise + totalTVA, [totalHTApresRemise, totalTVA])
+  const contreValeurMUR = useMemo(() => devise !== "MUR" ? totalTTC * tauxChange : null, [totalTTC, devise, tauxChange])
 
-  // Update exchange rate when currency changes
-  useEffect(() => {
-    setTauxChange(EXCHANGE_RATES[devise] || 1)
-  }, [devise])
+  const handleEcheancePreset = (val: string) => { const n = parseInt(val); setEcheancePreset(n); if (n > 0) setDateEcheance(addDays(dateFacture, n)) }
 
   const buildInvoiceData = (statut: string) => ({
-    societe_id: societeId,
-    numero_facture: numeroFacture,
-    tiers: clientNom || clientEntreprise,
-    description: lignes.map(l => l.description).filter(Boolean).join(", "),
-    date_facture: dateFacture,
-    date_echeance: dateEcheance,
-    devise, taux_change: tauxChange,
-    montant_ht: subtotalHT,
-    montant_tva: totalTVA,
-    montant_ttc: grandTotal,
-    taux_tva: clientOffshore ? 0 : 15,
-    statut,
-    lignes, conditions_paiement: settings?.conditions_paiement || 30,
-    notes_internes: notesInternes, termes,
+    societe_id: societeId, numero_facture: numeroFacture, reference,
+    tiers: clientNom || clientEntreprise, description: descriptif || lignes.map(l => l.description).filter(Boolean).join(", "),
+    date_facture: dateFacture, date_echeance: dateEcheance, devise, taux_change: tauxChange,
+    montant_ht: totalHTApresRemise, montant_tva: totalTVA, montant_ttc: totalTTC,
+    taux_tva: clientOffshore ? 0 : 15, statut, lignes, mode_paiement: modePaiement,
+    conditions_paiement: echeancePreset > 0 ? echeancePreset : (settings?.conditions_paiement || 30),
+    notes_visibles: notesVisibles, notes_internes: notesInternes,
     template: localStorage.getItem("lexora_invoice_template") || "standard",
-    client_offshore: clientOffshore,
-    remise_pct: remisePct, remise_montant: discountAmount,
-    logo_url: settings?.logo_url || "",
+    client_offshore: clientOffshore, remise_type: remiseType, remise_value: remiseValue, remise_montant: remiseMontant,
+    logo_url: settings?.logo_url || "", contre_valeur_mur: contreValeurMUR,
   })
 
   const saveToSession = () => {
-    const data = {
+    sessionStorage.setItem("lexora_facture_preview", JSON.stringify({
       ...buildInvoiceData("brouillon"),
       client: { nom: clientNom, entreprise: clientEntreprise, adresse: clientAdresse, email: clientEmail, vat_number: clientVat, offshore: clientOffshore },
       settings,
-    }
-    sessionStorage.setItem("lexora_facture_preview", JSON.stringify(data))
+    }))
   }
+  const incrementNumero = () => { if (settings) { const u = { ...settings, prochain_numero: settings.prochain_numero + 1 }; localStorage.setItem("lexora_invoice_settings", JSON.stringify(u)) } }
 
-  const handleSaveDraft = async () => {
-    if (!societeId) { setError("Selectionnez une societe"); return }
+  const handleSave = async (statut: string) => {
+    if (!societeId) { setError("Selectionnez une societe."); return }
+    if (statut === "en_attente" && lignes.length === 0) { setError("Ajoutez au moins une ligne."); return }
+    if (statut === "en_attente" && !clientNom && !clientEntreprise) { setError("Renseignez le client."); return }
     setSaving(true); setError(null)
     try {
-      const res = await fetch("/api/client/factures", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildInvoiceData("brouillon")),
-      })
+      const res = await fetch("/api/client/factures", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(buildInvoiceData(statut)) })
       if (!res.ok) { const d = await res.json(); throw new Error(d.error) }
-      // Increment next number in settings
-      if (settings) {
-        const updated = { ...settings, prochain_numero: settings.prochain_numero + 1 }
-        localStorage.setItem("lexora_invoice_settings", JSON.stringify(updated))
-      }
-      router.push("/client/factures")
+      incrementNumero(); router.push("/client/factures")
     } catch (e: unknown) { setError(e instanceof Error ? e.message : "Erreur") }
     finally { setSaving(false) }
   }
 
-  const handleFinalize = async () => {
-    if (!societeId) { setError("Selectionnez une societe"); return }
-    if (lignes.length === 0) { setError("Ajoutez au moins une ligne"); return }
-    setSaving(true); setError(null)
-    try {
-      const res = await fetch("/api/client/factures", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildInvoiceData("en_attente")),
-      })
-      if (!res.ok) { const d = await res.json(); throw new Error(d.error) }
-      if (settings) {
-        const updated = { ...settings, prochain_numero: settings.prochain_numero + 1 }
-        localStorage.setItem("lexora_invoice_settings", JSON.stringify(updated))
-      }
-      router.push("/client/factures")
-    } catch (e: unknown) { setError(e instanceof Error ? e.message : "Erreur") }
-    finally { setSaving(false) }
-  }
-
-  const handlePreview = () => {
-    saveToSession()
-    window.open("/client/facture-preview", "_blank")
-  }
-
-  const handleDownloadPDF = () => {
-    saveToSession()
-    const w = window.open("/client/facture-preview?print=true", "_blank")
-    if (w) {
-      w.addEventListener("afterprint", () => w.close())
-    }
-  }
+  const handlePreview = () => { saveToSession(); window.open("/client/facture-preview", "_blank") }
+  const handleDownloadPDF = () => { saveToSession(); const w = window.open("/client/facture-preview?print=true", "_blank"); if (w) w.addEventListener("afterprint", () => w.close()) }
 
   return (
-    <div className="p-6 space-y-6 max-w-5xl">
-      {/* Header */}
+    <div className="pb-28 max-w-5xl mx-auto p-6 space-y-6">
+      {/* Header bar */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="sm" onClick={() => router.push("/client/factures")}><ArrowLeft className="w-4 h-4 mr-1" />Retour</Button>
-          <div>
-            <h1 className="text-2xl font-bold text-[#1E2A4A]">Nouvelle Facture</h1>
-            <p className="text-sm text-gray-500">Conforme MRA - Maurice</p>
-          </div>
+          <div><h1 className="text-2xl font-bold text-[#1E2A4A]">Nouvelle Facture</h1><p className="text-sm text-gray-500">Conforme MRA - Maurice</p></div>
         </div>
-        <Badge className="bg-gray-100 text-gray-600">Brouillon</Badge>
+        <Badge className="bg-gray-100 text-gray-600 border border-gray-300">Brouillon</Badge>
       </div>
 
       {error && <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{error}</div>}
 
-      {/* Invoice details */}
-      <div className="grid grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="p-4 space-y-3">
-            <div>
-              <Label>Societe</Label>
-              <Select value={societeId} onValueChange={setSocieteId}>
-                <SelectTrigger><SelectValue placeholder="Choisir..." /></SelectTrigger>
-                <SelectContent>{societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div><Label>N. Facture</Label><Input value={numeroFacture} onChange={e => setNumeroFacture(e.target.value)} className="font-mono" /></div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 space-y-3">
-            <div><Label>Date de facture</Label><Input type="date" value={dateFacture} onChange={e => { setDateFacture(e.target.value); if (settings) setDateEcheance(addDays(e.target.value, settings.conditions_paiement)) }} /></div>
-            <div><Label>Date d&apos;echeance</Label><Input type="date" value={dateEcheance} onChange={e => setDateEcheance(e.target.value)} /></div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 space-y-3">
-            <div>
-              <Label>Devise</Label>
-              <Select value={devise} onValueChange={setDevise}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{["MUR", "EUR", "USD", "GBP"].map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            {devise !== "MUR" && (
-              <div>
-                <Label>Taux de change (1 {devise} = X MUR)</Label>
-                <Input type="number" step="0.01" value={tauxChange} onChange={e => setTauxChange(parseFloat(e.target.value) || 1)} />
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Client */}
-      <Card>
-        <CardHeader><CardTitle className="text-[#1E2A4A] text-base">Client</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label>Selectionner un client</Label>
-              <Select value={selectedClientId} onValueChange={handleClientSelect}>
-                <SelectTrigger><SelectValue placeholder="Choisir ou saisie manuelle..." /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="manual">-- Saisie manuelle --</SelectItem>
-                  {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.nom}{c.entreprise ? ` (${c.entreprise})` : ""}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Type</Label>
-              <Select value={clientOffshore ? "offshore" : "local"} onValueChange={v => setClientOffshore(v === "offshore")}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="local">Local Maurice - TVA 15%</SelectItem>
-                  <SelectItem value="offshore">Offshore / Export - Zero-rated</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+      {/* 1. Invoice header fields */}
+      <Card className="border-t-4 border-t-[#1E2A4A]">
+        <CardHeader className="pb-2"><CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2"><FileText className="w-4 h-4" />Informations facture</CardTitle></CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <Field label="Societe"><Sel value={societeId} onValueChange={setSocieteId} placeholder="Choisir...">{societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</Sel></Field>
+            <Field label="N. Facture"><Input value={numeroFacture} onChange={e => setNumeroFacture(e.target.value)} className="font-mono" /></Field>
+            <Field label="Date facture"><Input type="date" value={dateFacture} onChange={e => { setDateFacture(e.target.value); if (echeancePreset > 0) setDateEcheance(addDays(e.target.value, echeancePreset)) }} /></Field>
+            <Field label="Date echeance"><Input type="date" value={dateEcheance} onChange={e => { setDateEcheance(e.target.value); setEcheancePreset(-1) }} /></Field>
+            <Field label="Reference"><Input value={reference} onChange={e => setReference(e.target.value)} placeholder="Ref. / PO" /></Field>
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            <div><Label>Nom</Label><Input value={clientNom} onChange={e => setClientNom(e.target.value)} placeholder="Nom du contact" /></div>
-            <div><Label>Entreprise</Label><Input value={clientEntreprise} onChange={e => setClientEntreprise(e.target.value)} placeholder="Societe du client" /></div>
-            <div><Label>N. TVA</Label><Input value={clientVat} onChange={e => setClientVat(e.target.value)} placeholder="VAT number" /></div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><Label>Adresse</Label><Input value={clientAdresse} onChange={e => setClientAdresse(e.target.value)} /></div>
-            <div><Label>Email</Label><Input value={clientEmail} onChange={e => setClientEmail(e.target.value)} type="email" /></div>
-          </div>
-          {clientOffshore && (
-            <div className="bg-blue-50 border border-blue-200 rounded p-2 text-sm text-blue-700">
-              Client offshore / export : TVA a 0% (zero-rated) appliquee automatiquement.
-            </div>
-          )}
         </CardContent>
       </Card>
 
-      {/* Line Items */}
+      {/* 2. Client */}
       <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-[#1E2A4A] text-base">Lignes de facture</CardTitle>
+        <CardHeader className="pb-2"><CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2"><User className="w-4 h-4" />Client</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Selectionner un client">
+              <Sel value={selectedClientId} onValueChange={handleClientSelect} placeholder="Choisir ou saisie manuelle...">
+                <SelectItem value="manual">-- Saisie manuelle --</SelectItem>
+                {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.nom}{c.entreprise ? ` (${c.entreprise})` : ""}</SelectItem>)}
+              </Sel>
+            </Field>
+            <Field label="Type de client">
+              <Sel value={clientOffshore ? "offshore" : "local"} onValueChange={v => handleOffshoreToggle(v === "offshore")}>
+                <SelectItem value="local">Local Maurice - TVA 15%</SelectItem>
+                <SelectItem value="offshore">Offshore / Export - TVA 0%</SelectItem>
+              </Sel>
+            </Field>
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            <Field label="Nom"><Input value={clientNom} onChange={e => setClientNom(e.target.value)} placeholder="Nom du contact" /></Field>
+            <Field label="Entreprise"><Input value={clientEntreprise} onChange={e => setClientEntreprise(e.target.value)} placeholder="Nom de la societe" /></Field>
+            <Field label="N. TVA"><Input value={clientVat} onChange={e => setClientVat(e.target.value)} placeholder="VAT number" /></Field>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Adresse"><Input value={clientAdresse} onChange={e => setClientAdresse(e.target.value)} placeholder="Adresse complete" /></Field>
+            <Field label="Email"><Input value={clientEmail} onChange={e => setClientEmail(e.target.value)} type="email" placeholder="email@exemple.com" /></Field>
+          </div>
+          {clientOffshore && <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700">Client offshore / export : TVA a 0% (zero-rated) appliquee automatiquement sur toutes les lignes.</div>}
+        </CardContent>
+      </Card>
+
+      {/* 3. Descriptif */}
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2"><FileText className="w-4 h-4" />Descriptif</CardTitle></CardHeader>
+        <CardContent>
+          <Textarea value={descriptif} onChange={e => setDescriptif(e.target.value)} placeholder="Objet de la facture / description generale des prestations..." rows={3} className="resize-y" />
+        </CardContent>
+      </Card>
+
+      {/* 4. Line items table */}
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2"><ListOrdered className="w-4 h-4" />Lignes de facture</CardTitle>
             <div className="flex gap-2">
               {catalogue.length > 0 && (
                 <Select onValueChange={v => { const item = catalogue.find(i => i.id === v); if (item) addFromCatalogue(item) }}>
-                  <SelectTrigger className="w-60"><SelectValue placeholder="Ajouter du catalogue..." /></SelectTrigger>
+                  <SelectTrigger className="w-56 text-sm"><SelectValue placeholder="Ajouter du catalogue..." /></SelectTrigger>
                   <SelectContent>{catalogue.map(item => <SelectItem key={item.id} value={item.id}>{item.description} - {fmt(item.prix_unitaire)} {item.devise}</SelectItem>)}</SelectContent>
                 </Select>
               )}
-              <Button onClick={addLigne} variant="outline" size="sm"><Plus className="w-4 h-4 mr-1" />Ajouter une ligne</Button>
+              <Button onClick={addLigne} variant="outline" size="sm" className="border-[#C9A84C] text-[#C9A84C] hover:bg-[#C9A84C]/10"><Plus className="w-4 h-4 mr-1" />Ajouter une ligne</Button>
             </div>
           </div>
         </CardHeader>
-        <CardContent className="p-0">
+        <CardContent className="p-0 overflow-x-auto">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead className="w-[40%]">Description</TableHead>
-                <TableHead className="text-right w-[10%]">Qte</TableHead>
-                <TableHead className="text-right w-[15%]">Prix unit.</TableHead>
-                <TableHead className="text-right w-[10%]">TVA %</TableHead>
-                <TableHead className="text-right w-[15%]">Total</TableHead>
-                <TableHead className="w-[5%]" />
+              <TableRow className="bg-[#1E2A4A]/5">
+                <TableHead className="w-[4%] text-center">#</TableHead>
+                <TableHead className="w-[28%]">Description</TableHead>
+                <TableHead className="w-[11%]">Unite</TableHead>
+                <TableHead className="text-right w-[10%]">Quantite</TableHead>
+                <TableHead className="text-right w-[13%]">Prix unitaire</TableHead>
+                <TableHead className="text-right w-[8%]">TVA %</TableHead>
+                <TableHead className="text-right w-[14%]">Montant HT</TableHead>
+                <TableHead className="w-[4%]" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {lignes.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="text-center py-8 text-gray-400">Ajoutez des lignes a la facture</TableCell></TableRow>
-              ) : (
-                lignes.map(l => (
-                  <TableRow key={l.id}>
-                    <TableCell><Input value={l.description} onChange={e => updateLigne(l.id, "description", e.target.value)} placeholder="Description du service/produit" className="border-0 bg-transparent" /></TableCell>
-                    <TableCell><Input type="number" min={1} value={l.quantite} onChange={e => updateLigne(l.id, "quantite", parseFloat(e.target.value) || 0)} className="text-right border-0 bg-transparent w-20" /></TableCell>
-                    <TableCell><Input type="number" step="0.01" value={l.prix_unitaire} onChange={e => updateLigne(l.id, "prix_unitaire", parseFloat(e.target.value) || 0)} className="text-right border-0 bg-transparent w-28" /></TableCell>
-                    <TableCell>
-                      <Select value={String(l.taux_tva)} onValueChange={v => updateLigne(l.id, "taux_tva", parseFloat(v))}>
-                        <SelectTrigger className="border-0 bg-transparent w-20"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="15">15%</SelectItem>
-                          <SelectItem value="0">0%</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                    <TableCell className="text-right font-mono font-semibold">{fmt(l.total)}</TableCell>
-                    <TableCell><Button variant="ghost" size="sm" onClick={() => removeLigne(l.id)} className="text-red-500 hover:text-red-700"><Trash2 className="w-4 h-4" /></Button></TableCell>
-                  </TableRow>
-                ))
-              )}
+                <TableRow><TableCell colSpan={8} className="text-center py-10 text-gray-400">Aucune ligne. Cliquez sur &quot;Ajouter une ligne&quot; pour commencer.</TableCell></TableRow>
+              ) : lignes.map((l, idx) => (
+                <TableRow key={l.id} className="group">
+                  <TableCell className="text-center text-gray-400 text-sm">{idx + 1}</TableCell>
+                  <TableCell><Input value={l.description} onChange={e => updateLigne(l.id, "description", e.target.value)} placeholder="Description du service ou produit" className="border-0 bg-transparent focus:bg-white" /></TableCell>
+                  <TableCell>
+                    <Select value={l.unite} onValueChange={v => updateLigne(l.id, "unite", v)}>
+                      <SelectTrigger className="border-0 bg-transparent text-sm"><SelectValue /></SelectTrigger>
+                      <SelectContent>{UNITES.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </TableCell>
+                  <TableCell><Input type="number" min={0} step="0.01" value={l.quantite} onChange={e => updateLigne(l.id, "quantite", parseFloat(e.target.value) || 0)} className="text-right border-0 bg-transparent focus:bg-white w-20" /></TableCell>
+                  <TableCell><Input type="number" step="0.01" value={l.prix_unitaire} onChange={e => updateLigne(l.id, "prix_unitaire", parseFloat(e.target.value) || 0)} className="text-right border-0 bg-transparent focus:bg-white w-28" /></TableCell>
+                  <TableCell>
+                    <Select value={String(l.taux_tva)} onValueChange={v => updateLigne(l.id, "taux_tva", parseFloat(v))}>
+                      <SelectTrigger className="border-0 bg-transparent w-20 text-sm"><SelectValue /></SelectTrigger>
+                      <SelectContent><SelectItem value="15">15%</SelectItem><SelectItem value="0">0%</SelectItem></SelectContent>
+                    </Select>
+                  </TableCell>
+                  <TableCell className="text-right font-mono font-semibold text-[#1E2A4A]">{fmt(l.montant_ht)}</TableCell>
+                  <TableCell><Button variant="ghost" size="sm" onClick={() => removeLigne(l.id)} className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4" /></Button></TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
 
-      {/* Totals and Discounts */}
-      <div className="grid grid-cols-2 gap-4">
-        <Card>
-          <CardHeader><CardTitle className="text-[#1E2A4A] text-base">Remise</CardTitle></CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Remise en %</Label>
-                <Input type="number" min={0} max={100} step={0.5} value={remisePct} onChange={e => { setRemisePct(parseFloat(e.target.value) || 0); setRemiseMontant(0) }} />
+      {/* 5. Totals + 6. Devise */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-4">
+          {/* Discount */}
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2"><Calculator className="w-4 h-4" />Remise</CardTitle></CardHeader>
+            <CardContent>
+              <div className="flex items-end gap-3">
+                <Field label="Type">
+                  <Sel value={remiseType} onValueChange={v => { setRemiseType(v as "pct" | "fixe"); setRemiseValue(0) }}>
+                    <SelectItem value="pct">Pourcentage (%)</SelectItem>
+                    <SelectItem value="fixe">Montant fixe ({devise})</SelectItem>
+                  </Sel>
+                </Field>
+                <Field label={remiseType === "pct" ? "Remise (%)" : `Montant (${devise})`}>
+                  <Input type="number" min={0} max={remiseType === "pct" ? 100 : undefined} step={0.5} value={remiseValue} onChange={e => setRemiseValue(parseFloat(e.target.value) || 0)} />
+                </Field>
               </div>
-              <div>
-                <Label>Ou montant fixe ({devise})</Label>
-                <Input type="number" min={0} step={0.01} value={remiseMontant} onChange={e => { setRemiseMontant(parseFloat(e.target.value) || 0); setRemisePct(0) }} />
-              </div>
+            </CardContent>
+          </Card>
+          {/* Devise */}
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-[#1E2A4A] text-base">Devise</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <Sel value={devise} onValueChange={setDevise}>{DEVISES.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</Sel>
+              {devise !== "MUR" && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Label className="whitespace-nowrap">1 {devise} =</Label>
+                    <Input type="number" step="0.01" value={tauxChange} onChange={e => setTauxChange(parseFloat(e.target.value) || 1)} className="w-28 font-mono" />
+                    <span className="text-sm text-gray-500">MUR</span>
+                  </div>
+                  {tauxLoading && <p className="text-xs text-gray-400">Chargement du taux...</p>}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+        {/* Totals card */}
+        <Card className="border-2 border-[#1E2A4A]/20">
+          <CardContent className="p-5 space-y-3">
+            <div className="flex justify-between text-sm"><span className="text-gray-600">Sous-total HT</span><span className="font-mono">{fmt(sousTotal)} {devise}</span></div>
+            {remiseMontant > 0 && <div className="flex justify-between text-sm text-red-600"><span>Remise{remiseType === "pct" ? ` (${remiseValue}%)` : ""}</span><span className="font-mono">-{fmt(remiseMontant)} {devise}</span></div>}
+            <div className="flex justify-between text-sm"><span className="text-gray-600">Total HT apres remise</span><span className="font-mono">{fmt(totalHTApresRemise)} {devise}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-gray-600">TVA {clientOffshore ? "(zero-rated)" : "15%"}</span><span className="font-mono">{fmt(totalTVA)} {devise}</span></div>
+            <div className="border-t-2 border-[#1E2A4A] pt-3 flex justify-between font-bold text-xl">
+              <span className="text-[#1E2A4A]">TOTAL TTC</span><span className="text-[#1E2A4A] font-mono">{fmt(totalTTC)} {devise}</span>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4 space-y-2">
-            <div className="flex justify-between text-sm"><span className="text-gray-600">Sous-total HT</span><span className="font-mono">{fmt(subtotalHT)} {devise}</span></div>
-            {discountAmount > 0 && (
-              <div className="flex justify-between text-sm text-red-600"><span>Remise{remisePct > 0 ? ` (${remisePct}%)` : ""}</span><span className="font-mono">-{fmt(discountAmount)} {devise}</span></div>
-            )}
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">TVA {clientOffshore ? "(Zero-rated export)" : "(15%)"}</span>
-              <span className="font-mono">{fmt(totalTVA)} {devise}</span>
-            </div>
-            <div className="border-t pt-2 flex justify-between font-bold text-lg">
-              <span className="text-[#1E2A4A]">Total TTC</span>
-              <span className="text-[#1E2A4A] font-mono">{fmt(grandTotal)} {devise}</span>
-            </div>
-            {devise !== "MUR" && (
-              <div className="flex justify-between text-sm text-gray-500">
-                <span>Equivalent MUR (taux: {tauxChange})</span>
-                <span className="font-mono">{fmt(totalMUR)} MUR</span>
+            {contreValeurMUR !== null && (
+              <div className="bg-gray-50 rounded-lg p-3 mt-2 space-y-1">
+                <div className="flex justify-between text-xs text-gray-500"><span>Taux : 1 {devise} = {fmt(tauxChange)} MUR</span></div>
+                <div className="flex justify-between text-sm font-semibold text-gray-700"><span>Contre-valeur MUR</span><span className="font-mono">{fmt(contreValeurMUR)} MUR</span></div>
               </div>
             )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Notes */}
-      <div className="grid grid-cols-2 gap-4">
-        <Card>
-          <CardHeader><CardTitle className="text-[#1E2A4A] text-base">Notes internes</CardTitle></CardHeader>
-          <CardContent><Textarea value={notesInternes} onChange={e => setNotesInternes(e.target.value)} placeholder="Notes internes (non visibles sur la facture)" rows={3} /></CardContent>
-        </Card>
-        <Card>
-          <CardHeader><CardTitle className="text-[#1E2A4A] text-base">Termes et conditions</CardTitle></CardHeader>
-          <CardContent><Textarea value={termes} onChange={e => setTermes(e.target.value)} placeholder="Conditions de paiement, penalites de retard..." rows={3} /></CardContent>
-        </Card>
-      </div>
-
-      {/* Actions */}
+      {/* 7. Payment */}
       <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={handlePreview}><Eye className="w-4 h-4 mr-2" />Apercu</Button>
-              <Button variant="outline" onClick={handleDownloadPDF}><Download className="w-4 h-4 mr-2" />Telecharger PDF</Button>
+        <CardHeader className="pb-2"><CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2"><CreditCard className="w-4 h-4" />Paiement</CardTitle></CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <Field label="Mode de paiement"><Sel value={modePaiement} onValueChange={setModePaiement}>{MODES_PAIEMENT.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</Sel></Field>
+            <Field label="Echeance"><Sel value={String(echeancePreset)} onValueChange={handleEcheancePreset}>{ECHEANCES.map(e => <SelectItem key={e.value} value={String(e.value)}>{e.label}</SelectItem>)}</Sel></Field>
+            <Field label="Date d'echeance"><Input type="date" value={dateEcheance} onChange={e => { setDateEcheance(e.target.value); setEcheancePreset(-1) }} /></Field>
+          </div>
+          {settings && modePaiement === "Virement" && (settings.banque_nom || settings.banque_iban) && (
+            <div className="mt-4 bg-gray-50 rounded-lg p-4 text-sm space-y-1">
+              <p className="font-semibold text-[#1E2A4A] mb-1">Coordonnees bancaires</p>
+              {settings.banque_nom && <p>Banque : {settings.banque_nom}</p>}
+              {settings.banque_compte && <p>Compte : {settings.banque_compte}</p>}
+              {settings.banque_iban && <p>IBAN : {settings.banque_iban}</p>}
+              {settings.banque_swift && <p>SWIFT : {settings.banque_swift}</p>}
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => alert("Fonctionnalite email bientot disponible")} disabled><Send className="w-4 h-4 mr-2" />Envoyer par email</Button>
-              <Button onClick={handleSaveDraft} disabled={saving} className="bg-gray-600 hover:bg-gray-700 text-white"><Save className="w-4 h-4 mr-2" />{saving ? "Sauvegarde..." : "Sauvegarder brouillon"}</Button>
-              <Button onClick={handleFinalize} disabled={saving} className="bg-[#1E2A4A] hover:bg-[#2a3d6b]"><Lock className="w-4 h-4 mr-2" />{saving ? "Finalisation..." : "Finaliser"}</Button>
-            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 8. Notes */}
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2"><StickyNote className="w-4 h-4" />Notes</CardTitle></CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Field label="Notes visibles sur la facture"><Textarea value={notesVisibles} onChange={e => setNotesVisibles(e.target.value)} placeholder="Conditions de paiement, mentions legales..." rows={3} className="resize-y" /></Field>
+            <Field label="Notes internes (non imprimees)"><Textarea value={notesInternes} onChange={e => setNotesInternes(e.target.value)} placeholder="Notes internes, rappels..." rows={3} className="resize-y" /></Field>
           </div>
         </CardContent>
       </Card>
+
+      {/* 9. Sticky bottom actions */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-lg">
+        <div className="max-w-5xl mx-auto px-6 py-3 flex items-center justify-between">
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handlePreview} className="text-[#1E2A4A]"><Eye className="w-4 h-4 mr-2" />Apercu</Button>
+            <Button variant="outline" onClick={handleDownloadPDF}><Download className="w-4 h-4 mr-2" />Telecharger PDF</Button>
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={() => handleSave("brouillon")} disabled={saving} variant="outline" className="border-[#1E2A4A] text-[#1E2A4A]"><Save className="w-4 h-4 mr-2" />{saving ? "..." : "Sauvegarder brouillon"}</Button>
+            <Button onClick={() => handleSave("en_attente")} disabled={saving} className="bg-[#C9A84C] hover:bg-[#b8973e] text-white font-semibold"><Lock className="w-4 h-4 mr-2" />{saving ? "..." : "Finaliser"}</Button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
