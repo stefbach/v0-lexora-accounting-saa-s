@@ -78,18 +78,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Erreur profil: ${profileError.message}` }, { status: 500 })
     }
 
-    // Si société associée → insérer dans user_societes + dossier
-    if (societe_id) {
+    // Si société(s) associée(s) → insérer dans user_societes + dossiers
+    const societeIds = body.societe_ids && Array.isArray(body.societe_ids) && body.societe_ids.length > 0
+      ? body.societe_ids
+      : societe_id ? [societe_id] : []
+
+    for (const sid of societeIds) {
       // user_societes link
       await supabase.from('user_societes').upsert({
-        user_id: authData.user.id, societe_id, role, actif: true
+        user_id: authData.user.id, societe_id: sid, role, actif: true
       }, { onConflict: 'user_id,societe_id' })
 
-      // Pour les clients → créer un dossier (lien client ↔ société)
+      // Pour les clients/assistants → créer un dossier
       if (['client_admin', 'client_user', 'client_assistant'].includes(role)) {
         await supabase.from('dossiers').upsert({
           client_id: authData.user.id,
-          societe_id,
+          societe_id: sid,
           comptable_id: comptable_id || authData.user.id,
           statut: 'actif',
         }, { onConflict: 'client_id,societe_id', ignoreDuplicates: true })
@@ -99,7 +103,7 @@ export async function POST(request: NextRequest) {
       if (['comptable', 'comptable_dedie'].includes(role)) {
         await supabase.from('societes')
           .update({ comptable_id: authData.user.id })
-          .eq('id', societe_id)
+          .eq('id', sid)
           .is('comptable_id', null) // only if no comptable already assigned
       }
     }

@@ -159,6 +159,7 @@ export default function UsersPage() {
         full_name: `${form.prenom} ${form.nom}`,
         role: form.role,
         societe_id: form.societe_id || undefined,
+        societe_ids: (form as any).societe_ids || undefined,
         comptable_id: form.comptable_id || undefined,
         modules_utilisateur: form.modules_utilisateur,
       })
@@ -224,17 +225,36 @@ export default function UsersPage() {
               {NEEDS_SOCIETE.includes(form.role) && (
                 <div>
                   <Label>
-                    Société à associer
+                    {['client_assistant'].includes(form.role) ? 'Sociétés à gérer (multi-sélection)' : 'Société à associer'}
                     {['rh','juridique','employe','manager','direction'].includes(form.role) && <span className="text-red-500"> *</span>}
                   </Label>
-                  <Select value={form.societe_id} onValueChange={v => setForm(f => ({...f, societe_id: v}))}>
-                    <SelectTrigger><SelectValue placeholder="Sélectionner une société" /></SelectTrigger>
-                    <SelectContent>
-                      {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom} {s.brn ? `— ${s.brn}` : ''}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  {['client_assistant', 'client_admin'].includes(form.role) && societes.length > 1 ? (
+                    <div className="max-h-40 overflow-y-auto rounded-md border p-2 space-y-1 mt-1">
+                      {societes.map(s => (
+                        <label key={s.id} className="flex items-center gap-2 cursor-pointer text-sm hover:bg-gray-50 p-1 rounded">
+                          <input type="checkbox" className="rounded border-gray-300"
+                            checked={(form as any).societe_ids?.includes(s.id) || form.societe_id === s.id}
+                            onChange={e => {
+                              const ids: string[] = (form as any).societe_ids || (form.societe_id ? [form.societe_id] : [])
+                              const updated = e.target.checked ? [...ids, s.id] : ids.filter((id: string) => id !== s.id)
+                              setForm(f => ({...f, societe_ids: updated, societe_id: updated[0] || ''} as any))
+                            }}
+                          />
+                          <span>{s.nom} {s.brn ? `(${s.brn})` : ''}</span>
+                        </label>
+                      ))}
+                    </div>
+                  ) : (
+                    <Select value={form.societe_id} onValueChange={v => setForm(f => ({...f, societe_id: v}))}>
+                      <SelectTrigger><SelectValue placeholder="Sélectionner une société" /></SelectTrigger>
+                      <SelectContent>
+                        {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom} {s.brn ? `— ${s.brn}` : ''}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  )}
                   <p className="text-xs text-gray-500 mt-1">
-                    {['client_admin','client_user','client_assistant'].includes(form.role) && "Le client sera lié à cette société via un dossier"}
+                    {['client_assistant'].includes(form.role) && "L'assistant pourra numériser des documents pour toutes les sociétés cochées"}
+                    {['client_admin','client_user'].includes(form.role) && "Le client sera lié à cette société via un dossier"}
                     {['comptable','comptable_dedie'].includes(form.role) && "Le comptable sera assigné à cette société"}
                     {['rh','juridique','employe','manager','direction'].includes(form.role) && "La société principale de ce collaborateur"}
                   </p>
