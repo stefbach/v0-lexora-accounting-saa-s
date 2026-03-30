@@ -195,7 +195,7 @@ export default function HomePage() {
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
               </Link>
-              <Button size="lg" variant="outline" className="border-white/30 px-8 text-base font-semibold text-white hover:bg-white/10">
+              <Button size="lg" variant="outline" className="border-2 border-white px-8 text-base font-semibold text-white hover:bg-white hover:text-[#1E2A4A]">
                 {t('home.watch_demo', locale)}
               </Button>
             </div>
@@ -380,21 +380,32 @@ export default function HomePage() {
 
       {/* FOOTER */}
       <footer className="border-t bg-white py-12">
-        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-6 px-6 md:flex-row">
-          <Link href="/" className="text-xl font-bold tracking-tight" style={{ color: "#1E2A4A" }}>
-            LEXORA
-          </Link>
-          <div className="flex items-center gap-6">
-            <Link href="/auth/login" className="text-sm text-gray-600 hover:text-gray-900">
-              {t('home.login', locale)}
-            </Link>
-            <a href="#" className="text-sm text-gray-600 hover:text-gray-900">
-              {t('home.contact', locale)}
-            </a>
+        <div className="mx-auto max-w-7xl px-6">
+          <div className="flex flex-col items-center justify-between gap-6 md:flex-row">
+            <div className="flex items-center gap-3">
+              <Link href="/" className="text-xl font-bold tracking-tight" style={{ color: "#1E2A4A" }}>
+                LEXORA
+              </Link>
+              <span className="text-xs text-gray-400">|</span>
+              <span className="text-xs text-gray-400">Powered by <strong className="text-gray-600">Digital Data Solutions Ltd</strong></span>
+            </div>
+            <div className="flex items-center gap-6">
+              <Link href="/auth/login" className="text-sm text-gray-600 hover:text-gray-900">
+                {t('home.login', locale)}
+              </Link>
+              <a href="#" className="text-sm text-gray-600 hover:text-gray-900">
+                {t('home.contact', locale)}
+              </a>
+            </div>
           </div>
-          <p className="text-sm text-gray-400">
-            {t('home.footer_tagline', locale)}
-          </p>
+          <div className="mt-8 border-t pt-6 text-center">
+            <p className="text-sm text-gray-400">
+              {t('home.footer_tagline', locale)}
+            </p>
+            <p className="mt-2 text-xs text-gray-300">
+              &copy; {new Date().getFullYear()} LEXORA — Digital Data Solutions Ltd. {locale === 'fr' ? 'Tous droits réservés.' : 'All rights reserved.'}
+            </p>
+          </div>
         </div>
       </footer>
     </div>
