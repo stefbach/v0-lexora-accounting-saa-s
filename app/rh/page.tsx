@@ -58,12 +58,28 @@ export default function RHDashboard() {
           fetch(`/api/rh/conges?statut=en_attente${societe !== "all" ? `&societe_id=${societe}` : ""}`),
         ])
         const [emp, paie, conges] = await Promise.all([empRes.json(), paieRes.json(), congesRes.json()])
-        const coutTotal = paie.totaux?.cout_total_employeur || 0
-        const masseSalariale = paie.totaux?.salaire_net_total || coutTotal * 0.75
+        const employes = emp.employes || []
+        const nbBulletins = paie.nb || 0
+
+        // If bulletins exist for this period, use them
+        let masseSalariale = 0
+        let chargesPatronales = 0
+
+        if (nbBulletins > 0) {
+          masseSalariale = paie.totaux?.masse_salariale_brute || 0
+          chargesPatronales = paie.totaux?.total_charges_patronales || 0
+        } else {
+          // Fallback: estimate from employee base salaries
+          const totalBase = employes.reduce((s: number, e: any) => s + (Number(e.salaire_base) || 0), 0)
+          masseSalariale = totalBase
+          // Estimate charges: CSG 6% + NSF 2.5% + Training 1% + PRGF ~1.5% ≈ 11%
+          chargesPatronales = Math.round(totalBase * 0.11)
+        }
+
         setStats({
-          nb_employes: emp.total || 0,
+          nb_employes: emp.total || employes.length || 0,
           masse_salariale: masseSalariale,
-          charges_patronales: coutTotal - masseSalariale,
+          charges_patronales: chargesPatronales,
           conges_attente: conges.conges?.length || 0,
           absences_today: 0,
           primes_mois: 0,
