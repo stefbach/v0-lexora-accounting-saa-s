@@ -12,7 +12,7 @@ import {
   FileSpreadsheet, RotateCcw, BarChart3, Briefcase, FolderOpen, Landmark,
   Receipt, Calculator, CalendarClock, PieChart,
 } from "lucide-react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 
 interface NavItem {
   href: string | ((params: Record<string, string>) => string)
@@ -20,6 +20,7 @@ interface NavItem {
   icon: React.ComponentType<{ className?: string }>
   section?: string
   requiresSociete?: boolean
+  badge?: boolean
 }
 
 // ── SECTION "Tableau de bord" ────────────────────────────────────────────────
@@ -61,7 +62,7 @@ const rapportsNavItems: NavItem[] = [
 const adminNavItems: NavItem[] = [
   { href: "/rh",              label: "RH & Paie",      icon: UsersRound,    section: "Administration" },
   { href: "/comptable/equipe", label: "Mon Équipe",    icon: UsersRound,    section: "Administration" },
-  { href: "/comptable/alertes", label: "Alertes",      icon: AlertTriangle, section: "Administration" },
+  { href: "/comptable/alertes", label: "Alertes",      icon: AlertTriangle, section: "Administration", badge: true },
   { href: "/direction",       label: "Direction",      icon: PieChart,      section: "Administration" },
 ]
 
@@ -142,11 +143,13 @@ function NavSection({
   params,
   pathname,
   collapsed,
+  criticalAlertCount = 0,
 }: {
   items: NavItem[]
   params: Record<string, string>
   pathname: string
   collapsed: boolean
+  criticalAlertCount?: number
 }) {
   let lastSection: string | undefined = undefined
 
@@ -178,6 +181,11 @@ function NavSection({
             >
               <item.icon className="h-4 w-4 shrink-0" />
               {!collapsed && <span>{item.label}</span>}
+              {!collapsed && item.badge && criticalAlertCount > 0 && (
+                <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
+                  {criticalAlertCount > 99 ? "99+" : criticalAlertCount}
+                </span>
+              )}
             </Link>
           </div>
         )
@@ -191,7 +199,25 @@ export function ComptableSidebar() {
   const rawParams = useParams() as Record<string, string>
   const router = useRouter()
   const [collapsed, setCollapsed] = useState(false)
+  const [criticalAlertCount, setCriticalAlertCount] = useState(0)
   const { profile } = useProfile()
+
+  useEffect(() => {
+    async function fetchAlertCount() {
+      try {
+        const res = await fetch("/api/comptable/alertes")
+        if (res.ok) {
+          const data = await res.json()
+          setCriticalAlertCount(data.counts?.critical || 0)
+        }
+      } catch {
+        // Silently fail
+      }
+    }
+    fetchAlertCount()
+    const interval = setInterval(fetchAlertCount, 5 * 60 * 1000)
+    return () => clearInterval(interval)
+  }, [])
   const roleLabel = profile?.role === "comptable_dedie" ? "Comptable dédié" : "Comptable"
 
   const clientId = rawParams?.clientId ?? ""
@@ -278,7 +304,7 @@ export function ComptableSidebar() {
           <NavSection items={rapportsNavItems} params={routeParams} pathname={pathname} collapsed={collapsed} />
 
           {/* ── Administration ── */}
-          <NavSection items={adminNavItems} params={routeParams} pathname={pathname} collapsed={collapsed} />
+          <NavSection items={adminNavItems} params={routeParams} pathname={pathname} collapsed={collapsed} criticalAlertCount={criticalAlertCount} />
         </nav>
       </div>
 

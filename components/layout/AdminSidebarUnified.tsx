@@ -160,7 +160,8 @@ export function AdminSidebarUnified() {
                 <div className="space-y-0.5 ml-1">
                   {items.map(item => {
                     const Icon = item.icon
-                    const active = isActive(item.href, item.exact)
+                    const active = isActive(item.href, (item as any).exact)
+                    const showBadge = (item as any).badge && criticalAlertCount > 0
                     return (
                       <Link
                         key={item.href + item.label}
@@ -174,6 +175,11 @@ export function AdminSidebarUnified() {
                       >
                         <Icon className="w-4 h-4 flex-shrink-0" />
                         <span className="truncate">{item.label}</span>
+                        {showBadge && (
+                          <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
+                            {criticalAlertCount > 99 ? "99+" : criticalAlertCount}
+                          </span>
+                        )}
                       </Link>
                     )
                   })}
