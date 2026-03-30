@@ -160,6 +160,7 @@ export default function UsersPage() {
         role: form.role,
         societe_id: form.societe_id || undefined,
         comptable_id: form.comptable_id || undefined,
+        modules_utilisateur: form.modules_utilisateur,
       })
     })
     const data = await res.json()
@@ -204,7 +205,7 @@ export default function UsersPage() {
               <div><Label>Email</Label><Input type="email" value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))} placeholder="jean.dupont@email.com" /></div>
               <div>
                 <Label>Rôle</Label>
-                <Select value={form.role} onValueChange={v => setForm(f => ({...f, role: v, societe_id: ''}))}>
+                <Select value={form.role} onValueChange={v => setForm(f => ({...f, role: v, societe_id: '', modules_utilisateur: getDefaultModules(v)}))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {ROLES.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
@@ -230,6 +231,11 @@ export default function UsersPage() {
                   </p>
                 </div>
               )}
+              <PermissionsEditor
+                modules={form.modules_utilisateur}
+                onChange={m => setForm(f => ({...f, modules_utilisateur: m}))}
+                role={form.role}
+              />
               <div>
                 <Label>Mot de passe généré</Label>
                 <div className="flex gap-2">
