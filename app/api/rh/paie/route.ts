@@ -172,17 +172,17 @@ export async function POST(request: Request) {
       const resultat = calculerBulletin(elements, params, joursTravailles, Number(emp.pct_refacturation) || 0)
 
       // Déduire absences injustifiées du net
-      const salaire_net_final = Math.round((resultat.salaire_net - montant_absence) * 100) / 100
+      const salaire_net_final = Math.round((resultat.salaire_net - montant_absence_final) * 100) / 100
 
       const bulletin = {
         employe_id, societe_id: societe_id || emp.societe_id,
         periode: periodeDate,
         jours_absence: jours_absence_injust,
-        montant_absence,
+        montant_absence_final,
         primes_detail: primesMois || [],
         ...elements, ...resultat,
         salaire_net: salaire_net_final,
-        total_deductions: Math.round((resultat.total_deductions + montant_absence) * 100) / 100,
+        total_deductions: Math.round((resultat.total_deductions + montant_absence_final) * 100) / 100,
         pct_refacturation: emp.pct_refacturation || 0,
         societe_refacturation_id: emp.societe_refacturation_id || null,
         airbox_mur: body.airbox_mur || 924.48,
@@ -200,14 +200,24 @@ export async function POST(request: Request) {
           .in('id', primesMois.map(p => p.id))
       }
 
-      return NextResponse.json({ bulletin: data, simulation: { ...resultat, total_ot_montant, total_primes, montant_absence, jours_travailles } })
+      return NextResponse.json({ bulletin: data, simulation: { ...resultat, total_ot_montant, total_primes, montant_absence_final, jours_travailles } })
     }
 
     // ══════════════════════════════════════════════════════
     // ACTION : calculer_batch (tous les employés de la société)
     // ══════════════════════════════════════════════════════
     if (action === 'calculer_batch') {
-      const { data: employes } = await supabase.from('employes').select('*').eq('societe_id', societe_id).is('date_depart', null)
+      // Get all active employees (no departure date or departure in the future)
+      let empQuery = supabase.from('employes').select('*').eq('societe_id', societe_id)
+      const { data: allEmps } = await empQuery
+      // Filter out departed employees (keep those without date_depart or with future date_depart)
+      const employes = (allEmps || []).filter(e => !e.date_depart || e.date_depart > periodeStr)
+
+      // Get variables from request body if provided (from elaboration-paie page)
+      const requestVariables: Record<string, any> = {}
+      if (body.variables && Array.isArray(body.variables)) {
+        body.variables.forEach((v: any) => { requestVariables[v.employe_id] = v })
+      }
       const bulletinsSauvegardes = []
 
       for (const emp of employes || []) {
@@ -243,12 +253,21 @@ export async function POST(request: Request) {
           const enConge = (congesApprouves || []).some(c => pt.date_pointage >= c.date_debut && pt.date_pointage <= c.date_fin)
           if (!pt.heure_entree && !enConge && pt.absent_justifie !== true) jours_absence_injust++
         }
-        const montant_absence = Math.round(jours_absence_injust * (Number(emp.salaire_base) / 26) * 100) / 100
+        // 4. Override with request variables if provided
+        const reqVar = requestVariables[emp.id]
+        if (reqVar) {
+          if (reqVar.jours_travailles) jours_travailles = reqVar.jours_travailles
+          if (reqVar.absences) jours_absence_injust = reqVar.absences
+          if (reqVar.primes) total_primes += Number(reqVar.primes) || 0
+          if (reqVar.heures_sup_150) total_ot_montant += (Number(reqVar.heures_sup_150) || 0) * (Number(emp.salaire_base) / (45 * 52 / 12)) * 1.5
+          if (reqVar.heures_sup_200) total_ot_montant += (Number(reqVar.heures_sup_200) || 0) * (Number(emp.salaire_base) / (45 * 52 / 12)) * 2
+        }
+        const montant_absence_final = Math.round(jours_absence_injust * (Number(emp.salaire_base) / 26) * 100) / 100
 
-        // 4. Conversion EUR
+        // 5. Conversion EUR
         let salaire_base_mur = Number(emp.salaire_base)
         if (emp.devise_salaire === 'EUR') {
-          const taux = Number(emp.taux_change_eur) || 46.50
+          const taux = Number(emp.taux_change_eur) || params.taux_eur || 46.50
           salaire_base_mur = Math.round(salaire_base_mur * taux)
         }
 
@@ -262,7 +281,7 @@ export async function POST(request: Request) {
 
         const jt = jours_travailles > 0 ? jours_travailles : 26
         const resultat = calculerBulletin(elements, params, jt, Number(emp.pct_refacturation) || 0)
-        const salaire_net_final = Math.round((resultat.salaire_net - montant_absence) * 100) / 100
+        const salaire_net_final = Math.round((resultat.salaire_net - montant_absence_final) * 100) / 100
 
         // Résumé notes pour le bulletin
         const notesResume = `OT: ${Math.round(total_ot_montant)} MUR, Primes: ${Math.round(total_primes)} MUR, Absences: ${jours_absence_injust} jours`
@@ -272,11 +291,11 @@ export async function POST(request: Request) {
           societe_id,
           periode: periodeDate,
           jours_absence: jours_absence_injust,
-          montant_absence,
+          montant_absence: montant_absence_final,
           notes: notesResume,
           ...elements, ...resultat,
           salaire_net: salaire_net_final,
-          total_deductions: Math.round((resultat.total_deductions + montant_absence) * 100) / 100,
+          total_deductions: Math.round((resultat.total_deductions + montant_absence_final) * 100) / 100,
           pct_refacturation: emp.pct_refacturation || 0,
           societe_refacturation_id: emp.societe_refacturation_id || null,
           airbox_mur: 924.48,
