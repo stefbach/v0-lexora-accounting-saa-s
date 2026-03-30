@@ -389,7 +389,32 @@ export default function NouvelleFacturePage() {
         </CardContent>
       </Card>
 
-      {/* 8. Notes */}
+      {/* 8. Accent Color */}
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2"><Palette className="w-4 h-4" />Couleur de la facture</CardTitle></CardHeader>
+        <CardContent>
+          <p className="text-sm text-gray-500 mb-3">Choisissez la couleur d&apos;accent pour l&apos;en-tete, le tableau et les totaux de votre facture.</p>
+          <div className="flex flex-wrap gap-3">
+            {ACCENT_COLORS.map(color => (
+              <button
+                key={color.hex}
+                type="button"
+                onClick={() => setAccentColor(color.hex)}
+                className={`group relative w-10 h-10 rounded-lg border-2 transition-all ${accentColor === color.hex ? "border-[#C9A84C] ring-2 ring-[#C9A84C]/30 scale-110" : "border-gray-200 hover:border-gray-400 hover:scale-105"}`}
+                style={{ backgroundColor: color.hex }}
+                title={color.name}
+              >
+                {accentColor === color.hex && (
+                  <Check className="w-4 h-4 text-white absolute inset-0 m-auto drop-shadow-md" />
+                )}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-gray-400 mt-2">Selection : <span className="font-mono font-medium">{ACCENT_COLORS.find(c => c.hex === accentColor)?.name || accentColor}</span> ({accentColor})</p>
+        </CardContent>
+      </Card>
+
+      {/* 9. Notes */}
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2"><StickyNote className="w-4 h-4" />Notes</CardTitle></CardHeader>
         <CardContent>
@@ -400,7 +425,7 @@ export default function NouvelleFacturePage() {
         </CardContent>
       </Card>
 
-      {/* 9. Sticky bottom actions */}
+      {/* 10. Sticky bottom actions */}
       <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-lg">
         <div className="max-w-5xl mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex gap-2">

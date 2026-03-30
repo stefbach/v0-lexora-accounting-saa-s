@@ -15,6 +15,7 @@ interface InvoiceData {
   remise_pct: number; remise_montant: number
   termes: string; notes_internes: string; template: string
   tiers: string; logo_url: string
+  accent_color?: string
   client: {
     nom: string; entreprise: string; adresse: string; email: string
     vat_number: string; offshore: boolean
@@ -82,10 +83,16 @@ function FacturePreviewContent() {
   const discount = data.remise_pct > 0 ? subtotalHT * data.remise_pct / 100 : (data.remise_montant || 0)
   const grandTotal = subtotalHT + totalTVA - discount
   const colors = (() => {
+    // Prefer accent_color from invoice data (set in nouvelle-facture), fall back to localStorage template colors
+    const fallback = { primaire: "#1E2A4A", secondaire: "#C9A84C" }
     try {
       const tc = localStorage.getItem("lexora_invoice_template_colors")
-      return tc ? JSON.parse(tc) : { primaire: "#1E2A4A", secondaire: "#C9A84C" }
-    } catch { return { primaire: "#1E2A4A", secondaire: "#C9A84C" } }
+      const stored = tc ? JSON.parse(tc) : fallback
+      if (data.accent_color) {
+        return { primaire: data.accent_color, secondaire: stored.secondaire || fallback.secondaire }
+      }
+      return stored
+    } catch { return fallback }
   })()
 
   return (

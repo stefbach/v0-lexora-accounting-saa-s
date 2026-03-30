@@ -131,13 +131,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ pointage: data, message: 'Absence justifiee enregistree' })
     }
 
-    // Get existing pointage for today
-    const { data: existing } = await supabase
+    // Get existing pointage for today (may have duplicates if UNIQUE constraint missing)
+    const { data: existingList } = await supabase
       .from('pointages')
       .select('*')
       .eq('employe_id', employe_id)
       .eq('date_pointage', today)
-      .maybeSingle()
+      .order('created_at', { ascending: false })
+      .limit(1)
+
+    const existing = existingList && existingList.length > 0 ? existingList[0] : null
 
     let result
 
@@ -154,22 +157,24 @@ export async function POST(request: Request) {
         )
       }
 
-      const { data, error } = await supabase
-        .from('pointages')
-        .upsert(
-          {
-            employe_id,
-            date_pointage: today,
-            heure_entree: now,
-            type_entree: methode,
-            latitude_entree: latitude,
-            longitude_entree: longitude,
-          },
-          { onConflict: 'employe_id,date_pointage' }
-        )
-        .select()
-        .single()
-      if (error) throw error
+      let data, error
+      if (existing) {
+        // Update existing record
+        const res = await supabase.from('pointages')
+          .update({ heure_entree: now })
+          .eq('id', existing.id).select().single()
+        data = res.data; error = res.error
+      } else {
+        // Insert new record
+        const res = await supabase.from('pointages')
+          .insert({ employe_id, date_pointage: today, heure_entree: now })
+          .select().single()
+        data = res.data; error = res.error
+      }
+      if (error) {
+        console.error('[pointage entree]', error.message, error.details)
+        return NextResponse.json({ error: error.message }, { status: 500 })
+      }
       result = data
     } else if (type_pointage === 'sortie') {
       // Clock out: must have clocked in first
@@ -202,23 +207,20 @@ export async function POST(request: Request) {
       const heures_sup = heures_travaillees > 8 ? parseFloat((heures_travaillees - 8).toFixed(2)) : 0
       const heures_sup_montant = heures_sup * 1.5 // 1.5x rate coefficient
 
+      // Only update columns that exist in the table
+      const updateData: Record<string, any> = { heure_sortie: now }
+
       const { data, error } = await supabase
         .from('pointages')
-        .update({
-          heure_sortie: now,
-          type_sortie: methode,
-          latitude_sortie: latitude,
-          longitude_sortie: longitude,
-          duree_minutes,
-          heures_travaillees,
-          heures_sup,
-          heures_sup_montant,
-        })
+        .update(updateData)
         .eq('id', existing.id)
         .select()
         .single()
-      if (error) throw error
-      result = data
+      if (error) {
+        console.error('[pointage sortie]', error.message, error.details)
+        return NextResponse.json({ error: error.message }, { status: 500 })
+      }
+      result = { ...data, duree_minutes, heures_travaillees, heures_sup }
     } else {
       return NextResponse.json({ error: 'type_pointage invalide. Utiliser "entree" ou "sortie"' }, { status: 400 })
     }

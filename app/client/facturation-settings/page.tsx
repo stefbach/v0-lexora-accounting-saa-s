@@ -12,8 +12,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
-  Building2, Users, Package, Layout, Save, Plus, Pencil, Trash2, Check, X, Eye
+  Building2, Users, Package, Layout, Save, Plus, Pencil, Trash2, Check, X, Eye, Palette
 } from "lucide-react"
+
+const ACCENT_COLORS = [
+  { name: "Navy", hex: "#1E2A4A" }, { name: "Gold", hex: "#C9A84C" },
+  { name: "Blue", hex: "#2563EB" }, { name: "Green", hex: "#059669" },
+  { name: "Red", hex: "#DC2626" }, { name: "Purple", hex: "#7C3AED" },
+  { name: "Teal", hex: "#0D9488" }, { name: "Orange", hex: "#EA580C" },
+  { name: "Slate", hex: "#475569" }, { name: "Rose", hex: "#E11D48" },
+  { name: "Indigo", hex: "#4F46E5" }, { name: "Black", hex: "#000000" },
+] as const
 
 // ── Types ──
 interface CompanySettings {
@@ -499,13 +508,33 @@ export default function FacturationSettingsPage() {
             ))}
           </div>
 
-          {/* Customization */}
+          {/* Color Swatches */}
           <Card>
-            <CardHeader><CardTitle className="text-[#1E2A4A] text-base">Personnalisation</CardTitle></CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 gap-4 max-w-md">
+            <CardHeader><CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2"><Palette className="w-4 h-4" />Couleur d&apos;accent par defaut</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-gray-500">Selectionnez la couleur primaire par defaut pour vos factures. Elle sera utilisee pour l&apos;en-tete, le tableau et les totaux.</p>
+              <div className="flex flex-wrap gap-3">
+                {ACCENT_COLORS.map(color => (
+                  <button
+                    key={color.hex}
+                    type="button"
+                    onClick={() => setTemplateColors(c => ({ ...c, primaire: color.hex }))}
+                    className={`group relative w-11 h-11 rounded-lg border-2 transition-all ${templateColors.primaire === color.hex ? "border-[#C9A84C] ring-2 ring-[#C9A84C]/30 scale-110" : "border-gray-200 hover:border-gray-400 hover:scale-105"}`}
+                    style={{ backgroundColor: color.hex }}
+                    title={color.name}
+                  >
+                    {templateColors.primaire === color.hex && (
+                      <Check className="w-4 h-4 text-white absolute inset-0 m-auto drop-shadow-md" />
+                    )}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-gray-400">Selection : <span className="font-mono font-medium">{ACCENT_COLORS.find(c => c.hex === templateColors.primaire)?.name || "Personnalise"}</span> ({templateColors.primaire})</p>
+
+              {/* Custom color pickers */}
+              <div className="grid grid-cols-2 gap-4 max-w-md pt-2 border-t">
                 <div>
-                  <Label>Couleur primaire</Label>
+                  <Label>Couleur primaire (personnalisee)</Label>
                   <div className="flex items-center gap-2 mt-1">
                     <input type="color" value={templateColors.primaire} onChange={e => setTemplateColors(c => ({ ...c, primaire: e.target.value }))} className="w-10 h-10 rounded border cursor-pointer" />
                     <Input value={templateColors.primaire} onChange={e => setTemplateColors(c => ({ ...c, primaire: e.target.value }))} className="font-mono text-sm" />
@@ -516,6 +545,34 @@ export default function FacturationSettingsPage() {
                   <div className="flex items-center gap-2 mt-1">
                     <input type="color" value={templateColors.secondaire} onChange={e => setTemplateColors(c => ({ ...c, secondaire: e.target.value }))} className="w-10 h-10 rounded border cursor-pointer" />
                     <Input value={templateColors.secondaire} onChange={e => setTemplateColors(c => ({ ...c, secondaire: e.target.value }))} className="font-mono text-sm" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Mini preview with selected color */}
+              <div className="border rounded-lg p-4 bg-white max-w-sm">
+                <p className="text-xs font-medium text-gray-500 mb-2">Apercu</p>
+                <div className="border rounded-lg overflow-hidden">
+                  <div className="p-3 flex justify-between items-center" style={{ backgroundColor: templateColors.primaire }}>
+                    <div className="w-6 h-6 rounded bg-white/20" />
+                    <span className="text-white text-[10px] font-bold tracking-wide">FACTURE</span>
+                  </div>
+                  <div className="p-3 space-y-1.5">
+                    <div className="h-1.5 rounded bg-gray-200 w-3/4" />
+                    <div className="h-1.5 rounded bg-gray-200 w-1/2" />
+                    <div className="border-t mt-2 pt-2 space-y-1">
+                      <div className="flex justify-between">
+                        <div className="h-1.5 rounded bg-gray-200 w-1/3" />
+                        <div className="h-1.5 rounded w-1/6" style={{ backgroundColor: templateColors.secondaire }} />
+                      </div>
+                      <div className="flex justify-between">
+                        <div className="h-1.5 rounded bg-gray-200 w-2/5" />
+                        <div className="h-1.5 rounded w-1/6" style={{ backgroundColor: templateColors.secondaire }} />
+                      </div>
+                    </div>
+                    <div className="border-t pt-2 flex justify-end">
+                      <div className="px-3 py-1 rounded text-[8px] text-white font-bold" style={{ backgroundColor: templateColors.primaire }}>TOTAL TTC</div>
+                    </div>
                   </div>
                 </div>
               </div>
