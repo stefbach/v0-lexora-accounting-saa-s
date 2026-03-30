@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 
 interface LigneFacture {
@@ -30,7 +30,7 @@ interface InvoiceData {
 function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 function fmtDate(d: string) { if (!d) return "-"; return new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" }) }
 
-export default function FacturePreviewPage() {
+function FacturePreviewContent() {
   const searchParams = useSearchParams()
   const [data, setData] = useState<InvoiceData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -252,5 +252,13 @@ export default function FacturePreviewPage() {
         </div>
       </div>
     </>
+  )
+}
+
+export default function FacturePreviewPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-screen">Chargement...</div>}>
+      <FacturePreviewContent />
+    </Suspense>
   )
 }
