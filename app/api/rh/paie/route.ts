@@ -218,18 +218,33 @@ export async function POST(request: Request) {
     // ACTION : calculer_batch (tous les employés de la société)
     // ══════════════════════════════════════════════════════
     if (action === 'calculer_batch') {
-      // Get all active employees (no departure date or departure in the future)
-      let empQuery = supabase.from('employes').select('*').eq('societe_id', societe_id)
-      const { data: allEmps } = await empQuery
-      // Filter out departed employees (keep those without date_depart or with future date_depart)
-      const employes = (allEmps || []).filter(e => !e.date_depart || e.date_depart > periodeStr)
+      if (!societe_id) {
+        return NextResponse.json({ error: 'societe_id requis pour calculer_batch', bulletins: [], nb: 0 }, { status: 400 })
+      }
 
-      // Get variables from request body if provided (from elaboration-paie page)
+      // Get all employees for this société
+      const { data: allEmps, error: empError } = await supabase.from('employes').select('*').eq('societe_id', societe_id)
+
+      if (empError) {
+        console.error('[paie batch] Error fetching employees:', empError.message)
+        return NextResponse.json({ error: `Erreur employes: ${empError.message}`, bulletins: [], nb: 0 }, { status: 500 })
+      }
+
+      if (!allEmps || allEmps.length === 0) {
+        return NextResponse.json({ error: `Aucun employe trouve pour societe_id=${societe_id}`, bulletins: [], nb: 0, debug: { societe_id, periode: periodeStr } }, { status: 400 })
+      }
+
+      // Filter out departed employees
+      const employes = allEmps.filter(e => !e.date_depart || e.date_depart > periodeStr)
+      console.log(`[paie batch] ${employes.length} employes actifs sur ${allEmps.length} total pour societe=${societe_id}, periode=${periodeStr}`)
+
+      // Get variables from request body if provided
       const requestVariables: Record<string, any> = {}
       if (body.variables && Array.isArray(body.variables)) {
         body.variables.forEach((v: any) => { requestVariables[v.employe_id] = v })
       }
       const bulletinsSauvegardes = []
+      const erreurs: string[] = []
 
       for (const emp of employes || []) {
         // 1. OT depuis pointages
@@ -334,7 +349,9 @@ export async function POST(request: Request) {
 
         const { data: saved, error } = await supabase.from('bulletins_paie').upsert(bulletin, { onConflict: 'employe_id,periode' }).select().single()
         if (error) {
-          console.error(`[paie batch] Error for ${emp.nom} ${emp.prenom}:`, error.message)
+          const errMsg = `${emp.nom} ${emp.prenom}: ${error.message}`
+          console.error(`[paie batch] UPSERT FAILED:`, errMsg, error.details, error.hint)
+          erreurs.push(errMsg)
         }
         if (!error && saved) {
           bulletinsSauvegardes.push({ ...saved, nom: emp.nom, prenom: emp.prenom, employe: { id: emp.id, code: emp.code, nom: emp.nom, prenom: emp.prenom, poste: emp.poste } })
@@ -354,7 +371,14 @@ export async function POST(request: Request) {
         cout_total_employeur: bulletinsSauvegardes.reduce((s, b) => s + Number(b.salaire_brut || 0) + Number(b.total_charges_patronales || 0), 0),
       }
 
-      return NextResponse.json({ bulletins: bulletinsSauvegardes, totaux, nb: bulletinsSauvegardes.length })
+      return NextResponse.json({
+        bulletins: bulletinsSauvegardes,
+        totaux,
+        nb: bulletinsSauvegardes.length,
+        nb_employes: employes.length,
+        erreurs: erreurs.length > 0 ? erreurs : undefined,
+        debug: { societe_id, periode: periodeStr, nb_employes_total: allEmps.length, nb_actifs: employes.length, nb_bulletins: bulletinsSauvegardes.length, nb_erreurs: erreurs.length }
+      })
     }
 
     if (action === 'valider') {

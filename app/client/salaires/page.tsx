@@ -149,10 +149,14 @@ export default function ClientSalairesPage() {
         }),
       })
       const json = await res.json()
-      if (json.error) {
-        alert("Erreur: " + json.error)
+      if (json.error && json.nb === 0) {
+        alert("Erreur: " + json.error + (json.debug ? `\n\nDebug: ${JSON.stringify(json.debug)}` : ''))
       } else {
-        alert(`Paie calcul\u00e9e pour ${json.nb || 0} employ\u00e9(s)`)
+        let msg = `Paie calculee pour ${json.nb || 0} employe(s) sur ${json.nb_employes || '?'}`
+        if (json.erreurs && json.erreurs.length > 0) {
+          msg += `\n\n${json.erreurs.length} erreur(s):\n${json.erreurs.join('\n')}`
+        }
+        alert(msg)
         fetchData()
       }
     } catch {
