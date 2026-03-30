@@ -1,14 +1,19 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useProfile } from "@/hooks/use-profile"
-import { Loader2, Building2, Printer, Calendar } from "lucide-react"
+import { Loader2, Building2, Printer, Calendar, Upload, FileText, CheckCircle, AlertCircle } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
+import { Card, CardContent } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+
+const NAVY = "#1E2A4A"
+const GOLD = "#C9A84C"
 
 function fmt(n: number): string {
   return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -296,6 +301,69 @@ export default function BilanPage() {
   const [prevExercice, setPrevExercice] = useState<string>("")
   const [availableExercices, setAvailableExercices] = useState<string[]>([])
 
+  // PDF OCR Import state
+  const [importingPdf, setImportingPdf] = useState(false)
+  const [importMessage, setImportMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Load prior year OCR data from localStorage
+  useEffect(() => {
+    if (!exercice) return
+    const stored = localStorage.getItem(`lexora_bilan_prev_${exercice}`)
+    if (stored) {
+      try {
+        const ocrData = JSON.parse(stored)
+        setPrevData((current: any) => current ?? ocrData)
+      } catch { /* ignore */ }
+    }
+  }, [exercice])
+
+  const handleImportPdf = async (file: File) => {
+    setImportingPdf(true)
+    setImportMessage(null)
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      if (selectedSociete !== "all") formData.append("societe_id", selectedSociete)
+      formData.append("hint", "Bilan comptable - Balance Sheet - Profit & Loss - Financial Statements Mauritius")
+      const res = await fetch("/api/documents/upload", { method: "POST", body: formData })
+      if (!res.ok) {
+        setImportMessage({ type: "error", text: "Erreur lors de l'import du PDF." })
+        return
+      }
+      const result = await res.json()
+      const parsed = result?.n8n_result || result?.data || result
+      if (parsed) {
+        const ocrPrevData: any = {
+          totalRevenue: Number(parsed.total_revenue ?? parsed.totalRevenue ?? parsed.chiffre_affaires ?? 0),
+          totalExpenses: Number(parsed.total_expenses ?? parsed.totalExpenses ?? parsed.total_charges ?? 0),
+          creances: Number(parsed.creances ?? parsed.trade_receivables ?? 0),
+          immobilisations: Number(parsed.immobilisations ?? parsed.fixed_assets ?? parsed.property_plant_equipment ?? 0),
+          capitauxPropres: Number(parsed.capitaux_propres ?? parsed.capitauxPropres ?? parsed.share_capital ?? parsed.equity ?? 0),
+          dettesFournisseurs: Number(parsed.dettes_fournisseurs ?? parsed.dettesFournisseurs ?? parsed.trade_payables ?? 0),
+          dettesFiscales: Number(parsed.dettes_fiscales ?? parsed.dettesFiscales ?? parsed.vat_payable ?? 0),
+          dettesSociales: Number(parsed.dettes_sociales ?? parsed.dettesSociales ?? 0),
+          totalBankMUR: Number(parsed.tresorerie ?? parsed.totalBankMUR ?? parsed.cash_bank ?? parsed.cash ?? 0),
+        }
+        // Store in localStorage for persistence
+        if (exercice) {
+          localStorage.setItem(`lexora_bilan_prev_${exercice}`, JSON.stringify(ocrPrevData))
+        }
+        setPrevData(ocrPrevData)
+        setImportMessage({
+          type: "success",
+          text: `Donnees N-1 extraites : CA ${fmt(ocrPrevData.totalRevenue)}, Charges ${fmt(ocrPrevData.totalExpenses)}, Tresorerie ${fmt(ocrPrevData.totalBankMUR)}`
+        })
+      } else {
+        setImportMessage({ type: "error", text: "Aucune donnee financiere trouvee dans le PDF." })
+      }
+    } catch {
+      setImportMessage({ type: "error", text: "Erreur lors de l'import du PDF." })
+    } finally {
+      setImportingPdf(false)
+    }
+  }
+
   useEffect(() => {
     setFetching(true)
     const params = new URLSearchParams()
@@ -409,6 +477,53 @@ export default function BilanPage() {
           Print
         </button>
       </div>
+
+      {/* PDF Import for prior year data */}
+      <Card className="border-2 border-dashed print:hidden" style={{ borderColor: GOLD }}>
+        <CardContent className="py-4">
+          <div className="flex flex-col sm:flex-row items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Upload className="w-5 h-5" style={{ color: GOLD }} />
+              <div>
+                <p className="text-sm font-semibold" style={{ color: NAVY }}>Importer les comptes de l&apos;exercice precedent</p>
+                <p className="text-xs text-gray-500">
+                  Uploadez le bilan officiel (PDF) de l&apos;annee precedente pour pre-remplir la colonne N-1
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf"
+                id="pdf-import-bilan"
+                className="hidden"
+                onChange={e => {
+                  const file = e.target.files?.[0]
+                  if (file) handleImportPdf(file)
+                  e.target.value = ""
+                }}
+              />
+              <Button
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={importingPdf}
+                style={{ borderColor: GOLD, color: NAVY }}
+                className="flex items-center gap-2"
+              >
+                {importingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                {importingPdf ? "Analyse en cours..." : "Analyser avec OCR"}
+              </Button>
+            </div>
+          </div>
+          {importMessage && (
+            <div className={`flex items-center gap-2 text-sm mt-3 ${importMessage.type === "error" ? "text-red-600" : "text-green-700"}`}>
+              {importMessage.type === "error" ? <AlertCircle className="w-4 h-4 flex-shrink-0" /> : <CheckCircle className="w-4 h-4 flex-shrink-0" />}
+              <span>{importMessage.text}</span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {!hasData ? (
         <div className="flex flex-col items-center gap-2 py-16">
