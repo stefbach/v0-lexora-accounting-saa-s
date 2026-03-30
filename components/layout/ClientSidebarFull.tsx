@@ -62,6 +62,7 @@ const MENU = [
   {
     section: "RH & Paie",
     items: [
+      { href: "/client/elaboration-paie", label: "Elaboration Paie", icon: Calculator },
       { href: "/client/salaires", label: "Paie & Bulletins", icon: CreditCard },
       { href: "/client/rapports-paie", label: "Rapports Statutaires", icon: FileSpreadsheet },
       { href: "/client/declarations-sociales", label: "Déclarations Sociales", icon: FileText },
@@ -71,6 +72,8 @@ const MENU = [
       { href: "/rh/conges", label: "Congés", icon: Scale },
       { href: "/client/demandes-rh", label: "Demandes RH", icon: ClipboardList },
       { href: "/client/parametres-rh", label: "Paramètres RH", icon: Settings },
+      { href: "/client/primes", label: "Gestion Primes", icon: Target },
+      { href: "/client/planning", label: "Planning", icon: CalendarDays },
     ]
   },
   {
