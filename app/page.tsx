@@ -91,10 +91,64 @@ const aiCapabilities = [
 ]
 
 const plans = [
-  { name: "Premium", description: "Tout inclus", highlight: true },
-  { name: "Comptabilite", description: "Module compta uniquement", highlight: false },
-  { name: "RH & Paie", description: "Module RH uniquement", highlight: false },
-  { name: "Compta + RH", description: "Modules compta et RH combines", highlight: false },
+  {
+    name: "Premium", description: "Tout inclus", highlight: true,
+    features: [
+      "Documents & OCR IA illimites",
+      "Comptabilite complete (Grand Livre, Bilan, P&L)",
+      "Banque & Rapprochement automatique",
+      "Facturation MRA e-Invoicing (IRN + QR Code)",
+      "RH & Paie (bulletins, pointeuse, conges, primes)",
+      "Exports MRA (TVA, CSG/NSF, PAYE, PRGF)",
+      "IT Form 3 & Annual Return ROC auto-remplis",
+      "Agent IA alertes fiscales & comptables",
+      "Chat CLARA assistante RH",
+      "Previsionnel & pilotage strategique",
+      "Multi-devises taux temps reel (IAS 21)",
+      "Comptes courants associes",
+      "Utilisateurs illimites",
+    ],
+  },
+  {
+    name: "Comptabilite", description: "Module compta", highlight: false,
+    features: [
+      "Documents & OCR IA illimites",
+      "Grand Livre, Balance, Bilan & P&L comparatif",
+      "Banque & Rapprochement automatique",
+      "Facturation MRA e-Invoicing",
+      "Exports MRA (TVA, CSG/NSF)",
+      "IT Form 3 & Annual Return ROC",
+      "Multi-devises taux temps reel",
+      "Previsionnel & echeances",
+      "Agent IA alertes comptables",
+    ],
+  },
+  {
+    name: "RH & Paie", description: "Module RH", highlight: false,
+    features: [
+      "Fiche employe complete (9 onglets)",
+      "Elaboration paie 6 etapes",
+      "Bulletins conformes Maurice",
+      "Pointeuse digitale & planning IA",
+      "Conges (AL, SL, MAT, PAT — WRA 2019)",
+      "Primes IA regles configurables",
+      "Exports virements MCB/SBM",
+      "Declarations MRA (CSG, PAYE, PRGF)",
+      "Chat CLARA assistante RH",
+      "Import Excel employes & paie",
+    ],
+  },
+  {
+    name: "Compta + RH", description: "Les deux modules", highlight: false,
+    features: [
+      "Tous les modules Comptabilite",
+      "Tous les modules RH & Paie",
+      "Facturation MRA complete",
+      "Agent IA alertes fiscales & sociales",
+      "Previsionnel & pilotage",
+      "Multi-devises & taux temps reel",
+    ],
+  },
 ]
 
 const compliance = [
@@ -281,7 +335,15 @@ export default function HomePage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="pb-8">
-                    <p className="mb-6 text-sm text-gray-500">{plan.description}</p>
+                    <p className="mb-4 text-sm text-gray-500">{plan.description}</p>
+                    <ul className="mb-6 space-y-2 text-left">
+                      {(plan as any).features?.map((f: string, i: number) => (
+                        <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
+                          <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0" style={{ color: "#C9A84C" }} />
+                          <span>{f}</span>
+                        </li>
+                      ))}
+                    </ul>
                     <Link href="/auth/login">
                       <Button
                         variant={plan.highlight ? "default" : "outline"}

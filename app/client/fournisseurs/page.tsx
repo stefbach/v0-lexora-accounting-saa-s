@@ -16,10 +16,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
-import {
-  Search, Plus, Loader2, Users, ShoppingCart, FileText, Clock,
-  ArrowUpDown, Building2, Tag, PercentIcon, ChevronDown,
-} from "lucide-react"
+import { Search, Plus, Loader2, Users, ShoppingCart, FileText, Clock, ArrowUpDown, Building2, Tag, PercentIcon } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
 
 // ── Types ──
@@ -44,30 +41,18 @@ const NAVY = "#1E2A4A"
 const GOLD = "#C9A84C"
 
 const CATEGORIES: CategoryDef[] = [
-  { compte: "612", label: "Loyer & charges locatives", color: "bg-blue-100 text-blue-800 border-blue-200",
-    keywords: ["loyer", "rent", "mwpi", "mw prop", "bail"] },
-  { compte: "622", label: "Honoraires", color: "bg-purple-100 text-purple-800 border-purple-200",
-    keywords: ["honoraire", "comptable", "avocat", "consultant", "2e2j", "e2j", "magellan"] },
-  { compte: "626", label: "Telecom & Internet", color: "bg-cyan-100 text-cyan-800 border-cyan-200",
-    keywords: ["telecom", "internet", "ceb", "emtel", "mtml", "orange", "telephone"] },
-  { compte: "627", label: "Frais bancaires & financiers", color: "bg-red-100 text-red-800 border-red-200",
-    keywords: ["banque", "bank", "commission", "fee", "charge", "frais bancaire"] },
-  { compte: "651", label: "SaaS & Logiciels", color: "bg-violet-100 text-violet-800 border-violet-200",
-    keywords: ["saas", "openai", "vercel", "supabase", "aws", "github", "anthropic", "stripe", "adobe", "zoom", "slack", "wati", "microsoft"] },
-  { compte: "623", label: "Marketing & Publicite", color: "bg-pink-100 text-pink-800 border-pink-200",
-    keywords: ["marketing", "publicite", "meta", "facebook", "google ads"] },
-  { compte: "624", label: "Transport & Deplacements", color: "bg-amber-100 text-amber-800 border-amber-200",
-    keywords: ["transport", "uber", "bolt", "carburant", "taxi", "parking"] },
-  { compte: "616", label: "Assurances", color: "bg-emerald-100 text-emerald-800 border-emerald-200",
-    keywords: ["assurance", "insurance"] },
-  { compte: "606", label: "Fournitures de bureau", color: "bg-orange-100 text-orange-800 border-orange-200",
-    keywords: ["fourniture", "bureau", "papier", "cartouche"] },
-  { compte: "602", label: "Pharmacie / Medical", color: "bg-teal-100 text-teal-800 border-teal-200",
-    keywords: ["pharmacie", "medical", "medicament"] },
-  { compte: "611", label: "Sous-traitance", color: "bg-indigo-100 text-indigo-800 border-indigo-200",
-    keywords: ["sous-traitance", "outsourcing", "prestation"] },
-  { compte: "628", label: "Charges diverses", color: "bg-gray-100 text-gray-700 border-gray-200",
-    keywords: [] },
+  { compte: "612", label: "Loyer & charges locatives", color: "bg-blue-100 text-blue-800 border-blue-200", keywords: ["loyer", "rent", "mwpi", "mw prop", "bail"] },
+  { compte: "622", label: "Honoraires", color: "bg-purple-100 text-purple-800 border-purple-200", keywords: ["honoraire", "comptable", "avocat", "consultant", "2e2j", "e2j", "magellan"] },
+  { compte: "626", label: "Telecom & Internet", color: "bg-cyan-100 text-cyan-800 border-cyan-200", keywords: ["telecom", "internet", "ceb", "emtel", "mtml", "orange", "telephone"] },
+  { compte: "627", label: "Frais bancaires", color: "bg-red-100 text-red-800 border-red-200", keywords: ["banque", "bank", "commission", "fee", "charge", "frais bancaire"] },
+  { compte: "651", label: "SaaS & Logiciels", color: "bg-violet-100 text-violet-800 border-violet-200", keywords: ["saas", "openai", "vercel", "supabase", "aws", "github", "anthropic", "stripe", "adobe", "zoom", "slack", "wati", "microsoft"] },
+  { compte: "623", label: "Marketing & Publicite", color: "bg-pink-100 text-pink-800 border-pink-200", keywords: ["marketing", "publicite", "meta", "facebook", "google ads"] },
+  { compte: "624", label: "Transport & Deplacements", color: "bg-amber-100 text-amber-800 border-amber-200", keywords: ["transport", "uber", "bolt", "carburant", "taxi", "parking"] },
+  { compte: "616", label: "Assurances", color: "bg-emerald-100 text-emerald-800 border-emerald-200", keywords: ["assurance", "insurance"] },
+  { compte: "606", label: "Fournitures de bureau", color: "bg-orange-100 text-orange-800 border-orange-200", keywords: ["fourniture", "bureau", "papier", "cartouche"] },
+  { compte: "602", label: "Pharmacie / Medical", color: "bg-teal-100 text-teal-800 border-teal-200", keywords: ["pharmacie", "medical", "medicament"] },
+  { compte: "611", label: "Sous-traitance", color: "bg-indigo-100 text-indigo-800 border-indigo-200", keywords: ["sous-traitance", "outsourcing", "prestation"] },
+  { compte: "628", label: "Charges diverses", color: "bg-gray-100 text-gray-700 border-gray-200", keywords: [] },
 ]
 
 const LS_KEY = "lexora_fournisseur_categories"
@@ -116,12 +101,7 @@ export default function ClientFournisseursPage() {
   const [sortKey, setSortKey] = useState<SortKey>("totalTTC")
   const [sortAsc, setSortAsc] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [newNom, setNewNom] = useState("")
-  const [newAdresse, setNewAdresse] = useState("")
-  const [newEmail, setNewEmail] = useState("")
-  const [newTel, setNewTel] = useState("")
-  const [newTVA, setNewTVA] = useState("")
-  const [newCat, setNewCat] = useState("628")
+  const [newForm, setNewForm] = useState({ nom: "", adresse: "", email: "", tel: "", tva: "", cat: "628" })
   const [suggestedCat, setSuggestedCat] = useState<string | null>(null)
 
   // Load overrides from localStorage
@@ -240,30 +220,23 @@ export default function ClientFournisseursPage() {
   }, [overrides])
 
   const handleNewNomChange = useCallback((v: string) => {
-    setNewNom(v)
     const detected = autoClassify(v)
     setSuggestedCat(detected !== "628" ? detected : null)
-    if (detected !== "628") setNewCat(detected)
+    setNewForm(p => ({ ...p, nom: v, ...(detected !== "628" ? { cat: detected } : {}) }))
   }, [])
 
   const handleSaveFournisseur = useCallback(() => {
-    if (!newNom.trim()) return
-    const updated = { ...overrides, [newNom.trim()]: newCat }
-    setOverrides(updated)
-    saveOverrides(updated)
-    // Also save contact info to localStorage
+    if (!newForm.nom.trim()) return
+    const updated = { ...overrides, [newForm.nom.trim()]: newForm.cat }
+    setOverrides(updated); saveOverrides(updated)
     try {
       const contacts = JSON.parse(localStorage.getItem("lexora_fournisseur_contacts") || "[]")
-      contacts.push({
-        nom: newNom.trim(), adresse: newAdresse, email: newEmail,
-        telephone: newTel, tva: newTVA, categorie: newCat, created: new Date().toISOString(),
-      })
+      contacts.push({ nom: newForm.nom.trim(), adresse: newForm.adresse, email: newForm.email, telephone: newForm.tel, tva: newForm.tva, categorie: newForm.cat, created: new Date().toISOString() })
       localStorage.setItem("lexora_fournisseur_contacts", JSON.stringify(contacts))
     } catch { /* ignore */ }
     setDialogOpen(false)
-    setNewNom(""); setNewAdresse(""); setNewEmail(""); setNewTel(""); setNewTVA("")
-    setNewCat("628"); setSuggestedCat(null)
-  }, [newNom, newAdresse, newEmail, newTel, newTVA, newCat, overrides])
+    setNewForm({ nom: "", adresse: "", email: "", tel: "", tva: "", cat: "628" }); setSuggestedCat(null)
+  }, [newForm, overrides])
 
   function getStatutBadge(statut: string) {
     switch (statut) {
@@ -565,61 +538,45 @@ export default function ClientFournisseursPage() {
           <div className="space-y-4">
             <div>
               <Label htmlFor="fn-nom">Nom du fournisseur</Label>
-              <Input
-                id="fn-nom"
-                value={newNom}
-                onChange={e => handleNewNomChange(e.target.value)}
-                placeholder="Ex: EMTEL, AWS, MWPI..."
-              />
+              <Input id="fn-nom" value={newForm.nom} onChange={e => handleNewNomChange(e.target.value)} placeholder="Ex: EMTEL, AWS, MWPI..." />
               {suggestedCat && (
                 <p className="text-xs mt-1 flex items-center gap-1" style={{ color: GOLD }}>
                   <Tag className="h-3 w-3" />
-                  Suggestion automatique : {getCategoryDef(suggestedCat).compte} - {getCategoryDef(suggestedCat).label}
+                  Suggestion : {getCategoryDef(suggestedCat).compte} - {getCategoryDef(suggestedCat).label}
                 </p>
               )}
             </div>
             <div>
               <Label htmlFor="fn-adresse">Adresse</Label>
-              <Input id="fn-adresse" value={newAdresse} onChange={e => setNewAdresse(e.target.value)} placeholder="Adresse" />
+              <Input id="fn-adresse" value={newForm.adresse} onChange={e => setNewForm(p => ({ ...p, adresse: e.target.value }))} placeholder="Adresse" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label htmlFor="fn-email">Email</Label>
-                <Input id="fn-email" type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="email@example.com" />
+                <Input id="fn-email" type="email" value={newForm.email} onChange={e => setNewForm(p => ({ ...p, email: e.target.value }))} placeholder="email@example.com" />
               </div>
               <div>
                 <Label htmlFor="fn-tel">Telephone</Label>
-                <Input id="fn-tel" value={newTel} onChange={e => setNewTel(e.target.value)} placeholder="+230 xxx xxxx" />
+                <Input id="fn-tel" value={newForm.tel} onChange={e => setNewForm(p => ({ ...p, tel: e.target.value }))} placeholder="+230 xxx xxxx" />
               </div>
             </div>
             <div>
               <Label htmlFor="fn-tva">N. TVA</Label>
-              <Input id="fn-tva" value={newTVA} onChange={e => setNewTVA(e.target.value)} placeholder="Numero TVA" />
+              <Input id="fn-tva" value={newForm.tva} onChange={e => setNewForm(p => ({ ...p, tva: e.target.value }))} placeholder="Numero TVA" />
             </div>
             <div>
               <Label htmlFor="fn-cat">Categorie comptable</Label>
-              <Select value={newCat} onValueChange={v => setNewCat(v)}>
-                <SelectTrigger id="fn-cat">
-                  <SelectValue />
-                </SelectTrigger>
+              <Select value={newForm.cat} onValueChange={v => setNewForm(p => ({ ...p, cat: v }))}>
+                <SelectTrigger id="fn-cat"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {CATEGORIES.map(c => (
-                    <SelectItem key={c.compte} value={c.compte}>
-                      {c.compte} - {c.label}
-                    </SelectItem>
-                  ))}
+                  {CATEGORIES.map(c => (<SelectItem key={c.compte} value={c.compte}>{c.compte} - {c.label}</SelectItem>))}
                 </SelectContent>
               </Select>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Annuler</Button>
-            <Button
-              onClick={handleSaveFournisseur}
-              disabled={!newNom.trim()}
-              style={{ backgroundColor: NAVY }}
-              className="text-white hover:opacity-90"
-            >
+            <Button onClick={handleSaveFournisseur} disabled={!newForm.nom.trim()} style={{ backgroundColor: NAVY }} className="text-white hover:opacity-90">
               Enregistrer
             </Button>
           </DialogFooter>
