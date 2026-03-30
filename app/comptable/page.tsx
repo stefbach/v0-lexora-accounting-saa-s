@@ -72,23 +72,19 @@ export default function ComptableDashboardPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [clientsRes, dossiersRes, docsRes, usersRes] = await Promise.all([
-        fetch("/api/comptable/clients"),
-        fetch("/api/admin/dossiers"),
-        fetch("/api/comptable/documents"),
-        fetch("/api/admin/users"),
+      // Fetch what we can — some APIs may return 403 for non-comptable roles
+      const results = await Promise.allSettled([
+        fetch("/api/comptable/clients").then(r => r.json()),
+        fetch("/api/comptable/documents").then(r => r.json()),
+        fetch("/api/admin/users").then(r => r.json()),
       ])
 
-      const clientsData = await clientsRes.json()
-      const dossiersData = await dossiersRes.json()
-      const docsData = await docsRes.json()
-      const usersData = await usersRes.json()
+      const clientsData = results[0].status === 'fulfilled' ? results[0].value : {}
+      const docsData = results[1].status === 'fulfilled' ? results[1].value : {}
+      const usersData = results[2].status === 'fulfilled' ? results[2].value : {}
 
       if (clientsData.clients) setClients(clientsData.clients)
       if (clientsData.dossiers) setDossiers(clientsData.dossiers || [])
-      if (dossiersData.dossiers && !clientsData.dossiers) {
-        setDossiers(dossiersData.dossiers)
-      }
 
       if (docsData.documents) {
         const docs = docsData.documents as { statut: string }[]
@@ -97,7 +93,7 @@ export default function ComptableDashboardPage() {
 
       // Build assistants list
       if (usersData.users) {
-        const allDossiers = dossiersData.dossiers || clientsData.dossiers || []
+        const allDossiers = clientsData.dossiers || []
         const comptableDedies = (usersData.users as any[]).filter(
           (u) => u.role === "comptable_dedie"
         )
