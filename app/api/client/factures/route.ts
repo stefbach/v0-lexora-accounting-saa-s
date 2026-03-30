@@ -1,12 +1,118 @@
 import { NextResponse } from 'next/server'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
+
+function getAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !serviceKey) throw new Error('Missing Supabase admin credentials')
+  return createSupabaseClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
+}
 
 export const dynamic = 'force-dynamic'
 
+/**
+ * Auto-create ecritures comptables when an invoice is finalized (statut = 'en_attente').
+ * - Debit 411 (Clients) = montant_ttc
+ * - Credit 706 (Prestations de services) = montant_ht
+ * - Credit 4457 (TVA collectee) = montant_tva (if > 0)
+ * - Journal: VTE, Date: date_facture
+ */
+async function createEcrituresForFacture(
+  supabase: ReturnType<typeof getAdminClient>,
+  facture: {
+    id: string
+    societe_id: string
+    numero_facture: string
+    tiers: string
+    date_facture: string
+    montant_ht: number
+    montant_tva: number
+    montant_ttc: number
+  }
+) {
+  try {
+    // Find dossier_id from societe_id
+    const { data: dossier } = await supabase
+      .from('dossiers')
+      .select('id')
+      .eq('societe_id', facture.societe_id)
+      .limit(1)
+      .maybeSingle()
+
+    if (!dossier?.id) {
+      console.warn(`[factures] No dossier found for societe ${facture.societe_id}, skipping ecritures`)
+      return
+    }
+
+    const libelle = `Facture ${facture.numero_facture || ''} — ${facture.tiers || ''}`.trim()
+    const entries: Array<{
+      dossier_id: string
+      date_ecriture: string
+      journal: string
+      numero_piece: string | null
+      compte: string
+      libelle: string
+      debit: number
+      credit: number
+      piece_justificative: string
+    }> = []
+
+    // Debit 411 Clients = montant_ttc
+    entries.push({
+      dossier_id: dossier.id,
+      date_ecriture: facture.date_facture,
+      journal: 'VTE',
+      numero_piece: facture.numero_facture || null,
+      compte: '411',
+      libelle,
+      debit: Number(facture.montant_ttc) || 0,
+      credit: 0,
+      piece_justificative: facture.id,
+    })
+
+    // Credit 706 Prestations de services = montant_ht
+    entries.push({
+      dossier_id: dossier.id,
+      date_ecriture: facture.date_facture,
+      journal: 'VTE',
+      numero_piece: facture.numero_facture || null,
+      compte: '706',
+      libelle,
+      debit: 0,
+      credit: Number(facture.montant_ht) || 0,
+      piece_justificative: facture.id,
+    })
+
+    // Credit 4457 TVA collectee = montant_tva (only if > 0)
+    if (facture.montant_tva && Number(facture.montant_tva) > 0) {
+      entries.push({
+        dossier_id: dossier.id,
+        date_ecriture: facture.date_facture,
+        journal: 'VTE',
+        numero_piece: facture.numero_facture || null,
+        compte: '4457',
+        libelle,
+        debit: 0,
+        credit: Number(facture.montant_tva),
+        piece_justificative: facture.id,
+      })
+    }
+
+    const { error: insertError } = await supabase.from('ecritures_comptables').insert(entries)
+    if (insertError) {
+      console.error('[factures] Error creating ecritures:', insertError.message)
+    }
+  } catch (err) {
+    console.error('[factures] Error in createEcrituresForFacture:', err)
+  }
+}
+
 export async function GET(request: Request) {
   try {
-    const supabase = await createClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const supabase = getAdminClient()
+    const authClient = await createClient()
+    const { data: { user }, error: authError } = await authClient.auth.getUser()
     if (authError || !user) return NextResponse.json({ error: 'Non autorise' }, { status: 401 })
 
     const { searchParams } = new URL(request.url)
@@ -51,8 +157,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const supabase = getAdminClient()
+    const authClient = await createClient()
+    const { data: { user }, error: authError } = await authClient.auth.getUser()
     if (authError || !user) return NextResponse.json({ error: 'Non autorise' }, { status: 401 })
 
     const body = await request.json()
@@ -112,6 +219,21 @@ export async function POST(request: Request) {
       .single()
 
     if (error) throw error
+
+    // Auto-create ecritures comptables when invoice is finalized
+    if (statut === 'en_attente' && data) {
+      await createEcrituresForFacture(supabase, {
+        id: data.id,
+        societe_id,
+        numero_facture: finalNumero,
+        tiers: tiers || '',
+        date_facture,
+        montant_ht,
+        montant_tva,
+        montant_ttc: ttc,
+      })
+    }
+
     return NextResponse.json({ facture: data }, { status: 201 })
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
@@ -120,8 +242,9 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const supabase = await createClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const supabase = getAdminClient()
+    const authClient = await createClient()
+    const { data: { user }, error: authError } = await authClient.auth.getUser()
     if (authError || !user) return NextResponse.json({ error: 'Non autorise' }, { status: 401 })
 
     const body = await request.json()
@@ -129,10 +252,10 @@ export async function PATCH(request: Request) {
 
     if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
 
-    // Check invoice is still draft
+    // Fetch existing invoice for status transition check
     const { data: existing } = await supabase
       .from('factures')
-      .select('statut')
+      .select('*')
       .eq('id', id)
       .single()
 
@@ -163,6 +286,26 @@ export async function PATCH(request: Request) {
       .single()
 
     if (error) throw error
+
+    // Auto-create ecritures when transitioning from brouillon to en_attente
+    if (
+      existing &&
+      existing.statut === 'brouillon' &&
+      updates.statut === 'en_attente' &&
+      data
+    ) {
+      await createEcrituresForFacture(supabase, {
+        id: data.id,
+        societe_id: data.societe_id,
+        numero_facture: data.numero_facture || '',
+        tiers: data.tiers || '',
+        date_facture: data.date_facture,
+        montant_ht: data.montant_ht || 0,
+        montant_tva: data.montant_tva || 0,
+        montant_ttc: data.montant_ttc || 0,
+      })
+    }
+
     return NextResponse.json({ facture: data })
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
@@ -171,8 +314,9 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const supabase = await createClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const supabase = getAdminClient()
+    const authClient = await createClient()
+    const { data: { user }, error: authError } = await authClient.auth.getUser()
     if (authError || !user) return NextResponse.json({ error: 'Non autorise' }, { status: 401 })
 
     const { searchParams } = new URL(request.url)

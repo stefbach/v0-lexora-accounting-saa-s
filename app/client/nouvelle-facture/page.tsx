@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Plus, Trash2, Eye, Save, Lock, Download, ArrowLeft, FileText, User, ListOrdered, Calculator, CreditCard, StickyNote } from "lucide-react"
+import { Plus, Trash2, Eye, Save, Lock, Download, ArrowLeft, FileText, User, ListOrdered, Calculator, CreditCard, StickyNote, Palette, Check } from "lucide-react"
 
 interface LigneFacture { id: string; description: string; unite: string; quantite: number; prix_unitaire: number; taux_tva: number; montant_ht: number }
 interface InvoiceClient { id: string; nom: string; entreprise: string; adresse: string; email: string; telephone: string; vat_number: string; devise: string; conditions_paiement: number; offshore: boolean }
@@ -25,6 +25,14 @@ const addDays = (d: string, days: number) => { const dt = new Date(d); dt.setDat
 const UNITES = ["Heure", "Jour", "Mois", "Forfait", "Unite"] as const
 const DEVISES = ["MUR", "EUR", "USD", "GBP"] as const
 const MODES_PAIEMENT = ["Virement", "Cheque", "Especes", "Carte"] as const
+const ACCENT_COLORS = [
+  { name: "Navy", hex: "#1E2A4A" }, { name: "Gold", hex: "#C9A84C" },
+  { name: "Blue", hex: "#2563EB" }, { name: "Green", hex: "#059669" },
+  { name: "Red", hex: "#DC2626" }, { name: "Purple", hex: "#7C3AED" },
+  { name: "Teal", hex: "#0D9488" }, { name: "Orange", hex: "#EA580C" },
+  { name: "Slate", hex: "#475569" }, { name: "Rose", hex: "#E11D48" },
+  { name: "Indigo", hex: "#4F46E5" }, { name: "Black", hex: "#000000" },
+] as const
 const ECHEANCES = [{ label: "30 jours", value: 30 }, { label: "60 jours", value: 60 }, { label: "90 jours", value: 90 }, { label: "Personnalise", value: -1 }] as const
 
 function Sel({ value, onValueChange, placeholder, children }: { value?: string; onValueChange: (v: string) => void; placeholder?: string; children: React.ReactNode }) {
@@ -65,6 +73,7 @@ export default function NouvelleFacturePage() {
   const [echeancePreset, setEcheancePreset] = useState(30)
   const [notesVisibles, setNotesVisibles] = useState("")
   const [notesInternes, setNotesInternes] = useState("")
+  const [accentColor, setAccentColor] = useState("#1E2A4A")
 
   useEffect(() => {
     try {
@@ -80,6 +89,8 @@ export default function NouvelleFacturePage() {
       if (c) setClients(JSON.parse(c))
       const cat = localStorage.getItem("lexora_invoice_catalogue")
       if (cat) setCatalogue(JSON.parse(cat))
+      const tc = localStorage.getItem("lexora_invoice_template_colors")
+      if (tc) { try { const parsed = JSON.parse(tc); if (parsed.primaire) setAccentColor(parsed.primaire) } catch { /* ignore */ } }
     } catch { /* ignore */ }
     fetch("/api/client/societes").then(r => r.json()).then(d => {
       setSocietes(d.societes || [])
@@ -145,6 +156,7 @@ export default function NouvelleFacturePage() {
     template: localStorage.getItem("lexora_invoice_template") || "standard",
     client_offshore: clientOffshore, remise_type: remiseType, remise_value: remiseValue, remise_montant: remiseMontant,
     logo_url: settings?.logo_url || "", contre_valeur_mur: contreValeurMUR,
+    accent_color: accentColor,
   })
 
   const saveToSession = () => {
