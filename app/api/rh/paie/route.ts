@@ -77,11 +77,14 @@ export async function POST(request: Request) {
       nsf_salarie: Number(paramsDB.nsf_salarie),
       nsf_patronal: Number(paramsDB.nsf_patronal),
       training_levy: Number(paramsDB.training_levy),
-      prgf_patronal_par_jour: Number(paramsDB.prgf_patronal_par_jour),
+      prgf_patronal_par_jour: Number(paramsDB.prgf_patronal_par_jour ?? 4.50),
+      prgf_taux_emoluments: Number(paramsDB.prgf_taux_emoluments ?? 0.045),
       paye_seuil_exoneration: Number(paramsDB.paye_seuil_exoneration ?? 390000),
       paye_taux_1: Number(paramsDB.paye_taux_1 ?? 0.10),
       paye_seuil_taux_2: Number(paramsDB.paye_seuil_taux_2 ?? 650000),
       paye_taux_2: Number(paramsDB.paye_taux_2 ?? 0.15),
+      salary_compensation: Number(paramsDB.salary_compensation ?? 635),
+      salary_compensation_seuil: Number(paramsDB.salary_compensation_seuil ?? 50000),
     } : PARAMS_MRA_DEFAUT
 
     const periodeDate = periode ? `${periode}-01` : `${new Date().toISOString().slice(0, 7)}-01`

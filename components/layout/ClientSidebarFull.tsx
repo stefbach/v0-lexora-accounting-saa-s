@@ -63,12 +63,14 @@ const MENU = [
     section: "RH & Paie",
     items: [
       { href: "/client/salaires", label: "Paie & Bulletins", icon: CreditCard },
+      { href: "/client/rapports-paie", label: "Rapports Statutaires", icon: FileSpreadsheet },
+      { href: "/client/declarations-sociales", label: "Déclarations Sociales", icon: FileText },
+      { href: "/client/exports-rh", label: "Exports & Virements", icon: Download },
       { href: "/rh/employes", label: "Employés", icon: Users },
       { href: "/rh/pointage", label: "Pointage", icon: Clock },
       { href: "/rh/conges", label: "Congés", icon: Scale },
-      { href: "/client/declarations-sociales", label: "Déclarations Sociales", icon: FileText },
       { href: "/client/demandes-rh", label: "Demandes RH", icon: ClipboardList },
-      { href: "/client/exports-rh", label: "Exports & Virements", icon: Download },
+      { href: "/client/parametres-rh", label: "Paramètres RH", icon: Settings },
     ]
   },
   {

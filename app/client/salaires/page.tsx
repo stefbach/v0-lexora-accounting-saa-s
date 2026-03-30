@@ -70,6 +70,8 @@ export default function ClientSalairesPage() {
   const [importLoading, setImportLoading] = useState(false)
   const [activeTab, setActiveTab] = useState("bulletins")
   const [periodClosed, setPeriodClosed] = useState(false)
+  const [periodClosing, setPeriodClosing] = useState(false)
+  const [periodOpening, setPeriodOpening] = useState(false)
   const [virementDone, setVirementDone] = useState(false)
   const [csgExported, setCsgExported] = useState(false)
   const [payeExported, setPayeExported] = useState(false)
@@ -238,6 +240,59 @@ export default function ClientSalairesPage() {
       setImportLoading(false)
     }
   }
+
+  // Period management
+  function getPeriodeDates(periode: string) {
+    const [y, m] = periode.split("-").map(Number)
+    // Standard: 25th of previous month to 24th of current month
+    const prevMonth = m === 1 ? 12 : m - 1
+    const prevYear = m === 1 ? y - 1 : y
+    const dateDebut = `${prevYear}-${String(prevMonth).padStart(2, "0")}-25`
+    const dateFin = `${y}-${String(m).padStart(2, "0")}-24`
+    const MOIS_FR = ["Jan", "Fev", "Mar", "Avr", "Mai", "Jun", "Jul", "Aou", "Sep", "Oct", "Nov", "Dec"]
+    const label = `${MOIS_FR[m - 1]}, ${y} -- ${String(prevMonth).padStart(2, "0")}/${prevYear} to ${String(m).padStart(2, "0")}/${y}`
+    return { dateDebut, dateFin, label }
+  }
+
+  async function handleCloturerPeriode() {
+    if (!selectedSociete || !selectedPeriode) return
+    if (!confirm("Cloturer la periode ? Les bulletins ne pourront plus etre modifies.")) return
+    setPeriodClosing(true)
+    try {
+      // Validate all bulletins
+      for (const b of bulletins) {
+        if (b.statut === "brouillon") {
+          await fetch("/api/rh/paie", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "valider",
+              employe_id: b.employe_id,
+              periode: selectedPeriode,
+            }),
+          })
+        }
+      }
+      setPeriodClosed(true)
+      fetchData()
+    } catch {
+      alert("Erreur lors de la cloture")
+    } finally {
+      setPeriodClosing(false)
+    }
+  }
+
+  async function handleOuvrirPeriode() {
+    if (!confirm("Ouvrir la periode ? Les bulletins pourront etre modifies. (Admin uniquement)")) return
+    setPeriodOpening(true)
+    try {
+      setPeriodClosed(false)
+    } finally {
+      setPeriodOpening(false)
+    }
+  }
+
+  const periodeInfo = getPeriodeDates(selectedPeriode)
 
   // View PDF
   function openPDF(bulletinId: string) {
@@ -446,6 +501,72 @@ export default function ClientSalairesPage() {
         </Card>
       </div>
 
+      {/* Period Settings */}
+      <Card className="border border-gray-200">
+        <CardContent className="py-4 px-6">
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div className="flex items-center gap-4">
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Current Period</p>
+                <p className="text-sm font-bold mt-0.5" style={{ color: "#1E2A4A" }}>
+                  {periodeInfo.label}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {periodeInfo.dateDebut} to {periodeInfo.dateFin}
+                </p>
+              </div>
+              <Badge className={periodClosed
+                ? "bg-red-100 text-red-800 border-red-300"
+                : "bg-green-100 text-green-800 border-green-300"
+              }>
+                {periodClosed ? (
+                  <><Lock className="h-3 w-3 mr-1" /> Closed</>
+                ) : (
+                  <><CheckCircle className="h-3 w-3 mr-1" /> Open</>
+                )}
+              </Badge>
+            </div>
+            <div className="flex items-center gap-2">
+              {!periodClosed ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCloturerPeriode}
+                  disabled={periodClosing || bulletins.length === 0}
+                  className="border-red-300 text-red-700 hover:bg-red-50"
+                >
+                  {periodClosing ? (
+                    <><Loader2 className="mr-1 h-3 w-3 animate-spin" /> Cloture en cours...</>
+                  ) : (
+                    <><Lock className="mr-1 h-3 w-3" /> Cloturer la periode</>
+                  )}
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleOuvrirPeriode}
+                  disabled={periodOpening || profile?.role !== "admin" && profile?.role !== "client_admin"}
+                  className="border-green-300 text-green-700 hover:bg-green-50"
+                >
+                  {periodOpening ? (
+                    <><Loader2 className="mr-1 h-3 w-3 animate-spin" /> Opening...</>
+                  ) : (
+                    <><CheckCircle className="mr-1 h-3 w-3" /> Ouvrir la periode</>
+                  )}
+                </Button>
+              )}
+            </div>
+          </div>
+          {periodClosed && (
+            <div className="mt-3 p-2.5 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700 flex items-center gap-2">
+              <Lock className="h-4 w-4 flex-shrink-0" />
+              <span>Periode cloturee. Les bulletins sont valides et ne peuvent plus etre modifies. Seul un administrateur peut rouvrir la periode.</span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
@@ -511,7 +632,7 @@ export default function ClientSalairesPage() {
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
-                            {b.statut === "brouillon" && (
+                            {b.statut === "brouillon" && !periodClosed && (
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -559,7 +680,7 @@ export default function ClientSalairesPage() {
               </div>
               <Button
                 onClick={handleCalculerPaie}
-                disabled={calculating || !selectedSociete}
+                disabled={calculating || !selectedSociete || periodClosed}
                 style={{ backgroundColor: "#1E2A4A" }}
                 className="text-white"
               >
@@ -567,6 +688,11 @@ export default function ClientSalairesPage() {
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Calcul en cours...
+                  </>
+                ) : periodClosed ? (
+                  <>
+                    <Lock className="mr-2 h-4 w-4" />
+                    Periode cloturee
                   </>
                 ) : (
                   <>
