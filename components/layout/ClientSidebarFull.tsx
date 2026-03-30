@@ -238,11 +238,28 @@ export function ClientSidebarFull() {
     router.push('/auth/login')
   }
 
-  // Filter menu sections based on active modules (societe plan intersected with user permissions)
-  const visibleMenu = MENU.filter(section => {
-    if (!section.requiredModule) return true
-    return activeModules[section.requiredModule]
-  })
+  // For client_assistant: override to show ONLY Espace Assistant + Mon Profil
+  const isAssistant = profile?.role === "client_assistant"
+
+  const visibleMenu = isAssistant
+    ? [
+        {
+          section: "Mon Espace",
+          items: [
+            { href: "/client/assistant", label: "Espace Assistant", icon: Upload },
+          ],
+        },
+        {
+          section: "Mon Compte",
+          items: [
+            { href: "/client/profil", label: "Mon Profil", icon: Settings },
+          ],
+        },
+      ]
+    : MENU.filter(section => {
+        if (!section.requiredModule) return true
+        return activeModules[section.requiredModule]
+      })
 
   return (
     <>
