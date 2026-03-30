@@ -9,7 +9,8 @@ import {
   Receipt, Calculator, BarChart3, TrendingUp, Target,
   Users, Clock, CreditCard, Gavel, Scale, Bell,
   Settings, LogOut, ChevronDown, ChevronRight, FileSpreadsheet,
-  UserCog, Globe, Lightbulb, ClipboardList, Download, Upload, Calendar
+  UserCog, Globe, Lightbulb, ClipboardList, Download, Upload, Calendar,
+  CalendarDays
 } from "lucide-react"
 
 const MENU = [
@@ -44,6 +45,7 @@ const MENU = [
       { href: "/client/grand-livre", label: "Grand Livre", icon: BookOpen },
       { href: "/client/exercices", label: "Exercices", icon: Calendar },
       { href: "/client/previsionnel", label: "Prévisionnel", icon: TrendingUp },
+      { href: "/client/echeances", label: "Échéances", icon: CalendarDays },
       { href: "/client/simulations", label: "Simulations", icon: Target },
       { href: "/client/conseils", label: "Conseils IA", icon: Lightbulb },
     ]
