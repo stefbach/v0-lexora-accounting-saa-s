@@ -10,7 +10,7 @@ import {
   Users, Clock, CreditCard, Gavel, Scale, Bell,
   Settings, LogOut, ChevronDown, ChevronRight, FileSpreadsheet,
   UserCog, Globe, Lightbulb, ClipboardList, Download, Upload, Calendar,
-  CalendarDays
+  CalendarDays, FilePlus2, SlidersHorizontal
 } from "lucide-react"
 
 const MENU = [
