@@ -38,9 +38,17 @@ export async function GET(request: Request) {
       const { data } = await supabase.from('bulletins_paie').select('*').eq('id', bulletin_id).single()
       bulletin = data
     } else if (employe_id && periode) {
-      const periodeDate = periode.length === 7 ? `${periode}-01` : periode
+      // periode can be YYYY-MM or YYYY-MM-DD — search for the month
+      const periodeMonth = periode.substring(0, 7) // YYYY-MM
+      const startDate = `${periodeMonth}-01`
+      const endDate = `${periodeMonth}-31`
       const { data } = await supabase.from('bulletins_paie').select('*')
-        .eq('employe_id', employe_id).ilike('periode', `${periode}%`).limit(1).maybeSingle()
+        .eq('employe_id', employe_id)
+        .gte('periode', startDate)
+        .lte('periode', endDate)
+        .order('periode', { ascending: false })
+        .limit(1)
+        .maybeSingle()
       bulletin = data
     }
 
