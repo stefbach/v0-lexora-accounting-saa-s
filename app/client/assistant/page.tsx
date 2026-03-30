@@ -128,24 +128,30 @@ export default function AssistantPage() {
         </div>
       </div>
 
-      {/* Société selector */}
-      {societes.length > 1 && (
-        <Card>
-          <CardContent className="p-4">
-            <label className="text-sm font-medium text-gray-700 block mb-2">Societe</label>
+      {/* Société selector — ALWAYS visible for assistant */}
+      <Card className="border-2" style={{ borderColor: GOLD }}>
+        <CardContent className="p-4">
+          <label className="text-sm font-bold block mb-2" style={{ color: NAVY }}>
+            Pour quelle societe scannez-vous ?
+          </label>
+          {societes.length === 0 ? (
+            <p className="text-sm text-red-600">Aucune societe assignee. Demandez a votre administrateur de vous assigner des societes.</p>
+          ) : (
             <Select value={selectedSociete} onValueChange={setSelectedSociete}>
-              <SelectTrigger className="w-full md:w-80">
-                <SelectValue placeholder="Choisir la societe..." />
+              <SelectTrigger className="w-full text-base h-12">
+                <SelectValue placeholder="Selectionner la societe..." />
               </SelectTrigger>
               <SelectContent>
                 {societes.map(s => (
-                  <SelectItem key={s.id} value={s.id}>{s.nom} {s.brn ? `(${s.brn})` : ""}</SelectItem>
+                  <SelectItem key={s.id} value={s.id} className="text-base py-2">
+                    {s.nom} {s.brn ? `(${s.brn})` : ""}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </CardContent>
+      </Card>
 
       {/* Upload zone */}
       <Card className="border-2 border-dashed" style={{ borderColor: GOLD }}>
