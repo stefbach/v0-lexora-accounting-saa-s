@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { useProfile } from "@/hooks/use-profile"
 import { Button } from "@/components/ui/button"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   LayoutDashboard,
   Users,
@@ -24,6 +24,8 @@ import {
   LogOut,
   Settings,
   FileSpreadsheet,
+  Menu,
+  X,
 } from "lucide-react"
 
 const NAVY = "#1E2A4A"
@@ -88,6 +90,10 @@ export function ComptableSidebarNew() {
   const { profile } = useProfile()
   const [collapsed, setCollapsed] = useState(false)
   const [collapsedSections, setCollapsedSections] = useState<string[]>([])
+  const [mobileOpen, setMobileOpen] = useState(false)
+
+  // Close sidebar on navigation
+  useEffect(() => { setMobileOpen(false) }, [pathname])
 
   const clientId = rawParams?.clientId ?? ""
   const societeId = rawParams?.societeId ?? ""
@@ -119,13 +125,29 @@ export function ComptableSidebarNew() {
   }
 
   return (
+    <>
+      {/* Mobile hamburger */}
+      <button onClick={() => setMobileOpen(true)} className="fixed top-4 left-4 z-50 md:hidden bg-[#1E2A4A] text-white p-2 rounded-lg shadow-lg">
+        <Menu className="w-5 h-5" />
+      </button>
+
+      {/* Mobile backdrop */}
+      {mobileOpen && <div onClick={() => setMobileOpen(false)} className="fixed inset-0 bg-black/50 z-40 md:hidden" />}
+
     <aside
       className={cn(
-        "fixed left-0 top-0 bottom-0 z-40 flex flex-col transition-all duration-300 overflow-y-auto",
-        collapsed ? "w-16" : "w-64"
+        "fixed left-0 top-0 bottom-0 z-50 flex flex-col transition-all duration-300 overflow-y-auto",
+        collapsed ? "w-16" : "w-64",
+        mobileOpen ? "translate-x-0" : "-translate-x-full",
+        "md:translate-x-0"
       )}
       style={{ backgroundColor: NAVY }}
     >
+      {/* Mobile close button */}
+      <button onClick={() => setMobileOpen(false)} className="absolute top-4 right-4 md:hidden text-white/60 hover:text-white z-10">
+        <X className="w-5 h-5" />
+      </button>
+
       {/* Logo */}
       <div className="flex h-16 items-center justify-between border-b border-white/10 px-4 flex-shrink-0">
         {!collapsed ? (
@@ -252,5 +274,6 @@ export function ComptableSidebarNew() {
         </button>
       </div>
     </aside>
+    </>
   )
 }

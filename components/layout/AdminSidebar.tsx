@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
@@ -13,6 +14,8 @@ import {
   FileText,
   Settings,
   LogOut,
+  Menu,
+  X,
 } from "lucide-react"
 
 const MENU = [
@@ -39,6 +42,10 @@ const MENU = [
 export function AdminSidebar() {
   const pathname = usePathname()
   const router = useRouter()
+  const [mobileOpen, setMobileOpen] = useState(false)
+
+  // Close sidebar on navigation
+  useEffect(() => { setMobileOpen(false) }, [pathname])
 
   const isActive = (href: string, exact?: boolean) => {
     if (exact) return pathname === href
@@ -52,7 +59,21 @@ export function AdminSidebar() {
   }
 
   return (
-    <aside className="w-64 bg-[#1E2A4A] min-h-screen flex flex-col fixed left-0 top-0 bottom-0 z-40 overflow-y-auto">
+    <>
+      {/* Mobile hamburger */}
+      <button onClick={() => setMobileOpen(true)} className="fixed top-4 left-4 z-50 md:hidden bg-[#1E2A4A] text-white p-2 rounded-lg shadow-lg">
+        <Menu className="w-5 h-5" />
+      </button>
+
+      {/* Mobile backdrop */}
+      {mobileOpen && <div onClick={() => setMobileOpen(false)} className="fixed inset-0 bg-black/50 z-40 md:hidden" />}
+
+    <aside className={`w-64 bg-[#1E2A4A] min-h-screen flex flex-col fixed left-0 top-0 bottom-0 z-50 overflow-y-auto transition-transform duration-300 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
+      {/* Mobile close button */}
+      <button onClick={() => setMobileOpen(false)} className="absolute top-4 right-4 md:hidden text-white/60 hover:text-white z-10">
+        <X className="w-5 h-5" />
+      </button>
+
       {/* Logo */}
       <div className="p-4 border-b border-white/10 flex-shrink-0">
         <Link href="/admin" className="flex items-center gap-2">
@@ -109,5 +130,6 @@ export function AdminSidebar() {
         </button>
       </div>
     </aside>
+    </>
   )
 }

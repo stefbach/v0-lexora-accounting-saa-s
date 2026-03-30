@@ -15,7 +15,7 @@ export default async function RHLayout({ children }: { children: React.ReactNode
   return (
     <div className="flex min-h-screen bg-gray-50">
       <RHSidebarDedicated />
-      <main className="flex-1 overflow-auto ml-60">{children}</main>
+      <main className="flex-1 overflow-auto md:ml-60">{children}</main>
     </div>
   )
 }

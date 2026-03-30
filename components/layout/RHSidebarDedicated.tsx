@@ -1,9 +1,10 @@
 "use client"
+import { useState, useEffect } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
-import { Clock, Users, Calendar, CreditCard, TrendingUp, FileText, Banknote, Gavel, Receipt, Settings, LogOut, ArrowLeft } from "lucide-react"
+import { Clock, Users, Calendar, CreditCard, TrendingUp, FileText, Banknote, Gavel, Receipt, Settings, LogOut, ArrowLeft, Menu, X } from "lucide-react"
 
 const LINKS = [
   { href: '/rh', label: 'Tableau de bord', icon: Clock, exact: true },
@@ -20,6 +21,10 @@ const LINKS = [
 export function RHSidebarDedicated() {
   const pathname = usePathname()
   const router = useRouter()
+  const [mobileOpen, setMobileOpen] = useState(false)
+
+  // Close sidebar on navigation
+  useEffect(() => { setMobileOpen(false) }, [pathname])
 
   const isActive = (href: string, exact?: boolean) =>
     exact ? pathname === href : pathname.startsWith(href)
@@ -31,7 +36,21 @@ export function RHSidebarDedicated() {
   }
 
   return (
-    <aside className="w-60 bg-[#1E2A4A] min-h-screen flex flex-col fixed left-0 top-0 bottom-0 z-40">
+    <>
+      {/* Mobile hamburger */}
+      <button onClick={() => setMobileOpen(true)} className="fixed top-4 left-4 z-50 md:hidden bg-[#1E2A4A] text-white p-2 rounded-lg shadow-lg">
+        <Menu className="w-5 h-5" />
+      </button>
+
+      {/* Mobile backdrop */}
+      {mobileOpen && <div onClick={() => setMobileOpen(false)} className="fixed inset-0 bg-black/50 z-40 md:hidden" />}
+
+    <aside className={`w-60 bg-[#1E2A4A] min-h-screen flex flex-col fixed left-0 top-0 bottom-0 z-50 overflow-y-auto transition-transform duration-300 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
+      {/* Mobile close button */}
+      <button onClick={() => setMobileOpen(false)} className="absolute top-4 right-4 md:hidden text-white/60 hover:text-white z-10">
+        <X className="w-5 h-5" />
+      </button>
+
       <div className="p-4 border-b border-white/10">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-[#C9A84C] rounded-lg flex items-center justify-center">
@@ -74,5 +93,6 @@ export function RHSidebarDedicated() {
         </button>
       </div>
     </aside>
+    </>
   )
 }
