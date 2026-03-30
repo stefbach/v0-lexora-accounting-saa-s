@@ -1,9 +1,9 @@
-import { AdminSidebarUnified } from "@/components/layout/AdminSidebarUnified"
+import { ComptableSidebarNew } from "@/components/layout/ComptableSidebarNew"
 
 export default function ComptableLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen bg-gray-50">
-      <AdminSidebarUnified />
+      <ComptableSidebarNew />
       <main className="flex-1 overflow-auto ml-64">{children}</main>
     </div>
   )

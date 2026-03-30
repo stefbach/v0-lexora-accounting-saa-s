@@ -1,143 +1,110 @@
 "use client"
 
-import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
+import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
-import { Button } from "@/components/ui/button"
 import {
   LayoutDashboard,
-  UserCog,
   Users,
-  Settings,
-  BookOpen,
-  ClipboardList,
   Building2,
+  UserCog,
+  Briefcase,
+  FileText,
+  Settings,
   LogOut,
-  ChevronLeft,
-  ChevronRight,
 } from "lucide-react"
-import { useState } from "react"
 
-const navItems = [
-  { href: "/admin", label: "Tableau de bord", icon: LayoutDashboard },
-  { href: "/admin/clients", label: "Clients", icon: Users },
-  { href: "/admin/comptables", label: "Comptables", icon: UserCog },
-  { href: "/admin/societes", label: "Sociétés", icon: Building2 },
-  { href: "/admin/parametres", label: "Paramètres", icon: Settings },
-  { href: "/comptable", label: "→ Comptabilité", icon: BookOpen },
-  { href: "/rh", label: "→ RH & Paie", icon: ClipboardList },
+const MENU = [
+  {
+    section: "Administration",
+    items: [
+      { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
+      { href: "/admin/users", label: "Utilisateurs", icon: Users },
+      { href: "/admin/clients", label: "Clients", icon: Briefcase },
+      { href: "/admin/comptables", label: "Comptables", icon: UserCog },
+      { href: "/admin/societes", label: "Societes", icon: Building2 },
+      { href: "/admin/documents", label: "Documents", icon: FileText },
+    ],
+  },
+  {
+    section: "Parametres",
+    items: [
+      { href: "/admin/parametres", label: "Configuration", icon: Settings },
+    ],
+  },
 ]
 
 export function AdminSidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const [collapsed, setCollapsed] = useState(false)
 
-  const handleSignOut = async () => {
+  const isActive = (href: string, exact?: boolean) => {
+    if (exact) return pathname === href
+    return pathname.startsWith(href)
+  }
+
+  const handleLogout = async () => {
     const supabase = createClient()
     await supabase.auth.signOut()
     router.push("/auth/login")
   }
 
   return (
-    <aside
-      className={cn(
-        "sticky top-0 flex h-screen flex-col transition-all duration-300",
-        collapsed ? "w-16" : "w-64"
-      )}
-      style={{ backgroundColor: "#1E2A4A" }}
-    >
+    <aside className="w-64 bg-[#1E2A4A] min-h-screen flex flex-col fixed left-0 top-0 bottom-0 z-40 overflow-y-auto">
       {/* Logo */}
-      <div className="flex h-16 items-center justify-between border-b border-white/10 px-4">
-        {!collapsed ? (
-          <Link href="/admin" className="flex items-center gap-2">
-            <div
-              className="flex h-8 w-8 items-center justify-center rounded-lg"
-              style={{ backgroundColor: "#C9A84C" }}
-            >
-              <span className="text-sm font-bold text-white">L</span>
-            </div>
-            <div className="flex flex-col">
-              <span className="text-lg font-semibold" style={{ color: "#C9A84C" }}>
-                Lexora
-              </span>
-              <span className="text-[10px] font-medium uppercase tracking-wider text-white/50">
-                Admin
-              </span>
-            </div>
-          </Link>
-        ) : (
-          <div
-            className="mx-auto flex h-8 w-8 items-center justify-center rounded-lg"
-            style={{ backgroundColor: "#C9A84C" }}
-          >
-            <span className="text-sm font-bold text-white">L</span>
+      <div className="p-4 border-b border-white/10 flex-shrink-0">
+        <Link href="/admin" className="flex items-center gap-2">
+          <div className="w-8 h-8 bg-[#C9A84C] rounded-lg flex items-center justify-center">
+            <span className="text-[#1E2A4A] font-black text-sm">L</span>
           </div>
-        )}
+          <div>
+            <p className="text-white font-bold text-base leading-tight">LEXORA</p>
+            <p className="text-white/40 text-xs">Administration</p>
+          </div>
+        </Link>
       </div>
 
       {/* Navigation */}
-      <div className="flex-1 overflow-y-auto p-3">
-        {!collapsed && (
-          <div className="mb-4 rounded-lg bg-white/5 px-3 py-2">
-            <p className="text-xs font-medium uppercase tracking-wider text-white/50">
-              Portail Admin
+      <nav className="flex-1 p-3 space-y-4">
+        {MENU.map(({ section, items }) => (
+          <div key={section}>
+            <p className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-white/40">
+              {section}
             </p>
+            <div className="mt-1 space-y-0.5">
+              {items.map((item) => {
+                const Icon = item.icon
+                const active = isActive(item.href, item.exact)
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors",
+                      active
+                        ? "bg-[#C9A84C] text-[#1E2A4A] font-semibold"
+                        : "text-white/70 hover:bg-white/10 hover:text-white"
+                    )}
+                  >
+                    <Icon className="w-4 h-4 flex-shrink-0" />
+                    <span className="truncate">{item.label}</span>
+                  </Link>
+                )
+              })}
+            </div>
           </div>
-        )}
-
-        <nav className="flex flex-col gap-1">
-          {navItems.map((item) => {
-            const isActive =
-              item.href === "/admin"
-                ? pathname === "/admin"
-                : pathname.startsWith(item.href)
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
-                  isActive
-                    ? "bg-white/10 shadow-sm"
-                    : "text-white/70 hover:bg-white/5 hover:text-white",
-                  collapsed && "justify-center"
-                )}
-                style={isActive ? { color: "#C9A84C" } : undefined}
-              >
-                <item.icon className="h-5 w-5 shrink-0" />
-                {!collapsed && <span>{item.label}</span>}
-              </Link>
-            )
-          })}
-        </nav>
-      </div>
+        ))}
+      </nav>
 
       {/* Footer */}
-      <div className="border-t border-white/10 p-3">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setCollapsed(!collapsed)}
-          className="mb-2 w-full justify-center text-white/70 hover:bg-white/5 hover:text-white"
-        >
-          {collapsed ? (
-            <ChevronRight className="h-4 w-4" />
-          ) : (
-            <ChevronLeft className="h-4 w-4" />
-          )}
-          {!collapsed && <span className="ml-2">Réduire</span>}
-        </Button>
+      <div className="p-3 border-t border-white/10 flex-shrink-0">
         <button
-          onClick={handleSignOut}
-          className={cn(
-            "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-white/70 transition-all duration-200 hover:bg-white/5 hover:text-white",
-            collapsed && "justify-center"
-          )}
+          onClick={handleLogout}
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-white/50 hover:bg-red-500/20 hover:text-red-400 text-sm transition-colors"
         >
-          <LogOut className="h-5 w-5 shrink-0" />
-          {!collapsed && <span>Déconnexion</span>}
+          <LogOut className="w-4 h-4" />
+          <span>Deconnexion</span>
         </button>
       </div>
     </aside>
