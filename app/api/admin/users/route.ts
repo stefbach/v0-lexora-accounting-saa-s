@@ -9,9 +9,24 @@ function getAdminClient() {
 
 const VALID_ROLES = ['admin', 'super_admin', 'client_admin', 'client_user', 'client_assistant', 'comptable', 'comptable_dedie', 'rh', 'rh_manager', 'juridique', 'employe', 'manager', 'direction', 'salarie']
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const supabase = getAdminClient()
+    const { searchParams } = new URL(request.url)
+    const userId = searchParams.get('user_id')
+    const action = searchParams.get('action')
+
+    // Fetch societe_ids for a specific user
+    if (userId && action === 'societes') {
+      const { data } = await supabase
+        .from('user_societes')
+        .select('societe_id')
+        .eq('user_id', userId)
+        .eq('actif', true)
+      return NextResponse.json({ societe_ids: (data || []).map(r => r.societe_id) })
+    }
+
+    // Default: list all users
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
