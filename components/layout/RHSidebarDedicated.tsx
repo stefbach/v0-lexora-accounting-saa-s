@@ -3,7 +3,7 @@ import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
-import { Clock, Users, Calendar, CreditCard, TrendingUp, FileText, Banknote, Gavel, Receipt, Settings, LogOut } from "lucide-react"
+import { Clock, Users, Calendar, CreditCard, TrendingUp, FileText, Banknote, Gavel, Receipt, Settings, LogOut, ArrowLeft } from "lucide-react"
 
 const LINKS = [
   { href: '/rh', label: 'Tableau de bord', icon: Clock, exact: true },
@@ -44,6 +44,13 @@ export function RHSidebarDedicated() {
         </div>
       </div>
       <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
+        {/* Retour à l'espace principal */}
+        <Link href="/client/tableau-de-bord"
+          className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[#C9A84C] hover:bg-[#C9A84C]/20 text-sm transition-colors mb-3 border border-[#C9A84C]/30">
+          <ArrowLeft className="w-4 h-4 flex-shrink-0" />
+          <span>Retour espace client</span>
+        </Link>
+        <div className="border-b border-white/10 mb-2" />
         {LINKS.map(l => {
           const Icon = l.icon
           const active = isActive(l.href, l.exact)
