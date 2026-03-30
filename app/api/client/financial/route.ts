@@ -19,9 +19,52 @@ function convertToMUR(amount: number, devise: string, rates: Record<string, numb
   return amount
 }
 
+// Helper: parse exercice string to date range
+// Mauritius fiscal year: July 1 to June 30 (e.g., "2025-2026" = 2025-07-01 to 2026-06-30)
+function parseExerciceDates(exercice: string): { debut: string; fin: string } | null {
+  const match = exercice.match(/^(\d{4})-(\d{4})$/)
+  if (!match) return null
+  const startYear = parseInt(match[1])
+  const endYear = parseInt(match[2])
+  return { debut: `${startYear}-07-01`, fin: `${endYear}-06-30` }
+}
+
+function getCurrentExercice(): string {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = now.getMonth() + 1
+  if (month >= 7) return `${year}-${year + 1}`
+  return `${year - 1}-${year}`
+}
+
+function getPreviousExercice(exercice: string): string {
+  const match = exercice.match(/^(\d{4})-(\d{4})$/)
+  if (!match) {
+    const current = getCurrentExercice()
+    const y = parseInt(current.split('-')[0])
+    return `${y - 1}-${y}`
+  }
+  const startYear = parseInt(match[1])
+  return `${startYear - 1}-${startYear}`
+}
+
+function getAvailableExercices(): string[] {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = now.getMonth() + 1
+  const currentStart = month >= 7 ? year : year - 1
+  const exercices: string[] = []
+  for (let i = 0; i < 5; i++) {
+    const s = currentStart - i
+    exercices.push(`${s}-${s + 1}`)
+  }
+  return exercices
+}
+
 // GET — Aggregated financial data for a client
 // For clients: returns their own data
 // For comptables: accepts ?client_id=xxx to view a client's data
+// Supports ?exercice=2025-2026 and ?date_debut=...&date_fin=... for period filtering
 export async function GET(request: Request) {
   try {
     const supabaseAuth = await createServerClient()
@@ -34,6 +77,23 @@ export async function GET(request: Request) {
     // Determine which client's data to fetch
     const { searchParams } = new URL(request.url)
     const requestedClientId = searchParams.get('client_id')
+
+    // Exercice / date range filtering
+    const requestedExercice = searchParams.get('exercice')
+    const requestedDateDebut = searchParams.get('date_debut')
+    const requestedDateFin = searchParams.get('date_fin')
+
+    let dateFilter: { debut: string; fin: string } | null = null
+    let exerciceActuel = getCurrentExercice()
+
+    if (requestedExercice) {
+      dateFilter = parseExerciceDates(requestedExercice)
+      exerciceActuel = requestedExercice
+    } else if (requestedDateDebut && requestedDateFin) {
+      dateFilter = { debut: requestedDateDebut, fin: requestedDateFin }
+    }
+
+    const exercicePrecedent = getPreviousExercice(exerciceActuel)
 
     let targetClientId = user.id
 
@@ -87,13 +147,25 @@ export async function GET(request: Request) {
       .map((s: any) => ({ id: s.id, nom: s.nom }))
 
     // Get all accounting entries — depuis v2 en priorité, sinon v1
-    const { data: ecrituresV2 } = await supabase
+    let ecrituresV2Query = supabase
       .from('ecritures_comptables_v2').select('*').in('societe_id', societeIds)
       .order('date_ecriture', { ascending: false })
+    if (dateFilter) {
+      ecrituresV2Query = ecrituresV2Query.gte('date_ecriture', dateFilter.debut).lte('date_ecriture', dateFilter.fin)
+    }
+    const { data: ecrituresV2 } = await ecrituresV2Query
 
-    const { data: ecrituresV1 } = allDossierIds.length > 0 ? await supabase
-      .from('ecritures_comptables').select('*').in('dossier_id', allDossierIds)
-      .order('date_ecriture', { ascending: false }) : { data: [] }
+    let ecrituresV1Result: { data: any[] | null } = { data: [] }
+    if (allDossierIds.length > 0) {
+      let v1Query = supabase
+        .from('ecritures_comptables').select('*').in('dossier_id', allDossierIds)
+        .order('date_ecriture', { ascending: false })
+      if (dateFilter) {
+        v1Query = v1Query.gte('date_ecriture', dateFilter.debut).lte('date_ecriture', dateFilter.fin)
+      }
+      ecrituresV1Result = await v1Query
+    }
+    const ecrituresV1 = ecrituresV1Result.data
 
     // Fusionner v1 + v2 (v2 prioritaire, normaliser les noms de colonnes)
     const ecrituresFromV2 = (ecrituresV2 || []).map((e: any) => ({
@@ -127,9 +199,13 @@ export async function GET(request: Request) {
 
     // Get factures from table (source of truth for CA/dépenses)
     let facturesFromTable: any[] = []
-    const { data: facturesData, error: facturesErr } = await supabase
+    let facturesQuery = supabase
       .from('factures').select('*').in('societe_id', societeIds)
       .order('date_facture', { ascending: false })
+    if (dateFilter) {
+      facturesQuery = facturesQuery.gte('date_facture', dateFilter.debut).lte('date_facture', dateFilter.fin)
+    }
+    const { data: facturesData, error: facturesErr } = await facturesQuery
     if (!facturesErr) facturesFromTable = facturesData || []
 
     // Compute CA and dépenses from factures table (more reliable than écritures)
@@ -475,6 +551,9 @@ export async function GET(request: Request) {
         taux_change: rates,
         availableSocietes,
         selectedSocieteId: requestedSocieteId || null,
+        exercice_actuel: exerciceActuel,
+        exercice_precedent: exercicePrecedent,
+        available_exercices: getAvailableExercices(),
       }
     })
   } catch (e: unknown) {

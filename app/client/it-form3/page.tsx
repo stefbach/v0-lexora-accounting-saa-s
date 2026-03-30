@@ -117,13 +117,28 @@ export default function ITForm3Page() {
   const [apsQuarterly, setApsQuarterly] = useState(0)
   const [soldeAPayer, setSoldeAPayer] = useState(0)
 
-  // Fetch data on mount
+  // Prior year reference data
+  const [priorYearData, setPriorYearData] = useState<{
+    revenuAffaires: number; totalRevenus: number; totalDeductions: number;
+    revenuImposable: number; impotCalcule: number
+  } | null>(null)
+
+  // Fetch data on mount and when assessment year changes
   useEffect(() => {
     async function fetchData() {
+      setLoading(true)
       try {
-        const [socRes, finRes] = await Promise.all([
+        // Determine exercice from assessment year
+        // Assessment year 2026 = income year 2025-2026 (July 2025 - June 2026)
+        const yearNum = parseInt(assessmentYear)
+        const exercice = `${yearNum - 1}-${yearNum}`
+        const prevExercice = `${yearNum - 2}-${yearNum - 1}`
+
+        const [socRes, finRes, prevFinRes, priorFormRes] = await Promise.all([
           fetch("/api/client/societes"),
-          fetch("/api/client/financial"),
+          fetch(`/api/client/financial?exercice=${exercice}`),
+          fetch(`/api/client/financial?exercice=${prevExercice}`),
+          fetch(`/api/comptable/it-form3?assessment_year=${yearNum - 1}`).catch(() => null),
         ])
 
         if (socRes.ok) {
@@ -140,9 +155,40 @@ export default function ITForm3Page() {
 
         if (finRes.ok) {
           const finData = await finRes.json()
-          const fin = Array.isArray(finData) ? finData[0] : finData
+          const fin = finData?.financial || (Array.isArray(finData) ? finData[0] : finData)
           if (fin) {
             setRevenuAffaires(fin.totalRevenue || fin.total_revenue || fin.chiffre_affaires || 0)
+          }
+        }
+
+        // Set prior year reference from previous year financial data
+        if (prevFinRes.ok) {
+          const prevFinData = await prevFinRes.json()
+          const prevFin = prevFinData?.financial
+          if (prevFin) {
+            const prevRev = prevFin.totalRevenue || 0
+            setPriorYearData({
+              revenuAffaires: prevRev,
+              totalRevenus: prevRev,
+              totalDeductions: 0,
+              revenuImposable: prevRev,
+              impotCalcule: prevRev * 0.15,
+            })
+          }
+        }
+
+        // Try to load prior year IT Form 3 submission
+        if (priorFormRes && priorFormRes.ok) {
+          const priorForm = await priorFormRes.json()
+          if (priorForm && priorForm.data) {
+            const pf = priorForm.data
+            setPriorYearData({
+              revenuAffaires: pf.revenus?.revenuAffaires ?? 0,
+              totalRevenus: pf.revenus?.totalRevenus ?? 0,
+              totalDeductions: pf.deductions?.totalDeductions ?? 0,
+              revenuImposable: pf.taxCalculation?.revenuImposable ?? 0,
+              impotCalcule: pf.taxCalculation?.impotCalcule ?? 0,
+            })
           }
         }
       } catch (e) {
@@ -152,7 +198,7 @@ export default function ITForm3Page() {
       }
     }
     fetchData()
-  }, [])
+  }, [assessmentYear])
 
   const handleImportPdf = async (file: File) => {
     setImportingPdf(true)
@@ -355,8 +401,10 @@ export default function ITForm3Page() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="2024">2024</SelectItem>
                     <SelectItem value="2025">2025</SelectItem>
                     <SelectItem value="2026">2026</SelectItem>
+                    <SelectItem value="2027">2027</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -473,6 +521,32 @@ export default function ITForm3Page() {
                   {formatMUR(totalRevenus)}
                 </span>
               </div>
+
+              {priorYearData && (
+                <div className="mt-4 p-3 rounded-lg bg-gray-50 border border-gray-200">
+                  <p className="text-xs font-semibold text-gray-500 mb-2">
+                    Reference: Assessment Year {parseInt(assessmentYear) - 1}
+                  </p>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">CA (prior year)</span>
+                      <span className="font-mono text-gray-600">{formatMUR(priorYearData.revenuAffaires)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Total Revenus</span>
+                      <span className="font-mono text-gray-600">{formatMUR(priorYearData.totalRevenus)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Revenu Imposable</span>
+                      <span className="font-mono text-gray-600">{formatMUR(priorYearData.revenuImposable)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Impot Calcule</span>
+                      <span className="font-mono text-gray-600">{formatMUR(priorYearData.impotCalcule)}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 

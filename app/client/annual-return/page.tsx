@@ -98,6 +98,14 @@ interface AnnualReturnData {
   total_liabilities: number
 }
 
+interface PriorYearFinancials {
+  total_revenue: number
+  total_expenses: number
+  net_profit: number
+  total_assets: number
+  total_liabilities: number
+}
+
 const DEFAULT_DATA: AnnualReturnData = {
   company_name: "",
   company_number: "",
@@ -140,6 +148,7 @@ export default function AnnualReturnPage() {
   const [error, setError] = useState<string | null>(null)
   const [importingPdf, setImportingPdf] = useState(false)
   const [importMessage, setImportMessage] = useState("")
+  const [priorYear, setPriorYear] = useState<PriorYearFinancials | null>(null)
 
   const handleImportPdf = async (file: File) => {
     setImportingPdf(true)
@@ -203,12 +212,33 @@ export default function AnnualReturnPage() {
     setError(null)
 
     try {
-      const [arRes, dirRes, shRes, finRes] = await Promise.all([
+      // Determine exercice for this annual return year
+      const exercice = `${annee - 1}-${annee}`
+      const prevExercice = `${annee - 2}-${annee - 1}`
+
+      const [arRes, dirRes, shRes, finRes, prevFinRes, prevArRes] = await Promise.all([
         fetch(`/api/comptable/roc/annual-return?societe_id=${selectedSociete}&annee=${annee}`).then(r => r.json()),
         fetch(`/api/comptable/roc/administrateurs?societe_id=${selectedSociete}&actif=true`).then(r => r.json()),
         fetch(`/api/comptable/roc/actionnaires?societe_id=${selectedSociete}&actif=true`).then(r => r.json()),
-        fetch(`/api/client/financial?societe_id=${selectedSociete}`).then(r => r.json()).catch(() => ({ financial: null })),
+        fetch(`/api/client/financial?societe_id=${selectedSociete}&exercice=${exercice}`).then(r => r.json()).catch(() => ({ financial: null })),
+        fetch(`/api/client/financial?societe_id=${selectedSociete}&exercice=${prevExercice}`).then(r => r.json()).catch(() => ({ financial: null })),
+        fetch(`/api/comptable/roc/annual-return?societe_id=${selectedSociete}&annee=${annee - 1}`).then(r => r.json()).catch(() => ({})),
       ])
+
+      // Set prior year financials for comparative display
+      const prevFin = prevFinRes.financial
+      const prevAr = prevArRes.annual_returns?.[0]
+      if (prevFin || prevAr) {
+        setPriorYear({
+          total_revenue: prevAr?.chiffre_affaires || prevFin?.totalRevenue || 0,
+          total_expenses: prevFin?.totalExpenses || 0,
+          net_profit: prevAr?.resultat_net || (prevFin ? (prevFin.totalRevenue || 0) - (prevFin.totalExpenses || 0) : 0),
+          total_assets: prevAr?.actif_total || prevFin?.totalAssets || 0,
+          total_liabilities: prevAr?.passif_total || prevFin?.totalLiabilities || 0,
+        })
+      } else {
+        setPriorYear(null)
+      }
 
       const soc = societes.find(s => s.id === selectedSociete)
       const ar = arRes.annual_returns?.[0]
@@ -1107,23 +1137,38 @@ export default function AnnualReturnPage() {
                   </div>
                 </div>
 
-                {/* Summary Cards */}
+                {/* Summary Cards with comparative figures */}
                 <div className="border-t pt-4">
                   <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                     {[
-                      { label: "Revenue", value: data.total_revenue, color: "#16a34a" },
-                      { label: "Expenses", value: data.total_expenses, color: "#dc2626" },
-                      { label: "Net Profit", value: data.net_profit, color: data.net_profit >= 0 ? "#16a34a" : "#dc2626" },
-                      { label: "Assets", value: data.total_assets, color: NAVY },
-                      { label: "Liabilities", value: data.total_liabilities, color: "#9333ea" },
-                    ].map(item => (
-                      <div key={item.label} className="bg-gray-50 rounded-lg p-3 text-center">
-                        <p className="text-xs text-gray-500">{item.label}</p>
-                        <p className="text-sm font-bold mt-1" style={{ color: item.color }}>
-                          {formatMUR(item.value)} MUR
-                        </p>
-                      </div>
-                    ))}
+                      { label: "Revenue", value: data.total_revenue, prev: priorYear?.total_revenue, color: "#16a34a" },
+                      { label: "Expenses", value: data.total_expenses, prev: priorYear?.total_expenses, color: "#dc2626" },
+                      { label: "Net Profit", value: data.net_profit, prev: priorYear?.net_profit, color: data.net_profit >= 0 ? "#16a34a" : "#dc2626" },
+                      { label: "Assets", value: data.total_assets, prev: priorYear?.total_assets, color: NAVY },
+                      { label: "Liabilities", value: data.total_liabilities, prev: priorYear?.total_liabilities, color: "#9333ea" },
+                    ].map(item => {
+                      const variance = (item.prev !== undefined && item.prev !== 0)
+                        ? ((item.value - item.prev) / Math.abs(item.prev)) * 100
+                        : null
+                      return (
+                        <div key={item.label} className="bg-gray-50 rounded-lg p-3 text-center">
+                          <p className="text-xs text-gray-500">{item.label}</p>
+                          <p className="text-sm font-bold mt-1" style={{ color: item.color }}>
+                            {formatMUR(item.value)} MUR
+                          </p>
+                          {item.prev !== undefined && (
+                            <div className="mt-1">
+                              <p className="text-xs text-gray-400">Prior: {formatMUR(item.prev)}</p>
+                              {variance !== null && (
+                                <p className="text-xs font-mono" style={{ color: variance >= 0 ? "#16a34a" : "#dc2626" }}>
+                                  {variance >= 0 ? "+" : ""}{variance.toFixed(1)}%
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               </CardContent>

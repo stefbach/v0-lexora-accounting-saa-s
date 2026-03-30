@@ -26,6 +26,16 @@ export default function ClientGrandLivrePage() {
   const [dateDebut, setDateDebut] = useState("")
   const [dateFin, setDateFin] = useState("")
   const [journal, setJournal] = useState("all")
+  const [exercice, setExercice] = useState("")
+
+  // Available exercices (Mauritius fiscal year July-June)
+  const currentYear = new Date().getFullYear()
+  const currentMonth = new Date().getMonth() + 1
+  const currentExStart = currentMonth >= 7 ? currentYear : currentYear - 1
+  const availableExercices = Array.from({ length: 5 }, (_, i) => {
+    const s = currentExStart - i
+    return `${s}-${s + 1}`
+  })
 
   useEffect(() => {
     fetch("/api/comptable/societes").then(r => r.json()).then(d => {
@@ -45,16 +55,19 @@ export default function ClientGrandLivrePage() {
       if (dateDebut) params.set("date_debut", dateDebut)
       if (dateFin) params.set("date_fin", dateFin)
       if (journal && journal !== "all") params.set("journal", journal)
+      if (exercice) params.set("exercice", exercice)
       const res = await fetch(`/api/comptable/grand-livre?${params}`)
       setData(await res.json())
     } catch { setData(null) }
     finally { setLoading(false) }
-  }, [selectedSociete, page, compteDebut, compteFin, dateDebut, dateFin, journal])
+  }, [selectedSociete, page, compteDebut, compteFin, dateDebut, dateFin, journal, exercice])
 
   useEffect(() => { load() }, [load])
 
   const ecritures = data?.ecritures || []
   const lettrage = data?.lettrage || { lettrees: 0, non_lettrees: 0, total: 0 }
+  const soldeOuvertureParCompte: Record<string, number> = data?.solde_ouverture_par_compte || {}
+  const hasSoldeOuverture = Object.keys(soldeOuvertureParCompte).length > 0
 
   const exportCSV = () => {
     if (!ecritures.length) return
@@ -86,7 +99,7 @@ export default function ClientGrandLivrePage() {
 
       {/* Filtres */}
       <Card>
-        <CardContent className="p-4 grid grid-cols-2 md:grid-cols-6 gap-3">
+        <CardContent className="p-4 grid grid-cols-2 md:grid-cols-7 gap-3">
           <div>
             <Label className="text-xs">Societe</Label>
             <Select value={selectedSociete} onValueChange={v => { setSelectedSociete(v); setPage(1) }}>
@@ -94,6 +107,16 @@ export default function ClientGrandLivrePage() {
               <SelectContent>
                 <SelectItem value="all">-- Choisir --</SelectItem>
                 {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">Exercice</Label>
+            <Select value={exercice || "all"} onValueChange={v => { setExercice(v === "all" ? "" : v); setPage(1) }}>
+              <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous</SelectItem>
+                {availableExercices.map(ex => <SelectItem key={ex} value={ex}>{ex}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -127,10 +150,19 @@ export default function ClientGrandLivrePage() {
       ) : (
         <>
           {/* KPIs */}
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-5 gap-4">
+            {hasSoldeOuverture && (
+              <Card className="border-l-4 border-l-[#C9A84C]">
+                <CardContent className="p-4">
+                  <p className="text-xs text-gray-500">Report a nouveau</p>
+                  <p className={`text-xl font-bold ${data.solde_ouverture >= 0 ? "text-[#C9A84C]" : "text-red-600"}`}>{fmt(data.solde_ouverture)} MUR</p>
+                  <p className="text-xs text-gray-400">{Object.keys(soldeOuvertureParCompte).length} comptes</p>
+                </CardContent>
+              </Card>
+            )}
             <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Total Debit</p><p className="text-xl font-bold text-blue-700">{fmt(data.total_debit)} MUR</p></CardContent></Card>
             <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Total Credit</p><p className="text-xl font-bold text-purple-700">{fmt(data.total_credit)} MUR</p></CardContent></Card>
-            <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Solde</p><p className={`text-xl font-bold ${data.solde_cloture >= 0 ? "text-green-700" : "text-red-600"}`}>{fmt(Math.abs(data.solde_cloture))} MUR</p></CardContent></Card>
+            <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Solde Cloture</p><p className={`text-xl font-bold ${data.solde_cloture >= 0 ? "text-green-700" : "text-red-600"}`}>{fmt(Math.abs(data.solde_cloture))} MUR</p></CardContent></Card>
             <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Lettrage</p><p className="text-xl font-bold text-[#1E2A4A]">{lettrage.lettrees} / {lettrage.total}</p><p className="text-xs text-gray-400">{lettrage.non_lettrees} non lettrees</p></CardContent></Card>
           </div>
 
@@ -172,6 +204,51 @@ export default function ClientGrandLivrePage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
+                      {/* Opening balance rows when exercice is selected */}
+                      {hasSoldeOuverture && page === 1 && (() => {
+                        // Find unique accounts in current page ecritures that have opening balances
+                        const accountsShown = new Set<string>()
+                        const openingRows: { compte: string; solde: number }[] = []
+                        for (const e of ecritures) {
+                          if (!accountsShown.has(e.numero_compte) && soldeOuvertureParCompte[e.numero_compte] !== undefined) {
+                            accountsShown.add(e.numero_compte)
+                            openingRows.push({ compte: e.numero_compte, solde: soldeOuvertureParCompte[e.numero_compte] })
+                          }
+                        }
+                        // Also add accounts that have opening balances but no entries in this period
+                        for (const [compte, solde] of Object.entries(soldeOuvertureParCompte)) {
+                          if (!accountsShown.has(compte) && solde !== 0) {
+                            openingRows.push({ compte, solde })
+                          }
+                        }
+                        openingRows.sort((a, b) => a.compte.localeCompare(b.compte))
+                        if (openingRows.length === 0) return null
+                        return (
+                          <>
+                            <TableRow className="bg-[#C9A84C]/10 border-b-2 border-[#C9A84C]/30">
+                              <TableCell colSpan={9} className="text-xs font-bold text-[#1E2A4A] py-2">
+                                Report a nouveau (soldes d&apos;ouverture)
+                              </TableCell>
+                            </TableRow>
+                            {openingRows.map(row => (
+                              <TableRow key={`opening-${row.compte}`} className="bg-[#C9A84C]/5">
+                                <TableCell className="text-xs font-mono whitespace-nowrap text-gray-400">Ouverture</TableCell>
+                                <TableCell><Badge variant="outline" className="text-[10px] px-1 py-0 border-[#C9A84C] text-[#C9A84C]">RAN</Badge></TableCell>
+                                <TableCell className="text-xs font-mono text-gray-400">--</TableCell>
+                                <TableCell className="text-xs font-mono font-semibold text-[#1E2A4A]">{row.compte}</TableCell>
+                                <TableCell className="text-xs text-gray-500 italic">Solde d&apos;ouverture (report a nouveau)</TableCell>
+                                <TableCell className="text-xs text-right font-mono">{row.solde > 0 ? <span className="text-blue-700">{fmt(row.solde)}</span> : "—"}</TableCell>
+                                <TableCell className="text-xs text-right font-mono">{row.solde < 0 ? <span className="text-purple-700">{fmt(Math.abs(row.solde))}</span> : "—"}</TableCell>
+                                <TableCell className={`text-xs text-right font-mono ${row.solde >= 0 ? "text-green-700" : "text-red-600"}`}>{fmt(row.solde)}</TableCell>
+                                <TableCell><span className="text-gray-300">—</span></TableCell>
+                              </TableRow>
+                            ))}
+                            <TableRow className="border-b-2 border-[#1E2A4A]/20">
+                              <TableCell colSpan={9} className="py-0.5" />
+                            </TableRow>
+                          </>
+                        )
+                      })()}
                       {ecritures.map((e: any, idx: number) => (
                         <TableRow key={e.id} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50/50"}>
                           <TableCell className="text-xs font-mono whitespace-nowrap">{fmtDate(e.date_ecriture)}</TableCell>

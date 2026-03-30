@@ -26,11 +26,27 @@ export async function GET(request: Request) {
     const date_debut   = searchParams.get('date_debut')
     const date_fin     = searchParams.get('date_fin')
     const journal      = searchParams.get('journal')
+    const exercice     = searchParams.get('exercice')
     const page         = parseInt(searchParams.get('page') || '1', 10)
     const limit        = parseInt(searchParams.get('limit') || '50', 10)
     const offset       = (page - 1) * limit
 
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
+
+    // Parse exercice to date range if provided (e.g., "2025-2026" = July 2025 to June 2026)
+    let exerciceDateDebut: string | null = null
+    let exerciceDateFin: string | null = null
+    if (exercice) {
+      const match = exercice.match(/^(\d{4})-(\d{4})$/)
+      if (match) {
+        exerciceDateDebut = `${match[1]}-07-01`
+        exerciceDateFin = `${match[2]}-06-30`
+      }
+    }
+
+    // Use exercice dates as defaults if date_debut/date_fin not explicitly set
+    const effectiveDateDebut = date_debut || exerciceDateDebut
+    const effectiveDateFin = date_fin || exerciceDateFin
 
     let allEntries: any[] = []
     let useV2 = false
@@ -42,8 +58,8 @@ export async function GET(request: Request) {
       .eq('societe_id', societe_id).order('numero_compte').order('date_ecriture').order('id')
     if (compte_debut) v2Query = v2Query.gte('numero_compte', compte_debut)
     if (compte_fin)   v2Query = v2Query.lte('numero_compte', compte_fin)
-    if (date_debut)   v2Query = v2Query.gte('date_ecriture', date_debut)
-    if (date_fin)     v2Query = v2Query.lte('date_ecriture', date_fin)
+    if (effectiveDateDebut) v2Query = v2Query.gte('date_ecriture', effectiveDateDebut)
+    if (effectiveDateFin)   v2Query = v2Query.lte('date_ecriture', effectiveDateFin)
     if (journal)      v2Query = v2Query.eq('journal', journal)
 
     let { data: v2Data, error: v2Err } = await v2Query
@@ -54,8 +70,8 @@ export async function GET(request: Request) {
         .eq('societe_id', societe_id).order('numero_compte').order('date_ecriture').order('id')
       if (compte_debut) v2Fallback = v2Fallback.gte('numero_compte', compte_debut)
       if (compte_fin)   v2Fallback = v2Fallback.lte('numero_compte', compte_fin)
-      if (date_debut)   v2Fallback = v2Fallback.gte('date_ecriture', date_debut)
-      if (date_fin)     v2Fallback = v2Fallback.lte('date_ecriture', date_fin)
+      if (effectiveDateDebut) v2Fallback = v2Fallback.gte('date_ecriture', effectiveDateDebut)
+      if (effectiveDateFin)   v2Fallback = v2Fallback.lte('date_ecriture', effectiveDateFin)
       if (journal)      v2Fallback = v2Fallback.eq('journal', journal)
       const fb = await v2Fallback
       v2Data = fb.data
@@ -87,8 +103,8 @@ export async function GET(request: Request) {
 
         if (compte_debut) v1Query = v1Query.gte('compte', compte_debut)
         if (compte_fin)   v1Query = v1Query.lte('compte', compte_fin)
-        if (date_debut)   v1Query = v1Query.gte('date_ecriture', date_debut)
-        if (date_fin)     v1Query = v1Query.lte('date_ecriture', date_fin)
+        if (effectiveDateDebut) v1Query = v1Query.gte('date_ecriture', effectiveDateDebut)
+        if (effectiveDateFin)   v1Query = v1Query.lte('date_ecriture', effectiveDateFin)
         if (journal)      v1Query = v1Query.eq('journal', journal)
 
         let { data: v1Data, error: v1Err } = await v1Query
@@ -104,8 +120,8 @@ export async function GET(request: Request) {
 
           if (compte_debut) v1FallbackQuery = v1FallbackQuery.gte('compte', compte_debut)
           if (compte_fin)   v1FallbackQuery = v1FallbackQuery.lte('compte', compte_fin)
-          if (date_debut)   v1FallbackQuery = v1FallbackQuery.gte('date_ecriture', date_debut)
-          if (date_fin)     v1FallbackQuery = v1FallbackQuery.lte('date_ecriture', date_fin)
+          if (effectiveDateDebut) v1FallbackQuery = v1FallbackQuery.gte('date_ecriture', effectiveDateDebut)
+          if (effectiveDateFin)   v1FallbackQuery = v1FallbackQuery.lte('date_ecriture', effectiveDateFin)
           if (journal)      v1FallbackQuery = v1FallbackQuery.eq('journal', journal)
 
           const fallback = await v1FallbackQuery
@@ -124,8 +140,54 @@ export async function GET(request: Request) {
       }
     }
 
-    // Progressive balance per account
-    const soldesParCompte: Record<string, number> = {}
+    // Compute opening balances (report a nouveau) from prior year entries
+    // Only for balance sheet accounts (classes 1-5) - P&L accounts (6, 7) reset each year
+    const soldeOuvertureParCompte: Record<string, number> = {}
+
+    if (effectiveDateDebut) {
+      // Fetch all entries BEFORE the start date to compute opening balances
+      let priorV2Query = supabase.from('ecritures_comptables_v2')
+        .select('numero_compte, debit_mur, credit_mur')
+        .eq('societe_id', societe_id)
+        .lt('date_ecriture', effectiveDateDebut)
+      if (compte_debut) priorV2Query = priorV2Query.gte('numero_compte', compte_debut)
+      if (compte_fin) priorV2Query = priorV2Query.lte('numero_compte', compte_fin)
+
+      const { data: priorV2Data } = await priorV2Query
+      let priorEntries: any[] = priorV2Data || []
+
+      // V1 fallback for prior entries
+      if (priorEntries.length === 0) {
+        const { data: dossiers } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id)
+        const dossierIds = (dossiers || []).map((d: any) => d.id)
+        if (dossierIds.length > 0) {
+          let priorV1Query = supabase.from('ecritures_comptables')
+            .select('compte, debit, credit')
+            .in('dossier_id', dossierIds)
+            .lt('date_ecriture', effectiveDateDebut)
+          if (compte_debut) priorV1Query = priorV1Query.gte('compte', compte_debut)
+          if (compte_fin) priorV1Query = priorV1Query.lte('compte', compte_fin)
+          const { data: priorV1Data } = await priorV1Query
+          priorEntries = (priorV1Data || []).map((e: any) => ({
+            numero_compte: e.compte, debit_mur: Number(e.debit) || 0, credit_mur: Number(e.credit) || 0
+          }))
+        }
+      }
+
+      // Aggregate opening balances per account (only balance sheet accounts: classes 1-5)
+      for (const e of priorEntries) {
+        const compte = e.numero_compte
+        if (!compte) continue
+        const firstChar = compte.charAt(0)
+        // Only carry forward balance sheet accounts (1-5), not P&L (6, 7)
+        if (firstChar >= '1' && firstChar <= '5') {
+          soldeOuvertureParCompte[compte] = (soldeOuvertureParCompte[compte] || 0) + (Number(e.debit_mur) || 0) - (Number(e.credit_mur) || 0)
+        }
+      }
+    }
+
+    // Progressive balance per account (starting from opening balance)
+    const soldesParCompte: Record<string, number> = { ...soldeOuvertureParCompte }
     const soldesProgressifs: Record<string, number> = {}
     for (const e of allEntries) {
       if (!(e.numero_compte in soldesParCompte)) soldesParCompte[e.numero_compte] = 0
@@ -146,11 +208,17 @@ export async function GET(request: Request) {
 
     const lettrees = allEntries.filter(e => !!e.lettre).length
 
+    // Compute total opening balance
+    const totalSoldeOuverture = Object.values(soldeOuvertureParCompte).reduce((s, v) => s + v, 0)
+
     return NextResponse.json({
       ecritures: pagedEntries, total_debit, total_credit,
-      solde_ouverture: 0, solde_cloture: total_debit - total_credit,
+      solde_ouverture: totalSoldeOuverture,
+      solde_ouverture_par_compte: soldeOuvertureParCompte,
+      solde_cloture: totalSoldeOuverture + total_debit - total_credit,
       total, page, limit, pages, source: useV2 ? 'v2' : 'v1',
       lettrage: { lettrees, non_lettrees: total - lettrees, total },
+      exercice: exercice || null,
     })
   } catch (e: unknown) {
     console.error('[grand-livre]', e)
