@@ -7,6 +7,8 @@ import { createClient } from "@/lib/supabase/client"
 import { useProfile } from "@/hooks/use-profile"
 import { Button } from "@/components/ui/button"
 import { useState, useEffect } from "react"
+import { t, getLocale } from "@/lib/i18n"
+import { LanguageSwitcher } from "@/components/LanguageSwitcher"
 import {
   LayoutDashboard,
   Users,
@@ -34,38 +36,40 @@ const GOLD = "#C9A84C"
 interface NavItem {
   href: string
   label: string
+  labelKey?: string
   icon: React.ComponentType<{ className?: string }>
 }
 
 interface NavSection {
   title: string
+  titleKey?: string
   items: NavItem[]
 }
 
 const SECTIONS: NavSection[] = [
   {
-    title: "Mon Cabinet",
+    title: "Mon Cabinet", titleKey: "comptable.my_firm",
     items: [
-      { href: "/comptable", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/comptable/clients", label: "Mes Clients", icon: Users },
-      { href: "/comptable/equipe", label: "Mon Equipe", icon: UsersRound },
+      { href: "/comptable", label: "Dashboard", labelKey: "admin.dashboard", icon: LayoutDashboard },
+      { href: "/comptable/clients", label: "Mes Clients", labelKey: "comptable.my_clients", icon: Users },
+      { href: "/comptable/equipe", label: "Mon Equipe", labelKey: "comptable.my_team", icon: UsersRound },
     ],
   },
   {
-    title: "Comptabilite",
+    title: "Comptabilite", titleKey: "acc.accounting",
     items: [
-      { href: "/comptable/documents", label: "Documents & OCR", icon: FileText },
-      { href: "/comptable/banque", label: "Banque & Rapprochement", icon: Landmark },
-      { href: "/comptable/tva", label: "TVA MRA", icon: Receipt },
-      { href: "/comptable/factures-clients", label: "Factures", icon: FileSpreadsheet },
+      { href: "/comptable/documents", label: "Documents & OCR", labelKey: "nav.documents", icon: FileText },
+      { href: "/comptable/banque", label: "Banque & Rapprochement", labelKey: "comptable.bank_reconciliation", icon: Landmark },
+      { href: "/comptable/tva", label: "TVA MRA", labelKey: "tax.vat", icon: Receipt },
+      { href: "/comptable/factures-clients", label: "Factures", labelKey: "comptable.invoices", icon: FileSpreadsheet },
     ],
   },
   {
-    title: "Fiscal",
+    title: "Fiscal", titleKey: "comptable.fiscal",
     items: [
-      { href: "/comptable/charges-sociales", label: "Charges Sociales", icon: Calculator },
-      { href: "/comptable/interco", label: "INTERCO", icon: Globe },
-      { href: "/comptable/alertes", label: "Alertes", icon: AlertTriangle },
+      { href: "/comptable/charges-sociales", label: "Charges Sociales", labelKey: "comptable.social_charges", icon: Calculator },
+      { href: "/comptable/interco", label: "INTERCO", labelKey: "comptable.interco", icon: Globe },
+      { href: "/comptable/alertes", label: "Alertes", labelKey: "nav.alerts", icon: AlertTriangle },
     ],
   },
 ]
@@ -73,12 +77,12 @@ const SECTIONS: NavSection[] = [
 function buildSocieteSection(clientId: string, societeId: string): NavSection {
   const base = `/comptable/clients/${clientId}/${societeId}`
   return {
-    title: "Societe",
+    title: "Societe", titleKey: "comptable.company",
     items: [
-      { href: `${base}`, label: "Vue d'ensemble", icon: LayoutDashboard },
-      { href: `${base}/grand-livre`, label: "Grand Livre", icon: BookOpen },
-      { href: `${base}/balance`, label: "Balance", icon: Calculator },
-      { href: `${base}/bilan`, label: "Bilan & P&L", icon: FileSpreadsheet },
+      { href: `${base}`, label: "Vue d'ensemble", labelKey: "comptable.overview", icon: LayoutDashboard },
+      { href: `${base}/grand-livre`, label: "Grand Livre", labelKey: "fin.general_ledger", icon: BookOpen },
+      { href: `${base}/balance`, label: "Balance", labelKey: "comptable.balance", icon: Calculator },
+      { href: `${base}/bilan`, label: "Bilan & P&L", labelKey: "fin.balance_sheet", icon: FileSpreadsheet },
     ],
   }
 }
@@ -88,6 +92,7 @@ export function ComptableSidebarNew() {
   const rawParams = useParams() as Record<string, string>
   const router = useRouter()
   const { profile } = useProfile()
+  const locale = getLocale()
   const [collapsed, setCollapsed] = useState(false)
   const [collapsedSections, setCollapsedSections] = useState<string[]>([])
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -198,7 +203,7 @@ export function ComptableSidebarNew() {
                   )}
                   style={hasActive ? { color: GOLD } : undefined}
                 >
-                  <span>{section.title}</span>
+                  <span>{section.titleKey ? t(section.titleKey, locale) : section.title}</span>
                   {isSectionCollapsed ? (
                     <ChevronRight className="w-3 h-3" />
                   ) : (
@@ -229,7 +234,7 @@ export function ComptableSidebarNew() {
                         }
                       >
                         <Icon className="w-4 h-4 flex-shrink-0" />
-                        {!collapsed && <span className="truncate">{item.label}</span>}
+                        {!collapsed && <span className="truncate">{item.labelKey ? t(item.labelKey, locale) : item.label}</span>}
                       </Link>
                     )
                   })}
@@ -242,6 +247,11 @@ export function ComptableSidebarNew() {
 
       {/* Footer */}
       <div className="border-t border-white/10 p-3 flex-shrink-0 space-y-1">
+        {!collapsed && (
+          <div className="flex justify-center mb-2">
+            <LanguageSwitcher />
+          </div>
+        )}
         <Button
           variant="ghost"
           size="sm"
@@ -253,14 +263,14 @@ export function ComptableSidebarNew() {
           ) : (
             <ChevronLeft className="h-4 w-4" />
           )}
-          {!collapsed && <span className="ml-2">Reduire</span>}
+          {!collapsed && <span className="ml-2">{t('comptable.collapse', locale)}</span>}
         </Button>
         <Link
           href="/profil"
           className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-white/50 hover:bg-white/10 hover:text-white text-sm transition-colors"
         >
           <Settings className="w-4 h-4" />
-          {!collapsed && <span>Mon profil</span>}
+          {!collapsed && <span>{t('account.my_profile', locale)}</span>}
         </Link>
         <button
           onClick={handleSignOut}
@@ -270,7 +280,7 @@ export function ComptableSidebarNew() {
           )}
         >
           <LogOut className="w-4 h-4" />
-          {!collapsed && <span>Deconnexion</span>}
+          {!collapsed && <span>{t('common.logout', locale)}</span>}
         </button>
       </div>
     </aside>

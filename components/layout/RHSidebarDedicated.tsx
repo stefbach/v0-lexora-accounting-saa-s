@@ -4,23 +4,26 @@ import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
+import { t, getLocale } from "@/lib/i18n"
+import { LanguageSwitcher } from "@/components/LanguageSwitcher"
 import { Clock, Users, Calendar, CreditCard, TrendingUp, FileText, Banknote, Gavel, Receipt, Settings, LogOut, ArrowLeft, Menu, X } from "lucide-react"
 
 const LINKS = [
-  { href: '/rh', label: 'Tableau de bord', icon: Clock, exact: true },
-  { href: '/rh/employes', label: 'Employés', icon: Users },
-  { href: '/rh/pointage', label: 'Pointage', icon: Clock },
-  { href: '/rh/conges', label: 'Absences & Congés', icon: Calendar },
-  { href: '/rh/paie', label: 'Paie & Bulletins', icon: CreditCard },
-  { href: '/rh/paie/primes', label: 'Primes & OT', icon: TrendingUp },
-  { href: '/rh/paie/exports-mra', label: 'Exports MRA', icon: FileText },
-  { href: '/rh/exports/virement', label: 'Virements bancaires', icon: Banknote },
-  { href: '/rh/paie/parametres', label: 'Paramètres paie', icon: Settings },
+  { href: '/rh', label: 'Tableau de bord', labelKey: 'nav.dashboard', icon: Clock, exact: true },
+  { href: '/rh/employes', label: 'Employés', labelKey: 'hr.employees', icon: Users },
+  { href: '/rh/pointage', label: 'Pointage', labelKey: 'hr.time_clock', icon: Clock },
+  { href: '/rh/conges', label: 'Absences & Congés', labelKey: 'rh.absences_leave', icon: Calendar },
+  { href: '/rh/paie', label: 'Paie & Bulletins', labelKey: 'hr.payslips', icon: CreditCard },
+  { href: '/rh/paie/primes', label: 'Primes & OT', labelKey: 'rh.bonuses_ot', icon: TrendingUp },
+  { href: '/rh/paie/exports-mra', label: 'Exports MRA', labelKey: 'rh.exports_mra', icon: FileText },
+  { href: '/rh/exports/virement', label: 'Virements bancaires', labelKey: 'rh.bank_transfers', icon: Banknote },
+  { href: '/rh/paie/parametres', label: 'Paramètres paie', labelKey: 'rh.payroll_settings', icon: Settings },
 ]
 
 export function RHSidebarDedicated() {
   const pathname = usePathname()
   const router = useRouter()
+  const locale = getLocale()
   const [mobileOpen, setMobileOpen] = useState(false)
 
   // Close sidebar on navigation
@@ -58,7 +61,7 @@ export function RHSidebarDedicated() {
           </div>
           <div>
             <p className="text-white font-bold text-base leading-tight">LEXORA</p>
-            <p className="text-white/40 text-xs">Module RH & Paie</p>
+            <p className="text-white/40 text-xs">{t('rh.module_title', locale)}</p>
           </div>
         </div>
       </div>
@@ -67,7 +70,7 @@ export function RHSidebarDedicated() {
         <Link href="/client/tableau-de-bord"
           className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[#C9A84C] hover:bg-[#C9A84C]/20 text-sm transition-colors mb-3 border border-[#C9A84C]/30">
           <ArrowLeft className="w-4 h-4 flex-shrink-0" />
-          <span>Retour espace client</span>
+          <span>{t('rh.back_client', locale)}</span>
         </Link>
         <div className="border-b border-white/10 mb-2" />
         {LINKS.map(l => {
@@ -79,17 +82,20 @@ export function RHSidebarDedicated() {
                 active ? "bg-[#C9A84C] text-[#1E2A4A] font-semibold" : "text-white/70 hover:bg-white/10 hover:text-white"
               )}>
               <Icon className="w-4 h-4 flex-shrink-0" />
-              <span>{l.label}</span>
+              <span>{l.labelKey ? t(l.labelKey, locale) : l.label}</span>
             </Link>
           )
         })}
       </nav>
       <div className="p-3 border-t border-white/10 space-y-1">
+        <div className="flex justify-center mb-2">
+          <LanguageSwitcher />
+        </div>
         <Link href="/profil" className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-white/50 hover:bg-white/10 hover:text-white text-sm transition-colors">
-          <Settings className="w-4 h-4" /><span>Mon profil</span>
+          <Settings className="w-4 h-4" /><span>{t('account.my_profile', locale)}</span>
         </Link>
         <button onClick={handleLogout} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-white/50 hover:bg-red-500/20 hover:text-red-400 text-sm transition-colors">
-          <LogOut className="w-4 h-4" /><span>Déconnexion</span>
+          <LogOut className="w-4 h-4" /><span>{t('common.logout', locale)}</span>
         </button>
       </div>
     </aside>

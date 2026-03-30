@@ -22,21 +22,21 @@ import {
 
 const MENU = [
   {
-    section: "Administration",
+    section: "Administration", sectionKey: "admin.administration",
     items: [
-      { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
-      { href: "/admin/users", label: "Utilisateurs", icon: Users },
-      { href: "/admin/clients", label: "Clients", icon: Briefcase },
-      { href: "/admin/comptables", label: "Comptables", icon: UserCog },
-      { href: "/admin/societes", label: "Societes", icon: Building2 },
-      { href: "/admin/documents", label: "Documents", icon: FileText },
-      { href: "/admin/services", label: "Services & Plans", icon: Settings },
+      { href: "/admin", label: "Dashboard", labelKey: "admin.dashboard", icon: LayoutDashboard, exact: true },
+      { href: "/admin/users", label: "Utilisateurs", labelKey: "admin.users", icon: Users },
+      { href: "/admin/clients", label: "Clients", labelKey: "admin.clients", icon: Briefcase },
+      { href: "/admin/comptables", label: "Comptables", labelKey: "admin.accountants", icon: UserCog },
+      { href: "/admin/societes", label: "Societes", labelKey: "admin.companies", icon: Building2 },
+      { href: "/admin/documents", label: "Documents", labelKey: "admin.documents", icon: FileText },
+      { href: "/admin/services", label: "Services & Plans", labelKey: "admin.services", icon: Settings },
     ],
   },
   {
-    section: "Parametres",
+    section: "Parametres", sectionKey: "admin.settings_section",
     items: [
-      { href: "/admin/parametres", label: "Configuration", icon: Settings },
+      { href: "/admin/parametres", label: "Configuration", labelKey: "admin.configuration", icon: Settings },
     ],
   },
 ]
@@ -44,6 +44,7 @@ const MENU = [
 export function AdminSidebar() {
   const pathname = usePathname()
   const router = useRouter()
+  const locale = getLocale()
   const [mobileOpen, setMobileOpen] = useState(false)
 
   // Close sidebar on navigation
@@ -84,20 +85,20 @@ export function AdminSidebar() {
           </div>
           <div>
             <p className="text-white font-bold text-base leading-tight">LEXORA</p>
-            <p className="text-white/40 text-xs">Administration</p>
+            <p className="text-white/40 text-xs">{t('admin.administration', locale)}</p>
           </div>
         </Link>
       </div>
 
       {/* Navigation */}
       <nav className="flex-1 p-3 space-y-4">
-        {MENU.map(({ section, items }) => (
+        {MENU.map(({ section, sectionKey, items }) => (
           <div key={section}>
             <p className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-white/40">
-              {section}
+              {sectionKey ? t(sectionKey, locale) : section}
             </p>
             <div className="mt-1 space-y-0.5">
-              {items.map((item) => {
+              {items.map((item: any) => {
                 const Icon = item.icon
                 const active = isActive(item.href, item.exact)
                 return (
@@ -112,7 +113,7 @@ export function AdminSidebar() {
                     )}
                   >
                     <Icon className="w-4 h-4 flex-shrink-0" />
-                    <span className="truncate">{item.label}</span>
+                    <span className="truncate">{item.labelKey ? t(item.labelKey, locale) : item.label}</span>
                   </Link>
                 )
               })}
@@ -122,13 +123,16 @@ export function AdminSidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="p-3 border-t border-white/10 flex-shrink-0">
+      <div className="p-3 border-t border-white/10 flex-shrink-0 space-y-2">
+        <div className="flex justify-center">
+          <LanguageSwitcher />
+        </div>
         <button
           onClick={handleLogout}
           className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-white/50 hover:bg-red-500/20 hover:text-red-400 text-sm transition-colors"
         >
           <LogOut className="w-4 h-4" />
-          <span>Deconnexion</span>
+          <span>{t('common.logout', locale)}</span>
         </button>
       </div>
     </aside>

@@ -1,7 +1,11 @@
+"use client"
+
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { t, getLocale } from "@/lib/i18n"
+import { LanguageSwitcherLight } from "@/components/LanguageSwitcher"
 import {
   FileSearch,
   BookOpen,
@@ -23,143 +27,111 @@ import {
   CheckCircle2,
 } from "lucide-react"
 
-const features = [
-  {
-    icon: FileSearch,
-    title: "OCR & Documents IA",
-    items: [
-      "Upload PDF/Excel : l'IA analyse, classe et genere les ecritures automatiquement",
-      "Reconnaissance factures, releves bancaires, fiches paie",
-    ],
-  },
-  {
-    icon: BookOpen,
-    title: "Comptabilite Automatisee",
-    items: [
-      "Grand Livre, Balance, Bilan & P&L avec comparatif N/N-1",
-      "Rapprochement bancaire auto, lettrage intelligent",
-      "Multi-devises avec taux de change en temps reel (IAS 21)",
-    ],
-  },
-  {
-    icon: FileText,
-    title: "Facturation MRA",
-    items: [
-      "Factures conformes MRA avec fiscalisation electronique (IRN + QR Code)",
-      "Multi-devises EUR/USD/GBP, avoirs et notes de debit",
-      "Templates personnalisables avec palette de couleurs",
-    ],
-  },
-  {
-    icon: Users,
-    title: "RH & Paie Maurice",
-    items: [
-      "Bulletins de paie conformes (CSG/NSF/PAYE/PRGF)",
-      "Pointeuse digitale, planning, conges (Workers' Rights Act 2019)",
-      "Exports virements bancaires MCB/SBM + declarations MRA",
-    ],
-  },
-  {
-    icon: Landmark,
-    title: "Fiscal MRA",
-    items: [
-      "IT Form 3 (Return of Income) auto-rempli",
-      "Annual Return ROC auto-rempli",
-      "TVA 9-Box, CSG/NSF/PAYE, APS",
-      "Calendrier des echeances fiscales",
-    ],
-  },
-  {
-    icon: BellRing,
-    title: "Alertes IA & Pilotage",
-    items: [
-      "Agent IA qui surveille les echeances fiscales",
-      "Alertes WhatsApp et email automatiques",
-      "Previsionnel intelligent : Budget vs Reel, BFR, Tresorerie",
-      "Recommandations strategiques IA",
-    ],
-  },
-]
-
-const aiCapabilities = [
-  { icon: Brain, text: "OCR intelligent (Claude) pour l'analyse documentaire" },
-  { icon: MessageSquare, text: "Chat CLARA : assistante RH specialisee droit du travail mauricien" },
-  { icon: GitCompareArrows, text: "Rapprochement bancaire automatique par matching intelligent" },
-  { icon: Sparkles, text: "Primes IA : decrivez en langage naturel, le systeme cree les regles" },
-  { icon: CalendarClock, text: "Planning IA : decrivez vos besoins, le planning se construit" },
-  { icon: Bot, text: "Alertes proactives pour le comptable et ses clients" },
-]
-
-const plans = [
-  {
-    name: "Premium", description: "Tout inclus", highlight: true,
-    features: [
-      "Documents & OCR IA illimites",
-      "Comptabilite complete (Grand Livre, Bilan, P&L)",
-      "Banque & Rapprochement automatique",
-      "Facturation MRA e-Invoicing (IRN + QR Code)",
-      "RH & Paie (bulletins, pointeuse, conges, primes)",
-      "Exports MRA (TVA, CSG/NSF, PAYE, PRGF)",
-      "IT Form 3 & Annual Return ROC auto-remplis",
-      "Agent IA alertes fiscales & comptables",
-      "Chat CLARA assistante RH",
-      "Previsionnel & pilotage strategique",
-      "Multi-devises taux temps reel (IAS 21)",
-      "Comptes courants associes",
-      "Utilisateurs illimites",
-    ],
-  },
-  {
-    name: "Comptabilite", description: "Module compta", highlight: false,
-    features: [
-      "Documents & OCR IA illimites",
-      "Grand Livre, Balance, Bilan & P&L comparatif",
-      "Banque & Rapprochement automatique",
-      "Facturation MRA e-Invoicing",
-      "Exports MRA (TVA, CSG/NSF)",
-      "IT Form 3 & Annual Return ROC",
-      "Multi-devises taux temps reel",
-      "Previsionnel & echeances",
-      "Agent IA alertes comptables",
-    ],
-  },
-  {
-    name: "RH & Paie", description: "Module RH", highlight: false,
-    features: [
-      "Fiche employe complete (9 onglets)",
-      "Elaboration paie 6 etapes",
-      "Bulletins conformes Maurice",
-      "Pointeuse digitale & planning IA",
-      "Conges (AL, SL, MAT, PAT — WRA 2019)",
-      "Primes IA regles configurables",
-      "Exports virements MCB/SBM",
-      "Declarations MRA (CSG, PAYE, PRGF)",
-      "Chat CLARA assistante RH",
-      "Import Excel employes & paie",
-    ],
-  },
-  {
-    name: "Compta + RH", description: "Les deux modules", highlight: false,
-    features: [
-      "Tous les modules Comptabilite",
-      "Tous les modules RH & Paie",
-      "Facturation MRA complete",
-      "Agent IA alertes fiscales & sociales",
-      "Previsionnel & pilotage",
-      "Multi-devises & taux temps reel",
-    ],
-  },
-]
-
-const compliance = [
-  { icon: Landmark, label: "MRA (Mauritius Revenue Authority)" },
-  { icon: Scale, label: "Workers' Rights Act 2019" },
-  { icon: Building2, label: "Companies Act (ROC)" },
-  { icon: BookOpen, label: "IFRS for SMEs" },
-  { icon: Globe, label: "IAS 21 (multi-devises)" },
-]
-
 export default function HomePage() {
+  const locale = getLocale()
+
+  const features = [
+    {
+      icon: FileSearch,
+      title: t('home.feat.ocr_title', locale),
+      items: [
+        t('home.feat.ocr_1', locale),
+        t('home.feat.ocr_2', locale),
+      ],
+    },
+    {
+      icon: BookOpen,
+      title: t('home.feat.accounting_title', locale),
+      items: [
+        t('home.feat.accounting_1', locale),
+        t('home.feat.accounting_2', locale),
+        t('home.feat.accounting_3', locale),
+      ],
+    },
+    {
+      icon: FileText,
+      title: t('home.feat.invoicing_title', locale),
+      items: [
+        t('home.feat.invoicing_1', locale),
+        t('home.feat.invoicing_2', locale),
+        t('home.feat.invoicing_3', locale),
+      ],
+    },
+    {
+      icon: Users,
+      title: t('home.feat.hr_title', locale),
+      items: [
+        t('home.feat.hr_1', locale),
+        t('home.feat.hr_2', locale),
+        t('home.feat.hr_3', locale),
+      ],
+    },
+    {
+      icon: Landmark,
+      title: t('home.feat.fiscal_title', locale),
+      items: [
+        t('home.feat.fiscal_1', locale),
+        t('home.feat.fiscal_2', locale),
+        t('home.feat.fiscal_3', locale),
+        t('home.feat.fiscal_4', locale),
+      ],
+    },
+    {
+      icon: BellRing,
+      title: t('home.feat.alerts_title', locale),
+      items: [
+        t('home.feat.alerts_1', locale),
+        t('home.feat.alerts_2', locale),
+        t('home.feat.alerts_3', locale),
+        t('home.feat.alerts_4', locale),
+      ],
+    },
+  ]
+
+  const aiCapabilities = [
+    { icon: Brain, text: t('home.ai.ocr', locale) },
+    { icon: MessageSquare, text: t('home.ai.clara', locale) },
+    { icon: GitCompareArrows, text: t('home.ai.reconciliation', locale) },
+    { icon: Sparkles, text: t('home.ai.bonuses', locale) },
+    { icon: CalendarClock, text: t('home.ai.planning', locale) },
+    { icon: Bot, text: t('home.ai.alerts', locale) },
+  ]
+
+  const plans = [
+    {
+      name: t('home.plan.premium', locale),
+      description: t('home.plan.premium_desc', locale),
+      highlight: true,
+      features: Array.from({ length: 13 }, (_, i) => t(`home.plan.premium_f${i + 1}`, locale)),
+    },
+    {
+      name: t('home.plan.accounting', locale),
+      description: t('home.plan.accounting_desc', locale),
+      highlight: false,
+      features: Array.from({ length: 9 }, (_, i) => t(`home.plan.accounting_f${i + 1}`, locale)),
+    },
+    {
+      name: t('home.plan.hr', locale),
+      description: t('home.plan.hr_desc', locale),
+      highlight: false,
+      features: Array.from({ length: 10 }, (_, i) => t(`home.plan.hr_f${i + 1}`, locale)),
+    },
+    {
+      name: t('home.plan.combo', locale),
+      description: t('home.plan.combo_desc', locale),
+      highlight: false,
+      features: Array.from({ length: 6 }, (_, i) => t(`home.plan.combo_f${i + 1}`, locale)),
+    },
+  ]
+
+  const compliance = [
+    { icon: Landmark, label: t('home.compliance.mra', locale) },
+    { icon: Scale, label: t('home.compliance.wra', locale) },
+    { icon: Building2, label: t('home.compliance.roc', locale) },
+    { icon: BookOpen, label: t('home.compliance.ifrs', locale) },
+    { icon: Globe, label: t('home.compliance.ias21', locale) },
+  ]
+
   return (
     <div className="flex min-h-screen flex-col bg-white">
       {/* HEADER */}
@@ -170,23 +142,26 @@ export default function HomePage() {
           </Link>
           <nav className="hidden gap-8 md:flex">
             <a href="#features" className="text-sm font-medium text-gray-600 hover:text-gray-900">
-              Modules
+              {t('home.modules', locale)}
             </a>
             <a href="#ai" className="text-sm font-medium text-gray-600 hover:text-gray-900">
-              Intelligence IA
+              {t('home.ai_intelligence', locale)}
             </a>
             <a href="#plans" className="text-sm font-medium text-gray-600 hover:text-gray-900">
-              Formules
+              {t('home.plans', locale)}
             </a>
             <a href="#compliance" className="text-sm font-medium text-gray-600 hover:text-gray-900">
-              Conformite
+              {t('home.compliance', locale)}
             </a>
           </nav>
-          <Link href="/auth/login">
-            <Button variant="outline" size="sm">
-              Connexion
-            </Button>
-          </Link>
+          <div className="flex items-center gap-3">
+            <LanguageSwitcherLight />
+            <Link href="/auth/login">
+              <Button variant="outline" size="sm">
+                {t('home.login', locale)}
+              </Button>
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -205,23 +180,23 @@ export default function HomePage() {
           <div className="relative mx-auto max-w-4xl px-6 text-center">
             <Badge className="mb-6 border-0 px-4 py-1.5 text-sm font-medium" style={{ backgroundColor: "rgba(201,168,76,0.15)", color: "#C9A84C" }}>
               <Sparkles className="mr-2 h-4 w-4" />
-              Propulse par l&apos;Intelligence Artificielle
+              {t('home.hero_badge', locale)}
             </Badge>
             <h1 className="mb-6 text-4xl font-extrabold tracking-tight text-white md:text-6xl">
-              LEXORA — La comptabilite intelligente pour Maurice
+              {t('home.hero_title', locale)}
             </h1>
             <p className="mx-auto mb-10 max-w-2xl text-lg text-gray-300">
-              Plateforme SaaS pilotee par IA pour la gestion comptable, RH et fiscale des entreprises mauriciennes
+              {t('home.hero_subtitle', locale)}
             </p>
             <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
               <Link href="/auth/login">
                 <Button size="lg" className="px-8 text-base font-semibold" style={{ backgroundColor: "#C9A84C", color: "#1E2A4A" }}>
-                  Demarrer
+                  {t('home.get_started', locale)}
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
               </Link>
               <Button size="lg" variant="outline" className="border-white/30 px-8 text-base font-semibold text-white hover:bg-white/10">
-                Voir la demo
+                {t('home.watch_demo', locale)}
               </Button>
             </div>
           </div>
@@ -232,10 +207,10 @@ export default function HomePage() {
           <div className="mx-auto max-w-7xl px-6">
             <div className="mb-16 text-center">
               <h2 className="mb-4 text-3xl font-bold md:text-4xl" style={{ color: "#1E2A4A" }}>
-                Modules intelligents
+                {t('home.smart_modules', locale)}
               </h2>
               <p className="mx-auto max-w-2xl text-gray-500">
-                Six modules integres pour couvrir l&apos;ensemble de vos besoins comptables, RH et fiscaux
+                {t('home.smart_modules_desc', locale)}
               </p>
             </div>
             <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
@@ -276,10 +251,10 @@ export default function HomePage() {
           <div className="mx-auto max-w-7xl px-6">
             <div className="mb-16 text-center">
               <h2 className="mb-4 text-3xl font-bold md:text-4xl" style={{ color: "#1E2A4A" }}>
-                L&apos;IA au coeur du dispositif
+                {t('home.ai_at_core', locale)}
               </h2>
               <p className="mx-auto max-w-2xl text-gray-500">
-                Des agents intelligents qui automatisent, analysent et recommandent
+                {t('home.ai_at_core_desc', locale)}
               </p>
             </div>
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -306,10 +281,10 @@ export default function HomePage() {
           <div className="mx-auto max-w-5xl px-6">
             <div className="mb-16 text-center">
               <h2 className="mb-4 text-3xl font-bold md:text-4xl" style={{ color: "#1E2A4A" }}>
-                Formules adaptees
+                {t('home.adapted_plans', locale)}
               </h2>
               <p className="mx-auto max-w-2xl text-gray-500">
-                Choisissez la formule qui correspond a vos besoins
+                {t('home.adapted_plans_desc', locale)}
               </p>
             </div>
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -326,7 +301,7 @@ export default function HomePage() {
                       className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-0.5 text-xs font-semibold text-white"
                       style={{ backgroundColor: "#C9A84C" }}
                     >
-                      Populaire
+                      {t('home.popular', locale)}
                     </div>
                   )}
                   <CardHeader className="pb-2 pt-8">
@@ -337,7 +312,7 @@ export default function HomePage() {
                   <CardContent className="pb-8">
                     <p className="mb-4 text-sm text-gray-500">{plan.description}</p>
                     <ul className="mb-6 space-y-2 text-left">
-                      {(plan as any).features?.map((f: string, i: number) => (
+                      {plan.features.map((f: string, i: number) => (
                         <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
                           <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0" style={{ color: "#C9A84C" }} />
                           <span>{f}</span>
@@ -350,7 +325,7 @@ export default function HomePage() {
                         className="w-full"
                         style={plan.highlight ? { backgroundColor: "#C9A84C", color: "#1E2A4A" } : {}}
                       >
-                        Choisir
+                        {t('home.choose', locale)}
                       </Button>
                     </Link>
                   </CardContent>
@@ -365,7 +340,7 @@ export default function HomePage() {
           <div className="mx-auto max-w-5xl px-6">
             <div className="mb-16 text-center">
               <h2 className="mb-4 text-3xl font-bold md:text-4xl" style={{ color: "#1E2A4A" }}>
-                Conforme a la reglementation mauricienne
+                {t('home.compliance_title', locale)}
               </h2>
             </div>
             <div className="flex flex-wrap items-center justify-center gap-6">
@@ -388,14 +363,14 @@ export default function HomePage() {
         <section className="py-20 md:py-28" style={{ backgroundColor: "#1E2A4A" }}>
           <div className="mx-auto max-w-3xl px-6 text-center">
             <h2 className="mb-4 text-3xl font-bold text-white md:text-4xl">
-              Pret a transformer votre comptabilite ?
+              {t('home.cta_title', locale)}
             </h2>
             <p className="mb-10 text-gray-400">
-              Rejoignez les entreprises mauriciennes qui font confiance a LEXORA
+              {t('home.cta_subtitle', locale)}
             </p>
             <Link href="/auth/login">
               <Button size="lg" className="px-10 text-base font-semibold" style={{ backgroundColor: "#C9A84C", color: "#1E2A4A" }}>
-                Demarrer maintenant
+                {t('home.cta_button', locale)}
                 <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
             </Link>
@@ -411,14 +386,14 @@ export default function HomePage() {
           </Link>
           <div className="flex items-center gap-6">
             <Link href="/auth/login" className="text-sm text-gray-600 hover:text-gray-900">
-              Connexion
+              {t('home.login', locale)}
             </Link>
             <a href="#" className="text-sm text-gray-600 hover:text-gray-900">
-              Contact
+              {t('home.contact', locale)}
             </a>
           </div>
           <p className="text-sm text-gray-400">
-            Powered by AI — Made in Mauritius
+            {t('home.footer_tagline', locale)}
           </p>
         </div>
       </footer>
