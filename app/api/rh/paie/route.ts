@@ -172,7 +172,7 @@ export async function POST(request: Request) {
       const resultat = calculerBulletin(elements, params, joursTravailles, Number(emp.pct_refacturation) || 0)
 
       // Déduire absences injustifiées du net
-      const salaire_net_final = Math.round((resultat.salaire_net - montant_absence_final) * 100) / 100
+      const salaire_net_final = Math.round((resultat.salaire_net - montant_absence) * 100) / 100
 
       const bulletin: Record<string, any> = {
         employe_id, societe_id: societe_id || emp.societe_id,
@@ -187,13 +187,13 @@ export async function POST(request: Request) {
         paye: resultat.paye,
         training_levy: resultat.training_levy,
         prgf: resultat.prgf,
-        total_deductions: Math.round((resultat.total_deductions + montant_absence_final) * 100) / 100,
+        total_deductions: Math.round((resultat.total_deductions + montant_absence) * 100) / 100,
         total_charges_patronales: resultat.total_charges_patronales,
         heures_sup_montant: elements.heures_sup_montant || 0,
         special_allowance_1: elements.special_allowance_1 || 0,
         transport_allowance: elements.transport_allowance || 0,
         petrol_allowance: elements.petrol_allowance || 0,
-        montant_absence: montant_absence_final,
+        montant_absence: montant_absence,
         statut: 'brouillon',
       }
 
@@ -210,7 +210,7 @@ export async function POST(request: Request) {
           .in('id', primesMois.map(p => p.id))
       }
 
-      return NextResponse.json({ bulletin: data, simulation: { ...resultat, total_ot_montant, total_primes, montant_absence_final, jours_travailles } })
+      return NextResponse.json({ bulletin: data, simulation: { ...resultat, total_ot_montant, total_primes, montant_absence, jours_travailles } })
     }
 
     // ══════════════════════════════════════════════════════
