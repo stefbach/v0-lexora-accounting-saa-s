@@ -33,6 +33,35 @@ export default function ParametresPaiePage() {
     paye_taux_2: "0.15",
   })
   const [tauxEur, setTauxEur] = useState("46.50")
+  const [liveRates, setLiveRates] = useState<Record<string, number>>({})
+  const [ratesSource, setRatesSource] = useState("")
+  const [loadingRates, setLoadingRates] = useState(false)
+
+  // Fetch live exchange rates on mount
+  useEffect(() => {
+    setLoadingRates(true)
+    fetch("/api/taux-change").then(r => r.json()).then(d => {
+      if (d.rates) {
+        setLiveRates(d.rates)
+        if (d.rates.EUR) setTauxEur(String(d.rates.EUR))
+        setRatesSource(d.source || "api")
+      }
+    }).catch(() => {}).finally(() => setLoadingRates(false))
+  }, [])
+
+  const refreshRates = async () => {
+    setLoadingRates(true)
+    try {
+      const res = await fetch("/api/taux-change")
+      const d = await res.json()
+      if (d.rates) {
+        setLiveRates(d.rates)
+        if (d.rates.EUR) setTauxEur(String(d.rates.EUR))
+        setRatesSource(d.source || "api")
+      }
+    } catch {}
+    setLoadingRates(false)
+  }
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -148,21 +177,37 @@ export default function ParametresPaiePage() {
             </CardContent>
           </Card>
 
-          {/* Forex EUR */}
+          {/* Forex EUR — Live rates */}
           <Card>
-            <CardHeader><CardTitle className="text-[#1E2A4A] text-base">Taux de change EUR/MUR</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-[#1E2A4A] text-base">Taux de change</CardTitle></CardHeader>
             <CardContent className="space-y-4">
+              <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-medium text-green-800">Taux en temps réel</p>
+                  <Button variant="outline" size="sm" onClick={refreshRates} disabled={loadingRates}>
+                    {loadingRates ? <Loader2 className="w-4 h-4 animate-spin" /> : "Actualiser"}
+                  </Button>
+                </div>
+                {loadingRates ? <Loader2 className="w-4 h-4 animate-spin" /> : (
+                  <div className="flex gap-6">
+                    <div><span className="text-xs text-gray-500">EUR/MUR</span><p className="text-lg font-bold text-[#1E2A4A]">{liveRates.EUR ? liveRates.EUR.toFixed(4) : tauxEur}</p></div>
+                    {liveRates.GBP && <div><span className="text-xs text-gray-500">GBP/MUR</span><p className="text-lg font-bold text-[#1E2A4A]">{liveRates.GBP.toFixed(4)}</p></div>}
+                    {liveRates.USD && <div><span className="text-xs text-gray-500">USD/MUR</span><p className="text-lg font-bold text-[#1E2A4A]">{liveRates.USD.toFixed(4)}</p></div>}
+                  </div>
+                )}
+                <p className="text-xs text-gray-500 mt-2">Source: {ratesSource === 'database' ? 'Base de données (quotidien)' : ratesSource === 'fallback' ? 'Taux par défaut' : 'API ExchangeRate'}</p>
+              </div>
               <div>
-                <Label>Taux EUR → MUR (par défaut)</Label>
-                <p className="text-xs text-gray-400 mb-1">Utilisé si l'employé a devise_salaire = EUR et pas de taux personnalisé</p>
+                <Label>Override manuel (optionnel)</Label>
+                <p className="text-xs text-gray-400 mb-1">Forcer un taux spécifique au lieu du taux live</p>
                 <div className="flex items-center gap-2">
-                  <Input type="number" step="0.01" value={tauxEur} onChange={e => setTauxEur(e.target.value)} className="w-36" />
+                  <Input type="number" step="0.0001" value={tauxEur} onChange={e => setTauxEur(e.target.value)} className="w-36" />
                   <span className="text-sm text-gray-500">1 EUR = {tauxEur} MUR</span>
                 </div>
               </div>
-              <div className="bg-orange-50 p-3 rounded text-xs text-orange-800 flex gap-2">
+              <div className="bg-blue-50 p-3 rounded text-xs text-blue-800 flex gap-2">
                 <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <p>Les bulletins EUR affichent le montant converti en MUR pour les déclarations MRA. Le taux est figé au moment du calcul.</p>
+                <p>Le taux est récupéré automatiquement et mis à jour quotidiennement. Il est figé au moment du calcul de chaque bulletin.</p>
               </div>
             </CardContent>
           </Card>
