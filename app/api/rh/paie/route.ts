@@ -178,7 +178,7 @@ export async function POST(request: Request) {
         employe_id, societe_id: societe_id || emp.societe_id,
         periode: periodeDate,
         salaire_base: elements.salaire_base,
-        salaire_brut: resultat.salaire_brut,
+        // salaire_brut is GENERATED ALWAYS — do NOT include
         salaire_net: salaire_net_final,
         csg_salarie: resultat.csg_salarie,
         csg_patronal: resultat.csg_patronal,
@@ -189,7 +189,6 @@ export async function POST(request: Request) {
         prgf: resultat.prgf,
         total_deductions: Math.round((resultat.total_deductions + montant_absence_final) * 100) / 100,
         total_charges_patronales: resultat.total_charges_patronales,
-        cout_total_employeur: resultat.cout_total_employeur,
         heures_sup_montant: elements.heures_sup_montant || 0,
         special_allowance_1: elements.special_allowance_1 || 0,
         transport_allowance: elements.transport_allowance || 0,
@@ -200,8 +199,8 @@ export async function POST(request: Request) {
 
       const { data, error } = await supabase.from('bulletins_paie').upsert(bulletin, { onConflict: 'employe_id,periode' }).select().single()
       if (error) {
-        console.error('[paie calculer]', error.message)
-        throw error
+        console.error('[paie calculer]', error.message, error.details, error.hint)
+        return NextResponse.json({ error: `Erreur bulletin: ${error.message}`, details: error.details, hint: error.hint }, { status: 500 })
       }
 
       // Marquer les primes comme intégrées (colonne integre_paie + date_integration ajoutées en migration 028)
@@ -317,7 +316,7 @@ export async function POST(request: Request) {
           societe_id,
           periode: periodeDate,
           salaire_base: salaire_base_mur,
-          salaire_brut: resultat.salaire_brut,
+          // salaire_brut is GENERATED ALWAYS — do NOT include it
           salaire_net: salaire_net_final,
           csg_salarie: resultat.csg_salarie,
           csg_patronal: resultat.csg_patronal,
@@ -328,7 +327,6 @@ export async function POST(request: Request) {
           prgf: resultat.prgf,
           total_deductions: Math.round((resultat.total_deductions + montant_absence_final) * 100) / 100,
           total_charges_patronales: resultat.total_charges_patronales,
-          cout_total_employeur: resultat.cout_total_employeur,
           heures_sup_montant: Math.round(total_ot_montant),
           special_allowance_1: Math.round(total_primes),
           transport_allowance: Number(emp.transport_allowance) || 0,
