@@ -27,27 +27,26 @@ const MENU = [
     ]
   },
   {
+    section: "Facturation",
+    items: [
+      { href: "/client/factures", label: "Mes Factures", icon: Receipt },
+      { href: "/client/nouvelle-facture", label: "Nouvelle Facture", icon: FilePlus2 },
+      { href: "/client/facturation-settings", label: "Paramètres Facturation", icon: SlidersHorizontal },
+    ]
+  },
+  {
     section: "Comptabilité",
     items: [
       { href: "/client/banque", label: "Banque", icon: Banknote },
       { href: "/client/rapprochement", label: "Rapprochement & Lettrage", icon: CreditCard },
       { href: "/client/tresorerie", label: "Trésorerie", icon: Banknote },
-      { href: "/client/factures", label: "Factures Clients", icon: Receipt },
       { href: "/client/fournisseurs", label: "Fournisseurs", icon: FileSpreadsheet },
-      { href: "/client/compte-courant", label: "Comptes Courants Associes", icon: Users },
+      { href: "/client/compte-courant", label: "Comptes Courants Associés", icon: Users },
       { href: "/client/finances", label: "Mes Chiffres", icon: BarChart3 },
     ]
   },
   {
-    section: "Facturation",
-    items: [
-      { href: "/client/factures", label: "Mes Factures", icon: Receipt },
-      { href: "/client/nouvelle-facture", label: "Nouvelle Facture", icon: FilePlus2 },
-      { href: "/client/facturation-settings", label: "Param\u00e8tres Facturation", icon: SlidersHorizontal },
-    ]
-  },
-  {
-    section: "\u00c9tats Financiers",
+    section: "États Financiers",
     items: [
       { href: "/client/bilan", label: "Bilan & P&L", icon: BookOpen },
       { href: "/client/grand-livre", label: "Grand Livre", icon: BookOpen },
