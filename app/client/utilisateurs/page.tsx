@@ -67,7 +67,8 @@ const ROLES = [
   { value: "employe", label: "Employe", color: "bg-gray-100 text-gray-700 border-gray-200" },
 ]
 
-const NEEDS_SOCIETE = ["rh", "juridique", "employe", "manager", "direction"]
+const NEEDS_SOCIETE = ["rh", "juridique", "employe", "manager", "direction", "client_assistant", "client_admin", "client_user", "comptable", "comptable_dedie"]
+const MULTI_SOCIETE_ROLES = ["client_assistant", "client_admin", "client_user", "rh", "comptable", "comptable_dedie"]
 
 const MODULE_DEFS = [
   { key: "documents", label: "Documents & OCR", icon: FileText },
@@ -204,12 +205,14 @@ export default function UtilisateursPage() {
   const [lastPassword, setLastPassword] = useState("")
   const [createForm, setCreateForm] = useState({
     prenom: "", nom: "", email: "", password: genPassword(), role: "client_admin", societe_id: "",
+    societe_ids: [] as string[],
     modules_utilisateur: getDefaultModules("client_admin") as ModulesUtilisateur,
   })
 
   // Edit form
   const [editForm, setEditForm] = useState({
     full_name: "", email: "", phone: "", role: "", societe_id: "", actif: true,
+    societe_ids: [] as string[],
     modules_utilisateur: getDefaultModules("client_admin") as ModulesUtilisateur,
   })
   const [editSaving, setEditSaving] = useState(false)
@@ -281,9 +284,14 @@ export default function UtilisateursPage() {
   // ---------------------------------------------------------------------------
   const handleCreate = async () => {
     if (!createForm.prenom || !createForm.nom || !createForm.email || !createForm.role) return
-    if (NEEDS_SOCIETE.includes(createForm.role) && !createForm.societe_id) return
+    const isMulti = MULTI_SOCIETE_ROLES.includes(createForm.role)
+    if (NEEDS_SOCIETE.includes(createForm.role) && !isMulti && !createForm.societe_id) return
+    if (isMulti && createForm.societe_ids.length === 0) return
     setSaving(true)
     try {
+      const societePayload = isMulti && createForm.societe_ids.length > 0
+        ? { societe_ids: createForm.societe_ids, societe_id: createForm.societe_ids[0] }
+        : { societe_id: createForm.societe_id || undefined }
       const res = await fetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -292,7 +300,7 @@ export default function UtilisateursPage() {
           password: createForm.password,
           full_name: `${createForm.prenom} ${createForm.nom}`,
           role: createForm.role,
-          societe_id: createForm.societe_id || undefined,
+          ...societePayload,
           modules_utilisateur: createForm.modules_utilisateur,
         }),
       })
@@ -300,7 +308,7 @@ export default function UtilisateursPage() {
       if (data.error) { alert(data.error); setSaving(false); return }
       setLastPassword(createForm.password)
       setCreateOpen(false)
-      setCreateForm({ prenom: "", nom: "", email: "", password: genPassword(), role: "client_admin", societe_id: "", modules_utilisateur: getDefaultModules("client_admin") })
+      setCreateForm({ prenom: "", nom: "", email: "", password: genPassword(), role: "client_admin", societe_id: "", societe_ids: [], modules_utilisateur: getDefaultModules("client_admin") })
       load()
     } catch {
       alert("Erreur reseau")
@@ -308,14 +316,21 @@ export default function UtilisateursPage() {
     setSaving(false)
   }
 
-  const openEdit = (user: User) => {
+  const openEdit = async (user: User) => {
     setEditUser(user)
+    let userSocieteIds: string[] = user.societe_id ? [user.societe_id] : []
+    try {
+      const res = await fetch(`/api/admin/users?user_id=${user.id}&action=societes`)
+      const data = await res.json()
+      if (data.societe_ids && data.societe_ids.length > 0) userSocieteIds = data.societe_ids
+    } catch {}
     setEditForm({
       full_name: user.full_name || "",
       email: user.email,
       phone: user.phone || "",
       role: user.role,
       societe_id: user.societe_id || "",
+      societe_ids: userSocieteIds,
       actif: user.actif !== false,
       modules_utilisateur: user.modules_utilisateur || getDefaultModules(user.role),
     })
@@ -326,22 +341,27 @@ export default function UtilisateursPage() {
     if (!editUser) return
     setEditSaving(true)
     try {
+      const isMultiEdit = MULTI_SOCIETE_ROLES.includes(editForm.role)
+      const payload: Record<string, unknown> = {
+        user_id: editUser.id,
+        full_name: editForm.full_name,
+        email: editForm.email,
+        phone: editForm.phone,
+        role: editForm.role,
+        societe_id: isMultiEdit ? (editForm.societe_ids[0] || null) : (editForm.societe_id || null),
+        actif: editForm.actif,
+        modules_utilisateur: editForm.modules_utilisateur,
+      }
+      if (isMultiEdit && editForm.societe_ids.length > 0) {
+        payload.societe_ids = editForm.societe_ids
+      }
       const res = await fetch("/api/admin/users", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: editUser.id,
-          full_name: editForm.full_name,
-          email: editForm.email,
-          phone: editForm.phone,
-          role: editForm.role,
-          societe_id: editForm.societe_id || null,
-          actif: editForm.actif,
-          modules_utilisateur: editForm.modules_utilisateur,
-        }),
+        body: JSON.stringify(payload),
       })
       const data = await res.json()
-      if (data.error) { alert(data.error); setEditSaving(false); return }
+      if (data.error) { alert("Erreur: " + data.error); setEditSaving(false); return }
       setEditOpen(false)
       setEditUser(null)
       load()
@@ -428,7 +448,7 @@ export default function UtilisateursPage() {
                   <p className="text-xs text-gray-500 mt-1">Acces uniquement a la numerisation des documents</p>
                 )}
               </div>
-              {NEEDS_SOCIETE.includes(createForm.role) && (
+              {NEEDS_SOCIETE.includes(createForm.role) && !MULTI_SOCIETE_ROLES.includes(createForm.role) && (
                 <div>
                   <Label className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" /> Societe <span className="text-red-500">*</span></Label>
                   <Select value={createForm.societe_id} onValueChange={(v) => setCreateForm((f) => ({ ...f, societe_id: v }))}>
@@ -439,6 +459,22 @@ export default function UtilisateursPage() {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+              )}
+              {MULTI_SOCIETE_ROLES.includes(createForm.role) && (
+                <div>
+                  <Label className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" /> Societes <span className="text-red-500">*</span></Label>
+                  <div className="mt-2 space-y-1 max-h-40 overflow-y-auto border rounded-lg p-2">
+                    {societes.map(s => (
+                      <label key={s.id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-2 py-1.5 rounded">
+                        <input type="checkbox" checked={createForm.societe_ids.includes(s.id)}
+                          onChange={() => setCreateForm(f => ({ ...f, societe_ids: f.societe_ids.includes(s.id) ? f.societe_ids.filter(id => id !== s.id) : [...f.societe_ids, s.id] }))}
+                          className="rounded border-gray-300" />
+                        <span className="text-sm">{s.nom}{s.brn ? ` — ${s.brn}` : ""}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {createForm.societe_ids.length > 0 && <p className="text-xs text-gray-500 mt-1">{createForm.societe_ids.length} societe(s)</p>}
                 </div>
               )}
               <PermissionsEditor
@@ -464,7 +500,7 @@ export default function UtilisateursPage() {
               </div>
               <Button
                 onClick={handleCreate}
-                disabled={saving || !createForm.prenom || !createForm.nom || !createForm.email || (NEEDS_SOCIETE.includes(createForm.role) && !createForm.societe_id)}
+                disabled={saving || !createForm.prenom || !createForm.nom || !createForm.email || (NEEDS_SOCIETE.includes(createForm.role) && !MULTI_SOCIETE_ROLES.includes(createForm.role) && !createForm.societe_id) || (MULTI_SOCIETE_ROLES.includes(createForm.role) && createForm.societe_ids.length === 0)}
                 className="w-full bg-[#1E2A4A] hover:bg-[#2a3d66]"
               >
                 {saving ? "Creation en cours..." : "Creer le compte"}
@@ -732,18 +768,35 @@ export default function UtilisateursPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" /> Societe</Label>
-                <Select value={editForm.societe_id || "none"} onValueChange={(v) => setEditForm((f) => ({ ...f, societe_id: v === "none" ? "" : v }))}>
-                  <SelectTrigger><SelectValue placeholder="Aucune" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Aucune</SelectItem>
-                    {societes.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>{s.nom}{s.brn ? ` -- ${s.brn}` : ""}</SelectItem>
+              {MULTI_SOCIETE_ROLES.includes(editForm.role) ? (
+                <div>
+                  <Label className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" /> Societes</Label>
+                  <div className="mt-2 space-y-1 max-h-40 overflow-y-auto border rounded-lg p-2">
+                    {societes.map(s => (
+                      <label key={s.id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-2 py-1.5 rounded">
+                        <input type="checkbox" checked={editForm.societe_ids.includes(s.id)}
+                          onChange={() => setEditForm(f => ({ ...f, societe_ids: f.societe_ids.includes(s.id) ? f.societe_ids.filter(id => id !== s.id) : [...f.societe_ids, s.id] }))}
+                          className="rounded border-gray-300" />
+                        <span className="text-sm">{s.nom}{s.brn ? ` — ${s.brn}` : ""}</span>
+                      </label>
                     ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                  </div>
+                  {editForm.societe_ids.length > 0 && <p className="text-xs text-gray-500 mt-1">{editForm.societe_ids.length} societe(s)</p>}
+                </div>
+              ) : (
+                <div>
+                  <Label className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" /> Societe</Label>
+                  <Select value={editForm.societe_id || "none"} onValueChange={(v) => setEditForm((f) => ({ ...f, societe_id: v === "none" ? "" : v }))}>
+                    <SelectTrigger><SelectValue placeholder="Aucune" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Aucune</SelectItem>
+                      {societes.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>{s.nom}{s.brn ? ` -- ${s.brn}` : ""}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <PermissionsEditor
                 modules={editForm.modules_utilisateur}
                 onChange={(m) => setEditForm((f) => ({ ...f, modules_utilisateur: m }))}

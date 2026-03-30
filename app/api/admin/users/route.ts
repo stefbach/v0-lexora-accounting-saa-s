@@ -9,9 +9,18 @@ function getAdminClient() {
 
 const VALID_ROLES = ['admin', 'super_admin', 'client_admin', 'client_user', 'client_assistant', 'comptable', 'comptable_dedie', 'rh', 'juridique', 'employe', 'manager', 'direction']
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const supabase = getAdminClient()
+    const { searchParams } = new URL(request.url)
+    const userId = searchParams.get('user_id')
+    const action = searchParams.get('action')
+
+    if (userId && action === 'societes') {
+      const { data } = await supabase.from('user_societes').select('societe_id').eq('user_id', userId)
+      return NextResponse.json({ societe_ids: (data || []).map(r => r.societe_id) })
+    }
+
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
@@ -121,7 +130,10 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const { user_id, role, actif, full_name, email, phone, societe_id, modules_utilisateur } = await request.json()
+    const body = await request.json()
+    const { user_id, role, actif, full_name, email, phone, societe_id, societe_ids, modules_utilisateur } = body
+    if (!user_id) return NextResponse.json({ error: 'user_id requis' }, { status: 400 })
+
     const supabase = getAdminClient()
     const updates: Record<string, unknown> = {}
     if (role) updates.role = role
@@ -129,12 +141,42 @@ export async function PATCH(request: NextRequest) {
     if (full_name !== undefined) updates.full_name = full_name
     if (email !== undefined) updates.email = email
     if (phone !== undefined) updates.phone = phone
-    if (societe_id !== undefined) updates.societe_id = societe_id || null
     if (modules_utilisateur !== undefined) updates.modules_utilisateur = modules_utilisateur
+
+    // Set primary societe_id
+    if (societe_ids && Array.isArray(societe_ids) && societe_ids.length > 0) {
+      updates.societe_id = societe_ids[0]
+    } else if (societe_id !== undefined) {
+      updates.societe_id = societe_id || null
+    }
+
     const { error } = await supabase.from('profiles').update(updates).eq('id', user_id)
-    if (error) throw error
+    if (error) {
+      console.error('[PATCH] profile update error:', error.message)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    // Update user_societes for multi-société
+    if (societe_ids && Array.isArray(societe_ids) && societe_ids.length > 0) {
+      await supabase.from('user_societes').delete().eq('user_id', user_id)
+      for (const sid of societe_ids) {
+        await supabase.from('user_societes').insert({
+          user_id, societe_id: sid, role: role || 'client_user', actif: true,
+        })
+      }
+    } else if (societe_id) {
+      await supabase.from('user_societes').upsert({
+        user_id, societe_id, role: role || 'client_user', actif: true,
+      }, { onConflict: 'user_id,societe_id' })
+    }
+
+    if (email) {
+      try { await supabase.auth.admin.updateUserById(user_id, { email }) } catch {}
+    }
+
     return NextResponse.json({ success: true })
   } catch (e: unknown) {
+    console.error('[PATCH]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
