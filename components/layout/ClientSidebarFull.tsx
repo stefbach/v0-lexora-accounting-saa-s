@@ -3,7 +3,7 @@ import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   LayoutDashboard, Building2, FileText, BookOpen, Banknote,
   Receipt, Calculator, BarChart3, TrendingUp, Target,
@@ -13,7 +13,32 @@ import {
   CalendarDays, FilePlus2, SlidersHorizontal
 } from "lucide-react"
 
-const MENU = [
+/* ------------------------------------------------------------------ */
+/*  Module-gated section type                                          */
+/* ------------------------------------------------------------------ */
+interface MenuSection {
+  section: string
+  requiredModule?: "comptabilite" | "rh" | "juridique" | "facturation" | "documents"
+  items: { href: string; label: string; icon: any }[]
+}
+
+interface ActiveModules {
+  comptabilite: boolean
+  rh: boolean
+  juridique: boolean
+  facturation: boolean
+  documents: boolean
+}
+
+const DEFAULT_MODULES: ActiveModules = {
+  comptabilite: true,
+  rh: true,
+  juridique: true,
+  facturation: true,
+  documents: true,
+}
+
+const MENU: MenuSection[] = [
   {
     section: "Mon Espace",
     items: [
@@ -28,6 +53,7 @@ const MENU = [
   },
   {
     section: "Facturation",
+    requiredModule: "facturation",
     items: [
       { href: "/client/factures", label: "Mes Factures", icon: Receipt },
       { href: "/client/nouvelle-facture", label: "Nouvelle Facture", icon: FilePlus2 },
@@ -36,6 +62,7 @@ const MENU = [
   },
   {
     section: "Comptabilité",
+    requiredModule: "comptabilite",
     items: [
       { href: "/client/banque", label: "Banque", icon: Banknote },
       { href: "/client/rapprochement", label: "Rapprochement & Lettrage", icon: CreditCard },
@@ -47,6 +74,7 @@ const MENU = [
   },
   {
     section: "États Financiers",
+    requiredModule: "comptabilite",
     items: [
       { href: "/client/bilan", label: "Bilan & P&L", icon: BookOpen },
       { href: "/client/grand-livre", label: "Grand Livre", icon: BookOpen },
@@ -59,6 +87,7 @@ const MENU = [
   },
   {
     section: "Fiscal MRA",
+    requiredModule: "comptabilite",
     items: [
       { href: "/client/tva", label: "TVA MRA", icon: Receipt },
       { href: "/client/charges-sociales", label: "CSG / NSF / PAYE", icon: Calculator },
@@ -68,6 +97,7 @@ const MENU = [
   },
   {
     section: "RH & Paie",
+    requiredModule: "rh",
     items: [
       { href: "/client/elaboration-paie", label: "Elaboration Paie", icon: Calculator },
       { href: "/client/salaires", label: "Paie & Bulletins", icon: CreditCard },
@@ -95,6 +125,32 @@ export function ClientSidebarFull() {
   const pathname = usePathname()
   const router = useRouter()
   const [collapsed, setCollapsed] = useState<string[]>([])
+  const [activeModules, setActiveModules] = useState<ActiveModules>(DEFAULT_MODULES)
+
+  // Fetch modules_actifs from the user's first societe
+  useEffect(() => {
+    const loadModules = async () => {
+      try {
+        const res = await fetch("/api/client/societes")
+        if (!res.ok) return
+        const data = await res.json()
+        const societes = data.societes || []
+        if (societes.length > 0 && societes[0].modules_actifs) {
+          const m = societes[0].modules_actifs
+          setActiveModules({
+            comptabilite: m.comptabilite !== false,
+            rh: m.rh !== false,
+            juridique: m.juridique !== false,
+            facturation: m.facturation !== false,
+            documents: m.documents !== false,
+          })
+        }
+      } catch {
+        // Keep defaults if fetch fails
+      }
+    }
+    loadModules()
+  }, [])
 
   const toggle = (s: string) =>
     setCollapsed(p => p.includes(s) ? p.filter(x => x !== s) : [...p, s])
@@ -106,6 +162,12 @@ export function ClientSidebarFull() {
     await supabase.auth.signOut()
     router.push('/auth/login')
   }
+
+  // Filter menu sections based on active modules
+  const visibleMenu = MENU.filter(section => {
+    if (!section.requiredModule) return true
+    return activeModules[section.requiredModule]
+  })
 
   return (
     <aside className="w-64 bg-[#1E2A4A] min-h-screen flex flex-col fixed left-0 top-0 bottom-0 z-40 overflow-y-auto">
@@ -124,7 +186,7 @@ export function ClientSidebarFull() {
 
       {/* Navigation */}
       <nav className="flex-1 p-3 space-y-1">
-        {MENU.map(({ section, items }) => {
+        {visibleMenu.map(({ section, items }) => {
           const isCollapsed = collapsed.includes(section)
           const hasActive = items.some(i => isActive(i.href))
           return (

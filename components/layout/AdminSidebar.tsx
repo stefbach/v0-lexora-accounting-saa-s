@@ -25,6 +25,7 @@ const MENU = [
       { href: "/admin/comptables", label: "Comptables", icon: UserCog },
       { href: "/admin/societes", label: "Societes", icon: Building2 },
       { href: "/admin/documents", label: "Documents", icon: FileText },
+      { href: "/admin/services", label: "Services & Plans", icon: Settings },
     ],
   },
   {
