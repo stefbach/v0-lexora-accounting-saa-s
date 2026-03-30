@@ -392,7 +392,7 @@ export default function ElaborationPaiePage() {
                     </div>
                   </div>
                   <Button variant="outline" size="sm" onClick={() => window.open(
-                    `/api/rh/paie/bulletin-pdf?societe_id=${selectedSociete}&periode=${periode}&employe_id=${r.employe_id}`, "_blank"
+                    `/api/rh/paie/pdf?employe_id=${r.employe_id}&periode=${periode}`, "_blank"
                   )}><Eye className="w-4 h-4 mr-1" />Voir PDF</Button>
                 </div>
               ))}
