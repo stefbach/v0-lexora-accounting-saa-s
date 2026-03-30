@@ -24,7 +24,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs"
-import { Calculator, FileText, Save, Printer, Loader2, Upload } from "lucide-react"
+import { Calculator, FileText, Save, Printer, Loader2, Upload, CheckCircle, AlertCircle } from "lucide-react"
 
 const NAVY = "#1E2A4A"
 const GOLD = "#C9A84C"
@@ -222,8 +222,22 @@ export default function ITForm3Page() {
           if (parsed.type_activity) setTypeActivity(parsed.type_activity)
           if (parsed.detail_activity) setDetailActivity(parsed.detail_activity)
           if (parsed.accountant_name) setAccountantName(parsed.accountant_name)
-          if (parsed.revenue) setRevenuAffaires(Number(parsed.revenue) || 0)
           if (parsed.assessment_year) setAssessmentYear(parsed.assessment_year)
+          if (parsed.closing_date) setClosingDate(parsed.closing_date)
+          // Revenue fields
+          const rev = Number(parsed.revenue ?? parsed.revenu_affaires ?? parsed.chiffre_affaires ?? 0)
+          if (rev) setRevenuAffaires(rev)
+          if (parsed.revenu_emploi !== undefined) setRevenuEmploi(Number(parsed.revenu_emploi) || 0)
+          if (parsed.revenu_locatif !== undefined) setRevenuLocatif(Number(parsed.revenu_locatif) || 0)
+          if (parsed.revenu_interets !== undefined) setRevenuInterets(Number(parsed.revenu_interets) || 0)
+          if (parsed.dividendes !== undefined) setDividendes(Number(parsed.dividendes) || 0)
+          if (parsed.autres_revenus !== undefined) setAutresRevenus(Number(parsed.autres_revenus) || 0)
+          // Deductions
+          if (parsed.annual_allowance !== undefined) setAnnualAllowance(Number(parsed.annual_allowance) || 0)
+          if (parsed.autres_deductions !== undefined) setAutresDeductions(Number(parsed.autres_deductions) || 0)
+          // Tax
+          if (parsed.taux_is !== undefined) setTauxIS(Number(parsed.taux_is) || 15)
+          if (parsed.aps_paye !== undefined) setApsPayé(Number(parsed.aps_paye) || 0)
         }
         setImportMessage("PDF importe avec succes. Verifiez les champs pre-remplis.")
       } else {
@@ -346,9 +360,10 @@ export default function ITForm3Page() {
             </div>
           </div>
           {importMessage && (
-            <p className={`text-sm mt-2 ${importMessage.includes("Erreur") ? "text-red-600" : "text-green-600"}`}>
-              {importMessage}
-            </p>
+            <div className={`flex items-center gap-2 text-sm mt-3 ${importMessage.includes("Erreur") ? "text-red-600" : "text-green-700"}`}>
+              {importMessage.includes("Erreur") ? <AlertCircle className="w-4 h-4 flex-shrink-0" /> : <CheckCircle className="w-4 h-4 flex-shrink-0" />}
+              <span>{importMessage}</span>
+            </div>
           )}
         </CardContent>
       </Card>

@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Loader2, Save, FileDown, Building2, Users, Briefcase,
-  DollarSign, BarChart3, CheckCircle, AlertTriangle, Upload
+  DollarSign, BarChart3, CheckCircle, AlertTriangle, AlertCircle, Upload, FileText
 } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
 import Link from "next/link"
@@ -156,6 +156,7 @@ export default function AnnualReturnPage() {
     try {
       const formData = new FormData()
       formData.append("file", file)
+      if (selectedSociete) formData.append("societe_id", selectedSociete)
       formData.append("hint", "Annual Return - Companies Act - Registrar of Companies Mauritius")
       const res = await fetch("/api/documents/upload", { method: "POST", body: formData })
       if (res.ok) {
@@ -170,7 +171,13 @@ export default function AnnualReturnPage() {
             ...(parsed.registered_office && { registered_office: parsed.registered_office }),
             ...(parsed.postal_address && { postal_address: parsed.postal_address }),
             ...(parsed.date_agm && { date_agm: parsed.date_agm }),
+            ...(parsed.date_annual_return && { date_annual_return: parsed.date_annual_return }),
             ...(parsed.stated_capital && { stated_capital: parsed.stated_capital }),
+            ...(parsed.amount_received_on_issue && { amount_received_on_issue: parsed.amount_received_on_issue }),
+            ...(parsed.total_indebtedness && { total_indebtedness: parsed.total_indebtedness }),
+            ...(parsed.listed_on_exchange !== undefined && { listed_on_exchange: Boolean(parsed.listed_on_exchange) }),
+            ...(parsed.par_value_shares && Array.isArray(parsed.par_value_shares) && { par_value_shares: parsed.par_value_shares }),
+            ...(parsed.no_par_value_shares && Array.isArray(parsed.no_par_value_shares) && { no_par_value_shares: parsed.no_par_value_shares }),
             ...(parsed.total_revenue !== undefined && { total_revenue: Number(parsed.total_revenue) || 0 }),
             ...(parsed.total_expenses !== undefined && { total_expenses: Number(parsed.total_expenses) || 0 }),
             ...(parsed.net_profit !== undefined && { net_profit: Number(parsed.net_profit) || 0 }),
@@ -179,6 +186,16 @@ export default function AnnualReturnPage() {
             ...(parsed.directors && Array.isArray(parsed.directors) && { directors: parsed.directors }),
             ...(parsed.secretary && { secretary: parsed.secretary }),
           }))
+          // Also set as prior year data for comparative display
+          if (parsed.total_revenue !== undefined || parsed.total_assets !== undefined) {
+            setPriorYear({
+              total_revenue: Number(parsed.total_revenue) || 0,
+              total_expenses: Number(parsed.total_expenses) || 0,
+              net_profit: Number(parsed.net_profit) || 0,
+              total_assets: Number(parsed.total_assets) || 0,
+              total_liabilities: Number(parsed.total_liabilities) || 0,
+            })
+          }
         }
         setImportMessage("PDF importe avec succes. Verifiez les champs pre-remplis.")
       } else {
@@ -518,9 +535,10 @@ export default function AnnualReturnPage() {
             </div>
           </div>
           {importMessage && (
-            <p className={`text-sm mt-2 ${importMessage.includes("Erreur") ? "text-red-600" : "text-green-600"}`}>
-              {importMessage}
-            </p>
+            <div className={`flex items-center gap-2 text-sm mt-3 ${importMessage.includes("Erreur") ? "text-red-600" : "text-green-700"}`}>
+              {importMessage.includes("Erreur") ? <AlertCircle className="w-4 h-4 flex-shrink-0" /> : <CheckCircle className="w-4 h-4 flex-shrink-0" />}
+              <span>{importMessage}</span>
+            </div>
           )}
         </CardContent>
       </Card>
