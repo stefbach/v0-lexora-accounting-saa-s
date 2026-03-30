@@ -37,6 +37,7 @@ export async function GET(request: NextRequest) {
 
     const users = (data || []).map(u => ({
       ...u,
+      actif: u.is_active !== false,
       societe_nom: u.societe_id ? societeMap[u.societe_id] || null : null,
     }))
 
@@ -137,7 +138,7 @@ export async function PATCH(request: NextRequest) {
     const supabase = getAdminClient()
     const updates: Record<string, unknown> = {}
     if (role) updates.role = role
-    if (actif !== undefined) updates.actif = actif
+    if (actif !== undefined) updates.is_active = actif
     if (full_name !== undefined) updates.full_name = full_name
     if (email !== undefined) updates.email = email
     if (phone !== undefined) updates.phone = phone
