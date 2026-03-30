@@ -46,6 +46,7 @@ const ROLES = [
   { value: "comptable_dedie", label: "Comptable Dedie", color: "bg-blue-100 text-blue-800 border-blue-200" },
   { value: "client_admin", label: "Client (Dirigeant)", color: "bg-green-100 text-green-800 border-green-200" },
   { value: "client_user", label: "Client (Utilisateur)", color: "bg-green-50 text-green-700 border-green-200" },
+  { value: "client_assistant", label: "Assistant (Direction)", color: "bg-cyan-100 text-cyan-800 border-cyan-200" },
   { value: "rh", label: "RH", color: "bg-orange-100 text-orange-800 border-orange-200" },
   { value: "juridique", label: "Juridique", color: "bg-purple-100 text-purple-800 border-purple-200" },
   { value: "manager", label: "Manager", color: "bg-teal-100 text-teal-800 border-teal-200" },
@@ -336,6 +337,9 @@ export default function UtilisateursPage() {
                     ))}
                   </SelectContent>
                 </Select>
+                {createForm.role === "client_assistant" && (
+                  <p className="text-xs text-gray-500 mt-1">Acces uniquement a la numerisation des documents</p>
+                )}
               </div>
               {NEEDS_SOCIETE.includes(createForm.role) && (
                 <div>

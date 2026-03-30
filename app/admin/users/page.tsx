@@ -21,6 +21,7 @@ const ROLES = [
   { value: 'rh', label: 'RH', color: 'bg-orange-100 text-orange-800' },
   { value: 'juridique', label: 'Juridique', color: 'bg-purple-100 text-purple-800' },
   { value: 'manager', label: 'Manager', color: 'bg-teal-100 text-teal-800' },
+  { value: 'client_assistant', label: 'Assistant (Direction)', color: 'bg-cyan-100 text-cyan-800' },
   { value: 'direction', label: 'Direction', color: 'bg-indigo-100 text-indigo-800' },
   { value: 'employe', label: 'Employé', color: 'bg-gray-100 text-gray-700' },
 ]

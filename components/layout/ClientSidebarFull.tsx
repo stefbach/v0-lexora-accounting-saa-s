@@ -3,6 +3,7 @@ import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
+import { useProfile } from "@/hooks/use-profile"
 import { useState, useEffect } from "react"
 import {
   LayoutDashboard, Building2, FileText, BookOpen, Banknote,
@@ -121,9 +122,28 @@ const MENU: MenuSection[] = [
   },
 ]
 
+// Restricted menu for client_assistant role — documents & profile only
+const ASSISTANT_MENU: MenuSection[] = [
+  {
+    section: "Mon Espace",
+    items: [
+      { href: "/client/tableau-de-bord", label: "Tableau de bord", icon: LayoutDashboard },
+      { href: "/client/documents", label: "Documents & OCR", icon: FileText },
+      { href: "/client/assistant", label: "Espace Assistant", icon: Upload },
+    ]
+  },
+  {
+    section: "Mon Compte",
+    items: [
+      { href: "/client/profil", label: "Mon Profil", icon: Settings },
+    ]
+  },
+]
+
 export function ClientSidebarFull() {
   const pathname = usePathname()
   const router = useRouter()
+  const { profile } = useProfile()
   const [collapsed, setCollapsed] = useState<string[]>([])
   const [activeModules, setActiveModules] = useState<ActiveModules>(DEFAULT_MODULES)
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -167,11 +187,16 @@ export function ClientSidebarFull() {
     router.push('/auth/login')
   }
 
+  // For client_assistant, show only the restricted menu
+  const isAssistant = profile?.role === "client_assistant"
+
   // Filter menu sections based on active modules
-  const visibleMenu = MENU.filter(section => {
-    if (!section.requiredModule) return true
-    return activeModules[section.requiredModule]
-  })
+  const visibleMenu = isAssistant
+    ? ASSISTANT_MENU
+    : MENU.filter(section => {
+        if (!section.requiredModule) return true
+        return activeModules[section.requiredModule]
+      })
 
   return (
     <>
