@@ -7,14 +7,14 @@ function getAdminClient() {
   return createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
-const VALID_ROLES = ['admin', 'super_admin', 'client_admin', 'client_user', 'comptable', 'comptable_dedie', 'rh', 'juridique', 'employe', 'manager', 'direction']
+const VALID_ROLES = ['admin', 'super_admin', 'client_admin', 'client_user', 'client_assistant', 'comptable', 'comptable_dedie', 'rh', 'rh_manager', 'juridique', 'employe', 'manager', 'direction', 'salarie']
 
 export async function GET() {
   try {
     const supabase = getAdminClient()
     const { data, error } = await supabase
       .from('profiles')
-      .select('*, societes(nom)')
+      .select('*')
       .order('created_at', { ascending: false })
     if (error) throw error
     return NextResponse.json({ users: data || [] })
@@ -26,7 +26,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { email, password, full_name, role, phone, societe_id, comptable_id } = body
+    const { email, password, full_name, role, phone, societe_id, societe_ids, comptable_id, modules_utilisateur } = body
 
     if (!email || !password || !full_name || !role) {
       return NextResponse.json({ error: 'Email, mot de passe, nom et rôle requis' }, { status: 400 })
@@ -48,14 +48,16 @@ export async function POST(request: NextRequest) {
     if (!authData.user) return NextResponse.json({ error: 'Échec création' }, { status: 500 })
 
     // Upsert profil — le trigger handle_new_user peut déjà l'avoir créé
+    const primarySocieteId = societe_id || (societe_ids && societe_ids[0]) || null
     const { error: profileError } = await supabase.from('profiles').upsert({
       id: authData.user.id,
       email,
       full_name,
       role,
       phone: phone || null,
-      societe_id: societe_id || null,
+      societe_id: primarySocieteId,
       comptable_id: comptable_id || null,
+      modules_utilisateur: modules_utilisateur || null,
     }, { onConflict: 'id' })
 
     if (profileError) {
@@ -63,11 +65,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Erreur profil: ${profileError.message}` }, { status: 500 })
     }
 
-    // Si société associée → insérer dans user_societes
-    if (societe_id) {
+    // Multi-société assignments
+    const allSocieteIds = societe_ids && societe_ids.length > 0
+      ? societe_ids
+      : societe_id ? [societe_id] : []
+
+    for (const sid of allSocieteIds) {
       const { error: usError } = await supabase.from('user_societes').upsert({
         user_id: authData.user.id,
-        societe_id,
+        societe_id: sid,
         role,
         actif: true
       }, { onConflict: 'user_id,societe_id' })
@@ -85,13 +91,51 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const { user_id, role, actif } = await request.json()
+    const body = await request.json()
+    const { user_id, full_name, email, phone, role, societe_id, societe_ids, actif, modules_utilisateur } = body
+    if (!user_id) return NextResponse.json({ error: 'user_id requis' }, { status: 400 })
+
     const supabase = getAdminClient()
     const updates: Record<string, unknown> = {}
-    if (role) updates.role = role
+    if (full_name !== undefined) updates.full_name = full_name
+    if (email !== undefined) updates.email = email
+    if (phone !== undefined) updates.phone = phone || null
+    if (role !== undefined) updates.role = role
+    if (societe_id !== undefined) updates.societe_id = societe_id || null
     if (actif !== undefined) updates.actif = actif
+    if (modules_utilisateur !== undefined) updates.modules_utilisateur = modules_utilisateur
+
     const { error } = await supabase.from('profiles').update(updates).eq('id', user_id)
     if (error) throw error
+
+    // Update user_societes if societe_ids provided (multi-société)
+    if (societe_ids && Array.isArray(societe_ids) && societe_ids.length > 0) {
+      // Remove old assignments
+      await supabase.from('user_societes').delete().eq('user_id', user_id)
+      // Insert new ones
+      for (const sid of societe_ids) {
+        await supabase.from('user_societes').upsert({
+          user_id,
+          societe_id: sid,
+          role: role || body.role,
+          actif: true,
+        }, { onConflict: 'user_id,societe_id' })
+      }
+    } else if (societe_id) {
+      // Single société assignment
+      await supabase.from('user_societes').upsert({
+        user_id,
+        societe_id,
+        role: role || body.role,
+        actif: true,
+      }, { onConflict: 'user_id,societe_id' })
+    }
+
+    // Update email in auth if changed
+    if (email) {
+      await supabase.auth.admin.updateUserById(user_id, { email })
+    }
+
     return NextResponse.json({ success: true })
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
