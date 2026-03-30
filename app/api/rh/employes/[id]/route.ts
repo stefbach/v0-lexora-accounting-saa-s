@@ -20,12 +20,37 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
     const supabase = getAdminClient()
+
+    const { searchParams } = new URL(_req.url)
+    const year = searchParams.get('year')
+    const pointage_mois = searchParams.get('pointage_mois')
+
+    // Build bulletin query - all bulletins, optionally filtered by year
+    let bulletinQuery = supabase.from('bulletins_paie').select('*').eq('employe_id', id).order('periode', { ascending: false })
+    if (year) {
+      bulletinQuery = bulletinQuery.gte('periode', `${year}-01-01`).lte('periode', `${year}-12-31`)
+    }
+
+    // Build conges query - all leave requests, optionally filtered by year
+    let congesQuery = supabase.from('demandes_conges').select('*').eq('employe_id', id).order('date_debut', { ascending: false })
+    if (year) {
+      congesQuery = congesQuery.gte('date_debut', `${year}-01-01`).lte('date_debut', `${year}-12-31`)
+    }
+
+    // Build pointages query - month-based or last 31 days
+    let pointagesQuery = supabase.from('pointages').select('*').eq('employe_id', id).order('date_pointage', { ascending: false })
+    if (pointage_mois) {
+      pointagesQuery = pointagesQuery.gte('date_pointage', `${pointage_mois}-01`).lte('date_pointage', `${pointage_mois}-31`)
+    } else {
+      pointagesQuery = pointagesQuery.limit(31)
+    }
+
     const [emp, bulletins, conges, soldes, pointages] = await Promise.all([
       supabase.from('employes').select('*').eq('id', id).single(),
-      supabase.from('bulletins_paie').select('*').eq('employe_id', id).order('periode', { ascending: false }).limit(12),
-      supabase.from('demandes_conges').select('*').eq('employe_id', id).order('date_debut', { ascending: false }).limit(20),
-      supabase.from('soldes_conges').select('*').eq('employe_id', id).order('annee', { ascending: false }).limit(3),
-      supabase.from('pointages').select('*').eq('employe_id', id).order('date_pointage', { ascending: false }).limit(31),
+      bulletinQuery,
+      congesQuery,
+      supabase.from('soldes_conges').select('*').eq('employe_id', id).order('annee', { ascending: false }),
+      pointagesQuery,
     ])
 
     return NextResponse.json({ employe: emp.data, bulletins: bulletins.data, conges: conges.data, soldes: soldes.data, pointages: pointages.data })
