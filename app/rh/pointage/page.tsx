@@ -480,7 +480,7 @@ export default function PointagePage() {
           <CardContent>
             {selectedEmployeePointage ? (
               <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                <div className="flex-1 grid grid-cols-4 gap-4 text-center">
+                <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
                   <div>
                     <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Entree</p>
                     <p className="text-2xl font-mono font-semibold text-emerald-700">

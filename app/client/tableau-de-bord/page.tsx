@@ -77,9 +77,9 @@ export default function TableauDeBord() {
   )
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 pt-14 md:pt-6 md:p-6 space-y-6">
       {/* En-tête */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-[#1E2A4A]">
             Bonjour {profile?.full_name?.split(" ")[0] || ""}

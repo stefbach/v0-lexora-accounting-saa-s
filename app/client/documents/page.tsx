@@ -302,7 +302,7 @@ export default function ClientDocumentsPage() {
   const currentDocs = getDocsForFolder(documents, selectedFolder)
 
   return (
-    <div className="flex-1 overflow-auto p-6 lg:p-8 space-y-6">
+    <div className="flex-1 overflow-auto p-4 pt-14 md:pt-6 md:p-6 lg:p-8 space-y-6">
       <div>
         <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Mes Documents</h1>
         <p className="text-sm text-muted-foreground">
@@ -312,11 +312,11 @@ export default function ClientDocumentsPage() {
 
       {/* Société selector for multi-société clients */}
       {societes.length > 1 && (
-        <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30">
+        <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg border bg-muted/30">
           <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
           <span className="text-sm text-muted-foreground">Société :</span>
           <Select value={selectedUploadSociete} onValueChange={setSelectedUploadSociete}>
-            <SelectTrigger className="w-[260px] h-9"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-[260px] h-9"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="auto">Détection automatique</SelectItem>
               {societes.map(s => <SelectItem key={s.societe_id} value={s.societe_id}>{s.nom}</SelectItem>)}
@@ -424,6 +424,7 @@ export default function ClientDocumentsPage() {
           </div>
         </CardHeader>
         <CardContent className="p-0">
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -536,6 +537,7 @@ export default function ClientDocumentsPage() {
               )}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
 
