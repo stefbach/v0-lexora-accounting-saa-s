@@ -56,20 +56,50 @@ export default function ImportPaiePage() {
 
   const handleFile = async (file: File) => {
     if (!file) return
+    console.log("[import-paie] Selected file:", file.name, file.size, file.type)
     setFileName(file.name)
     setParsing(true)
     setParseError("")
     try {
+      if (file.size > 10 * 1024 * 1024) {
+        setParseError("Fichier trop volumineux (max 10 MB)")
+        return
+      }
       const fd = new FormData()
       fd.append("file", file)
+      console.log("[import-paie] Uploading to API...")
       const res = await fetch("/api/rh/import-paie", { method: "POST", body: fd })
+      console.log("[import-paie] Response status:", res.status)
+
+      if (!res.ok) {
+        const text = await res.text()
+        console.error("[import-paie] Error response:", text)
+        try {
+          const errData = JSON.parse(text)
+          setParseError(errData.error || `Erreur serveur (${res.status})`)
+        } catch {
+          setParseError(`Erreur serveur (${res.status}): ${text.substring(0, 200)}`)
+        }
+        return
+      }
+
       const data = await res.json()
+      console.log("[import-paie] Parsed:", data.nb_rows, "rows,", data.columns?.length, "columns")
+
       if (data.error) { setParseError(data.error); return }
+      if (!data.employes || data.employes.length === 0) {
+        setParseError("Aucun employé détecté dans le fichier. Vérifiez que le fichier contient des colonnes: Basic Salary, Net Pay, CSG, etc.")
+        return
+      }
+
       setColumns(data.columns || [])
       setEmployes(data.employes || [])
       if (data.periode_detected && !periode) setPeriode(data.periode_detected)
       setStep("preview")
-    } catch (e: any) { setParseError(e.message || "Erreur") }
+    } catch (e: any) {
+      console.error("[import-paie] Exception:", e)
+      setParseError("Erreur: " + (e.message || "Connexion échouée. Vérifiez votre connexion internet."))
+    }
     finally { setParsing(false) }
   }
 
@@ -123,26 +153,44 @@ export default function ImportPaiePage() {
       {/* Step 1: Upload */}
       {step === "upload" && (
         <Card>
-          <CardContent className="p-8">
+          <CardContent className="p-8 space-y-4">
             <div
-              className="border-2 border-dashed border-gray-300 rounded-xl p-12 text-center hover:border-[#C9A84C] transition-colors cursor-pointer"
+              className="border-2 border-dashed border-gray-300 rounded-xl p-12 text-center hover:border-[#C9A84C] transition-colors"
               onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('border-[#C9A84C]', 'bg-[#C9A84C]/5') }}
               onDragLeave={e => { e.currentTarget.classList.remove('border-[#C9A84C]', 'bg-[#C9A84C]/5') }}
               onDrop={e => { e.preventDefault(); e.currentTarget.classList.remove('border-[#C9A84C]', 'bg-[#C9A84C]/5'); const f = e.dataTransfer.files[0]; if (f) handleFile(f) }}
-              onClick={() => { const input = document.createElement('input'); input.type = 'file'; input.accept = '.xlsx,.xls,.csv'; input.onchange = (e: any) => { const f = e.target.files[0]; if (f) handleFile(f) }; input.click() }}
             >
               {parsing ? (
-                <div><Loader2 className="h-12 w-12 animate-spin mx-auto mb-3 text-[#C9A84C]" /><p className="text-gray-500">Analyse du fichier en cours...</p></div>
+                <div><Loader2 className="h-12 w-12 animate-spin mx-auto mb-3 text-[#C9A84C]" /><p className="text-gray-500">Analyse du fichier <strong>{fileName}</strong> en cours...</p></div>
               ) : (
                 <div>
                   <FileSpreadsheet className="h-12 w-12 mx-auto mb-3 text-gray-400" />
                   <p className="text-lg font-medium" style={{ color: NAVY }}>Glissez votre fichier Excel ici</p>
-                  <p className="text-sm text-gray-400 mt-1">ou cliquez pour sélectionner (.xlsx, .xls, .csv)</p>
-                  <p className="text-xs text-gray-300 mt-3">Format attendu : Payroll Report avec colonnes Basic Salary, CSG, NSF, PAYE, Net Pay</p>
+                  <p className="text-sm text-gray-400 mt-1">ou utilisez le bouton ci-dessous</p>
                 </div>
               )}
             </div>
-            {parseError && <p className="text-red-600 text-sm mt-3 text-center">{parseError}</p>}
+
+            {/* Input fichier visible */}
+            <div className="flex items-center gap-3">
+              <input
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }}
+                className="flex-1 text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-[#1E2A4A] file:text-white hover:file:bg-[#2a3d66]"
+                disabled={parsing}
+              />
+              {fileName && !parsing && <Badge variant="outline">{fileName}</Badge>}
+            </div>
+
+            <p className="text-xs text-gray-400 text-center">Format attendu : Payroll Report avec colonnes Basic Salary, CSG, NSF, PAYE, Net Pay (.xlsx, .xls, .csv)</p>
+
+            {parseError && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                <p className="text-red-600 text-sm font-medium">Erreur</p>
+                <p className="text-red-500 text-sm mt-1">{parseError}</p>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
