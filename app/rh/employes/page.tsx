@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Search, Plus, Loader2, Users, Upload, Download, FileSpreadsheet, Pencil, ExternalLink } from "lucide-react"
+import { Search, Plus, Loader2, Users, Upload, Download, FileSpreadsheet, Pencil, ExternalLink, UserPlus, Key } from "lucide-react"
 import { BANQUES_MAURITIUS } from "@/lib/rh/banques-mauritius"
 
 function fmt(n: number) { return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "MUR", maximumFractionDigits: 0 }).format(n) }
@@ -31,6 +31,48 @@ export default function EmployesPage() {
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState<{imported:number,errors:{row:number,message:string}[],total_rows:number}|null>(null)
   const [importError, setImportError] = useState<string|null>(null)
+
+  // Create user access
+  const [accessOpen, setAccessOpen] = useState(false)
+  const [accessEmp, setAccessEmp] = useState<any>(null)
+  const [accessRole, setAccessRole] = useState("employe")
+  const [accessPassword, setAccessPassword] = useState("")
+  const [accessSaving, setAccessSaving] = useState(false)
+  const [accessResult, setAccessResult] = useState<{email:string;password:string}|null>(null)
+
+  const genPwd = () => { const c = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"; let p = ""; for (let i = 0; i < 10; i++) p += c[Math.floor(Math.random() * c.length)]; return p }
+
+  const openAccess = (emp: any) => {
+    setAccessEmp(emp)
+    setAccessRole(emp.role_rh || emp.role || "employe")
+    setAccessPassword(genPwd())
+    setAccessResult(null)
+    setAccessOpen(true)
+  }
+
+  const handleCreateAccess = async () => {
+    if (!accessEmp || !accessEmp.email) { alert("L'employé doit avoir un email"); return }
+    setAccessSaving(true)
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: accessEmp.email,
+          password: accessPassword,
+          full_name: `${accessEmp.prenom} ${accessEmp.nom}`,
+          role: accessRole,
+          societe_id: accessEmp.societe_id,
+          phone: accessEmp.telephone || null,
+        }),
+      })
+      const data = await res.json()
+      if (data.error) { alert("Erreur: " + data.error) }
+      else { setAccessResult({ email: accessEmp.email, password: accessPassword }) }
+    } catch { alert("Erreur réseau") }
+    setAccessSaving(false)
+  }
+
   const [editOpen, setEditOpen] = useState(false)
   const [editEmp, setEditEmp] = useState<any>(null)
   const [editSaving, setEditSaving] = useState(false)
@@ -217,6 +259,7 @@ export default function EmployesPage() {
                       <div className="flex items-center gap-1">
                         <Button variant="ghost" size="sm" onClick={(ev)=>{ev.stopPropagation();router.push(`/rh/employes/${e.id}`)}} title="Voir fiche"><ExternalLink className="w-4 h-4 text-[#1E2A4A]"/></Button>
                         <Button variant="ghost" size="sm" onClick={(ev)=>{ev.stopPropagation();openEdit(e)}} title="Modifier"><Pencil className="w-4 h-4 text-[#C9A84C]"/></Button>
+                        <Button variant="ghost" size="sm" onClick={(ev)=>{ev.stopPropagation();openAccess(e)}} title="Créer accès utilisateur"><Key className="w-4 h-4 text-purple-600"/></Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -257,6 +300,73 @@ export default function EmployesPage() {
             <Button variant="outline" onClick={()=>setEditOpen(false)}>Annuler</Button>
             <Button onClick={handleEdit} disabled={editSaving} className="bg-[#1E2A4A] text-white">{editSaving&&<Loader2 className="w-4 h-4 animate-spin mr-2"/>}Enregistrer</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog création accès utilisateur */}
+      <Dialog open={accessOpen} onOpenChange={o => { setAccessOpen(o); if (!o) { setAccessEmp(null); setAccessResult(null) } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-[#1E2A4A]">
+              <Key className="w-5 h-5 text-purple-600" />
+              Créer un accès utilisateur
+            </DialogTitle>
+          </DialogHeader>
+          {accessEmp && !accessResult && (
+            <div className="space-y-4">
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <p className="font-medium">{accessEmp.prenom} {accessEmp.nom}</p>
+                <p className="text-sm text-gray-500">{accessEmp.poste || "—"} • {accessEmp.email || "Pas d'email"}</p>
+              </div>
+              {!accessEmp.email && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                  Cet employé n'a pas d'email. Modifiez sa fiche pour ajouter un email avant de créer un accès.
+                </div>
+              )}
+              <div>
+                <Label>Rôle / Fonction</Label>
+                <Select value={accessRole} onValueChange={setAccessRole}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="employe">Employé (portail salarié)</SelectItem>
+                    <SelectItem value="manager">Manager (supervision équipe)</SelectItem>
+                    <SelectItem value="rh">RH (gestion complète)</SelectItem>
+                    <SelectItem value="rh_manager">RH Manager</SelectItem>
+                    <SelectItem value="comptable">Comptable</SelectItem>
+                    <SelectItem value="direction">Direction</SelectItem>
+                    <SelectItem value="client_admin">Administrateur</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Mot de passe généré</Label>
+                <div className="flex gap-2">
+                  <Input value={accessPassword} readOnly className="font-mono bg-gray-50" />
+                  <Button variant="outline" size="sm" onClick={() => setAccessPassword(genPwd())}>Régénérer</Button>
+                </div>
+                <p className="text-xs text-orange-600 mt-1">Notez ce mot de passe avant de confirmer</p>
+              </div>
+              <Button onClick={handleCreateAccess} disabled={accessSaving || !accessEmp.email}
+                className="w-full bg-[#1E2A4A] text-white">
+                {accessSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <UserPlus className="w-4 h-4 mr-2" />}
+                Créer le compte
+              </Button>
+            </div>
+          )}
+          {accessResult && (
+            <div className="space-y-4">
+              <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                <p className="font-semibold text-green-800 mb-2">Compte créé avec succès</p>
+                <div className="space-y-1">
+                  <p className="text-sm">Email : <span className="font-mono font-bold">{accessResult.email}</span></p>
+                  <p className="text-sm">Mot de passe : <span className="font-mono font-bold text-lg">{accessResult.password}</span></p>
+                  <p className="text-sm">Rôle : <span className="font-semibold">{accessRole}</span></p>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500">Communiquez ces identifiants à l'employé de manière sécurisée.</p>
+              <Button variant="outline" className="w-full" onClick={() => { setAccessOpen(false); setAccessResult(null) }}>Fermer</Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
