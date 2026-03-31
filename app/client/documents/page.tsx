@@ -364,6 +364,11 @@ export default function ClientDocumentsPage() {
         </div>
       )}
 
+      {/* Debug counter */}
+      <div className="text-xs text-gray-400 px-2">
+        Total: {documents.length} docs | Fournisseur: {documents.filter(d => d.type_document === 'facture_fournisseur').length} | Client: {documents.filter(d => d.type_document === 'facture_client').length} | Banque: {documents.filter(d => d.type_document === 'releve_bancaire').length} | Null: {documents.filter(d => !d.type_document).length}
+      </div>
+
       {/* Folder list */}
       <div>
         <h3 className="font-semibold mb-3" style={{ color: NAVY }}>Mes Dossiers</h3>
