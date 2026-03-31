@@ -339,8 +339,16 @@ export async function POST(request: Request) {
       }
 
       // Écritures comptables — DÉTAIL salaires + charges
+      // D'abord supprimer les anciennes écritures SAL pour cette période (évite les doublons)
       let comptaOk = false
       if (dossier) {
+        await supabase.from('ecritures_comptables')
+          .delete()
+          .eq('dossier_id', dossier.id)
+          .eq('journal', 'SAL')
+          .eq('date_ecriture', periodeDate)
+        console.log(`[import-paie] Deleted old SAL entries for ${periodeDate}`)
+
         const t = employes.reduce((s: any, e: any) => ({
           basic: s.basic + (e.salaire_base || 0),
           ot: s.ot + (e.overtime_1_5x || 0) + (e.overtime_2x || 0),
