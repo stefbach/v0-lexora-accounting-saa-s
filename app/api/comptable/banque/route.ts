@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     // Verify role
     const supabase = getAdminClient()
     const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-    if (!profile || !['comptable', 'comptable_dedie', 'admin'].includes(profile.role)) {
+    if (!profile || !['comptable', 'comptable_dedie', 'admin', 'super_admin', 'client_admin', 'rh', 'rh_manager'].includes(profile.role)) {
       return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
     }
 
