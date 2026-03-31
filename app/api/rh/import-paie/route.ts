@@ -10,33 +10,35 @@ function getAdminClient() {
 }
 
 const COL_PATTERNS: Record<string, string[]> = {
-  code: ['code', 'employee code', 'no'],
-  nom: ['last name', 'nom', 'name', 'surname'],
-  prenom: ['first name', 'prenom', 'prénom'],
-  poste: ['job', 'poste', 'position'],
-  departement: ['department', 'departement', 'dept'],
-  date_arrivee: ['arr. date', 'arr date', 'date arrivee', 'hire date', 'joined'],
-  date_depart: ['dep. date', 'dep date', 'date depart', 'departure'],
-  salaire_base: ['basic salary', 'salaire base', 'basic', '1000'],
-  overtime_1_5x: ['overtime', '@1.5', '1100'],
-  overtime_2x: ['@2x', '1150'],
-  special_allowance: ['special', '3010'],
-  internet_allowance: ['internet', '3170'],
-  prime_production: ['prime', 'production', '3200'],
-  electricity: ['electricity', '3250'],
-  meal_allowance: ['meal', '3510'],
-  total_payments: ['total payments', 'total pay'],
-  absence_deductions: ['absence', '3900'],
-  csg: ['csg', '4010'],
-  nsf: ['nsf', '4100'],
-  paye: ['paye', '5000'],
-  total_deductions: ['total deductions'],
-  er_csg: ['er] csg', 'er csg', '[er] 4010'],
-  er_nsf: ['er] nsf', 'er nsf', '[er] 4100'],
-  er_levy: ['er] 4200', 'er levy', '[er] levy'],
-  er_prgf: ['er] 7900', 'er prgf', '[er] 7900'],
-  total_er: ['total er', 'total employer'],
-  net_pay: ['net pay', 'net', 'salaire net'],
+  code: ['code', 'employee code', 'emp code', 'no.', 'no '],
+  nom: ['last name', 'last_name', 'nom', 'surname', 'family name'],
+  prenom: ['first name', 'first_name', 'prenom', 'prénom', 'given name'],
+  poste: ['job', 'poste', 'position', 'titre', 'fonction'],
+  departement: ['department', 'departement', 'département', 'dept', 'service'],
+  date_arrivee: ['arr. date', 'arr date', 'arr.date', 'date arrivee', 'hire date', 'joined', 'date embauche'],
+  date_depart: ['dep. date', 'dep date', 'dep.date', 'date depart', 'departure', 'leaving'],
+  salaire_base: ['basic salary', 'salaire base', 'basic', '1000 basic', '1000'],
+  overtime_1_5x: ['overtime @1.5', 'overtime', '@1.5x', '1100 overtime', '1100'],
+  overtime_2x: ['overtime @2', '@2x', '1150 overtime', '1150'],
+  special_allowance: ['special allowance', 'special', '3010 special', '3010'],
+  internet_allowance: ['internet allowance', 'internet', '3170 internet', '3170'],
+  prime_production: ['prime production', 'prime', 'production', '3200 prime', '3200'],
+  on_call: ['on call', '3220'],
+  prime_tl: ['prime tl', '3230'],
+  electricity: ['electricity allowance', 'electricity', 'electricite', '3250 elec', '3250'],
+  meal_allowance: ['meal allowance', 'meal', 'repas', '3510 meal', '3510'],
+  total_payments: ['total payments', 'total pay', 'gross', 'brut total'],
+  absence_deductions: ['absence deductions', 'absence', '3900 absence', '3900'],
+  csg: ['4010 csg', 'csg', '4010'],
+  nsf: ['4100 nsf', 'nsf', '4100'],
+  paye: ['5000 paye', 'paye', '5000'],
+  total_deductions: ['total deductions', 'total ded'],
+  er_csg: ['[er] 4010', 'er] csg', 'er csg', 'er] 4010'],
+  er_nsf: ['[er] 4100', 'er] nsf', 'er nsf', 'er] 4100'],
+  er_levy: ['[er] 4200', 'er] 4200', 'er levy', 'er] levy', 'levy'],
+  er_prgf: ['[er] 7900', 'er] 7900', 'er prgf', 'prgf'],
+  total_er: ['total er contributions', 'total er', 'total employer'],
+  net_pay: ['net pay', 'net_pay', 'salaire net', 'net'],
 }
 
 function detectColumns(headers: string[]): Record<string, number> {
@@ -128,17 +130,75 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Erreur lecture fichier Excel: ' + (parseErr.message || 'Format invalide') }, { status: 400 })
       }
 
-      const hIdx = rows.findIndex(r => r.some((c: any) => String(c).toLowerCase().match(/salary|basic|net pay|1000|4010/)))
-      if (hIdx < 0) return NextResponse.json({ error: 'En-tête non trouvé' }, { status: 400 })
+      // Find header row(s) — payroll Excel often has 2 header rows:
+      // Row A: numeric codes (1000, 1100, 3010, 4010, [ER] 4010...)
+      // Row B: labels (Basic Salary, Overtime @1.5x, CSG, NSF, PAYE...)
+      // We also need the row with Last name/First name/Code columns
 
-      const headers = rows[hIdx].map((c: any) => String(c).trim())
-      const colMap = detectColumns(headers)
+      let hIdx = -1
+      let nameRowIdx = -1
+
+      // Find row with salary codes/keywords
+      for (let i = 0; i < Math.min(rows.length, 15); i++) {
+        const rowStr = rows[i].map((c: any) => String(c).toLowerCase()).join(' ')
+        if (rowStr.match(/salary|basic|net pay|1000|4010|paye/)) { hIdx = i; break }
+      }
+
+      // Find row with name columns (Code, Last name, First name)
+      for (let i = 0; i < Math.min(rows.length, 15); i++) {
+        const rowStr = rows[i].map((c: any) => String(c).toLowerCase()).join(' ')
+        if (rowStr.match(/last name|nom|first name|prenom|code.*name|employee/)) { nameRowIdx = i; break }
+      }
+
+      // If we found name row but not salary row, use name row
+      if (hIdx < 0 && nameRowIdx >= 0) hIdx = nameRowIdx
+      if (hIdx < 0) return NextResponse.json({ error: `En-tête non trouvé dans les 15 premières lignes. Lignes scannées: ${rows.slice(0, 5).map((r, i) => `[${i}] ${r.slice(0, 5).join(', ')}`).join(' | ')}` }, { status: 400 })
+
+      // Merge multiple header rows: combine the header row with adjacent rows
+      // (handles payroll reports with codes on one row and labels on another)
+      const mergedHeaders: string[] = []
+      const headerRow = rows[hIdx]
+      const prevRow = hIdx > 0 ? rows[hIdx - 1] : []
+      const nextRow = hIdx + 1 < rows.length ? rows[hIdx + 1] : []
+
+      // Also check if nameRowIdx is different from hIdx
+      const nameRow = nameRowIdx >= 0 && nameRowIdx !== hIdx ? rows[nameRowIdx] : []
+
+      for (let i = 0; i < Math.max(headerRow.length, prevRow.length, nextRow.length, nameRow.length); i++) {
+        const parts = [
+          String(headerRow[i] || '').trim(),
+          String(prevRow[i] || '').trim(),
+          String(nextRow[i] || '').trim(),
+          String(nameRow[i] || '').trim(),
+        ].filter(p => p && p !== '0' && p !== 'undefined')
+        mergedHeaders.push(parts.join(' '))
+      }
+
+      console.log(`[import-paie] Header row: ${hIdx}, Name row: ${nameRowIdx}, Merged headers: ${mergedHeaders.slice(0, 10).join(' | ')}`)
+
+      const colMap = detectColumns(mergedHeaders)
+      console.log(`[import-paie] Column mapping: ${JSON.stringify(colMap)}`)
+
+      // Determine data start row (after ALL header rows)
+      const dataStartRow = Math.max(hIdx, nameRowIdx) + 1
+      // If the row right after headers looks like another header (contains labels), skip it too
+      let skipExtra = 0
+      if (dataStartRow < rows.length) {
+        const firstDataRow = rows[dataStartRow]
+        const firstDataStr = firstDataRow.map((c: any) => String(c).toLowerCase()).join(' ')
+        if (firstDataStr.match(/^.*(?:last name|basic salary|overtime|net pay|code).*$/)) skipExtra = 1
+      }
+
+      const headers = mergedHeaders
       const getVal = (row: any[], f: string) => colMap[f] !== undefined ? Number(String(row[colMap[f]] || '0').replace(/[^\d.-]/g, '')) || 0 : 0
       const getStr = (row: any[], f: string) => colMap[f] !== undefined ? String(row[colMap[f]] || '').trim() : ''
 
-      const employes = rows.slice(hIdx + 1)
+      const employes = rows.slice(dataStartRow + skipExtra)
         .filter(r => r.some(c => c !== '' && c !== null))
-        .filter(r => { const n = getStr(r, 'nom'); return n && n.toLowerCase() !== 'total' })
+        .filter(r => {
+          const n = getStr(r, 'nom') || getStr(r, 'prenom')
+          return n && !n.toLowerCase().match(/^(total|nom|last name|name)$/)
+        })
         .map(r => ({
           code: getStr(r, 'code'), nom: getStr(r, 'nom'), prenom: getStr(r, 'prenom'),
           poste: getStr(r, 'poste'), departement: getStr(r, 'departement'),
@@ -151,6 +211,18 @@ export async function POST(request: Request) {
           er_csg: getVal(r, 'er_csg'), er_nsf: getVal(r, 'er_nsf'), er_levy: getVal(r, 'er_levy'), er_prgf: getVal(r, 'er_prgf'),
           total_er: getVal(r, 'total_er'), net_pay: getVal(r, 'net_pay'),
         }))
+
+      console.log(`[import-paie] Found ${employes.length} employees. First: ${employes[0]?.nom || 'none'} ${employes[0]?.prenom || ''}`)
+
+      // If no employees found, return debug info
+      if (employes.length === 0) {
+        return NextResponse.json({
+          error: `Aucun employé détecté. Colonnes trouvées: ${Object.keys(colMap).join(', ')}. En-têtes fusionnés: ${mergedHeaders.slice(0, 15).join(' | ')}. Lignes de données: ${rows.length - dataStartRow - skipExtra}`,
+          columns: Object.entries(colMap).map(([f, i]) => ({ field: f, index: i })),
+          headers: mergedHeaders.slice(0, 20),
+          debug: { hIdx, nameRowIdx, dataStartRow, skipExtra, totalRows: rows.length },
+        }, { status: 400 })
+      }
 
       const monthMap: Record<string, string> = { jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12' }
       const pm = file.name.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*[\s_-]*(\d{4})/i)
