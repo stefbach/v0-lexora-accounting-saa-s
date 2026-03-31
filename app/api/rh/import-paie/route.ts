@@ -300,7 +300,21 @@ export async function POST(request: Request) {
           let employeId: string | null = null
           const { data: ex } = await supabase.from('employes').select('id, salaire_base').eq('societe_id', societe_id).ilike('nom', `%${nom}%`).limit(1).maybeSingle()
           if (ex) { employeId = ex.id; if (emp.salaire_base > 0 && emp.salaire_base !== Number(ex.salaire_base)) await supabase.from('employes').update({ salaire_base: emp.salaire_base }).eq('id', ex.id); updated++ }
-          else { const { data: n } = await supabase.from('employes').insert({ societe_id, nom, prenom: emp.prenom || '', code_employe: emp.code || null, poste: emp.poste || null, departement: emp.departement || null, salaire_base: emp.salaire_base || 0, date_arrivee: emp.date_arrivee || null }).select('id').single(); if (n) { employeId = n.id; created++ } }
+          else {
+            const autoCode = emp.code || `EMP-${String(Date.now()).slice(-6)}`
+            const { data: n, error: empErr } = await supabase.from('employes').insert({
+              societe_id, nom, prenom: emp.prenom || '', code: autoCode,
+              code_employe: emp.code || autoCode,
+              poste: emp.poste || null, departement: emp.departement || null,
+              salaire_base: emp.salaire_base || 0, date_arrivee: emp.date_arrivee || null
+            }).select('id').single()
+            if (empErr) {
+              console.error(`[import-paie] employe insert error for ${nom}:`, empErr.message)
+              errors.push(`${nom}: ${empErr.message}`)
+              continue
+            }
+            if (n) { employeId = n.id; created++ }
+          }
           if (!employeId) continue
           const { error: bulErr } = await supabase.from('bulletins_paie').upsert({ employe_id: employeId, societe_id, periode: periodeDate, salaire_base: emp.salaire_base || 0, heures_sup_montant: (emp.overtime_1_5x || 0) + (emp.overtime_2x || 0), special_allowance_1: emp.special_allowance || 0, salaire_net: emp.net_pay || 0, csg_salarie: emp.csg || 0, csg_patronal: emp.er_csg || 0, nsf_salarie: emp.nsf || 0, nsf_patronal: emp.er_nsf || 0, paye: emp.paye || 0, training_levy: emp.er_levy || 0, prgf: emp.er_prgf || 0, total_deductions: emp.total_deductions || 0, total_charges_patronales: emp.total_er || 0, statut: 'valide', source: 'import_excel' }, { onConflict: 'employe_id,periode' })
           if (bulErr) {
