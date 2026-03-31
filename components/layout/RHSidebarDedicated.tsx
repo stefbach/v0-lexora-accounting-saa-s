@@ -102,6 +102,17 @@ export function RHSidebarDedicated() {
         </div>
       </div>
       <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
+        {/* Retour espace client — visible pour client_admin, client_user, comptable */}
+        {['client_admin', 'client_user', 'comptable', 'comptable_dedie', 'admin', 'super_admin'].includes(userRole) && (
+          <>
+            <Link href="/client/tableau-de-bord"
+              className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[#C9A84C] hover:bg-[#C9A84C]/20 text-sm transition-colors mb-2 border border-[#C9A84C]/30">
+              <ArrowLeft className="w-4 h-4 flex-shrink-0" />
+              <span>Retour espace client</span>
+            </Link>
+            <div className="border-b border-white/10 mb-2" />
+          </>
+        )}
         {visibleLinks.map(l => {
           const Icon = l.icon
           const active = isActive(l.href, l.exact)
