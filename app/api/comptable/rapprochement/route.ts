@@ -592,6 +592,80 @@ export async function POST(request: Request) {
       })
     }
 
+    // === PAIEMENT EMPLOYÉ — virement individuel (hors bulk) ===
+    if (action === 'paiement_employe') {
+      const { transaction_id, releve_id, employe_id, societe_id, periode } = body
+      if (!employe_id || !societe_id) {
+        return NextResponse.json({ error: 'employe_id et societe_id requis' }, { status: 400 })
+      }
+
+      // Trouver l'employé
+      const { data: employe } = await supabase.from('employes').select('id, nom, prenom, salaire_base').eq('id', employe_id).single()
+      if (!employe) return NextResponse.json({ error: 'Employé non trouvé' }, { status: 404 })
+
+      // Trouver le bulletin de paie (si période fournie)
+      let bulletin: any = null
+      if (periode) {
+        const periodeDate = periode.length === 7 ? `${periode}-01` : periode
+        const { data: bul } = await supabase.from('bulletins_paie')
+          .select('id, salaire_net, salaire_base, periode')
+          .eq('employe_id', employe_id)
+          .gte('periode', periodeDate)
+          .lte('periode', `${periode}-31`)
+          .limit(1).maybeSingle()
+        bulletin = bul
+      }
+
+      const montantNet = bulletin ? Number(bulletin.salaire_net) : Number(employe.salaire_base) || 0
+      const lettreCode = `SAL${String(Date.now()).slice(-4)}`
+      const nomComplet = `${employe.prenom} ${employe.nom}`
+
+      // Marquer la transaction bancaire
+      if (releve_id && transaction_id) {
+        const { data: releve } = await supabase.from('releves_bancaires').select('id, transactions_json').eq('id', releve_id).single()
+        if (releve) {
+          const txIdx = parseInt(transaction_id.split('-').pop() || '0')
+          const txs = [...(releve.transactions_json || [])]
+          if (txIdx < txs.length) {
+            txs[txIdx] = {
+              ...txs[txIdx],
+              lettre: lettreCode,
+              statut: 'rapproche',
+              employe_id,
+              employe_nom: nomComplet,
+              type_rapprochement: 'salaire_individuel',
+              bulletin_id: bulletin?.id || null,
+            }
+            await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', releve_id)
+          }
+        }
+      }
+
+      // Créer les écritures comptables (Débit 421 / Crédit 512)
+      const { data: dossier } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
+      if (dossier) {
+        const dateEcriture = new Date().toISOString().split('T')[0]
+        await supabase.from('ecritures_comptables').insert([
+          { dossier_id: dossier.id, date_ecriture: dateEcriture, journal: 'BNQ', compte: '421000', libelle: `Virement salaire ${nomComplet}`, debit: Math.round(montantNet), credit: 0, lettre: lettreCode },
+          { dossier_id: dossier.id, date_ecriture: dateEcriture, journal: 'BNQ', compte: '512000', libelle: `Virement salaire ${nomComplet}`, debit: 0, credit: Math.round(montantNet), lettre: lettreCode },
+        ])
+      }
+
+      // Si bulletin trouvé, marquer comme payé
+      if (bulletin) {
+        await supabase.from('bulletins_paie').update({ statut: 'paye' }).eq('id', bulletin.id)
+      }
+
+      return NextResponse.json({
+        success: true,
+        lettre: lettreCode,
+        employe: nomComplet,
+        montant: montantNet,
+        bulletin_id: bulletin?.id || null,
+        bulletin_found: !!bulletin,
+      })
+    }
+
     return NextResponse.json({ error: 'Action inconnue' }, { status: 400 })
   } catch (e: unknown) {
     console.error('[rapprochement POST]', e)
