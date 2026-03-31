@@ -293,6 +293,7 @@ export default function EmployesPage() {
                   <TableRow key={e.id} className="hover:bg-gray-50 cursor-pointer" onClick={()=>router.push(`/rh/employes/${e.id}`)}>
                     <TableCell className="font-mono text-xs">{e.code||"—"}</TableCell>
                     <TableCell className="font-medium">{e.prenom} {e.nom}</TableCell>
+                    <TableCell>{e.date_depart ? <Badge className="bg-red-100 text-red-700 border-red-200 text-xs">Sorti le {new Date(e.date_depart.split("T")[0] + "T00:00:00").toLocaleDateString("fr-FR", {day:"2-digit",month:"2-digit",year:"numeric"})}</Badge> : <Badge className="bg-green-100 text-green-700 border-green-200 text-xs">Actif</Badge>}</TableCell>
                     <TableCell className="text-sm text-gray-600">{e.poste||"—"}</TableCell>
                     <TableCell className="text-sm text-gray-500">{e.email||"—"}</TableCell>
                     <TableCell className="text-right">{fmt(e.salaire_base)}</TableCell>
