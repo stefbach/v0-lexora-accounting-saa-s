@@ -24,6 +24,9 @@ export default function TestDocuments() {
         <p><strong>Debug dossiers :</strong> {result?._debug?.dossierIds_count || "?"}</p>
         <p><strong>Debug uploaders :</strong> {result?._debug?.uploaderIds_count || "?"}</p>
         <p><strong>Erreur :</strong> {result?.error || "Aucune"}</p>
+        <p><strong>Types :</strong> {JSON.stringify([...new Set((result?.documents || []).map((d: any) => d.type_document))])}</p>
+        <p><strong>Statuts :</strong> {JSON.stringify([...new Set((result?.documents || []).map((d: any) => d.statut))])}</p>
+        <p><strong>Factures fournisseur :</strong> {(result?.documents || []).filter((d: any) => d.type_document === 'facture_fournisseur').length}</p>
       </div>
 
       {result?.documents?.length > 0 && (
