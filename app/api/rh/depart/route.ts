@@ -11,6 +11,7 @@ function getAdminClient() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
+}
 
 /** Count working days between two dates (exclude Sat/Sun) */
 function countWorkingDays(dateDebut: string, dateFin: string): number {
