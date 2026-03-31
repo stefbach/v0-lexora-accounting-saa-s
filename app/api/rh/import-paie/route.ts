@@ -302,11 +302,20 @@ export async function POST(request: Request) {
           if (ex) { employeId = ex.id; if (emp.salaire_base > 0 && emp.salaire_base !== Number(ex.salaire_base)) await supabase.from('employes').update({ salaire_base: emp.salaire_base }).eq('id', ex.id); updated++ }
           else {
             const autoCode = emp.code || `EMP-${String(Date.now()).slice(-6)}`
+            // Fix date format: JS Date toString → YYYY-MM-DD
+            const fixDate = (d: any) => {
+              if (!d) return null
+              const s = String(d).trim()
+              if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10)
+              if (/^\d{2}\/\d{2}\/\d{4}/.test(s)) { const [dd, mm, yy] = s.split('/'); return `${yy}-${mm}-${dd}` }
+              try { const dt = new Date(s); if (!isNaN(dt.getTime())) return dt.toISOString().slice(0, 10) } catch {}
+              return null
+            }
             const { data: n, error: empErr } = await supabase.from('employes').insert({
               societe_id, nom, prenom: emp.prenom || '', code: autoCode,
               code_employe: emp.code || autoCode,
               poste: emp.poste || null, departement: emp.departement || null,
-              salaire_base: emp.salaire_base || 0, date_arrivee: emp.date_arrivee || null
+              salaire_base: emp.salaire_base || 0, date_arrivee: fixDate(emp.date_arrivee)
             }).select('id').single()
             if (empErr) {
               console.error(`[import-paie] employe insert error for ${nom}:`, empErr.message)
