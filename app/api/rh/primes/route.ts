@@ -89,18 +89,38 @@ export async function POST(request: Request) {
       if (!libelle || !type_prime) return NextResponse.json({ error: 'libelle et type_prime requis' }, { status: 400 })
 
       const autoCode = code || `PRM-${Date.now().toString(36).toUpperCase()}`
-      const { data, error } = await supabase.from('catalogue_primes').insert({
-        code: autoCode, libelle, type_prime,
+
+      // Try with new column names first, fallback to old names if column missing
+      const record: Record<string, unknown> = {
+        code: autoCode, libelle, actif: true,
+        type_prime: type_prime || null,
+        type: type_prime || null, // old column name
         montant_fixe: montant_fixe || null,
         montant_par_unite: montant_par_unite || null,
+        tarif_unitaire: montant_par_unite || null, // old column name
         unite: unite || null,
+        unite_libelle: unite || null, // old column name
         pourcentage: pourcentage || null,
         bonus_objectif_montant: bonus_objectif_montant || null,
+        bonus_si_atteint: bonus_objectif_montant || null, // old column name
         periode_application: periode_application || 'mensuel',
+        periode: periode_application || 'mensuel', // old column name
         societe_id: societe_id || null,
         postes_eligibles: postes_eligibles || null,
-        actif: true,
-      }).select().single()
+      }
+
+      let { data, error } = await supabase.from('catalogue_primes').insert(record).select().single()
+      if (error) {
+        // Strip columns mentioned in the error and retry
+        const safe = { ...record }
+        const msg = error.message || ''
+        for (const col of Object.keys(safe)) {
+          if (msg.includes(col)) delete safe[col]
+        }
+        console.warn('[primes] retry without:', Object.keys(record).filter(k => !(k in safe)))
+        const retry = await supabase.from('catalogue_primes').insert(safe).select().single()
+        data = retry.data; error = retry.error
+      }
       if (error) {
         console.error('[primes POST creer_catalogue]', error.message)
         return NextResponse.json({ error: error.message }, { status: 500 })
