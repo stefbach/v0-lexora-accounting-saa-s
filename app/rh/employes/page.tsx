@@ -12,6 +12,109 @@ import { Badge } from "@/components/ui/badge"
 import { Search, Plus, Loader2, Users, Upload, Download, FileSpreadsheet, Pencil, ExternalLink, UserPlus, Key } from "lucide-react"
 import { BANQUES_MAURITIUS } from "@/lib/rh/banques-mauritius"
 
+// ── Composant formulaire création (state isolé = pas de re-render parent) ──
+function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; onCreated: () => void; onClose: () => void }) {
+  const [form, setForm] = useState({ societe_id:"",nom:"",prenom:"",poste:"",email:"",telephone:"",salaire_base:"",transport_allowance:"0",petrol_allowance:"0",date_arrivee:"",role:"salarie",csg_categorie:"A",bank_account:"",bank_name:"",nic:"",tan:"",iban:"" })
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string|null>(null)
+  const u = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
+
+  const handleCreate = async () => {
+    if (!form.societe_id || !form.nom || !form.prenom || !form.salaire_base || !form.date_arrivee) { setError("Champs requis manquants"); return }
+    setSaving(true); setError(null)
+    try {
+      const res = await fetch("/api/rh/employes", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ ...form, salaire_base: parseFloat(form.salaire_base), transport_allowance: parseFloat(form.transport_allowance)||0, petrol_allowance: parseFloat(form.petrol_allowance)||0 }) })
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error) }
+      onClose(); onCreated()
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : "Erreur") }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <div className="space-y-3 py-2">
+      {error && <p className="text-sm text-red-600 bg-red-50 p-2 rounded">{error}</p>}
+      <div className="grid grid-cols-2 gap-3">
+        <div><Label>Société *</Label><Select value={form.societe_id} onValueChange={v=>u("societe_id",v)}><SelectTrigger><SelectValue placeholder="Choisir..."/></SelectTrigger><SelectContent>{societes.map(s=><SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent></Select></div>
+        <div><Label>Rôle</Label><Select value={form.role} onValueChange={v=>u("role",v)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{["salarie","manager","rh","admin","direction"].map(r=><SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent></Select></div>
+        <div><Label>Nom *</Label><Input value={form.nom} onChange={e=>u("nom",e.target.value)} placeholder="DUPONT"/></div>
+        <div><Label>Prénom *</Label><Input value={form.prenom} onChange={e=>u("prenom",e.target.value)} placeholder="Jean"/></div>
+        <div><Label>Poste</Label><Input value={form.poste} onChange={e=>u("poste",e.target.value)} placeholder="Comptable"/></div>
+        <div><Label>Email</Label><Input type="email" value={form.email} onChange={e=>u("email",e.target.value)} placeholder="jean@example.com"/></div>
+        <div><Label>Téléphone</Label><Input value={form.telephone} onChange={e=>u("telephone",e.target.value)} placeholder="+230 5123 4567"/></div>
+        <div><Label>Salaire base *</Label><Input type="number" value={form.salaire_base} onChange={e=>u("salaire_base",e.target.value)} placeholder="35000"/></div>
+        <div><Label>Transport</Label><Input type="number" value={form.transport_allowance} onChange={e=>u("transport_allowance",e.target.value)}/></div>
+        <div><Label>Petrol</Label><Input type="number" value={form.petrol_allowance} onChange={e=>u("petrol_allowance",e.target.value)}/></div>
+        <div><Label>Date arrivée *</Label><Input type="date" value={form.date_arrivee} onChange={e=>u("date_arrivee",e.target.value)}/></div>
+        <div><Label>Catégorie CSG</Label><Select value={form.csg_categorie} onValueChange={v=>u("csg_categorie",v)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="A">A</SelectItem><SelectItem value="B">B</SelectItem></SelectContent></Select></div>
+        <div><Label>NIC</Label><Input value={form.nic} onChange={e=>u("nic",e.target.value)} placeholder="A1234567890123"/></div>
+        <div><Label>TAN</Label><Input value={form.tan} onChange={e=>u("tan",e.target.value)} placeholder="A123456789"/></div>
+        <div><Label>Banque</Label><Select value={form.bank_name} onValueChange={v=>u("bank_name",v)}><SelectTrigger><SelectValue placeholder="Choisir..."/></SelectTrigger><SelectContent>{BANQUES_MAURITIUS.map(b=><SelectItem key={b.code} value={b.code}>{b.nom}</SelectItem>)}</SelectContent></Select></div>
+        <div><Label>N° compte</Label><Input value={form.bank_account} onChange={e=>u("bank_account",e.target.value)} placeholder="000012345678"/></div>
+        <div><Label>IBAN</Label><Input value={form.iban} onChange={e=>u("iban",e.target.value)} placeholder="MU17BOMM..."/></div>
+      </div>
+      <DialogFooter>
+        <Button variant="outline" onClick={onClose}>Annuler</Button>
+        <Button onClick={handleCreate} disabled={saving} className="bg-[#1E2A4A] text-white">{saving&&<Loader2 className="w-4 h-4 animate-spin mr-2"/>}Créer</Button>
+      </DialogFooter>
+    </div>
+  )
+}
+
+// ── Composant formulaire édition (state isolé) ──
+function EditEmployeForm({ emp, onSaved, onClose }: { emp: any; onSaved: () => void; onClose: () => void }) {
+  const [e, setE] = useState({ ...emp })
+  const [saving, setSaving] = useState(false)
+  const u = (k: string, v: any) => setE((p: any) => ({ ...p, [k]: v }))
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/rh/employes/${e.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nom: e.nom, prenom: e.prenom, poste: e.poste, email: e.email, telephone: e.telephone,
+          salaire_base: parseFloat(e.salaire_base) || 0,
+          transport_allowance: parseFloat(e.transport_allowance) || 0,
+          petrol_allowance: parseFloat(e.petrol_allowance) || 0,
+          date_arrivee: e.date_arrivee, date_depart: e.date_depart || null,
+          role: e.role, csg_categorie: e.csg_categorie, bank_name: e.bank_name, bank_account: e.bank_account,
+          nic_number: e.nic_number, tan_number: e.tan_number, iban: e.iban, devise_salaire: e.devise_salaire,
+        }),
+      })
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error) }
+      onClose(); onSaved()
+    } catch (err: any) { alert(err.message || "Erreur") }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <div className="grid grid-cols-2 gap-3 py-2">
+      <div><Label>Nom *</Label><Input value={e.nom||""} onChange={ev=>u("nom",ev.target.value)}/></div>
+      <div><Label>Prénom *</Label><Input value={e.prenom||""} onChange={ev=>u("prenom",ev.target.value)}/></div>
+      <div><Label>Poste</Label><Input value={e.poste||""} onChange={ev=>u("poste",ev.target.value)}/></div>
+      <div><Label>Email</Label><Input type="email" value={e.email||""} onChange={ev=>u("email",ev.target.value)}/></div>
+      <div><Label>Téléphone</Label><Input value={e.telephone||""} onChange={ev=>u("telephone",ev.target.value)}/></div>
+      <div><Label>Rôle</Label><Select value={e.role||"salarie"} onValueChange={v=>u("role",v)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{["salarie","manager","rh","admin","direction"].map(r=><SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent></Select></div>
+      <div><Label>Salaire base *</Label><Input type="number" value={e.salaire_base||""} onChange={ev=>u("salaire_base",ev.target.value)}/></div>
+      <div><Label>Devise</Label><Select value={e.devise_salaire||"MUR"} onValueChange={v=>u("devise_salaire",v)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{["MUR","EUR","USD","GBP"].map(d=><SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select></div>
+      <div><Label>Transport</Label><Input type="number" value={e.transport_allowance||""} onChange={ev=>u("transport_allowance",ev.target.value)}/></div>
+      <div><Label>Petrol</Label><Input type="number" value={e.petrol_allowance||""} onChange={ev=>u("petrol_allowance",ev.target.value)}/></div>
+      <div><Label>Date arrivée</Label><Input type="date" value={e.date_arrivee?.split("T")[0]||""} onChange={ev=>u("date_arrivee",ev.target.value)}/></div>
+      <div><Label>Date départ</Label><Input type="date" value={e.date_depart?.split("T")[0]||""} onChange={ev=>u("date_depart",ev.target.value)}/></div>
+      <div><Label>NIC</Label><Input value={e.nic_number||""} onChange={ev=>u("nic_number",ev.target.value)}/></div>
+      <div><Label>TAN</Label><Input value={e.tan_number||""} onChange={ev=>u("tan_number",ev.target.value)}/></div>
+      <div><Label>CSG</Label><Select value={e.csg_categorie||"A"} onValueChange={v=>u("csg_categorie",v)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="A">A</SelectItem><SelectItem value="B">B</SelectItem></SelectContent></Select></div>
+      <div><Label>Banque</Label><Select value={e.bank_name||""} onValueChange={v=>u("bank_name",v)}><SelectTrigger><SelectValue placeholder="Choisir..."/></SelectTrigger><SelectContent>{BANQUES_MAURITIUS.map(b=><SelectItem key={b.code} value={b.code}>{b.nom}</SelectItem>)}</SelectContent></Select></div>
+      <div><Label>N° compte</Label><Input value={e.bank_account||""} onChange={ev=>u("bank_account",ev.target.value)}/></div>
+      <div><Label>IBAN</Label><Input value={e.iban||""} onChange={ev=>u("iban",ev.target.value)}/></div>
+      <DialogFooter className="col-span-2">
+        <Button variant="outline" onClick={onClose}>Annuler</Button>
+        <Button onClick={handleSave} disabled={saving} className="bg-[#1E2A4A] text-white">{saving&&<Loader2 className="w-4 h-4 animate-spin mr-2"/>}Enregistrer</Button>
+      </DialogFooter>
+    </div>
+  )
+}
+
 function fmt(n: number) { return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "MUR", maximumFractionDigits: 0 }).format(n) }
 
 export default function EmployesPage() {
@@ -22,9 +125,6 @@ export default function EmployesPage() {
   const [search, setSearch] = useState("")
   const [filterSociete, setFilterSociete] = useState("all")
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string|null>(null)
-  const [form, setForm] = useState({ societe_id:"",nom:"",prenom:"",poste:"",email:"",telephone:"",salaire_base:"",transport_allowance:"0",petrol_allowance:"0",date_arrivee:"",role:"salarie",csg_categorie:"A",bank_account:"",bank_name:"",nic:"",tan:"",iban:"" })
   const [importOpen, setImportOpen] = useState(false)
   const [importFile, setImportFile] = useState<File|null>(null)
   const [importSociete, setImportSociete] = useState("")
@@ -75,36 +175,10 @@ export default function EmployesPage() {
 
   const [editOpen, setEditOpen] = useState(false)
   const [editEmp, setEditEmp] = useState<any>(null)
-  const [editSaving, setEditSaving] = useState(false)
 
   const openEdit = (emp: any) => {
     setEditEmp({ ...emp })
     setEditOpen(true)
-  }
-
-  const handleEdit = async () => {
-    if (!editEmp) return
-    setEditSaving(true)
-    try {
-      const res = await fetch(`/api/rh/employes/${editEmp.id}`, {
-        method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          nom: editEmp.nom, prenom: editEmp.prenom, poste: editEmp.poste,
-          email: editEmp.email, telephone: editEmp.telephone,
-          salaire_base: parseFloat(editEmp.salaire_base) || 0,
-          transport_allowance: parseFloat(editEmp.transport_allowance) || 0,
-          petrol_allowance: parseFloat(editEmp.petrol_allowance) || 0,
-          date_arrivee: editEmp.date_arrivee, date_depart: editEmp.date_depart || null,
-          role: editEmp.role, csg_categorie: editEmp.csg_categorie,
-          bank_account: editEmp.bank_account, bank_name: editEmp.bank_name,
-          nic_number: editEmp.nic_number, tan_number: editEmp.tan_number,
-          iban: editEmp.iban, devise_salaire: editEmp.devise_salaire,
-        }),
-      })
-      if (!res.ok) { const d = await res.json(); throw new Error(d.error) }
-      setEditOpen(false); setEditEmp(null); load()
-    } catch (e: any) { alert(e.message || "Erreur") }
-    finally { setEditSaving(false) }
   }
 
   const load = useCallback(async () => {
@@ -120,17 +194,6 @@ export default function EmployesPage() {
   }, [filterSociete])
 
   useEffect(() => { load() }, [load])
-
-  const handleCreate = async () => {
-    if (!form.societe_id || !form.nom || !form.prenom || !form.salaire_base || !form.date_arrivee) { setError("Champs requis manquants"); return }
-    setSaving(true); setError(null)
-    try {
-      const res = await fetch("/api/rh/employes", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ ...form, salaire_base: parseFloat(form.salaire_base), transport_allowance: parseFloat(form.transport_allowance)||0, petrol_allowance: parseFloat(form.petrol_allowance)||0 }) })
-      if (!res.ok) { const d = await res.json(); throw new Error(d.error) }
-      setDialogOpen(false); load()
-    } catch (e: unknown) { setError(e instanceof Error ? e.message : "Erreur") }
-    finally { setSaving(false) }
-  }
 
   const handleImport = async () => {
     if (!importFile || !importSociete) { setImportError("Fichier et société requis"); return }
@@ -203,31 +266,9 @@ export default function EmployesPage() {
         </Dialog>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild><Button className="bg-[#1E2A4A] text-white"><Plus className="w-4 h-4 mr-2"/>Nouvel employé</Button></DialogTrigger>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
             <DialogHeader><DialogTitle>Nouvel employé</DialogTitle></DialogHeader>
-            <div className="grid grid-cols-2 gap-3 py-2 max-h-[60vh] overflow-y-auto pr-2">
-              {error && <p className="col-span-2 text-sm text-red-600">{error}</p>}
-              <div><Label>Société *</Label><Select value={form.societe_id} onValueChange={v=>setForm(f=>({...f,societe_id:v}))}><SelectTrigger><SelectValue placeholder="Choisir..."/></SelectTrigger><SelectContent>{societes.map(s=><SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent></Select></div>
-              <div><Label>Rôle</Label><Select value={form.role} onValueChange={v=>setForm(f=>({...f,role:v}))}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{["salarie","manager","rh","admin","direction"].map(r=><SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent></Select></div>
-              <div><Label>Nom *</Label><Input value={form.nom} onChange={e=>setForm(f=>({...f,nom:e.target.value}))} placeholder="BACH"/></div>
-              <div><Label>Prénom *</Label><Input value={form.prenom} onChange={e=>setForm(f=>({...f,prenom:e.target.value}))} placeholder="Stéphane"/></div>
-              <div><Label>Poste</Label><Input value={form.poste} onChange={e=>setForm(f=>({...f,poste:e.target.value}))} placeholder="Médecin directeur"/></div>
-              <div><Label>Email</Label><Input type="email" value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))}/></div>
-              <div><Label>Téléphone</Label><Input value={form.telephone} onChange={e=>setForm(f=>({...f,telephone:e.target.value}))}/></div>
-              <div><Label>Date d'arrivée *</Label><Input type="date" value={form.date_arrivee} onChange={e=>setForm(f=>({...f,date_arrivee:e.target.value}))}/></div>
-              <div><Label>Salaire de base MUR *</Label><Input type="number" value={form.salaire_base} onChange={e=>setForm(f=>({...f,salaire_base:e.target.value}))}/></div>
-              <div><Label>Transport allowance</Label><Input type="number" value={form.transport_allowance} onChange={e=>setForm(f=>({...f,transport_allowance:e.target.value}))}/></div>
-              <div><Label>Petrol allowance</Label><Input type="number" value={form.petrol_allowance} onChange={e=>setForm(f=>({...f,petrol_allowance:e.target.value}))}/></div>
-              <div><Label>NIC (National ID Card)</Label><Input value={form.nic} onChange={e=>setForm(f=>({...f,nic:e.target.value}))} placeholder="Ex: A1234567890123"/></div>
-              <div><Label>TAN (Tax Account Number)</Label><Input value={form.tan} onChange={e=>setForm(f=>({...f,tan:e.target.value}))} placeholder="A123456789"/></div>
-              <div><Label>Banque</Label><Select value={form.bank_name} onValueChange={v=>setForm(f=>({...f,bank_name:v}))}><SelectTrigger><SelectValue placeholder="Choisir banque..."/></SelectTrigger><SelectContent>{BANQUES_MAURITIUS.map(b=><SelectItem key={b.code} value={b.code}>{b.nom}</SelectItem>)}</SelectContent></Select></div>
-              <div><Label>N° compte bancaire</Label><Input value={form.bank_account} onChange={e=>setForm(f=>({...f,bank_account:e.target.value}))} placeholder="Ex: 000012345678"/></div>
-              <div><Label>IBAN (optionnel)</Label><Input value={form.iban} onChange={e=>setForm(f=>({...f,iban:e.target.value}))} placeholder="MU17BOMM0101101030300200000MUR"/></div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={()=>setDialogOpen(false)}>Annuler</Button>
-              <Button onClick={handleCreate} disabled={saving} className="bg-[#1E2A4A] text-white">{saving&&<Loader2 className="w-4 h-4 animate-spin mr-2"/>}Créer</Button>
-            </DialogFooter>
+            <CreateEmployeForm societes={societes} onCreated={load} onClose={() => setDialogOpen(false)} />
           </DialogContent>
         </Dialog>
         </div>
@@ -272,33 +313,8 @@ export default function EmployesPage() {
       {/* Dialog édition employé */}
       <Dialog open={editOpen} onOpenChange={o => { setEditOpen(o); if (!o) setEditEmp(null) }}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Modifier l{"'"}employé — {editEmp?.prenom} {editEmp?.nom}</DialogTitle></DialogHeader>
-          {editEmp && (
-            <div className="grid grid-cols-2 gap-3 py-2">
-              <div><Label>Nom *</Label><Input value={editEmp.nom||""} onChange={e=>setEditEmp({...editEmp,nom:e.target.value})}/></div>
-              <div><Label>Prénom *</Label><Input value={editEmp.prenom||""} onChange={e=>setEditEmp({...editEmp,prenom:e.target.value})}/></div>
-              <div><Label>Poste</Label><Input value={editEmp.poste||""} onChange={e=>setEditEmp({...editEmp,poste:e.target.value})}/></div>
-              <div><Label>Email</Label><Input type="email" value={editEmp.email||""} onChange={e=>setEditEmp({...editEmp,email:e.target.value})}/></div>
-              <div><Label>Téléphone</Label><Input value={editEmp.telephone||""} onChange={e=>setEditEmp({...editEmp,telephone:e.target.value})}/></div>
-              <div><Label>Rôle</Label><Select value={editEmp.role||"salarie"} onValueChange={v=>setEditEmp({...editEmp,role:v})}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{["salarie","manager","rh","admin","direction"].map(r=><SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent></Select></div>
-              <div><Label>Salaire de base *</Label><Input type="number" value={editEmp.salaire_base||""} onChange={e=>setEditEmp({...editEmp,salaire_base:e.target.value})}/></div>
-              <div><Label>Devise</Label><Select value={editEmp.devise_salaire||"MUR"} onValueChange={v=>setEditEmp({...editEmp,devise_salaire:v})}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{["MUR","EUR","USD","GBP"].map(d=><SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select></div>
-              <div><Label>Transport Allowance</Label><Input type="number" value={editEmp.transport_allowance||""} onChange={e=>setEditEmp({...editEmp,transport_allowance:e.target.value})}/></div>
-              <div><Label>Petrol Allowance</Label><Input type="number" value={editEmp.petrol_allowance||""} onChange={e=>setEditEmp({...editEmp,petrol_allowance:e.target.value})}/></div>
-              <div><Label>Date arrivée</Label><Input type="date" value={editEmp.date_arrivee?.split("T")[0]||""} onChange={e=>setEditEmp({...editEmp,date_arrivee:e.target.value})}/></div>
-              <div><Label>Date départ</Label><Input type="date" value={editEmp.date_depart?.split("T")[0]||""} onChange={e=>setEditEmp({...editEmp,date_depart:e.target.value})}/></div>
-              <div><Label>NIC</Label><Input value={editEmp.nic_number||""} onChange={e=>setEditEmp({...editEmp,nic_number:e.target.value})} placeholder="A1234567890123"/></div>
-              <div><Label>TAN</Label><Input value={editEmp.tan_number||""} onChange={e=>setEditEmp({...editEmp,tan_number:e.target.value})} placeholder="A123456789"/></div>
-              <div><Label>Catégorie CSG</Label><Select value={editEmp.csg_categorie||"A"} onValueChange={v=>setEditEmp({...editEmp,csg_categorie:v})}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="A">A</SelectItem><SelectItem value="B">B</SelectItem></SelectContent></Select></div>
-              <div><Label>Banque</Label><Select value={editEmp.bank_name||""} onValueChange={v=>setEditEmp({...editEmp,bank_name:v})}><SelectTrigger><SelectValue placeholder="Choisir..."/></SelectTrigger><SelectContent>{BANQUES_MAURITIUS.map(b=><SelectItem key={b.code} value={b.code}>{b.nom}</SelectItem>)}</SelectContent></Select></div>
-              <div><Label>N° compte bancaire</Label><Input value={editEmp.bank_account||""} onChange={e=>setEditEmp({...editEmp,bank_account:e.target.value})}/></div>
-              <div><Label>IBAN</Label><Input value={editEmp.iban||""} onChange={e=>setEditEmp({...editEmp,iban:e.target.value})}/></div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={()=>setEditOpen(false)}>Annuler</Button>
-            <Button onClick={handleEdit} disabled={editSaving} className="bg-[#1E2A4A] text-white">{editSaving&&<Loader2 className="w-4 h-4 animate-spin mr-2"/>}Enregistrer</Button>
-          </DialogFooter>
+          <DialogHeader><DialogTitle>Modifier — {editEmp?.prenom} {editEmp?.nom}</DialogTitle></DialogHeader>
+          {editEmp && <EditEmployeForm emp={editEmp} onSaved={load} onClose={() => { setEditOpen(false); setEditEmp(null) }} />}
         </DialogContent>
       </Dialog>
 
