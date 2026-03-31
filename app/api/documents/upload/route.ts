@@ -646,6 +646,105 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
       }
     }
 
+    // ──── AFFECTATION COMPTABLE AUTOMATIQUE (facture fournisseur) ────
+    // If this is a supplier invoice, look up automatic accounting assignment
+    if (typeDocument === 'facture_fournisseur') {
+      const fournisseurName = extraction.emetteur || extraction.fournisseur || ''
+      // Resolve societe_id for affectation lookup
+      let affSocieteId = societeId
+      if (!affSocieteId && finalDossierId) {
+        const { data: dossierAff } = await supabase.from('dossiers').select('societe_id').eq('id', finalDossierId).maybeSingle()
+        affSocieteId = dossierAff?.societe_id
+      }
+
+      if (fournisseurName && affSocieteId) {
+        try {
+          // Normalize fournisseur name for matching
+          const normalizedFournisseur = fournisseurName
+            .toUpperCase()
+            .replace(/\b(LTD|LIMITED|SARL|SAS|SA|EURL|SNC|GIE|INC|CORP|LLC|PLC|CO\.?\s*LTD)\b/gi, '')
+            .replace(/[.,;:!?]/g, '')
+            .replace(/\s+/g, ' ')
+            .trim()
+
+          // 1. Exact match
+          let affectation: any = null
+          const { data: exactMatch } = await supabase
+            .from('affectations_comptables')
+            .select('*')
+            .eq('societe_id', affSocieteId)
+            .eq('fournisseur', normalizedFournisseur)
+            .limit(1)
+            .maybeSingle()
+
+          if (exactMatch) {
+            affectation = exactMatch
+          } else {
+            // 2. Pattern match
+            const { data: allAff } = await supabase
+              .from('affectations_comptables')
+              .select('*')
+              .eq('societe_id', affSocieteId)
+
+            if (allAff && allAff.length > 0) {
+              for (const aff of allAff) {
+                if (normalizedFournisseur.includes(aff.fournisseur) || aff.fournisseur.includes(normalizedFournisseur)) {
+                  affectation = aff
+                  break
+                }
+                if (Array.isArray(aff.fournisseur_patterns)) {
+                  for (const pattern of aff.fournisseur_patterns) {
+                    const p = pattern.toUpperCase().trim()
+                    if (p && normalizedFournisseur.includes(p)) {
+                      affectation = aff
+                      break
+                    }
+                  }
+                  if (affectation) break
+                }
+              }
+            }
+          }
+
+          if (affectation) {
+            console.log(`[upload] Affectation auto: ${fournisseurName} → compte ${affectation.compte} (${affectation.libelle_compte || ''})`)
+
+            // Override the 6xx charge account in ecritures_comptables with the affectation compte
+            if (Array.isArray(extraction.ecritures_comptables)) {
+              extraction.ecritures_comptables = extraction.ecritures_comptables.map((e: any) => {
+                // Replace 6xx charge accounts (not 401 fournisseur, not 4456 TVA)
+                if (String(e.compte).startsWith('6')) {
+                  return { ...e, compte: affectation.compte, libelle: affectation.libelle_compte || e.libelle }
+                }
+                return e
+              })
+            }
+
+            // Override journal if specified
+            if (affectation.journal) {
+              extraction._affectation_journal = affectation.journal
+            }
+
+            // Mark as auto-lettrée if configured
+            if (affectation.auto_lettrage) {
+              extraction._auto_lettrage = true
+            }
+
+            // Update usage stats on affectation
+            await supabase
+              .from('affectations_comptables')
+              .update({
+                nb_utilisations: (affectation.nb_utilisations || 0) + 1,
+                derniere_utilisation: new Date().toISOString(),
+              })
+              .eq('id', affectation.id)
+          }
+        } catch (affErr: any) {
+          console.warn('[upload] Affectation lookup failed:', affErr.message)
+        }
+      }
+    }
+
     // Update document as processed
     const updateData: any = {
       type_document: typeDocument, statut: 'traite',
@@ -665,6 +764,8 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
     const ecritures = extraction.ecritures_comptables
     if (Array.isArray(ecritures) && ecritures.length > 0) {
       const journalMap: Record<string, string> = { facture_fournisseur: 'ACH', facture_client: 'VTE', releve_bancaire: 'BNQ', fiche_paie: 'OD', charges_sociales: 'OD' }
+      // Use affectation journal override if available
+      const effectiveJournal = extraction._affectation_journal || journalMap[typeDocument] || 'OD'
 
       // Determine the correct date based on document type
       let dateEcriture = extraction.date_document || extraction.date_facture || null
@@ -679,10 +780,12 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
           dossier_id: finalDossierId,
           // Use transaction-level date if available, otherwise document-level date
           date_ecriture: e.date || dateEcriture,
-          journal: journalMap[typeDocument] || 'OD',
+          journal: effectiveJournal,
           numero_piece: e.reference || extraction.numero_reference || null,
           compte: String(e.compte), libelle: e.libelle || file.name,
           debit: Number(e.debit) || 0, credit: Number(e.credit) || 0, piece_justificative: doc.id,
+          // Mark as auto-lettrée if affectation says so
+          ...(extraction._auto_lettrage ? { lettrage: 'AUTO' } : {}),
         }))
       if (entries.length > 0) await supabase.from('ecritures_comptables').insert(entries)
     }
