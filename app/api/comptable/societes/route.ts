@@ -64,10 +64,20 @@ export async function GET() {
         }
       }
 
-    } else if (['rh', 'juridique', 'employe', 'manager', 'direction'].includes(role)) {
+    } else if (['rh', 'rh_manager', 'juridique', 'employe', 'manager', 'direction'].includes(role)) {
       if (profile?.societe_id) {
         const { data } = await admin.from('societes').select('*').eq('id', profile.societe_id)
         ;(data || []).forEach((s: any) => societeMap.set(s.id, s))
+      }
+    }
+
+    // Pour TOUS les rôles: ajouter les sociétés via user_societes
+    const { data: userSocietes } = await admin.from('user_societes').select('societe_id').eq('user_id', user.id)
+    if (userSocietes && userSocietes.length > 0) {
+      const usIds = userSocietes.map(us => us.societe_id).filter(Boolean)
+      if (usIds.length > 0) {
+        const { data: usSocietes } = await admin.from('societes').select('*').in('id', usIds)
+        ;(usSocietes || []).forEach((s: any) => societeMap.set(s.id, s))
       }
     }
 
