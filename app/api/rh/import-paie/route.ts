@@ -274,19 +274,48 @@ export async function POST(request: Request) {
         } catch (e: any) { errors.push(`${emp.nom}: ${e.message}`) }
       }
 
-      // Écritures comptables
+      // Écritures comptables — DÉTAIL salaires + charges
       let comptaOk = false
       if (dossier) {
-        const t = employes.reduce((s: any, e: any) => ({ brut: s.brut + (e.total_payments || e.salaire_base || 0), net: s.net + (e.net_pay || 0), csg: s.csg + (e.csg || 0) + (e.er_csg || 0), paye: s.paye + (e.paye || 0), levy: s.levy + (e.er_levy || 0), charges: s.charges + (e.total_er || 0) }), { brut: 0, net: 0, csg: 0, paye: 0, levy: 0, charges: 0 })
-        console.log(`[import-paie] Compta totals: brut=${t.brut}, net=${t.net}, csg=${t.csg}, paye=${t.paye}, charges=${t.charges}`)
+        const t = employes.reduce((s: any, e: any) => ({
+          basic: s.basic + (e.salaire_base || 0),
+          ot: s.ot + (e.overtime_1_5x || 0) + (e.overtime_2x || 0),
+          allowances: s.allowances + (e.special_allowance || 0) + (e.internet_allowance || 0) + (e.prime_production || 0) + (e.electricity || 0) + (e.meal_allowance || 0),
+          brut: s.brut + (e.total_payments || e.salaire_base || 0),
+          net: s.net + (e.net_pay || 0),
+          csg_sal: s.csg_sal + (e.csg || 0),
+          nsf_sal: s.nsf_sal + (e.nsf || 0),
+          paye: s.paye + (e.paye || 0),
+          csg_pat: s.csg_pat + (e.er_csg || 0),
+          nsf_pat: s.nsf_pat + (e.er_nsf || 0),
+          levy: s.levy + (e.er_levy || 0),
+          prgf: s.prgf + (e.er_prgf || 0),
+          total_er: s.total_er + (e.total_er || 0),
+          absence: s.absence + (e.absence_deductions || 0),
+        }), { basic: 0, ot: 0, allowances: 0, brut: 0, net: 0, csg_sal: 0, nsf_sal: 0, paye: 0, csg_pat: 0, nsf_pat: 0, levy: 0, prgf: 0, total_er: 0, absence: 0 })
+
+        const moisLabel = new Date(periodeDate).toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
+        console.log(`[import-paie] Compta: basic=${t.basic}, ot=${t.ot}, allow=${t.allowances}, net=${t.net}, csg_s=${t.csg_sal}, csg_p=${t.csg_pat}`)
+
         const entries = [
-          { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '641', libelle: `Rémunérations ${periode}`, debit: Math.round(t.brut), credit: 0 },
-          { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '645', libelle: `Charges patronales ${periode}`, debit: Math.round(t.charges), credit: 0 },
-          { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '421', libelle: `Net à payer ${periode}`, debit: 0, credit: Math.round(t.net) },
-          { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '431', libelle: `CSG ${periode}`, debit: 0, credit: Math.round(t.csg) },
-          { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '444', libelle: `PAYE ${periode}`, debit: 0, credit: Math.round(t.paye) },
-          { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '432', libelle: `Training Levy ${periode}`, debit: 0, credit: Math.round(t.levy) },
-        ].filter(e => e.debit > 0 || e.credit > 0)
+          // DÉBIT — Salaires et charges
+          { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '641100', libelle: `Salaires de base ${moisLabel}`, debit: Math.round(t.basic), credit: 0 },
+          t.ot > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '641200', libelle: `Heures supplémentaires ${moisLabel}`, debit: Math.round(t.ot), credit: 0 } : null,
+          t.allowances > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '641300', libelle: `Primes et indemnités ${moisLabel}`, debit: Math.round(t.allowances), credit: 0 } : null,
+          t.csg_pat > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '645100', libelle: `CSG patronale ${moisLabel}`, debit: Math.round(t.csg_pat), credit: 0 } : null,
+          t.nsf_pat > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '645200', libelle: `NSF patronal ${moisLabel}`, debit: Math.round(t.nsf_pat), credit: 0 } : null,
+          t.levy > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '645300', libelle: `Training Levy ${moisLabel}`, debit: Math.round(t.levy), credit: 0 } : null,
+          t.prgf > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '645400', libelle: `PRGF ${moisLabel}`, debit: Math.round(t.prgf), credit: 0 } : null,
+          // CRÉDIT — Dettes
+          { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '421000', libelle: `Net à payer ${moisLabel}`, debit: 0, credit: Math.round(t.net) },
+          t.csg_sal + t.csg_pat > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '431000', libelle: `CSG à payer ${moisLabel}`, debit: 0, credit: Math.round(t.csg_sal + t.csg_pat) } : null,
+          t.nsf_sal + t.nsf_pat > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '431100', libelle: `NSF à payer ${moisLabel}`, debit: 0, credit: Math.round(t.nsf_sal + t.nsf_pat) } : null,
+          t.paye > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '444000', libelle: `PAYE à payer ${moisLabel}`, debit: 0, credit: Math.round(t.paye) } : null,
+          t.levy > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '432000', libelle: `Training Levy à payer ${moisLabel}`, debit: 0, credit: Math.round(t.levy) } : null,
+          t.prgf > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '432100', libelle: `PRGF à payer ${moisLabel}`, debit: 0, credit: Math.round(t.prgf) } : null,
+          t.absence > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '641900', libelle: `Retenues absences ${moisLabel}`, debit: 0, credit: Math.round(t.absence) } : null,
+        ].filter(Boolean) as any[]
+
         const { error: comptaErr } = await supabase.from('ecritures_comptables').insert(entries)
         if (comptaErr) {
           console.error('[import-paie] compta insert failed:', comptaErr.message)

@@ -198,15 +198,25 @@ export default function ImportPaiePage() {
       {/* Step 2: Preview */}
       {step === "preview" && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-3">
               <Badge style={{ backgroundColor: NAVY }} className="text-white">{fileName}</Badge>
-              <Badge variant="outline">{employes.length} employés détectés</Badge>
-              <Badge variant="outline">{columns.length} colonnes mappées</Badge>
+              <Badge variant="outline">{employes.length} employés</Badge>
+              <Badge variant="outline">{columns.length} colonnes</Badge>
             </div>
             <div className="flex items-center gap-2">
-              <Label className="text-sm">Période :</Label>
-              <Input type="month" value={periode} onChange={e => setPeriode(e.target.value)} className="w-40" />
+              <Label className="text-sm font-medium">Période :</Label>
+              <select value={periode} onChange={e => setPeriode(e.target.value)}
+                className="border rounded px-3 py-2 text-sm w-[180px]">
+                <option value="">-- Choisir le mois --</option>
+                {Array.from({ length: 36 }, (_, i) => {
+                  const d = new Date()
+                  d.setMonth(d.getMonth() - i)
+                  const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+                  const label = d.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
+                  return <option key={val} value={val}>{label}</option>
+                })}
+              </select>
               <Button variant="outline" onClick={() => { setStep("upload"); setEmployes([]); setColumns([]) }}>Annuler</Button>
               <Button onClick={handleImport} disabled={importing || !periode || !societe} style={{ backgroundColor: NAVY }} className="text-white">
                 {importing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
@@ -224,58 +234,70 @@ export default function ImportPaiePage() {
             <Card><CardContent className="p-3 text-center"><p className="text-xs text-gray-500">CSG + PAYE</p><p className="text-xl font-bold text-purple-600">{fmt(totals.csg + totals.paye)}</p></CardContent></Card>
           </div>
 
-          {/* Preview table */}
+          {/* Preview table — ALL columns */}
           <Card>
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead className="bg-gray-50 sticky top-0">
+              <div className="overflow-x-auto max-h-[60vh]">
+                <table className="w-full text-xs border-collapse">
+                  <thead className="bg-gray-50 sticky top-0 z-10">
                     <tr>
-                      <th className="px-2 py-2 text-left font-medium">Code</th>
-                      <th className="px-2 py-2 text-left font-medium">Nom</th>
-                      <th className="px-2 py-2 text-left font-medium">Prénom</th>
-                      <th className="px-2 py-2 text-left font-medium">Poste</th>
-                      <th className="px-2 py-2 text-right font-medium">Basic</th>
-                      <th className="px-2 py-2 text-right font-medium">OT</th>
-                      <th className="px-2 py-2 text-right font-medium">Primes</th>
-                      <th className="px-2 py-2 text-right font-medium">Total Brut</th>
-                      <th className="px-2 py-2 text-right font-medium">CSG</th>
-                      <th className="px-2 py-2 text-right font-medium">NSF</th>
-                      <th className="px-2 py-2 text-right font-medium">PAYE</th>
-                      <th className="px-2 py-2 text-right font-medium">ER Total</th>
-                      <th className="px-2 py-2 text-right font-medium text-emerald-700">Net Pay</th>
+                      <th className="px-2 py-2 text-left font-medium border-b">Code</th>
+                      <th className="px-2 py-2 text-left font-medium border-b">Nom</th>
+                      <th className="px-2 py-2 text-left font-medium border-b">Prénom</th>
+                      <th className="px-2 py-2 text-left font-medium border-b">Poste</th>
+                      <th className="px-2 py-2 text-left font-medium border-b">Dept</th>
+                      <th className="px-2 py-2 text-right font-medium border-b bg-blue-50">Basic</th>
+                      <th className="px-2 py-2 text-right font-medium border-b bg-blue-50">OT 1.5x</th>
+                      <th className="px-2 py-2 text-right font-medium border-b bg-blue-50">OT 2x</th>
+                      <th className="px-2 py-2 text-right font-medium border-b bg-green-50">Special</th>
+                      <th className="px-2 py-2 text-right font-medium border-b bg-green-50">Internet</th>
+                      <th className="px-2 py-2 text-right font-medium border-b bg-green-50">Prime</th>
+                      <th className="px-2 py-2 text-right font-medium border-b bg-green-50">Elec</th>
+                      <th className="px-2 py-2 text-right font-medium border-b bg-green-50">Meal</th>
+                      <th className="px-2 py-2 text-right font-medium border-b font-bold">Total Brut</th>
+                      <th className="px-2 py-2 text-right font-medium border-b bg-red-50">Absence</th>
+                      <th className="px-2 py-2 text-right font-medium border-b bg-red-50">CSG</th>
+                      <th className="px-2 py-2 text-right font-medium border-b bg-red-50">NSF</th>
+                      <th className="px-2 py-2 text-right font-medium border-b bg-red-50">PAYE</th>
+                      <th className="px-2 py-2 text-right font-medium border-b bg-red-50">Tot. Déd.</th>
+                      <th className="px-2 py-2 text-right font-medium border-b bg-orange-50">ER CSG</th>
+                      <th className="px-2 py-2 text-right font-medium border-b bg-orange-50">ER NSF</th>
+                      <th className="px-2 py-2 text-right font-medium border-b bg-orange-50">ER Levy</th>
+                      <th className="px-2 py-2 text-right font-medium border-b bg-orange-50">ER PRGF</th>
+                      <th className="px-2 py-2 text-right font-medium border-b bg-orange-50">Tot. ER</th>
+                      <th className="px-2 py-2 text-right font-medium border-b bg-emerald-50 font-bold">Net Pay</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y">
                     {employes.map((e, i) => (
                       <tr key={i} className="hover:bg-gray-50">
-                        <td className="px-2 py-1.5 font-mono">{e.code || "—"}</td>
-                        <td className="px-2 py-1.5 font-medium">{e.nom}</td>
-                        <td className="px-2 py-1.5">{e.prenom}</td>
-                        <td className="px-2 py-1.5 text-gray-500">{e.poste || "—"}</td>
-                        <td className="px-2 py-1.5 text-right font-mono">{fmt(e.salaire_base)}</td>
-                        <td className="px-2 py-1.5 text-right font-mono">{fmt((e.overtime_1_5x || 0) + (e.overtime_2x || 0))}</td>
-                        <td className="px-2 py-1.5 text-right font-mono">{fmt((e.special_allowance || 0) + (e.prime_production || 0))}</td>
-                        <td className="px-2 py-1.5 text-right font-mono font-medium">{fmt(e.total_payments || e.salaire_base)}</td>
-                        <td className="px-2 py-1.5 text-right font-mono text-gray-500">{fmt(e.csg)}</td>
-                        <td className="px-2 py-1.5 text-right font-mono text-gray-500">{fmt(e.nsf)}</td>
-                        <td className="px-2 py-1.5 text-right font-mono text-gray-500">{fmt(e.paye)}</td>
-                        <td className="px-2 py-1.5 text-right font-mono text-orange-600">{fmt(e.total_er)}</td>
-                        <td className="px-2 py-1.5 text-right font-mono font-bold text-emerald-700">{fmt(e.net_pay)}</td>
+                        <td className="px-2 py-1 font-mono">{e.code || "—"}</td>
+                        <td className="px-2 py-1 font-medium">{e.nom}</td>
+                        <td className="px-2 py-1">{e.prenom}</td>
+                        <td className="px-2 py-1 text-gray-500">{e.poste || "—"}</td>
+                        <td className="px-2 py-1 text-gray-500">{e.departement || "—"}</td>
+                        <td className="px-2 py-1 text-right font-mono">{fmt(e.salaire_base)}</td>
+                        <td className="px-2 py-1 text-right font-mono">{fmt(e.overtime_1_5x)}</td>
+                        <td className="px-2 py-1 text-right font-mono">{fmt(e.overtime_2x)}</td>
+                        <td className="px-2 py-1 text-right font-mono">{fmt(e.special_allowance)}</td>
+                        <td className="px-2 py-1 text-right font-mono">{fmt(e.internet_allowance)}</td>
+                        <td className="px-2 py-1 text-right font-mono">{fmt(e.prime_production)}</td>
+                        <td className="px-2 py-1 text-right font-mono">{fmt(e.electricity)}</td>
+                        <td className="px-2 py-1 text-right font-mono">{fmt(e.meal_allowance)}</td>
+                        <td className="px-2 py-1 text-right font-mono font-medium">{fmt(e.total_payments || e.salaire_base)}</td>
+                        <td className="px-2 py-1 text-right font-mono text-red-500">{fmt(e.absence_deductions)}</td>
+                        <td className="px-2 py-1 text-right font-mono text-red-600">{fmt(e.csg)}</td>
+                        <td className="px-2 py-1 text-right font-mono text-red-600">{fmt(e.nsf)}</td>
+                        <td className="px-2 py-1 text-right font-mono text-red-600">{fmt(e.paye)}</td>
+                        <td className="px-2 py-1 text-right font-mono text-red-700 font-medium">{fmt(e.total_deductions)}</td>
+                        <td className="px-2 py-1 text-right font-mono text-orange-500">{fmt(e.er_csg)}</td>
+                        <td className="px-2 py-1 text-right font-mono text-orange-500">{fmt(e.er_nsf)}</td>
+                        <td className="px-2 py-1 text-right font-mono text-orange-500">{fmt(e.er_levy)}</td>
+                        <td className="px-2 py-1 text-right font-mono text-orange-500">{fmt(e.er_prgf)}</td>
+                        <td className="px-2 py-1 text-right font-mono text-orange-700 font-medium">{fmt(e.total_er)}</td>
+                        <td className="px-2 py-1 text-right font-mono font-bold text-emerald-700">{fmt(e.net_pay)}</td>
                       </tr>
                     ))}
-                    <tr className="bg-gray-100 font-bold">
-                      <td colSpan={4} className="px-2 py-2">TOTAL</td>
-                      <td className="px-2 py-2 text-right font-mono">{fmt(employes.reduce((s, e) => s + (e.salaire_base || 0), 0))}</td>
-                      <td className="px-2 py-2 text-right font-mono">{fmt(employes.reduce((s, e) => s + (e.overtime_1_5x || 0) + (e.overtime_2x || 0), 0))}</td>
-                      <td className="px-2 py-2 text-right font-mono">{fmt(employes.reduce((s, e) => s + (e.special_allowance || 0) + (e.prime_production || 0), 0))}</td>
-                      <td className="px-2 py-2 text-right font-mono">{fmt(totals.brut)}</td>
-                      <td className="px-2 py-2 text-right font-mono">{fmt(totals.csg)}</td>
-                      <td className="px-2 py-2 text-right font-mono">{fmt(employes.reduce((s, e) => s + (e.nsf || 0), 0))}</td>
-                      <td className="px-2 py-2 text-right font-mono">{fmt(totals.paye)}</td>
-                      <td className="px-2 py-2 text-right font-mono text-orange-600">{fmt(totals.charges)}</td>
-                      <td className="px-2 py-2 text-right font-mono text-emerald-700">{fmt(totals.net)}</td>
-                    </tr>
                   </tbody>
                 </table>
               </div>
