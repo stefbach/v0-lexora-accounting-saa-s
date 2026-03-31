@@ -1,0 +1,319 @@
+"use client"
+import { useState, useEffect, useCallback } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Loader2, Upload, FileSpreadsheet, CheckCircle, AlertTriangle, Download, Users, Banknote, ChevronDown } from "lucide-react"
+
+const NAVY = "#1E2A4A"
+const GOLD = "#C9A84C"
+function fmt(n: number) { return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(n) }
+
+type Step = "upload" | "preview" | "result"
+
+export default function ImportPaiePage() {
+  const [societes, setSocietes] = useState<any[]>([])
+  const [societe, setSociete] = useState("")
+  const [periode, setPeriode] = useState("")
+  const [step, setStep] = useState<Step>("upload")
+
+  // Parse results
+  const [parsing, setParsing] = useState(false)
+  const [parseError, setParseError] = useState("")
+  const [columns, setColumns] = useState<any[]>([])
+  const [employes, setEmployes] = useState<any[]>([])
+  const [fileName, setFileName] = useState("")
+
+  // Import results
+  const [importing, setImporting] = useState(false)
+  const [result, setResult] = useState<{ created: number; updated: number; errors: string[]; total: number } | null>(null)
+
+  // History
+  const [history, setHistory] = useState<any[]>([])
+  const [historyDetail, setHistoryDetail] = useState<any>(null)
+  const [detailBulletins, setDetailBulletins] = useState<any[]>([])
+
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/comptable/societes").then(r => r.json()).catch(() => ({ societes: [] })),
+      fetch("/api/client/societes").then(r => r.json()).catch(() => ({ societes: [] })),
+    ]).then(([d1, d2]) => {
+      const all = [...(d1.societes || []), ...(d2.societes || [])]
+      const unique = Array.from(new Map(all.map((s: any) => [s.id, s])).values())
+      setSocietes(unique)
+      if (unique.length >= 1) setSociete(unique[0].id)
+    })
+    loadHistory()
+  }, [])
+
+  const loadHistory = async () => {
+    const res = await fetch("/api/rh/import-paie?action=history").then(r => r.json()).catch(() => ({ history: [] }))
+    setHistory(res.history || [])
+  }
+
+  const handleFile = async (file: File) => {
+    if (!file) return
+    setFileName(file.name)
+    setParsing(true)
+    setParseError("")
+    try {
+      const fd = new FormData()
+      fd.append("file", file)
+      const res = await fetch("/api/rh/import-paie", { method: "POST", body: fd })
+      const data = await res.json()
+      if (data.error) { setParseError(data.error); return }
+      setColumns(data.columns || [])
+      setEmployes(data.employes || [])
+      if (data.periode_detected && !periode) setPeriode(data.periode_detected)
+      setStep("preview")
+    } catch (e: any) { setParseError(e.message || "Erreur") }
+    finally { setParsing(false) }
+  }
+
+  const handleImport = async () => {
+    if (!societe || !periode || employes.length === 0) return
+    setImporting(true)
+    try {
+      const res = await fetch("/api/rh/import-paie", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "import", societe_id: societe, periode, employes }),
+      })
+      const data = await res.json()
+      if (data.error) { alert("Erreur: " + data.error); return }
+      setResult(data)
+      setStep("result")
+      loadHistory()
+    } catch { alert("Erreur réseau") }
+    finally { setImporting(false) }
+  }
+
+  const loadDetail = async (p: string) => {
+    if (historyDetail === p) { setHistoryDetail(null); return }
+    setHistoryDetail(p)
+    const res = await fetch(`/api/rh/import-paie?action=detail&periode=${p}`).then(r => r.json()).catch(() => ({ bulletins: [] }))
+    setDetailBulletins(res.bulletins || [])
+  }
+
+  const totals = employes.reduce((s, e) => ({
+    brut: s.brut + (e.total_payments || e.salaire_base || 0),
+    net: s.net + (e.net_pay || 0),
+    charges: s.charges + (e.total_er || 0),
+    csg: s.csg + (e.csg || 0),
+    paye: s.paye + (e.paye || 0),
+  }), { brut: 0, net: 0, charges: 0, csg: 0, paye: 0 })
+
+  return (
+    <div className="p-4 md:p-6 space-y-6 max-w-6xl mx-auto">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Import Paie Excel</h1>
+          <p className="text-gray-500 text-sm">Importez vos rapports de paie — alimente RH + comptabilité</p>
+        </div>
+        <div className="flex gap-2">
+          <Select value={societe} onValueChange={setSociete}>
+            <SelectTrigger className="w-[200px]"><SelectValue placeholder="Société" /></SelectTrigger>
+            <SelectContent>{societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Step 1: Upload */}
+      {step === "upload" && (
+        <Card>
+          <CardContent className="p-8">
+            <div
+              className="border-2 border-dashed border-gray-300 rounded-xl p-12 text-center hover:border-[#C9A84C] transition-colors cursor-pointer"
+              onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('border-[#C9A84C]', 'bg-[#C9A84C]/5') }}
+              onDragLeave={e => { e.currentTarget.classList.remove('border-[#C9A84C]', 'bg-[#C9A84C]/5') }}
+              onDrop={e => { e.preventDefault(); e.currentTarget.classList.remove('border-[#C9A84C]', 'bg-[#C9A84C]/5'); const f = e.dataTransfer.files[0]; if (f) handleFile(f) }}
+              onClick={() => { const input = document.createElement('input'); input.type = 'file'; input.accept = '.xlsx,.xls,.csv'; input.onchange = (e: any) => { const f = e.target.files[0]; if (f) handleFile(f) }; input.click() }}
+            >
+              {parsing ? (
+                <div><Loader2 className="h-12 w-12 animate-spin mx-auto mb-3 text-[#C9A84C]" /><p className="text-gray-500">Analyse du fichier en cours...</p></div>
+              ) : (
+                <div>
+                  <FileSpreadsheet className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+                  <p className="text-lg font-medium" style={{ color: NAVY }}>Glissez votre fichier Excel ici</p>
+                  <p className="text-sm text-gray-400 mt-1">ou cliquez pour sélectionner (.xlsx, .xls, .csv)</p>
+                  <p className="text-xs text-gray-300 mt-3">Format attendu : Payroll Report avec colonnes Basic Salary, CSG, NSF, PAYE, Net Pay</p>
+                </div>
+              )}
+            </div>
+            {parseError && <p className="text-red-600 text-sm mt-3 text-center">{parseError}</p>}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Step 2: Preview */}
+      {step === "preview" && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Badge style={{ backgroundColor: NAVY }} className="text-white">{fileName}</Badge>
+              <Badge variant="outline">{employes.length} employés détectés</Badge>
+              <Badge variant="outline">{columns.length} colonnes mappées</Badge>
+            </div>
+            <div className="flex items-center gap-2">
+              <Label className="text-sm">Période :</Label>
+              <Input type="month" value={periode} onChange={e => setPeriode(e.target.value)} className="w-40" />
+              <Button variant="outline" onClick={() => { setStep("upload"); setEmployes([]); setColumns([]) }}>Annuler</Button>
+              <Button onClick={handleImport} disabled={importing || !periode || !societe} style={{ backgroundColor: NAVY }} className="text-white">
+                {importing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+                Importer {employes.length} employés
+              </Button>
+            </div>
+          </div>
+
+          {/* KPIs */}
+          <div className="grid grid-cols-5 gap-3">
+            <Card><CardContent className="p-3 text-center"><p className="text-xs text-gray-500">Employés</p><p className="text-xl font-bold" style={{ color: NAVY }}>{employes.length}</p></CardContent></Card>
+            <Card><CardContent className="p-3 text-center"><p className="text-xs text-gray-500">Total brut</p><p className="text-xl font-bold text-blue-600">{fmt(totals.brut)}</p></CardContent></Card>
+            <Card><CardContent className="p-3 text-center"><p className="text-xs text-gray-500">Total net</p><p className="text-xl font-bold text-emerald-600">{fmt(totals.net)}</p></CardContent></Card>
+            <Card><CardContent className="p-3 text-center"><p className="text-xs text-gray-500">Charges patronales</p><p className="text-xl font-bold text-orange-600">{fmt(totals.charges)}</p></CardContent></Card>
+            <Card><CardContent className="p-3 text-center"><p className="text-xs text-gray-500">CSG + PAYE</p><p className="text-xl font-bold text-purple-600">{fmt(totals.csg + totals.paye)}</p></CardContent></Card>
+          </div>
+
+          {/* Preview table */}
+          <Card>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-50 sticky top-0">
+                    <tr>
+                      <th className="px-2 py-2 text-left font-medium">Code</th>
+                      <th className="px-2 py-2 text-left font-medium">Nom</th>
+                      <th className="px-2 py-2 text-left font-medium">Prénom</th>
+                      <th className="px-2 py-2 text-left font-medium">Poste</th>
+                      <th className="px-2 py-2 text-right font-medium">Basic</th>
+                      <th className="px-2 py-2 text-right font-medium">OT</th>
+                      <th className="px-2 py-2 text-right font-medium">Primes</th>
+                      <th className="px-2 py-2 text-right font-medium">Total Brut</th>
+                      <th className="px-2 py-2 text-right font-medium">CSG</th>
+                      <th className="px-2 py-2 text-right font-medium">NSF</th>
+                      <th className="px-2 py-2 text-right font-medium">PAYE</th>
+                      <th className="px-2 py-2 text-right font-medium">ER Total</th>
+                      <th className="px-2 py-2 text-right font-medium text-emerald-700">Net Pay</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {employes.map((e, i) => (
+                      <tr key={i} className="hover:bg-gray-50">
+                        <td className="px-2 py-1.5 font-mono">{e.code || "—"}</td>
+                        <td className="px-2 py-1.5 font-medium">{e.nom}</td>
+                        <td className="px-2 py-1.5">{e.prenom}</td>
+                        <td className="px-2 py-1.5 text-gray-500">{e.poste || "—"}</td>
+                        <td className="px-2 py-1.5 text-right font-mono">{fmt(e.salaire_base)}</td>
+                        <td className="px-2 py-1.5 text-right font-mono">{fmt((e.overtime_1_5x || 0) + (e.overtime_2x || 0))}</td>
+                        <td className="px-2 py-1.5 text-right font-mono">{fmt((e.special_allowance || 0) + (e.prime_production || 0))}</td>
+                        <td className="px-2 py-1.5 text-right font-mono font-medium">{fmt(e.total_payments || e.salaire_base)}</td>
+                        <td className="px-2 py-1.5 text-right font-mono text-gray-500">{fmt(e.csg)}</td>
+                        <td className="px-2 py-1.5 text-right font-mono text-gray-500">{fmt(e.nsf)}</td>
+                        <td className="px-2 py-1.5 text-right font-mono text-gray-500">{fmt(e.paye)}</td>
+                        <td className="px-2 py-1.5 text-right font-mono text-orange-600">{fmt(e.total_er)}</td>
+                        <td className="px-2 py-1.5 text-right font-mono font-bold text-emerald-700">{fmt(e.net_pay)}</td>
+                      </tr>
+                    ))}
+                    <tr className="bg-gray-100 font-bold">
+                      <td colSpan={4} className="px-2 py-2">TOTAL</td>
+                      <td className="px-2 py-2 text-right font-mono">{fmt(employes.reduce((s, e) => s + (e.salaire_base || 0), 0))}</td>
+                      <td className="px-2 py-2 text-right font-mono">{fmt(employes.reduce((s, e) => s + (e.overtime_1_5x || 0) + (e.overtime_2x || 0), 0))}</td>
+                      <td className="px-2 py-2 text-right font-mono">{fmt(employes.reduce((s, e) => s + (e.special_allowance || 0) + (e.prime_production || 0), 0))}</td>
+                      <td className="px-2 py-2 text-right font-mono">{fmt(totals.brut)}</td>
+                      <td className="px-2 py-2 text-right font-mono">{fmt(totals.csg)}</td>
+                      <td className="px-2 py-2 text-right font-mono">{fmt(employes.reduce((s, e) => s + (e.nsf || 0), 0))}</td>
+                      <td className="px-2 py-2 text-right font-mono">{fmt(totals.paye)}</td>
+                      <td className="px-2 py-2 text-right font-mono text-orange-600">{fmt(totals.charges)}</td>
+                      <td className="px-2 py-2 text-right font-mono text-emerald-700">{fmt(totals.net)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Step 3: Result */}
+      {step === "result" && result && (
+        <Card>
+          <CardContent className="p-8 text-center space-y-4">
+            <CheckCircle className="h-16 w-16 mx-auto text-emerald-500" />
+            <h2 className="text-xl font-bold" style={{ color: NAVY }}>Import terminé</h2>
+            <div className="flex justify-center gap-6">
+              <div><p className="text-3xl font-bold text-emerald-600">{result.created}</p><p className="text-sm text-gray-500">Créés</p></div>
+              <div><p className="text-3xl font-bold text-blue-600">{result.updated}</p><p className="text-sm text-gray-500">Mis à jour</p></div>
+              <div><p className="text-3xl font-bold text-red-600">{result.errors.length}</p><p className="text-sm text-gray-500">Erreurs</p></div>
+            </div>
+            {result.errors.length > 0 && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-left text-sm max-h-40 overflow-y-auto">
+                {result.errors.map((e, i) => <p key={i} className="text-red-700">{e}</p>)}
+              </div>
+            )}
+            <p className="text-sm text-gray-500">Les écritures comptables (641, 645, 421, 431, 444, 432) ont été générées automatiquement.</p>
+            <Button variant="outline" onClick={() => { setStep("upload"); setEmployes([]); setResult(null) }}>
+              Importer un autre fichier
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* History */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base" style={{ color: NAVY }}>
+            <Banknote className="inline h-5 w-5 mr-2" style={{ color: GOLD }} />
+            Historique des imports
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {history.length === 0 ? (
+            <p className="text-gray-400 text-center py-6">Aucun import effectué</p>
+          ) : (
+            <div className="space-y-1">
+              {history.map(h => (
+                <div key={h.periode}>
+                  <button onClick={() => loadDetail(h.periode)}
+                    className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 text-left">
+                    <div className="flex items-center gap-3">
+                      <Badge style={{ backgroundColor: NAVY }} className="text-white text-xs">
+                        {new Date(h.periode + "T12:00:00").toLocaleDateString("fr-FR", { month: "long", year: "numeric" })}
+                      </Badge>
+                      <span className="text-sm"><Users className="inline h-4 w-4 mr-1 text-gray-400" />{h.nb} employés</span>
+                    </div>
+                    <div className="flex items-center gap-4 text-sm font-mono">
+                      <span>Brut: {fmt(h.total_brut)}</span>
+                      <span className="text-emerald-600">Net: {fmt(h.total_net)}</span>
+                      <span className="text-orange-600">Charges: {fmt(h.total_charges)}</span>
+                      <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${historyDetail === h.periode ? "rotate-180" : ""}`} />
+                    </div>
+                  </button>
+                  {historyDetail === h.periode && (
+                    <div className="ml-4 mb-3 border-l-2 pl-4" style={{ borderColor: GOLD }}>
+                      <table className="w-full text-xs">
+                        <thead><tr className="text-gray-400"><th className="text-left py-1">Employé</th><th className="text-right py-1">Base</th><th className="text-right py-1">Net</th><th className="text-right py-1">CSG</th><th className="text-right py-1">PAYE</th></tr></thead>
+                        <tbody>
+                          {detailBulletins.map((b: any) => (
+                            <tr key={b.id} className="border-t border-gray-100">
+                              <td className="py-1">{b.employe?.prenom} {b.employe?.nom}</td>
+                              <td className="py-1 text-right font-mono">{fmt(b.salaire_base || 0)}</td>
+                              <td className="py-1 text-right font-mono text-emerald-600">{fmt(b.salaire_net || 0)}</td>
+                              <td className="py-1 text-right font-mono">{fmt(b.csg_salarie || 0)}</td>
+                              <td className="py-1 text-right font-mono">{fmt(b.paye || 0)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
