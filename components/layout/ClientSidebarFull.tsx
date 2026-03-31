@@ -114,6 +114,8 @@ const MENU: MenuSection[] = [
       { href: "/client/rapprochement", label: "Rapprochement & Lettrage", labelKey: "acc.reconciliation", icon: CreditCard },
       { href: "/client/tresorerie", label: "Trésorerie", labelKey: "acc.treasury", icon: Banknote },
       { href: "/client/fournisseurs", label: "Fournisseurs", labelKey: "acc.suppliers", icon: FileSpreadsheet },
+      { href: "/client/affectations", label: "Affectations comptables", icon: Settings },
+      { href: "/client/salaires-compta", label: "Salaires", icon: CreditCard },
       { href: "/client/compte-courant", label: "Comptes Courants Associés", labelKey: "acc.current_accounts", icon: Users },
       { href: "/client/finances", label: "Mes Chiffres", labelKey: "acc.my_figures", icon: BarChart3 },
     ]
