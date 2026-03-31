@@ -55,21 +55,18 @@ export default function CongesPage() {
     try {
       const params = new URLSearchParams()
       if (societe !== "all") params.set("societe_id", societe)
-      const [congesRes, socRes] = await Promise.all([
+      const [congesRes, socRes, empRes] = await Promise.all([
         fetch(`/api/rh/conges?${params}`),
-        fetch("/api/comptable/societes")
+        fetch("/api/comptable/societes"),
+        fetch(`/api/rh/employes${societe !== "all" ? `?societe_id=${societe}` : ""}`)
       ])
       setConges((await congesRes.json()).conges || [])
       setSocietes((await socRes.json()).societes || [])
+      setEmployes((await empRes.json()).employes || [])
     } catch (e) { console.error(e) } finally { setLoading(false) }
   }, [societe])
 
   useEffect(() => { load() }, [load])
-  useEffect(() => {
-    if (societe !== "all") {
-      fetch(`/api/rh/employes?societe_id=${societe}`).then(r => r.json()).then(d => setEmployes(d.employes || []))
-    }
-  }, [societe])
 
   const handleCreate = async () => {
     if (!form.employe_id || !form.date_debut || !form.date_fin) { setError("Champs requis manquants"); return }
@@ -104,6 +101,13 @@ export default function CongesPage() {
       body: JSON.stringify({ employe_id: empId, type_conge: "SL", date_debut: today, date_fin: today, motif: "Absence justifiée rétroactivement" })
     })
     load()
+  }
+
+  // Build société name lookup
+  const societeMap = new Map(societes.map((s: any) => [s.id, s.nom]))
+  const getSocieteName = (c: any) => {
+    const empSocId = c.employe?.societe_id
+    return empSocId ? societeMap.get(empSocId) || "" : ""
   }
 
   const congesEnAttente = conges.filter(c => c.statut === "en_attente")
@@ -149,7 +153,10 @@ export default function CongesPage() {
                 <div><Label>Employé *</Label>
                   <Select value={form.employe_id} onValueChange={v => setForm(f => ({ ...f, employe_id: v }))}>
                     <SelectTrigger><SelectValue placeholder="Choisir..." /></SelectTrigger>
-                    <SelectContent>{employes.map(e => <SelectItem key={e.id} value={e.id}>{e.prenom} {e.nom}</SelectItem>)}</SelectContent>
+                    <SelectContent>{employes.map(e => {
+                      const socName = societeMap.get(e.societe_id)
+                      return <SelectItem key={e.id} value={e.id}>{e.prenom} {e.nom}{socName ? ` (${socName})` : ""}</SelectItem>
+                    })}</SelectContent>
                   </Select></div>
                 <div><Label>Type *</Label>
                   <Select value={form.type_conge} onValueChange={v => setForm(f => ({ ...f, type_conge: v }))}>
@@ -197,7 +204,7 @@ export default function CongesPage() {
               : (
                 <Table>
                   <TableHeader><TableRow>
-                    <TableHead>Employé</TableHead><TableHead>Type</TableHead>
+                    <TableHead>Employé</TableHead><TableHead>Société</TableHead><TableHead>Type</TableHead>
                     <TableHead>Dates</TableHead><TableHead>Nb jours</TableHead>
                     <TableHead>Motif</TableHead><TableHead>Actions</TableHead>
                   </TableRow></TableHeader>
@@ -205,6 +212,7 @@ export default function CongesPage() {
                     {congesEnAttente.map(c => (
                       <TableRow key={c.id}>
                         <TableCell className="font-medium">{c.employe?.prenom} {c.employe?.nom}</TableCell>
+                        <TableCell className="text-sm text-gray-500">{getSocieteName(c) || "—"}</TableCell>
                         <TableCell><span className={`px-2 py-1 rounded-full text-xs font-medium ${TYPE_COLORS[c.type_conge] || ""}`}>{TYPE_LABELS[c.type_conge] || c.type_conge}</span></TableCell>
                         <TableCell className="text-sm">{new Date(c.date_debut).toLocaleDateString("fr-FR")} → {new Date(c.date_fin).toLocaleDateString("fr-FR")}</TableCell>
                         <TableCell><span className="font-semibold">{c.nb_jours}j</span></TableCell>

@@ -116,6 +116,17 @@ async function findExistingPointage(supabase: ReturnType<typeof getAdminClient>,
   return data && data.length > 0 ? data[0] : null
 }
 
+// Bug 3: Look up planning_assignment for an employee on a given date
+async function findPlanningAssignment(supabase: ReturnType<typeof getAdminClient>, employe_id: string, date: string) {
+  const { data } = await supabase
+    .from('planning_assignments')
+    .select('id, shift_code, heure_debut, heure_fin, heures_prevues, est_repos')
+    .eq('employe_id', employe_id)
+    .eq('date', date)
+    .limit(1)
+  return data && data.length > 0 ? data[0] : null
+}
+
 export async function GET(request: Request) {
   try {
     const supabaseAuth = await createServerClient()
@@ -220,6 +231,14 @@ export async function POST(request: Request) {
     const today = bodyDate || new Date().toISOString().split('T')[0]
     const now = heure_forcee || new Date().toTimeString().split(' ')[0]
 
+    // Bug 3: Look up planning assignment for this employee+date
+    const planAssignment = await findPlanningAssignment(supabase, employe_id, today)
+    const planningFields: Record<string, unknown> = {}
+    if (planAssignment) {
+      planningFields.planning_assignment_id = planAssignment.id
+      planningFields.shift_code = planAssignment.shift_code
+    }
+
     // Absence justifiée
     if (type_pointage === 'absence_justifiee') {
       const existing = await findExistingPointage(supabase, employe_id, today)
@@ -227,6 +246,7 @@ export async function POST(request: Request) {
         const { data, error } = await safeUpdatePointage(supabase, existing.id, {
           statut_jour: 'absent_justifie',
           notes: motif_absence || existing.notes || null,
+          ...planningFields,
         })
         if (error) return NextResponse.json({ error: error.message }, { status: 500 })
         return NextResponse.json({ pointage: data, message: 'Absence justifiee enregistree' })
@@ -236,6 +256,7 @@ export async function POST(request: Request) {
           date_pointage: today,
           statut_jour: 'absent_justifie',
           notes: motif_absence || null,
+          ...planningFields,
         })
         if (error) return NextResponse.json({ error: error.message }, { status: 500 })
         return NextResponse.json({ pointage: data, message: 'Absence justifiee enregistree' })
@@ -255,13 +276,13 @@ export async function POST(request: Request) {
 
       if (existing) {
         const { data, error } = await safeUpdatePointage(supabase, existing.id, {
-          heure_entree: now, statut_jour: 'travaille',
+          heure_entree: now, statut_jour: 'travaille', ...planningFields,
         })
         if (error) return NextResponse.json({ error: error.message }, { status: 500 })
         return NextResponse.json({ pointage: data })
       } else {
         const { data, error } = await safeInsertPointage(supabase, {
-          employe_id, date_pointage: today, heure_entree: now, statut_jour: 'travaille',
+          employe_id, date_pointage: today, heure_entree: now, statut_jour: 'travaille', ...planningFields,
         })
         if (error) {
           console.error('[POST entree insert fail]', error.message)
@@ -289,7 +310,7 @@ export async function POST(request: Request) {
       const duree_minutes = Math.round((sortieMs - entreeMs) / 60000)
 
       const { data, error } = await safeUpdatePointage(supabase, existing.id, {
-        heure_sortie: now, duree_minutes,
+        heure_sortie: now, duree_minutes, ...planningFields,
       })
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
@@ -312,14 +333,14 @@ export async function POST(request: Request) {
 
       if (existing) {
         const { data, error } = await safeUpdatePointage(supabase, existing.id, {
-          heure_entree, heure_sortie: heure_sortie || null, duree_minutes, statut_jour: 'travaille',
+          heure_entree, heure_sortie: heure_sortie || null, duree_minutes, statut_jour: 'travaille', ...planningFields,
         })
         if (error) return NextResponse.json({ error: error.message }, { status: 500 })
         return NextResponse.json({ pointage: data })
       } else {
         const { data, error } = await safeInsertPointage(supabase, {
           employe_id, date_pointage: today, heure_entree, heure_sortie: heure_sortie || null,
-          duree_minutes, statut_jour: 'travaille',
+          duree_minutes, statut_jour: 'travaille', ...planningFields,
         })
         if (error) return NextResponse.json({ error: error.message }, { status: 500 })
         return NextResponse.json({ pointage: data })

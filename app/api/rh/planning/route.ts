@@ -10,7 +10,17 @@ function getAdminClient() {
   return createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
+// Shift definitions with hours (Bug 2)
+const SHIFT_HOURS: Record<string, { heure_debut: string; heure_fin: string; heures_prevues: number; est_repos: boolean }> = {
+  Jour:          { heure_debut: '08:00', heure_fin: '17:00', heures_prevues: 8, est_repos: false },
+  Matin:         { heure_debut: '06:00', heure_fin: '14:00', heures_prevues: 8, est_repos: false },
+  'Après-midi':  { heure_debut: '14:00', heure_fin: '22:00', heures_prevues: 8, est_repos: false },
+  Nuit:          { heure_debut: '22:00', heure_fin: '06:00', heures_prevues: 8, est_repos: false },
+  Repos:         { heure_debut: '',      heure_fin: '',      heures_prevues: 0, est_repos: true },
+}
+
 // GET /api/rh/planning?societe_id=...&periode=YYYY-MM
+// Returns { planning: [...flat assignment entries...], published: boolean }
 export async function GET(request: Request) {
   try {
     const supabaseAuth = await createServerClient()
@@ -26,26 +36,62 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
     }
 
-    let query = supabase
+    // Find the planning for this societe + periode
+    let planningQuery = supabase
       .from('plannings')
-      .select('*, assignments:planning_assignments(*)')
+      .select('*')
       .eq('societe_id', societe_id)
       .order('periode', { ascending: false })
 
     if (periode) {
-      query = query.eq('periode', `${periode}-01`)
+      planningQuery = planningQuery.eq('periode', `${periode}-01`)
     }
 
-    const { data, error } = await query
-    if (error) throw error
+    const { data: plannings, error: planErr } = await planningQuery
+    if (planErr) throw planErr
 
-    return NextResponse.json({ plannings: data, total: data?.length || 0 })
+    const planningRecord = plannings && plannings.length > 0 ? plannings[0] : null
+    const published = planningRecord?.statut === 'publie'
+
+    if (!planningRecord) {
+      return NextResponse.json({ planning: [], published: false, total: 0 })
+    }
+
+    // Fetch assignments for this planning
+    const { data: assignments, error: assErr } = await supabase
+      .from('planning_assignments')
+      .select('*')
+      .eq('planning_id', planningRecord.id)
+
+    if (assErr) throw assErr
+
+    // Flatten to the format the frontend expects:
+    // { employe_id, jour (day-of-month number), shift (shift name) }
+    const flatEntries = (assignments || []).map(a => {
+      const dayOfMonth = new Date(a.date).getUTCDate()
+      return {
+        employe_id: a.employe_id,
+        jour: dayOfMonth,
+        day: dayOfMonth,
+        shift: a.shift_code,
+        type_shift: a.shift_code,
+        heure_debut: a.heure_debut,
+        heure_fin: a.heure_fin,
+        heures_prevues: a.heures_prevues,
+        est_repos: a.est_repos,
+      }
+    })
+
+    return NextResponse.json({ planning: flatEntries, published, total: flatEntries.length })
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
 
 // POST /api/rh/planning
+// Accepts the format sent by the frontend page:
+//   { periode: "YYYY-MM", societe_id, planning: [{ employe_id, jour, shift }], publish? }
+// Also still supports action-based calls for backwards compatibility.
 export async function POST(request: Request) {
   try {
     const supabaseAuth = await createServerClient()
@@ -55,6 +101,79 @@ export async function POST(request: Request) {
     const supabase = getAdminClient()
     const body = await request.json()
     const { action } = body
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Frontend save format: { periode, societe_id, planning: entries[], publish? }
+    // ══════════════════════════════════════════════════════════════════════════
+    if (!action && body.planning && Array.isArray(body.planning)) {
+      const { periode, societe_id, planning: entries, publish } = body
+      if (!periode || !societe_id) {
+        return NextResponse.json({ error: 'periode et societe_id requis' }, { status: 400 })
+      }
+
+      const periodeDate = `${periode}-01`
+
+      // Upsert the planning record
+      const { data: planningRecord, error: planErr } = await supabase
+        .from('plannings')
+        .upsert({
+          societe_id,
+          periode: periodeDate,
+          nom: `Planning ${periode}`,
+          statut: publish ? 'publie' : 'brouillon',
+          created_by: user.id,
+          created_at: new Date().toISOString(),
+        }, { onConflict: 'societe_id,periode' })
+        .select()
+        .single()
+
+      if (planErr) throw planErr
+
+      // Convert frontend entries to DB rows
+      // Frontend sends: { employe_id, jour (day number), shift (shift name like "Jour") }
+      const rows = entries.map((entry: { employe_id: string; jour: number; shift: string }) => {
+        const shiftName = entry.shift || 'Repos'
+        const shiftDef = SHIFT_HOURS[shiftName] || SHIFT_HOURS['Repos']
+        const dateStr = `${periode}-${String(entry.jour).padStart(2, '0')}`
+        return {
+          planning_id: planningRecord.id,
+          employe_id: entry.employe_id,
+          date: dateStr,
+          shift_code: shiftName,
+          heure_debut: shiftDef.heure_debut || null,
+          heure_fin: shiftDef.heure_fin || null,
+          heures_prevues: shiftDef.heures_prevues,
+          est_repos: shiftDef.est_repos,
+        }
+      })
+
+      // Batch upsert in chunks to avoid payload limits
+      const CHUNK_SIZE = 500
+      let totalInserted = 0
+      for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+        const chunk = rows.slice(i, i + CHUNK_SIZE)
+        const { data: inserted, error: insErr } = await supabase
+          .from('planning_assignments')
+          .upsert(chunk, { onConflict: 'planning_id,employe_id,date' })
+          .select()
+        if (insErr) throw insErr
+        totalInserted += inserted?.length || 0
+      }
+
+      // If publishing, update statut
+      if (publish && planningRecord.statut !== 'publie') {
+        await supabase
+          .from('plannings')
+          .update({ statut: 'publie' })
+          .eq('id', planningRecord.id)
+      }
+
+      return NextResponse.json({
+        planning: planningRecord,
+        nb_saved: totalInserted,
+        message: publish ? 'Planning publié' : 'Planning enregistré',
+      }, { status: 201 })
+    }
 
     // ── Create planning ──────────────────────────────────────────────────────
     if (action === 'create_planning') {
@@ -72,7 +191,7 @@ export async function POST(request: Request) {
           nom: nom || `Planning ${periode}`,
           shift_template_id: shift_template_id || null,
           statut: 'brouillon',
-          cree_par: user.id,
+          created_by: user.id,
           created_at: new Date().toISOString(),
         }, { onConflict: 'societe_id,periode' })
         .select()
@@ -89,15 +208,21 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'planning_id et assignments[] requis' }, { status: 400 })
       }
 
-      const rows = assignments.map((a: { employe_id: string; date: string; shift_type: string; heure_debut?: string; heure_fin?: string; notes?: string }) => ({
-        planning_id,
-        employe_id: a.employe_id,
-        date: a.date,
-        shift_type: a.shift_type,
-        heure_debut: a.heure_debut || null,
-        heure_fin: a.heure_fin || null,
-        notes: a.notes || null,
-      }))
+      const rows = assignments.map((a: { employe_id: string; date: string; shift_code?: string; shift_type?: string; heure_debut?: string; heure_fin?: string; notes?: string }) => {
+        const shiftName = a.shift_code || a.shift_type || 'Repos'
+        const shiftDef = SHIFT_HOURS[shiftName] || SHIFT_HOURS['Repos']
+        return {
+          planning_id,
+          employe_id: a.employe_id,
+          date: a.date,
+          shift_code: shiftName,
+          heure_debut: a.heure_debut || shiftDef.heure_debut || null,
+          heure_fin: a.heure_fin || shiftDef.heure_fin || null,
+          heures_prevues: shiftDef.heures_prevues,
+          est_repos: shiftDef.est_repos,
+          commentaire: a.notes || null,
+        }
+      })
 
       const { data, error } = await supabase
         .from('planning_assignments')
@@ -124,7 +249,7 @@ export async function POST(request: Request) {
           periode: periodeDate,
           nom: `Planning ${periode} (import)`,
           statut: 'brouillon',
-          cree_par: user.id,
+          created_by: user.id,
           created_at: new Date().toISOString(),
         }, { onConflict: 'societe_id,periode' })
         .select()
@@ -135,14 +260,20 @@ export async function POST(request: Request) {
       const pId = planning_id || planning.id
 
       // Map imported rows to assignments
-      const rows = importData.map((row: { employe_id: string; date: string; shift_type: string; heure_debut?: string; heure_fin?: string }) => ({
-        planning_id: pId,
-        employe_id: row.employe_id,
-        date: row.date,
-        shift_type: row.shift_type,
-        heure_debut: row.heure_debut || null,
-        heure_fin: row.heure_fin || null,
-      }))
+      const rows = importData.map((row: { employe_id: string; date: string; shift_code?: string; shift_type?: string; heure_debut?: string; heure_fin?: string }) => {
+        const shiftName = row.shift_code || row.shift_type || 'Repos'
+        const shiftDef = SHIFT_HOURS[shiftName] || SHIFT_HOURS['Repos']
+        return {
+          planning_id: pId,
+          employe_id: row.employe_id,
+          date: row.date,
+          shift_code: shiftName,
+          heure_debut: row.heure_debut || shiftDef.heure_debut || null,
+          heure_fin: row.heure_fin || shiftDef.heure_fin || null,
+          heures_prevues: shiftDef.heures_prevues,
+          est_repos: shiftDef.est_repos,
+        }
+      })
 
       const { data: inserted, error: insErr } = await supabase
         .from('planning_assignments')
@@ -166,7 +297,7 @@ export async function POST(request: Request) {
 
       const { data, error } = await supabase
         .from('plannings')
-        .update({ statut: 'publie', publie_at: new Date().toISOString(), publie_par: user.id })
+        .update({ statut: 'publie' })
         .eq('id', planning_id)
         .select()
         .single()
