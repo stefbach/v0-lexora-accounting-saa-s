@@ -27,6 +27,7 @@ export default function ParametresPaiePage() {
     nsf_patronal: "0.025",
     training_levy: "0.010",
     prgf_patronal_par_jour: "4.50",
+    prgf_taux_emoluments: "0.045",
     paye_seuil_exoneration: "390000",
     paye_taux_1: "0.10",
     paye_seuil_taux_2: "650000",
@@ -80,6 +81,7 @@ export default function ParametresPaiePage() {
             nsf_patronal: String(d.params.nsf_patronal || 0.025),
             training_levy: String(d.params.training_levy || 0.010),
             prgf_patronal_par_jour: String(d.params.prgf_patronal_par_jour || 4.50),
+            prgf_taux_emoluments: String(d.params.prgf_taux_emoluments || 0.045),
             paye_seuil_exoneration: String(d.params.paye_seuil_exoneration || 390000),
             paye_taux_1: String(d.params.paye_taux_1 || 0.10),
             paye_seuil_taux_2: String(d.params.paye_seuil_taux_2 || 650000),
@@ -158,7 +160,12 @@ export default function ParametresPaiePage() {
               {pField("nsf_salarie", "NSF salarié", "National Savings Fund — salarié", true)}
               {pField("nsf_patronal", "NSF patronal", "National Savings Fund — employeur", true)}
               {pField("training_levy", "Training Levy (HRDC)", "1% masse salariale", true)}
-              {pField("prgf_patronal_par_jour", "PRGF par jour travaillé (MUR)", "Portable Retirement Gratuity Fund")}
+              {pField("prgf_taux_emoluments", "PRGF taux (%)", "4.5% des émoluments — Portable Retirement Gratuity Fund", true)}
+              {pField("prgf_patronal_par_jour", "PRGF minimum par jour (MUR)", "Plancher : 4.50 MUR/jour travaillé")}
+              <div className="bg-blue-50 p-3 rounded text-xs text-blue-800 flex gap-2">
+                <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <p>PRGF (WRA 2019) : l'employeur paie le MAX entre 4.5% des émoluments et 4.50 MUR × jours travaillés.</p>
+              </div>
             </CardContent>
           </Card>
 
