@@ -138,6 +138,7 @@ export async function POST(request: NextRequest) {
 
     let typeDocument = ''
     let extraction: any = {}
+    let parsed: any = {}
     let messageContent: any
     if (isImage) {
       const mt = ext === 'png' ? 'image/png' : 'image/jpeg'
