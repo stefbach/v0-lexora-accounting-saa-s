@@ -101,6 +101,7 @@ const MENU: MenuSection[] = [
     items: [
       { href: "/client/factures", label: "Mes Factures", labelKey: "inv.my_invoices", icon: Receipt },
       { href: "/client/nouvelle-facture", label: "Nouvelle Facture", labelKey: "inv.new_invoice", icon: FilePlus2 },
+      { href: "/client/facture-template", label: "Template IA", icon: Lightbulb },
       { href: "/client/facturation-settings", label: "Paramètres Facturation", labelKey: "inv.settings", icon: SlidersHorizontal },
     ]
   },
