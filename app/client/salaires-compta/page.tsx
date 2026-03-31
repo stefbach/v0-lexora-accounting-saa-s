@@ -33,22 +33,49 @@ export default function SalairesComptaPage() {
     if (!societe) return
     setLoading(true)
     try {
-      // Get all SAL journal ecritures for this société
-      const { data: dossiers } = await fetch(`/api/comptable/societes`).then(r => r.json()).catch(() => ({ societes: [] }))
-      // Use import-paie history to get periods
-      const histRes = await fetch(`/api/rh/import-paie?action=history&societe_id=${societe}`).then(r => r.json()).catch(() => ({ history: [] }))
-      setPeriodes((histRes.history || []).sort((a: any, b: any) => b.periode.localeCompare(a.periode)))
+      // Get ALL bulletins for this société (all periods)
+      const res = await fetch(`/api/rh/paie?societe_id=${societe}`)
+      const data = await res.json()
+      const allBulletins = data.bulletins || []
+
+      // Group by période
+      const groups: Record<string, any> = {}
+      for (const b of allBulletins) {
+        const p = (b.periode || '').slice(0, 7) // YYYY-MM
+        if (!p) continue
+        if (!groups[p]) groups[p] = { periode: p, nb: 0, basic: 0, ot: 0, primes: 0, brut: 0, net: 0, csg_sal: 0, nsf_sal: 0, paye: 0, csg_pat: 0, nsf_pat: 0, levy: 0, prgf: 0, charges: 0 }
+        groups[p].nb++
+        groups[p].basic += Number(b.salaire_base) || 0
+        groups[p].ot += Number(b.heures_sup_montant) || 0
+        groups[p].primes += Number(b.special_allowance_1) || 0
+        groups[p].brut += Number(b.salaire_brut || b.salaire_base) || 0
+        groups[p].net += Number(b.salaire_net) || 0
+        groups[p].csg_sal += Number(b.csg_salarie) || 0
+        groups[p].nsf_sal += Number(b.nsf_salarie) || 0
+        groups[p].paye += Number(b.paye) || 0
+        groups[p].csg_pat += Number(b.csg_patronal) || 0
+        groups[p].nsf_pat += Number(b.nsf_patronal) || 0
+        groups[p].levy += Number(b.training_levy) || 0
+        groups[p].prgf += Number(b.prgf) || 0
+        groups[p].charges += Number(b.total_charges_patronales) || 0
+      }
+      setPeriodes(Object.values(groups).sort((a: any, b: any) => b.periode.localeCompare(a.periode)))
     } catch {}
     setLoading(false)
   }, [societe])
 
   useEffect(() => { load() }, [load])
 
-  // Totaux globaux
-  const totalBrut = periodes.reduce((s, p) => s + (p.total_brut || 0), 0)
-  const totalNet = periodes.reduce((s, p) => s + (p.total_net || 0), 0)
-  const totalCharges = periodes.reduce((s, p) => s + (p.total_charges || 0), 0)
-  const totalCSG = periodes.reduce((s, p) => s + (p.total_csg || 0), 0)
+  const totalBrut = periodes.reduce((s, p) => s + (p.brut || 0), 0)
+  const totalNet = periodes.reduce((s, p) => s + (p.net || 0), 0)
+  const totalCharges = periodes.reduce((s, p) => s + (p.charges || 0), 0)
+  const totalCSGSal = periodes.reduce((s, p) => s + (p.csg_sal || 0), 0)
+  const totalCSGPat = periodes.reduce((s, p) => s + (p.csg_pat || 0), 0)
+  const totalNSFSal = periodes.reduce((s, p) => s + (p.nsf_sal || 0), 0)
+  const totalNSFPat = periodes.reduce((s, p) => s + (p.nsf_pat || 0), 0)
+  const totalPaye = periodes.reduce((s, p) => s + (p.paye || 0), 0)
+  const totalLevy = periodes.reduce((s, p) => s + (p.levy || 0), 0)
+  const totalPrgf = periodes.reduce((s, p) => s + (p.prgf || 0), 0)
 
   return (
     <div className="p-6 space-y-6">
@@ -70,20 +97,25 @@ export default function SalairesComptaPage() {
           <p className="text-2xl font-bold" style={{ color: NAVY }}>{periodes.length}</p>
           <p className="text-xs text-gray-500">Mois comptabilisés</p>
         </CardContent></Card>
-        <Card><CardContent className="p-4 text-center">
-          <Banknote className="h-5 w-5 mx-auto mb-1 text-blue-600" />
+        <Card className="border-l-4 border-l-blue-500"><CardContent className="p-4">
+          <p className="text-xs text-gray-400">641 — Masse salariale brute</p>
           <p className="text-2xl font-bold text-blue-600">{fmt(totalBrut)} MUR</p>
-          <p className="text-xs text-gray-500">641 — Rémunérations</p>
+          <p className="text-xs text-gray-400 mt-1">Basic: {fmt(periodes.reduce((s, p) => s + p.basic, 0))}</p>
         </CardContent></Card>
-        <Card><CardContent className="p-4 text-center">
-          <CreditCard className="h-5 w-5 mx-auto mb-1 text-emerald-600" />
+        <Card className="border-l-4 border-l-emerald-500"><CardContent className="p-4">
+          <p className="text-xs text-gray-400">421 — Net à payer</p>
           <p className="text-2xl font-bold text-emerald-600">{fmt(totalNet)} MUR</p>
-          <p className="text-xs text-gray-500">421 — Net à payer</p>
+          <p className="text-xs text-gray-400 mt-1">{totalBrut > 0 ? Math.round(totalNet / totalBrut * 100) : 0}% du brut</p>
         </CardContent></Card>
-        <Card><CardContent className="p-4 text-center">
-          <TrendingUp className="h-5 w-5 mx-auto mb-1 text-orange-600" />
+        <Card className="border-l-4 border-l-red-500"><CardContent className="p-4">
+          <p className="text-xs text-gray-400">431/444 — Retenues salariales</p>
+          <p className="text-2xl font-bold text-red-600">{fmt(totalCSGSal + totalNSFSal + totalPaye)} MUR</p>
+          <p className="text-xs text-gray-400 mt-1">CSG {fmt(totalCSGSal)} • NSF {fmt(totalNSFSal)} • PAYE {fmt(totalPaye)}</p>
+        </CardContent></Card>
+        <Card className="border-l-4 border-l-orange-500"><CardContent className="p-4">
+          <p className="text-xs text-gray-400">645 — Charges patronales</p>
           <p className="text-2xl font-bold text-orange-600">{fmt(totalCharges)} MUR</p>
-          <p className="text-xs text-gray-500">645 — Charges patronales</p>
+          <p className="text-xs text-gray-400 mt-1">CSG {fmt(totalCSGPat)} • NSF {fmt(totalNSFPat)} • Levy {fmt(totalLevy)} • PRGF {fmt(totalPrgf)}</p>
         </CardContent></Card>
       </div>
 
@@ -93,47 +125,65 @@ export default function SalairesComptaPage() {
         <>
           {/* Tableau des comptes de salaires */}
           <Card>
-            <CardHeader><CardTitle className="text-base" style={{ color: NAVY }}>Comptes de salaires par période</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base" style={{ color: NAVY }}>Détail par période</CardTitle></CardHeader>
             <CardContent className="p-0 overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-xs">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-2 text-left font-medium" style={{ color: NAVY }}>Période</th>
-                    <th className="px-3 py-2 text-center font-medium">Employés</th>
-                    <th className="px-3 py-2 text-right font-medium text-blue-600">641 Salaires</th>
-                    <th className="px-3 py-2 text-right font-medium text-orange-600">645 Charges pat.</th>
-                    <th className="px-3 py-2 text-right font-medium text-emerald-600">421 Net à payer</th>
-                    <th className="px-3 py-2 text-right font-medium text-red-600">431 CSG</th>
-                    <th className="px-3 py-2 text-right font-medium text-red-600">444 PAYE</th>
-                    <th className="px-3 py-2 text-right font-medium text-purple-600">432 Levy</th>
+                    <th className="px-3 py-2 text-left font-medium" style={{ color: NAVY }}>Période</th>
+                    <th className="px-2 py-2 text-center font-medium">Nb</th>
+                    <th className="px-2 py-2 text-right font-medium bg-blue-50">641 Basic</th>
+                    <th className="px-2 py-2 text-right font-medium bg-blue-50">OT</th>
+                    <th className="px-2 py-2 text-right font-medium bg-blue-50">Primes</th>
+                    <th className="px-2 py-2 text-right font-medium bg-red-50">CSG sal.</th>
+                    <th className="px-2 py-2 text-right font-medium bg-red-50">NSF sal.</th>
+                    <th className="px-2 py-2 text-right font-medium bg-red-50">PAYE</th>
+                    <th className="px-2 py-2 text-right font-medium bg-emerald-50 font-bold">421 Net</th>
+                    <th className="px-2 py-2 text-right font-medium bg-orange-50">CSG pat.</th>
+                    <th className="px-2 py-2 text-right font-medium bg-orange-50">NSF pat.</th>
+                    <th className="px-2 py-2 text-right font-medium bg-orange-50">Levy</th>
+                    <th className="px-2 py-2 text-right font-medium bg-orange-50">PRGF</th>
+                    <th className="px-2 py-2 text-right font-medium bg-orange-50">645 Total</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
                   {periodes.map(p => {
-                    const mois = new Date(p.periode + "T12:00:00").toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
+                    const mois = new Date((p.periode || '2025-01') + "-01T12:00:00").toLocaleDateString("fr-FR", { month: "short", year: "numeric" })
                     return (
                       <tr key={p.periode} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 font-medium capitalize">{mois}</td>
-                        <td className="px-3 py-3 text-center"><Badge variant="outline">{p.nb}</Badge></td>
-                        <td className="px-3 py-3 text-right font-mono text-blue-600">{fmt(p.total_brut || 0)}</td>
-                        <td className="px-3 py-3 text-right font-mono text-orange-600">{fmt(p.total_charges || 0)}</td>
-                        <td className="px-3 py-3 text-right font-mono text-emerald-600 font-bold">{fmt(p.total_net || 0)}</td>
-                        <td className="px-3 py-3 text-right font-mono text-red-600">{fmt(p.total_csg || 0)}</td>
-                        <td className="px-3 py-3 text-right font-mono text-red-600">{fmt(p.total_paye || 0)}</td>
-                        <td className="px-3 py-3 text-right font-mono text-purple-600">{fmt(p.total_levy || 0)}</td>
+                        <td className="px-3 py-2 font-medium capitalize">{mois}</td>
+                        <td className="px-2 py-2 text-center">{p.nb}</td>
+                        <td className="px-2 py-2 text-right font-mono text-blue-600">{fmt(p.basic)}</td>
+                        <td className="px-2 py-2 text-right font-mono text-blue-500">{p.ot > 0 ? fmt(p.ot) : "—"}</td>
+                        <td className="px-2 py-2 text-right font-mono text-blue-500">{p.primes > 0 ? fmt(p.primes) : "—"}</td>
+                        <td className="px-2 py-2 text-right font-mono text-red-600">{fmt(p.csg_sal)}</td>
+                        <td className="px-2 py-2 text-right font-mono text-red-500">{fmt(p.nsf_sal)}</td>
+                        <td className="px-2 py-2 text-right font-mono text-red-500">{fmt(p.paye)}</td>
+                        <td className="px-2 py-2 text-right font-mono text-emerald-600 font-bold">{fmt(p.net)}</td>
+                        <td className="px-2 py-2 text-right font-mono text-orange-600">{fmt(p.csg_pat)}</td>
+                        <td className="px-2 py-2 text-right font-mono text-orange-500">{fmt(p.nsf_pat)}</td>
+                        <td className="px-2 py-2 text-right font-mono text-orange-500">{fmt(p.levy)}</td>
+                        <td className="px-2 py-2 text-right font-mono text-orange-500">{fmt(p.prgf)}</td>
+                        <td className="px-2 py-2 text-right font-mono text-orange-700 font-bold">{fmt(p.charges)}</td>
                       </tr>
                     )
                   })}
                   {periodes.length > 0 && (
-                    <tr className="bg-gray-100 font-bold">
-                      <td className="px-4 py-3">TOTAL</td>
-                      <td className="px-3 py-3 text-center">{periodes.reduce((s, p) => s + (p.nb || 0), 0)}</td>
-                      <td className="px-3 py-3 text-right font-mono text-blue-600">{fmt(totalBrut)}</td>
-                      <td className="px-3 py-3 text-right font-mono text-orange-600">{fmt(totalCharges)}</td>
-                      <td className="px-3 py-3 text-right font-mono text-emerald-600">{fmt(totalNet)}</td>
-                      <td className="px-3 py-3 text-right font-mono text-red-600">{fmt(totalCSG)}</td>
-                      <td className="px-3 py-3 text-right font-mono text-red-600">{fmt(periodes.reduce((s, p) => s + (p.total_paye || 0), 0))}</td>
-                      <td className="px-3 py-3 text-right font-mono text-purple-600">{fmt(periodes.reduce((s, p) => s + (p.total_levy || 0), 0))}</td>
+                    <tr className="bg-gray-100 font-bold text-xs">
+                      <td className="px-3 py-2">TOTAL</td>
+                      <td className="px-2 py-2 text-center">{periodes.reduce((s, p) => s + p.nb, 0)}</td>
+                      <td className="px-2 py-2 text-right font-mono text-blue-600">{fmt(periodes.reduce((s, p) => s + p.basic, 0))}</td>
+                      <td className="px-2 py-2 text-right font-mono">{fmt(periodes.reduce((s, p) => s + p.ot, 0))}</td>
+                      <td className="px-2 py-2 text-right font-mono">{fmt(periodes.reduce((s, p) => s + p.primes, 0))}</td>
+                      <td className="px-2 py-2 text-right font-mono text-red-600">{fmt(totalCSGSal)}</td>
+                      <td className="px-2 py-2 text-right font-mono text-red-500">{fmt(totalNSFSal)}</td>
+                      <td className="px-2 py-2 text-right font-mono text-red-500">{fmt(totalPaye)}</td>
+                      <td className="px-2 py-2 text-right font-mono text-emerald-600 font-bold">{fmt(totalNet)}</td>
+                      <td className="px-2 py-2 text-right font-mono text-orange-600">{fmt(totalCSGPat)}</td>
+                      <td className="px-2 py-2 text-right font-mono text-orange-500">{fmt(totalNSFPat)}</td>
+                      <td className="px-2 py-2 text-right font-mono text-orange-500">{fmt(totalLevy)}</td>
+                      <td className="px-2 py-2 text-right font-mono text-orange-500">{fmt(totalPrgf)}</td>
+                      <td className="px-2 py-2 text-right font-mono text-orange-700 font-bold">{fmt(totalCharges)}</td>
                     </tr>
                   )}
                 </tbody>

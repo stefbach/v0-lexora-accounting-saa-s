@@ -33,7 +33,7 @@ export default function ChargesSocialesPage() {
     if (!societe) return
     setLoading(true)
     try {
-      const res = await fetch(`/api/rh/paie?action=list&societe_id=${societe}&periode=${periode}`)
+      const res = await fetch(`/api/rh/paie?societe_id=${societe}&periode=${periode}`)
       const data = await res.json()
       setBulletins(data.bulletins || [])
     } catch {}
