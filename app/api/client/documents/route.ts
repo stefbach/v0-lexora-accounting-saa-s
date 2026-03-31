@@ -107,30 +107,63 @@ export async function GET() {
       }
     }
 
-    if (dossierIds.length === 0) {
+    // ALSO: for admin, find ALL documents uploaded by users of the same sociétés
+    // This catches documents in orphan dossiers (assistant uploaded before société link was set)
+    let uploaderIds: string[] = []
+    if (isAdmin && societeIds.size > 0) {
+      // Users with profiles.societe_id in our sociétés
+      const { data: socUsers } = await supabase.from('profiles').select('id').in('societe_id', [...societeIds])
+      uploaderIds = (socUsers || []).map(u => u.id)
+      // Users in user_societes for our sociétés
+      const { data: usUsers } = await supabase.from('user_societes').select('user_id').in('societe_id', [...societeIds])
+      for (const u of usUsers || []) if (!uploaderIds.includes(u.user_id)) uploaderIds.push(u.user_id)
+    }
+
+    if (dossierIds.length === 0 && uploaderIds.length === 0) {
       return NextResponse.json({ documents: [] })
     }
 
-    // Get all documents in those dossiers
-    // client_user: only sees documents they uploaded themselves
-    // client_admin/admin/comptable: sees all documents from all dossiers
-    let documentsQuery = supabase
-      .from('documents')
-      .select('id, nom_fichier, type_fichier, type_document, statut, storage_path, created_at, societe_detectee, n8n_result')
-      .in('dossier_id', dossierIds)
-      .order('created_at', { ascending: false })
+    // Get documents: by dossier OR by uploader (for admin roles)
+    let documents: any[] = []
 
+    // Query 1: documents in known dossiers
+    if (dossierIds.length > 0) {
+      const { data: d1 } = await supabase
+        .from('documents')
+        .select('id, nom_fichier, type_fichier, type_document, statut, storage_path, created_at, societe_detectee, n8n_result, uploaded_by, dossier_id')
+        .in('dossier_id', dossierIds)
+        .order('created_at', { ascending: false })
+      if (d1) documents = [...d1]
+    }
+
+    // Query 2: documents uploaded by users of the same sociétés (catches orphan dossiers)
+    if (isAdmin && uploaderIds.length > 0) {
+      const { data: d2 } = await supabase
+        .from('documents')
+        .select('id, nom_fichier, type_fichier, type_document, statut, storage_path, created_at, societe_detectee, n8n_result, uploaded_by, dossier_id')
+        .in('uploaded_by', uploaderIds)
+        .order('created_at', { ascending: false })
+      if (d2) {
+        // Merge without duplicates
+        const existingIds = new Set(documents.map(d => d.id))
+        for (const doc of d2) {
+          if (!existingIds.has(doc.id)) documents.push(doc)
+        }
+      }
+    }
+
+    // For client_user: filter to only their own uploads
+    let documentsQuery: any = null // not used anymore
+
+    // For client_user: only their own uploads
     if (userProfile?.role === 'client_user') {
-      documentsQuery = documentsQuery.eq('uploaded_by', user.id)
+      documents = documents.filter(d => d.uploaded_by === user.id)
     }
 
-    const { data: documents, error } = await documentsQuery
+    // Sort by date descending
+    documents.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-
-    return NextResponse.json({ documents: documents || [] })
+    return NextResponse.json({ documents })
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur inconnue' }, { status: 500 })
   }
