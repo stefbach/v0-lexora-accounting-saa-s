@@ -337,11 +337,23 @@ Apres traitement de toutes les lignes, verifier:
 solde_ouverture + total_credits - total_debits = solde_cloture (tolerance 1 MUR)
 - Si ecart > 1 MUR: ajouter 'lignes_manquantes: true' et 'ecart_solde: X' dans le JSON
 
+EXTRACTION OBLIGATOIRE EN-TETE:
+- Extraire le nom de la societe titulaire du compte (champ "nom_societe")
+- Extraire le BRN / numero d'entreprise (champ "brn") — souvent sur la premiere page
+- Extraire l'IBAN complet (champ "iban")
+- Extraire le numero de compte (champ "numero_compte")
+- Extraire le nom de la banque (champ "banque")
+- Extraire la devise du compte (champ "devise")
+
 FORMAT REPONSE JSON strict:
 {
   "banque": "",
+  "nom_societe": "",
+  "brn": "",
+  "iban": "",
   "compte_bancaire": "",
   "numero_compte": "",
+  "titulaire": "",
   "periode": "",
   "periode_debut": "YYYY-MM-DD",
   "periode_fin": "YYYY-MM-DD",

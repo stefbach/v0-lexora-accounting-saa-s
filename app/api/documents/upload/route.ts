@@ -562,24 +562,66 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
       }
     }
 
-    // Handle bank statement: create/update bank account + store statement
+    // Handle bank statement: auto-detect société + create/update bank account + store statement
     if (typeDocument === 'releve_bancaire') {
-      // Ensure we have at least a bank name (fallback to detected société name)
       if (!extraction.banque && !extraction.compte_bancaire) {
         extraction.banque = detectedSociete !== 'INCONNU' ? detectedSociete : 'Banque'
       }
       const bankDevise = extraction.devise || 'MUR'
       const bankName = extraction.banque || extraction.compte_bancaire || 'Banque'
-      // Support both field names: solde_cloture (prompt inline) and solde_fin (SYSTEM_PROMPT_RELEVE_BANCAIRE)
       const solde = Number(extraction.solde_cloture) || Number(extraction.solde_fin) || 0
+      const extractedIBAN = extraction.iban || null
+      const extractedNumeroCompte = extraction.numero_compte || extraction.compte_bancaire || null
+      const extractedBRN = extraction.brn || null
+      const extractedNomSociete = extraction.nom_societe || extraction.titulaire || detectedSociete || null
 
-      // Get the societe_id: prefer explicit societeId from form, then from dossier
+      // ──── AUTO-DETECT SOCIÉTÉ from PDF (BRN, IBAN, numéro compte, nom) ────
       let bankSocieteId = societeId || null
+
       if (!bankSocieteId) {
-        const { data: dossierData } = await supabase.from('dossiers').select('societe_id').eq('id', finalDossierId).maybeSingle()
-        bankSocieteId = dossierData?.societe_id || null
+        // 1. Match by BRN
+        if (extractedBRN) {
+          const { data: byBRN } = await supabase.from('societes').select('id, nom').eq('brn', extractedBRN).limit(1).maybeSingle()
+          if (byBRN) { bankSocieteId = byBRN.id; console.log(`[upload] Société by BRN ${extractedBRN} → ${byBRN.nom}`) }
+        }
+        // 2. Match by IBAN on existing bank accounts
+        if (!bankSocieteId && extractedIBAN) {
+          const { data: byIBAN } = await supabase.from('comptes_bancaires').select('id, societe_id').eq('iban', extractedIBAN).limit(1).maybeSingle()
+          if (byIBAN) { bankSocieteId = byIBAN.societe_id; console.log(`[upload] Société by IBAN`) }
+        }
+        // 3. Match by account number
+        if (!bankSocieteId && extractedNumeroCompte) {
+          const { data: byNum } = await supabase.from('comptes_bancaires').select('id, societe_id').eq('numero_compte', extractedNumeroCompte).limit(1).maybeSingle()
+          if (byNum) { bankSocieteId = byNum.societe_id; console.log(`[upload] Société by account number ${extractedNumeroCompte}`) }
+        }
+        // 4. Match by société name (fuzzy)
+        if (!bankSocieteId && extractedNomSociete && extractedNomSociete !== 'INCONNU') {
+          const sn = extractedNomSociete.toLowerCase().replace(/ ltd| limited| sarl| sas/gi, '').trim()
+          const { data: allSoc } = await supabase.from('societes').select('id, nom')
+          const matched = (allSoc || []).find(s => {
+            const n = (s.nom || '').toLowerCase().replace(/ ltd| limited| sarl| sas/gi, '').trim()
+            return n === sn || n.includes(sn) || sn.includes(n)
+          })
+          if (matched) { bankSocieteId = matched.id; console.log(`[upload] Société by name "${extractedNomSociete}" → ${matched.nom}`) }
+        }
+        // 5. Fallback: user's dossier
+        if (!bankSocieteId) {
+          const { data: dd } = await supabase.from('dossiers').select('societe_id').eq('id', finalDossierId).maybeSingle()
+          bankSocieteId = dd?.societe_id || null
+        }
       }
-      console.log(`[upload] Bank statement: bankName=${bankName}, bankSocieteId=${bankSocieteId}, devise=${bankDevise}, solde=${solde}`)
+
+      // Re-route document to correct société dossier
+      if (bankSocieteId) {
+        const { data: correctDossier } = await supabase.from('dossiers').select('id').eq('societe_id', bankSocieteId).eq('client_id', user.id).limit(1).maybeSingle()
+        if (correctDossier && correctDossier.id !== finalDossierId) {
+          finalDossierId = correctDossier.id
+          await supabase.from('documents').update({ dossier_id: correctDossier.id }).eq('id', doc.id)
+          console.log(`[upload] Rerouted to dossier ${correctDossier.id} for société ${bankSocieteId}`)
+        }
+      }
+
+      console.log(`[upload] Bank: name=${bankName}, societe=${bankSocieteId}, devise=${bankDevise}, solde=${solde}, IBAN=${extractedIBAN}, BRN=${extractedBRN}`)
 
       if (bankSocieteId) {
         // Normalize date fields: support all naming variants from both prompts
@@ -608,9 +650,14 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
 
         const normNumeroCompte = extraction.numero_compte || extraction.compte_bancaire || null
 
-        // Check if bank account exists — match by numero_compte first, then by banque+devise
+        // Check if bank account exists — match by IBAN, numero_compte, or banque+devise
         let existingBank: any = null
-        if (normNumeroCompte) {
+        if (extractedIBAN) {
+          const { data: byIBAN } = await supabase.from('comptes_bancaires')
+            .select('id').eq('societe_id', bankSocieteId).eq('iban', extractedIBAN).limit(1).maybeSingle()
+          existingBank = byIBAN
+        }
+        if (!existingBank && normNumeroCompte) {
           const { data: byNum } = await supabase.from('comptes_bancaires')
             .select('id').eq('societe_id', bankSocieteId).eq('numero_compte', normNumeroCompte).limit(1).maybeSingle()
           existingBank = byNum
@@ -624,10 +671,10 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
         if (existingBank) {
           // Update balance
           console.log(`[upload] Updating existing bank account ${existingBank.id}: solde=${solde}, date=${normPeriodeFin}`)
-          await supabase.from('comptes_bancaires').update({
-            solde_actuel: solde,
-            date_dernier_releve: normPeriodeFin,
-          }).eq('id', existingBank.id)
+          const bankUpdate: Record<string, unknown> = { solde_actuel: solde, date_dernier_releve: normPeriodeFin }
+          if (extractedIBAN) bankUpdate.iban = extractedIBAN
+          if (normNumeroCompte) bankUpdate.numero_compte = normNumeroCompte
+          await supabase.from('comptes_bancaires').update(bankUpdate).eq('id', existingBank.id)
         } else {
           // Create new bank account
           console.log(`[upload] Creating new bank account: ${bankName} for societe=${bankSocieteId}`)
@@ -636,6 +683,7 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
             banque: bankName,
             nom_compte: normNumeroCompte || bankName,
             numero_compte: normNumeroCompte,
+            iban: extractedIBAN,
             devise: bankDevise,
             solde_actuel: solde,
             solde_dernier_releve: solde,
