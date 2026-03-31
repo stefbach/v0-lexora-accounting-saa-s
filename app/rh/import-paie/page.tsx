@@ -221,41 +221,46 @@ export default function ImportPaiePage() {
           </div>
 
           {/* KPIs — indicateurs clés */}
-          <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
-            <Card className="border-2 border-blue-200"><CardContent className="p-3 text-center">
-              <p className="text-[10px] text-gray-400 uppercase">Employés</p>
-              <p className="text-2xl font-bold" style={{ color: NAVY }}>{employes.length}</p>
-            </CardContent></Card>
-            <Card className="border-2 border-blue-200"><CardContent className="p-3 text-center">
-              <p className="text-[10px] text-gray-400 uppercase">Total Brut</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Card className="border-l-4 border-l-blue-500"><CardContent className="p-4">
+              <p className="text-xs text-gray-400">Masse salariale brute</p>
               <p className="text-2xl font-bold text-blue-600">{fmt(totals.brut)}</p>
+              <p className="text-xs text-gray-400 mt-1">{employes.length} employés • Basic: {fmt(totals.basic)}</p>
             </CardContent></Card>
-            <Card className="border-2 border-emerald-200"><CardContent className="p-3 text-center">
-              <p className="text-[10px] text-gray-400 uppercase">Net à payer</p>
+            <Card className="border-l-4 border-l-emerald-500"><CardContent className="p-4">
+              <p className="text-xs text-gray-400">Net à payer</p>
               <p className="text-2xl font-bold text-emerald-600">{fmt(totals.net)}</p>
-              {totals.net === 0 && totals.brut > 0 && <p className="text-[9px] text-red-500">Colonne "NET Pay" non détectée</p>}
+              {totals.net === 0 && totals.brut > 0 && <p className="text-xs text-red-500 mt-1">Colonne "NET Pay" non détectée</p>}
+              {totals.net > 0 && <p className="text-xs text-gray-400 mt-1">{Math.round(totals.net / totals.brut * 100)}% du brut</p>}
             </CardContent></Card>
-            <Card className="border-2 border-red-200"><CardContent className="p-3 text-center">
-              <p className="text-[10px] text-gray-400 uppercase">Déductions sal.</p>
-              <p className="text-xl font-bold text-red-600">{fmt(totals.deductions)}</p>
-              <p className="text-[9px] text-gray-400">CSG {fmt(totals.csg)} + NSF {fmt(totals.nsf)} + PAYE {fmt(totals.paye)}</p>
+            <Card className="border-l-4 border-l-red-500"><CardContent className="p-4">
+              <p className="text-xs text-gray-400">Retenues salariales</p>
+              <p className="text-2xl font-bold text-red-600">{fmt(totals.deductions)}</p>
+              <p className="text-xs text-gray-400 mt-1">CSG {fmt(totals.csg)} • NSF {fmt(totals.nsf)} • PAYE {fmt(totals.paye)}</p>
             </CardContent></Card>
-            <Card className="border-2 border-orange-200"><CardContent className="p-3 text-center">
-              <p className="text-[10px] text-gray-400 uppercase">Charges patron.</p>
-              <p className="text-xl font-bold text-orange-600">{fmt(totals.charges)}</p>
-            </CardContent></Card>
-            <Card className="border-2 border-purple-200"><CardContent className="p-3 text-center">
-              <p className="text-[10px] text-gray-400 uppercase">Coût total</p>
-              <p className="text-xl font-bold text-purple-700">{fmt(totals.brut + totals.charges)}</p>
+            <Card className="border-l-4 border-l-orange-500"><CardContent className="p-4">
+              <p className="text-xs text-gray-400">Charges patronales</p>
+              <p className="text-2xl font-bold text-orange-600">{fmt(totals.charges)}</p>
+              <p className="text-xs text-gray-400 mt-1">Coût total: <strong>{fmt(totals.brut + totals.charges)}</strong></p>
             </CardContent></Card>
           </div>
 
+          {/* Vérification cohérence */}
+          {totals.brut > 0 && Math.abs(totals.brut - totals.deductions - totals.net) > 100 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-700">
+              Vérification : Brut ({fmt(totals.brut)}) - Déductions ({fmt(totals.deductions)}) = {fmt(totals.brut - totals.deductions)} ≠ Net ({fmt(totals.net)}) — Écart de {fmt(Math.abs(totals.brut - totals.deductions - totals.net))}
+            </div>
+          )}
+
           {/* Colonnes détectées */}
-          <div className="flex flex-wrap gap-1">
-            {columns.map((c: any) => (
-              <Badge key={c.field} variant="outline" className="text-[10px]">{c.field}: col {c.index}</Badge>
-            ))}
-          </div>
+          <details className="text-xs">
+            <summary className="text-gray-400 cursor-pointer">Colonnes détectées ({columns.length})</summary>
+            <div className="flex flex-wrap gap-1 mt-1">
+              {columns.map((c: any) => (
+                <Badge key={c.field} variant="outline" className="text-[10px]">{c.field}: col {c.index}</Badge>
+              ))}
+            </div>
+          </details>
 
           {/* Preview table — ALL columns */}
           <Card>

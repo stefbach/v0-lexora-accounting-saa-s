@@ -253,8 +253,29 @@ export async function POST(request: Request) {
       }
 
       const monthMap: Record<string, string> = { jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12' }
-      const pm = file.name.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*[\s_-]*(\d{4})/i)
-      const periode = pm ? `${pm[2]}-${monthMap[pm[1].toLowerCase().slice(0,3)]}` : ''
+      // Try multiple date patterns in filename
+      const pm1 = file.name.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*[\s_-]*(\d{4})/i)
+      const pm2 = file.name.match(/(\d{4})[-_](\d{2})[-_]\d{2}/) // YYYY-MM-DD format
+      const pm3 = file.name.match(/(\d{4})[-_](\d{2})/) // YYYY-MM format
+      let periode = ''
+      if (pm1) {
+        periode = `${pm1[2]}-${monthMap[pm1[1].toLowerCase().slice(0,3)]}`
+      } else if (pm2) {
+        periode = `${pm2[1]}-${pm2[2]}`
+      } else if (pm3) {
+        periode = `${pm3[1]}-${pm3[2]}`
+      }
+      // Also try to detect from sheet content (first cell might have "Payroll Report Aug 2025")
+      if (!periode) {
+        const firstCells = rows.slice(0, 5).flat().map((c: any) => String(c))
+        for (const cell of firstCells) {
+          const cm = cell.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*[\s_-]*(\d{4})/i)
+          if (cm) { periode = `${cm[2]}-${monthMap[cm[1].toLowerCase().slice(0,3)]}`; break }
+          const cm2 = cell.match(/(\d{4})[-_/](\d{2})/)
+          if (cm2) { periode = `${cm2[1]}-${cm2[2]}`; break }
+        }
+      }
+      console.log(`[import-paie] Detected period: "${periode}" from filename "${file.name}"`)
 
       return NextResponse.json({ columns: Object.entries(colMap).map(([f, i]) => ({ field: f, header: headers[i], index: i })), employes, periode_detected: periode, nb_rows: employes.length })
     }
