@@ -88,6 +88,7 @@ const MENU: MenuSection[] = [
     items: [
       { href: "/client/tableau-de-bord", label: "Tableau de bord", labelKey: "nav.dashboard", icon: LayoutDashboard },
       { href: "/client/societes", label: "Mes Sociétés", labelKey: "nav.companies", icon: Building2 },
+      { href: "/client/societe", label: "Fiche Société", icon: Settings },
       { href: "/client/documents", label: "Documents & OCR", labelKey: "nav.documents", icon: FileText },
       { href: "/client/utilisateurs", label: "Utilisateurs", labelKey: "nav.users", icon: Users },
       { href: "/client/equipe", label: "Mon Équipe", labelKey: "nav.team", icon: UserCog },
@@ -163,7 +164,7 @@ const MENU: MenuSection[] = [
   {
     section: "Mon Compte", sectionKey: "account.my_account",
     items: [
-      { href: "/rh/societe", label: "Paramètres société", icon: Settings },
+      { href: "/client/societe", label: "Paramètres société", icon: Settings },
       { href: "/client/profil", label: "Mon Profil", labelKey: "account.my_profile", icon: Settings },
     ]
   },
