@@ -39,18 +39,38 @@ const COL_PATTERNS: Record<string, string[]> = {
   er_levy: ['[er] 4200', 'er] 4200', 'er levy', 'er] levy', 'levy'],
   er_prgf: ['[er] 7900', 'er] 7900', 'er prgf', 'prgf'],
   total_er: ['total er contributions', 'total er', 'total employer'],
-  net_pay: ['net pay', 'net_pay', 'salaire net', 'net'],
+  net_pay: ['net pay', 'net_pay', 'salaire net', 'ad net'],
 }
 
 function detectColumns(headers: string[]): Record<string, number> {
   const mapping: Record<string, number> = {}
   const lower = headers.map(h => String(h).toLowerCase().trim())
-  for (const [field, patterns] of Object.entries(COL_PATTERNS)) {
+  const used = new Set<number>() // avoid assigning same column to multiple fields
+
+  // Process fields in priority order — specific fields first, generic last
+  const priorityOrder = [
+    'nom', 'prenom', 'code', 'poste', 'departement', 'date_arrivee', 'date_depart',
+    'salaire_base', 'overtime_1_5x', 'overtime_2x',
+    'special_allowance', 'internet_allowance', 'prime_production', 'on_call', 'prime_tl',
+    'electricity', 'meal_allowance', 'total_payments', 'absence_deductions',
+    'csg', 'nsf', 'paye', 'total_deductions',
+    'er_csg', 'er_nsf', 'er_levy', 'er_prgf', 'total_er',
+    'net_pay', // last — avoids matching "internet" as "net"
+  ]
+
+  for (const field of priorityOrder) {
+    const patterns = COL_PATTERNS[field]
+    if (!patterns) continue
     for (let i = 0; i < lower.length; i++) {
-      if (mapping[field] !== undefined) break
-      if (patterns.some(p => lower[i].includes(p))) mapping[field] = i
+      if (used.has(i)) continue // column already assigned
+      if (patterns.some(p => lower[i].includes(p))) {
+        mapping[field] = i
+        used.add(i)
+        break
+      }
     }
   }
+
   return mapping
 }
 

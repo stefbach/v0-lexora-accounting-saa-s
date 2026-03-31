@@ -128,12 +128,16 @@ export default function ImportPaiePage() {
   }
 
   const totals = employes.reduce((s, e) => ({
+    basic: s.basic + (e.salaire_base || 0),
     brut: s.brut + (e.total_payments || e.salaire_base || 0),
     net: s.net + (e.net_pay || 0),
     charges: s.charges + (e.total_er || 0),
     csg: s.csg + (e.csg || 0),
+    nsf: s.nsf + (e.nsf || 0),
     paye: s.paye + (e.paye || 0),
-  }), { brut: 0, net: 0, charges: 0, csg: 0, paye: 0 })
+    deductions: s.deductions + (e.total_deductions || 0),
+    ot: s.ot + (e.overtime_1_5x || 0) + (e.overtime_2x || 0),
+  }), { basic: 0, brut: 0, net: 0, charges: 0, csg: 0, nsf: 0, paye: 0, deductions: 0, ot: 0 })
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-6xl mx-auto">
@@ -206,17 +210,8 @@ export default function ImportPaiePage() {
             </div>
             <div className="flex items-center gap-2">
               <Label className="text-sm font-medium">Période :</Label>
-              <select value={periode} onChange={e => setPeriode(e.target.value)}
-                className="border rounded px-3 py-2 text-sm w-[180px]">
-                <option value="">-- Choisir le mois --</option>
-                {Array.from({ length: 36 }, (_, i) => {
-                  const d = new Date()
-                  d.setMonth(d.getMonth() - i)
-                  const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
-                  const label = d.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
-                  return <option key={val} value={val}>{label}</option>
-                })}
-              </select>
+              <input type="month" value={periode} onChange={e => setPeriode(e.target.value)}
+                className="border rounded px-3 py-2 text-sm" />
               <Button variant="outline" onClick={() => { setStep("upload"); setEmployes([]); setColumns([]) }}>Annuler</Button>
               <Button onClick={handleImport} disabled={importing || !periode || !societe} style={{ backgroundColor: NAVY }} className="text-white">
                 {importing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
@@ -225,13 +220,41 @@ export default function ImportPaiePage() {
             </div>
           </div>
 
-          {/* KPIs */}
-          <div className="grid grid-cols-5 gap-3">
-            <Card><CardContent className="p-3 text-center"><p className="text-xs text-gray-500">Employés</p><p className="text-xl font-bold" style={{ color: NAVY }}>{employes.length}</p></CardContent></Card>
-            <Card><CardContent className="p-3 text-center"><p className="text-xs text-gray-500">Total brut</p><p className="text-xl font-bold text-blue-600">{fmt(totals.brut)}</p></CardContent></Card>
-            <Card><CardContent className="p-3 text-center"><p className="text-xs text-gray-500">Total net</p><p className="text-xl font-bold text-emerald-600">{fmt(totals.net)}</p></CardContent></Card>
-            <Card><CardContent className="p-3 text-center"><p className="text-xs text-gray-500">Charges patronales</p><p className="text-xl font-bold text-orange-600">{fmt(totals.charges)}</p></CardContent></Card>
-            <Card><CardContent className="p-3 text-center"><p className="text-xs text-gray-500">CSG + PAYE</p><p className="text-xl font-bold text-purple-600">{fmt(totals.csg + totals.paye)}</p></CardContent></Card>
+          {/* KPIs — indicateurs clés */}
+          <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+            <Card className="border-2 border-blue-200"><CardContent className="p-3 text-center">
+              <p className="text-[10px] text-gray-400 uppercase">Employés</p>
+              <p className="text-2xl font-bold" style={{ color: NAVY }}>{employes.length}</p>
+            </CardContent></Card>
+            <Card className="border-2 border-blue-200"><CardContent className="p-3 text-center">
+              <p className="text-[10px] text-gray-400 uppercase">Total Brut</p>
+              <p className="text-2xl font-bold text-blue-600">{fmt(totals.brut)}</p>
+            </CardContent></Card>
+            <Card className="border-2 border-emerald-200"><CardContent className="p-3 text-center">
+              <p className="text-[10px] text-gray-400 uppercase">Net à payer</p>
+              <p className="text-2xl font-bold text-emerald-600">{fmt(totals.net)}</p>
+              {totals.net === 0 && totals.brut > 0 && <p className="text-[9px] text-red-500">Colonne "NET Pay" non détectée</p>}
+            </CardContent></Card>
+            <Card className="border-2 border-red-200"><CardContent className="p-3 text-center">
+              <p className="text-[10px] text-gray-400 uppercase">Déductions sal.</p>
+              <p className="text-xl font-bold text-red-600">{fmt(totals.deductions)}</p>
+              <p className="text-[9px] text-gray-400">CSG {fmt(totals.csg)} + NSF {fmt(totals.nsf)} + PAYE {fmt(totals.paye)}</p>
+            </CardContent></Card>
+            <Card className="border-2 border-orange-200"><CardContent className="p-3 text-center">
+              <p className="text-[10px] text-gray-400 uppercase">Charges patron.</p>
+              <p className="text-xl font-bold text-orange-600">{fmt(totals.charges)}</p>
+            </CardContent></Card>
+            <Card className="border-2 border-purple-200"><CardContent className="p-3 text-center">
+              <p className="text-[10px] text-gray-400 uppercase">Coût total</p>
+              <p className="text-xl font-bold text-purple-700">{fmt(totals.brut + totals.charges)}</p>
+            </CardContent></Card>
+          </div>
+
+          {/* Colonnes détectées */}
+          <div className="flex flex-wrap gap-1">
+            {columns.map((c: any) => (
+              <Badge key={c.field} variant="outline" className="text-[10px]">{c.field}: col {c.index}</Badge>
+            ))}
           </div>
 
           {/* Preview table — ALL columns */}
