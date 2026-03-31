@@ -46,9 +46,9 @@ export default function FraisKmPage() {
   const [employes, setEmployes] = useState<any[]>([])
   const [frais, setFrais] = useState<FraisKm[]>([])
   const [loading, setLoading] = useState(true)
-  const [tarif, setTarif] = useState(3.5)
+  const [tarif, setTarif] = useState(16)
   const [editingTarif, setEditingTarif] = useState(false)
-  const [newTarif, setNewTarif] = useState("3.5")
+  const [newTarif, setNewTarif] = useState("16")
   const [savingTarif, setSavingTarif] = useState(false)
   const [periode, setPeriode] = useState(new Date().toISOString().slice(0, 7))
 
@@ -69,12 +69,12 @@ export default function FraisKmPage() {
       const params = new URLSearchParams({ periode })
       if (societe !== "all") params.set("societe_id", societe)
       const [fraisRes, empRes] = await Promise.all([
-        fetch(`/api/rh/frais-km?${params}`).then(r => r.json()).catch(() => ({ frais: [], tarif_km: 3.5 })),
+        fetch(`/api/rh/frais-km?${params}`).then(r => r.json()).catch(() => ({ frais: [], tarif_km: 16 })),
         fetch(`/api/rh/employes?${societe !== "all" ? `societe_id=${societe}` : ""}`).then(r => r.json()).catch(() => ({ employes: [] })),
       ])
       setFrais(fraisRes.frais || [])
-      setTarif(fraisRes.tarif_km ?? 3.5)
-      setNewTarif(String(fraisRes.tarif_km ?? 3.5))
+      setTarif(fraisRes.tarif_km ?? 16)
+      setNewTarif(String(fraisRes.tarif_km ?? 16))
       setEmployes(empRes.employes || [])
     } catch (e) {
       console.error(e)

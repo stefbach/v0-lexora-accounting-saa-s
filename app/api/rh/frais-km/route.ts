@@ -27,17 +27,29 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
     }
 
-    // Fetch km rule for the société
-    const { data: rule, error: ruleErr } = await supabase
-      .from('frais_km_regles')
+    // Fetch km rule — try both table names (frais_km_rules or frais_km_regles)
+    let rule: any = null
+    const { data: r1, error: e1 } = await supabase
+      .from('frais_km_rules')
       .select('*')
       .eq('societe_id', societe_id)
       .eq('actif', true)
-      .order('created_at', { ascending: false })
+      .order('date_effet', { ascending: false })
       .limit(1)
       .maybeSingle()
-
-    if (ruleErr) throw ruleErr
+    if (!e1) {
+      rule = r1
+    } else {
+      const { data: r2 } = await supabase
+        .from('frais_km_regles')
+        .select('*')
+        .eq('societe_id', societe_id)
+        .eq('actif', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      rule = r2
+    }
 
     // Fetch monthly entries
     let entryQuery = supabase
@@ -66,12 +78,37 @@ export async function GET(request: Request) {
     }
 
     const { data: entries, error: entErr } = await entryQuery
-    if (entErr) throw entErr
+
+    // Enrich entries with employee names (avoid FK join)
+    const empIds = [...new Set((entries || []).map((e: any) => e.employe_id))]
+    let empMap: Record<string, any> = {}
+    if (empIds.length > 0) {
+      const { data: emps } = await supabase.from('employes').select('id, nom, prenom, poste').in('id', empIds)
+      for (const e of emps || []) empMap[e.id] = e
+    }
+
+    const frais = (entries || []).map((e: any) => {
+      const emp = empMap[e.employe_id] || e.employe || {}
+      return {
+        id: e.id,
+        employe_id: e.employe_id,
+        employe_nom: emp.nom || '',
+        employe_prenom: emp.prenom || '',
+        employe_poste: emp.poste || '',
+        periode: e.periode,
+        km: Number(e.km_parcourus) || 0,
+        tarif: Number(e.tarif_par_km || e.tarif_applique) || Number(rule?.tarif_par_km) || 16,
+        montant: Number(e.montant) || 0,
+        statut: e.statut || 'en_attente',
+      }
+    })
 
     return NextResponse.json({
       rule,
-      entries,
-      total: entries?.length || 0,
+      frais,
+      tarif_km: Number(rule?.tarif_par_km) || 16,
+      entries: entries || [],
+      total: (entries || []).length,
     })
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
@@ -90,35 +127,40 @@ export async function POST(request: Request) {
     const { action } = body
 
     // ── Set km tariff rule for a société ─────────────────────────────────────
-    if (action === 'set_rule') {
-      const { societe_id, tarif_par_km, vehicule_type, plafond_mensuel, notes } = body
-      if (!societe_id || !tarif_par_km) {
-        return NextResponse.json({ error: 'societe_id et tarif_par_km requis' }, { status: 400 })
+    if (action === 'set_rule' || action === 'update_tarif') {
+      const societe_id = body.societe_id
+      const tarifValue = Number(body.tarif_par_km || body.tarif_km)
+      if (!societe_id || !tarifValue) {
+        return NextResponse.json({ error: 'societe_id et tarif requis' }, { status: 400 })
       }
 
-      // Deactivate previous rules
-      await supabase
-        .from('frais_km_regles')
-        .update({ actif: false })
-        .eq('societe_id', societe_id)
+      // Try frais_km_rules first, fallback to frais_km_regles
+      let tableName = 'frais_km_rules'
+      let deactivateErr = null
+      const r1 = await supabase.from('frais_km_rules').update({ actif: false }).eq('societe_id', societe_id)
+      if (r1.error) {
+        tableName = 'frais_km_regles'
+        await supabase.from('frais_km_regles').update({ actif: false }).eq('societe_id', societe_id)
+      }
 
       const { data, error } = await supabase
-        .from('frais_km_regles')
+        .from(tableName)
         .insert({
           societe_id,
-          tarif_par_km: Number(tarif_par_km),
-          vehicule_type: vehicule_type || null,
-          plafond_mensuel: plafond_mensuel ? Number(plafond_mensuel) : null,
-          notes: notes || null,
+          tarif_par_km: tarifValue,
+          vehicule_type: body.vehicule_type || 'voiture',
+          plafond_mensuel: body.plafond_mensuel ? Number(body.plafond_mensuel) : null,
           actif: true,
-          cree_par: user.id,
-          created_at: new Date().toISOString(),
+          date_effet: new Date().toISOString().split('T')[0],
         })
         .select()
         .single()
 
-      if (error) throw error
-      return NextResponse.json({ rule: data }, { status: 201 })
+      if (error) {
+        console.error('[frais-km set_rule]', error.message)
+        return NextResponse.json({ error: error.message }, { status: 500 })
+      }
+      return NextResponse.json({ rule: data, tarif_km: tarifValue })
     }
 
     // ── Enter km for an employee for a period ────────────────────────────────
@@ -139,21 +181,20 @@ export async function POST(request: Request) {
         sid = emp?.societe_id
       }
 
-      const { data: rule } = await supabase
-        .from('frais_km_regles')
-        .select('tarif_par_km, plafond_mensuel')
-        .eq('societe_id', sid)
-        .eq('actif', true)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
+      // Try both table names
+      let saisieRule: any = null
+      const { data: sr1 } = await supabase.from('frais_km_rules').select('tarif_par_km, plafond_mensuel').eq('societe_id', sid).eq('actif', true).order('date_effet', { ascending: false }).limit(1).maybeSingle()
+      if (sr1) { saisieRule = sr1 } else {
+        const { data: sr2 } = await supabase.from('frais_km_regles').select('tarif_par_km, plafond_mensuel').eq('societe_id', sid).eq('actif', true).order('created_at', { ascending: false }).limit(1).maybeSingle()
+        saisieRule = sr2
+      }
 
-      const tarif = rule?.tarif_par_km || 0
+      const tarif = saisieRule?.tarif_par_km || 16
       let montant = Math.round(Number(km_parcourus) * tarif * 100) / 100
 
       // Apply monthly cap if set
-      if (rule?.plafond_mensuel && montant > rule.plafond_mensuel) {
-        montant = rule.plafond_mensuel
+      if (saisieRule?.plafond_mensuel && montant > saisieRule.plafond_mensuel) {
+        montant = saisieRule.plafond_mensuel
       }
 
       const periodeDate = `${periode}-01`
