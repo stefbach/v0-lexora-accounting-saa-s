@@ -33,7 +33,7 @@ const ALL_LINKS: NavLink[] = [
   { href: '/rh/paie/primes', label: 'Primes & OT', labelKey: 'rh.bonuses_ot', icon: TrendingUp, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'comptable', 'comptable_dedie'] },
   { href: '/rh/frais-km', label: 'Frais kilométriques', icon: Car },
   { href: '/rh/paie/exports-mra', label: 'Exports MRA', labelKey: 'rh.exports_mra', icon: FileText, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'comptable', 'comptable_dedie'] },
-  { href: '/rh/exports/virement', label: 'Virements bancaires', labelKey: 'rh.bank_transfers', icon: Banknote, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'comptable', 'comptable_dedie'] },
+  { href: '/rh/exports/paie', label: 'Export Paie & Virements', icon: Banknote, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'comptable', 'comptable_dedie'] },
   { href: '/rh/chat', label: 'CLARA — Assistant IA', icon: Bot },
   { href: '/rh/paie/parametres', label: 'Paramètres paie', labelKey: 'rh.payroll_settings', icon: Settings, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
 ]
