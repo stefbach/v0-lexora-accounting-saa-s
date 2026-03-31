@@ -47,5 +47,25 @@ export async function GET() {
   const { data: ownedSoc } = await supabase.from('societes').select('id, nom').eq('created_by', adminId)
   results['owned_societes'] = ownedSoc || []
 
+  // 8. Check assistant's profile and user_societes
+  const assistantId = '53ed107f-a22d-441e-8e55-3d308bc609d0'
+  const { data: assistantProfile } = await supabase.from('profiles').select('id, email, role, societe_id, client_id').eq('id', assistantId).maybeSingle()
+  results['assistant_profile'] = assistantProfile
+
+  const { data: assistantUS } = await supabase.from('user_societes').select('*').eq('user_id', assistantId)
+  results['assistant_user_societes'] = assistantUS || []
+
+  // 9. What the API would find for uploaderIds
+  const societeId2 = '1826dde7-7b41-4d14-bc75-d8d22dfc75fb'
+  const { data: socUsers } = await supabase.from('profiles').select('id, email, societe_id').eq('societe_id', societeId2)
+  results['users_with_societe_dds'] = socUsers || []
+
+  const { data: usUsers } = await supabase.from('user_societes').select('user_id, societe_id').eq('societe_id', societeId2)
+  results['user_societes_dds'] = usUsers || []
+
+  // 10. Dossier 2c9677e9 details
+  const { data: orphanDossier } = await supabase.from('dossiers').select('*').eq('id', '2c9677e9-4394-4cf6-9dac-51ecf3d31d15').maybeSingle()
+  results['orphan_dossier'] = orphanDossier
+
   return NextResponse.json(results)
 }
