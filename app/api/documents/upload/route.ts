@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
 
     // === AI PROCESSING ===
     const { default: Anthropic } = await import('@anthropic-ai/sdk')
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY!, maxRetries: 3 })
 
     // Fetch live exchange rates — direct from lib (not via HTTP to avoid self-call issues)
     const { getTauxChange, fetchAndStoreRates } = await import('@/lib/taux-change')
