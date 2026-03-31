@@ -42,7 +42,18 @@ export async function GET(request: Request) {
         if (sIds.length > 0) query = query.in('societe_id', sIds)
       }
     }
-    // Don't filter by 'actif' column — it may not exist or be GENERATED
+    // Filter by departure status
+    const statut = searchParams.get('statut')
+    if (statut === 'presents') {
+      query = query.is('date_depart', null)
+    } else if (statut === 'sortis') {
+      query = query.not('date_depart', 'is', null)
+    }
+    // Legacy: if actifs param is used (backwards compat)
+    else if (actifs) {
+      // Don't filter — show all by default for backwards compat
+    }
+
     if (search) query = query.or(`nom.ilike.%${search}%,prenom.ilike.%${search}%,poste.ilike.%${search}%`)
 
     const { data, error } = await query

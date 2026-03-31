@@ -124,6 +124,7 @@ export default function EmployesPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [filterSociete, setFilterSociete] = useState("all")
+  const [filterStatut, setFilterStatut] = useState("presents")
   const [dialogOpen, setDialogOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [importFile, setImportFile] = useState<File|null>(null)
@@ -186,12 +187,13 @@ export default function EmployesPage() {
     try {
       const params = new URLSearchParams()
       if (filterSociete !== "all") params.set("societe_id", filterSociete)
+      if (filterStatut !== "tous") params.set("statut", filterStatut)
       const [empRes, socRes] = await Promise.all([fetch(`/api/rh/employes?${params}`), fetch("/api/comptable/societes")])
       setEmployes((await empRes.json()).employes || [])
       setSocietes((await socRes.json()).societes || [])
     } catch (e) { console.error(e) }
     finally { setLoading(false) }
-  }, [filterSociete])
+  }, [filterSociete, filterStatut])
 
   useEffect(() => { load() }, [load])
 
@@ -225,7 +227,7 @@ export default function EmployesPage() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <div><h1 className="text-2xl font-bold text-[#1E2A4A]">Employés</h1><p className="text-sm text-gray-500">{employes.length} employé(s) actif(s)</p></div>
+        <div><h1 className="text-2xl font-bold text-[#1E2A4A]">Employés</h1><p className="text-sm text-gray-500">{employes.length} employé(s) {filterStatut === "sortis" ? "sorti(s)" : filterStatut === "tous" ? "au total" : "actif(s)"}</p></div>
         <div className="flex gap-2">
         <Dialog open={importOpen} onOpenChange={(v) => { setImportOpen(v); if(!v){ setImportFile(null); setImportResult(null); setImportError(null) } }}>
           <DialogTrigger asChild><Button variant="outline" className="border-[#1E2A4A] text-[#1E2A4A]"><Upload className="w-4 h-4 mr-2"/>Importer CSV</Button></DialogTrigger>
@@ -266,7 +268,7 @@ export default function EmployesPage() {
         </Dialog>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild><Button className="bg-[#1E2A4A] text-white"><Plus className="w-4 h-4 mr-2"/>Nouvel employé</Button></DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" onOpenAutoFocus={e => e.preventDefault()}>
             <DialogHeader><DialogTitle>Nouvel employé</DialogTitle></DialogHeader>
             <CreateEmployeForm societes={societes} onCreated={load} onClose={() => setDialogOpen(false)} />
           </DialogContent>
@@ -276,6 +278,7 @@ export default function EmployesPage() {
 
       <Card><CardContent className="p-4 flex gap-3">
         <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"/><Input className="pl-9" placeholder="Rechercher..." value={search} onChange={e=>setSearch(e.target.value)}/></div>
+        <Select value={filterStatut} onValueChange={setFilterStatut}><SelectTrigger className="w-40"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="presents">Présents</SelectItem><SelectItem value="sortis">Sortis</SelectItem><SelectItem value="tous">Tous</SelectItem></SelectContent></Select>
         <Select value={filterSociete} onValueChange={setFilterSociete}><SelectTrigger className="w-48"><SelectValue placeholder="Toutes sociétés"/></SelectTrigger><SelectContent><SelectItem value="all">Toutes</SelectItem>{societes.map(s=><SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent></Select>
       </CardContent></Card>
 
@@ -284,7 +287,7 @@ export default function EmployesPage() {
         <CardContent className="p-0">
           {loading ? <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-[#1E2A4A]"/></div> : filtered.length===0 ? <div className="text-center py-12 text-gray-500">Aucun employé</div> : (
             <Table>
-              <TableHeader><TableRow><TableHead>Code</TableHead><TableHead>Nom</TableHead><TableHead>Poste</TableHead><TableHead>Email</TableHead><TableHead className="text-right">Salaire base</TableHead><TableHead>Banque</TableHead><TableHead>NIC</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead>Code</TableHead><TableHead>Nom</TableHead><TableHead>Statut</TableHead><TableHead>Poste</TableHead><TableHead>Email</TableHead><TableHead className="text-right">Salaire base</TableHead><TableHead>Banque</TableHead><TableHead>NIC</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
               <TableBody>
                 {filtered.map(e=>(
                   <TableRow key={e.id} className="hover:bg-gray-50 cursor-pointer" onClick={()=>router.push(`/rh/employes/${e.id}`)}>
@@ -312,7 +315,7 @@ export default function EmployesPage() {
 
       {/* Dialog édition employé */}
       <Dialog open={editOpen} onOpenChange={o => { setEditOpen(o); if (!o) setEditEmp(null) }}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" onOpenAutoFocus={e => e.preventDefault()}>
           <DialogHeader><DialogTitle>Modifier — {editEmp?.prenom} {editEmp?.nom}</DialogTitle></DialogHeader>
           {editEmp && <EditEmployeForm emp={editEmp} onSaved={load} onClose={() => { setEditOpen(false); setEditEmp(null) }} />}
         </DialogContent>
