@@ -34,6 +34,7 @@ export async function GET() {
 
     // Collect ALL dossier IDs the user has access to
     let dossierIds: string[] = []
+    const societeIds = new Set<string>()
 
     // 1. Dossiers where user is client_id
     const { data: myDossiers } = await supabase
@@ -42,8 +43,6 @@ export async function GET() {
 
     // 2. For admin: also get dossiers from same sociétés
     if (isAdmin) {
-      // Get all sociétés accessible by this user
-      const societeIds = new Set<string>()
 
       // From own dossiers
       for (const d of myDossiers || []) if (d.societe_id) societeIds.add(d.societe_id)
