@@ -240,6 +240,7 @@ export default function PointagePage() {
       })
 
       const data = await res.json()
+      console.log('[pointage response]', res.status, JSON.stringify(data).substring(0, 300))
 
       if (res.status === 409) {
         // Already clocked in/out
@@ -267,21 +268,51 @@ export default function PointagePage() {
         }
 
         // Update local state immediately with the returned pointage
-        if (data.pointage) {
-          const p = data.pointage
+        const returnedPointage = data.pointage
+        if (returnedPointage) {
+          const empId = returnedPointage.employe_id || eid
+          const emp = employes.find(e => e.id === empId)
+          const enriched: Pointage = {
+            id: returnedPointage.id || `local-${Date.now()}`,
+            employe_id: empId,
+            date_pointage: returnedPointage.date_pointage || todayISO(),
+            heure_entree: returnedPointage.heure_entree || (type === "entree" ? body.heure_forcee : null),
+            heure_sortie: returnedPointage.heure_sortie || (type === "sortie" ? body.heure_forcee : null),
+            duree_minutes: returnedPointage.duree_minutes || null,
+            heures_travaillees: returnedPointage.heures_travaillees || null,
+            heures_sup: returnedPointage.heures_sup || null,
+            employe: returnedPointage.employe || (emp ? { nom: emp.nom, prenom: emp.prenom, poste: emp.poste } : undefined),
+          }
+          console.log('[local update]', enriched.employe_id, 'entree:', enriched.heure_entree, 'sortie:', enriched.heure_sortie)
           setPointages(prev => {
-            const idx = prev.findIndex(x => x.employe_id === p.employe_id)
-            const emp = employes.find(e => e.id === p.employe_id)
-            const enriched = {
-              ...p,
-              employe: p.employe || (emp ? { nom: emp.nom, prenom: emp.prenom, poste: emp.poste } : undefined),
-            }
+            const idx = prev.findIndex(x => x.employe_id === empId)
             if (idx >= 0) {
               const updated = [...prev]
-              updated[idx] = enriched
+              // Merge: keep existing fields, override with new ones
+              updated[idx] = { ...prev[idx], ...enriched, employe: enriched.employe || prev[idx].employe }
               return updated
             }
             return [...prev, enriched]
+          })
+        } else {
+          // No pointage returned but no error — create a local entry
+          const emp = employes.find(e => e.id === eid)
+          const localEntry: Pointage = {
+            id: `local-${Date.now()}`,
+            employe_id: eid,
+            heure_entree: type === "entree" ? body.heure_forcee : null,
+            heure_sortie: type === "sortie" ? body.heure_forcee : null,
+            duree_minutes: null,
+            employe: emp ? { nom: emp.nom, prenom: emp.prenom, poste: emp.poste } : undefined,
+          }
+          setPointages(prev => {
+            const idx = prev.findIndex(x => x.employe_id === eid)
+            if (idx >= 0) {
+              const updated = [...prev]
+              updated[idx] = { ...prev[idx], ...localEntry, employe: localEntry.employe || prev[idx].employe }
+              return updated
+            }
+            return [...prev, localEntry]
           })
         }
 

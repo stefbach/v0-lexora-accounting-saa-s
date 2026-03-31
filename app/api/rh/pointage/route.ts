@@ -65,11 +65,28 @@ async function resolveEmployeeFilter(
 }
 
 // Safe insert/update that retries without statut_jour if column doesn't exist
+// Columns that may not exist in production DB — remove them on error and retry
+const OPTIONAL_COLS = ['statut_jour', 'notes', 'duree_minutes', 'type_entree', 'type_sortie', 'shift_code', 'planning_assignment_id', 'absence_type', 'auto_detected', 'valide_par']
+
+function stripMissingCols(record: Record<string, unknown>, errorMsg: string): Record<string, unknown> {
+  const cleaned = { ...record }
+  for (const col of OPTIONAL_COLS) {
+    if (errorMsg.includes(col)) {
+      delete cleaned[col]
+    }
+  }
+  return cleaned
+}
+
 async function safeInsertPointage(supabase: ReturnType<typeof getAdminClient>, record: Record<string, unknown>) {
   const { data, error } = await supabase.from('pointages').insert(record).select().single()
-  if (error && error.message?.includes('statut_jour')) {
-    const { statut_jour, ...safe } = record
+  if (error) {
+    console.error('[safeInsert] first try failed:', error.message)
+    // Strip any columns mentioned in the error and retry
+    const safe = stripMissingCols(record, error.message)
+    console.log('[safeInsert] retrying with:', Object.keys(safe))
     const retry = await supabase.from('pointages').insert(safe).select().single()
+    if (retry.error) console.error('[safeInsert] retry also failed:', retry.error.message)
     return retry
   }
   return { data, error }
@@ -77,9 +94,12 @@ async function safeInsertPointage(supabase: ReturnType<typeof getAdminClient>, r
 
 async function safeUpdatePointage(supabase: ReturnType<typeof getAdminClient>, id: string, updates: Record<string, unknown>) {
   const { data, error } = await supabase.from('pointages').update(updates).eq('id', id).select().single()
-  if (error && error.message?.includes('statut_jour')) {
-    const { statut_jour, ...safe } = updates
+  if (error) {
+    console.error('[safeUpdate] first try failed:', error.message)
+    const safe = stripMissingCols(updates, error.message)
+    console.log('[safeUpdate] retrying with:', Object.keys(safe))
     const retry = await supabase.from('pointages').update(safe).eq('id', id).select().single()
+    if (retry.error) console.error('[safeUpdate] retry also failed:', retry.error.message)
     return retry
   }
   return { data, error }
@@ -227,13 +247,18 @@ export async function POST(request: Request) {
         const { data, error } = await safeInsertPointage(supabase, {
           employe_id, date_pointage: today, heure_entree: now, statut_jour: 'travaille',
         })
-        if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+        if (error) {
+          console.error('[POST entree insert fail]', error.message)
+          return NextResponse.json({ error: error.message }, { status: 500 })
+        }
+        console.log('[POST entree OK]', data?.id, 'heure_entree:', data?.heure_entree)
         return NextResponse.json({ pointage: data })
       }
     }
 
     if (type_pointage === 'sortie') {
       if (!existing || !existing.heure_entree) {
+        console.log('[POST sortie] no existing entry, existing:', existing?.id, 'heure_entree:', existing?.heure_entree)
         return NextResponse.json({ error: "Pas de pointage d'entree" }, { status: 400 })
       }
       if (existing.heure_sortie) {
