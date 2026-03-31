@@ -355,7 +355,8 @@ Verifier: solde_ouverture + total_credits - total_debits = solde_cloture (tolera
 TAUX EUR: {{TAUX_EUR}}, GBP: {{TAUX_GBP}}, USD: {{TAUX_USD}}.
 
 --- FICHE DE PAIE ---
-Format: {"routing":{"societe":"<employeur>","type_document":"fiche_paie","confiance_type":0-100},"extraction":{"employe":"","employeur":"","date_document":"YYYY-MM-DD","periode":"","salaire_brut":0,"salaire_net":0,"npf_salarie_3pct":0,"npf_patronal_6pct":0,"hrdc_1pct":0,"paye":0,"nps_salarie":0,"nps_employeur":0,"cotisations_salariales":0,"cotisations_patronales":0,"ecritures_comptables":[{"compte":"641|421|431|444|432|645","libelle":"","debit":0,"credit":0}]}}
+Format: {"routing":{"societe":"<employeur>","type_document":"fiche_paie","confiance_type":0-100},"extraction":{"employe":"<NOM COMPLET>","employeur":"","date_document":"YYYY-MM-DD","periode":"YYYY-MM","poste":"","fonction":"","nic":"","npf":"","date_embauche":"YYYY-MM-DD","salaire_base":0,"salaire_brut":0,"salaire_net":0,"transport_allowance":0,"heures_sup_montant":0,"csg_salarie":0,"csg_patronal":0,"npf_salarie_3pct":0,"npf_patronal_6pct":0,"hrdc_1pct":0,"training_levy":0,"paye":0,"nps_salarie":0,"nps_employeur":0,"nsf_salarie":0,"nsf_patronal":0,"cotisations_salariales":0,"cotisations_patronales":0,"compte_bancaire_employe":"","banque_employe":"","ecritures_comptables":[{"compte":"641|421|431|444|432|645","libelle":"","debit":0,"credit":0}]}}
+IMPORTANT FICHE PAIE: Extraire NOM COMPLET employe, NIC, NPF, date embauche, poste, banque — alimente automatiquement le module RH.
 Ecritures: 641 Remunerations (debit brut), 645 Charges patronales (debit CSG patron+TL+NSF patron), 421 Net a payer (credit), 444 PAYE (credit), 431 CSG (credit), 432 Training Levy (credit).
 
 --- CHARGES SOCIALES ---
@@ -496,6 +497,136 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
           debit: Number(e.debit) || 0, credit: Number(e.credit) || 0, piece_justificative: doc.id,
         }))
       if (entries.length > 0) await supabase.from('ecritures_comptables').insert(entries)
+    }
+
+    // ──── AUTO-FEED RH MODULE from scanned payslips & social charges ────
+    if (typeDocument === 'fiche_paie' && finalDossierId) {
+      const { data: dossierRH } = await supabase.from('dossiers').select('societe_id').eq('id', finalDossierId).maybeSingle()
+      const rhSocieteId = societeId || dossierRH?.societe_id
+
+      if (rhSocieteId) {
+        const empNom = extraction.employe || extraction.nom_employe || ''
+        const employeur = extraction.employeur || ''
+        const periodeStr = extraction.periode || extraction.date_document?.slice(0, 7) || new Date().toISOString().slice(0, 7)
+
+        // 1. Find or create employee
+        let employeId: string | null = null
+        if (empNom) {
+          const parts = empNom.trim().split(/\s+/)
+          const nom = parts.length > 1 ? parts.slice(1).join(' ') : parts[0]
+          const prenom = parts.length > 1 ? parts[0] : ''
+
+          // Search by name in this société
+          const { data: existingEmp } = await supabase.from('employes')
+            .select('id').eq('societe_id', rhSocieteId)
+            .or(`nom.ilike.%${nom}%,prenom.ilike.%${prenom}%`)
+            .limit(1).maybeSingle()
+
+          if (existingEmp) {
+            employeId = existingEmp.id
+            // Update salary if higher than current (in case of raise)
+            if (extraction.salaire_brut) {
+              await supabase.from('employes').update({
+                salaire_base: Number(extraction.salaire_brut) || undefined,
+              }).eq('id', existingEmp.id).lt('salaire_base', Number(extraction.salaire_brut) || 0)
+            }
+          } else {
+            // Create employee from payslip data
+            const { data: newEmp } = await supabase.from('employes').insert({
+              societe_id: rhSocieteId,
+              nom: nom.toUpperCase(),
+              prenom,
+              salaire_base: Number(extraction.salaire_brut) || 0,
+              date_arrivee: extraction.date_embauche || null,
+              poste: extraction.poste || extraction.fonction || null,
+              nic_number: extraction.nic || extraction.numero_nic || null,
+              npf_number: extraction.npf || extraction.numero_npf || null,
+              bank_account: extraction.compte_bancaire_employe || extraction.rib || null,
+              bank_name: extraction.banque_employe || null,
+            }).select('id').single()
+            if (newEmp) employeId = newEmp.id
+            console.log(`[upload] Created employee from payslip: ${prenom} ${nom} → ${employeId}`)
+          }
+        }
+
+        // 2. Create historical bulletin de paie
+        if (employeId) {
+          const periodeDate = periodeStr.length === 7 ? `${periodeStr}-01` : periodeStr
+          const bulletinData: Record<string, unknown> = {
+            employe_id: employeId,
+            societe_id: rhSocieteId,
+            periode: periodeDate,
+            salaire_base: Number(extraction.salaire_brut) || Number(extraction.salaire_base) || 0,
+            salaire_net: Number(extraction.salaire_net) || 0,
+            csg_salarie: Number(extraction.npf_salarie_3pct) || Number(extraction.csg_salarie) || 0,
+            csg_patronal: Number(extraction.npf_patronal_6pct) || Number(extraction.csg_patronal) || 0,
+            paye: Number(extraction.paye) || 0,
+            nsf_salarie: Number(extraction.nps_salarie) || Number(extraction.nsf_salarie) || 0,
+            nsf_patronal: Number(extraction.nps_employeur) || Number(extraction.nsf_patronal) || 0,
+            training_levy: Number(extraction.hrdc_1pct) || Number(extraction.training_levy) || 0,
+            total_deductions: Number(extraction.cotisations_salariales) || Number(extraction.total_retenues) || 0,
+            total_charges_patronales: Number(extraction.cotisations_patronales) || 0,
+            transport_allowance: Number(extraction.transport_allowance) || 0,
+            heures_sup_montant: Number(extraction.heures_sup_montant) || Number(extraction.overtime) || 0,
+            statut: 'valide',
+            source: 'ocr',
+            document_id: doc.id,
+          }
+
+          // Upsert by employe_id + periode (avoid duplicates)
+          const { error: bulErr } = await supabase.from('bulletins_paie')
+            .upsert(bulletinData, { onConflict: 'employe_id,periode' })
+          if (bulErr) {
+            // If upsert fails (constraint might not exist), try insert
+            await supabase.from('bulletins_paie').insert(bulletinData).catch(e => {
+              console.warn('[upload] bulletin insert fallback:', e)
+            })
+          }
+          console.log(`[upload] Bulletin RH créé: ${empNom} période ${periodeStr}`)
+        }
+      }
+    }
+
+    // ──── AUTO-FEED CHARGES SOCIALES from scanned documents ────
+    if (typeDocument === 'charges_sociales' && finalDossierId) {
+      const { data: dossierCS } = await supabase.from('dossiers').select('societe_id').eq('id', finalDossierId).maybeSingle()
+      const csSocieteId = societeId || dossierCS?.societe_id
+
+      if (csSocieteId) {
+        const periodeStr = extraction.periode || extraction.date_document?.slice(0, 7) || new Date().toISOString().slice(0, 7)
+        const organisme = extraction.organisme || 'MRA'
+        const details = extraction.detail || []
+
+        // Create declaration records
+        for (const d of details) {
+          const type = d.type || ''
+          const montant = Number(d.montant) || 0
+          if (montant <= 0) continue
+
+          if (type.includes('CSG') || type.includes('NPF')) {
+            await supabase.from('declarations_csg_mensuelle').upsert({
+              societe_id: csSocieteId,
+              periode: periodeStr.length === 7 ? `${periodeStr}-01` : periodeStr,
+              montant_csg_salarie: type.includes('salarie') ? montant : 0,
+              montant_csg_patronal: type.includes('patronal') ? montant : 0,
+              source: 'ocr',
+              document_id: doc.id,
+            }, { onConflict: 'societe_id,periode' }).catch(() => {})
+          }
+
+          if (type.includes('PAYE')) {
+            await supabase.from('declarations_paye_mensuelle').upsert({
+              societe_id: csSocieteId,
+              periode: periodeStr.length === 7 ? `${periodeStr}-01` : periodeStr,
+              montant_paye: montant,
+              source: 'ocr',
+              document_id: doc.id,
+            }, { onConflict: 'societe_id,periode' }).catch(() => {})
+          }
+        }
+
+        console.log(`[upload] Charges sociales RH: ${organisme} période ${periodeStr}, ${details.length} lignes`)
+      }
     }
 
     // Auto-create facture record for client/fournisseur invoices
