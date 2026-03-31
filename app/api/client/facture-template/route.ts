@@ -48,13 +48,20 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Format non supporté. Utilisez PDF, JPG ou PNG.' }, { status: 400 })
       }
 
-      const stream = anthropic.messages.stream({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 4096,
-        temperature: 0,
-        messages: [{ role: 'user', content }],
-      })
-      const msg = await stream.finalMessage()
+      console.log(`[facture-template] Analyzing file: ${file.name}, size: ${file.size}`)
+      let msg: any
+      try {
+        const stream = anthropic.messages.stream({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 4096,
+          temperature: 0,
+          messages: [{ role: 'user', content }],
+        })
+        msg = await stream.finalMessage()
+      } catch (aiErr: any) {
+        console.error('[facture-template] AI call failed:', aiErr.message)
+        return NextResponse.json({ error: 'Erreur IA: ' + (aiErr.message || 'Appel Claude échoué') }, { status: 500 })
+      }
       const text = msg.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
       const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
 
