@@ -101,6 +101,12 @@ export default function PlanningPage() {
   const [creneauConfigOpen, setCreneauConfigOpen] = useState(false)
   const [editingCreneau, setEditingCreneau] = useState<Creneau | null>(null)
 
+  // Employee filter — who appears in the planning
+  const [allEmployes, setAllEmployes] = useState<any[]>([])
+  const [includedEmpIds, setIncludedEmpIds] = useState<Set<string>>(new Set())
+  const [empFilterOpen, setEmpFilterOpen] = useState(false)
+  const [empSearch, setEmpSearch] = useState("")
+
   // Cell edit
   const [editCell, setEditCell] = useState<{ empId: string; day: number } | null>(null)
 
@@ -141,12 +147,24 @@ export default function PlanningPage() {
         fetch(`/api/rh/planning?${params}`).then(r => r.json()).catch(() => ({ planning: [] })),
         fetch(`/api/rh/employes?${societe !== "all" ? `societe_id=${societe}` : ""}`).then(r => r.json()).catch(() => ({ employes: [] })),
       ])
-      const emps = empRes.employes || []
-      setEmployes(emps)
+      const emps = (empRes.employes || []).sort((a: any, b: any) => `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`))
+      setAllEmployes(emps)
       setPublished(planRes.published || false)
 
+      // If first load or société changed, include all employees by default
+      // But if we have planning data, only include those who have entries + current selection
+      const planEmpIds = new Set((planRes.planning || []).map((e: any) => e.employe_id))
+      if (includedEmpIds.size === 0) {
+        // First load: include all if no planning, or only planned ones + all
+        setIncludedEmpIds(new Set(emps.map((e: any) => e.id)))
+      }
+
+      // Filter displayed employees
+      const displayedEmps = emps.filter((e: any) => includedEmpIds.size === 0 || includedEmpIds.has(e.id))
+      setEmployes(displayedEmps)
+
       const grid: Record<string, Record<number, CellData | null>> = {}
-      for (const emp of emps) {
+      for (const emp of displayedEmps) {
         grid[emp.id] = {}
         for (let d = 1; d <= daysInMonth; d++) grid[emp.id][d] = null
       }
@@ -333,6 +351,9 @@ export default function PlanningPage() {
               {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
             </SelectContent>
           </Select>
+          <Button variant="outline" size="sm" onClick={() => setEmpFilterOpen(true)}>
+            <Users className="h-4 w-4 mr-1" /> Collaborateurs ({employes.length}/{allEmployes.length})
+          </Button>
           <Button variant="outline" size="sm" onClick={() => { setEditingCreneau(null); setCreneauConfigOpen(true) }}>
             <Clock className="h-4 w-4 mr-1" /> Créneaux
           </Button>
@@ -446,6 +467,80 @@ export default function PlanningPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* ── Employee filter dialog ── */}
+      <Dialog open={empFilterOpen} onOpenChange={setEmpFilterOpen}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle style={{ color: "#1E2A4A" }}>Collaborateurs dans le planning</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input placeholder="Rechercher un collaborateur..." value={empSearch} onChange={e => setEmpSearch(e.target.value)} />
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setIncludedEmpIds(new Set(allEmployes.map(e => e.id)))}>
+                Tout sélectionner
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setIncludedEmpIds(new Set())}>
+                Tout désélectionner
+              </Button>
+            </div>
+            <div className="border rounded-lg divide-y max-h-[50vh] overflow-y-auto">
+              {allEmployes
+                .filter(e => {
+                  if (!empSearch.trim()) return true
+                  const q = empSearch.toLowerCase()
+                  return `${e.nom} ${e.prenom}`.toLowerCase().includes(q) || (e.poste || "").toLowerCase().includes(q)
+                })
+                .map(emp => (
+                  <label key={emp.id} className="flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={includedEmpIds.has(emp.id)}
+                      onChange={() => {
+                        setIncludedEmpIds(prev => {
+                          const next = new Set(prev)
+                          if (next.has(emp.id)) next.delete(emp.id)
+                          else next.add(emp.id)
+                          return next
+                        })
+                      }}
+                      className="rounded border-gray-300"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium">{emp.prenom} {emp.nom}</p>
+                      {emp.poste && <p className="text-xs text-gray-400">{emp.poste}</p>}
+                    </div>
+                    {includedEmpIds.has(emp.id) && (
+                      <Badge className="bg-green-100 text-green-700 text-[10px]">Inclus</Badge>
+                    )}
+                  </label>
+                ))}
+            </div>
+            <p className="text-xs text-gray-500">{includedEmpIds.size} collaborateur(s) sélectionné(s) sur {allEmployes.length}</p>
+            <Button className="w-full text-white" style={{ backgroundColor: "#1E2A4A" }} onClick={() => {
+              setEmployes(allEmployes.filter(e => includedEmpIds.has(e.id)))
+              // Rebuild planning grid for newly included employees
+              setPlanning(prev => {
+                const next = { ...prev }
+                for (const emp of allEmployes) {
+                  if (includedEmpIds.has(emp.id) && !next[emp.id]) {
+                    next[emp.id] = {}
+                    for (let d = 1; d <= daysInMonth; d++) next[emp.id][d] = null
+                  }
+                }
+                // Remove excluded
+                for (const empId of Object.keys(next)) {
+                  if (!includedEmpIds.has(empId)) delete next[empId]
+                }
+                return next
+              })
+              setEmpFilterOpen(false)
+            }}>
+              Appliquer
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Créneau config dialog ── */}
       <Dialog open={creneauConfigOpen} onOpenChange={setCreneauConfigOpen}>
