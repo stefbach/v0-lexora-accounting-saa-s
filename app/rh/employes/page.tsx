@@ -112,13 +112,12 @@ export default function EmployesPage() {
     try {
       const params = new URLSearchParams()
       if (filterSociete !== "all") params.set("societe_id", filterSociete)
-      if (search) params.set("search", search)
       const [empRes, socRes] = await Promise.all([fetch(`/api/rh/employes?${params}`), fetch("/api/comptable/societes")])
       setEmployes((await empRes.json()).employes || [])
       setSocietes((await socRes.json()).societes || [])
     } catch (e) { console.error(e) }
     finally { setLoading(false) }
-  }, [filterSociete, search])
+  }, [filterSociete])
 
   useEffect(() => { load() }, [load])
 
