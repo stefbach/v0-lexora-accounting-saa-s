@@ -60,6 +60,8 @@ const ISIC_SECTORS = [
 export default function ITForm3Page() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [societes, setSocietes] = useState<any[]>([])
+  const [selectedSociete, setSelectedSociete] = useState("")
 
   // Company details
   const [companyName, setCompanyName] = useState("")
@@ -143,8 +145,11 @@ export default function ITForm3Page() {
 
         if (socRes.ok) {
           const socData = await socRes.json()
-          const soc = Array.isArray(socData) ? socData[0] : socData?.data?.[0] || socData
+          const allSoc = socData.societes || (Array.isArray(socData) ? socData : [socData])
+          setSocietes(allSoc)
+          const soc = selectedSociete ? allSoc.find((s: any) => s.id === selectedSociete) : allSoc[0]
           if (soc) {
+            if (!selectedSociete) setSelectedSociete(soc.id)
             setCompanyName(soc.nom || soc.name || "")
             setBrn(soc.brn || "")
             setTan(soc.numero_tva_mra || soc.tan || "")
@@ -319,9 +324,17 @@ export default function ITForm3Page() {
           </h1>
           <p className="text-sm text-gray-500 mt-1">Mauritius Revenue Authority - Formulaire de retour de revenus pour sociétés</p>
         </div>
-        <Badge className="text-sm px-3 py-1" style={{ backgroundColor: GOLD, color: NAVY }}>
-          Assessment Year {assessmentYear}
-        </Badge>
+        <div className="flex items-center gap-2">
+          {societes.length > 1 && (
+            <Select value={selectedSociete} onValueChange={v => { setSelectedSociete(v); setLoading(true) }}>
+              <SelectTrigger className="w-[220px]"><SelectValue placeholder="Société" /></SelectTrigger>
+              <SelectContent>{societes.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent>
+            </Select>
+          )}
+          <Badge className="text-sm px-3 py-1" style={{ backgroundColor: GOLD, color: NAVY }}>
+            Assessment Year {assessmentYear}
+          </Badge>
+        </div>
       </div>
 
       {/* PDF Import Section */}
