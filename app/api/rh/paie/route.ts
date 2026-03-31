@@ -66,27 +66,42 @@ export async function GET(request: Request) {
       if (accessibleIds.length === 0) return NextResponse.json({ bulletins: [], totaux: {}, nb: 0 })
     }
 
+    // Query bulletins (NO FK join — avoids schema cache issues)
     let query = supabase
       .from('bulletins_paie')
-      .select('*, employe:employes(code,nom,prenom,poste,pct_refacturation,societe_refacturation_id,devise_salaire,taux_change_eur)')
+      .select('*')
       .order('periode', { ascending: false })
 
     if (employe_id) query = query.eq('employe_id', employe_id)
-    if (periode) query = query.ilike('periode', `${periode}%`)
+    if (periode) query = query.gte('periode', `${periode}-01`).lte('periode', `${periode}-31`)
     if (societe_id) query = query.eq('societe_id', societe_id)
 
     const { data, error } = await query
-    if (error) throw error
-
-    const totaux = {
-      masse_salariale_brute: data?.reduce((s, b) => s + (Number(b.salaire_brut) || 0), 0) || 0,
-      masse_salariale_nette: data?.reduce((s, b) => s + (Number(b.salaire_net) || 0), 0) || 0,
-      total_charges_patronales: data?.reduce((s, b) => s + (Number(b.total_charges_patronales) || 0), 0) || 0,
-      cout_total_employeur: data?.reduce((s, b) => s + (Number(b.salaire_brut) + Number(b.total_charges_patronales) || 0), 0) || 0,
-      total_refacture: data?.reduce((s, b) => s + (Number(b.montant_refacture_mur) || 0), 0) || 0,
+    if (error) {
+      console.error('[paie GET] query error:', error.message)
+      throw error
     }
 
-    return NextResponse.json({ bulletins: data, totaux, nb: data?.length || 0 })
+    // Enrich with employee names (separate query)
+    const empIds = [...new Set((data || []).map(b => b.employe_id))]
+    let empMap: Record<string, any> = {}
+    if (empIds.length > 0) {
+      const { data: emps } = await supabase.from('employes').select('id, code_employe, nom, prenom, poste, devise_salaire').in('id', empIds)
+      for (const e of emps || []) empMap[e.id] = { code: e.code_employe, nom: e.nom, prenom: e.prenom, poste: e.poste, devise_salaire: e.devise_salaire }
+    }
+
+    const enriched = (data || []).map(b => ({ ...b, employe: empMap[b.employe_id] || null }))
+
+    const totaux = {
+      masse_salariale_brute: enriched.reduce((s, b) => s + (Number(b.salaire_brut || b.salaire_base) || 0), 0),
+      masse_salariale_nette: enriched.reduce((s, b) => s + (Number(b.salaire_net) || 0), 0),
+      total_charges_patronales: enriched.reduce((s, b) => s + (Number(b.total_charges_patronales) || 0), 0),
+      cout_total_employeur: enriched.reduce((s, b) => s + (Number(b.salaire_brut || b.salaire_base) || 0) + (Number(b.total_charges_patronales) || 0), 0),
+      total_refacture: enriched.reduce((s, b) => s + (Number(b.montant_refacture_mur) || 0), 0),
+    }
+
+    console.log(`[paie GET] ${enriched.length} bulletins, periode=${periode}, societe=${societe_id || 'all'}`)
+    return NextResponse.json({ bulletins: enriched, totaux, nb: enriched.length })
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
