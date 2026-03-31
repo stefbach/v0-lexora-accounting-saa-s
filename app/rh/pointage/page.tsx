@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Loader2, Clock, LogIn, LogOut, Users, Calendar, ChevronLeft, ChevronRight, X, AlertTriangle, CheckCircle } from "lucide-react"
+import { Loader2, Clock, LogIn, LogOut, Users, Calendar, ChevronLeft, ChevronRight, X, AlertTriangle, CheckCircle, Coffee } from "lucide-react"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -16,6 +16,8 @@ interface Pointage {
   date_pointage?: string
   heure_entree: string | null
   heure_sortie: string | null
+  heure_pause_debut: string | null
+  heure_pause_fin: string | null
   duree_minutes: number | null
   heures_travaillees?: number | null
   heures_sup?: number | null
@@ -368,6 +370,8 @@ export default function PointagePage() {
         employe_id: emp.id,
         heure_entree: null,
         heure_sortie: null,
+        heure_pause_debut: null,
+        heure_pause_fin: null,
         duree_minutes: null,
         heures_travaillees: null,
         heures_sup: null,
@@ -498,49 +502,36 @@ export default function PointagePage() {
             </div>
           </div>
 
-          {/* Punch buttons with status-aware disabling */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <Button
-                onClick={() => doPointage("entree")}
-                disabled={!employeId || doingPointage || !canClockIn}
-                className="w-full h-16 md:h-20 text-lg md:text-xl font-semibold bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white rounded-xl shadow-md transition-all active:scale-95"
-              >
-                {doingPointage ? (
-                  <Loader2 className="w-6 h-6 animate-spin mr-3" />
-                ) : (
-                  <LogIn className="w-6 h-6 mr-3" />
-                )}
-                Pointer Entree
-              </Button>
-              {employeId && !canClockIn && (
-                <p className="text-xs text-center text-gray-500">
-                  Deja pointe a {fmtHeure(selectedEmployeePointage?.heure_entree || null)}
-                </p>
-              )}
-            </div>
-            <div className="space-y-1">
-              <Button
-                onClick={() => doPointage("sortie")}
-                disabled={!employeId || doingPointage || !canClockOut}
-                className="w-full h-16 md:h-20 text-lg md:text-xl font-semibold bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white rounded-xl shadow-md transition-all active:scale-95"
-              >
-                {doingPointage ? (
-                  <Loader2 className="w-6 h-6 animate-spin mr-3" />
-                ) : (
-                  <LogOut className="w-6 h-6 mr-3" />
-                )}
-                Pointer Sortie
-              </Button>
-              {employeId && selectedEmployeePointage?.heure_sortie && (
-                <p className="text-xs text-center text-gray-500">
-                  Deja pointe a {fmtHeure(selectedEmployeePointage.heure_sortie)}
-                </p>
-              )}
-              {employeId && !canClockOut && !selectedEmployeePointage?.heure_entree && (
-                <p className="text-xs text-center text-gray-500">Entree requise d'abord</p>
-              )}
-            </div>
+          {/* Punch buttons */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Button
+              onClick={() => doPointage("entree")}
+              disabled={!employeId || doingPointage || !canClockIn}
+              className="h-16 text-base font-semibold bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white rounded-xl shadow-md transition-all active:scale-95"
+            >
+              <LogIn className="w-5 h-5 mr-2" /> Entree
+            </Button>
+            <Button
+              onClick={() => doPointage("pause_debut")}
+              disabled={!employeId || doingPointage || !canClockOut}
+              className="h-16 text-base font-semibold bg-amber-500 hover:bg-amber-600 disabled:bg-amber-300 text-white rounded-xl shadow-md transition-all active:scale-95"
+            >
+              <Coffee className="w-5 h-5 mr-2" /> Debut Pause
+            </Button>
+            <Button
+              onClick={() => doPointage("pause_fin")}
+              disabled={!employeId || doingPointage}
+              className="h-16 text-base font-semibold bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 text-white rounded-xl shadow-md transition-all active:scale-95"
+            >
+              <Coffee className="w-5 h-5 mr-2" /> Fin Pause
+            </Button>
+            <Button
+              onClick={() => doPointage("sortie")}
+              disabled={!employeId || doingPointage || !canClockOut}
+              className="h-16 text-base font-semibold bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white rounded-xl shadow-md transition-all active:scale-95"
+            >
+              <LogOut className="w-5 h-5 mr-2" /> Sortie
+            </Button>
           </div>
 
           {/* Feedback message */}
@@ -667,6 +658,7 @@ export default function PointagePage() {
                   <TableRow className="bg-gray-50">
                     <TableHead className="font-semibold text-[#1E2A4A]">Employe</TableHead>
                     <TableHead className="font-semibold text-[#1E2A4A] text-center">Entree</TableHead>
+                    <TableHead className="font-semibold text-[#1E2A4A] text-center">Pause</TableHead>
                     <TableHead className="font-semibold text-[#1E2A4A] text-center">Sortie</TableHead>
                     <TableHead className="font-semibold text-[#1E2A4A] text-center">Heures</TableHead>
                     <TableHead className="font-semibold text-[#1E2A4A] text-center">H. Sup</TableHead>
@@ -707,6 +699,21 @@ export default function PointagePage() {
                             >
                               <LogIn className="w-3 h-3 mr-1" /> Pointer
                             </Button>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {p.heure_pause_debut ? (
+                            <span className="font-mono text-amber-600 text-xs">
+                              {fmtHeure(p.heure_pause_debut)}{p.heure_pause_fin ? `—${fmtHeure(p.heure_pause_fin)}` : " ..."}
+                            </span>
+                          ) : canOut ? (
+                            <Button size="sm" variant="outline" disabled={doingPointage}
+                              onClick={() => doPointage("pause_debut", p.employe_id)}
+                              className="text-[10px] h-6 border-amber-300 text-amber-600 hover:bg-amber-50">
+                              <Coffee className="w-3 h-3 mr-0.5" /> Pause
+                            </Button>
+                          ) : (
+                            <span className="text-gray-300 text-xs">—</span>
                           )}
                         </TableCell>
                         <TableCell className="text-center">

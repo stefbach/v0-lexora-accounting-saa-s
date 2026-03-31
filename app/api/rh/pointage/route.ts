@@ -66,7 +66,7 @@ async function resolveEmployeeFilter(
 
 // Safe insert/update that retries without statut_jour if column doesn't exist
 // Columns that may not exist in production DB — remove them on error and retry
-const OPTIONAL_COLS = ['statut_jour', 'notes', 'duree_minutes', 'type_entree', 'type_sortie', 'shift_code', 'planning_assignment_id', 'absence_type', 'auto_detected', 'valide_par']
+const OPTIONAL_COLS = ['statut_jour', 'notes', 'duree_minutes', 'type_entree', 'type_sortie', 'shift_code', 'planning_assignment_id', 'absence_type', 'auto_detected', 'valide_par', 'heure_pause_debut', 'heure_pause_fin']
 
 function stripMissingCols(record: Record<string, unknown>, errorMsg: string): Record<string, unknown> {
   const cleaned = { ...record }
@@ -307,7 +307,15 @@ export async function POST(request: Request) {
 
       const entreeMs = new Date(`1970-01-01T${existing.heure_entree}`).getTime()
       const sortieMs = new Date(`1970-01-01T${now}`).getTime()
-      const duree_minutes = Math.round((sortieMs - entreeMs) / 60000)
+      let duree_minutes = Math.round((sortieMs - entreeMs) / 60000)
+
+      // Soustraire la pause si enregistrée
+      if (existing.heure_pause_debut && existing.heure_pause_fin) {
+        const pauseDebMs = new Date(`1970-01-01T${existing.heure_pause_debut}`).getTime()
+        const pauseFinMs = new Date(`1970-01-01T${existing.heure_pause_fin}`).getTime()
+        const pauseMin = Math.round((pauseFinMs - pauseDebMs) / 60000)
+        if (pauseMin > 0) duree_minutes -= pauseMin
+      }
 
       const { data, error } = await safeUpdatePointage(supabase, existing.id, {
         heure_sortie: now, duree_minutes, ...planningFields,
@@ -347,7 +355,33 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json({ error: 'type_pointage invalide. Utiliser: entree, sortie, absence_justifiee, manuel' }, { status: 400 })
+    // Pause début
+    if (type_pointage === 'pause_debut') {
+      if (!existing || !existing.heure_entree) {
+        return NextResponse.json({ error: "Pas de pointage d'entree" }, { status: 400 })
+      }
+      if (existing.heure_pause_debut) {
+        return NextResponse.json({ error: 'Pause deja commencee', message: `Pause depuis ${String(existing.heure_pause_debut).slice(0, 5)}` }, { status: 409 })
+      }
+      const { data, error } = await safeUpdatePointage(supabase, existing.id, { heure_pause_debut: now })
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json({ pointage: data, message: `Pause commencee a ${now.slice(0, 5)}` })
+    }
+
+    // Pause fin
+    if (type_pointage === 'pause_fin') {
+      if (!existing || !existing.heure_pause_debut) {
+        return NextResponse.json({ error: "Pas de debut de pause" }, { status: 400 })
+      }
+      if (existing.heure_pause_fin) {
+        return NextResponse.json({ error: 'Pause deja terminee', message: `Fin pause a ${String(existing.heure_pause_fin).slice(0, 5)}` }, { status: 409 })
+      }
+      const { data, error } = await safeUpdatePointage(supabase, existing.id, { heure_pause_fin: now })
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json({ pointage: data, message: `Pause terminee a ${now.slice(0, 5)}` })
+    }
+
+    return NextResponse.json({ error: 'type_pointage invalide. Utiliser: entree, sortie, pause_debut, pause_fin, absence_justifiee, manuel' }, { status: 400 })
   } catch (e: unknown) {
     console.error('[pointage POST]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })

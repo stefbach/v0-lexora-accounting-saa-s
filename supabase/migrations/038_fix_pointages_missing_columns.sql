@@ -11,6 +11,8 @@ ALTER TABLE public.pointages ADD COLUMN IF NOT EXISTS notes TEXT;
 ALTER TABLE public.pointages ADD COLUMN IF NOT EXISTS valide_par UUID;
 ALTER TABLE public.pointages ADD COLUMN IF NOT EXISTS type_entree TEXT DEFAULT 'manuel';
 ALTER TABLE public.pointages ADD COLUMN IF NOT EXISTS type_sortie TEXT DEFAULT 'manuel';
+ALTER TABLE public.pointages ADD COLUMN IF NOT EXISTS heure_pause_debut TIME;
+ALTER TABLE public.pointages ADD COLUMN IF NOT EXISTS heure_pause_fin TIME;
 ALTER TABLE public.pointages ADD COLUMN IF NOT EXISTS latitude_entree NUMERIC(10,7);
 ALTER TABLE public.pointages ADD COLUMN IF NOT EXISTS longitude_entree NUMERIC(10,7);
 ALTER TABLE public.pointages ADD COLUMN IF NOT EXISTS latitude_sortie NUMERIC(10,7);
