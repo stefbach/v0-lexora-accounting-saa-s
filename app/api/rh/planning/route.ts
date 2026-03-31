@@ -12,7 +12,7 @@ function getAdminClient() {
 
 // Shift definitions with hours (Bug 2)
 const SHIFT_HOURS: Record<string, { heure_debut: string; heure_fin: string; heures_prevues: number; est_repos: boolean }> = {
-  Jour:          { heure_debut: '08:00', heure_fin: '17:00', heures_prevues: 8, est_repos: false },
+  Jour:          { heure_debut: '08:00', heure_fin: '17:00', heures_prevues: 9, est_repos: false },
   Matin:         { heure_debut: '06:00', heure_fin: '14:00', heures_prevues: 8, est_repos: false },
   'Après-midi':  { heure_debut: '14:00', heure_fin: '22:00', heures_prevues: 8, est_repos: false },
   Nuit:          { heure_debut: '22:00', heure_fin: '06:00', heures_prevues: 8, est_repos: false },
