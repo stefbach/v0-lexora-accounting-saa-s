@@ -73,30 +73,39 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PUT — Update a société
+// PUT — Update a société (tous les champs)
 export async function PUT(request: NextRequest) {
   try {
-    const { id, nom, brn, numero_tva_mra, statut_tva, comptable_id } = await request.json()
+    const body = await request.json()
+    const { id } = body
 
-    if (!id) {
-      return NextResponse.json({ error: "L'identifiant de la société est requis" }, { status: 400 })
-    }
-
-    if (!nom) {
-      return NextResponse.json({ error: 'Le nom de la société est requis' }, { status: 400 })
-    }
+    if (!id) return NextResponse.json({ error: "L'identifiant de la société est requis" }, { status: 400 })
 
     const supabase = getAdminClient()
 
+    // Build update object — only include fields that are present in the body
+    const updates: Record<string, unknown> = {}
+    const allowedFields = [
+      'nom', 'brn', 'numero_tva_mra', 'statut_tva', 'comptable_id',
+      'short_name', 'ern', 'npf_number', 'nature_business', 'date_incorporation', 'logo_url',
+      'secteur_activite', 'contact_name', 'contact_position',
+      'adresse', 'adresse2', 'ville', 'telephone', 'fax', 'email', 'email_dco',
+      'latitude', 'longitude', 'distance_pointage',
+      'period_closing_day', 'pay_day', 'salary_frequency', 'eoy_bonus_mode',
+      'declaration_type', 'payslip_template', 'payslip_language',
+      'devises_actives', 'client_id', 'modules_actifs',
+    ]
+    for (const field of allowedFields) {
+      if (body[field] !== undefined) updates[field] = body[field]
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json({ error: 'Aucun champ à mettre à jour' }, { status: 400 })
+    }
+
     const { data, error } = await supabase
       .from('societes')
-      .update({
-        nom,
-        brn: brn || null,
-        numero_tva_mra: numero_tva_mra || null,
-        statut_tva: statut_tva ?? false,
-        comptable_id: comptable_id || null,
-      })
+      .update(updates)
       .eq('id', id)
       .select()
       .single()
