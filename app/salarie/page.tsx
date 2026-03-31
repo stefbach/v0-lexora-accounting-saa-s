@@ -3,7 +3,10 @@ import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Clock, Calendar, CreditCard, TrendingUp, LogIn, LogOut, Coffee, Download, User } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Loader2, Clock, Calendar, CreditCard, TrendingUp, LogIn, LogOut, Coffee, Download, User, Save, CheckCircle } from "lucide-react"
 
 const NAVY = "#1E2A4A"
 const GOLD = "#C9A84C"
@@ -14,7 +17,108 @@ function fmt(n: number) { return new Intl.NumberFormat("fr-FR", { maximumFractio
 function timeMauritius(): string { return new Date().toLocaleTimeString("en-GB", { timeZone: MU_TZ, hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }) }
 function todayISO(): string { const d = new Date(new Date().toLocaleString("en-US", { timeZone: MU_TZ })); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}` }
 
-type Tab = "dashboard" | "bulletins" | "planning" | "primes"
+type Tab = "dashboard" | "profil" | "bulletins" | "planning" | "primes"
+
+// ── Ma fiche — composant isolé (pas de re-render parent) ──
+function MaFicheTab({ employe, onUpdated }: { employe: any; onUpdated: () => void }) {
+  const [f, setF] = useState({ ...employe })
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const u = (k: string, v: any) => setF((p: any) => ({ ...p, [k]: v }))
+
+  const handleSave = async () => {
+    setSaving(true); setSaved(false)
+    try {
+      const res = await fetch("/api/rh/employes/me", {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mobile: f.mobile, telephone: f.telephone, email: f.email,
+          adresse: f.adresse, adresse2: f.adresse2, ville: f.ville, code_postal: f.code_postal,
+          date_naissance: f.date_naissance, genre: f.genre, statut_marital: f.statut_marital, nationalite: f.nationalite,
+          bank_name: f.bank_name, bank_account: f.bank_account, iban: f.iban,
+        }),
+      })
+      const data = await res.json()
+      if (data.error) alert("Erreur: " + data.error)
+      else { setSaved(true); setTimeout(() => setSaved(false), 3000); onUpdated() }
+    } catch { alert("Erreur réseau") }
+    setSaving(false)
+  }
+
+  return (
+    <div className="space-y-6">
+      {saved && <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700"><CheckCircle className="h-4 w-4" /> Informations mises à jour</div>}
+
+      {/* Infos modifiables */}
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-base" style={{ color: NAVY }}>Mes coordonnées</CardTitle></CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div><Label>Email</Label><Input type="email" value={f.email || ""} onChange={e => u("email", e.target.value)} /></div>
+          <div><Label>Mobile</Label><Input value={f.mobile || ""} onChange={e => u("mobile", e.target.value)} placeholder="+230 5XXX XXXX" /></div>
+          <div><Label>Téléphone</Label><Input value={f.telephone || ""} onChange={e => u("telephone", e.target.value)} /></div>
+          <div><Label>Adresse</Label><Input value={f.adresse || ""} onChange={e => u("adresse", e.target.value)} /></div>
+          <div><Label>Adresse 2</Label><Input value={f.adresse2 || ""} onChange={e => u("adresse2", e.target.value)} /></div>
+          <div><Label>Ville</Label><Input value={f.ville || ""} onChange={e => u("ville", e.target.value)} /></div>
+          <div><Label>Code postal</Label><Input value={f.code_postal || ""} onChange={e => u("code_postal", e.target.value)} /></div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-base" style={{ color: NAVY }}>Informations personnelles</CardTitle></CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div><Label>Date de naissance</Label><Input type="date" value={f.date_naissance?.split("T")[0] || ""} onChange={e => u("date_naissance", e.target.value)} /></div>
+          <div><Label>Genre</Label>
+            <Select value={f.genre || ""} onValueChange={v => u("genre", v)}>
+              <SelectTrigger><SelectValue placeholder="Choisir" /></SelectTrigger>
+              <SelectContent><SelectItem value="M">Homme</SelectItem><SelectItem value="F">Femme</SelectItem></SelectContent>
+            </Select>
+          </div>
+          <div><Label>Statut marital</Label>
+            <Select value={f.statut_marital || "single"} onValueChange={v => u("statut_marital", v)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="single">Célibataire</SelectItem>
+                <SelectItem value="married">Marié(e)</SelectItem>
+                <SelectItem value="divorced">Divorcé(e)</SelectItem>
+                <SelectItem value="widowed">Veuf/Veuve</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div><Label>Nationalité</Label><Input value={f.nationalite || ""} onChange={e => u("nationalite", e.target.value)} /></div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-base" style={{ color: NAVY }}>Coordonnées bancaires</CardTitle></CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div><Label>Banque</Label><Input value={f.bank_name || ""} onChange={e => u("bank_name", e.target.value)} /></div>
+          <div><Label>N° compte</Label><Input value={f.bank_account || ""} onChange={e => u("bank_account", e.target.value)} /></div>
+          <div className="md:col-span-2"><Label>IBAN</Label><Input value={f.iban || ""} onChange={e => u("iban", e.target.value)} /></div>
+        </CardContent>
+      </Card>
+
+      <Button onClick={handleSave} disabled={saving} style={{ backgroundColor: NAVY }} className="text-white">
+        {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+        Enregistrer mes modifications
+      </Button>
+
+      {/* Infos lecture seule */}
+      <Card className="opacity-75">
+        <CardHeader className="pb-2"><CardTitle className="text-base text-gray-500">Mon emploi (lecture seule)</CardTitle></CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div><Label className="text-gray-400">Code employé</Label><p className="text-sm font-mono bg-gray-50 p-2 rounded">{employe.code_employe || employe.code || "—"}</p></div>
+          <div><Label className="text-gray-400">Poste</Label><p className="text-sm bg-gray-50 p-2 rounded">{employe.poste || "—"}</p></div>
+          <div><Label className="text-gray-400">Département</Label><p className="text-sm bg-gray-50 p-2 rounded">{employe.departement || "—"}</p></div>
+          <div><Label className="text-gray-400">Type contrat</Label><p className="text-sm bg-gray-50 p-2 rounded">{employe.contrat_type || "Fulltime"}</p></div>
+          <div><Label className="text-gray-400">Date d'arrivée</Label><p className="text-sm bg-gray-50 p-2 rounded">{employe.date_arrivee ? new Date(employe.date_arrivee).toLocaleDateString("fr-FR") : "—"}</p></div>
+          <div><Label className="text-gray-400">NIC</Label><p className="text-sm font-mono bg-gray-50 p-2 rounded">{employe.nic_number || "—"}</p></div>
+          <div><Label className="text-gray-400">Salaire de base</Label><p className="text-sm font-mono bg-gray-50 p-2 rounded">{employe.salaire_base ? `${Number(employe.salaire_base).toLocaleString("fr-FR")} MUR` : "—"}</p></div>
+          <div><Label className="text-gray-400">Devise</Label><p className="text-sm bg-gray-50 p-2 rounded">{employe.devise_salaire || "MUR"}</p></div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
 
 export default function EspaceEmployePage() {
   const [loading, setLoading] = useState(true)
@@ -103,6 +207,7 @@ export default function EspaceEmployePage() {
         <div className="flex gap-1 bg-white rounded-lg p-1 border">
           {([
             { id: "dashboard" as Tab, label: "Pointage", icon: Clock },
+            { id: "profil" as Tab, label: "Ma fiche", icon: User },
             { id: "bulletins" as Tab, label: "Bulletins", icon: CreditCard },
             { id: "planning" as Tab, label: "Planning", icon: Calendar },
             { id: "primes" as Tab, label: "Primes", icon: TrendingUp },
@@ -140,6 +245,11 @@ export default function EspaceEmployePage() {
               <Card><CardContent className="p-4 text-center"><Calendar className="h-6 w-6 mx-auto mb-1 text-orange-600" /><p className="text-3xl font-bold text-orange-600">{conges.sl_solde ?? 15}j</p><p className="text-xs text-gray-500">Sick leave</p></CardContent></Card>
             </div>
           </div>
+        )}
+
+        {/* Ma fiche */}
+        {tab === "profil" && employe && (
+          <MaFicheTab employe={employe} onUpdated={load} />
         )}
 
         {/* Bulletins */}
