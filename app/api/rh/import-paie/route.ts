@@ -84,7 +84,10 @@ export async function GET(request: Request) {
     if (action === 'detail') {
       const periode = searchParams.get('periode')
       if (!periode) return NextResponse.json({ error: 'periode requis' }, { status: 400 })
-      const { data } = await supabase.from('bulletins_paie').select('*').eq('source', 'import_excel').eq('periode', periode)
+      // Multi-tenant: filter by accessible societes
+      const accessibleIdsDetail = await getUserSocieteIds(user.id)
+      if (accessibleIdsDetail.length === 0) return NextResponse.json({ bulletins: [] })
+      const { data } = await supabase.from('bulletins_paie').select('*').eq('source', 'import_excel').eq('periode', periode).in('societe_id', accessibleIdsDetail)
       const empIds = [...new Set((data || []).map(b => b.employe_id))]
       let empMap: Record<string, any> = {}
       if (empIds.length > 0) {
@@ -241,6 +244,10 @@ export async function POST(request: Request) {
     if (body.action === 'import') {
       const { societe_id, periode, employes } = body
       if (!societe_id || !periode || !employes?.length) return NextResponse.json({ error: 'Données manquantes' }, { status: 400 })
+
+      // Multi-tenant: verify user has access to this société
+      const hasAccessImport = await userHasAccessToSociete(user.id, societe_id)
+      if (!hasAccessImport) return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
       const periodeDate = `${periode}-01`
       let created = 0, updated = 0, errors: string[] = []
       const { data: dossier } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
