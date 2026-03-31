@@ -279,15 +279,45 @@ export default function PointagePage() {
   }, [selectedEmployeePointage])
 
   // ---------------------------------------------------------------------------
-  // Sorted pointages for daily view
+  // Merged view: all employees with their pointage (or placeholder if none)
   // ---------------------------------------------------------------------------
   const sortedPointages = useMemo(() => {
-    return [...pointages].sort((a, b) => {
+    // Build a map of existing pointages by employe_id
+    const pointageMap = new Map<string, Pointage>()
+    for (const p of pointages) {
+      pointageMap.set(p.employe_id, p)
+    }
+
+    // For each employee, either use existing pointage or create a placeholder
+    const merged: Pointage[] = employes.map((emp) => {
+      const existing = pointageMap.get(emp.id)
+      if (existing) return existing
+      // Placeholder for employees with no pointage today
+      return {
+        id: `placeholder-${emp.id}`,
+        employe_id: emp.id,
+        heure_entree: null,
+        heure_sortie: null,
+        duree_minutes: null,
+        heures_travaillees: null,
+        heures_sup: null,
+        employe: { nom: emp.nom, prenom: emp.prenom, poste: emp.poste },
+      }
+    })
+
+    // Also include pointages for employees not in the current employes list
+    for (const p of pointages) {
+      if (!employes.find((e) => e.id === p.employe_id)) {
+        merged.push(p)
+      }
+    }
+
+    return merged.sort((a, b) => {
       const nameA = `${a.employe?.nom || ""} ${a.employe?.prenom || ""}`
       const nameB = `${b.employe?.nom || ""} ${b.employe?.prenom || ""}`
       return nameA.localeCompare(nameB)
     })
-  }, [pointages])
+  }, [pointages, employes])
 
   // ---------------------------------------------------------------------------
   // Calendar helpers
@@ -556,7 +586,9 @@ export default function PointagePage() {
               <Loader2 className="w-6 h-6 animate-spin text-[#1E2A4A]" />
             </div>
           ) : sortedPointages.length === 0 ? (
-            <div className="text-center py-12 text-gray-400">Aucun pointage aujourd'hui</div>
+            <div className="text-center py-12 text-gray-400">
+              {societeId ? "Aucun employe dans cette societe" : "Selectionnez une societe"}
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>

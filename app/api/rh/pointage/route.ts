@@ -12,6 +12,85 @@ function getAdminClient() {
   )
 }
 
+// Helper: compute hours from entry/exit times
+function computeHours(heure_entree: string | null, heure_sortie: string | null, duree_minutes_existing: number | null) {
+  let duree_minutes = duree_minutes_existing || null
+  let heures_travaillees: number | null = null
+  let heures_sup: number | null = null
+
+  if (heure_entree && heure_sortie && !duree_minutes) {
+    const entreeMs = new Date(`1970-01-01T${heure_entree}`).getTime()
+    const sortieMs = new Date(`1970-01-01T${heure_sortie}`).getTime()
+    if (!isNaN(entreeMs) && !isNaN(sortieMs)) {
+      duree_minutes = Math.round((sortieMs - entreeMs) / 60000)
+    }
+  }
+
+  if (duree_minutes && duree_minutes > 0) {
+    heures_travaillees = parseFloat((duree_minutes / 60).toFixed(2))
+    heures_sup = heures_travaillees > 8 ? parseFloat((heures_travaillees - 8).toFixed(2)) : 0
+  }
+
+  return { duree_minutes, heures_travaillees, heures_sup }
+}
+
+// Helper: find employee IDs for a societe, or for the user's linked societes
+async function resolveEmployeeFilter(
+  supabase: ReturnType<typeof getAdminClient>,
+  userId: string,
+  societe_id: string | null
+): Promise<string[] | null> {
+  if (societe_id) {
+    const { data: emps } = await supabase.from('employes').select('id').eq('societe_id', societe_id)
+    return emps?.map(e => e.id) || []
+  }
+
+  // No societe_id given: resolve from user profile
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role, societe_id')
+    .eq('id', userId)
+    .maybeSingle()
+
+  if (profile?.societe_id) {
+    const { data: emps } = await supabase.from('employes').select('id').eq('societe_id', profile.societe_id)
+    return emps?.map(e => e.id) || []
+  }
+
+  // Admin/super_admin: return null (no filter = all)
+  if (profile?.role && ['admin', 'super_admin'].includes(profile.role)) {
+    return null
+  }
+
+  // Fallback: find societes via dossiers or ownership
+  const { data: dossiers } = await supabase.from('dossiers').select('societe_id').eq('client_id', userId)
+  const { data: owned } = await supabase.from('societes').select('id').eq('created_by', userId)
+  const sIds = [...new Set([...(dossiers || []).map(d => d.societe_id), ...(owned || []).map(s => s.id)])].filter(Boolean)
+
+  if (sIds.length > 0) {
+    const { data: emps } = await supabase.from('employes').select('id').in('societe_id', sIds)
+    return emps?.map(e => e.id) || []
+  }
+
+  return []
+}
+
+// Helper: find existing pointage for an employee on a date
+async function findExistingPointage(
+  supabase: ReturnType<typeof getAdminClient>,
+  employe_id: string,
+  date: string
+) {
+  const { data } = await supabase
+    .from('pointages')
+    .select('*')
+    .eq('employe_id', employe_id)
+    .eq('date_pointage', date)
+    .order('created_at', { ascending: false })
+    .limit(1)
+  return data && data.length > 0 ? data[0] : null
+}
+
 export async function GET(request: Request) {
   try {
     const supabaseAuth = await createServerClient()
@@ -26,12 +105,8 @@ export async function GET(request: Request) {
     const mensuel = searchParams.get('mensuel') === '1'
     const periode = searchParams.get('periode') // YYYY-MM
 
-    // Get employee IDs filtered by societe
-    let empIds: string[] | null = null
-    if (societe_id) {
-      const { data: emps } = await supabase.from('employes').select('id').eq('societe_id', societe_id)
-      empIds = emps?.map(e => e.id) || []
-    }
+    // Resolve employee filter based on societe or user context
+    const empIds = employe_id ? null : await resolveEmployeeFilter(supabase, user.id, societe_id)
 
     if (mensuel || periode) {
       // Monthly view: return all pointages for the month
@@ -53,25 +128,15 @@ export async function GET(request: Request) {
       else if (empIds && empIds.length === 0) return NextResponse.json({ pointages: [], mois })
 
       const { data, error } = await query
-      if (error) throw error
+      if (error) {
+        console.error('[pointage GET monthly]', error.message, error.details)
+        throw error
+      }
 
       const enriched = (data || []).map(p => {
-        // Compute duration if both times exist
-        let duree_minutes = p.duree_minutes || null
-        let heures_travaillees: number | null = null
-        let heures_sup: number | null = null
-
-        if (p.heure_entree && p.heure_sortie && !duree_minutes) {
-          const entreeMs = new Date(`1970-01-01T${p.heure_entree}`).getTime()
-          const sortieMs = new Date(`1970-01-01T${p.heure_sortie}`).getTime()
-          duree_minutes = Math.round((sortieMs - entreeMs) / 60000)
-        }
-
-        if (duree_minutes && duree_minutes > 0) {
-          heures_travaillees = parseFloat((duree_minutes / 60).toFixed(2))
-          heures_sup = heures_travaillees > 8 ? parseFloat((heures_travaillees - 8).toFixed(2)) : 0
-        }
-
+        const { duree_minutes, heures_travaillees, heures_sup } = computeHours(
+          p.heure_entree, p.heure_sortie, p.duree_minutes
+        )
         return {
           ...p,
           date: p.date_pointage,
@@ -97,25 +162,16 @@ export async function GET(request: Request) {
     else if (empIds && empIds.length === 0) return NextResponse.json({ pointages: [], date })
 
     const { data, error } = await query
-    if (error) throw error
+    if (error) {
+      console.error('[pointage GET daily]', error.message, error.details)
+      throw error
+    }
 
     // Enrich with computed fields
     const enriched = (data || []).map(p => {
-      let duree_minutes = p.duree_minutes || null
-      let heures_travaillees: number | null = null
-      let heures_sup: number | null = null
-
-      if (p.heure_entree && p.heure_sortie && !duree_minutes) {
-        const entreeMs = new Date(`1970-01-01T${p.heure_entree}`).getTime()
-        const sortieMs = new Date(`1970-01-01T${p.heure_sortie}`).getTime()
-        duree_minutes = Math.round((sortieMs - entreeMs) / 60000)
-      }
-
-      if (duree_minutes && duree_minutes > 0) {
-        heures_travaillees = parseFloat((duree_minutes / 60).toFixed(2))
-        heures_sup = heures_travaillees > 8 ? parseFloat((heures_travaillees - 8).toFixed(2)) : 0
-      }
-
+      const { duree_minutes, heures_travaillees, heures_sup } = computeHours(
+        p.heure_entree, p.heure_sortie, p.duree_minutes
+      )
       return {
         ...p,
         duree_minutes,
@@ -143,7 +199,6 @@ export async function POST(request: Request) {
     const {
       employe_id,
       type_pointage,
-      societe_id,
       heure_forcee,
       motif_absence,
       date_pointage: bodyDate,
@@ -156,21 +211,9 @@ export async function POST(request: Request) {
     const today = bodyDate || new Date().toISOString().split('T')[0]
     const now = heure_forcee || new Date().toTimeString().split(' ')[0] // HH:MM:SS
 
-    // Helper: find existing pointage for this employee on this date
-    async function findExisting() {
-      const { data } = await supabase
-        .from('pointages')
-        .select('*')
-        .eq('employe_id', employe_id)
-        .eq('date_pointage', today)
-        .order('created_at', { ascending: false })
-        .limit(1)
-      return data && data.length > 0 ? data[0] : null
-    }
-
     // Special case: justified absence
     if (type_pointage === 'absence_justifiee') {
-      const existing = await findExisting()
+      const existing = await findExistingPointage(supabase, employe_id, today)
 
       if (existing) {
         const { data, error } = await supabase
@@ -182,7 +225,10 @@ export async function POST(request: Request) {
           .eq('id', existing.id)
           .select()
           .single()
-        if (error) throw error
+        if (error) {
+          console.error('[pointage absence update]', error.message, error.details)
+          throw error
+        }
         return NextResponse.json({ pointage: data, message: 'Absence justifiee enregistree' })
       } else {
         const { data, error } = await supabase
@@ -195,12 +241,15 @@ export async function POST(request: Request) {
           })
           .select()
           .single()
-        if (error) throw error
+        if (error) {
+          console.error('[pointage absence insert]', error.message, error.details)
+          throw error
+        }
         return NextResponse.json({ pointage: data, message: 'Absence justifiee enregistree' })
       }
     }
 
-    const existing = await findExisting()
+    const existing = await findExistingPointage(supabase, employe_id, today)
 
     let result
 
@@ -265,14 +314,12 @@ export async function POST(request: Request) {
       const heures_sup = heures_travaillees > 8 ? parseFloat((heures_travaillees - 8).toFixed(2)) : 0
 
       // Update with sortie time and computed duration
-      const updateData: Record<string, unknown> = {
-        heure_sortie: now,
-        duree_minutes,
-      }
-
       const { data, error } = await supabase
         .from('pointages')
-        .update(updateData)
+        .update({
+          heure_sortie: now,
+          duree_minutes,
+        })
         .eq('id', existing.id)
         .select()
         .single()
