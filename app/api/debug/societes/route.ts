@@ -43,5 +43,12 @@ export async function GET() {
     owned: (owned || []).map(s => ({ id: s.id, nom: s.nom })),
     all_societe_ids: [...allSocIds],
     societes,
+    // RH user check
+    rh_check: await (async () => {
+      const rhId = '0ebbb025-6015-42ed-8be2-4a1c2bf4bab7'
+      const { data: rhP } = await admin.from('profiles').select('role, societe_id').eq('id', rhId).maybeSingle()
+      const { data: rhUS } = await admin.from('user_societes').select('societe_id').eq('user_id', rhId)
+      return { profile: rhP, user_societes: (rhUS || []).map(u => u.societe_id) }
+    })(),
   })
 }
