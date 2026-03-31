@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { getUserSocieteIds, userHasAccessToSociete } from '@/lib/rh/access'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
@@ -63,7 +64,11 @@ export async function GET(request: Request) {
     const action = searchParams.get('action')
 
     if (action === 'history') {
-      const { data } = await supabase.from('bulletins_paie').select('periode, salaire_base, salaire_net, total_charges_patronales').eq('source', 'import_excel').order('periode', { ascending: false })
+      // Multi-tenant: filter by accessible societes
+      const accessibleIds = await getUserSocieteIds(user.id)
+      if (accessibleIds.length === 0) return NextResponse.json({ history: [] })
+
+      const { data } = await supabase.from('bulletins_paie').select('periode, salaire_base, salaire_net, total_charges_patronales').eq('source', 'import_excel').in('societe_id', accessibleIds).order('periode', { ascending: false })
       const groups: Record<string, any> = {}
       for (const b of data || []) {
         const p = b.periode

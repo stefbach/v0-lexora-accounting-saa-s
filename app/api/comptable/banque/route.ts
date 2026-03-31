@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getTauxChange, convertToMUR } from '@/lib/taux-change'
+import { userHasAccessToSociete } from '@/lib/rh/access'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,6 +32,10 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const societe_id = searchParams.get('societe_id')
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
+
+    // Multi-tenant: verify user has access to this société
+    const hasAccess = await userHasAccessToSociete(user.id, societe_id)
+    if (!hasAccess) return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
 
     // Fetch bank accounts
     const { data: comptes, error: comptesError } = await supabase

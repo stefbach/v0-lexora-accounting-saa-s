@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { userHasAccessToEmploye } from '@/lib/rh/access'
 
 export const dynamic = 'force-dynamic'
 
@@ -54,6 +55,10 @@ export async function GET(request: Request) {
 
     if (!bulletin) return new NextResponse('Bulletin non trouvé', { status: 404 })
 
+    // Multi-tenant: verify user has access to this employee's bulletin
+    const hasAccess = await userHasAccessToEmploye(user.id, bulletin.employe_id)
+    if (!hasAccess) return new NextResponse('Accès refusé à ce bulletin', { status: 403 })
+
     // Get employee + société
     const { data: emp } = await supabase.from('employes').select('*').eq('id', bulletin.employe_id).single()
     const { data: soc } = await supabase.from('societes').select('*').eq('id', bulletin.societe_id).single()
@@ -96,6 +101,10 @@ export async function POST(request: Request) {
       .single()
 
     if (error || !bulletin) return NextResponse.json({ error: 'Bulletin non trouvé' }, { status: 404 })
+
+    // Multi-tenant: verify user has access to this employee's bulletin
+    const hasAccessPost = await userHasAccessToEmploye(user.id, bulletin.employe_id)
+    if (!hasAccessPost) return NextResponse.json({ error: 'Accès refusé à ce bulletin' }, { status: 403 })
 
     const emp = bulletin.employe
     const soc = emp?.societe

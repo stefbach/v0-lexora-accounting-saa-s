@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { userHasAccessToEmploye } from '@/lib/rh/access'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,6 +19,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+
+    // Multi-tenant: verify user has access to this employee
+    const hasAccess = await userHasAccessToEmploye(user.id, id)
+    if (!hasAccess) return NextResponse.json({ error: 'Accès refusé à cet employé' }, { status: 403 })
 
     const supabase = getAdminClient()
 
@@ -65,6 +70,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+
+    // Multi-tenant: verify user has access to this employee
+    const hasAccess = await userHasAccessToEmploye(user.id, id)
+    if (!hasAccess) return NextResponse.json({ error: 'Accès refusé à cet employé' }, { status: 403 })
 
     const supabase = getAdminClient()
     const body = await request.json()

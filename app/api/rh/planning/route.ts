@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { userHasAccessToSociete } from '@/lib/rh/access'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,6 +36,10 @@ export async function GET(request: Request) {
     if (!societe_id) {
       return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
     }
+
+    // Multi-tenant: verify user has access to this société
+    const hasAccess = await userHasAccessToSociete(user.id, societe_id)
+    if (!hasAccess) return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
 
     // Find the planning for this societe + periode
     let planningQuery = supabase
@@ -111,6 +116,10 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'periode et societe_id requis' }, { status: 400 })
       }
 
+      // Multi-tenant: verify user has access to this société
+      const hasAccessSave = await userHasAccessToSociete(user.id, societe_id)
+      if (!hasAccessSave) return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
+
       const periodeDate = `${periode}-01`
 
       // Upsert the planning record
@@ -182,6 +191,10 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'societe_id et periode requis' }, { status: 400 })
       }
 
+      // Multi-tenant: verify user has access to this société
+      const hasAccessCreate = await userHasAccessToSociete(user.id, societe_id)
+      if (!hasAccessCreate) return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
+
       const periodeDate = `${periode}-01`
       const { data, error } = await supabase
         .from('plannings')
@@ -239,6 +252,10 @@ export async function POST(request: Request) {
       if (!societe_id || !periode || !Array.isArray(importData)) {
         return NextResponse.json({ error: 'societe_id, periode et data[] requis' }, { status: 400 })
       }
+
+      // Multi-tenant: verify user has access to this société
+      const hasAccessImport = await userHasAccessToSociete(user.id, societe_id)
+      if (!hasAccessImport) return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
 
       // Ensure planning exists
       const periodeDate = `${periode}-01`

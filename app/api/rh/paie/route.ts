@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { calculerBulletin, PARAMS_MRA_DEFAUT } from '@/lib/rh/paie'
+import { getUserSocieteIds, userHasAccessToSociete, userHasAccessToEmploye } from '@/lib/rh/access'
 
 export const dynamic = 'force-dynamic'
 
@@ -49,6 +50,21 @@ export async function GET(request: Request) {
     const employe_id = searchParams.get('employe_id')
     const periode = searchParams.get('periode')
     const societe_id = searchParams.get('societe_id')
+
+    // Multi-tenant: verify access
+    if (societe_id) {
+      const hasAccess = await userHasAccessToSociete(user.id, societe_id)
+      if (!hasAccess) return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
+    }
+    if (employe_id && !societe_id) {
+      const hasAccess = await userHasAccessToEmploye(user.id, employe_id)
+      if (!hasAccess) return NextResponse.json({ error: 'Accès refusé à cet employé' }, { status: 403 })
+    }
+    // If neither societe_id nor employe_id, restrict to accessible societes
+    if (!societe_id && !employe_id) {
+      const accessibleIds = await getUserSocieteIds(user.id)
+      if (accessibleIds.length === 0) return NextResponse.json({ bulletins: [], totaux: {}, nb: 0 })
+    }
 
     let query = supabase
       .from('bulletins_paie')
@@ -113,6 +129,16 @@ export async function POST(request: Request) {
     // ACTION : calculer (employé unique)
     // ══════════════════════════════════════════════════════
     if (action === 'calculer') {
+      // Multi-tenant: verify access to the target société
+      const targetSocieteId = societe_id || null
+      if (targetSocieteId) {
+        const hasAccess = await userHasAccessToSociete(user.id, targetSocieteId)
+        if (!hasAccess) return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
+      } else if (employe_id) {
+        const hasAccess = await userHasAccessToEmploye(user.id, employe_id)
+        if (!hasAccess) return NextResponse.json({ error: 'Accès refusé à cet employé' }, { status: 403 })
+      }
+
       const { data: emp } = await supabase.from('employes').select('*').eq('id', employe_id).single()
       if (!emp) return NextResponse.json({ error: 'Employé non trouvé' }, { status: 404 })
 
@@ -245,6 +271,10 @@ export async function POST(request: Request) {
       if (!societe_id) {
         return NextResponse.json({ error: 'societe_id requis pour calculer_batch', bulletins: [], nb: 0 }, { status: 400 })
       }
+
+      // Multi-tenant: verify access to this société
+      const hasAccess = await userHasAccessToSociete(user.id, societe_id)
+      if (!hasAccess) return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
 
       // Get all employees for this société
       const { data: allEmps, error: empError } = await supabase.from('employes').select('*').eq('societe_id', societe_id)
