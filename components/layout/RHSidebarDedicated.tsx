@@ -23,6 +23,7 @@ interface NavLink {
 const ALL_LINKS: NavLink[] = [
   { href: '/rh', label: 'Tableau de bord', labelKey: 'nav.dashboard', icon: Clock, exact: true },
   { href: '/rh/employes', label: 'Employés', labelKey: 'hr.employees', icon: Users },
+  { href: '/rh/groupes', label: 'Groupes / Équipes', icon: Users },
   { href: '/rh/planning', label: 'Planning', icon: CalendarDays },
   { href: '/rh/pointage', label: 'Pointage', labelKey: 'hr.time_clock', icon: Clock },
   { href: '/rh/conges', label: 'Absences & Congés', labelKey: 'rh.absences_leave', icon: Calendar },

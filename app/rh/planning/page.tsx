@@ -104,6 +104,8 @@ export default function PlanningPage() {
   // Employee filter — who appears in the planning
   const [allEmployes, setAllEmployes] = useState<any[]>([])
   const [includedEmpIds, setIncludedEmpIds] = useState<Set<string>>(new Set())
+  const [groupes, setGroupes] = useState<any[]>([])
+  const [selectedGroupe, setSelectedGroupe] = useState("all")
   const [empFilterOpen, setEmpFilterOpen] = useState(false)
   const [empSearch, setEmpSearch] = useState("")
 
@@ -143,10 +145,12 @@ export default function PlanningPage() {
     try {
       const params = new URLSearchParams({ periode })
       if (societe !== "all") params.set("societe_id", societe)
-      const [planRes, empRes] = await Promise.all([
+      const [planRes, empRes, grpRes] = await Promise.all([
         fetch(`/api/rh/planning?${params}`).then(r => r.json()).catch(() => ({ planning: [] })),
         fetch(`/api/rh/employes?${societe !== "all" ? `societe_id=${societe}` : ""}`).then(r => r.json()).catch(() => ({ employes: [] })),
+        fetch(`/api/rh/groupes?${societe !== "all" ? `societe_id=${societe}` : ""}`).then(r => r.json()).catch(() => ({ groupes: [] })),
       ])
+      setGroupes(grpRes.groupes || [])
       const emps = (empRes.employes || []).sort((a: any, b: any) => `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`))
       setAllEmployes(emps)
       setPublished(planRes.published || false)
@@ -351,6 +355,37 @@ export default function PlanningPage() {
               {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
             </SelectContent>
           </Select>
+          {groupes.length > 0 && (
+            <Select value={selectedGroupe} onValueChange={v => {
+              setSelectedGroupe(v)
+              if (v === "all") {
+                setIncludedEmpIds(new Set(allEmployes.map(e => e.id)))
+              } else if (v === "sans_groupe") {
+                const assignedIds = new Set(groupes.flatMap((g: any) => (g.membres || []).map((m: any) => m.employe_id)))
+                setIncludedEmpIds(new Set(allEmployes.filter(e => !assignedIds.has(e.id)).map(e => e.id)))
+              } else {
+                const g = groupes.find((g: any) => g.id === v)
+                setIncludedEmpIds(new Set((g?.membres || []).map((m: any) => m.employe_id)))
+              }
+              // Trigger re-render of displayed employees
+              setEmployes(allEmployes.filter(e => {
+                if (v === "all") return true
+                if (v === "sans_groupe") {
+                  const assignedIds = new Set(groupes.flatMap((g: any) => (g.membres || []).map((m: any) => m.employe_id)))
+                  return !assignedIds.has(e.id)
+                }
+                const g = groupes.find((g: any) => g.id === v)
+                return (g?.membres || []).some((m: any) => m.employe_id === e.id)
+              }))
+            }}>
+              <SelectTrigger className="w-[180px]"><SelectValue placeholder="Groupe" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous les groupes</SelectItem>
+                {groupes.map((g: any) => <SelectItem key={g.id} value={g.id}>{g.nom} ({g.nb_membres})</SelectItem>)}
+                <SelectItem value="sans_groupe">Sans groupe</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
           <Button variant="outline" size="sm" onClick={() => setEmpFilterOpen(true)}>
             <Users className="h-4 w-4 mr-1" /> Collaborateurs ({employes.length}/{allEmployes.length})
           </Button>
