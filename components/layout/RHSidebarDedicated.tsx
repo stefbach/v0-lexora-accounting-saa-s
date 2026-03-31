@@ -29,6 +29,7 @@ const ALL_LINKS: NavLink[] = [
   { href: '/rh/pointage', label: 'Pointage', labelKey: 'hr.time_clock', icon: Clock },
   { href: '/rh/conges', label: 'Absences & Congés', labelKey: 'rh.absences_leave', icon: Calendar },
   { href: '/rh/conges/parametres', label: 'Règles congés', icon: Settings, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
+  { href: '/rh/jours-feries', label: 'Jours fériés', icon: Calendar, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
   { href: '/rh/paie', label: 'Paie & Bulletins', labelKey: 'hr.payslips', icon: CreditCard, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'comptable', 'comptable_dedie'] },
   { href: '/rh/paie/validation', label: 'Contrôle pré-paie', icon: CheckCircle, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
   { href: '/rh/paie/primes', label: 'Primes & OT', labelKey: 'rh.bonuses_ot', icon: TrendingUp },
@@ -36,6 +37,7 @@ const ALL_LINKS: NavLink[] = [
   { href: '/rh/paie/exports-mra', label: 'Exports MRA', labelKey: 'rh.exports_mra', icon: FileText, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'comptable', 'comptable_dedie'] },
   { href: '/rh/exports/paie', label: 'Export Paie & Virements', icon: Banknote, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'comptable', 'comptable_dedie'] },
   { href: '/rh/chat', label: 'CLARA — Assistant IA', icon: Bot },
+  { href: '/rh/societe', label: 'Paramètres société', icon: Settings, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
   { href: '/rh/paie/parametres', label: 'Paramètres paie', labelKey: 'rh.payroll_settings', icon: Settings, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
 ]
 
