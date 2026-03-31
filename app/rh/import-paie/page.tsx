@@ -214,12 +214,28 @@ export default function ImportPaiePage() {
             </div>
             <div className="flex items-center gap-2">
               <Label className="text-sm font-medium">Période :</Label>
-              <input type="month" value={periode} onChange={e => setPeriode(e.target.value)}
-                className="border rounded px-3 py-2 text-sm" />
+              <select value={periode} onChange={e => setPeriode(e.target.value)}
+                className="border rounded px-3 py-2 text-sm">
+                <option value="">-- Choisir --</option>
+                {(() => {
+                  const opts = []
+                  for (let y = 2026; y >= 2020; y--) {
+                    for (let m = 12; m >= 1; m--) {
+                      const val = `${y}-${String(m).padStart(2, '0')}`
+                      const d = new Date(y, m - 1)
+                      const label = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
+                      opts.push(<option key={val} value={val}>{label}</option>)
+                    }
+                  }
+                  return opts
+                })()}
+              </select>
               <Button variant="outline" onClick={() => { setStep("upload"); setEmployes([]); setColumns([]) }}>Annuler</Button>
-              <Button onClick={handleImport} disabled={importing || !periode || !societe} style={{ backgroundColor: NAVY }} className="text-white">
+              <Button onClick={handleImport} disabled={importing || !periode || !societe}
+                style={{ backgroundColor: !periode || !societe ? '#999' : NAVY }}
+                className="text-white">
                 {importing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
-                Importer {employes.length} employés
+                {!periode ? "Choisir le mois d'abord" : !societe ? "Choisir la société" : `Importer ${employes.length} employés`}
               </Button>
             </div>
           </div>
