@@ -299,7 +299,22 @@ export default function ClientDocumentsPage() {
   }
 
   const currentFolder = FOLDERS.find(f => f.key === selectedFolder) || FOLDERS[0]
-  const currentDocs = getDocsForFolder(documents, selectedFolder)
+
+  // Filter by selected société if not "auto"
+  const filteredDocuments = selectedUploadSociete === "auto"
+    ? documents
+    : documents.filter(d => {
+        // Match by societe_detectee or by dossier's société
+        const matchSociete = d.societe_detectee && societes.some(s =>
+          s.societe_id === selectedUploadSociete &&
+          (d.societe_detectee?.toLowerCase().includes(s.nom.toLowerCase().split(' ')[0]) || s.nom.toLowerCase().includes(d.societe_detectee?.toLowerCase() || ''))
+        )
+        // Also check dossier_id belongs to the selected société
+        const matchDossier = societes.some(s => s.societe_id === selectedUploadSociete && s.id === (d as any).dossier_id)
+        return matchSociete || matchDossier || !d.societe_detectee
+      })
+
+  const currentDocs = getDocsForFolder(filteredDocuments, selectedFolder)
 
   return (
     <div className="flex-1 overflow-auto p-4 pt-14 md:pt-6 md:p-6 lg:p-8 space-y-6">
@@ -318,7 +333,7 @@ export default function ClientDocumentsPage() {
           <Select value={selectedUploadSociete} onValueChange={setSelectedUploadSociete}>
             <SelectTrigger className="w-full sm:w-[260px] h-9"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="auto">Détection automatique</SelectItem>
+              <SelectItem value="auto">Toutes les sociétés ({documents.length} docs)</SelectItem>
               {societes.map(s => <SelectItem key={s.societe_id} value={s.societe_id}>{s.nom}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -364,9 +379,9 @@ export default function ClientDocumentsPage() {
         </div>
       )}
 
-      {/* Debug counter */}
+      {/* Document counter */}
       <div className="text-xs text-gray-400 px-2">
-        Total: {documents.length} docs | Fournisseur: {documents.filter(d => d.type_document === 'facture_fournisseur').length} | Client: {documents.filter(d => d.type_document === 'facture_client').length} | Banque: {documents.filter(d => d.type_document === 'releve_bancaire').length} | Null: {documents.filter(d => !d.type_document).length}
+        {filteredDocuments.length} document(s) {selectedUploadSociete !== "auto" ? "(filtré par société)" : "(toutes sociétés)"}
       </div>
 
       {/* Folder list */}
@@ -374,7 +389,7 @@ export default function ClientDocumentsPage() {
         <h3 className="font-semibold mb-3" style={{ color: NAVY }}>Mes Dossiers</h3>
         <div className="grid gap-2">
           {FOLDERS.map((folder) => {
-            const count = getDocsForFolder(documents, folder.key).length
+            const count = getDocsForFolder(filteredDocuments, folder.key).length
             const isSelected = selectedFolder === folder.key
             return (
               <Card
