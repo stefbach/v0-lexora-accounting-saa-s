@@ -171,15 +171,34 @@ export async function POST(request: Request) {
 
           let matched = false
 
-          // Strategy 1: Match with factures (if available)
+          // Strategy 1: Match with factures — by reference first, then by amount
           if (factures.length > 0) {
             const isCredit = txCredit > 0
-            const matchedFacture = factures.find(f => {
-              const typeMatch = isCredit ? f.type_facture === 'client' : f.type_facture === 'fournisseur'
-              if (!typeMatch) return false
-              const fAmount = Number(f.montant_ttc) || 0
-              return Math.abs(txAmount - fAmount) <= Math.max(fAmount * 0.01, 1)
+            const txLib = (tx.libelle || '').toUpperCase()
+
+            // 1a. Match by invoice reference in bank libelle
+            let matchedFacture = factures.find(f => {
+              if (!f.numero_facture) return false
+              const ref = f.numero_facture.toUpperCase()
+              return txLib.includes(ref) || (ref.length > 3 && txLib.includes(ref.replace(/[^A-Z0-9]/g, '')))
             })
+
+            // 1b. Match by tiers name + amount (±1%)
+            if (!matchedFacture) {
+              matchedFacture = factures.find(f => {
+                const typeMatch = isCredit ? f.type_facture === 'client' : f.type_facture === 'fournisseur'
+                if (!typeMatch) return false
+                const fAmount = Number(f.montant_ttc) || 0
+                const amountMatch = Math.abs(txAmount - fAmount) <= Math.max(fAmount * 0.01, 1)
+                if (!amountMatch) return false
+                // Bonus: tiers name match
+                const txTiers = (tx.tiers_detecte || tx.tiers || txLib).toLowerCase()
+                const fTiers = (f.tiers || '').toLowerCase()
+                if (fTiers.length > 3 && txTiers.includes(fTiers.substring(0, Math.min(fTiers.length, 10)))) return true
+                // Still match by amount alone if close enough
+                return Math.abs(txAmount - fAmount) <= Math.max(fAmount * 0.005, 0.5)
+              })
+            }
             if (matchedFacture) {
               const code = `R${String(matchCount + 1).padStart(3, '0')}`
               updatedTxs[i] = { ...tx, facture_id: matchedFacture.id, lettre: code, statut: 'rapproche' }
@@ -354,6 +373,223 @@ export async function POST(request: Request) {
         .eq('id', body.rapprochement_id).select().single()
       if (error) throw error
       return NextResponse.json({ rapprochement: data })
+    }
+
+    // === LETTRAGE MULTI — 1 paiement = plusieurs factures ===
+    if (action === 'lettrer_multi') {
+      const { transaction_id, releve_id, facture_ids, societe_id } = body
+      if (!releve_id || !facture_ids || !Array.isArray(facture_ids) || facture_ids.length === 0) {
+        return NextResponse.json({ error: 'releve_id et facture_ids[] requis' }, { status: 400 })
+      }
+
+      const { data: releve } = await supabase
+        .from('releves_bancaires').select('id, transactions_json').eq('id', releve_id).single()
+      if (!releve) return NextResponse.json({ error: 'Relevé non trouvé' }, { status: 404 })
+
+      const txIdx = parseInt(transaction_id.split('-').pop() || '0')
+      const txs = [...(releve.transactions_json || [])]
+      if (txIdx >= txs.length) return NextResponse.json({ error: 'Transaction non trouvée' }, { status: 404 })
+
+      const tx = txs[txIdx]
+      const txAmount = Number(tx.credit) > 0 ? Number(tx.credit) : Number(tx.debit)
+
+      // Vérifier que la somme des factures ≈ montant transaction
+      const { data: facturesData } = await supabase.from('factures').select('id, montant_ttc, numero_facture, tiers').in('id', facture_ids)
+      const facturesTotal = (facturesData || []).reduce((s, f) => s + (Number(f.montant_ttc) || 0), 0)
+      const ecart = Math.abs(txAmount - facturesTotal)
+
+      const lettreCode = `RM${String(Date.now()).slice(-4)}`
+
+      // Marquer toutes les factures comme payées
+      for (const fId of facture_ids) {
+        await supabase.from('factures').update({ statut: 'paye' }).eq('id', fId)
+      }
+
+      // Mettre à jour la transaction avec toutes les facture_ids
+      txs[txIdx] = {
+        ...tx,
+        facture_ids: facture_ids,
+        facture_id: facture_ids[0],
+        lettre: lettreCode,
+        statut: 'rapproche',
+        rapprochement_multi: true,
+        nb_factures: facture_ids.length,
+        ecart_montant: Math.round(ecart * 100) / 100,
+      }
+      await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', releve_id)
+
+      // Si écart > 0, créer écriture d'écart
+      if (ecart > 1) {
+        const { data: dossier } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
+        if (dossier) {
+          await supabase.from('ecritures_comptables').insert({
+            dossier_id: dossier.id,
+            date_ecriture: new Date().toISOString().split('T')[0],
+            journal: 'OD',
+            compte: txAmount > facturesTotal ? '758' : '658',
+            libelle: `Écart rapprochement multi-factures — ${lettreCode}`,
+            debit: txAmount > facturesTotal ? Math.round(ecart * 100) / 100 : 0,
+            credit: txAmount < facturesTotal ? Math.round(ecart * 100) / 100 : 0,
+            lettre: lettreCode,
+          })
+        }
+      }
+
+      return NextResponse.json({
+        success: true, lettre: lettreCode,
+        nb_factures: facture_ids.length,
+        montant_transaction: txAmount,
+        total_factures: facturesTotal,
+        ecart: Math.round(ecart * 100) / 100,
+      })
+    }
+
+    // === PAYE PAR ASSOCIE — l'associé a payé des factures ===
+    if (action === 'paye_par_associe') {
+      const { transaction_id, releve_id, facture_ids, societe_id, associe_nom, compte_courant_id } = body
+      if (!societe_id || !facture_ids || facture_ids.length === 0) {
+        return NextResponse.json({ error: 'societe_id et facture_ids[] requis' }, { status: 400 })
+      }
+
+      // Trouver ou créer le compte courant associé
+      let ccaId = compte_courant_id
+      if (!ccaId && associe_nom) {
+        const { data: existingCCA } = await supabase.from('comptes_courants_associes')
+          .select('id').eq('societe_id', societe_id).eq('nom', associe_nom).maybeSingle()
+        if (existingCCA) {
+          ccaId = existingCCA.id
+        } else {
+          const { data: newCCA } = await supabase.from('comptes_courants_associes')
+            .insert({ societe_id, nom: associe_nom, type: 'associe', solde: 0 }).select('id').single()
+          ccaId = newCCA?.id
+        }
+      }
+      if (!ccaId) return NextResponse.json({ error: 'associe_nom ou compte_courant_id requis' }, { status: 400 })
+
+      // Calculer le total des factures
+      const { data: factures } = await supabase.from('factures').select('id, montant_ttc, tiers, numero_facture').in('id', facture_ids)
+      const totalMontant = (factures || []).reduce((s, f) => s + (Number(f.montant_ttc) || 0), 0)
+
+      // Marquer les factures comme payées par associé
+      for (const f of factures || []) {
+        await supabase.from('factures').update({
+          statut: 'paye', mode_paiement: 'associe', paye_par: associe_nom,
+        }).eq('id', f.id)
+      }
+
+      // Créer le mouvement CCA (avance)
+      const description = facture_ids.length === 1
+        ? `Paiement facture ${(factures || [])[0]?.numero_facture || ''}`
+        : `Paiement ${facture_ids.length} factures`
+      await supabase.from('mouvements_compte_courant').insert({
+        compte_courant_id: ccaId, societe_id,
+        date_mouvement: new Date().toISOString().split('T')[0],
+        type: 'avance', montant: totalMontant,
+        description,
+        facture_id: facture_ids.length === 1 ? facture_ids[0] : null,
+      })
+
+      // Mettre à jour le solde CCA
+      await supabase.rpc('increment_solde_cca', { cca_id: ccaId, delta: totalMontant }).catch(() => {
+        // Si la fonction RPC n'existe pas, faire manuellement
+        supabase.from('comptes_courants_associes')
+          .select('solde').eq('id', ccaId).single()
+          .then(({ data }) => {
+            const newSolde = (Number(data?.solde) || 0) + totalMontant
+            supabase.from('comptes_courants_associes').update({ solde: newSolde }).eq('id', ccaId)
+          })
+      })
+
+      // Créer les écritures comptables
+      const { data: dossier } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
+      if (dossier) {
+        // Débit charges/fournisseur, Crédit 455 (CCA)
+        for (const f of factures || []) {
+          await supabase.from('ecritures_comptables').insert([
+            { dossier_id: dossier.id, date_ecriture: new Date().toISOString().split('T')[0], journal: 'OD', compte: '401', libelle: `Fournisseur ${f.tiers || ''} — payé par ${associe_nom}`, debit: Number(f.montant_ttc), credit: 0 },
+            { dossier_id: dossier.id, date_ecriture: new Date().toISOString().split('T')[0], journal: 'OD', compte: '455', libelle: `CCA ${associe_nom} — ${f.numero_facture || ''}`, debit: 0, credit: Number(f.montant_ttc) },
+          ])
+        }
+      }
+
+      // Si transaction bancaire fournie, la marquer aussi
+      if (releve_id && transaction_id) {
+        const { data: releve } = await supabase.from('releves_bancaires').select('id, transactions_json').eq('id', releve_id).single()
+        if (releve) {
+          const txIdx = parseInt(transaction_id.split('-').pop() || '0')
+          const txs = [...(releve.transactions_json || [])]
+          if (txIdx < txs.length) {
+            txs[txIdx] = { ...txs[txIdx], lettre: `CCA${String(Date.now()).slice(-4)}`, statut: 'rapproche', paye_par_associe: associe_nom }
+            await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', releve_id)
+          }
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        cca_id: ccaId,
+        montant_total: totalMontant,
+        nb_factures: facture_ids.length,
+        associe: associe_nom,
+      })
+    }
+
+    // === COMPENSATION — remboursement associé via virement bancaire ===
+    if (action === 'compensation') {
+      const { transaction_id, releve_id, compte_courant_id, societe_id, montant } = body
+      if (!compte_courant_id || !societe_id || !montant) {
+        return NextResponse.json({ error: 'compte_courant_id, societe_id, montant requis' }, { status: 400 })
+      }
+
+      // Récupérer le CCA
+      const { data: cca } = await supabase.from('comptes_courants_associes')
+        .select('id, nom, solde').eq('id', compte_courant_id).single()
+      if (!cca) return NextResponse.json({ error: 'Compte courant non trouvé' }, { status: 404 })
+
+      const remboursementMontant = Number(montant)
+
+      // Créer mouvement de remboursement
+      await supabase.from('mouvements_compte_courant').insert({
+        compte_courant_id, societe_id,
+        date_mouvement: new Date().toISOString().split('T')[0],
+        type: 'remboursement',
+        montant: -remboursementMontant,
+        description: `Remboursement par virement bancaire`,
+      })
+
+      // Mettre à jour le solde
+      const newSolde = (Number(cca.solde) || 0) - remboursementMontant
+      await supabase.from('comptes_courants_associes').update({ solde: newSolde }).eq('id', compte_courant_id)
+
+      // Écritures comptables: Débit 455 (CCA) / Crédit 512 (Banque)
+      const { data: dossier } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
+      if (dossier) {
+        await supabase.from('ecritures_comptables').insert([
+          { dossier_id: dossier.id, date_ecriture: new Date().toISOString().split('T')[0], journal: 'BNQ', compte: '455', libelle: `Remboursement CCA ${cca.nom}`, debit: remboursementMontant, credit: 0 },
+          { dossier_id: dossier.id, date_ecriture: new Date().toISOString().split('T')[0], journal: 'BNQ', compte: '512', libelle: `Virement remboursement ${cca.nom}`, debit: 0, credit: remboursementMontant },
+        ])
+      }
+
+      // Marquer la transaction bancaire si fournie
+      if (releve_id && transaction_id) {
+        const { data: releve } = await supabase.from('releves_bancaires').select('id, transactions_json').eq('id', releve_id).single()
+        if (releve) {
+          const txIdx = parseInt(transaction_id.split('-').pop() || '0')
+          const txs = [...(releve.transactions_json || [])]
+          if (txIdx < txs.length) {
+            txs[txIdx] = { ...txs[txIdx], lettre: `RMB${String(Date.now()).slice(-4)}`, statut: 'rapproche', compensation_cca: cca.nom }
+            await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', releve_id)
+          }
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        ancien_solde: Number(cca.solde),
+        nouveau_solde: newSolde,
+        associe: cca.nom,
+        montant_rembourse: remboursementMontant,
+      })
     }
 
     return NextResponse.json({ error: 'Action inconnue' }, { status: 400 })
