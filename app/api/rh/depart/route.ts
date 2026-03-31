@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { getUserSocieteIds } from '@/lib/rh/access'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,16 +11,6 @@ function getAdminClient() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
-}
-
-/** Get societe IDs accessible by user */
-async function getUserSocieteIds(supabase: ReturnType<typeof getAdminClient>, userId: string): Promise<string[]> {
-  const { data: profile } = await supabase.from('profiles').select('role, societe_id').eq('id', userId).maybeSingle()
-  if (profile?.societe_id) return [profile.societe_id]
-  const { data: dossiers } = await supabase.from('dossiers').select('societe_id').eq('client_id', userId)
-  const { data: owned } = await supabase.from('societes').select('id').eq('created_by', userId)
-  return [...new Set([...(dossiers || []).map((d: any) => d.societe_id), ...(owned || []).map((s: any) => s.id)])]
-}
 
 /** Count working days between two dates (exclude Sat/Sun) */
 function countWorkingDays(dateDebut: string, dateFin: string): number {
@@ -110,7 +101,7 @@ export async function GET(request: Request) {
 
     // List recent departures
     if (action === 'recent') {
-      const accessibleIds = await getUserSocieteIds(supabase, user.id)
+      const accessibleIds = await getUserSocieteIds(user.id)
       if (accessibleIds.length === 0) return NextResponse.json({ departs: [] })
 
       const { data: departs } = await supabase
@@ -161,7 +152,7 @@ export async function POST(request: Request) {
       if (!emp) return NextResponse.json({ error: 'Employé non trouvé' }, { status: 404 })
 
       // Check access
-      const accessibleIds = await getUserSocieteIds(supabase, user.id)
+      const accessibleIds = await getUserSocieteIds(user.id)
       if (!accessibleIds.includes(emp.societe_id)) {
         return NextResponse.json({ error: 'Accès non autorisé' }, { status: 403 })
       }
@@ -315,7 +306,7 @@ export async function POST(request: Request) {
       if (!emp) return NextResponse.json({ error: 'Employé non trouvé' }, { status: 404 })
 
       // Check access
-      const accessibleIds = await getUserSocieteIds(supabase, user.id)
+      const accessibleIds = await getUserSocieteIds(user.id)
       if (!accessibleIds.includes(emp.societe_id)) {
         return NextResponse.json({ error: 'Accès non autorisé' }, { status: 403 })
       }
@@ -454,7 +445,29 @@ export async function POST(request: Request) {
       })
     }
 
-    return NextResponse.json({ error: 'Action non reconnue. Utilisez calculer_solde ou confirmer_depart.' }, { status: 400 })
+    // === SORTIE MANUELLE — enregistrer un départ sans calcul de solde ===
+    if (action === 'sortie_manuelle') {
+      const { employe_id, date_depart, type_depart, raison_depart } = body
+      if (!employe_id || !date_depart) return NextResponse.json({ error: 'employe_id et date_depart requis' }, { status: 400 })
+
+      const { data: emp } = await supabase.from('employes').select('id, nom, prenom').eq('id', employe_id).maybeSingle()
+      if (!emp) return NextResponse.json({ error: 'Employé non trouvé' }, { status: 404 })
+
+      const { error: updateErr } = await supabase.from('employes').update({
+        date_depart,
+        date_depart_type: type_depart || 'demission',
+        raison_depart: raison_depart || null,
+      }).eq('id', employe_id)
+
+      if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 })
+
+      return NextResponse.json({
+        success: true,
+        message: `Sortie manuelle enregistrée pour ${emp.prenom} ${emp.nom} au ${date_depart}`,
+      })
+    }
+
+    return NextResponse.json({ error: 'Action non reconnue. Utilisez calculer_solde, confirmer_depart ou sortie_manuelle.' }, { status: 400 })
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }

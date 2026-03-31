@@ -139,7 +139,31 @@ function DepartureForm({ societes, onCalculated }: {
             />
           </div>
         </div>
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-3">
+          <Button
+            variant="outline"
+            onClick={async () => {
+              if (!employeId || !dateDepart) { setError("Employé et date requis"); return }
+              setLoading(true); setError(null)
+              try {
+                const res = await fetch("/api/rh/depart", {
+                  method: "POST", headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ action: "sortie_manuelle", employe_id: employeId, date_depart: dateDepart, type_depart: typeDepart || "demission", raison_depart: raison }),
+                })
+                const data = await res.json()
+                if (!res.ok) throw new Error(data.error || "Erreur")
+                alert(data.message || "Sortie enregistrée")
+                setEmployeId(""); setDateDepart("")
+              } catch (e: unknown) { setError(e instanceof Error ? e.message : "Erreur") }
+              finally { setLoading(false) }
+            }}
+            disabled={loading || !employeId || !dateDepart}
+            className="border-red-300 text-red-600 hover:bg-red-50"
+          >
+            {loading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+            <UserMinus className="w-4 h-4 mr-2" />
+            Sortie manuelle (sans solde)
+          </Button>
           <Button
             onClick={handleCalculer}
             disabled={loading || !employeId || !dateDepart || !typeDepart}
