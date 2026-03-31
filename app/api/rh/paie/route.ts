@@ -18,15 +18,23 @@ const JOURS_FERIES_MU = ["01-01", "02-01", "12-03", "01-05", "09-05", "15-08", "
 function isFerie(dateStr: string): boolean { return JOURS_FERIES_MU.includes(dateStr.slice(5)) }
 function isWeekend(dateStr: string): boolean { const d = new Date(dateStr + "T12:00:00"); return d.getDay() === 0 || d.getDay() === 6 }
 
-function calcOT(hEntree: string, hSortie: string, ferieDay: boolean) {
+// Bug 4 fix: OT threshold comes from planning (heures_prevues) instead of hardcoded 9.
+// planningHours = planned working hours for the day (e.g. 8 for 3x8, 9 for standard).
+// isPlannedWorkDay = true if there's a planning_assignment that is NOT repos for this day.
+// Weekend/unplanned work: if employee works on a day NOT in planning, all hours are OT at 1.5x.
+function calcOT(hEntree: string, hSortie: string, ferieDay: boolean, planningHours: number = 9, isPlannedWorkDay: boolean = true) {
   if (!hEntree || !hSortie) return { normales: 0, ot15: 0, ot2: 0 }
   const debut = new Date(`1970-01-01T${hEntree}`)
   const fin = new Date(`1970-01-01T${hSortie}`)
   let totalH = (fin.getTime() - debut.getTime()) / 3600000 - 1
   if (totalH <= 0) totalH = 0
+  // Public holiday: all hours at 2x
   if (ferieDay) return { normales: 0, ot15: 0, ot2: totalH }
-  const normales = Math.min(totalH, 9)
-  const reste = Math.max(totalH - 9, 0)
+  // Unplanned work day (not in planning or planning says Repos): all hours at 1.5x
+  if (!isPlannedWorkDay) return { normales: 0, ot15: totalH, ot2: 0 }
+  // Normal planned work day: OT starts after planningHours
+  const normales = Math.min(totalH, planningHours)
+  const reste = Math.max(totalH - planningHours, 0)
   return { normales, ot15: Math.min(reste, 2), ot2: Math.max(reste - 2, 0) }
 }
 
@@ -114,6 +122,17 @@ export async function POST(request: Request) {
         .gte('date_pointage', `${periodeStr}-01`)
         .lte('date_pointage', `${periodeStr}-31`)
 
+      // Bug 4 fix: fetch planning assignments for this employee+period to determine planned hours
+      const { data: planAssignments } = await supabase.from('planning_assignments')
+        .select('date, shift_code, heures_prevues, est_repos')
+        .eq('employe_id', employe_id)
+        .gte('date', `${periodeStr}-01`)
+        .lte('date', `${periodeStr}-31`)
+      const planMap: Record<string, { heures_prevues: number; est_repos: boolean }> = {}
+      for (const pa of planAssignments || []) {
+        planMap[pa.date] = { heures_prevues: Number(pa.heures_prevues) || 8, est_repos: pa.est_repos }
+      }
+
       let total_ot_montant = 0
       const taux_horaire = Number(emp.salaire_base) / (45 * 52 / 12)
       let jours_travailles = 0
@@ -122,7 +141,13 @@ export async function POST(request: Request) {
         if (!pt.heure_entree) continue
         jours_travailles++
         const ferie = isFerie(pt.date_pointage)
-        const ot = calcOT(pt.heure_entree, pt.heure_sortie || '', ferie)
+        const plan = planMap[pt.date_pointage]
+        // If planning exists, use planned hours as OT threshold; default to 9 (standard)
+        const planningHours = plan ? plan.heures_prevues : 9
+        // Work day is "planned" if planning says it's a work day (not repos)
+        // If no planning exists, fall back to weekday=planned, weekend=unplanned
+        const isPlannedWorkDay = plan ? !plan.est_repos : !isWeekend(pt.date_pointage)
+        const ot = calcOT(pt.heure_entree, pt.heure_sortie || '', ferie, planningHours, isPlannedWorkDay)
         const montant15 = ot.ot15 * taux_horaire * 1.5
         const montant2 = ot.ot2 * taux_horaire * 2
         total_ot_montant += montant15 + montant2
@@ -251,6 +276,17 @@ export async function POST(request: Request) {
           .select('*').eq('employe_id', emp.id)
           .gte('date_pointage', `${periodeStr}-01`).lte('date_pointage', `${periodeStr}-31`)
 
+        // Bug 4 fix: fetch planning assignments for this employee+period
+        const { data: planAssignments } = await supabase.from('planning_assignments')
+          .select('date, shift_code, heures_prevues, est_repos')
+          .eq('employe_id', emp.id)
+          .gte('date', `${periodeStr}-01`)
+          .lte('date', `${periodeStr}-31`)
+        const planMap: Record<string, { heures_prevues: number; est_repos: boolean }> = {}
+        for (const pa of planAssignments || []) {
+          planMap[pa.date] = { heures_prevues: Number(pa.heures_prevues) || 8, est_repos: pa.est_repos }
+        }
+
         let total_ot_montant = 0
         const taux_horaire = Number(emp.salaire_base) / (45 * 52 / 12)
         let jours_travailles = 0
@@ -258,7 +294,11 @@ export async function POST(request: Request) {
         for (const pt of pointagesMois || []) {
           if (!pt.heure_entree) continue
           jours_travailles++
-          const ot = calcOT(pt.heure_entree, pt.heure_sortie || '', isFerie(pt.date_pointage))
+          const ferie = isFerie(pt.date_pointage)
+          const plan = planMap[pt.date_pointage]
+          const planningHours = plan ? plan.heures_prevues : 9
+          const isPlannedWorkDay = plan ? !plan.est_repos : !isWeekend(pt.date_pointage)
+          const ot = calcOT(pt.heure_entree, pt.heure_sortie || '', ferie, planningHours, isPlannedWorkDay)
           total_ot_montant += ot.ot15 * taux_horaire * 1.5 + ot.ot2 * taux_horaire * 2
         }
 
