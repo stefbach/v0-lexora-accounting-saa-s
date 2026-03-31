@@ -5,12 +5,11 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Switch } from "@/components/ui/switch"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Users, Plus, Pencil, Trash2, UserPlus, Loader2, CalendarDays, Clock, Search } from "lucide-react"
+import { Loader2, Plus, Trash2, Users, UserPlus, X, Check, ChevronRight } from "lucide-react"
 
-const COULEURS = ["#1E2A4A", "#C9A84C", "#059669", "#DC2626", "#7C3AED", "#EA580C", "#0891B2", "#DB2777"]
+const NAVY = "#1E2A4A"
+const GOLD = "#C9A84C"
 
 export default function GroupesPage() {
   const [societes, setSocietes] = useState<any[]>([])
@@ -18,13 +17,15 @@ export default function GroupesPage() {
   const [groupes, setGroupes] = useState<any[]>([])
   const [allEmployes, setAllEmployes] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState("")
 
-  const [createOpen, setCreateOpen] = useState(false)
-  const [editGroup, setEditGroup] = useState<any>(null)
-  const [assignOpen, setAssignOpen] = useState<any>(null)
-  const [search, setSearch] = useState("")
+  // New group inline
+  const [newGroupName, setNewGroupName] = useState("")
+  const [addingGroup, setAddingGroup] = useState(false)
 
-  const [form, setForm] = useState({ nom: "", code: "", description: "", couleur: "#1E2A4A", inclus_planning: true, inclus_pointage: true })
+  // Assign mode
+  const [assignGroupId, setAssignGroupId] = useState<string | null>(null)
 
   useEffect(() => {
     Promise.all([
@@ -41,235 +42,226 @@ export default function GroupesPage() {
   const load = useCallback(async () => {
     if (!societe) return
     setLoading(true)
+    setError("")
     try {
       const [gRes, eRes] = await Promise.all([
-        fetch(`/api/rh/groupes?societe_id=${societe}`).then(r => r.json()).catch(() => ({ groupes: [] })),
+        fetch(`/api/rh/groupes?societe_id=${societe}`).then(r => r.json()),
         fetch(`/api/rh/employes?societe_id=${societe}`).then(r => r.json()).catch(() => ({ employes: [] })),
       ])
-      setGroupes(gRes.groupes || [])
+      if (gRes.error) {
+        setError(gRes.error)
+        setGroupes([])
+      } else {
+        setGroupes(gRes.groupes || [])
+      }
       setAllEmployes((eRes.employes || []).sort((a: any, b: any) => `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`)))
-    } catch {}
+    } catch (e: any) {
+      setError(e.message || "Erreur chargement")
+    }
     setLoading(false)
   }, [societe])
 
   useEffect(() => { load() }, [load])
 
-  const handleCreate = async () => {
+  // Employés assignés à un groupe
+  const assignedEmpIds = new Set(groupes.flatMap((g: any) => (g.membres || []).map((m: any) => m.employe_id)))
+  const sansGroupe = allEmployes.filter(e => !assignedEmpIds.has(e.id))
+
+  // Créer un groupe
+  const createGroup = async () => {
+    if (!newGroupName.trim() || !societe) return
+    setAddingGroup(true)
     const res = await fetch("/api/rh/groupes", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "creer", societe_id: societe, ...form }),
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "creer", societe_id: societe, nom: newGroupName.trim() }),
     })
     const data = await res.json()
-    if (data.error) { alert(data.error); return }
-    setCreateOpen(false)
-    setForm({ nom: "", code: "", description: "", couleur: "#1E2A4A", inclus_planning: true, inclus_pointage: true })
-    load()
+    if (data.error) setError(data.error)
+    else { setNewGroupName(""); load() }
+    setAddingGroup(false)
   }
 
-  const handleEdit = async () => {
-    if (!editGroup) return
-    const res = await fetch("/api/rh/groupes", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "modifier", id: editGroup.id, ...form }),
-    })
-    const data = await res.json()
-    if (data.error) { alert(data.error); return }
-    setEditGroup(null)
-    load()
-  }
-
-  const handleDelete = async (id: string) => {
-    if (!confirm("Supprimer ce groupe ?")) return
+  // Supprimer un groupe
+  const deleteGroup = async (id: string) => {
+    if (!confirm("Supprimer ce groupe et retirer tous ses membres ?")) return
     await fetch("/api/rh/groupes", {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "supprimer", id }),
     })
     load()
   }
 
-  const [selectedEmpIds, setSelectedEmpIds] = useState<Set<string>>(new Set())
-
-  const openAssign = (groupe: any) => {
-    setAssignOpen(groupe)
-    setSelectedEmpIds(new Set((groupe.membres || []).map((m: any) => m.employe_id)))
-    setSearch("")
+  // Affecter/retirer un employé
+  const toggleEmployee = async (groupeId: string, employeId: string, currentlyIn: boolean) => {
+    setSaving(true)
+    if (currentlyIn) {
+      await fetch("/api/rh/groupes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "retirer", groupe_id: groupeId, employe_id: employeId }),
+      })
+    } else {
+      // Ajouter — on récupère les membres actuels + le nouveau
+      const groupe = groupes.find(g => g.id === groupeId)
+      const currentIds = (groupe?.membres || []).map((m: any) => m.employe_id)
+      await fetch("/api/rh/groupes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "affecter", groupe_id: groupeId, employe_ids: [...currentIds, employeId] }),
+      })
+    }
+    await load()
+    setSaving(false)
   }
-
-  const handleAssign = async () => {
-    if (!assignOpen) return
-    await fetch("/api/rh/groupes", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "affecter", groupe_id: assignOpen.id, employe_ids: [...selectedEmpIds] }),
-    })
-    setAssignOpen(null)
-    load()
-  }
-
-  // Employés sans groupe
-  const assignedEmpIds = new Set(groupes.flatMap(g => (g.membres || []).map((m: any) => m.employe_id)))
-  const sansGroupe = allEmployes.filter(e => !assignedEmpIds.has(e.id))
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="p-4 md:p-6 space-y-6 max-w-4xl mx-auto">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>Groupes d'employés</h1>
-          <p className="text-gray-500 text-sm">Organisez vos équipes pour le planning, pointage et la paie</p>
+          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Groupes</h1>
+          <p className="text-gray-500 text-sm">Créez des groupes et affectez les employés</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Select value={societe} onValueChange={setSociete}>
-            <SelectTrigger className="w-[200px]"><SelectValue placeholder="Société" /></SelectTrigger>
-            <SelectContent>
-              {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Button onClick={() => { setForm({ nom: "", code: "", description: "", couleur: "#1E2A4A", inclus_planning: true, inclus_pointage: true }); setCreateOpen(true) }}
-            style={{ backgroundColor: "#1E2A4A" }} className="text-white">
-            <Plus className="h-4 w-4 mr-1" /> Nouveau groupe
-          </Button>
-        </div>
+        <Select value={societe} onValueChange={setSociete}>
+          <SelectTrigger className="w-[200px]"><SelectValue placeholder="Société" /></SelectTrigger>
+          <SelectContent>
+            {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
+          </SelectContent>
+        </Select>
       </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+          {error}
+          <p className="text-xs mt-1 text-red-500">
+            Si l'erreur mentionne "relation does not exist", exécutez la migration SQL pour créer la table groupes_employes.
+          </p>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-gray-400" /></div>
       ) : (
-        <>
-          {/* Groupes */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {groupes.map(g => (
-              <Card key={g.id} className="border-l-4" style={{ borderLeftColor: g.couleur || "#1E2A4A" }}>
+        <div className="space-y-4">
+          {/* Créer un groupe — inline simple */}
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Nom du nouveau groupe (ex: Agents, Cadres, Direction...)"
+                  value={newGroupName}
+                  onChange={e => setNewGroupName(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && createGroup()}
+                  className="flex-1"
+                />
+                <Button onClick={createGroup} disabled={!newGroupName.trim() || addingGroup}
+                  style={{ backgroundColor: NAVY }} className="text-white">
+                  {addingGroup ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />}
+                  Créer
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Liste des groupes */}
+          {groupes.map(g => {
+            const isAssigning = assignGroupId === g.id
+            const membres = g.membres || []
+            const membreIds = new Set(membres.map((m: any) => m.employe_id))
+
+            return (
+              <Card key={g.id} className="border-l-4" style={{ borderLeftColor: g.couleur || NAVY }}>
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <Users className="h-4 w-4" style={{ color: g.couleur }} />
+                    <CardTitle className="text-base flex items-center gap-2" style={{ color: NAVY }}>
+                      <Users className="h-4 w-4" />
                       {g.nom}
-                      {g.code && <Badge variant="outline" className="text-[10px]">{g.code}</Badge>}
+                      <Badge variant="outline" className="text-xs">{membres.length} membre{membres.length !== 1 ? "s" : ""}</Badge>
                     </CardTitle>
                     <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditGroup(g); setForm({ nom: g.nom, code: g.code || "", description: g.description || "", couleur: g.couleur || "#1E2A4A", inclus_planning: g.inclus_planning !== false, inclus_pointage: g.inclus_pointage !== false }) }}>
-                        <Pencil className="h-3.5 w-3.5" />
+                      <Button variant="outline" size="sm" onClick={() => setAssignGroupId(isAssigning ? null : g.id)}>
+                        <UserPlus className="h-4 w-4 mr-1" />
+                        {isAssigning ? "Fermer" : "Gérer"}
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500" onClick={() => handleDelete(g.id)}>
-                        <Trash2 className="h-3.5 w-3.5" />
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700" onClick={() => deleteGroup(g.id)}>
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {g.description && <p className="text-xs text-gray-500">{g.description}</p>}
-                  <div className="flex gap-2">
-                    {g.inclus_planning && <Badge className="text-[10px] bg-blue-100 text-blue-700"><CalendarDays className="h-3 w-3 mr-0.5" /> Planning</Badge>}
-                    {g.inclus_pointage && <Badge className="text-[10px] bg-green-100 text-green-700"><Clock className="h-3 w-3 mr-0.5" /> Pointage</Badge>}
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-xs font-medium text-gray-500">{g.nb_membres} membre{g.nb_membres !== 1 ? 's' : ''}</p>
-                    <div className="flex flex-wrap gap-1">
-                      {(g.membres || []).slice(0, 8).map((m: any) => (
-                        <span key={m.employe_id} className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100">{m.prenom} {m.nom}</span>
+                  {/* Membres actuels */}
+                  {membres.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {membres.map((m: any) => (
+                        <div key={m.employe_id} className="flex items-center gap-1 px-2 py-1 bg-gray-100 rounded-full text-sm">
+                          <span>{m.prenom} {m.nom}</span>
+                          {isAssigning && (
+                            <button onClick={() => toggleEmployee(g.id, m.employe_id, true)}
+                              className="text-red-400 hover:text-red-600 ml-1" disabled={saving}>
+                              <X className="h-3 w-3" />
+                            </button>
+                          )}
+                        </div>
                       ))}
-                      {g.nb_membres > 8 && <span className="text-[10px] text-gray-400">+{g.nb_membres - 8}</span>}
                     </div>
-                  </div>
-                  <Button variant="outline" size="sm" className="w-full" onClick={() => openAssign(g)}>
-                    <UserPlus className="h-4 w-4 mr-1" /> Gérer les membres
-                  </Button>
+                  ) : (
+                    <p className="text-sm text-gray-400">Aucun membre — cliquez "Gérer" pour ajouter</p>
+                  )}
+
+                  {/* Mode affectation — liste des employés non assignés à ce groupe */}
+                  {isAssigning && (
+                    <div className="border-t pt-3 mt-3">
+                      <p className="text-xs font-medium text-gray-500 mb-2">Cliquez pour ajouter au groupe :</p>
+                      <div className="flex flex-wrap gap-1">
+                        {allEmployes.filter(e => !membreIds.has(e.id)).map(emp => (
+                          <button key={emp.id}
+                            onClick={() => toggleEmployee(g.id, emp.id, false)}
+                            disabled={saving}
+                            className="flex items-center gap-1 px-2 py-1 text-xs rounded-full border border-dashed border-gray-300 hover:border-emerald-400 hover:bg-emerald-50 transition-colors">
+                            <Plus className="h-3 w-3 text-emerald-500" />
+                            {emp.prenom} {emp.nom}
+                            {emp.poste && <span className="text-gray-400">({emp.poste})</span>}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
-            ))}
-          </div>
+            )
+          })}
 
           {/* Employés sans groupe */}
-          {sansGroupe.length > 0 && (
-            <Card className="border-dashed border-orange-300 bg-orange-50/50">
+          {sansGroupe.length > 0 && groupes.length > 0 && (
+            <Card className="border-dashed border-orange-300">
               <CardHeader className="pb-2">
-                <CardTitle className="text-base text-orange-700">Sans groupe ({sansGroupe.length})</CardTitle>
+                <CardTitle className="text-base text-orange-600">
+                  Sans groupe ({sansGroupe.length})
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex flex-wrap gap-1">
+                <div className="flex flex-wrap gap-2">
                   {sansGroupe.map(e => (
-                    <span key={e.id} className="text-xs px-2 py-1 rounded bg-orange-100 text-orange-800">{e.prenom} {e.nom} {e.poste ? `(${e.poste})` : ""}</span>
+                    <span key={e.id} className="px-2 py-1 text-xs rounded-full bg-orange-50 border border-orange-200 text-orange-700">
+                      {e.prenom} {e.nom}
+                    </span>
                   ))}
                 </div>
               </CardContent>
             </Card>
           )}
-        </>
+
+          {groupes.length === 0 && !loading && (
+            <div className="text-center py-12 text-gray-400">
+              <Users className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+              <p className="font-medium">Aucun groupe créé</p>
+              <p className="text-sm mt-1">Tapez un nom ci-dessus et cliquez "Créer"</p>
+            </div>
+          )}
+        </div>
       )}
-
-      {/* Dialog création/édition */}
-      <Dialog open={createOpen || !!editGroup} onOpenChange={v => { if (!v) { setCreateOpen(false); setEditGroup(null) } }}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle style={{ color: "#1E2A4A" }}>{editGroup ? "Modifier le groupe" : "Nouveau groupe"}</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Nom *</Label><Input value={form.nom} onChange={e => setForm(f => ({ ...f, nom: e.target.value }))} placeholder="Ex: Agents" /></div>
-              <div><Label>Code</Label><Input value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value.toUpperCase() }))} placeholder="Ex: AGT" maxLength={5} /></div>
-            </div>
-            <div><Label>Description</Label><Input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Ex: Équipe des agents de terrain" /></div>
-            <div>
-              <Label>Couleur</Label>
-              <div className="flex gap-2 mt-1">
-                {COULEURS.map(c => (
-                  <button key={c} className={`w-8 h-8 rounded-lg ${form.couleur === c ? "ring-2 ring-offset-2 ring-gray-600" : ""}`}
-                    style={{ backgroundColor: c }} onClick={() => setForm(f => ({ ...f, couleur: c }))} />
-                ))}
-              </div>
-            </div>
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-              <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-blue-600" /><Label className="text-sm">Inclure dans le planning</Label></div>
-              <Switch checked={form.inclus_planning} onCheckedChange={v => setForm(f => ({ ...f, inclus_planning: v }))} />
-            </div>
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-              <div className="flex items-center gap-2"><Clock className="h-4 w-4 text-green-600" /><Label className="text-sm">Inclure dans le pointage</Label></div>
-              <Switch checked={form.inclus_pointage} onCheckedChange={v => setForm(f => ({ ...f, inclus_pointage: v }))} />
-            </div>
-            <Button className="w-full text-white" style={{ backgroundColor: "#1E2A4A" }} onClick={editGroup ? handleEdit : handleCreate} disabled={!form.nom}>
-              {editGroup ? "Enregistrer" : "Créer le groupe"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Dialog affectation membres */}
-      <Dialog open={!!assignOpen} onOpenChange={v => { if (!v) setAssignOpen(null) }}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle style={{ color: "#1E2A4A" }}>
-              Membres — {assignOpen?.nom}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <Input placeholder="Rechercher..." value={search} onChange={e => setSearch(e.target.value)} />
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => setSelectedEmpIds(new Set(allEmployes.map(e => e.id)))}>Tous</Button>
-              <Button variant="outline" size="sm" onClick={() => setSelectedEmpIds(new Set())}>Aucun</Button>
-            </div>
-            <div className="border rounded-lg divide-y max-h-[50vh] overflow-y-auto">
-              {allEmployes
-                .filter(e => !search.trim() || `${e.nom} ${e.prenom} ${e.poste || ""}`.toLowerCase().includes(search.toLowerCase()))
-                .map(emp => (
-                  <label key={emp.id} className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer">
-                    <input type="checkbox" checked={selectedEmpIds.has(emp.id)}
-                      onChange={() => setSelectedEmpIds(prev => {
-                        const next = new Set(prev)
-                        next.has(emp.id) ? next.delete(emp.id) : next.add(emp.id)
-                        return next
-                      })}
-                      className="rounded border-gray-300" />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">{emp.prenom} {emp.nom}</p>
-                      {emp.poste && <p className="text-[10px] text-gray-400">{emp.poste}</p>}
-                    </div>
-                  </label>
-                ))}
-            </div>
-            <p className="text-xs text-gray-500">{selectedEmpIds.size} sélectionné(s)</p>
-            <Button className="w-full text-white" style={{ backgroundColor: "#1E2A4A" }} onClick={handleAssign}>
-              Appliquer ({selectedEmpIds.size} membres)
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
