@@ -163,7 +163,9 @@ export async function GET() {
     // Sort by date descending
     documents.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
-    return NextResponse.json({ documents })
+    console.log(`[documents GET] user=${user.id} role=${userProfile?.role} dossiers=${dossierIds.length} uploaders=${uploaderIds.length} docs=${documents.length}`)
+
+    return NextResponse.json({ documents, _debug: { dossierIds_count: dossierIds.length, uploaderIds_count: uploaderIds.length, total: documents.length } })
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur inconnue' }, { status: 500 })
   }
