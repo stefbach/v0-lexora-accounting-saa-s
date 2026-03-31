@@ -65,8 +65,20 @@ const BADGE_CLASSES: Record<string, string> = {
   none: "bg-gray-100 text-gray-600 border-gray-200",
 }
 
+// Mauritius timezone (UTC+4)
+const MU_TZ = "Indian/Mauritius"
+
+function nowMauritius(): Date {
+  return new Date(new Date().toLocaleString("en-US", { timeZone: MU_TZ }))
+}
+
 function todayISO(): string {
-  return new Date().toISOString().split("T")[0]
+  const d = nowMauritius()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+}
+
+function timeMauritius(): string {
+  return new Date().toLocaleTimeString("en-GB", { timeZone: MU_TZ, hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })
 }
 
 function frenchDate(d: Date): string {
@@ -108,10 +120,10 @@ export default function PointagePage() {
   const [selectedCalDay, setSelectedCalDay] = useState<string | null>(null)
 
   // ---------------------------------------------------------------------------
-  // Live clock
+  // Live clock — Mauritius time (UTC+4)
   // ---------------------------------------------------------------------------
   useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 1000)
+    const timer = setInterval(() => setNow(nowMauritius()), 1000)
     return () => clearInterval(timer)
   }, [])
 
@@ -206,13 +218,20 @@ export default function PointagePage() {
   // ---------------------------------------------------------------------------
   // Pointage action
   // ---------------------------------------------------------------------------
-  const doPointage = async (type: "entree" | "sortie") => {
-    if (!employeId || !societeId) return
+  const doPointage = async (type: "entree" | "sortie", overrideEmployeId?: string) => {
+    const eid = overrideEmployeId || employeId
+    if (!eid || !societeId) return
     setDoingPointage(true)
     setFeedbackMsg(null)
 
     try {
-      const body = { employe_id: employeId, type_pointage: type, societe_id: societeId }
+      const body = {
+        employe_id: eid,
+        type_pointage: type,
+        societe_id: societeId,
+        heure_forcee: timeMauritius(),
+        date_pointage: todayISO(),
+      }
       const res = await fetch("/api/rh/pointage", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -229,9 +248,9 @@ export default function PointagePage() {
         setFeedbackType("error")
         setFeedbackMsg(data.message || data.error || "Erreur lors du pointage")
       } else {
-        const emp = employes.find((e) => e.id === employeId)
+        const emp = employes.find((e) => e.id === eid)
         const name = emp ? `${emp.prenom} ${emp.nom}` : ""
-        const timeStr = now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+        const timeStr = timeMauritius().slice(0, 5)
 
         if (type === "entree") {
           setFeedbackType("success")
@@ -388,6 +407,7 @@ export default function PointagePage() {
             </span>
           </div>
           <p className="text-lg text-gray-300 capitalize">{frenchDate(now)}</p>
+          <p className="text-sm text-[#C9A84C] mt-1">Heure Maurice (UTC+4)</p>
         </div>
 
         <CardContent className="p-6 space-y-5">
@@ -605,10 +625,12 @@ export default function PointagePage() {
                 <TableBody>
                   {sortedPointages.map((p) => {
                     const s = statutLabel(p)
+                    const canIn = !p.heure_entree
+                    const canOut = !!p.heure_entree && !p.heure_sortie
                     return (
                       <TableRow
                         key={p.id}
-                        className={
+                        className={`${
                           s.variant === "present"
                             ? "bg-emerald-50/30"
                             : s.variant === "sorti"
@@ -616,16 +638,42 @@ export default function PointagePage() {
                             : s.variant === "absent"
                             ? "bg-red-50/30"
                             : ""
-                        }
+                        }`}
                       >
                         <TableCell className="font-medium">
                           {p.employe?.prenom} {p.employe?.nom}
                         </TableCell>
-                        <TableCell className="text-center font-mono text-emerald-700">
-                          {fmtHeure(p.heure_entree)}
+                        <TableCell className="text-center">
+                          {p.heure_entree ? (
+                            <span className="font-mono text-emerald-700">{fmtHeure(p.heure_entree)}</span>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={doingPointage}
+                              onClick={() => doPointage("entree", p.employe_id)}
+                              className="text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                            >
+                              <LogIn className="w-3 h-3 mr-1" /> Pointer
+                            </Button>
+                          )}
                         </TableCell>
-                        <TableCell className="text-center font-mono text-red-600">
-                          {fmtHeure(p.heure_sortie)}
+                        <TableCell className="text-center">
+                          {p.heure_sortie ? (
+                            <span className="font-mono text-red-600">{fmtHeure(p.heure_sortie)}</span>
+                          ) : canOut ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={doingPointage}
+                              onClick={() => doPointage("sortie", p.employe_id)}
+                              className="text-xs border-red-300 text-red-600 hover:bg-red-50"
+                            >
+                              <LogOut className="w-3 h-3 mr-1" /> Pointer
+                            </Button>
+                          ) : (
+                            <span className="font-mono text-red-300">--:--</span>
+                          )}
                         </TableCell>
                         <TableCell className="text-center font-mono">
                           {dureeFmt(p.duree_minutes)}
