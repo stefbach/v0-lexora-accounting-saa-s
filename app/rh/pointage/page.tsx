@@ -138,14 +138,15 @@ export default function PointagePage() {
   // Load societes on mount
   // ---------------------------------------------------------------------------
   useEffect(() => {
-    fetch("/api/comptable/societes")
-      .then((r) => r.json())
-      .then((d) => {
-        const list: Societe[] = d.societes || []
-        setSocietes(list)
-        if (list.length === 1) setSocieteId(list[0].id)
-      })
-      .catch(console.error)
+    Promise.all([
+      fetch("/api/comptable/societes").then(r => r.json()).catch(() => ({ societes: [] })),
+      fetch("/api/client/societes").then(r => r.json()).catch(() => ({ societes: [] })),
+    ]).then(([d1, d2]) => {
+      const all = [...(d1.societes || []), ...(d2.societes || [])]
+      const unique = Array.from(new Map(all.map((s: Societe) => [s.id, s])).values())
+      setSocietes(unique)
+      if (unique.length === 1) setSocieteId(unique[0].id)
+    })
   }, [])
 
   // ---------------------------------------------------------------------------
@@ -257,7 +258,7 @@ export default function PointagePage() {
           setFeedbackMsg(`Entree enregistree pour ${name} a ${timeStr}`)
         } else {
           const duree = data.pointage?.duree_minutes
-          const dureeStr = duree ? ` -- Duree: ${dureeFmt(duree)}` : ""
+          const dureeStr = duree ? ` — Duree: ${dureeFmt(duree)}` : ""
           const otStr = data.pointage?.heures_sup && data.pointage.heures_sup > 0
             ? ` (dont ${data.pointage.heures_sup.toFixed(1)}h sup.)`
             : ""
@@ -265,8 +266,27 @@ export default function PointagePage() {
           setFeedbackMsg(`Sortie enregistree pour ${name} a ${timeStr}${dureeStr}${otStr}`)
         }
 
-        // Refresh immediately
-        await loadPointages()
+        // Update local state immediately with the returned pointage
+        if (data.pointage) {
+          const p = data.pointage
+          setPointages(prev => {
+            const idx = prev.findIndex(x => x.employe_id === p.employe_id)
+            const emp = employes.find(e => e.id === p.employe_id)
+            const enriched = {
+              ...p,
+              employe: p.employe || (emp ? { nom: emp.nom, prenom: emp.prenom, poste: emp.poste } : undefined),
+            }
+            if (idx >= 0) {
+              const updated = [...prev]
+              updated[idx] = enriched
+              return updated
+            }
+            return [...prev, enriched]
+          })
+        }
+
+        // Also refresh from server
+        loadPointages()
         if (showCalendar) loadCalendar()
       }
     } catch (e) {
