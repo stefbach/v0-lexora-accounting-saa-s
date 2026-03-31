@@ -20,15 +20,21 @@ export default function ClientRapprochementPage() {
   const [autoMatching, setAutoMatching] = useState(false)
   const [linkDialog, setLinkDialog] = useState<any>(null)
   const [societeId, setSocieteId] = useState<string | null>(null)
+  const [societes, setSocietes] = useState<any[]>([])
   const [payeParAssocie, setPayeParAssocie] = useState(false)
   const [payeParType, setPayeParType] = useState("associe")
   const [payeParNom, setPayeParNom] = useState("")
 
-  // Get societe_id from client/societes
+  // Get sociétés
   useEffect(() => {
-    fetch("/api/client/societes").then(r => r.json()).then(d => {
-      const s = d.societes || []
-      if (s.length > 0) setSocieteId(s[0].id)
+    Promise.all([
+      fetch("/api/client/societes").then(r => r.json()).catch(() => ({ societes: [] })),
+      fetch("/api/comptable/societes").then(r => r.json()).catch(() => ({ societes: [] })),
+    ]).then(([d1, d2]) => {
+      const all = [...(d1.societes || []), ...(d2.societes || [])]
+      const unique = Array.from(new Map(all.map((s: any) => [s.id, s])).values())
+      setSocietes(unique)
+      if (unique.length > 0) setSocieteId(unique[0].id)
     })
   }, [])
 
@@ -145,7 +151,15 @@ export default function ClientRapprochementPage() {
           <h1 className="text-2xl font-bold text-[#1E2A4A]">Rapprochement bancaire</h1>
           <p className="text-sm text-gray-500">Rapprocher les transactions avec les factures et ecritures</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          {societes.length > 1 && (
+            <Select value={societeId || ""} onValueChange={v => setSocieteId(v)}>
+              <SelectTrigger className="w-[220px]"><SelectValue placeholder="Société" /></SelectTrigger>
+              <SelectContent>
+                {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
           <Button variant="outline" onClick={load}><RefreshCw className="w-4 h-4 mr-2" />Actualiser</Button>
           <Button onClick={handleAutoMatch} disabled={autoMatching} className="bg-[#1E2A4A]">
             <Zap className={`w-4 h-4 mr-2 ${autoMatching ? "animate-spin" : ""}`} />
