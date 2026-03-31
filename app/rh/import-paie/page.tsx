@@ -104,19 +104,23 @@ export default function ImportPaiePage() {
   }
 
   const handleImport = async () => {
-    if (!societe || !periode || employes.length === 0) return
+    if (!societe) { alert("Veuillez sélectionner une société"); return }
+    if (!periode) { alert("Veuillez sélectionner la période (mois)"); return }
+    if (employes.length === 0) { alert("Aucun employé à importer"); return }
     setImporting(true)
     try {
+      console.log(`[import] Importing ${employes.length} employees for ${societe} period ${periode}`)
       const res = await fetch("/api/rh/import-paie", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "import", societe_id: societe, periode, employes }),
       })
       const data = await res.json()
+      console.log("[import] Result:", data)
       if (data.error) { alert("Erreur: " + data.error); return }
       setResult(data)
       setStep("result")
       loadHistory()
-    } catch { alert("Erreur réseau") }
+    } catch (e: any) { alert("Erreur réseau: " + (e.message || "")) }
     finally { setImporting(false) }
   }
 
