@@ -24,52 +24,31 @@ export async function GET(
     const supabase = getAdminClient()
     const { id } = await params
 
-    // Fetch document with dossier join for access control
+    // Fetch document (no FK join — avoids schema cache issues)
     const { data: doc, error } = await supabase
       .from('documents')
-      .select(`
-        id,
-        nom_fichier,
-        type_fichier,
-        type_document,
-        statut,
-        storage_path,
-        created_at,
-        societe_detectee,
-        n8n_result,
-        confiance_type,
-        corrige_manuellement,
-        taille_fichier,
-        dossier_id,
-        uploaded_by,
-        dossiers!inner(
-          id,
-          client_id,
-          societe_id,
-          comptable_id,
-          societes(nom, brn)
-        )
-      `)
+      .select('*')
       .eq('id', id)
       .single()
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 404 })
-    if (!doc) return NextResponse.json({ error: 'Document non trouvé' }, { status: 404 })
+    if (error || !doc) return NextResponse.json({ error: 'Document non trouvé' }, { status: 404 })
 
-    // Access control: user must be owner, comptable, or admin
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single()
+    // Fetch dossier separately
+    let dossier: any = null
+    if (doc.dossier_id) {
+      const { data: d } = await supabase.from('dossiers').select('id, client_id, societe_id, comptable_id').eq('id', doc.dossier_id).maybeSingle()
+      dossier = d
+    }
 
-    const userRole = profile?.role
-    const dossier = doc.dossiers as any
+    // Access control: owner, admin roles, or same société
+    const { data: profile } = await supabase.from('profiles').select('role, societe_id').eq('id', user.id).single()
+    const userRole = profile?.role || ''
     const isOwner = doc.uploaded_by === user.id || dossier?.client_id === user.id
-    const isComptableOrAdmin = ['admin', 'comptable', 'comptable_dedie'].includes(userRole || '')
+    const isAdminRole = ['admin', 'super_admin', 'client_admin', 'comptable', 'comptable_dedie'].includes(userRole)
     const isAssignedComptable = dossier?.comptable_id === user.id
+    const sameSociete = dossier?.societe_id && profile?.societe_id === dossier.societe_id
 
-    if (!isOwner && !isComptableOrAdmin && !isAssignedComptable) {
+    if (!isOwner && !isAdminRole && !isAssignedComptable && !sameSociete) {
       return NextResponse.json({ error: 'Accès non autorisé' }, { status: 403 })
     }
 
