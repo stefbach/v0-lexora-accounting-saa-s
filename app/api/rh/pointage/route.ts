@@ -12,7 +12,6 @@ function getAdminClient() {
   )
 }
 
-// Helper: compute hours from entry/exit times
 function computeHours(heure_entree: string | null, heure_sortie: string | null, duree_minutes_existing: number | null) {
   let duree_minutes = duree_minutes_existing || null
   let heures_travaillees: number | null = null
@@ -34,7 +33,6 @@ function computeHours(heure_entree: string | null, heure_sortie: string | null, 
   return { duree_minutes, heures_travaillees, heures_sup }
 }
 
-// Helper: find employee IDs for a societe, or for the user's linked societes
 async function resolveEmployeeFilter(
   supabase: ReturnType<typeof getAdminClient>,
   userId: string,
@@ -45,24 +43,15 @@ async function resolveEmployeeFilter(
     return emps?.map(e => e.id) || []
   }
 
-  // No societe_id given: resolve from user profile
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role, societe_id')
-    .eq('id', userId)
-    .maybeSingle()
+  const { data: profile } = await supabase.from('profiles').select('role, societe_id').eq('id', userId).maybeSingle()
 
   if (profile?.societe_id) {
     const { data: emps } = await supabase.from('employes').select('id').eq('societe_id', profile.societe_id)
     return emps?.map(e => e.id) || []
   }
 
-  // Admin/super_admin: return null (no filter = all)
-  if (profile?.role && ['admin', 'super_admin'].includes(profile.role)) {
-    return null
-  }
+  if (profile?.role && ['admin', 'super_admin'].includes(profile.role)) return null
 
-  // Fallback: find societes via dossiers or ownership
   const { data: dossiers } = await supabase.from('dossiers').select('societe_id').eq('client_id', userId)
   const { data: owned } = await supabase.from('societes').select('id').eq('created_by', userId)
   const sIds = [...new Set([...(dossiers || []).map(d => d.societe_id), ...(owned || []).map(s => s.id)])].filter(Boolean)
@@ -75,12 +64,28 @@ async function resolveEmployeeFilter(
   return []
 }
 
-// Helper: find existing pointage for an employee on a date
-async function findExistingPointage(
-  supabase: ReturnType<typeof getAdminClient>,
-  employe_id: string,
-  date: string
-) {
+// Safe insert/update that retries without statut_jour if column doesn't exist
+async function safeInsertPointage(supabase: ReturnType<typeof getAdminClient>, record: Record<string, unknown>) {
+  const { data, error } = await supabase.from('pointages').insert(record).select().single()
+  if (error && error.message?.includes('statut_jour')) {
+    const { statut_jour, ...safe } = record
+    const retry = await supabase.from('pointages').insert(safe).select().single()
+    return retry
+  }
+  return { data, error }
+}
+
+async function safeUpdatePointage(supabase: ReturnType<typeof getAdminClient>, id: string, updates: Record<string, unknown>) {
+  const { data, error } = await supabase.from('pointages').update(updates).eq('id', id).select().single()
+  if (error && error.message?.includes('statut_jour')) {
+    const { statut_jour, ...safe } = updates
+    const retry = await supabase.from('pointages').update(safe).eq('id', id).select().single()
+    return retry
+  }
+  return { data, error }
+}
+
+async function findExistingPointage(supabase: ReturnType<typeof getAdminClient>, employe_id: string, date: string) {
   const { data } = await supabase
     .from('pointages')
     .select('*')
@@ -103,13 +108,11 @@ export async function GET(request: Request) {
     const societe_id = searchParams.get('societe_id')
     const employe_id = searchParams.get('employe_id')
     const mensuel = searchParams.get('mensuel') === '1'
-    const periode = searchParams.get('periode') // YYYY-MM
+    const periode = searchParams.get('periode')
 
-    // Resolve employee filter based on societe or user context
     const empIds = employe_id ? null : await resolveEmployeeFilter(supabase, user.id, societe_id)
 
     if (mensuel || periode) {
-      // Monthly view: return all pointages for the month
       const mois = periode || date.slice(0, 7)
       const [annee, moisNum] = mois.split('-').map(Number)
       const nbJours = new Date(annee, moisNum, 0).getDate()
@@ -128,29 +131,17 @@ export async function GET(request: Request) {
       else if (empIds && empIds.length === 0) return NextResponse.json({ pointages: [], mois })
 
       const { data, error } = await query
-      if (error) {
-        console.error('[pointage GET monthly]', error.message, error.details)
-        throw error
-      }
+      if (error) { console.error('[pointage GET monthly]', error.message); throw error }
 
       const enriched = (data || []).map(p => {
-        const { duree_minutes, heures_travaillees, heures_sup } = computeHours(
-          p.heure_entree, p.heure_sortie, p.duree_minutes
-        )
-        return {
-          ...p,
-          date: p.date_pointage,
-          duree_minutes,
-          heures_travaillees,
-          heures_sup,
-          absent_justifie: p.statut_jour === 'absent_justifie',
-        }
+        const { duree_minutes, heures_travaillees, heures_sup } = computeHours(p.heure_entree, p.heure_sortie, p.duree_minutes)
+        return { ...p, date: p.date_pointage, duree_minutes, heures_travaillees, heures_sup }
       })
 
       return NextResponse.json({ pointages: enriched, mois, nb: enriched.length })
     }
 
-    // Daily view (default)
+    // Daily view
     let query = supabase
       .from('pointages')
       .select('*, employe:employes(nom,prenom,poste)')
@@ -162,23 +153,11 @@ export async function GET(request: Request) {
     else if (empIds && empIds.length === 0) return NextResponse.json({ pointages: [], date })
 
     const { data, error } = await query
-    if (error) {
-      console.error('[pointage GET daily]', error.message, error.details)
-      throw error
-    }
+    if (error) { console.error('[pointage GET daily]', error.message); throw error }
 
-    // Enrich with computed fields
     const enriched = (data || []).map(p => {
-      const { duree_minutes, heures_travaillees, heures_sup } = computeHours(
-        p.heure_entree, p.heure_sortie, p.duree_minutes
-      )
-      return {
-        ...p,
-        duree_minutes,
-        heures_travaillees,
-        heures_sup,
-        absent_justifie: p.statut_jour === 'absent_justifie',
-      }
+      const { duree_minutes, heures_travaillees, heures_sup } = computeHours(p.heure_entree, p.heure_sortie, p.duree_minutes)
+      return { ...p, duree_minutes, heures_travaillees, heures_sup }
     })
 
     return NextResponse.json({ pointages: enriched, date })
@@ -196,143 +175,117 @@ export async function POST(request: Request) {
 
     const supabase = getAdminClient()
     const body = await request.json()
-    const {
-      employe_id,
-      type_pointage,
-      heure_forcee,
-      motif_absence,
-      date_pointage: bodyDate,
-    } = body
+    const { employe_id, type_pointage, heure_forcee, motif_absence, date_pointage: bodyDate } = body
 
     if (!employe_id || !type_pointage) {
       return NextResponse.json({ error: 'employe_id et type_pointage requis' }, { status: 400 })
     }
 
     const today = bodyDate || new Date().toISOString().split('T')[0]
-    const now = heure_forcee || new Date().toTimeString().split(' ')[0] // HH:MM:SS
+    const now = heure_forcee || new Date().toTimeString().split(' ')[0]
 
-    // Special case: justified absence
+    // Absence justifiée
     if (type_pointage === 'absence_justifiee') {
       const existing = await findExistingPointage(supabase, employe_id, today)
-
       if (existing) {
-        const { data, error } = await supabase
-          .from('pointages')
-          .update({
-            statut_jour: 'absent_justifie',
-            notes: motif_absence || existing.notes || null,
-          })
-          .eq('id', existing.id)
-          .select()
-          .single()
-        if (error) {
-          console.error('[pointage absence update]', error.message, error.details)
-          throw error
-        }
+        const { data, error } = await safeUpdatePointage(supabase, existing.id, {
+          statut_jour: 'absent_justifie',
+          notes: motif_absence || existing.notes || null,
+        })
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 })
         return NextResponse.json({ pointage: data, message: 'Absence justifiee enregistree' })
       } else {
-        const { data, error } = await supabase
-          .from('pointages')
-          .insert({
-            employe_id,
-            date_pointage: today,
-            statut_jour: 'absent_justifie',
-            notes: motif_absence || null,
-          })
-          .select()
-          .single()
-        if (error) {
-          console.error('[pointage absence insert]', error.message, error.details)
-          throw error
-        }
+        const { data, error } = await safeInsertPointage(supabase, {
+          employe_id,
+          date_pointage: today,
+          statut_jour: 'absent_justifie',
+          notes: motif_absence || null,
+        })
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 })
         return NextResponse.json({ pointage: data, message: 'Absence justifiee enregistree' })
       }
     }
 
     const existing = await findExistingPointage(supabase, employe_id, today)
 
-    let result
-
     if (type_pointage === 'entree') {
-      // Clock in: if already clocked in today, return error
       if (existing && existing.heure_entree) {
-        return NextResponse.json(
-          {
-            error: 'Deja pointe',
-            message: `Entree deja enregistree a ${String(existing.heure_entree).slice(0, 5)}`,
-            pointage: existing,
-          },
-          { status: 409 }
-        )
+        return NextResponse.json({
+          error: 'Deja pointe',
+          message: `Entree deja enregistree a ${String(existing.heure_entree).slice(0, 5)}`,
+          pointage: existing,
+        }, { status: 409 })
       }
 
-      let data, error
       if (existing) {
-        // Update existing record (e.g., absence record being corrected)
-        const res = await supabase.from('pointages')
-          .update({ heure_entree: now, statut_jour: 'travaille' })
-          .eq('id', existing.id).select().single()
-        data = res.data; error = res.error
+        const { data, error } = await safeUpdatePointage(supabase, existing.id, {
+          heure_entree: now, statut_jour: 'travaille',
+        })
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+        return NextResponse.json({ pointage: data })
       } else {
-        // Insert new record
-        const res = await supabase.from('pointages')
-          .insert({ employe_id, date_pointage: today, heure_entree: now, statut_jour: 'travaille' })
-          .select().single()
-        data = res.data; error = res.error
+        const { data, error } = await safeInsertPointage(supabase, {
+          employe_id, date_pointage: today, heure_entree: now, statut_jour: 'travaille',
+        })
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+        return NextResponse.json({ pointage: data })
       }
-      if (error) {
-        console.error('[pointage entree]', error.message, error.details)
-        return NextResponse.json({ error: error.message }, { status: 500 })
-      }
-      result = data
-    } else if (type_pointage === 'sortie') {
-      // Clock out: must have clocked in first
+    }
+
+    if (type_pointage === 'sortie') {
       if (!existing || !existing.heure_entree) {
-        return NextResponse.json(
-          { error: "Pas de pointage d'entree", message: "Veuillez d'abord pointer votre entree" },
-          { status: 400 }
-        )
+        return NextResponse.json({ error: "Pas de pointage d'entree" }, { status: 400 })
       }
-
-      // If already clocked out, return error
       if (existing.heure_sortie) {
-        return NextResponse.json(
-          {
-            error: 'Deja pointe',
-            message: `Sortie deja enregistree a ${String(existing.heure_sortie).slice(0, 5)}`,
-            pointage: existing,
-          },
-          { status: 409 }
-        )
+        return NextResponse.json({
+          error: 'Deja pointe',
+          message: `Sortie deja enregistree a ${String(existing.heure_sortie).slice(0, 5)}`,
+        }, { status: 409 })
       }
 
-      // Calculate duration in minutes
       const entreeMs = new Date(`1970-01-01T${existing.heure_entree}`).getTime()
       const sortieMs = new Date(`1970-01-01T${now}`).getTime()
       const duree_minutes = Math.round((sortieMs - entreeMs) / 60000)
+
+      const { data, error } = await safeUpdatePointage(supabase, existing.id, {
+        heure_sortie: now, duree_minutes,
+      })
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
       const heures_travaillees = parseFloat((duree_minutes / 60).toFixed(2))
       const heures_sup = heures_travaillees > 8 ? parseFloat((heures_travaillees - 8).toFixed(2)) : 0
-
-      // Update with sortie time and computed duration
-      const { data, error } = await supabase
-        .from('pointages')
-        .update({
-          heure_sortie: now,
-          duree_minutes,
-        })
-        .eq('id', existing.id)
-        .select()
-        .single()
-      if (error) {
-        console.error('[pointage sortie]', error.message, error.details)
-        return NextResponse.json({ error: error.message }, { status: 500 })
-      }
-      result = { ...data, duree_minutes, heures_travaillees, heures_sup }
-    } else {
-      return NextResponse.json({ error: 'type_pointage invalide. Utiliser "entree", "sortie" ou "absence_justifiee"' }, { status: 400 })
+      return NextResponse.json({ pointage: { ...data, duree_minutes, heures_travaillees, heures_sup } })
     }
 
-    return NextResponse.json({ pointage: result })
+    // Saisie manuelle (heure_entree + heure_sortie en une fois)
+    if (type_pointage === 'manuel') {
+      const { heure_entree, heure_sortie } = body
+      if (!heure_entree) return NextResponse.json({ error: 'heure_entree requise pour saisie manuelle' }, { status: 400 })
+
+      let duree_minutes: number | null = null
+      if (heure_entree && heure_sortie) {
+        const e = new Date(`1970-01-01T${heure_entree}`).getTime()
+        const s = new Date(`1970-01-01T${heure_sortie}`).getTime()
+        if (!isNaN(e) && !isNaN(s)) duree_minutes = Math.round((s - e) / 60000)
+      }
+
+      if (existing) {
+        const { data, error } = await safeUpdatePointage(supabase, existing.id, {
+          heure_entree, heure_sortie: heure_sortie || null, duree_minutes, statut_jour: 'travaille',
+        })
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+        return NextResponse.json({ pointage: data })
+      } else {
+        const { data, error } = await safeInsertPointage(supabase, {
+          employe_id, date_pointage: today, heure_entree, heure_sortie: heure_sortie || null,
+          duree_minutes, statut_jour: 'travaille',
+        })
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+        return NextResponse.json({ pointage: data })
+      }
+    }
+
+    return NextResponse.json({ error: 'type_pointage invalide. Utiliser: entree, sortie, absence_justifiee, manuel' }, { status: 400 })
   } catch (e: unknown) {
     console.error('[pointage POST]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
