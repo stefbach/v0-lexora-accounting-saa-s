@@ -23,20 +23,58 @@ export async function GET() {
     // Use admin client to bypass RLS
     const supabase = getAdminClient()
 
-    // Get dossiers for this user
+    // Get user profile to determine role and société access
+    const { data: userProfile } = await supabase
+      .from('profiles')
+      .select('role, societe_id, client_id')
+      .eq('id', user.id)
+      .single()
+
+    const isAdmin = ['admin', 'super_admin', 'client_admin', 'comptable', 'comptable_dedie'].includes(userProfile?.role || '')
+
+    // Collect ALL dossier IDs the user has access to
+    let dossierIds: string[] = []
+
+    // 1. Dossiers where user is client_id
     const { data: myDossiers } = await supabase
       .from('dossiers').select('id, societe_id').eq('client_id', user.id)
+    dossierIds = (myDossiers || []).map(d => d.id)
 
-    // Also get dossiers from the same sociétés (shared with client_admin)
-    let dossierIds: string[] = (myDossiers || []).map(d => d.id)
+    // 2. For admin: also get dossiers from same sociétés
+    if (isAdmin) {
+      // Get all sociétés accessible by this user
+      const societeIds = new Set<string>()
 
-    if (myDossiers && myDossiers.length > 0) {
-      const societeIds = [...new Set(myDossiers.map(d => d.societe_id))]
-      const { data: sharedDossiers } = await supabase
-        .from('dossiers').select('id').in('societe_id', societeIds)
-      if (sharedDossiers) {
-        const sharedIds = sharedDossiers.map(d => d.id)
-        dossierIds = [...new Set([...dossierIds, ...sharedIds])]
+      // From own dossiers
+      for (const d of myDossiers || []) if (d.societe_id) societeIds.add(d.societe_id)
+
+      // From profile.societe_id
+      if (userProfile?.societe_id) societeIds.add(userProfile.societe_id)
+
+      // From user_societes
+      const { data: userSocietes } = await supabase
+        .from('user_societes').select('societe_id').eq('user_id', user.id)
+      for (const us of userSocietes || []) if (us.societe_id) societeIds.add(us.societe_id)
+
+      // From created_by (sociétés créées par ce user)
+      const { data: ownedSocietes } = await supabase
+        .from('societes').select('id').eq('created_by', user.id)
+      for (const s of ownedSocietes || []) societeIds.add(s.id)
+
+      // From client_id (toutes les sociétés du même client)
+      if (userProfile?.client_id) {
+        const { data: clientSocietes } = await supabase
+          .from('societes').select('id').eq('client_id', userProfile.client_id)
+        for (const s of clientSocietes || []) societeIds.add(s.id)
+      }
+
+      // Get ALL dossiers for these sociétés
+      if (societeIds.size > 0) {
+        const { data: allDossiers } = await supabase
+          .from('dossiers').select('id').in('societe_id', [...societeIds])
+        if (allDossiers) {
+          dossierIds = [...new Set([...dossierIds, ...allDossiers.map(d => d.id)])]
+        }
       }
     }
 
@@ -44,16 +82,9 @@ export async function GET() {
       return NextResponse.json({ documents: [] })
     }
 
-    // Check user role from profiles table
-    const { data: userProfile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
     // Get all documents in those dossiers
     // client_user: only sees documents they uploaded themselves
-    // client_admin: sees all documents from all dossiers of the same société
+    // client_admin/admin/comptable: sees all documents from all dossiers
     let documentsQuery = supabase
       .from('documents')
       .select('id, nom_fichier, type_fichier, type_document, statut, storage_path, created_at, societe_detectee, n8n_result')
