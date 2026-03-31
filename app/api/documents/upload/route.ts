@@ -64,20 +64,37 @@ export async function POST(request: NextRequest) {
       await supabase.from('documents').delete().eq('id', existingDoc.id)
     }
 
-    // Resolve dossier_id
+    // Resolve dossier_id — IMPORTANT: use the société's dossier, not the user's personal dossier
     let resolvedDossierId = dossierId
     if (!resolvedDossierId) {
-      // 1. Si societe_id fourni, chercher un dossier pour cette société (peu importe le client)
+      // 1. Si societe_id fourni, chercher un dossier pour cette société
       if (societeId) {
         const { data: d } = await supabase.from('dossiers').select('id').eq('societe_id', societeId).limit(1).maybeSingle()
         if (d) { resolvedDossierId = d.id }
       }
-      // 2. Sinon chercher un dossier du user (en tant que client)
+      // 2. Trouver la société du user (via profile.societe_id ou user_societes)
+      if (!resolvedDossierId) {
+        const { data: profile } = await supabase.from('profiles').select('societe_id').eq('id', user.id).maybeSingle()
+        if (profile?.societe_id) {
+          // Chercher un dossier existant pour CETTE société (peu importe le client_id)
+          const { data: d } = await supabase.from('dossiers').select('id').eq('societe_id', profile.societe_id).limit(1).maybeSingle()
+          if (d) { resolvedDossierId = d.id }
+        }
+      }
+      // 3. Via user_societes
+      if (!resolvedDossierId) {
+        const { data: us } = await supabase.from('user_societes').select('societe_id').eq('user_id', user.id).limit(1).maybeSingle()
+        if (us?.societe_id) {
+          const { data: d } = await supabase.from('dossiers').select('id').eq('societe_id', us.societe_id).limit(1).maybeSingle()
+          if (d) { resolvedDossierId = d.id }
+        }
+      }
+      // 4. Chercher un dossier du user (en tant que client)
       if (!resolvedDossierId) {
         const { data: d } = await supabase.from('dossiers').select('id').eq('client_id', user.id).limit(1).maybeSingle()
         if (d) { resolvedDossierId = d.id }
       }
-      // 3. Si le user est comptable, chercher un dossier où il est assigné
+      // 5. Si le user est comptable
       if (!resolvedDossierId) {
         const { data: d } = await supabase.from('dossiers').select('id').eq('comptable_id', user.id).limit(1).maybeSingle()
         if (d) { resolvedDossierId = d.id }
