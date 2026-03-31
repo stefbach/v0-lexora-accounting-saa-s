@@ -50,7 +50,7 @@ async function resolveEmployeeFilter(
     return emps?.map(e => e.id) || []
   }
 
-  if (profile?.role && ['admin', 'super_admin'].includes(profile.role)) return null
+  if (profile?.role && ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'manager', 'direction'].includes(profile.role)) return null
 
   const { data: dossiers } = await supabase.from('dossiers').select('societe_id').eq('client_id', userId)
   const { data: owned } = await supabase.from('societes').select('id').eq('created_by', userId)
@@ -141,7 +141,7 @@ export async function GET(request: Request) {
 
       let query = supabase
         .from('pointages')
-        .select('*, employe:employes(nom,prenom,poste)')
+        .select('*')
         .gte('date_pointage', dateDebut)
         .lte('date_pointage', dateFin)
         .order('date_pointage', { ascending: true })
@@ -153,9 +153,17 @@ export async function GET(request: Request) {
       const { data, error } = await query
       if (error) { console.error('[pointage GET monthly]', error.message); throw error }
 
+      // Enrich with employee names (separate query — avoids FK schema cache issues)
+      const uniqueEmpIds = [...new Set((data || []).map(p => p.employe_id))]
+      let empMap: Record<string, { nom: string; prenom: string; poste?: string }> = {}
+      if (uniqueEmpIds.length > 0) {
+        const { data: emps } = await supabase.from('employes').select('id, nom, prenom, poste').in('id', uniqueEmpIds)
+        for (const e of emps || []) empMap[e.id] = { nom: e.nom, prenom: e.prenom, poste: e.poste }
+      }
+
       const enriched = (data || []).map(p => {
         const { duree_minutes, heures_travaillees, heures_sup } = computeHours(p.heure_entree, p.heure_sortie, p.duree_minutes)
-        return { ...p, date: p.date_pointage, duree_minutes, heures_travaillees, heures_sup }
+        return { ...p, date: p.date_pointage, duree_minutes, heures_travaillees, heures_sup, employe: empMap[p.employe_id] || null }
       })
 
       return NextResponse.json({ pointages: enriched, mois, nb: enriched.length })
@@ -164,7 +172,7 @@ export async function GET(request: Request) {
     // Daily view
     let query = supabase
       .from('pointages')
-      .select('*, employe:employes(nom,prenom,poste)')
+      .select('*')
       .eq('date_pointage', date)
       .order('created_at', { ascending: true })
 
@@ -175,9 +183,17 @@ export async function GET(request: Request) {
     const { data, error } = await query
     if (error) { console.error('[pointage GET daily]', error.message); throw error }
 
+    // Enrich with employee names (separate query)
+    const uniqueEmpIds = [...new Set((data || []).map(p => p.employe_id))]
+    let empMap: Record<string, { nom: string; prenom: string; poste?: string }> = {}
+    if (uniqueEmpIds.length > 0) {
+      const { data: emps } = await supabase.from('employes').select('id, nom, prenom, poste').in('id', uniqueEmpIds)
+      for (const e of emps || []) empMap[e.id] = { nom: e.nom, prenom: e.prenom, poste: e.poste }
+    }
+
     const enriched = (data || []).map(p => {
       const { duree_minutes, heures_travaillees, heures_sup } = computeHours(p.heure_entree, p.heure_sortie, p.duree_minutes)
-      return { ...p, duree_minutes, heures_travaillees, heures_sup }
+      return { ...p, duree_minutes, heures_travaillees, heures_sup, employe: empMap[p.employe_id] || null }
     })
 
     return NextResponse.json({ pointages: enriched, date })

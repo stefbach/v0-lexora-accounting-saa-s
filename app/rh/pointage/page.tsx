@@ -145,7 +145,7 @@ export default function PointagePage() {
       const all = [...(d1.societes || []), ...(d2.societes || [])]
       const unique = Array.from(new Map(all.map((s: Societe) => [s.id, s])).values())
       setSocietes(unique)
-      if (unique.length === 1) setSocieteId(unique[0].id)
+      if (unique.length >= 1) setSocieteId(unique[0].id)
     })
   }, [])
 
