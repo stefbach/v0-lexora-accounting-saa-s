@@ -41,7 +41,24 @@ export default function RHDashboard() {
   const [societe, setSociete] = useState("all")
   const [stats, setStats] = useState({ nb_employes: 0, masse_salariale: 0, charges_patronales: 0, conges_attente: 0, absences_today: 0, primes_mois: 0 })
   const [loading, setLoading] = useState(true)
+  const [userRole, setUserRole] = useState("")
   const periode = new Date().toISOString().slice(0, 7)
+
+  // Check if manager → redirect to manager dashboard
+  useEffect(() => {
+    import("@/lib/supabase/client").then(({ createClient }) => {
+      const supabase = createClient()
+      supabase.auth.getUser().then(({ data: { user } }) => {
+        if (!user) return
+        supabase.from("profiles").select("role").eq("id", user.id).single().then(({ data }) => {
+          if (data?.role === "manager") {
+            window.location.href = "/rh/manager"
+          }
+          setUserRole(data?.role || "")
+        })
+      })
+    })
+  }, [])
 
   useEffect(() => {
     fetch("/api/comptable/societes").then(r => r.json()).then(d => setSocietes(d.societes || []))
