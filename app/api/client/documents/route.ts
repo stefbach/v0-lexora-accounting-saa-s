@@ -76,6 +76,35 @@ export async function GET() {
           dossierIds = [...new Set([...dossierIds, ...allDossiers.map(d => d.id)])]
         }
       }
+
+      // ALSO get dossiers of other users assigned to the same sociétés
+      // (handles case where assistant has their own dossier not linked to admin's societe)
+      if (societeIds.size > 0) {
+        // Find users assigned to same sociétés
+        const { data: sameUsers } = await supabase
+          .from('user_societes').select('user_id').in('societe_id', [...societeIds])
+        const otherUserIds = [...new Set((sameUsers || []).map(u => u.user_id).filter(uid => uid !== user.id))]
+
+        if (otherUserIds.length > 0) {
+          const { data: otherDossiers } = await supabase
+            .from('dossiers').select('id').in('client_id', otherUserIds)
+          if (otherDossiers) {
+            dossierIds = [...new Set([...dossierIds, ...otherDossiers.map(d => d.id)])]
+          }
+        }
+      }
+
+      // ALSO: find ALL dossiers created by users who have profiles.societe_id matching our sociétés
+      const { data: sameProfileUsers } = await supabase
+        .from('profiles').select('id').in('societe_id', [...societeIds])
+      const profileUserIds = (sameProfileUsers || []).map(u => u.id).filter(uid => uid !== user.id)
+      if (profileUserIds.length > 0) {
+        const { data: profileDossiers } = await supabase
+          .from('dossiers').select('id').in('client_id', profileUserIds)
+        if (profileDossiers) {
+          dossierIds = [...new Set([...dossierIds, ...profileDossiers.map(d => d.id)])]
+        }
+      }
     }
 
     if (dossierIds.length === 0) {
