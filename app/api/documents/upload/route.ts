@@ -149,20 +149,22 @@ export async function POST(request: NextRequest) {
         { type: 'text', text: 'Analyse ce document comptable.' },
       ]
     } else if (isExcel) {
-      // Extraire le contenu texte du fichier Excel pour l'envoyer à Claude
+      // Extraire le contenu COMPLET du fichier Excel
       let xlsxText = ''
       try {
         const XLSX = await import('xlsx')
         const wb = XLSX.read(fileArrayBuffer, { type: 'array', cellText: true, cellDates: true })
-        for (const sheetName of wb.SheetNames.slice(0, 3)) {
+        for (const sheetName of wb.SheetNames.slice(0, 5)) {
           const ws = wb.Sheets[sheetName]
           const csv = XLSX.utils.sheet_to_csv(ws, { blankrows: false })
-          xlsxText += `\n=== Feuille: ${sheetName} ===\n${csv.substring(0, 3000)}\n`
+          xlsxText += `\n=== Feuille: ${sheetName} ===\n${csv}\n`
         }
+        // Limit to 30K chars (enough for payroll reports with 50+ employees)
+        if (xlsxText.length > 30000) xlsxText = xlsxText.substring(0, 30000)
       } catch {
-        xlsxText = Buffer.from(fileArrayBuffer).toString('utf-8', 0, 5000)
+        xlsxText = Buffer.from(fileArrayBuffer).toString('utf-8', 0, 10000)
       }
-      messageContent = `Analyse ce document Excel comptable et extrais toutes les informations (facture, montants, TVA, dates, fournisseur, client, numéro de facture):\n\n${xlsxText}`
+      messageContent = `Analyse ce document Excel comptable. Si c'est un Payroll Report / tableau de paie avec PLUSIEURS employés, extrais CHAQUE LIGNE employé.\n\nContenu:\n${xlsxText}`
     } else {
       messageContent = 'Analyse ce document:\n' + Buffer.from(fileArrayBuffer).toString('utf-8').substring(0, 5000)
     }
@@ -357,6 +359,8 @@ TAUX EUR: {{TAUX_EUR}}, GBP: {{TAUX_GBP}}, USD: {{TAUX_USD}}.
 --- FICHE DE PAIE ---
 Format: {"routing":{"societe":"<employeur>","type_document":"fiche_paie","confiance_type":0-100},"extraction":{"employe":"<NOM COMPLET>","employeur":"","date_document":"YYYY-MM-DD","periode":"YYYY-MM","poste":"","fonction":"","nic":"","npf":"","date_embauche":"YYYY-MM-DD","salaire_base":0,"salaire_brut":0,"salaire_net":0,"transport_allowance":0,"heures_sup_montant":0,"csg_salarie":0,"csg_patronal":0,"npf_salarie_3pct":0,"npf_patronal_6pct":0,"hrdc_1pct":0,"training_levy":0,"paye":0,"nps_salarie":0,"nps_employeur":0,"nsf_salarie":0,"nsf_patronal":0,"cotisations_salariales":0,"cotisations_patronales":0,"compte_bancaire_employe":"","banque_employe":"","ecritures_comptables":[{"compte":"641|421|431|444|432|645","libelle":"","debit":0,"credit":0}]}}
 IMPORTANT FICHE PAIE: Extraire NOM COMPLET employe, NIC, NPF, date embauche, poste, banque — alimente automatiquement le module RH.
+Si le document est un TABLEAU DE PAIE (Payroll Report) avec PLUSIEURS employes, retourner type_document="payroll_report" avec:
+Format: {"routing":{"societe":"<employeur>","type_document":"payroll_report","confiance_type":0-100},"extraction":{"employeur":"","periode":"YYYY-MM","employes":[{"code":"","nom":"","prenom":"","poste":"","departement":"","date_arrivee":"","date_depart":"","salaire_base":0,"overtime_1_5x":0,"overtime_2x":0,"special_allowance":0,"internet_allowance":0,"prime_production":0,"on_call_allowance":0,"prime_tl":0,"electricity_allowance":0,"meal_allowance":0,"total_payments":0,"absence_deductions":0,"csg":0,"nsf":0,"paye":0,"total_deductions":0,"er_csg":0,"er_nsf":0,"er_levy":0,"er_prgf":0,"total_er_contributions":0,"net_pay":0}],"totaux":{"total_basic":0,"total_payments":0,"total_deductions":0,"total_er_contributions":0,"total_net_pay":0}}}
 Ecritures: 641 Remunerations (debit brut), 645 Charges patronales (debit CSG patron+TL+NSF patron), 421 Net a payer (credit), 444 PAYE (credit), 431 CSG (credit), 432 Training Levy (credit).
 
 --- CHARGES SOCIALES ---
@@ -499,7 +503,98 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
       if (entries.length > 0) await supabase.from('ecritures_comptables').insert(entries)
     }
 
-    // ──── AUTO-FEED RH MODULE from scanned payslips & social charges ────
+    // ──── AUTO-FEED RH from PAYROLL REPORT (Excel multi-employés) ────
+    if (typeDocument === 'payroll_report' && finalDossierId) {
+      const { data: dossierPR } = await supabase.from('dossiers').select('societe_id').eq('id', finalDossierId).maybeSingle()
+      const prSocieteId = societeId || dossierPR?.societe_id
+      const empList = extraction.employes || []
+      const periodeStr = extraction.periode || new Date().toISOString().slice(0, 7)
+      let created = 0, updated = 0
+
+      if (prSocieteId && empList.length > 0) {
+        console.log(`[upload] Payroll Report: ${empList.length} employés, période ${periodeStr}, société ${prSocieteId}`)
+
+        for (const emp of empList) {
+          const nom = (emp.nom || emp.last_name || '').toUpperCase().trim()
+          const prenom = (emp.prenom || emp.first_name || '').trim()
+          if (!nom) continue
+
+          // Find or create employee
+          let employeId: string | null = null
+          const { data: existingEmp } = await supabase.from('employes')
+            .select('id, salaire_base')
+            .eq('societe_id', prSocieteId)
+            .ilike('nom', `%${nom}%`)
+            .limit(1).maybeSingle()
+
+          if (existingEmp) {
+            employeId = existingEmp.id
+            // Update salary if changed
+            const newBase = Number(emp.salaire_base || emp.basic_salary) || 0
+            if (newBase > 0 && newBase !== Number(existingEmp.salaire_base)) {
+              await supabase.from('employes').update({ salaire_base: newBase }).eq('id', existingEmp.id)
+            }
+            updated++
+          } else {
+            const { data: newEmp } = await supabase.from('employes').insert({
+              societe_id: prSocieteId,
+              nom, prenom,
+              code_employe: emp.code || null,
+              poste: emp.poste || emp.job || null,
+              departement: emp.departement || emp.department || null,
+              salaire_base: Number(emp.salaire_base || emp.basic_salary) || 0,
+              date_arrivee: emp.date_arrivee || emp.arr_date || null,
+              date_depart: emp.date_depart || emp.dep_date || null,
+            }).select('id').single()
+            if (newEmp) { employeId = newEmp.id; created++ }
+          }
+
+          // Create bulletin de paie
+          if (employeId) {
+            const periodeDate = `${periodeStr}-01`
+            const bulletinData: Record<string, unknown> = {
+              employe_id: employeId,
+              societe_id: prSocieteId,
+              periode: periodeDate,
+              salaire_base: Number(emp.salaire_base || emp.basic_salary) || 0,
+              heures_sup_montant: (Number(emp.overtime_1_5x) || 0) + (Number(emp.overtime_2x) || 0),
+              transport_allowance: 0,
+              special_allowance_1: Number(emp.special_allowance) || 0,
+              special_allowance_2: Number(emp.internet_allowance) || 0,
+              special_allowance_3: Number(emp.meal_allowance) || 0,
+              salaire_net: Number(emp.net_pay) || 0,
+              csg_salarie: Number(emp.csg) || 0,
+              csg_patronal: Number(emp.er_csg) || 0,
+              nsf_salarie: Number(emp.nsf) || 0,
+              nsf_patronal: Number(emp.er_nsf) || 0,
+              paye: Number(emp.paye) || 0,
+              training_levy: Number(emp.er_levy) || 0,
+              prgf: Number(emp.er_prgf) || 0,
+              total_deductions: Number(emp.total_deductions) || 0,
+              total_charges_patronales: Number(emp.total_er_contributions) || 0,
+              statut: 'valide',
+              source: 'ocr_payroll_report',
+              document_id: doc.id,
+            }
+            await supabase.from('bulletins_paie').upsert(bulletinData, { onConflict: 'employe_id,periode' }).catch(() => {
+              supabase.from('bulletins_paie').insert(bulletinData).catch(() => {})
+            })
+          }
+        }
+
+        console.log(`[upload] Payroll Report processed: ${created} created, ${updated} updated, ${empList.length} total`)
+
+        // Update document metadata
+        await supabase.from('documents').update({
+          n8n_result: {
+            ...updateData.n8n_result,
+            rh_import: { employes_crees: created, employes_maj: updated, total: empList.length, periode: periodeStr },
+          }
+        }).eq('id', doc.id)
+      }
+    }
+
+    // ──── AUTO-FEED RH MODULE from scanned payslips (individual) ────
     if (typeDocument === 'fiche_paie' && finalDossierId) {
       const { data: dossierRH } = await supabase.from('dossiers').select('societe_id').eq('id', finalDossierId).maybeSingle()
       const rhSocieteId = societeId || dossierRH?.societe_id
