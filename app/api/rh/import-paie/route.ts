@@ -261,23 +261,46 @@ export async function POST(request: Request) {
           if (ex) { employeId = ex.id; if (emp.salaire_base > 0 && emp.salaire_base !== Number(ex.salaire_base)) await supabase.from('employes').update({ salaire_base: emp.salaire_base }).eq('id', ex.id); updated++ }
           else { const { data: n } = await supabase.from('employes').insert({ societe_id, nom, prenom: emp.prenom || '', code_employe: emp.code || null, poste: emp.poste || null, departement: emp.departement || null, salaire_base: emp.salaire_base || 0, date_arrivee: emp.date_arrivee || null }).select('id').single(); if (n) { employeId = n.id; created++ } }
           if (!employeId) continue
-          await supabase.from('bulletins_paie').upsert({ employe_id: employeId, societe_id, periode: periodeDate, salaire_base: emp.salaire_base || 0, heures_sup_montant: (emp.overtime_1_5x || 0) + (emp.overtime_2x || 0), special_allowance_1: emp.special_allowance || 0, salaire_net: emp.net_pay || 0, csg_salarie: emp.csg || 0, csg_patronal: emp.er_csg || 0, nsf_salarie: emp.nsf || 0, nsf_patronal: emp.er_nsf || 0, paye: emp.paye || 0, training_levy: emp.er_levy || 0, prgf: emp.er_prgf || 0, total_deductions: emp.total_deductions || 0, total_charges_patronales: emp.total_er || 0, statut: 'valide', source: 'import_excel' }, { onConflict: 'employe_id,periode' }).catch(() => {})
+          const { error: bulErr } = await supabase.from('bulletins_paie').upsert({ employe_id: employeId, societe_id, periode: periodeDate, salaire_base: emp.salaire_base || 0, heures_sup_montant: (emp.overtime_1_5x || 0) + (emp.overtime_2x || 0), special_allowance_1: emp.special_allowance || 0, salaire_net: emp.net_pay || 0, csg_salarie: emp.csg || 0, csg_patronal: emp.er_csg || 0, nsf_salarie: emp.nsf || 0, nsf_patronal: emp.er_nsf || 0, paye: emp.paye || 0, training_levy: emp.er_levy || 0, prgf: emp.er_prgf || 0, total_deductions: emp.total_deductions || 0, total_charges_patronales: emp.total_er || 0, statut: 'valide', source: 'import_excel' }, { onConflict: 'employe_id,periode' })
+          if (bulErr) {
+            console.warn(`[import-paie] bulletin upsert failed for ${nom}, trying insert:`, bulErr.message)
+            // Fallback: try simple insert without upsert
+            const { error: insErr } = await supabase.from('bulletins_paie').insert({ employe_id: employeId, societe_id, periode: periodeDate, salaire_base: emp.salaire_base || 0, salaire_net: emp.net_pay || 0, csg_salarie: emp.csg || 0, paye: emp.paye || 0, statut: 'valide', source: 'import_excel' })
+            if (insErr) {
+              console.error(`[import-paie] bulletin insert also failed:`, insErr.message)
+              errors.push(`${nom}: bulletin - ${insErr.message}`)
+            }
+          }
         } catch (e: any) { errors.push(`${emp.nom}: ${e.message}`) }
       }
 
+      // Écritures comptables
+      let comptaOk = false
       if (dossier) {
         const t = employes.reduce((s: any, e: any) => ({ brut: s.brut + (e.total_payments || e.salaire_base || 0), net: s.net + (e.net_pay || 0), csg: s.csg + (e.csg || 0) + (e.er_csg || 0), paye: s.paye + (e.paye || 0), levy: s.levy + (e.er_levy || 0), charges: s.charges + (e.total_er || 0) }), { brut: 0, net: 0, csg: 0, paye: 0, levy: 0, charges: 0 })
-        await supabase.from('ecritures_comptables').insert([
+        console.log(`[import-paie] Compta totals: brut=${t.brut}, net=${t.net}, csg=${t.csg}, paye=${t.paye}, charges=${t.charges}`)
+        const entries = [
           { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '641', libelle: `Rémunérations ${periode}`, debit: Math.round(t.brut), credit: 0 },
           { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '645', libelle: `Charges patronales ${periode}`, debit: Math.round(t.charges), credit: 0 },
           { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '421', libelle: `Net à payer ${periode}`, debit: 0, credit: Math.round(t.net) },
           { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '431', libelle: `CSG ${periode}`, debit: 0, credit: Math.round(t.csg) },
           { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '444', libelle: `PAYE ${periode}`, debit: 0, credit: Math.round(t.paye) },
           { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '432', libelle: `Training Levy ${periode}`, debit: 0, credit: Math.round(t.levy) },
-        ].filter(e => e.debit > 0 || e.credit > 0)).catch(() => {})
+        ].filter(e => e.debit > 0 || e.credit > 0)
+        const { error: comptaErr } = await supabase.from('ecritures_comptables').insert(entries)
+        if (comptaErr) {
+          console.error('[import-paie] compta insert failed:', comptaErr.message)
+          errors.push(`Compta: ${comptaErr.message}`)
+        } else {
+          comptaOk = true
+          console.log(`[import-paie] ${entries.length} écritures comptables créées (journal SAL)`)
+        }
+      } else {
+        console.warn('[import-paie] No dossier found for societe — compta skipped')
+        errors.push('Aucun dossier trouvé pour cette société — écritures comptables non créées')
       }
 
-      return NextResponse.json({ created, updated, errors, total: employes.length })
+      return NextResponse.json({ created, updated, errors, total: employes.length, compta: comptaOk, dossier_found: !!dossier })
     }
 
     return NextResponse.json({ error: 'Action inconnue' }, { status: 400 })
