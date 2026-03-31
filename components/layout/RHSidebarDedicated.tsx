@@ -22,15 +22,15 @@ interface NavLink {
 
 const ALL_LINKS: NavLink[] = [
   { href: '/rh', label: 'Tableau de bord', labelKey: 'nav.dashboard', icon: Clock, exact: true },
-  { href: '/rh/employes', label: 'Employés', labelKey: 'hr.employees', icon: Users },
-  { href: '/rh/groupes', label: 'Groupes / Équipes', icon: Users },
+  { href: '/rh/employes', label: 'Employés', labelKey: 'hr.employees', icon: Users, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
+  { href: '/rh/groupes', label: 'Groupes / Équipes', icon: Users, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
   { href: '/rh/planning', label: 'Planning', icon: CalendarDays },
   { href: '/rh/pointage', label: 'Pointage', labelKey: 'hr.time_clock', icon: Clock },
   { href: '/rh/conges', label: 'Absences & Congés', labelKey: 'rh.absences_leave', icon: Calendar },
   { href: '/rh/conges/parametres', label: 'Règles congés', icon: Settings, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
   { href: '/rh/paie', label: 'Paie & Bulletins', labelKey: 'hr.payslips', icon: CreditCard, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'comptable', 'comptable_dedie'] },
   { href: '/rh/paie/validation', label: 'Contrôle pré-paie', icon: CheckCircle, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
-  { href: '/rh/paie/primes', label: 'Primes & OT', labelKey: 'rh.bonuses_ot', icon: TrendingUp, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'comptable', 'comptable_dedie'] },
+  { href: '/rh/paie/primes', label: 'Primes & OT', labelKey: 'rh.bonuses_ot', icon: TrendingUp },
   { href: '/rh/frais-km', label: 'Frais kilométriques', icon: Car },
   { href: '/rh/paie/exports-mra', label: 'Exports MRA', labelKey: 'rh.exports_mra', icon: FileText, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'comptable', 'comptable_dedie'] },
   { href: '/rh/exports/paie', label: 'Export Paie & Virements', icon: Banknote, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'comptable', 'comptable_dedie'] },
