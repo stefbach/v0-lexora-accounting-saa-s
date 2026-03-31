@@ -136,6 +136,8 @@ export async function POST(request: NextRequest) {
     const isPdf = ext === 'pdf'
     const isExcel = ext === 'xlsx' || ext === 'xls'
 
+    let typeDocument = ''
+    let extraction: any = {}
     let messageContent: any
     if (isImage) {
       const mt = ext === 'png' ? 'image/png' : 'image/jpeg'
@@ -149,29 +151,138 @@ export async function POST(request: NextRequest) {
         { type: 'text', text: 'Analyse ce document comptable.' },
       ]
     } else if (isExcel) {
-      // Extraire le contenu COMPLET du fichier Excel
+      // Extraire le contenu du fichier Excel
       let xlsxText = ''
+      let xlsxRows: any[][] = []
+      let xlsxHeaders: string[] = []
+      let isPayrollDetected = false
+
       try {
         const XLSX = await import('xlsx')
         const wb = XLSX.read(fileArrayBuffer, { type: 'array', cellText: true, cellDates: true })
-        for (const sheetName of wb.SheetNames.slice(0, 5)) {
-          const ws = wb.Sheets[sheetName]
-          const csv = XLSX.utils.sheet_to_csv(ws, { blankrows: false })
-          xlsxText += `\n=== Feuille: ${sheetName} ===\n${csv}\n`
-        }
-        // Limit to 30K chars (enough for payroll reports with 50+ employees)
-        if (xlsxText.length > 30000) xlsxText = xlsxText.substring(0, 30000)
-      } catch {
-        xlsxText = Buffer.from(fileArrayBuffer).toString('utf-8', 0, 10000)
-      }
-      messageContent = `Analyse ce document Excel comptable. Si c'est un Payroll Report / tableau de paie avec PLUSIEURS employés, retourne type_document="payroll_report". Si c'est une fiche de paie individuelle, retourne "fiche_paie".\n\nContenu:\n${xlsxText}`
+        const ws = wb.Sheets[wb.SheetNames[0]]
+        const csv = XLSX.utils.sheet_to_csv(ws, { blankrows: false })
+        xlsxText = csv
 
-      // Pre-detect payroll report from Excel content
-      const xlsxLower = xlsxText.toLowerCase()
-      if (xlsxLower.includes('payroll') || xlsxLower.includes('salary') || xlsxLower.includes('net pay') ||
-          xlsxLower.includes('basic salary') || xlsxLower.includes('salaire') || xlsxLower.includes('csg') ||
-          xlsxLower.includes('paye') || xlsxLower.includes('nsf') || xlsxLower.includes('bulletin')) {
-        console.log('[upload] Excel pre-detected as payroll/salary document')
+        // Parse rows for direct processing
+        const jsonData = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as any[][]
+        xlsxRows = jsonData
+
+        // Detect payroll report by headers
+        const headerRow = jsonData.slice(0, 5).find(row =>
+          row.some((c: any) => String(c).toLowerCase().match(/salary|salaire|net pay|basic|csg|paye|nsf|payroll/))
+        )
+        if (headerRow) {
+          xlsxHeaders = headerRow.map((c: any) => String(c).trim())
+          isPayrollDetected = true
+          console.log(`[upload] Excel payroll detected locally. Headers: ${xlsxHeaders.slice(0, 10).join(', ')}`)
+        }
+
+        if (xlsxText.length > 15000) xlsxText = xlsxText.substring(0, 15000)
+      } catch {
+        xlsxText = Buffer.from(fileArrayBuffer).toString('utf-8', 0, 5000)
+      }
+
+      // If payroll detected, process locally without heavy AI call
+      if (isPayrollDetected && xlsxRows.length > 3) {
+        console.log(`[upload] Processing payroll Excel locally: ${xlsxRows.length} rows`)
+
+        // Find header row index
+        const hIdx = xlsxRows.findIndex(row =>
+          row.some((c: any) => String(c).toLowerCase().match(/salary|salaire|basic|net pay/))
+        )
+        const headers = xlsxRows[hIdx]?.map((c: any) => String(c).toLowerCase().trim()) || []
+        const dataRows = xlsxRows.slice(hIdx + 1).filter(row => row.some((c: any) => c !== '' && c !== null))
+
+        // Map column indices
+        const col = (patterns: string[]) => headers.findIndex(h => patterns.some(p => h.includes(p)))
+        const iCode = col(['code'])
+        const iNom = col(['last name', 'nom', 'name'])
+        const iPrenom = col(['first name', 'prenom', 'prénom'])
+        const iPoste = col(['job', 'poste', 'fonction', 'position'])
+        const iDept = col(['department', 'departement', 'département'])
+        const iArrDate = col(['arr. date', 'arr date', 'date arrivee', 'date embauche', 'hire date'])
+        const iDepDate = col(['dep. date', 'dep date', 'date depart', 'departure'])
+        const iBasic = col(['basic salary', 'salaire base', 'basic', '1000'])
+        const iOT15 = col(['overtime', 'ot', '@1.5', '1100'])
+        const iOT2 = col(['@2x', 'overtime @2', '1150'])
+        const iSpecial = col(['special', 'allowance', '3010'])
+        const iInternet = col(['internet', '3170'])
+        const iPrime = col(['prime', 'production', '3200'])
+        const iElec = col(['electricity', 'electricite', '3250'])
+        const iMeal = col(['meal', 'repas', '3510'])
+        const iTotalPay = col(['total payments', 'total pay', 'brut'])
+        const iAbsence = col(['absence', 'deductions', '3900'])
+        const iCSG = col(['csg', '4010'])
+        const iNSF = col(['nsf', '4100'])
+        const iPAYE = col(['paye', '5000'])
+        const iTotalDed = col(['total deductions', 'total ded'])
+        const iERCSG = col(['er] csg', 'er csg', '[er] 4010'])
+        const iERNSF = col(['er] nsf', 'er nsf', '[er] 4100'])
+        const iERLevy = col(['er] 4200', 'er levy', 'levy', '[er] levy'])
+        const iERPRGF = col(['er] 7900', 'er prgf', 'prgf', '[er] 7900'])
+        const iTotalER = col(['total er', 'total employer'])
+        const iNetPay = col(['net pay', 'net', 'salaire net'])
+
+        const getVal = (row: any[], idx: number) => idx >= 0 && idx < row.length ? Number(String(row[idx]).replace(/[^\d.-]/g, '')) || 0 : 0
+        const getStr = (row: any[], idx: number) => idx >= 0 && idx < row.length ? String(row[idx] || '').trim() : ''
+
+        const employes = dataRows
+          .filter(row => getStr(row, iNom) || getStr(row, iPrenom))
+          .filter(row => getStr(row, iNom).toLowerCase() !== 'total')
+          .map(row => ({
+            code: getStr(row, iCode),
+            nom: getStr(row, iNom),
+            prenom: getStr(row, iPrenom),
+            poste: getStr(row, iPoste),
+            departement: getStr(row, iDept),
+            date_arrivee: getStr(row, iArrDate),
+            date_depart: getStr(row, iDepDate),
+            salaire_base: getVal(row, iBasic),
+            overtime_1_5x: getVal(row, iOT15),
+            overtime_2x: getVal(row, iOT2),
+            special_allowance: getVal(row, iSpecial),
+            internet_allowance: getVal(row, iInternet),
+            prime_production: getVal(row, iPrime),
+            electricity_allowance: getVal(row, iElec),
+            meal_allowance: getVal(row, iMeal),
+            total_payments: getVal(row, iTotalPay),
+            absence_deductions: getVal(row, iAbsence),
+            csg: getVal(row, iCSG),
+            nsf: getVal(row, iNSF),
+            paye: getVal(row, iPAYE),
+            total_deductions: getVal(row, iTotalDed),
+            er_csg: getVal(row, iERCSG),
+            er_nsf: getVal(row, iERNSF),
+            er_levy: getVal(row, iERLevy),
+            er_prgf: getVal(row, iERPRGF),
+            total_er_contributions: getVal(row, iTotalER),
+            net_pay: getVal(row, iNetPay),
+          }))
+
+        // Detect period from filename or content
+        const periodMatch = file.name.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s*(\d{4})/i)
+          || xlsxText.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s*(\d{4})/i)
+        const monthMap: Record<string, string> = { jan:'01', feb:'02', mar:'03', apr:'04', may:'05', jun:'06', jul:'07', aug:'08', sep:'09', oct:'10', nov:'11', dec:'12' }
+        const detectedPeriode = periodMatch
+          ? `${periodMatch[2]}-${monthMap[periodMatch[1].toLowerCase().slice(0,3)] || '01'}`
+          : new Date().toISOString().slice(0, 7)
+
+        // Detect employer from content
+        const employerMatch = xlsxText.match(/^([A-Z][A-Za-z\s]+(?:Ltd|Limited|Sarl|SAS)?)/m)
+        const detectedEmployer = employerMatch?.[1]?.trim() || detectedSociete || 'INCONNU'
+
+        parsed = {
+          routing: { type_document: 'payroll_report', societe: detectedEmployer, confiance_type: 95 },
+          extraction: { employeur: detectedEmployer, periode: detectedPeriode, employes },
+        }
+        typeDocument = 'payroll_report'
+        extraction = parsed.extraction
+        console.log(`[upload] Payroll parsed locally: ${employes.length} employees, period ${detectedPeriode}`)
+
+        messageContent = null // Skip AI call
+      } else {
+        messageContent = `Analyse ce document Excel comptable. Si c'est un Payroll Report avec PLUSIEURS employés, retourne type_document="payroll_report".\n\nContenu (premiers 15K):\n${xlsxText}`
       }
     } else {
       messageContent = 'Analyse ce document:\n' + Buffer.from(fileArrayBuffer).toString('utf-8').substring(0, 5000)
@@ -196,9 +307,12 @@ export async function POST(request: NextRequest) {
 
     // Si relevé bancaire détecté → aller directement au prompt spécialisé (évite double appel)
     let aiResponse: any
-    let parsed: any = {}
+    if (!parsed.routing) parsed = {}
 
-    if (isLikelyBankStatement && isPdf) {
+    // Skip AI if already parsed locally (e.g., Excel payroll)
+    if (messageContent === null) {
+      console.log('[upload] Skipping AI call — already parsed locally')
+    } else if (isLikelyBankStatement && isPdf) {
       const bankSystemPrompt = getSystemPrompt('releve_bancaire', tauxChange)
       const bankStream = anthropic.messages.stream({
         model: CLAUDE_CONFIG.model,
@@ -388,10 +502,10 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
       try { parsed = JSON.parse(cleaned) } catch { parsed = { routing: { type_document: 'autre', societe: 'INCONNU' }, extraction: {} } }
     }
 
-    let typeDocument = parsed.routing?.type_document || 'autre'
+    if (!typeDocument) typeDocument = parsed.routing?.type_document || 'autre'
     const detectedSociete = parsed.routing?.societe || 'INCONNU'
     const confianceType = parsed.routing?.confiance_type || null
-    let extraction = parsed.extraction || {}
+    if (!extraction || Object.keys(extraction).length === 0) extraction = parsed.extraction || {}
 
     // Force reclassification: if Excel with salary keywords but classified as 'autre', force to payroll_report
     if (isExcel && (typeDocument === 'autre' || typeDocument === 'fiche_paie')) {
