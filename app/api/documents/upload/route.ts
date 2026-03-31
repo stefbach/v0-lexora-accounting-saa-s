@@ -164,7 +164,15 @@ export async function POST(request: NextRequest) {
       } catch {
         xlsxText = Buffer.from(fileArrayBuffer).toString('utf-8', 0, 10000)
       }
-      messageContent = `Analyse ce document Excel comptable. Si c'est un Payroll Report / tableau de paie avec PLUSIEURS employés, extrais CHAQUE LIGNE employé.\n\nContenu:\n${xlsxText}`
+      messageContent = `Analyse ce document Excel comptable. Si c'est un Payroll Report / tableau de paie avec PLUSIEURS employés, retourne type_document="payroll_report". Si c'est une fiche de paie individuelle, retourne "fiche_paie".\n\nContenu:\n${xlsxText}`
+
+      // Pre-detect payroll report from Excel content
+      const xlsxLower = xlsxText.toLowerCase()
+      if (xlsxLower.includes('payroll') || xlsxLower.includes('salary') || xlsxLower.includes('net pay') ||
+          xlsxLower.includes('basic salary') || xlsxLower.includes('salaire') || xlsxLower.includes('csg') ||
+          xlsxLower.includes('paye') || xlsxLower.includes('nsf') || xlsxLower.includes('bulletin')) {
+        console.log('[upload] Excel pre-detected as payroll/salary document')
+      }
     } else {
       messageContent = 'Analyse ce document:\n' + Buffer.from(fileArrayBuffer).toString('utf-8').substring(0, 5000)
     }
@@ -286,7 +294,8 @@ export async function POST(request: NextRequest) {
         system: injectTauxChange(`Tu es un expert-comptable mauricien. Analyse ce document et retourne UNIQUEMENT un JSON valide (pas de markdown, pas de backticks).
 
 === DETECTION DU TYPE ===
-Determine d'abord le type: facture_fournisseur, facture_client, releve_bancaire, fiche_paie, charges_sociales, contrat, ou autre.
+Determine d'abord le type: facture_fournisseur, facture_client, releve_bancaire, fiche_paie, payroll_report, charges_sociales, contrat, ou autre.
+IMPORTANT: Si le document contient un TABLEAU avec PLUSIEURS employes (Payroll Report, etat de salaire, bulk salary), le type est "payroll_report" (PAS "fiche_paie").
 
 === REGLES PAR TYPE ===
 
@@ -379,10 +388,53 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
       try { parsed = JSON.parse(cleaned) } catch { parsed = { routing: { type_document: 'autre', societe: 'INCONNU' }, extraction: {} } }
     }
 
-    const typeDocument = parsed.routing?.type_document || 'autre'
+    let typeDocument = parsed.routing?.type_document || 'autre'
     const detectedSociete = parsed.routing?.societe || 'INCONNU'
     const confianceType = parsed.routing?.confiance_type || null
     let extraction = parsed.extraction || {}
+
+    // Force reclassification: if Excel with salary keywords but classified as 'autre', force to payroll_report
+    if (isExcel && (typeDocument === 'autre' || typeDocument === 'fiche_paie')) {
+      const xlsxContent = typeof messageContent === 'string' ? messageContent.toLowerCase() : ''
+      const hasMultipleEmployees = extraction.employes?.length > 1 ||
+        xlsxContent.includes('payroll') || xlsxContent.includes('net pay') ||
+        (xlsxContent.match(/\d{3,6}\.\d{2}/g) || []).length > 10
+
+      if (hasMultipleEmployees) {
+        console.log(`[upload] Excel reclassified: ${typeDocument} → payroll_report (detected multiple employees)`)
+        typeDocument = 'payroll_report'
+        parsed.routing = { ...parsed.routing, type_document: 'payroll_report' }
+
+        // If extraction doesn't have employes array, re-process with specific prompt
+        if (!extraction.employes || extraction.employes.length === 0) {
+          console.log('[upload] Re-processing Excel as payroll_report with specific prompt')
+          try {
+            const payrollStream = anthropic.messages.stream({
+              model: CLAUDE_CONFIG.model,
+              max_tokens: 16384,
+              temperature: 0,
+              messages: [{ role: 'user', content: `Ce document Excel est un PAYROLL REPORT (tableau de paie multi-employés).
+Extrais CHAQUE LIGNE employé. Retourne UNIQUEMENT un JSON valide:
+{"routing":{"type_document":"payroll_report","societe":"<nom>","confiance_type":95},"extraction":{"employeur":"","periode":"YYYY-MM","employes":[{"code":"","nom":"","prenom":"","poste":"","departement":"","date_arrivee":"","salaire_base":0,"overtime_1_5x":0,"overtime_2x":0,"special_allowance":0,"internet_allowance":0,"prime_production":0,"electricity_allowance":0,"meal_allowance":0,"total_payments":0,"absence_deductions":0,"csg":0,"nsf":0,"paye":0,"total_deductions":0,"er_csg":0,"er_nsf":0,"er_levy":0,"er_prgf":0,"total_er_contributions":0,"net_pay":0}]}}
+
+Contenu du fichier:
+${typeof messageContent === 'string' ? messageContent : ''}` }],
+            })
+            const prMsg = await payrollStream.finalMessage()
+            const prText = prMsg.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
+            const prCleaned = prText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
+            const prParsed = JSON.parse(prCleaned.match(/\{[\s\S]*\}/)?.[0] || '{}')
+            if (prParsed.extraction?.employes?.length > 0) {
+              extraction = prParsed.extraction
+              parsed = prParsed
+              console.log(`[upload] Payroll re-parse OK: ${extraction.employes.length} employees`)
+            }
+          } catch (e) {
+            console.warn('[upload] Payroll re-parse failed:', e)
+          }
+        }
+      }
+    }
 
     // Si le prompt générique a détecté un relevé bancaire mais n'a pas utilisé le prompt spécialisé
     // (isLikelyBankStatement était false), on relance avec le prompt spécialisé pour avoir les transactions
