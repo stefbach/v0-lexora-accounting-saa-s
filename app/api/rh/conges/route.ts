@@ -19,7 +19,7 @@ async function getUserSocieteIds(supabase: ReturnType<typeof getAdminClient>, us
 
   const { data: dossiers } = await supabase.from('dossiers').select('societe_id').eq('client_id', userId)
   const { data: owned } = await supabase.from('societes').select('id').eq('created_by', userId)
-  return [...new Set([...(dossiers || []).map(d => d.societe_id), ...(owned || []).map(s => s.id)])]
+  return [...new Set([...(dossiers || []).map((d: any) => d.societe_id), ...(owned || []).map((s: any) => s.id)])]
 }
 
 /** Count working days between two dates (exclude Sat/Sun) */
@@ -35,7 +35,7 @@ function countWorkingDays(dateDebut: string, dateFin: string): number {
   return count
 }
 
-/** Calculate prorata AL entitlement based on hire date */
+/** Calculate prorata AL entitlement based on hire date (Mauritius WRA 2019: 20 days/year) */
 function calculateALEntitlement(dateArrivee: string | null, year: number): number {
   if (!dateArrivee) return 20
   const hireDate = new Date(dateArrivee)
@@ -50,13 +50,13 @@ function calculateALEntitlement(dateArrivee: string | null, year: number): numbe
 /** Detect consecutive sick leave days > 3 for an employee */
 function detectSickCertAlert(slRecords: any[]): boolean {
   if (slRecords.length === 0) return false
-  // Sort by date_debut ascending
   const sorted = [...slRecords].sort((a, b) => a.date_debut.localeCompare(b.date_debut))
+  // Check individual records
   for (const rec of sorted) {
     const days = countWorkingDays(rec.date_debut, rec.date_fin)
     if (days > 3) return true
   }
-  // Also check consecutive separate SL records that together span > 3 days
+  // Check consecutive separate SL records that together span > 3 days
   let consecutiveDays = 0
   let lastEnd: Date | null = null
   for (const rec of sorted) {
@@ -64,10 +64,8 @@ function detectSickCertAlert(slRecords: any[]): boolean {
     const end = new Date(rec.date_fin + 'T12:00:00')
     const days = countWorkingDays(rec.date_debut, rec.date_fin)
     if (lastEnd) {
-      // Check if this record starts within 1 working day of last end
       const gap = new Date(lastEnd)
       gap.setDate(gap.getDate() + 1)
-      // Skip weekends
       while (gap.getDay() === 0 || gap.getDay() === 6) gap.setDate(gap.getDate() + 1)
       if (start <= gap) {
         consecutiveDays += days
@@ -109,7 +107,7 @@ export async function GET(request: Request) {
     }
 
     if (societeIds.length === 0) {
-      return NextResponse.json({ conges: [], balances: [], employes: [] })
+      return NextResponse.json({ conges: [], balances: [], employes: [], kpis: { total_al_taken: 0, total_sl_taken: 0, pending_requests: 0, alerts: 0 } })
     }
 
     // 2) Get employees for those societes
@@ -118,10 +116,10 @@ export async function GET(request: Request) {
       .select('id, nom, prenom, poste, societe_id, date_arrivee, sexe, statut')
       .in('societe_id', societeIds)
     const employees = emps || []
-    const employeeIds = employees.map(e => e.id)
+    const employeeIds = employees.map((e: any) => e.id)
 
     if (employeeIds.length === 0) {
-      return NextResponse.json({ conges: [], balances: [], employes: [] })
+      return NextResponse.json({ conges: [], balances: [], employes: [], kpis: { total_al_taken: 0, total_sl_taken: 0, pending_requests: 0, alerts: 0 } })
     }
 
     // ---- ACTION: balances ----
@@ -140,33 +138,24 @@ export async function GET(request: Request) {
       const conges = congesData || []
 
       // Get all SL records (approved) for consecutive check
-      const { data: allSlData } = await supabase
-        .from('demandes_conges')
-        .select('*')
-        .in('employe_id', employeeIds)
-        .eq('type_conge', 'SL')
-        .eq('statut', 'approuve')
-        .gte('date_debut', `${currentYear}-01-01`)
-        .lte('date_debut', `${currentYear}-12-31`)
-
-      const allSl = allSlData || []
+      const allSl = conges.filter((c: any) => c.type_conge === 'SL')
 
       // Build balances per employee
-      const balances = employees.map(emp => {
-        const empConges = conges.filter(c => c.employe_id === emp.id)
-        const alTaken = empConges.filter(c => c.type_conge === 'AL').reduce((sum, c) => sum + (c.nb_jours || 0), 0)
-        const slTaken = empConges.filter(c => c.type_conge === 'SL').reduce((sum, c) => sum + (c.nb_jours || 0), 0)
+      const balances = employees.map((emp: any) => {
+        const empConges = conges.filter((c: any) => c.employe_id === emp.id)
+        const alTaken = empConges.filter((c: any) => c.type_conge === 'AL').reduce((sum: number, c: any) => sum + (c.nb_jours || 0), 0)
+        const slTaken = empConges.filter((c: any) => c.type_conge === 'SL').reduce((sum: number, c: any) => sum + (c.nb_jours || 0), 0)
         const alEntitled = calculateALEntitlement(emp.date_arrivee, currentYear)
         const slEntitled = 15
         const alBalance = alEntitled - alTaken
         const slBalance = slEntitled - slTaken
 
         // Sick certificate alert
-        const empSl = allSl.filter(c => c.employe_id === emp.id)
+        const empSl = allSl.filter((c: any) => c.employe_id === emp.id)
         const sickCertAlert = detectSickCertAlert(empSl)
 
         // Status indicator
-        let statusColor = 'green' // all good
+        let statusColor = 'green'
         if (alBalance <= 0 || slBalance <= 0) statusColor = 'red'
         else if (alBalance <= 5 || slBalance <= 3) statusColor = 'orange'
 
@@ -190,8 +179,8 @@ export async function GET(request: Request) {
       })
 
       // Summary KPIs
-      const totalAlTaken = balances.reduce((s, b) => s + b.al_pris, 0)
-      const totalSlTaken = balances.reduce((s, b) => s + b.sl_pris, 0)
+      const totalAlTaken = balances.reduce((s: number, b: any) => s + b.al_pris, 0)
+      const totalSlTaken = balances.reduce((s: number, b: any) => s + b.sl_pris, 0)
 
       // Pending requests count
       const { count: pendingCount } = await supabase
@@ -200,7 +189,7 @@ export async function GET(request: Request) {
         .in('employe_id', employeeIds)
         .eq('statut', 'en_attente')
 
-      const alertCount = balances.filter(b => b.sick_cert_alert).length
+      const alertCount = balances.filter((b: any) => b.sick_cert_alert).length
 
       return NextResponse.json({
         balances,
@@ -210,6 +199,38 @@ export async function GET(request: Request) {
           pending_requests: pendingCount || 0,
           alerts: alertCount,
         },
+      })
+    }
+
+    // ---- ACTION: absents_today ----
+    if (action === 'absents_today') {
+      const today = new Date().toISOString().split('T')[0]
+
+      // Get approved leaves covering today
+      const { data: congesAujourdhui } = await supabase
+        .from('demandes_conges')
+        .select('*')
+        .in('employe_id', employeeIds)
+        .eq('statut', 'approuve')
+        .lte('date_debut', today)
+        .gte('date_fin', today)
+
+      const empIdsEnConge = new Set((congesAujourdhui || []).map((c: any) => c.employe_id))
+
+      const absentsWithLeave = (congesAujourdhui || []).map((c: any) => {
+        const emp = employees.find((e: any) => e.id === c.employe_id)
+        return {
+          ...c,
+          employe: emp ? { nom: emp.nom, prenom: emp.prenom, poste: emp.poste, societe_id: emp.societe_id } : null,
+        }
+      })
+
+      // All employees not on approved leave (potential unplanned absences)
+      const employeesNotOnLeave = employees.filter((e: any) => !empIdsEnConge.has(e.id))
+
+      return NextResponse.json({
+        absents_avec_conge: absentsWithLeave,
+        employes_sans_conge: employeesNotOnLeave,
       })
     }
 
@@ -226,16 +247,19 @@ export async function GET(request: Request) {
     if (congesErr) throw congesErr
 
     // Enrich with employee info (no FK join)
-    const empMap = new Map(employees.map(e => [e.id, e]))
-    const congesEnriched = (congesData || []).map(c => ({
-      ...c,
-      employe: empMap.get(c.employe_id) ? {
-        nom: empMap.get(c.employe_id)!.nom,
-        prenom: empMap.get(c.employe_id)!.prenom,
-        poste: empMap.get(c.employe_id)!.poste,
-        societe_id: empMap.get(c.employe_id)!.societe_id,
-      } : null,
-    }))
+    const empMap = new Map(employees.map((e: any) => [e.id, e]))
+    const congesEnriched = (congesData || []).map((c: any) => {
+      const emp = empMap.get(c.employe_id)
+      return {
+        ...c,
+        employe: emp ? {
+          nom: emp.nom,
+          prenom: emp.prenom,
+          poste: emp.poste,
+          societe_id: emp.societe_id,
+        } : null,
+      }
+    })
 
     return NextResponse.json({ conges: congesEnriched, employes: employees })
   } catch (e: unknown) {
@@ -259,12 +283,64 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Champs requis manquants' }, { status: 400 })
 
       const accessibleIds = await getUserSocieteIds(supabase, user.id)
-      const { data: emp } = await supabase.from('employes').select('id, societe_id').eq('id', body.employe_id).maybeSingle()
+      const { data: emp } = await supabase.from('employes').select('id, societe_id, sexe').eq('id', body.employe_id).maybeSingle()
       if (!emp || !accessibleIds.includes(emp.societe_id)) {
         return NextResponse.json({ error: 'Employe non trouve ou acces non autorise' }, { status: 403 })
       }
 
+      // Validate Mauritius WRA 2019 rules
       const nb_jours = countWorkingDays(body.date_debut, body.date_fin)
+
+      if (body.type_conge === 'MAT' && emp.sexe === 'M') {
+        return NextResponse.json({ error: 'Conge maternite reserve aux femmes (WRA 2019)' }, { status: 400 })
+      }
+      if (body.type_conge === 'PAT' && emp.sexe === 'F') {
+        return NextResponse.json({ error: 'Conge paternite reserve aux hommes (WRA 2019)' }, { status: 400 })
+      }
+      if (body.type_conge === 'MAT') {
+        // Maternity = 14 weeks = 98 calendar days
+        const startDate = new Date(body.date_debut + 'T12:00:00')
+        const endDate = new Date(body.date_fin + 'T12:00:00')
+        const calendarDays = Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
+        if (calendarDays > 98) {
+          return NextResponse.json({ error: 'Conge maternite: maximum 14 semaines (98 jours) selon WRA 2019' }, { status: 400 })
+        }
+      }
+      if (body.type_conge === 'PAT' && nb_jours > 5) {
+        return NextResponse.json({ error: 'Conge paternite: maximum 5 jours ouvrables selon WRA 2019' }, { status: 400 })
+      }
+
+      // Check balance for AL and SL
+      if (body.type_conge === 'AL' || body.type_conge === 'SL') {
+        const currentYear = new Date().getFullYear()
+        const { data: existingLeaves } = await supabase
+          .from('demandes_conges')
+          .select('nb_jours')
+          .eq('employe_id', body.employe_id)
+          .eq('type_conge', body.type_conge)
+          .eq('statut', 'approuve')
+          .gte('date_debut', `${currentYear}-01-01`)
+          .lte('date_debut', `${currentYear}-12-31`)
+
+        const taken = (existingLeaves || []).reduce((sum: number, c: any) => sum + (c.nb_jours || 0), 0)
+        const entitled = body.type_conge === 'AL'
+          ? calculateALEntitlement(null, currentYear) // Will recalculate with actual date_arrivee below
+          : 15
+
+        if (body.type_conge === 'AL') {
+          const { data: empFull } = await supabase.from('employes').select('date_arrivee').eq('id', body.employe_id).maybeSingle()
+          const alEntitled = calculateALEntitlement(empFull?.date_arrivee, currentYear)
+          const remaining = alEntitled - taken
+          if (nb_jours > remaining) {
+            return NextResponse.json({ error: `Solde AL insuffisant: ${remaining} jour(s) restant(s)` }, { status: 400 })
+          }
+        } else {
+          const remaining = entitled - taken
+          if (nb_jours > remaining) {
+            return NextResponse.json({ error: `Solde SL insuffisant: ${remaining} jour(s) restant(s)` }, { status: 400 })
+          }
+        }
+      }
 
       const { data, error } = await supabase.from('demandes_conges').insert({
         employe_id: body.employe_id,
