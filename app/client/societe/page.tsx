@@ -352,13 +352,13 @@ export default function SocieteSettingsPage() {
         <TabButton id="bank" label="Banque" active={tab === "bank"} onClick={() => setTab("bank")} />
       </div>
 
-      {/* Tab content */}
+      {/* Tab content — key={societeId} forces re-mount when société changes */}
       {societe && (
         <div>
-          {tab === "details" && <DetailsTab data={societe} onSave={handleSave} />}
-          {tab === "contact" && <ContactTab data={societe} onSave={handleSave} />}
-          {tab === "payroll" && <PayrollTab data={societe} onSave={handleSave} />}
-          {tab === "bank" && <BankTab data={societe} onSave={handleSave} />}
+          {tab === "details" && <DetailsTab key={`details-${societeId}`} data={societe} onSave={handleSave} />}
+          {tab === "contact" && <ContactTab key={`contact-${societeId}`} data={societe} onSave={handleSave} />}
+          {tab === "payroll" && <PayrollTab key={`payroll-${societeId}`} data={societe} onSave={handleSave} />}
+          {tab === "bank" && <BankTab key={`bank-${societeId}`} data={societe} onSave={handleSave} />}
         </div>
       )}
     </div>
