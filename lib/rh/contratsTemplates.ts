@@ -162,7 +162,7 @@ export const TEMPLATES: Record<string, string> = {
 </div>
 
 <p style="margin-top: 30px; font-size: 11px; color: #888; text-align: center; border-top: 1px solid #eee; padding-top: 15px;">
-  Document généré le {{date_generation}} — TIBOK RH System — Conforme WRA 2019, Finance Act 2024
+  Document généré le {{date_generation}} — Lexora RH — Conforme WRA 2019, Finance Act 2024
 </p>
 </div>`,
 
@@ -216,7 +216,7 @@ export const TEMPLATES: Record<string, string> = {
     <p>Date : _______________</p>
   </div>
 </div>
-<p style="margin-top: 20px; font-size: 11px; color: #888; text-align: center;">Généré le {{date_generation}} — TIBOK RH — WRA 2019 s.17</p>
+<p style="margin-top: 20px; font-size: 11px; color: #888; text-align: center;">Généré le {{date_generation}} — Lexora RH — WRA 2019 s.17</p>
 </div>`,
 
 // ============================================================
@@ -252,7 +252,7 @@ export const TEMPLATES: Record<string, string> = {
   <div style="width: 45%; text-align: center;"><p><strong>Le Client</strong></p><div style="height: 60px; border-bottom: 1px solid #666; margin: 20px 0;"></div><p>Date : _______________</p></div>
   <div style="width: 45%; text-align: center;"><p><strong>Le Consultant</strong></p><div style="height: 60px; border-bottom: 1px solid #666; margin: 20px 0;"></div><p>Date : _______________</p></div>
 </div>
-<p style="margin-top: 20px; font-size: 11px; color: #888; text-align: center;">Généré le {{date_generation}} — TIBOK RH</p>
+<p style="margin-top: 20px; font-size: 11px; color: #888; text-align: center;">Généré le {{date_generation}} — Lexora RH</p>
 </div>`,
 
 // ============================================================
@@ -293,7 +293,7 @@ export const TEMPLATES: Record<string, string> = {
   <div style="width: 45%; text-align: center;"><p><strong>L'Employeur</strong></p><div style="height: 60px; border-bottom: 1px solid #666; margin: 20px 0;"></div><p>Date : _______________</p></div>
   <div style="width: 45%; text-align: center;"><p><strong>L'Employé(e)</strong></p><div style="height: 60px; border-bottom: 1px solid #666; margin: 20px 0;"></div><p>Date : _______________</p></div>
 </div>
-<p style="font-size: 11px; color: #888; text-align: center; margin-top: 20px;">Généré le {{date_generation}} — TIBOK RH — WRA 2019, Medical Act</p>
+<p style="font-size: 11px; color: #888; text-align: center; margin-top: 20px;">Généré le {{date_generation}} — Lexora RH — WRA 2019, Medical Act</p>
 </div>`,
 
 // CDI BPO/IT
@@ -333,7 +333,7 @@ export const TEMPLATES: Record<string, string> = {
   <div style="width: 45%; text-align: center;"><p><strong>L'Employeur</strong></p><div style="height: 60px; border-bottom: 1px solid #666; margin: 20px 0;"></div><p>Date : _______________</p></div>
   <div style="width: 45%; text-align: center;"><p><strong>L'Employé(e)</strong></p><div style="height: 60px; border-bottom: 1px solid #666; margin: 20px 0;"></div><p>Date : _______________</p></div>
 </div>
-<p style="font-size: 11px; color: #888; text-align: center; margin-top: 20px;">Généré le {{date_generation}} — TIBOK RH — WRA 2019, Data Protection Act 2017</p>
+<p style="font-size: 11px; color: #888; text-align: center; margin-top: 20px;">Généré le {{date_generation}} — Lexora RH — WRA 2019, Data Protection Act 2017</p>
 </div>`
 
 };

@@ -375,7 +375,7 @@ export function generateSEPAXML(
   const requestedDate = header.dateValeur.toISOString().split('T')[0]
 
   // Identifiant unique du message (max 35 caractères)
-  const msgId = `TIBOK-${formatMCBDate(now)}-${String(now.getTime()).slice(-6)}`
+  const msgId = `LEXORA-${formatMCBDate(now)}-${String(now.getTime()).slice(-6)}`
 
   // Construction des lignes de transactions
   const transactions = credits.map((c, idx) => {

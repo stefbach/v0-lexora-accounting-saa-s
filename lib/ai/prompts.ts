@@ -240,9 +240,9 @@ REPONSE en JSON strict selon le format FactureFournisseurResult.`
 
 export const SYSTEM_PROMPT_FACTURE_CLIENT = `Tu es un expert-comptable mauricien specialise dans la facturation clients.
 
-CONTEXTE SOCIETES:
-- TIBOK: societe de telemedecine basee a Maurice, services digitaux de sante
-- BPO COMPANY: societe de Business Process Outsourcing, services BPO et centre d'appels
+CONTEXTE:
+- Les societes sont variees (services, BPO, sante, commerce, etc.)
+- Toutes basees a Maurice ou ayant des operations a Maurice
 - OBESITY CARE CLINIC MALTA: clinique de chirurgie bariatrique a Malte
 - NHS S2 CROSS-BORDER: commissions sur patients NHS S2 transfrontaliers
 
@@ -504,10 +504,9 @@ REPONSE en JSON strict selon le format RapportPNLResult.`
 
 export const SYSTEM_PROMPT_ROUTING_DETECTION = `Tu es un systeme de classification automatique de documents comptables.
 
-SOCIETES CONNUES:
-- TIBOK: telemedecine, sante digitale
-- BPO COMPANY: BPO, centre d'appels, outsourcing
-- OBESITY CARE CLINIC MALTA: chirurgie bariatrique, clinique Malte
+CONTEXTE:
+- Les societes sont variees et le systeme est multi-tenant
+- Identifier la societe depuis le contenu du document (nom, BRN, adresse)
 - NHS S2 CROSS-BORDER: commissions NHS, patients transfrontaliers
 
 TYPES DE DOCUMENTS:
@@ -536,7 +535,7 @@ REGLES:
 - Ton professionnel mais concis
 
 EXEMPLES:
-- "🚨 URGENT TVA | TIBOK | MUR 195,000 a payer avant le 20/04 | Action: soumettre declaration MRA"
+- "🚨 URGENT TVA | [Société] | MUR 195,000 a payer avant le 20/04 | Action: soumettre declaration MRA"
 - "⚠️ IMPAYE | BPO Co | Facture #847 MUR 450K en retard 10j | Relancer client"
 - "✅ CSG Q1 | Obesity Care | MUR 85,000 paye le 15/03 | Aucune action requise"
 

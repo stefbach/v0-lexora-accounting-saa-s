@@ -106,10 +106,27 @@ export async function POST(request: Request) {
       const formData = await request.formData()
       const file = formData.get('file') as File
       if (!file) return NextResponse.json({ error: 'Fichier requis' }, { status: 400 })
-      const XLSX = await import('xlsx')
-      const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellText: true, cellDates: true })
-      const ws = wb.Sheets[wb.SheetNames[0]]
-      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as any[][]
+      console.log(`[import-paie] Parsing file: ${file.name}, size: ${file.size}, type: ${file.type}`)
+
+      let XLSX: any
+      try {
+        XLSX = await import('xlsx')
+      } catch (xlsxErr: any) {
+        console.error('[import-paie] xlsx import failed:', xlsxErr)
+        return NextResponse.json({ error: 'Erreur chargement librairie Excel: ' + (xlsxErr.message || 'xlsx non disponible') }, { status: 500 })
+      }
+
+      let wb: any, ws: any, rows: any[][]
+      try {
+        const buffer = await file.arrayBuffer()
+        wb = XLSX.read(buffer, { type: 'array', cellText: true, cellDates: true })
+        ws = wb.Sheets[wb.SheetNames[0]]
+        rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as any[][]
+        console.log(`[import-paie] Parsed ${rows.length} rows from sheet "${wb.SheetNames[0]}"`)
+      } catch (parseErr: any) {
+        console.error('[import-paie] Excel parse error:', parseErr)
+        return NextResponse.json({ error: 'Erreur lecture fichier Excel: ' + (parseErr.message || 'Format invalide') }, { status: 400 })
+      }
 
       const hIdx = rows.findIndex(r => r.some((c: any) => String(c).toLowerCase().match(/salary|basic|net pay|1000|4010/)))
       if (hIdx < 0) return NextResponse.json({ error: 'En-tête non trouvé' }, { status: 400 })

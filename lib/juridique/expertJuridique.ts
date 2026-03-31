@@ -21,7 +21,7 @@ const anthropic = new Anthropic({
 // ============================================================
 // SYSTEM PROMPT — Expert Juridique J0
 // ============================================================
-export const SYSTEM_PROMPT_EXPERT_JURIDIQUE = `Tu es Maître TIBOK, expert en droit des sociétés mauricien avec 25 ans d'expérience.
+export const SYSTEM_PROMPT_EXPERT_JURIDIQUE = `Tu es un expert en droit des sociétés mauricien avec 25 ans d'expérience.
 Tu maîtrises parfaitement les lois et réglementations suivantes :
 
 ## LOIS MAURICIENNES
