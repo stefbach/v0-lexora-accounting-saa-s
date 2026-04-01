@@ -386,6 +386,9 @@ export async function POST(request: Request) {
           t.levy > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '432000', libelle: `Training Levy à payer ${moisLabel}`, debit: 0, credit: Math.round(t.levy) } : null,
           t.prgf > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '432100', libelle: `PRGF à payer ${moisLabel}`, debit: 0, credit: Math.round(t.prgf) } : null,
           t.absence > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '641900', libelle: `Retenues absences ${moisLabel}`, debit: 0, credit: Math.round(t.absence) } : null,
+          // Provision 13ème mois (YEB) — 1/12 du salaire de base mensuel
+          t.basic > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '6416', libelle: `Provision 13ème mois ${moisLabel}`, debit: Math.round(t.basic / 12), credit: 0 } : null,
+          t.basic > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '4212', libelle: `Provision 13ème mois à payer ${moisLabel}`, debit: 0, credit: Math.round(t.basic / 12) } : null,
         ].filter(Boolean) as any[]
 
         const { error: comptaErr } = await supabase.from('ecritures_comptables').insert(entries)
