@@ -224,7 +224,7 @@ export default function ComptableBanquePage() {
                   <Landmark className="w-5 h-5" /> Comptes bancaires ({comptes.length})
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-0">
+              <CardContent className="p-0 overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -277,7 +277,7 @@ export default function ComptableBanquePage() {
               <CardHeader>
                 <CardTitle className="text-[#1E2A4A] text-base">Relevés importés ({releves.length})</CardTitle>
               </CardHeader>
-              <CardContent className="p-0">
+              <CardContent className="p-0 overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>

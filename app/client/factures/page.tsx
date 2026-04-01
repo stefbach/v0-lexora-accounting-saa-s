@@ -313,7 +313,7 @@ export default function ClientFacturesPage() {
 
           {/* Table */}
           <Card>
-            <CardContent className="p-0">
+            <CardContent className="p-0 overflow-x-auto">
               {loading ? (
                 <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-[#1E2A4A]" /></div>
               ) : filtered.length === 0 ? (
@@ -428,7 +428,7 @@ export default function ClientFacturesPage() {
 
           {/* Recurring templates list */}
           <Card>
-            <CardContent className="p-0">
+            <CardContent className="p-0 overflow-x-auto">
               {recurring.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">Aucun modele recurrent. Creez votre premier modele.</div>
               ) : (

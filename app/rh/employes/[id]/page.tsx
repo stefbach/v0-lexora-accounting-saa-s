@@ -462,7 +462,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
             </div>
           )}
           <Card>
-            <CardContent className="p-0">
+            <CardContent className="p-0 overflow-x-auto">
               {conges.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">Aucune demande de conge</div>
               ) : (
@@ -500,7 +500,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
             </Select>
           </div>
           <Card>
-            <CardContent className="p-0">
+            <CardContent className="p-0 overflow-x-auto">
               {bulletins.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">Aucun bulletin de paie</div>
               ) : (
@@ -562,7 +562,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
             </CardContent></Card>
           </div>
           <Card>
-            <CardContent className="p-0">
+            <CardContent className="p-0 overflow-x-auto">
               {pointages.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">Aucun pointage enregistre</div>
               ) : (
@@ -599,7 +599,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
         <TabsContent value="documents" className="space-y-4">
           <Card>
             <CardHeader className="pb-3"><CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2"><FolderOpen className="w-4 h-4" />Documents employe</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 overflow-x-auto">
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
                 <Upload className="w-8 h-8 mx-auto text-gray-400 mb-2" />
                 <p className="text-sm text-gray-500">Glisser un fichier ou cliquer pour telecharger</p>

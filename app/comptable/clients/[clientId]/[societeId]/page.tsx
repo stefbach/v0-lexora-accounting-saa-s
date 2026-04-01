@@ -619,7 +619,7 @@ export default function SocieteContextPage() {
           {fournisseurs.length === 0 ? (
             <EmptyTab icon={FileIcon} message="Aucune facture fournisseur" detail="Les factures fournisseurs apparaîtront ici une fois importées." />
           ) : (
-            <Card><CardContent className="p-0">
+            <Card><CardContent className="p-0 overflow-x-auto">
               <Table><TableHeader><TableRow>
                 <TableHead>Fournisseur</TableHead><TableHead>N°</TableHead><TableHead>Date</TableHead>
                 <TableHead className="text-right">HT</TableHead><TableHead className="text-right">TVA</TableHead><TableHead className="text-right">TTC</TableHead>
@@ -635,7 +635,7 @@ export default function SocieteContextPage() {
           {facturesClients.length === 0 ? (
             <EmptyTab icon={FileIcon} message="Aucune facture client" detail="Les factures clients apparaîtront ici une fois créées." />
           ) : (
-            <Card><CardContent className="p-0">
+            <Card><CardContent className="p-0 overflow-x-auto">
               <Table><TableHeader><TableRow>
                 <TableHead>Client</TableHead><TableHead>N°</TableHead><TableHead>Date</TableHead>
                 <TableHead className="text-right">HT</TableHead><TableHead className="text-right">TVA</TableHead><TableHead className="text-right">TTC</TableHead>
@@ -651,7 +651,7 @@ export default function SocieteContextPage() {
           {banque.length === 0 ? (
             <EmptyTab icon={Landmark} message="Aucune transaction bancaire" detail="Les relevés bancaires apparaîtront ici une fois importés." />
           ) : (
-            <Card><CardContent className="p-0">
+            <Card><CardContent className="p-0 overflow-x-auto">
               <Table><TableHeader><TableRow>
                 <TableHead>Date</TableHead><TableHead>Libellé</TableHead><TableHead className="text-right">Débit</TableHead><TableHead className="text-right">Crédit</TableHead>
                 <TableHead>Tiers</TableHead><TableHead>Compte</TableHead><TableHead>Statut</TableHead><TableHead></TableHead>
@@ -666,7 +666,7 @@ export default function SocieteContextPage() {
           {salaires.length === 0 ? (
             <EmptyTab icon={Wallet} message="Aucune fiche de paie" detail="Les fiches de paie apparaîtront ici une fois saisies." />
           ) : (
-            <Card><CardContent className="p-0">
+            <Card><CardContent className="p-0 overflow-x-auto">
               <Table><TableHeader><TableRow>
                 <TableHead>Employé</TableHead><TableHead className="text-right">Brut</TableHead><TableHead className="text-right">CSG 3%</TableHead><TableHead className="text-right">NSF 1.5%</TableHead><TableHead className="text-right">PAYE</TableHead>
                 <TableHead className="text-right">Net</TableHead><TableHead className="text-right">Coût empl.</TableHead><TableHead>Statut</TableHead><TableHead></TableHead>
@@ -681,7 +681,7 @@ export default function SocieteContextPage() {
           {charges.length === 0 ? (
             <EmptyTab icon={Calculator} message="Aucune charge sociale" detail="Les charges sociales apparaîtront ici une fois calculées." />
           ) : (
-            <Card><CardContent className="p-0">
+            <Card><CardContent className="p-0 overflow-x-auto">
               <Table><TableHeader><TableRow>
                 <TableHead>Période</TableHead><TableHead className="text-right">CSG Empl.</TableHead><TableHead className="text-right">CSG Patr.</TableHead>
                 <TableHead className="text-right">NSF Empl.</TableHead><TableHead className="text-right">NSF Patr.</TableHead><TableHead className="text-right">Training</TableHead><TableHead className="text-right">PAYE</TableHead>
@@ -697,7 +697,7 @@ export default function SocieteContextPage() {
           {tva.length === 0 ? (
             <EmptyTab icon={Calculator} message="Aucune déclaration TVA" detail="Les déclarations TVA apparaîtront ici une fois générées." />
           ) : (
-            <Card><CardContent className="p-0">
+            <Card><CardContent className="p-0 overflow-x-auto">
               <Table><TableHeader><TableRow>
                 <TableHead>Mois</TableHead><TableHead className="text-right">Collectée</TableHead><TableHead className="text-right">Déductible</TableHead>
                 <TableHead className="text-right">Nette</TableHead><TableHead>Deadline</TableHead><TableHead>Statut</TableHead><TableHead>Réf</TableHead><TableHead></TableHead>

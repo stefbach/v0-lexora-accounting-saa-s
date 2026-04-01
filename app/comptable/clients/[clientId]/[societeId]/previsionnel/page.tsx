@@ -234,7 +234,7 @@ export default function PrevisionnelPage() {
         <CardHeader>
           <CardTitle style={{ color: NAVY }}>Prévision vs Réel</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="overflow-x-auto">
           {previsionVsReel.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground text-sm">
               Aucune donnée prévisionnelle disponible.

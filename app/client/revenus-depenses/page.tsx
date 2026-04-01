@@ -217,7 +217,7 @@ export default function RevenusDepensesPage() {
             </Dialog>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -324,7 +324,7 @@ export default function RevenusDepensesPage() {
             </Dialog>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>

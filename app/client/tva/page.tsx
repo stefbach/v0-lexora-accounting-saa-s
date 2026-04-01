@@ -378,7 +378,7 @@ export default function TVAPage() {
               TVA sur ventes locales ({clientInvoices.length})
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="overflow-x-auto">
             {clientInvoices.length > 0 ? (
               <Table>
                 <TableHeader>
@@ -424,7 +424,7 @@ export default function TVAPage() {
               Fournisseurs locaux avec n&deg; TVA MRA valide
             </p>
           </CardHeader>
-          <CardContent>
+          <CardContent className="overflow-x-auto">
             {validLocalInvoices.length > 0 ? (
               <Table>
                 <TableHeader>
@@ -476,7 +476,7 @@ export default function TVAPage() {
               Fournisseurs &eacute;trangers — TVA net = 0
             </p>
           </CardHeader>
-          <CardContent>
+          <CardContent className="overflow-x-auto">
             {foreignSupplierInvoices.length > 0 ? (
               <>
                 <Table>
@@ -529,7 +529,7 @@ export default function TVAPage() {
           <CardHeader>
             <CardTitle style={{ color: NAVY }}>Historique des d&eacute;clarations TVA</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>

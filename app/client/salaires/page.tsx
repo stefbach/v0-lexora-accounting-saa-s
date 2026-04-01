@@ -587,7 +587,7 @@ export default function ClientSalairesPage() {
                 Bulletins de paie &mdash; {selectedPeriode} ({bulletins.length})
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="overflow-x-auto">
               {fetching ? (
                 <div className="flex justify-center py-12">
                   <Loader2 className="h-6 w-6 animate-spin" style={{ color: "#C9A84C" }} />

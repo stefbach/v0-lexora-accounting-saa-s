@@ -231,7 +231,7 @@ export default function BalancePage() {
                     <span className="ml-2 text-xs font-normal text-gray-500">({comptes.length} comptes)</span>
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="p-0">
+                <CardContent className="p-0 overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow className="text-xs">

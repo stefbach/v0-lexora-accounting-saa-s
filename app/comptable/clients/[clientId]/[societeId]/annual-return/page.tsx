@@ -521,7 +521,7 @@ export default function AnnualReturnPage() {
             </Dialog>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -642,7 +642,7 @@ export default function AnnualReturnPage() {
             </Dialog>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>

@@ -246,7 +246,7 @@ function TresorerieView() {
             Comptes bancaires ({bankAccounts.length})
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="overflow-x-auto">
           {bankAccounts.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-6 text-center">
               <Wallet className="h-10 w-10 text-muted-foreground/40 mb-3" />

@@ -324,7 +324,7 @@ export default function FacturationSettingsPage() {
             <Button onClick={openNewClient} className="bg-[#1E2A4A]"><Plus className="w-4 h-4 mr-2" />Nouveau client</Button>
           </div>
           <Card>
-            <CardContent className="p-0">
+            <CardContent className="p-0 overflow-x-auto">
               {clients.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">Aucun client. Ajoutez votre premier client de facturation.</div>
               ) : (
@@ -418,7 +418,7 @@ export default function FacturationSettingsPage() {
             <Button onClick={openNewItem} className="bg-[#1E2A4A]"><Plus className="w-4 h-4 mr-2" />Nouveau service/produit</Button>
           </div>
           <Card>
-            <CardContent className="p-0">
+            <CardContent className="p-0 overflow-x-auto">
               {catalogue.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">Aucun service ou produit. Ajoutez vos prestations courantes.</div>
               ) : (

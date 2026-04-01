@@ -402,7 +402,7 @@ export default function IntercoPage() {
             {loadingRecon && <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />}
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -455,7 +455,7 @@ export default function IntercoPage() {
             <Badge variant="secondary" className="ml-2">{flux.length}</Badge>
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>

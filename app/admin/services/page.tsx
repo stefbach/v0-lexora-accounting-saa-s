@@ -419,7 +419,7 @@ export default function AdminServicesPage() {
           </button>
         </CardHeader>
         {section2Open && (
-          <CardContent>
+          <CardContent className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>

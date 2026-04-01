@@ -207,7 +207,7 @@ export default function AdminDocumentsPage() {
 
       {/* Table */}
       <Card>
-        <CardContent className="p-0">
+        <CardContent className="p-0 overflow-x-auto">
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#1E2A4A" }} />

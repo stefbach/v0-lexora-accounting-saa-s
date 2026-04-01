@@ -291,7 +291,7 @@ export default function EDFPage() {
                 <Badge variant="secondary">{declaration.nb_employes} employé(s)</Badge>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>

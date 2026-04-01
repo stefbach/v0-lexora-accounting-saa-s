@@ -308,7 +308,7 @@ export default function ITForm3Page() {
         <CardHeader className="pb-2">
           <CardTitle className="text-base" style={{ color: NAVY }}>Récapitulatif — Income Tax Computation</CardTitle>
         </CardHeader>
-        <CardContent className="p-0">
+        <CardContent className="p-0 overflow-x-auto">
           <Table>
             <TableBody>
               <TableRow className="border-t">

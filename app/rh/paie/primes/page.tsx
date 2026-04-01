@@ -191,7 +191,7 @@ export default function PrimesPage() {
               </Button>
             </div>
           </CardHeader>
-          <CardContent className="p-0">
+          <CardContent className="p-0 overflow-x-auto">
             {loading ? <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin" /></div>
               : catalogue.length === 0 ? <div className="text-center py-12 text-gray-500">Aucune prime dans le catalogue</div>
               : (
@@ -256,7 +256,7 @@ export default function PrimesPage() {
 
           <Card>
             <CardHeader><CardTitle className="text-[#1E2A4A]">Primes de {periode} ({saisies.length})</CardTitle></CardHeader>
-            <CardContent className="p-0">
+            <CardContent className="p-0 overflow-x-auto">
               {loading ? <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin" /></div>
                 : saisies.length === 0 ? <div className="text-center py-12 text-gray-500">Aucune prime saisie pour cette période</div>
                 : (

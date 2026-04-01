@@ -148,7 +148,7 @@ export default function ClientChargesSocialesPage() {
             Détail des charges sociales ({filtered.length})
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>

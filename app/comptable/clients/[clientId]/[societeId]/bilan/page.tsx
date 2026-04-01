@@ -153,7 +153,7 @@ export default function BilanOfficielPage() {
           <CardHeader>
             <CardTitle style={{ color: NAVY }}>ACTIF</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 overflow-x-auto">
             {/* Non-courant */}
             <div>
               <h3 className="font-semibold text-sm mb-2" style={{ color: NAVY }}>
@@ -229,7 +229,7 @@ export default function BilanOfficielPage() {
           <CardHeader>
             <CardTitle style={{ color: NAVY }}>PASSIF</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 overflow-x-auto">
             {/* Capitaux Propres */}
             <div>
               <h3 className="font-semibold text-sm mb-2" style={{ color: NAVY }}>

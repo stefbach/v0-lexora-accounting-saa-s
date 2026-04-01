@@ -327,7 +327,7 @@ export default function TVAPage() {
             </Select>
           </div>
         </CardHeader>
-        <CardContent className="p-0">
+        <CardContent className="p-0 overflow-x-auto">
           {loading ? (
             <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin" style={{ color: NAVY }} /></div>
           ) : tvaRecords.length === 0 ? (

@@ -246,7 +246,7 @@ export default function DemandesRHPage() {
             Demandes ({filtered.length})
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="overflow-x-auto">
           {loading ? (
             <div className="flex justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin" style={{ color: GOLD }} />

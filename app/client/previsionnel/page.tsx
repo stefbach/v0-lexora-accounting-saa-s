@@ -274,7 +274,7 @@ export default function PrevisionnelPage() {
                 </Button>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -379,7 +379,7 @@ export default function PrevisionnelPage() {
             <CardHeader className="pb-3">
               <CardTitle className="text-lg" style={{ color: NAVY }}>Flux de tresorerie - 6 mois + 3 mois projection</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>

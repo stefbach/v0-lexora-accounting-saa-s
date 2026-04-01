@@ -272,7 +272,7 @@ export default function JuridiquePage() {
           </Card>
 
           <Card>
-            <CardContent className="p-0">
+            <CardContent className="p-0 overflow-x-auto">
               {loadingContrats ? (
                 <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin" /></div>
               ) : contrats.length === 0 ? (

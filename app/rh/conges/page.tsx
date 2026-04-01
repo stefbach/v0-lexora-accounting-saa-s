@@ -191,7 +191,7 @@ export default function CongesPage() {
       {view === "attente" && (
         <Card>
           <CardHeader><CardTitle className="text-[#1E2A4A]">Demandes en attente de validation</CardTitle></CardHeader>
-          <CardContent className="p-0">
+          <CardContent className="p-0 overflow-x-auto">
             {loading ? <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin" /></div>
               : congesEnAttente.length === 0 ? <div className="text-center py-12 text-gray-500">Aucune demande en attente ✅</div>
               : (
@@ -312,7 +312,7 @@ export default function CongesPage() {
               Absences non planifiées — aujourd'hui ({new Date().toLocaleDateString("fr-FR")})
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="overflow-x-auto">
             {societe === "all" ? (
               <p className="text-gray-500 text-sm">Sélectionnez une société pour voir les absences du jour</p>
             ) : employes.length === 0 ? (

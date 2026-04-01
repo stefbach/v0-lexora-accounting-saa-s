@@ -331,7 +331,7 @@ export default function ComptableSocietesPage() {
               </div>
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
