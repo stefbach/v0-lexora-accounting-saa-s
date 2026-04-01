@@ -39,7 +39,7 @@ export async function GET(request: Request) {
     for (const societe of societes || []) {
       // Check if TVA declaration already submitted
       const { data: declaration } = await supabase
-        .from('declarations_fiscales')
+        .from('declarations_annuelles')
         .select('id')
         .eq('societe_id', societe.id)
         .eq('type_declaration', 'tva')

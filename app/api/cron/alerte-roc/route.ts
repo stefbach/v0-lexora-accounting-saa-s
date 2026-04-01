@@ -38,13 +38,13 @@ export async function GET(request: Request) {
     for (const societe of societes || []) {
       // Check if annual return already filed this year
       const { data: declaration } = await supabase
-        .from('declarations_fiscales')
+        .from('declarations_annuelles')
         .select('id')
         .eq('societe_id', societe.id)
-        .eq('type', 'ROC_ANNUAL_RETURN')
+        .eq('type_declaration', 'roc_annual_return')
         .gte('date_echeance', `${annee}-01-01`)
         .lte('date_echeance', `${annee}-12-31`)
-        .eq('statut', 'soumise')
+        .eq('statut', 'soumis')
         .maybeSingle()
 
       if (declaration) continue
