@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
@@ -103,17 +104,23 @@ export default function ClientFournisseursPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [newForm, setNewForm] = useState({ nom: "", adresse: "", email: "", tel: "", tva: "", cat: "628" })
   const [suggestedCat, setSuggestedCat] = useState<string | null>(null)
+  const [societes, setSocietes] = useState<any[]>([])
+  const [selectedSociete, setSelectedSociete] = useState("all")
 
   // Load overrides from localStorage
   useEffect(() => { setOverrides(getOverrides()) }, [])
 
-  // Fetch data
+  // Fetch sociétés + data
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch("/api/client/financial")
+        const url = selectedSociete !== "all"
+          ? `/api/client/financial?societe_id=${selectedSociete}`
+          : "/api/client/financial"
+        const res = await fetch(url)
         if (!res.ok) throw new Error("fetch failed")
         const json = await res.json()
+        if (json.financial?.availableSocietes) setSocietes(json.financial.availableSocietes)
         const all: Facture[] = (json.financial?.factures || [])
           .filter((f: Facture) => f.type_facture === "fournisseur")
         setFactures(all)
@@ -124,7 +131,7 @@ export default function ClientFournisseursPage() {
       }
     }
     load()
-  }, [])
+  }, [selectedSociete])
 
   // Group factures by fournisseur
   const fournisseurs = useMemo(() => {
@@ -281,6 +288,16 @@ export default function ClientFournisseursPage() {
             Classification automatique et suivi des achats par categorie comptable
           </p>
         </div>
+        <div className="flex items-center gap-2">
+          {societes.length > 1 && (
+            <Select value={selectedSociete} onValueChange={setSelectedSociete}>
+              <SelectTrigger className="w-[220px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Toutes les sociétés</SelectItem>
+                {societes.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
         <Button
           onClick={() => setDialogOpen(true)}
           style={{ backgroundColor: NAVY }}
@@ -289,6 +306,7 @@ export default function ClientFournisseursPage() {
           <Plus className="h-4 w-4 mr-2" />
           Ajouter un fournisseur
         </Button>
+        </div>
       </div>
 
       {/* SECTION 1 - KPIs */}
