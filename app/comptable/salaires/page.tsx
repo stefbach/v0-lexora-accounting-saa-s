@@ -55,7 +55,7 @@ export default function SalairesPage() {
   const chargesSociales = {
     csg_patronal: totalSalaires > 0 ? totalSalaires * 0.045 : 0, // ~4.5% moyen (3% ou 6% selon seuil)
     nsf_patronal: totalSalaires * 0.025,
-    hrdc: totalSalaires * 0.01,
+    training_levy: totalSalaires * 0.01,
   }
   const totalChargesPatronales = Object.values(chargesSociales).reduce((s, v) => s + v, 0)
 
@@ -127,7 +127,7 @@ export default function SalairesPage() {
                     { label: "CSG patronale", taux: "3% ou 6%", qui: "Employeur", montant: chargesSociales.csg_patronal, note: "3% si brut ≤50K MUR, 6% si >50K" },
                     { label: "NSF salariale", taux: "1%", qui: "Salarié", montant: totalSalaires * 0.01, note: "National Savings Fund" },
                     { label: "NSF patronale", taux: "2.5%", qui: "Employeur", montant: chargesSociales.nsf_patronal, note: "National Savings Fund" },
-                    { label: "HRDC (Training Levy)", taux: "1%", qui: "Employeur", montant: chargesSociales.hrdc, note: "Sur masse salariale >1.5M MUR" },
+                    { label: "Training Levy (1%)", taux: "1%", qui: "Employeur", montant: chargesSociales.training_levy, note: "Sur masse salariale >1.5M MUR" },
                     { label: "PAYE", taux: "0% / 10% / 15%", qui: "Salarié", montant: 0, note: "Retenu à la source — barème progressif MRA" },
                   ].map(r => (
                     <TableRow key={r.label}>

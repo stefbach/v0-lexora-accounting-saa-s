@@ -13,6 +13,7 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk'
+import { CLAUDE_MODEL } from '@/lib/claude'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -161,7 +162,7 @@ Fournis :
 6. Points d'attention spécifiques selon la nationalité des fondateurs`
 
   const response = await anthropic.messages.create({
-    model: 'claude-opus-4-5',
+    model: CLAUDE_MODEL,
     max_tokens: 2000,
     system: SYSTEM_PROMPT_EXPERT_JURIDIQUE,
     messages: [{ role: 'user', content: prompt }],
@@ -199,7 +200,7 @@ Basé sur FATF Recommendations, FSC AML/CFT Guidelines 2023, et FIAMLA.
 Réponds UNIQUEMENT avec le JSON valide.`
 
   const response = await anthropic.messages.create({
-    model: 'claude-opus-4-5',
+    model: CLAUDE_MODEL,
     max_tokens: 1500,
     system: SYSTEM_PROMPT_EXPERT_JURIDIQUE,
     messages: [{ role: 'user', content: prompt }],
@@ -257,7 +258,7 @@ Fournis une checklist JSON complète et structurée :
 Adapte selon le droit mauricien. Réponds UNIQUEMENT avec le JSON valide.`
 
   const response = await anthropic.messages.create({
-    model: 'claude-opus-4-5',
+    model: CLAUDE_MODEL,
     max_tokens: 3000,
     system: SYSTEM_PROMPT_EXPERT_JURIDIQUE,
     messages: [{ role: 'user', content: prompt }],
@@ -390,7 +391,7 @@ Instructions :
 6. Espaces pour signatures et dates`
 
   const response = await anthropic.messages.create({
-    model: 'claude-opus-4-5',
+    model: CLAUDE_MODEL,
     max_tokens: 4000,
     system: SYSTEM_PROMPT_EXPERT_JURIDIQUE,
     messages: [{ role: 'user', content: prompt }],
@@ -425,7 +426,7 @@ ${params.question}`
   messages.push({ role: 'user', content: question })
 
   const response = await anthropic.messages.create({
-    model: 'claude-opus-4-5',
+    model: CLAUDE_MODEL,
     max_tokens: 2500,
     system: SYSTEM_PROMPT_EXPERT_JURIDIQUE,
     messages,

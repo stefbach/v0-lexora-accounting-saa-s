@@ -149,9 +149,10 @@ export async function GET(request: Request) {
 
     // Call Claude AI
     const { default: Anthropic } = await import('@anthropic-ai/sdk')
+    const { CLAUDE_MODEL } = await import('@/lib/claude')
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
     const response = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+      model: CLAUDE_MODEL,
       max_tokens: 4096,
       temperature: 0,
       system: SYSTEM_PROMPT_RECOMMANDATIONS_CFO,

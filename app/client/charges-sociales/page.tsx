@@ -19,10 +19,10 @@ const chargesData: {
   id: string
   societe: string
   periode: string
-  npfPatronal: number
-  npfSalarie: number
-  hrdc: number
-  nps: number
+  csgPatronal: number
+  csgSalarie: number
+  trainingLevy: number
+  nsf: number
   paye: number
   total: number
   echeance: string
@@ -72,7 +72,7 @@ export default function ClientChargesSocialesPage() {
           Charges Sociales
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Suivi des cotisations NPF, HRDC, NPS et PAYE
+          Suivi des cotisations CSG, Training Levy, NSF et PAYE
         </p>
       </div>
 
@@ -80,40 +80,40 @@ export default function ClientChargesSocialesPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">NPF total</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">CSG total</CardTitle>
             <div className="rounded-lg p-2 bg-blue-50">
               <Shield className="h-5 w-5" style={{ color: "#1E2A4A" }} />
             </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
-              {formatMUR(chargesData.reduce((sum, r) => sum + r.npfPatronal + r.npfSalarie, 0))}
+              {formatMUR(chargesData.reduce((sum, r) => sum + r.csgPatronal + r.csgSalarie, 0))}
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">HRDC total</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Training Levy total</CardTitle>
             <div className="rounded-lg p-2 bg-amber-50">
               <GraduationCap className="h-5 w-5" style={{ color: "#C9A84C" }} />
             </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
-              {formatMUR(chargesData.reduce((sum, r) => sum + r.hrdc, 0))}
+              {formatMUR(chargesData.reduce((sum, r) => sum + r.trainingLevy, 0))}
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">NPS total</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">NSF total</CardTitle>
             <div className="rounded-lg p-2 bg-blue-50">
               <PiggyBank className="h-5 w-5" style={{ color: "#1E2A4A" }} />
             </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
-              {formatMUR(chargesData.reduce((sum, r) => sum + r.nps, 0))}
+              {formatMUR(chargesData.reduce((sum, r) => sum + r.nsf, 0))}
             </div>
           </CardContent>
         </Card>
@@ -154,10 +154,10 @@ export default function ClientChargesSocialesPage() {
               <TableRow>
                 <TableHead>Société</TableHead>
                 <TableHead>Période</TableHead>
-                <TableHead className="text-right">NPF Patronal</TableHead>
-                <TableHead className="text-right">NPF Salarié</TableHead>
-                <TableHead className="text-right">HRDC</TableHead>
-                <TableHead className="text-right">NPS</TableHead>
+                <TableHead className="text-right">CSG Patronal</TableHead>
+                <TableHead className="text-right">CSG Salarié</TableHead>
+                <TableHead className="text-right">Training Levy</TableHead>
+                <TableHead className="text-right">NSF</TableHead>
                 <TableHead className="text-right">PAYE</TableHead>
                 <TableHead className="text-right">Total</TableHead>
                 <TableHead>Échéance</TableHead>
@@ -173,10 +173,10 @@ export default function ClientChargesSocialesPage() {
                     </Badge>
                   </TableCell>
                   <TableCell className="font-medium">{row.periode}</TableCell>
-                  <TableCell className="text-right">{formatMUR(row.npfPatronal)}</TableCell>
-                  <TableCell className="text-right">{formatMUR(row.npfSalarie)}</TableCell>
-                  <TableCell className="text-right">{formatMUR(row.hrdc)}</TableCell>
-                  <TableCell className="text-right">{formatMUR(row.nps)}</TableCell>
+                  <TableCell className="text-right">{formatMUR(row.csgPatronal)}</TableCell>
+                  <TableCell className="text-right">{formatMUR(row.csgSalarie)}</TableCell>
+                  <TableCell className="text-right">{formatMUR(row.trainingLevy)}</TableCell>
+                  <TableCell className="text-right">{formatMUR(row.nsf)}</TableCell>
                   <TableCell className="text-right">{formatMUR(row.paye)}</TableCell>
                   <TableCell className="text-right font-semibold">{formatMUR(row.total)}</TableCell>
                   <TableCell>{row.echeance}</TableCell>

@@ -1,5 +1,6 @@
 // app/lib/expertRH.ts
 import Anthropic from '@anthropic-ai/sdk';
+import { CLAUDE_MODEL } from '@/lib/claude';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -28,7 +29,7 @@ export async function genererContrat(params: {
 
 export async function verifierContrat(html: string): Promise<{ risques: string[]; score: number; clauses_manquantes: string[] }> {
   const res = await anthropic.messages.create({
-    model: 'claude-opus-4-5', max_tokens: 1500,
+    model: CLAUDE_MODEL, max_tokens: 1500,
     system: SYSTEM_PROMPT_EXPERT_CONTRATS,
     messages: [{ role: 'user', content: `Analyse ce contrat et retourne un JSON : {"risques": [...], "score": 0-100, "clauses_manquantes": [...]}.\n\nContrat:\n${html.slice(0, 3000)}` }]
   });

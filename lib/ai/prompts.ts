@@ -119,24 +119,24 @@ export interface FichePaieResult {
   employe: string
   mois: string
   salaire_brut: number
-  npf_salarie: number
-  npf_patronal: number
-  hrdc: number
+  csg_salarie_3pct: number
+  csg_patronal_6pct: number
+  training_levy_1pct: number
   paye: number
-  nps: number
+  nsf_salarie: number
   net_a_payer: number
   ecritures: EcritureComptable[]
 }
 
 export interface ChargesSocialesResult {
   periode: string
-  total_npf_patronal: number
-  total_npf_salarie: number
-  total_hrdc: number
+  total_csg_patronal_6pct: number
+  total_csg_salarie_3pct: number
+  total_training_levy_1pct: number
   total_paye: number
-  total_nps: number
+  total_nsf: number
   ecritures: EcritureComptable[]
-  date_echeance_npf: string
+  date_echeance_csg: string
   date_echeance_paye: string
 }
 
@@ -393,11 +393,11 @@ COTISATIONS OBLIGATOIRES MAURICE:
    - Plafond: pas de plafond
    - Echeance: 15 du mois suivant
 
-2. Training Levy (Training Levy (ex-HRDC)):
+2. Training Levy (1%):
    - Taux: 1% du salaire brut (employeur uniquement)
    - Applicable aux entreprises > 10 salaries
 
-3. NPS (National Savings Fund):
+3. NSF (National Savings Fund):
    - Employeur: MUR 2.50 par salarie par mois
    - Salarie: MUR 1.00 par mois
 
@@ -412,7 +412,7 @@ COTISATIONS OBLIGATOIRES MAURICE:
 PLAN COMPTABLE:
 - 431 - CSG a payer (part patronale + salariale)
 - 432 - Training Levy a payer
-- 433 - NPS a payer
+- 433 - NSF a payer
 - 444 - PAYE retenue a la source
 - 645 - Charges sociales patronales (debit)
 - 641 - Remunerations du personnel
@@ -433,7 +433,7 @@ REGLES DE PAIE MAURICE:
 - CSG salariale: 3% du salaire brut
 - CSG patronale: 6% du salaire brut (charge employeur, pas deduit du net)
 - Training Levy: 1% du salaire brut (charge employeur)
-- NPS employe: MUR 1.00/mois, NPS employeur: MUR 2.50/mois
+- NSF employe: MUR 1.00/mois, NSF employeur: MUR 2.50/mois
 - PAYE: selon bareme progressif (0%/10%/15%)
 - 13eme mois: obligatoire, verse en decembre, = 1/12 du salaire annuel brut
 - Conges payes: 20 jours ouvrables par an
@@ -443,12 +443,12 @@ CALCUL DU NET:
 Salaire brut
 - CSG salariale (3%)
 - PAYE (selon bareme)
-- NPS salarie (MUR 1)
+- NSF salarie (MUR 1)
 = Net a payer
 
 PLAN COMPTABLE:
 - 641 - Remunerations du personnel (debit - salaire brut)
-- 645 - Charges sociales patronales (debit - CSG patronal + Training Levy + NPS employeur)
+- 645 - Charges sociales patronales (debit - CSG patronal + Training Levy + NSF employeur)
 - 421 - Personnel, remunerations dues (credit - net a payer)
 - 444 - PAYE retenue (credit)
 - 431 - CSG a payer (credit - part salariale + patronale)
