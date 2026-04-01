@@ -33,8 +33,6 @@ const adminSocieteNav: NavSection[] = [
     { href: "/client/bilan", label: "Mon Bilan", icon: ClipboardList },
     { href: "/client/tableau-de-bord", label: "Tableau de Bord", icon: BarChart3 },
     { href: "/client/previsionnel", label: "Prévisionnel", icon: TrendingUp },
-    { href: "/client/simulations", label: "Simulations", icon: Target },
-    { href: "/client/conseils", label: "Conseils", icon: Lightbulb },
   ]},
   { label: "Mon Compte", items: [
     { href: "/client/equipe", label: "Mon Équipe", icon: UsersIcon },
@@ -55,9 +53,7 @@ const adminFreelanceNav: NavSection[] = [
   { label: "Analyse", items: [
     { href: "/client/bilan", label: "Mon Bilan", icon: ClipboardList },
     { href: "/client/previsionnel", label: "Prévisionnel", icon: TrendingUp },
-    { href: "/client/simulations", label: "Simulations", icon: Target },
     { href: "/client/fiscal-freelance", label: "Mes Obligations Fiscales", icon: Calendar },
-    { href: "/client/conseils", label: "Conseils", icon: Lightbulb },
   ]},
   { label: "Mon Compte", items: [
     { href: "/client/alertes", label: "Mes Alertes", icon: Bell },

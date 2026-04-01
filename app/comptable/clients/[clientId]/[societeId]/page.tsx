@@ -14,7 +14,7 @@ import {
   ArrowLeft, TrendingUp, TrendingDown, ChevronRight, Upload,
   BarChart3, Landmark, Wallet, Calculator, FolderOpen, Loader2,
   FileText as FileIcon, CheckCircle, AlertTriangle as AlertIcon, Pencil,
-  Building2,
+  Building2, Eye, Mail, Phone, BookOpen, Scale, Receipt,
 } from "lucide-react"
 
 // ---------------------------------------------------------------------------
@@ -164,6 +164,8 @@ export default function SocieteContextPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<SocieteData | null>(null)
+  const [societeInfo, setSocieteInfo] = useState<{ brn?: string; statut_tva?: boolean; email?: string; phone?: string } | null>(null)
+  const [clientInfo, setClientInfo] = useState<{ email?: string; phone?: string } | null>(null)
 
   // Documents state
   const [uploading, setUploading] = useState(false)
@@ -179,19 +181,26 @@ export default function SocieteContextPage() {
       setLoading(true)
       setError(null)
       try {
-        // Fetch from existing APIs
-        const [usersRes, societesRes, dossiersRes] = await Promise.all([
-          fetch("/api/admin/users"),
-          fetch("/api/admin/societes"),
-          fetch("/api/admin/dossiers"),
+        // Use comptable-accessible APIs (avoids 403 from /api/admin/* for non-admins)
+        const [clientsRes, societesRes] = await Promise.all([
+          fetch("/api/comptable/clients"),
+          fetch("/api/comptable/societes"),
         ])
-        const [usersData, societesData, dossiersData] = await Promise.all([
-          usersRes.json(), societesRes.json(), dossiersRes.json(),
+        const [clientsData, societesData] = await Promise.all([
+          clientsRes.ok ? clientsRes.json() : { clients: [], dossiers: [] },
+          societesRes.ok ? societesRes.json() : { societes: [] },
         ])
 
-        const user = usersData.users?.find((u: any) => u.id === clientId)
-        const societe = societesData.societes?.find((s: any) => s.id === societeId)
-        if (!user || !societe) throw new Error("Données introuvables")
+        const user = (clientsData.clients || []).find((u: any) => u.id === clientId)
+        const societe = (societesData.societes || []).find((s: any) => s.id === societeId)
+        // Fall back to dossiers enriched data if societe not found directly
+        const societeFromDossier = !societe
+          ? (clientsData.dossiers || []).find((d: any) => d.societe_id === societeId)?.societe
+          : null
+        const resolvedSociete = societe || societeFromDossier
+
+        if (!user) throw new Error("Client introuvable")
+        if (!resolvedSociete) throw new Error("Société introuvable")
 
         // Fetch financial data for this client filtered by société
         const finRes = await fetch(`/api/client/financial?client_id=${clientId}&societe_id=${societeId}`)
@@ -328,7 +337,7 @@ export default function SocieteContextPage() {
 
         setData({
           clientName: user.full_name,
-          societeName: societe.nom,
+          societeName: resolvedSociete.nom,
           kpis,
           fournisseurs,
           facturesClients,

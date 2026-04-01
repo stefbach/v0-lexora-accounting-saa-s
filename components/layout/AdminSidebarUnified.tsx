@@ -76,7 +76,6 @@ const MENU = [
     items: [
       { href: "/direction", label: "Dashboard Direction", icon: BarChart3 },
       { href: "/client/previsionnel", label: "Prévisionnel", icon: TrendingUp },
-      { href: "/client/simulations", label: "Simulations", icon: Calculator },
     ]
   },
   {

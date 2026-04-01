@@ -130,8 +130,6 @@ const MENU: MenuSection[] = [
       { href: "/client/exercices", label: "Exercices", labelKey: "fin.fiscal_years", icon: Calendar },
       { href: "/client/previsionnel", label: "Prévisionnel", labelKey: "fin.forecast", icon: TrendingUp },
       { href: "/client/echeances", label: "Échéances", labelKey: "fin.deadlines", icon: CalendarDays },
-      { href: "/client/simulations", label: "Simulations", labelKey: "fin.simulations", icon: Target },
-      { href: "/client/conseils", label: "Conseils IA", labelKey: "fin.ai_advice", icon: Lightbulb },
     ]
   },
   {
