@@ -91,13 +91,13 @@ export default function ChargesSocialesPage() {
               ) : (
                 <div className="space-y-2">
                   {[
-                    { label: "CSG salarié (1.5% / 3%)", montant: totalCSGSalarie, compte: "431", color: "text-red-600" },
-                    { label: "CSG patronal (6%)", montant: totalCSGPatronal, compte: "431", color: "text-red-600" },
+                    { label: "CSG salarié (1.5% si brut ≤ 50K / 3% si > 50K)", montant: totalCSGSalarie, compte: "431", color: "text-red-600" },
+                    { label: "CSG patronal (3% si brut ≤ 50K / 6% si > 50K)", montant: totalCSGPatronal, compte: "431", color: "text-red-600" },
                     { label: "NSF salarié (1.5%)", montant: totalNSFSalarie, compte: "431", color: "text-blue-600" },
                     { label: "NSF patronal (2.5%)", montant: totalNSFPatronal, compte: "431", color: "text-blue-600" },
-                    { label: "Training Levy (1%)", montant: totalTrainingLevy, compte: "432", color: "text-purple-600" },
-                    { label: "PRGF (4.5% / 4.50 MUR/j)", montant: totalPRGF, compte: "432", color: "text-purple-600" },
-                    { label: "PAYE (impôt sur le revenu)", montant: totalPAYE, compte: "444", color: "text-orange-600" },
+                    { label: "Training Levy HRDC (1%)", montant: totalTrainingLevy, compte: "432", color: "text-purple-600" },
+                    { label: "PRGF (max 4.5% émoluments ou 4.50 MUR/jour)", montant: totalPRGF, compte: "432", color: "text-purple-600" },
+                    { label: "PAYE — Pay As You Earn (0% / 10% / 15%)", montant: totalPAYE, compte: "444", color: "text-orange-600" },
                   ].map((c, i) => (
                     <div key={i} className="flex items-center justify-between p-3 border rounded-lg">
                       <div className="flex items-center gap-3">

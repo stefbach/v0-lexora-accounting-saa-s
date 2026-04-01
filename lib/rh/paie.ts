@@ -5,7 +5,7 @@
  *
  * Rates applied:
  * - CSG Employee: 1.5% (salary <= 50,000 MUR), 3% (salary > 50,000 MUR)
- * - CSG Employer: 6% (flat)
+ * - CSG Employer: 3% if basic ≤ 50K, 6% if > 50K (progressive like employee CSG)
  * - NSF Employee: 1.5% (standard)
  * - NSF Employer: 2.5%
  * - Training Levy (HRDC): 1% of basic salary
@@ -19,7 +19,8 @@ export const PARAMS_MRA_DEFAUT: ParametresPaieMRA = {
   csg_seuil_taux_reduit: 50000,
   csg_salarie_taux_reduit: 0.015,   // 1.5% si brut <= 50 000 MUR
   csg_salarie_taux_plein: 0.030,    // 3% si brut > 50 000 MUR
-  csg_patronal: 0.060,              // 6% employeur
+  csg_patronal: 0.060,              // 6% employeur (si brut > 50K)
+  csg_patronal_taux_reduit: 0.030,  // 3% employeur (si brut <= 50K)
   nsf_salarie: 0.015,               // 1.5% NSF salarie
   nsf_patronal: 0.025,              // 2.5% NSF employeur
   training_levy: 0.010,             // 1% HRDC sur salaire de base
@@ -144,7 +145,11 @@ export function calculerBulletin(
   const salaire_net = salaire_brut - total_deductions
 
   // Charges patronales
-  const csg_patronal = Math.round(salaire_brut_base * params.csg_patronal)
+  // CSG patronale progressive: 3% si brut <= 50K, 6% si > 50K (même seuil que CSG salarié)
+  const csgPatronalTaux = salaire_brut_base <= params.csg_seuil_taux_reduit
+    ? (params.csg_patronal_taux_reduit || 0.030)
+    : params.csg_patronal
+  const csg_patronal = Math.round(salaire_brut_base * csgPatronalTaux)
   const csg_patronal_bonus = eoy_bonus > 0 ? Math.round(eoy_bonus * params.csg_patronal) : 0
   const nsf_patronal = Math.round(salaire_brut * params.nsf_patronal)
 
