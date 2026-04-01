@@ -375,6 +375,7 @@ export interface ParametresPaieMRA {
   csg_salarie_taux_reduit: number
   csg_salarie_taux_plein: number
   csg_patronal: number
+  csg_patronal_taux_reduit?: number
   nsf_salarie: number
   nsf_patronal: number
   training_levy: number
