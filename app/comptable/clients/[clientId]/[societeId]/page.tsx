@@ -202,6 +202,9 @@ export default function SocieteContextPage() {
         if (!user) throw new Error("Client introuvable")
         if (!resolvedSociete) throw new Error("Société introuvable")
 
+        setSocieteInfo({ brn: resolvedSociete.brn, statut_tva: resolvedSociete.statut_tva })
+        setClientInfo({ email: user.email, phone: user.phone })
+
         // Fetch financial data for this client filtered by société
         const finRes = await fetch(`/api/client/financial?client_id=${clientId}&societe_id=${societeId}`)
         const finData = finRes.ok ? await finRes.json() : { financial: null }
@@ -461,7 +464,8 @@ export default function SocieteContextPage() {
 
   return (
     <div className="flex-1 overflow-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      {/* Breadcrumb + actions */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2 text-sm">
           <Link href="/comptable/clients" className="text-muted-foreground hover:text-foreground">Portefeuille</Link>
           <ChevronRight className="h-4 w-4 text-muted-foreground" />
@@ -469,10 +473,82 @@ export default function SocieteContextPage() {
           <ChevronRight className="h-4 w-4 text-muted-foreground" />
           <span className="font-medium" style={{ color: NAVY }}>{societeName}</span>
         </div>
-        <Button variant="outline" size="sm" asChild>
-          <Link href={`/comptable/clients/${clientId}`}><ArrowLeft className="mr-1 h-4 w-4" />Retour au client</Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" asChild>
+            <Link href={`/comptable/clients/${clientId}`}><ArrowLeft className="mr-1 h-4 w-4" />Retour au client</Link>
+          </Button>
+        </div>
       </div>
+
+      {/* Société info header */}
+      <Card style={{ borderLeft: `4px solid ${GOLD}`, backgroundColor: `${NAVY}06` }}>
+        <CardContent className="pt-5 pb-4">
+          <div className="flex flex-col md:flex-row md:items-start gap-4">
+            <div
+              className="flex items-center justify-center h-12 w-12 rounded-lg text-white font-bold text-lg shrink-0"
+              style={{ backgroundColor: NAVY }}
+            >
+              <Building2 className="h-6 w-6" />
+            </div>
+            <div className="flex-1 space-y-1.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-xl font-bold" style={{ color: NAVY }}>{societeName}</h1>
+                {societeInfo?.statut_tva && (
+                  <Badge className="bg-green-50 text-green-700 border-green-200 text-xs">TVA Assujetti</Badge>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+                {societeInfo?.brn && (
+                  <span className="flex items-center gap-1">
+                    <FileIcon className="h-3.5 w-3.5" />
+                    BRN : <strong>{societeInfo.brn}</strong>
+                  </span>
+                )}
+                {clientInfo?.email && (
+                  <span className="flex items-center gap-1">
+                    <Mail className="h-3.5 w-3.5" />
+                    {clientInfo.email}
+                  </span>
+                )}
+                {clientInfo?.phone && (
+                  <span className="flex items-center gap-1">
+                    <Phone className="h-3.5 w-3.5" />
+                    {clientInfo.phone}
+                  </span>
+                )}
+              </div>
+            </div>
+            {/* Quick module links */}
+            <div className="flex flex-wrap gap-2 shrink-0">
+              <Link href={`/comptable/clients/${clientId}/${societeId}/grand-livre`}>
+                <Button variant="outline" size="sm" className="gap-1 text-xs" style={{ borderColor: `${NAVY}50`, color: NAVY }}>
+                  <BookOpen className="h-3 w-3" />Grand Livre
+                </Button>
+              </Link>
+              <Link href={`/comptable/clients/${clientId}/${societeId}/balance`}>
+                <Button variant="outline" size="sm" className="gap-1 text-xs" style={{ borderColor: `${NAVY}50`, color: NAVY }}>
+                  <Scale className="h-3 w-3" />Balance
+                </Button>
+              </Link>
+              <Link href={`/comptable/clients/${clientId}/${societeId}/bilan`}>
+                <Button variant="outline" size="sm" className="gap-1 text-xs" style={{ borderColor: `${NAVY}50`, color: NAVY }}>
+                  <TrendingUp className="h-3 w-3" />Bilan &amp; P&amp;L
+                </Button>
+              </Link>
+              <Link href={`/comptable/clients/${clientId}/${societeId}/tva`}>
+                <Button variant="outline" size="sm" className="gap-1 text-xs" style={{ borderColor: `${NAVY}50`, color: NAVY }}>
+                  <Receipt className="h-3 w-3" />TVA
+                </Button>
+              </Link>
+              <Link href={`/comptable/clients/${clientId}/${societeId}/it-form3`}>
+                <Button variant="outline" size="sm" className="gap-1 text-xs" style={{ borderColor: `${NAVY}50`, color: NAVY }}>
+                  <FileIcon className="h-3 w-3" />IT Form 3
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* KPI Cards */}
       {kpis.length > 0 ? (
