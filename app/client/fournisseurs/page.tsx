@@ -14,9 +14,6 @@ import {
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select"
 import { Search, Plus, Loader2, Users, ShoppingCart, FileText, Clock, ArrowUpDown, Building2, Tag, PercentIcon } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
 
