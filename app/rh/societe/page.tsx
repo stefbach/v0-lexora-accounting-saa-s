@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -7,137 +7,354 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Save, Building2, Phone, Banknote, Settings, MapPin, CheckCircle } from "lucide-react"
+import { Separator } from "@/components/ui/separator"
+import {
+  Loader2, Save, Building2, Phone, Banknote, Settings,
+  MapPin, CheckCircle, AlertCircle, FileText, Scale,
+} from "lucide-react"
 
 const NAVY = "#1E2A4A"
 const GOLD = "#C9A84C"
 
-type Tab = "details" | "contact" | "payroll" | "bank"
-
-function TabButton({ id, label, active, onClick }: { id: Tab; label: string; active: boolean; onClick: () => void }) {
+// ── Fluid input: defaultValue + onBlur, never re-renders on every keystroke ──
+function Field({
+  label, name, defaultValue, type = "text", placeholder, step, required,
+  onChange,
+}: {
+  label: string
+  name: string
+  defaultValue?: string | number | null
+  type?: string
+  placeholder?: string
+  step?: string
+  required?: boolean
+  onChange: (name: string, value: string | number) => void
+}) {
   return (
-    <button onClick={onClick}
-      className={`px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors ${active ? "text-white" : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"}`}
-      style={active ? { backgroundColor: NAVY } : {}}>
-      {label}
+    <div>
+      <Label className="text-xs text-gray-600 mb-1 block">
+        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+      </Label>
+      <Input
+        key={String(defaultValue ?? "")}
+        type={type}
+        step={step}
+        placeholder={placeholder}
+        defaultValue={defaultValue ?? ""}
+        onBlur={e => {
+          const raw = e.target.value
+          const val = type === "number" ? (raw === "" ? "" : Number(raw)) : raw
+          onChange(name, val as string | number)
+        }}
+        className="h-9 text-sm"
+      />
+    </div>
+  )
+}
+
+type Tab = "details" | "contact" | "bank" | "rh" | "fiscal"
+
+interface TabBtnProps { id: Tab; label: string; icon: React.ReactNode; active: boolean; onClick: () => void }
+function TabBtn({ id, label, icon, active, onClick }: TabBtnProps) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors whitespace-nowrap
+        ${active ? "text-white" : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"}`}
+      style={active ? { backgroundColor: NAVY } : {}}
+    >
+      {icon}{label}
     </button>
   )
 }
 
-// Each tab is a separate component with its own state to avoid re-render issues
+// ── DETAILS TAB ────────────────────────────────────────────────────────────────
 function DetailsTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
-  const [f, setF] = useState({ ...data })
-  const u = (k: string, v: any) => setF((p: any) => ({ ...p, [k]: v }))
+  const f = useRef({ ...data })
+  const u = (k: string, v: any) => { f.current[k] = v }
+  const [tva, setTva] = useState<boolean>(!!data.statut_tva)
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-4">
-          <div><Label>Nom de la société *</Label><Input value={f.nom || ""} onChange={e => u("nom", e.target.value)} /></div>
-          <div><Label>Nom court</Label><Input value={f.short_name || ""} onChange={e => u("short_name", e.target.value)} placeholder="Ex: DDS" /></div>
-          <div><Label>ERN (Employer Registration Number)</Label><Input value={f.ern || ""} onChange={e => u("ern", e.target.value)} placeholder="Ex: 02276097" /></div>
-          <div><Label>NPF No.</Label><Input value={f.npf_number || ""} onChange={e => u("npf_number", e.target.value)} placeholder="Ex: 02276097" /></div>
-          <div><Label>Date d'incorporation</Label><Input type="date" value={f.date_incorporation || ""} onChange={e => u("date_incorporation", e.target.value)} /></div>
+          <Field label="Nom de la société" name="nom" defaultValue={data.nom} required onChange={u} />
+          <Field label="Nom court" name="short_name" defaultValue={data.short_name} placeholder="Ex: DDS" onChange={u} />
+          <Field label="ERN (Employer Registration Number)" name="ern" defaultValue={data.ern} placeholder="Ex: 02276097" onChange={u} />
+          <Field label="NPF No." name="npf_number" defaultValue={data.npf_number} placeholder="Ex: 02276097" onChange={u} />
+          <Field label="Date d'incorporation" name="date_incorporation" type="date" defaultValue={data.date_incorporation} onChange={u} />
         </div>
         <div className="space-y-4">
-          <div><Label>BRN (Business Registration Number)</Label><Input value={f.brn || ""} onChange={e => u("brn", e.target.value)} placeholder="Ex: C20173522" /></div>
-          <div><Label>Numéro TVA MRA</Label><Input value={f.numero_tva_mra || ""} onChange={e => u("numero_tva_mra", e.target.value)} /></div>
-          <div><Label>Nature of Business</Label><Input value={f.nature_business || ""} onChange={e => u("nature_business", e.target.value)} placeholder="Ex: BPO, Télémedecine" /></div>
-          <div><Label>Secteur d'activité</Label><Input value={f.secteur_activite || ""} onChange={e => u("secteur_activite", e.target.value)} /></div>
-          <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-            <Switch checked={f.statut_tva === true} onCheckedChange={v => u("statut_tva", v)} />
-            <Label>Assujetti à la TVA</Label>
+          <Field label="BRN (Business Registration Number)" name="brn" defaultValue={data.brn} placeholder="Ex: C20173522" onChange={u} />
+          <Field label="PAYE Number (MRA)" name="paye_number" defaultValue={data.paye_number} placeholder="Ex: P1234567" onChange={u} />
+          <Field label="CSG Number" name="csg_number" defaultValue={data.csg_number} placeholder="Ex: CSG123456" onChange={u} />
+          <Field label="NSF Number" name="nsf_number" defaultValue={data.nsf_number} placeholder="Ex: NSF789012" onChange={u} />
+          <Field label="Numéro TVA MRA" name="numero_tva_mra" defaultValue={data.numero_tva_mra} onChange={u} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="space-y-4">
+          <Field label="Nature of Business" name="nature_business" defaultValue={data.nature_business} placeholder="Ex: BPO, Télémedecine" onChange={u} />
+          <Field label="Secteur d'activité" name="secteur_activite" defaultValue={data.secteur_activite} onChange={u} />
+        </div>
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border mt-5">
+            <Switch
+              checked={tva}
+              onCheckedChange={v => { setTva(v); u("statut_tva", v) }}
+            />
+            <Label className="cursor-pointer">Assujetti à la TVA</Label>
           </div>
         </div>
       </div>
-      <Button onClick={() => onSave(f)} style={{ backgroundColor: NAVY }} className="text-white">
-        <Save className="h-4 w-4 mr-2" /> Enregistrer
+
+      <Button
+        onClick={() => onSave({ ...f.current, statut_tva: tva })}
+        style={{ backgroundColor: NAVY }}
+        className="text-white hover:opacity-90"
+      >
+        <Save className="h-4 w-4 mr-2" /> Enregistrer les détails
       </Button>
     </div>
   )
 }
 
+// ── CONTACT TAB ────────────────────────────────────────────────────────────────
 function ContactTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
-  const [f, setF] = useState({ ...data })
-  const u = (k: string, v: any) => setF((p: any) => ({ ...p, [k]: v }))
+  const f = useRef({ ...data })
+  const u = (k: string, v: any) => { f.current[k] = v }
 
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">Personne de contact</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-2 gap-4">
-          <div><Label>Nom</Label><Input value={f.contact_name || ""} onChange={e => u("contact_name", e.target.value)} placeholder="Stephane Bach" /></div>
-          <div><Label>Fonction</Label><Input value={f.contact_position || ""} onChange={e => u("contact_position", e.target.value)} placeholder="CEO" /></div>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-gray-600">Personne de contact</CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Field label="Nom" name="contact_name" defaultValue={data.contact_name} placeholder="Stephane Bach" onChange={u} />
+          <Field label="Fonction" name="contact_position" defaultValue={data.contact_position} placeholder="CEO" onChange={u} />
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">Coordonnées</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-2 gap-4">
-          <div><Label>Adresse</Label><Input value={f.adresse || ""} onChange={e => u("adresse", e.target.value)} placeholder="Bourdet Road" /></div>
-          <div><Label>Téléphone</Label><Input value={f.telephone || ""} onChange={e => u("telephone", e.target.value)} placeholder="52503644" /></div>
-          <div><Label>Adresse 2</Label><Input value={f.adresse2 || ""} onChange={e => u("adresse2", e.target.value)} /></div>
-          <div><Label>Fax</Label><Input value={f.fax || ""} onChange={e => u("fax", e.target.value)} /></div>
-          <div><Label>Ville</Label><Input value={f.ville || ""} onChange={e => u("ville", e.target.value)} placeholder="Grand Baie" /></div>
-          <div><Label>Email</Label><Input type="email" value={f.email || ""} onChange={e => u("email", e.target.value)} /></div>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-gray-600">Coordonnées</CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Field label="Adresse" name="adresse" defaultValue={data.adresse} placeholder="Bourdet Road" onChange={u} />
+          <Field label="Téléphone" name="telephone" defaultValue={data.telephone} placeholder="52503644" onChange={u} />
+          <Field label="Adresse (ligne 2)" name="adresse2" defaultValue={data.adresse2} onChange={u} />
+          <Field label="Fax" name="fax" defaultValue={data.fax} onChange={u} />
+          <Field label="Ville" name="ville" defaultValue={data.ville} placeholder="Grand Baie" onChange={u} />
+          <Field label="Email" name="email" type="email" defaultValue={data.email} onChange={u} />
+          <Field label="Email DCO (Data Controller)" name="email_dco" type="email" defaultValue={data.email_dco} onChange={u} />
+          <Field label="Site web" name="website" defaultValue={data.website} placeholder="https://www.example.mu" onChange={u} />
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">Email spécifique</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-2 gap-4">
-          <div><Label>Email réponse demandes</Label><Input type="email" value={f.email || ""} onChange={e => u("email", e.target.value)} /></div>
-          <div><Label>Email DCO (Data Controller)</Label><Input type="email" value={f.email_dco || ""} onChange={e => u("email_dco", e.target.value)} /></div>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
+            <MapPin className="h-4 w-4" /> Localisation GPS (pour pointage)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Field label="Latitude" name="latitude" type="number" step="any" defaultValue={data.latitude} onChange={u} />
+          <Field label="Longitude" name="longitude" type="number" step="any" defaultValue={data.longitude} onChange={u} />
+          <Field label="Rayon pointage (mètres)" name="distance_pointage" type="number" defaultValue={data.distance_pointage ?? 50} onChange={u} />
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500 flex items-center gap-2"><MapPin className="h-4 w-4" /> Localisation GPS (pour pointage)</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-3 gap-4">
-          <div><Label>Latitude</Label><Input type="number" step="any" value={f.latitude || ""} onChange={e => u("latitude", e.target.value)} /></div>
-          <div><Label>Longitude</Label><Input type="number" step="any" value={f.longitude || ""} onChange={e => u("longitude", e.target.value)} /></div>
-          <div><Label>Rayon pointage (mètres)</Label><Input type="number" value={f.distance_pointage || 50} onChange={e => u("distance_pointage", parseInt(e.target.value))} /></div>
-        </CardContent>
-      </Card>
-
-      <Button onClick={() => onSave(f)} style={{ backgroundColor: NAVY }} className="text-white">
-        <Save className="h-4 w-4 mr-2" /> Enregistrer
+      <Button onClick={() => onSave(f.current)} style={{ backgroundColor: NAVY }} className="text-white hover:opacity-90">
+        <Save className="h-4 w-4 mr-2" /> Enregistrer les coordonnées
       </Button>
     </div>
   )
 }
 
-function PayrollTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
-  const [f, setF] = useState({ ...data })
-  const u = (k: string, v: any) => setF((p: any) => ({ ...p, [k]: v }))
+// ── BANKING TAB ────────────────────────────────────────────────────────────────
+function BankTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
+  const f = useRef({ ...data })
+  const u = (k: string, v: any) => { f.current[k] = v }
+  const [bankAccounts, setBankAccounts] = useState<any[]>([])
+  const [devises, setDevises] = useState<string[]>(
+    data.devises_actives
+      ? (typeof data.devises_actives === "string" ? JSON.parse(data.devises_actives) : data.devises_actives)
+      : ["MUR", "EUR", "USD"]
+  )
+  const ALL_DEVISES = ["MUR", "EUR", "USD", "GBP", "JPY", "ZAR", "INR", "MGA", "SCR", "NZD", "CHF", "AUD", "CAD", "SGD"]
+
+  useEffect(() => {
+    if (data.id) {
+      fetch(`/api/comptable/banque?societe_id=${data.id}`)
+        .then(r => r.json())
+        .then(d => setBankAccounts(d.comptes || []))
+        .catch(() => {})
+    }
+  }, [data.id])
+
+  const toggleDevise = (d: string, checked: boolean) => {
+    const next = checked ? [...devises, d] : devises.filter(x => x !== d)
+    setDevises(next)
+    f.current.devises_actives = next
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-gray-600">Coordonnées bancaires principales</CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Field label="Nom de la banque" name="bank_name" defaultValue={data.bank_name} placeholder="MCB, SBM, ABC…" onChange={u} />
+          <Field label="Numéro de compte" name="bank_account_number" defaultValue={data.bank_account_number} placeholder="000000000000" onChange={u} />
+          <Field label="IBAN" name="iban" defaultValue={data.iban} placeholder="MU12MCBL0100…" onChange={u} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-gray-600">Comptes bancaires (relevés importés)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {bankAccounts.length === 0 ? (
+            <p className="text-gray-400 text-sm py-4 text-center">
+              Aucun compte bancaire. Les comptes sont créés automatiquement lors de l'import d'un relevé.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {bankAccounts.map((b: any) => (
+                <div key={b.id} className="p-3 border rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <Badge style={{ backgroundColor: NAVY }} className="text-white">{b.banque}</Badge>
+                    <Badge variant="outline">{b.devise}</Badge>
+                  </div>
+                  <div className="mt-2 text-sm space-y-1">
+                    <p><span className="text-gray-500">Compte:</span> {b.numero_compte || "—"}</p>
+                    <p><span className="text-gray-500">IBAN:</span> {b.iban || "—"}</p>
+                    {b.solde_actuel != null && (
+                      <p>
+                        <span className="text-gray-500">Solde:</span>{" "}
+                        <span className="font-mono font-medium">
+                          {Number(b.solde_actuel).toLocaleString("fr-FR")} {b.devise}
+                        </span>
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-gray-600">Devises activées</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
+            {ALL_DEVISES.map(d => (
+              <label key={d} className="flex items-center gap-2 cursor-pointer p-2 rounded hover:bg-gray-50 border">
+                <input
+                  type="checkbox"
+                  checked={devises.includes(d)}
+                  onChange={e => toggleDevise(d, e.target.checked)}
+                  className="rounded border-gray-300"
+                />
+                <span className="text-sm font-medium">{d}</span>
+              </label>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Button onClick={() => onSave(f.current)} style={{ backgroundColor: NAVY }} className="text-white hover:opacity-90">
+        <Save className="h-4 w-4 mr-2" /> Enregistrer les données bancaires
+      </Button>
+    </div>
+  )
+}
+
+// ── RH PARAMETERS TAB ─────────────────────────────────────────────────────────
+function RhTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
+  const f = useRef({ ...data })
+  const u = (k: string, v: any) => { f.current[k] = v }
+  const uSelect = (k: string) => (v: string) => { f.current[k] = v }
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">Périodes</CardTitle></CardHeader>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">Temps de travail</CardTitle>
+          </CardHeader>
           <CardContent className="space-y-4">
-            <div><Label>Jour de clôture du mois</Label>
-              <Select value={String(f.period_closing_day || 24)} onValueChange={v => u("period_closing_day", parseInt(v))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{Array.from({ length: 28 }, (_, i) => i + 1).map(d => <SelectItem key={d} value={String(d)}>{d}</SelectItem>)}</SelectContent>
+            <Field label="Heures par semaine" name="heures_semaine" type="number" step="0.5" defaultValue={data.heures_semaine ?? 45} onChange={u} />
+            <Field label="Jours travaillés / semaine" name="jours_travail_semaine" type="number" defaultValue={data.jours_travail_semaine ?? 5} onChange={u} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">Politique de congés</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Field label="Congés annuels (jours / an)" name="conges_annuels_jours" type="number" defaultValue={data.conges_annuels_jours ?? 20} onChange={u} />
+            <Field label="Congés maladie (jours / an)" name="conges_maladie_jours" type="number" defaultValue={data.conges_maladie_jours ?? 15} onChange={u} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">Heures supplémentaires</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Field label="Taux normal (× salaire horaire)" name="ot_taux_normal" type="number" step="0.1" defaultValue={data.ot_taux_normal ?? 1.5} onChange={u} />
+            <Field label="Taux majoré (jours fériés / nuit)" name="ot_taux_majore" type="number" step="0.1" defaultValue={data.ot_taux_majore ?? 2.0} onChange={u} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">Paie</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label className="text-xs text-gray-600 mb-1 block">Jour de clôture du mois</Label>
+              <Select defaultValue={String(data.period_closing_day ?? 24)} onValueChange={uSelect("period_closing_day")}>
+                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 28 }, (_, i) => i + 1).map(d => (
+                    <SelectItem key={d} value={String(d)}>{d}</SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
             </div>
-            <div><Label>Jour de paiement</Label>
-              <Select value={String(f.pay_day || 28)} onValueChange={v => u("pay_day", parseInt(v))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{Array.from({ length: 31 }, (_, i) => i + 1).map(d => <SelectItem key={d} value={String(d)}>{d}</SelectItem>)}</SelectContent>
+            <div>
+              <Label className="text-xs text-gray-600 mb-1 block">Jour de paiement</Label>
+              <Select defaultValue={String(data.pay_day ?? 28)} onValueChange={uSelect("pay_day")}>
+                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
+                    <SelectItem key={d} value={String(d)}>{d}</SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">Calcul salaire</CardTitle></CardHeader>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">Calcul du salaire</CardTitle>
+          </CardHeader>
           <CardContent className="space-y-4">
-            <div><Label>Fréquence</Label>
-              <Select value={f.salary_frequency || "monthly"} onValueChange={v => u("salary_frequency", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+            <div>
+              <Label className="text-xs text-gray-600 mb-1 block">Fréquence</Label>
+              <Select defaultValue={data.salary_frequency ?? "monthly"} onValueChange={uSelect("salary_frequency")}>
+                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="monthly">Mensuel</SelectItem>
                   <SelectItem value="fortnightly">Bimensuel</SelectItem>
@@ -145,9 +362,10 @@ function PayrollTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
                 </SelectContent>
               </Select>
             </div>
-            <div><Label>EOY Bonus (13ème mois)</Label>
-              <Select value={f.eoy_bonus_mode || "separated"} onValueChange={v => u("eoy_bonus_mode", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+            <div>
+              <Label className="text-xs text-gray-600 mb-1 block">EOY Bonus (13ème mois)</Label>
+              <Select defaultValue={data.eoy_bonus_mode ?? "separated"} onValueChange={uSelect("eoy_bonus_mode")}>
+                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="separated">Bulletin séparé</SelectItem>
                   <SelectItem value="included">Inclus dans le bulletin</SelectItem>
@@ -158,11 +376,34 @@ function PayrollTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
         </Card>
 
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">Déclarations</CardTitle></CardHeader>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">Bulletin de paie</CardTitle>
+          </CardHeader>
           <CardContent className="space-y-4">
-            <div><Label>Type de déclaration</Label>
-              <Select value={f.declaration_type || "MRA_PACO"} onValueChange={v => u("declaration_type", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+            <div>
+              <Label className="text-xs text-gray-600 mb-1 block">Template</Label>
+              <Select defaultValue={data.payslip_template ?? "basic"} onValueChange={uSelect("payslip_template")}>
+                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="basic">Basic</SelectItem>
+                  <SelectItem value="detailed">Détaillé</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs text-gray-600 mb-1 block">Langue d'impression</Label>
+              <Select defaultValue={data.payslip_language ?? "fr"} onValueChange={uSelect("payslip_language")}>
+                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="fr">Français</SelectItem>
+                  <SelectItem value="en">English</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs text-gray-600 mb-1 block">Déclaration MRA</Label>
+              <Select defaultValue={data.declaration_type ?? "MRA_PACO"} onValueChange={uSelect("declaration_type")}>
+                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="MRA_PACO">MRA (PACO)</SelectItem>
                   <SelectItem value="MRA_DIRECT">MRA Direct</SelectItem>
@@ -171,196 +412,329 @@ function PayrollTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
             </div>
           </CardContent>
         </Card>
-
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">Bulletin de paie</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div><Label>Template</Label>
-              <Select value={f.payslip_template || "basic"} onValueChange={v => u("payslip_template", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="basic">Basic</SelectItem>
-                  <SelectItem value="detailed">Détaillé</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div><Label>Langue d'impression</Label>
-              <Select value={f.payslip_language || "fr"} onValueChange={v => u("payslip_language", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="fr">Français</SelectItem>
-                  <SelectItem value="en">English</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
-      <Button onClick={() => onSave(f)} style={{ backgroundColor: NAVY }} className="text-white">
-        <Save className="h-4 w-4 mr-2" /> Enregistrer
+      <Button onClick={() => onSave(f.current)} style={{ backgroundColor: NAVY }} className="text-white hover:opacity-90">
+        <Save className="h-4 w-4 mr-2" /> Enregistrer les paramètres RH
       </Button>
     </div>
   )
 }
 
-function BankTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
-  const [f, setF] = useState({ ...data })
-  const u = (k: string, v: any) => setF((p: any) => ({ ...p, [k]: v }))
-  const [bankAccounts, setBankAccounts] = useState<any[]>([])
+// ── FISCAL PARAMETERS TAB ──────────────────────────────────────────────────────
+function FiscalTab({
+  data, params, year, onSave,
+}: {
+  data: any
+  params: any
+  year: number
+  onSave: (societeData: any, paramsData: any) => void
+}) {
+  const fSociete = useRef({ ...data })
+  const fParams = useRef({ annee: year, ...(params ?? {}) })
+  const uS = (k: string, v: any) => { fSociete.current[k] = v }
+  const uP = (k: string, v: any) => { fParams.current[k] = v }
 
-  useEffect(() => {
-    if (data.id) {
-      fetch(`/api/comptable/banque?societe_id=${data.id}`).then(r => r.json()).then(d => setBankAccounts(d.comptes || [])).catch(() => {})
-    }
-  }, [data.id])
-
-  const devises = f.devises_actives ? (typeof f.devises_actives === 'string' ? JSON.parse(f.devises_actives) : f.devises_actives) : ['MUR', 'EUR', 'USD']
-  const allDevises = ['MUR', 'EUR', 'USD', 'GBP', 'JPY', 'ZAR', 'INR', 'MGA', 'SCR', 'NZD', 'CHF', 'AUD', 'CAD', 'SGD']
+  const p = params ?? {}
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center gap-2 p-3 rounded-lg" style={{ backgroundColor: `${NAVY}10` }}>
+        <Scale className="h-4 w-4" style={{ color: NAVY }} />
+        <span className="text-sm font-medium" style={{ color: NAVY }}>
+          Paramètres fiscaux — Exercice {year} (Finance Act Mauritius)
+        </span>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* CSG */}
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">Comptes bancaires</CardTitle></CardHeader>
-          <CardContent>
-            {bankAccounts.length === 0 ? (
-              <p className="text-gray-400 text-sm py-4 text-center">Aucun compte bancaire. Les comptes sont créés automatiquement lors de l'upload d'un relevé bancaire.</p>
-            ) : (
-              <div className="space-y-3">
-                {bankAccounts.map((b: any) => (
-                  <div key={b.id} className="p-3 border rounded-lg">
-                    <div className="flex items-center justify-between">
-                      <Badge style={{ backgroundColor: NAVY }} className="text-white">{b.banque}</Badge>
-                      <Badge variant="outline">{b.devise}</Badge>
-                    </div>
-                    <div className="mt-2 text-sm space-y-1">
-                      <p><span className="text-gray-500">Compte:</span> {b.numero_compte || "—"}</p>
-                      <p><span className="text-gray-500">IBAN:</span> {b.iban || "—"}</p>
-                      {b.solde_actuel != null && <p><span className="text-gray-500">Solde:</span> <span className="font-mono font-medium">{Number(b.solde_actuel).toLocaleString("fr-FR")} {b.devise}</span></p>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">CSG — Contribution Sociale Généralisée</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Field label="Seuil taux réduit (MUR / mois)" name="csg_seuil_taux_reduit" type="number" defaultValue={p.csg_seuil_taux_reduit ?? 50000} onChange={uP} />
+            <Separator />
+            <p className="text-xs font-medium text-gray-500 uppercase">Salarié</p>
+            <Field label="Taux réduit salarié (%)" name="csg_salarie_taux_reduit" type="number" step="0.01" defaultValue={p.csg_salarie_taux_reduit ?? 1.5} onChange={uP} />
+            <Field label="Taux plein salarié (%)" name="csg_salarie_taux_plein" type="number" step="0.01" defaultValue={p.csg_salarie_taux_plein ?? 3} onChange={uP} />
+            <Separator />
+            <p className="text-xs font-medium text-gray-500 uppercase">Patronal</p>
+            <Field label="Taux patronal (%)" name="csg_patronal" type="number" step="0.01" defaultValue={p.csg_patronal ?? 6} onChange={uP} />
+            <Field label="Taux patronal réduit (%)" name="csg_patronal_taux_reduit" type="number" step="0.01" defaultValue={p.csg_patronal_taux_reduit ?? 3} onChange={uP} />
           </CardContent>
         </Card>
 
+        {/* NSF */}
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">Devises activées</CardTitle></CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-3 gap-2">
-              {allDevises.map(d => (
-                <label key={d} className="flex items-center gap-2 cursor-pointer p-2 rounded hover:bg-gray-50">
-                  <input type="checkbox" checked={devises.includes(d)}
-                    onChange={e => {
-                      const next = e.target.checked ? [...devises, d] : devises.filter((x: string) => x !== d)
-                      u("devises_actives", next)
-                    }}
-                    className="rounded border-gray-300" />
-                  <span className="text-sm font-medium">{d}</span>
-                </label>
-              ))}
-            </div>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">NSF — National Savings Fund</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Field label="Taux salarié NSF (%)" name="nsf_salarie" type="number" step="0.01" defaultValue={p.nsf_salarie ?? 1} onChange={uP} />
+            <Field label="Taux patronal NSF (%)" name="nsf_patronal" type="number" step="0.01" defaultValue={p.nsf_patronal ?? 2.5} onChange={uP} />
+          </CardContent>
+        </Card>
+
+        {/* PAYE */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">PAYE — Income Tax</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Field label="Seuil d'exonération (MUR / an)" name="paye_seuil_exoneration" type="number" defaultValue={p.paye_seuil_exoneration ?? 390000} onChange={uP} />
+            <Field label="Taux 1 (%)" name="paye_taux_1" type="number" step="0.1" defaultValue={p.paye_taux_1 ?? 15} onChange={uP} />
+            <Field label="Seuil taux 2 (MUR / an)" name="paye_seuil_taux_2" type="number" defaultValue={p.paye_seuil_taux_2 ?? 650000} onChange={uP} />
+            <Field label="Taux 2 (%)" name="paye_taux_2" type="number" step="0.1" defaultValue={p.paye_taux_2 ?? 20} onChange={uP} />
+          </CardContent>
+        </Card>
+
+        {/* Training Levy & PRGF */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">Training Levy & PRGF</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Field label="Training Levy (%)" name="training_levy" type="number" step="0.01" defaultValue={p.training_levy ?? 1} onChange={uP} />
+            <Separator />
+            <p className="text-xs font-medium text-gray-500 uppercase">PRGF — Portable Retirement Gratuity Fund</p>
+            <Field label="PRGF patronal par jour (MUR)" name="prgf_patronal_par_jour" type="number" step="0.01" defaultValue={p.prgf_patronal_par_jour ?? 2} onChange={uP} />
+            <Field label="PRGF taux émoluments (%)" name="prgf_taux_emoluments" type="number" step="0.01" defaultValue={p.prgf_taux_emoluments ?? 0} onChange={uP} />
+          </CardContent>
+        </Card>
+
+        {/* Salaire minimum */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">Salaire minimum & compensation</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Field label="Salaire minimum légal (MUR)" name="salaire_minimum" type="number" defaultValue={p.salaire_minimum ?? 16500} onChange={uP} />
+            <Field label="Salaire minimum national (MUR)" name="salaire_minimum_national" type="number" defaultValue={p.salaire_minimum_national ?? 16500} onChange={uP} />
+            <Field label="Salary compensation (MUR)" name="salary_compensation" type="number" defaultValue={p.salary_compensation ?? 1000} onChange={uP} />
+            <Field label="Seuil compensation (MUR)" name="salary_compensation_seuil" type="number" defaultValue={p.salary_compensation_seuil ?? 50000} onChange={uP} />
+          </CardContent>
+        </Card>
+
+        {/* Congés légaux */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">Congés légaux</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Field label="Congés annuels — moins de 5 ans (jours)" name="conges_annuels_moins_5ans" type="number" defaultValue={p.conges_annuels_moins_5ans ?? 15} onChange={uP} />
+            <Field label="Congés annuels — plus de 5 ans (jours)" name="conges_annuels_plus_5ans" type="number" defaultValue={p.conges_annuels_plus_5ans ?? 20} onChange={uP} />
+            <Field label="Congés maladie (jours / an)" name="conges_maladie_annuels" type="number" defaultValue={p.conges_maladie_annuels ?? 15} onChange={uP} />
+            <Field label="Congés maternité (semaines)" name="conges_maternite_semaines" type="number" defaultValue={p.conges_maternite_semaines ?? 16} onChange={uP} />
+            <Field label="Congés paternité (semaines)" name="conges_paternite_semaines" type="number" defaultValue={p.conges_paternite_semaines ?? 4} onChange={uP} />
           </CardContent>
         </Card>
       </div>
 
-      <Button onClick={() => onSave(f)} style={{ backgroundColor: NAVY }} className="text-white">
-        <Save className="h-4 w-4 mr-2" /> Enregistrer
+      <Button
+        onClick={() => onSave(fSociete.current, fParams.current)}
+        style={{ backgroundColor: NAVY }}
+        className="text-white hover:opacity-90"
+      >
+        <Save className="h-4 w-4 mr-2" /> Enregistrer les paramètres fiscaux
       </Button>
     </div>
   )
 }
 
-// Main page
+// ── MAIN PAGE ──────────────────────────────────────────────────────────────────
 export default function SocieteSettingsPage() {
   const [societes, setSocietes] = useState<any[]>([])
   const [societeId, setSocieteId] = useState("")
   const [societe, setSociete] = useState<any>(null)
+  const [paramsPaie, setParamsPaie] = useState<any>(null)
+  const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<"idle" | "ok" | "err">("idle")
+  const [saveMsg, setSaveMsg] = useState("")
   const [tab, setTab] = useState<Tab>("details")
 
-  useEffect(() => {
-    Promise.all([
-      fetch("/api/comptable/societes").then(r => r.json()).catch(() => ({ societes: [] })),
-      fetch("/api/client/societes").then(r => r.json()).catch(() => ({ societes: [] })),
-    ]).then(([d1, d2]) => {
-      const all = [...(d1.societes || []), ...(d2.societes || [])]
-      const unique = Array.from(new Map(all.map((s: any) => [s.id, s])).values())
-      setSocietes(unique)
-      if (unique.length >= 1) { setSocieteId(unique[0].id); setSociete(unique[0]) }
-      setLoading(false)
-    })
-  }, [])
-
-  useEffect(() => {
-    if (societeId) {
-      const s = societes.find(s => s.id === societeId)
-      if (s) setSociete(s)
-    }
-  }, [societeId, societes])
-
-  const handleSave = async (data: any) => {
-    setSaving(true); setSaved(false)
+  const loadData = async (sid?: string) => {
+    setLoading(true)
     try {
-      const res = await fetch("/api/admin/societes", {
+      const url = sid
+        ? `/api/rh/societe?societe_id=${sid}`
+        : "/api/rh/societe"
+      const res = await fetch(url)
+      const data = await res.json()
+      if (data.error) {
+        console.error("[rh/societe] load error:", data.error)
+        setSocietes([])
+        setLoading(false)
+        return
+      }
+      const list: any[] = data.societes || []
+      setSocietes(list)
+      if (data.societe) {
+        setSociete(data.societe)
+        setSocieteId(data.societe.id)
+      } else if (list.length > 0 && !sid) {
+        setSociete(list[0])
+        setSocieteId(list[0].id)
+      }
+      if (data.params_paie) setParamsPaie(data.params_paie)
+      if (data.current_year) setCurrentYear(data.current_year)
+    } catch (e) {
+      console.error("[rh/societe] fetch failed:", e)
+    }
+    setLoading(false)
+  }
+
+  useEffect(() => { loadData() }, [])
+
+  const handleSocieteChange = (id: string) => {
+    setSocieteId(id)
+    setSociete(null)
+    setParamsPaie(null)
+    loadData(id)
+  }
+
+  const flash = (ok: boolean, msg: string) => {
+    setSaveStatus(ok ? "ok" : "err")
+    setSaveMsg(msg)
+    setTimeout(() => setSaveStatus("idle"), 4000)
+  }
+
+  // Save societe fields only (details / contact / bank / rh tabs)
+  const handleSave = async (data: any) => {
+    setSaving(true)
+    try {
+      const res = await fetch("/api/rh/societe", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: societeId, ...data }),
       })
       const result = await res.json()
-      if (result.error) alert("Erreur: " + result.error)
+      if (result.error) flash(false, result.error)
       else {
-        setSaved(true)
-        setSociete(data)
-        setTimeout(() => setSaved(false), 3000)
+        if (result.societe) setSociete(result.societe)
+        flash(true, "Paramètres enregistrés")
       }
-    } catch { alert("Erreur réseau") }
+    } catch { flash(false, "Erreur réseau") }
     setSaving(false)
   }
 
-  if (loading) return <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin" /></div>
+  // Save societe fields + params_paie (fiscal tab)
+  const handleFiscalSave = async (societeData: any, paramsData: any) => {
+    setSaving(true)
+    try {
+      const res = await fetch("/api/rh/societe", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: societeId,
+          ...societeData,
+          params_paie: paramsData,
+        }),
+      })
+      const result = await res.json()
+      if (result.error) flash(false, result.error)
+      else {
+        if (result.societe) setSociete(result.societe)
+        if (result.params_paie) setParamsPaie(result.params_paie)
+        flash(true, "Paramètres fiscaux enregistrés")
+      }
+    } catch { flash(false, "Erreur réseau") }
+    setSaving(false)
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: NAVY }} />
+        <span className="ml-3 text-gray-500">Chargement…</span>
+      </div>
+    )
+  }
+
+  if (!societe) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-4">
+        <AlertCircle className="h-10 w-10 text-orange-400" />
+        <p className="text-gray-600 text-center">
+          Aucune société trouvée. Veuillez vérifier votre accès ou créer une société.
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Paramètres Société</h1>
+          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>
+            Fiche Société
+          </h1>
           <p className="text-gray-500 text-sm">Configuration complète de votre entreprise</p>
         </div>
-        <div className="flex items-center gap-3">
-          {saved && <Badge className="bg-green-100 text-green-700"><CheckCircle className="h-3 w-3 mr-1" /> Enregistré</Badge>}
-          {societes.length > 1 && (
-            <Select value={societeId} onValueChange={setSocieteId}>
-              <SelectTrigger className="w-[220px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
-              </SelectContent>
-            </Select>
+        <div className="flex items-center gap-3 flex-wrap">
+          {saveStatus === "ok" && (
+            <Badge className="bg-green-100 text-green-700 border border-green-200">
+              <CheckCircle className="h-3 w-3 mr-1" /> {saveMsg}
+            </Badge>
           )}
+          {saveStatus === "err" && (
+            <Badge className="bg-red-100 text-red-700 border border-red-200">
+              <AlertCircle className="h-3 w-3 mr-1" /> {saveMsg}
+            </Badge>
+          )}
+          {saving && <Loader2 className="h-4 w-4 animate-spin" style={{ color: NAVY }} />}
+
+          {/* Selector always visible */}
+          <Select value={societeId} onValueChange={handleSocieteChange}>
+            <SelectTrigger className="w-[220px]">
+              <Building2 className="h-4 w-4 mr-2 opacity-60" />
+              <SelectValue placeholder="Choisir une société" />
+            </SelectTrigger>
+            <SelectContent>
+              {societes.map(s => (
+                <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b">
-        <TabButton id="details" label="Détails société" active={tab === "details"} onClick={() => setTab("details")} />
-        <TabButton id="contact" label="Contact" active={tab === "contact"} onClick={() => setTab("contact")} />
-        <TabButton id="payroll" label="Paie" active={tab === "payroll"} onClick={() => setTab("payroll")} />
-        <TabButton id="bank" label="Banque" active={tab === "bank"} onClick={() => setTab("bank")} />
+      <div className="flex border-b gap-0.5 overflow-x-auto">
+        <TabBtn id="details" label="Identité" icon={<Building2 className="h-3.5 w-3.5" />} active={tab === "details"} onClick={() => setTab("details")} />
+        <TabBtn id="contact" label="Contact" icon={<Phone className="h-3.5 w-3.5" />} active={tab === "contact"} onClick={() => setTab("contact")} />
+        <TabBtn id="bank" label="Banque" icon={<Banknote className="h-3.5 w-3.5" />} active={tab === "bank"} onClick={() => setTab("bank")} />
+        <TabBtn id="rh" label="RH / Paie" icon={<Settings className="h-3.5 w-3.5" />} active={tab === "rh"} onClick={() => setTab("rh")} />
+        <TabBtn id="fiscal" label="Fiscal" icon={<Scale className="h-3.5 w-3.5" />} active={tab === "fiscal"} onClick={() => setTab("fiscal")} />
       </div>
 
-      {/* Tab content — key={societeId} forces re-mount when société changes */}
-      {societe && (
-        <div>
-          {tab === "details" && <DetailsTab key={`details-${societeId}`} data={societe} onSave={handleSave} />}
-          {tab === "contact" && <ContactTab key={`contact-${societeId}`} data={societe} onSave={handleSave} />}
-          {tab === "payroll" && <PayrollTab key={`payroll-${societeId}`} data={societe} onSave={handleSave} />}
-          {tab === "bank" && <BankTab key={`bank-${societeId}`} data={societe} onSave={handleSave} />}
-        </div>
-      )}
+      {/* Tab content — key forces full re-mount when société changes */}
+      <div>
+        {tab === "details" && (
+          <DetailsTab key={`details-${societeId}`} data={societe} onSave={handleSave} />
+        )}
+        {tab === "contact" && (
+          <ContactTab key={`contact-${societeId}`} data={societe} onSave={handleSave} />
+        )}
+        {tab === "bank" && (
+          <BankTab key={`bank-${societeId}`} data={societe} onSave={handleSave} />
+        )}
+        {tab === "rh" && (
+          <RhTab key={`rh-${societeId}`} data={societe} onSave={handleSave} />
+        )}
+        {tab === "fiscal" && (
+          <FiscalTab
+            key={`fiscal-${societeId}`}
+            data={societe}
+            params={paramsPaie}
+            year={currentYear}
+            onSave={handleFiscalSave}
+          />
+        )}
+      </div>
     </div>
   )
 }
