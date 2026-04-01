@@ -93,10 +93,13 @@ export async function GET(request: Request) {
     const enriched = (data || []).map(b => ({ ...b, employe: empMap[b.employe_id] || null }))
 
     const totaux = {
-      masse_salariale_brute: enriched.reduce((s, b) => s + (Number(b.salaire_brut || b.salaire_base) || 0), 0),
+      masse_salariale_brute: enriched.reduce((s, b) => s + (Number(b.salaire_brut) || (Number(b.salaire_base) || 0) + (Number(b.heures_sup_montant) || 0) + (Number(b.special_allowance_1) || 0) + (Number(b.transport_allowance) || 0) + (Number(b.petrol_allowance) || 0)), 0),
       masse_salariale_nette: enriched.reduce((s, b) => s + (Number(b.salaire_net) || 0), 0),
       total_charges_patronales: enriched.reduce((s, b) => s + (Number(b.total_charges_patronales) || 0), 0),
-      cout_total_employeur: enriched.reduce((s, b) => s + (Number(b.salaire_brut || b.salaire_base) || 0) + (Number(b.total_charges_patronales) || 0), 0),
+      cout_total_employeur: enriched.reduce((s, b) => {
+        const brut = Number(b.salaire_brut) || (Number(b.salaire_base) || 0) + (Number(b.heures_sup_montant) || 0) + (Number(b.special_allowance_1) || 0)
+        return s + brut + (Number(b.total_charges_patronales) || 0)
+      }, 0),
       total_refacture: enriched.reduce((s, b) => s + (Number(b.montant_refacture_mur) || 0), 0),
     }
 
