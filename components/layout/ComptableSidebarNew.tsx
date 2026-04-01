@@ -31,12 +31,16 @@ import {
   Building2,
   CreditCard,
   TrendingUp,
-  Target,
-  ClipboardList,
-  CalendarDays,
   UserCog,
   Banknote,
   BarChart3,
+  ArrowLeft,
+  Gavel,
+  Upload,
+  Download,
+  CalendarDays,
+  Target,
+  ClipboardList,
 } from "lucide-react"
 
 const NAVY = "#1E2A4A"
@@ -52,15 +56,13 @@ interface NavItem {
 interface NavSection {
   title: string
   titleKey?: string
-  /** When true, render with gold accent even when not active */
-  isClientContext?: boolean
   items: NavItem[]
 }
 
 /* ------------------------------------------------------------------ */
-/*  Static top-level sections (no client context required)            */
+/*  MODE CABINET — Sidebar minimal (Dashboard, Clients, Équipe)        */
 /* ------------------------------------------------------------------ */
-const STATIC_SECTIONS: NavSection[] = [
+const CABINET_SECTIONS: NavSection[] = [
   {
     title: "Mon Cabinet",
     titleKey: "comptable.my_firm",
@@ -70,73 +72,82 @@ const STATIC_SECTIONS: NavSection[] = [
       { href: "/comptable/equipe", label: "Mon Équipe", labelKey: "comptable.my_team", icon: UsersRound },
     ],
   },
+]
+
+/* ------------------------------------------------------------------ */
+/*  MODE CLIENT — Mêmes rubriques que ClientSidebarFull                */
+/*  Quand le comptable navigue sur /client/* il voit tout              */
+/* ------------------------------------------------------------------ */
+const CLIENT_SECTIONS: NavSection[] = [
+  {
+    title: "Mon Espace",
+    items: [
+      { href: "/client/tableau-de-bord", label: "Tableau de bord", icon: LayoutDashboard },
+      { href: "/client/documents", label: "Mes Documents", icon: FileText },
+    ],
+  },
+  {
+    title: "Facturation",
+    items: [
+      { href: "/client/factures", label: "Factures clients", icon: FileSpreadsheet },
+      { href: "/client/fournisseurs", label: "Fournisseurs", icon: Banknote },
+      { href: "/client/facture-template", label: "Template IA", icon: FileText },
+    ],
+  },
   {
     title: "Comptabilité",
-    titleKey: "acc.accounting",
     items: [
-      { href: "/client/documents", label: "Documents & OCR", labelKey: "nav.documents", icon: FileText },
-      { href: "/client/banque", label: "Banque", labelKey: "acc.bank", icon: Landmark },
-      { href: "/client/rapprochement", label: "Rapprochement", labelKey: "acc.reconciliation", icon: CreditCard },
-      { href: "/client/grand-livre", label: "Grand Livre", labelKey: "fin.general_ledger", icon: BookOpen },
-      { href: "/client/tresorerie", label: "Trésorerie & BFR", labelKey: "acc.treasury", icon: Banknote },
-      { href: "/comptable/factures-clients", label: "Factures clients", labelKey: "comptable.invoices", icon: FileSpreadsheet },
-      { href: "/client/fournisseurs", label: "Fournisseurs", labelKey: "acc.suppliers", icon: Banknote },
-    ],
-  },
-  {
-    title: "Social & Paie",
-    titleKey: "hr.hr_payroll",
-    items: [
-      { href: "/client/charges-sociales", label: "Charges sociales", labelKey: "comptable.social_charges", icon: Calculator },
-      { href: "/client/salaires-compta", label: "Salaires", labelKey: "hr.payslips", icon: CreditCard },
-      { href: "/rh", label: "RH & Paie", labelKey: "hr.hr_payroll", icon: UserCog },
-    ],
-  },
-  {
-    title: "Fiscal MRA",
-    titleKey: "comptable.fiscal",
-    items: [
-      { href: "/client/tva", label: "TVA MRA", labelKey: "tax.vat", icon: Receipt },
-      { href: "/client/itform3", label: "IT Form 3 / IS", labelKey: "tax.it_form3", icon: FileText },
-      { href: "/comptable/interco", label: "INTERCO", labelKey: "comptable.interco", icon: Globe },
-      { href: "/comptable/alertes", label: "Alertes", labelKey: "nav.alerts", icon: AlertTriangle },
+      { href: "/client/banque", label: "Banque", icon: Landmark },
+      { href: "/client/rapprochement", label: "Rapprochement", icon: CreditCard },
+      { href: "/client/grand-livre", label: "Grand Livre", icon: BookOpen },
+      { href: "/client/tresorerie", label: "Trésorerie & BFR", icon: Banknote },
+      { href: "/client/affectations", label: "Affectations comptables", icon: ClipboardList },
     ],
   },
   {
     title: "États Financiers",
-    titleKey: "fin.financial_statements",
     items: [
-      { href: "/client/bilan", label: "Bilan & P&L", labelKey: "fin.balance_sheet", icon: BookOpen },
-      { href: "/client/previsionnel", label: "Prévisionnel", labelKey: "fin.forecast", icon: TrendingUp },
-      { href: "/client/tableau-de-bord", label: "Tableau de bord client", labelKey: "admin.dashboard", icon: BarChart3 },
+      { href: "/client/bilan", label: "Bilan & P&L", icon: BookOpen },
+      { href: "/client/previsionnel", label: "Prévisionnel", icon: TrendingUp },
+      { href: "/client/echeances", label: "Échéances", icon: CalendarDays },
+    ],
+  },
+  {
+    title: "Fiscal MRA",
+    items: [
+      { href: "/client/tva", label: "TVA MRA", icon: Receipt },
+      { href: "/client/charges-sociales", label: "CSG / NSF / PAYE", icon: Calculator },
+      { href: "/client/itform3", label: "IT Form 3 / IS", icon: FileText },
+      { href: "/client/salaires-compta", label: "Salaires — Plan comptable", icon: CreditCard },
+    ],
+  },
+  {
+    title: "RH & Paie",
+    items: [
+      { href: "/rh", label: "Module RH complet", icon: UserCog },
+      { href: "/rh/paie", label: "Bulletins de paie", icon: FileSpreadsheet },
+      { href: "/rh/import-paie", label: "Import paie Excel", icon: Upload },
+      { href: "/rh/paie/exports-mra", label: "Exports MRA", icon: Download },
     ],
   },
 ]
 
 /* ------------------------------------------------------------------ */
-/*  Per-société section built from URL params                          */
+/*  Per-société section (when in /comptable/clients/[id]/[societeId])  */
 /* ------------------------------------------------------------------ */
-function buildClientSection(
-  clientId: string,
-  societeId: string,
-  societeName: string,
-): NavSection {
+function buildSocieteSection(clientId: string, societeId: string, societeName: string): NavSection {
   const base = `/comptable/clients/${clientId}/${societeId}`
   return {
-    title: societeName ? `Client: ${societeName}` : `Client: ${societeId}`,
-    isClientContext: true,
+    title: societeName || "Société",
     items: [
-      { href: `${base}/tableau-de-bord`, label: "Vue d'ensemble", labelKey: "comptable.overview", icon: LayoutDashboard },
-      { href: `${base}/grand-livre`, label: "Grand Livre", labelKey: "fin.general_ledger", icon: BookOpen },
-      { href: `${base}/balance`, label: "Balance", labelKey: "comptable.balance", icon: BarChart3 },
-      { href: `${base}/bilan`, label: "Bilan & P&L", labelKey: "fin.balance_sheet", icon: FileSpreadsheet },
-      { href: `${base}/previsionnel`, label: "Prévisionnel", labelKey: "fin.forecast", icon: TrendingUp },
-      { href: `${base}/simulations`, label: "Simulations", labelKey: "fin.simulations", icon: Target },
-      { href: `${base}/it-form3`, label: "IT Form 3", labelKey: "tax.it_form3", icon: FileText },
-      { href: `${base}/annual-return`, label: "Annual Return", labelKey: "tax.annual_return", icon: ClipboardList },
-      { href: `${base}/far`, label: "Fournisseurs (FAR)", labelKey: "acc.suppliers", icon: Banknote },
-      { href: `/comptable/salaires?clientId=${clientId}&societeId=${societeId}`, label: "Salaires", labelKey: "hr.payslips", icon: CreditCard },
-      { href: `/comptable/rapprochement?clientId=${clientId}&societeId=${societeId}`, label: "Rapprochement", labelKey: "acc.reconciliation", icon: Landmark },
+      { href: `${base}/tableau-de-bord`, label: "Tableau de bord", icon: LayoutDashboard },
+      { href: `${base}/grand-livre`, label: "Grand Livre", icon: BookOpen },
+      { href: `${base}/balance`, label: "Balance", icon: BarChart3 },
+      { href: `${base}/bilan`, label: "Bilan & P&L", icon: FileSpreadsheet },
+      { href: `${base}/it-form3`, label: "IT Form 3", icon: FileText },
+      { href: `${base}/previsionnel`, label: "Prévisionnel", icon: TrendingUp },
+      { href: `${base}/far`, label: "FAR / Amortissements", icon: Target },
+      { href: `${base}/annual-return`, label: "Annual Return", icon: ClipboardList },
     ],
   }
 }
@@ -154,53 +165,59 @@ export function ComptableSidebarNew() {
   const [collapsed, setCollapsed] = useState(false)
   const [collapsedSections, setCollapsedSections] = useState<string[]>([])
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [societeName, setSocieteName] = useState<string>("")
+  const [societeName, setSocieteName] = useState("")
 
-  // Close sidebar on navigation
   useEffect(() => { setMobileOpen(false) }, [pathname])
 
   const clientId = rawParams?.clientId ?? ""
   const societeId = rawParams?.societeId ?? ""
   const hasSociete = Boolean(clientId && societeId)
 
-  // Fetch société name when context changes
+  // Detect context: are we in /client/* pages or /comptable/* pages?
+  const isClientContext = pathname.startsWith("/client/") || pathname.startsWith("/rh/") || pathname.startsWith("/rh")
+
+  // Fetch société name when in société context
   useEffect(() => {
     if (!hasSociete) { setSocieteName(""); return }
-    const fetchName = async () => {
-      try {
-        const res = await fetch(`/api/comptable/clients?clientId=${clientId}`)
-        if (!res.ok) return
-        const data = await res.json()
-        const societes: { id: string; nom: string }[] = data.societes || data.clients || []
-        const found = societes.find((s) => s.id === societeId)
+    fetch(`/api/comptable/societes`)
+      .then(r => r.json())
+      .then(d => {
+        const societes = d.societes || []
+        const found = societes.find((s: any) => s.id === societeId)
         if (found?.nom) setSocieteName(found.nom)
-      } catch {
-        // Keep empty — the ID will be shown as fallback
-      }
-    }
-    fetchName()
+      })
+      .catch(() => {})
   }, [clientId, societeId, hasSociete])
 
   const roleLabel =
     profile?.role === "comptable_dedie" ? "Assistant Comptable" : "Expert-Comptable"
 
-  // Build section list: client section first when in société context
-  const sections: NavSection[] = []
-  if (hasSociete) {
-    sections.push(buildClientSection(clientId, societeId, societeName))
+  // Build sections based on context
+  let sections: NavSection[]
+  if (isClientContext) {
+    // In client pages: show client-like sidebar
+    sections = [...CLIENT_SECTIONS]
+  } else if (hasSociete) {
+    // In /comptable/clients/[clientId]/[societeId]/*: show cabinet + société sections
+    sections = [
+      ...CABINET_SECTIONS,
+      buildSocieteSection(clientId, societeId, societeName),
+    ]
+  } else {
+    // Default: just the cabinet
+    sections = [...CABINET_SECTIONS]
   }
-  sections.push(...STATIC_SECTIONS)
 
   const toggleSection = (title: string) => {
-    setCollapsedSections((prev) =>
-      prev.includes(title) ? prev.filter((s) => s !== title) : [...prev, title]
+    setCollapsedSections(prev =>
+      prev.includes(title) ? prev.filter(s => s !== title) : [...prev, title]
     )
   }
 
   const isActive = (href: string) => {
-    // Strip query string for comparison
     const hrefPath = href.split("?")[0]
     if (hrefPath === "/comptable") return pathname === "/comptable"
+    if (hrefPath === "/rh") return pathname === "/rh" || pathname.startsWith("/rh/")
     return pathname === hrefPath || pathname.startsWith(hrefPath + "/")
   }
 
@@ -216,17 +233,12 @@ export function ComptableSidebarNew() {
       <button
         onClick={() => setMobileOpen(true)}
         className="fixed top-4 left-4 z-50 md:hidden bg-[#1E2A4A] text-white p-2 rounded-lg shadow-lg"
-        aria-label="Open menu"
       >
         <Menu className="w-5 h-5" />
       </button>
 
-      {/* Mobile backdrop */}
       {mobileOpen && (
-        <div
-          onClick={() => setMobileOpen(false)}
-          className="fixed inset-0 bg-black/50 z-40 md:hidden"
-        />
+        <div onClick={() => setMobileOpen(false)} className="fixed inset-0 bg-black/50 z-40 md:hidden" />
       )}
 
       <aside
@@ -238,12 +250,8 @@ export function ComptableSidebarNew() {
         )}
         style={{ backgroundColor: NAVY }}
       >
-        {/* Mobile close button */}
-        <button
-          onClick={() => setMobileOpen(false)}
-          className="absolute top-4 right-4 md:hidden text-white/60 hover:text-white z-10"
-          aria-label="Close menu"
-        >
+        {/* Mobile close */}
+        <button onClick={() => setMobileOpen(false)} className="absolute top-4 right-4 md:hidden text-white/60 hover:text-white z-10">
           <X className="w-5 h-5" />
         </button>
 
@@ -251,10 +259,7 @@ export function ComptableSidebarNew() {
         <div className="flex h-16 items-center justify-between border-b border-white/10 px-4 flex-shrink-0">
           {!collapsed ? (
             <Link href="/comptable" className="flex items-center gap-2">
-              <div
-                className="flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0"
-                style={{ backgroundColor: GOLD }}
-              >
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0" style={{ backgroundColor: GOLD }}>
                 <span className="text-sm font-bold" style={{ color: NAVY }}>L</span>
               </div>
               <div className="flex flex-col min-w-0">
@@ -265,92 +270,74 @@ export function ComptableSidebarNew() {
               </div>
             </Link>
           ) : (
-            <div
-              className="mx-auto flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0"
-              style={{ backgroundColor: GOLD }}
-            >
+            <div className="mx-auto flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: GOLD }}>
               <span className="text-sm font-bold" style={{ color: NAVY }}>L</span>
             </div>
           )}
         </div>
 
-        {/* Client context banner (expanded mode only) */}
-        {hasSociete && !collapsed && (
-          <div
-            className="flex items-center gap-2 px-4 py-2 border-b border-white/10 flex-shrink-0"
-            style={{ backgroundColor: `${GOLD}18` }}
+        {/* Context banner: "Retour cabinet" when in client context */}
+        {isClientContext && !collapsed && (
+          <Link
+            href="/comptable"
+            className="flex items-center gap-2 px-4 py-2.5 border-b border-white/10 text-white/70 hover:text-white hover:bg-white/5 transition-colors flex-shrink-0"
           >
+            <ArrowLeft className="w-4 h-4 flex-shrink-0" style={{ color: GOLD }} />
+            <span className="text-xs font-semibold" style={{ color: GOLD }}>Retour espace cabinet</span>
+          </Link>
+        )}
+
+        {/* Société context banner */}
+        {hasSociete && !collapsed && (
+          <div className="flex items-center gap-2 px-4 py-2 border-b border-white/10 flex-shrink-0" style={{ backgroundColor: `${GOLD}18` }}>
             <Building2 className="w-3.5 h-3.5 flex-shrink-0" style={{ color: GOLD }} />
             <span className="text-xs font-semibold truncate" style={{ color: GOLD }}>
               {societeName || societeId}
             </span>
-            <Link
-              href="/comptable/clients"
-              className="ml-auto text-white/40 hover:text-white/80 text-xs whitespace-nowrap transition-colors"
-              title="Tous les clients"
-            >
-              ← Tous
-            </Link>
+            <Link href="/comptable/clients" className="ml-auto text-white/40 hover:text-white/80 text-xs whitespace-nowrap">← Tous</Link>
           </div>
         )}
 
         {/* Navigation */}
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          {sections.map((section) => {
+          {sections.map(section => {
             const isSectionCollapsed = collapsedSections.includes(section.title)
-            const hasActive = section.items.some((i) => isActive(i.href))
-            const isClientContext = section.isClientContext
+            const hasActive = section.items.some(i => isActive(i.href))
 
             return (
               <div key={section.title} className="mb-1">
-                {/* Section header — hidden when sidebar is icon-only collapsed */}
                 {!collapsed && (
                   <button
                     onClick={() => toggleSection(section.title)}
                     className={cn(
                       "w-full flex items-center justify-between px-2 py-1.5 text-xs font-semibold uppercase tracking-wider rounded transition-colors",
-                      hasActive || isClientContext
-                        ? "text-[#C9A84C]"
-                        : "text-white/40 hover:text-white/70"
+                      hasActive ? "text-[#C9A84C]" : "text-white/40 hover:text-white/70"
                     )}
                   >
-                    <span className="truncate text-left">
-                      {section.titleKey ? t(section.titleKey, locale) : section.title}
-                    </span>
-                    {isSectionCollapsed ? (
-                      <ChevronRight className="w-3 h-3 flex-shrink-0" />
-                    ) : (
-                      <ChevronDown className="w-3 h-3 flex-shrink-0" />
-                    )}
+                    <span className="truncate text-left">{section.title}</span>
+                    {isSectionCollapsed ? <ChevronRight className="w-3 h-3 flex-shrink-0" /> : <ChevronDown className="w-3 h-3 flex-shrink-0" />}
                   </button>
                 )}
 
-                {/* Items — always show in icon-only mode; respect collapse in expanded mode */}
                 {(!isSectionCollapsed || collapsed) && (
                   <div className={cn("space-y-0.5", !collapsed && "ml-1")}>
-                    {section.items.map((item) => {
+                    {section.items.map(item => {
                       const Icon = item.icon
                       const active = isActive(item.href)
                       return (
                         <Link
                           key={`${item.href}-${item.label}`}
                           href={item.href}
-                          title={collapsed ? (item.labelKey ? t(item.labelKey, locale) : item.label) : undefined}
+                          title={collapsed ? item.label : undefined}
                           className={cn(
                             "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors",
-                            active
-                              ? "font-semibold"
-                              : "text-white/70 hover:bg-white/10 hover:text-white",
+                            active ? "font-semibold" : "text-white/70 hover:bg-white/10 hover:text-white",
                             collapsed && "justify-center"
                           )}
                           style={active ? { backgroundColor: GOLD, color: NAVY } : undefined}
                         >
                           <Icon className="w-4 h-4 flex-shrink-0" />
-                          {!collapsed && (
-                            <span className="truncate">
-                              {item.labelKey ? t(item.labelKey, locale) : item.label}
-                            </span>
-                          )}
+                          {!collapsed && <span className="truncate">{item.label}</span>}
                         </Link>
                       )
                     })}
@@ -369,47 +356,35 @@ export function ComptableSidebarNew() {
             </div>
           )}
 
-          {/* Collapse / expand toggle */}
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setCollapsed(!collapsed)}
             className="w-full justify-center text-white/50 hover:bg-white/5 hover:text-white"
           >
-            {collapsed ? (
-              <ChevronRight className="h-4 w-4" />
-            ) : (
-              <>
-                <ChevronLeft className="h-4 w-4" />
-                <span className="ml-2">{t("comptable.collapse", locale)}</span>
-              </>
-            )}
+            {collapsed ? <ChevronRight className="h-4 w-4" /> : <><ChevronLeft className="h-4 w-4" /><span className="ml-2">Réduire</span></>}
           </Button>
 
-          {/* Profile */}
           <Link
             href="/profil"
             className={cn(
               "flex items-center gap-2.5 px-3 py-2 rounded-lg text-white/50 hover:bg-white/10 hover:text-white text-sm transition-colors",
               collapsed && "justify-center"
             )}
-            title={collapsed ? t("account.my_profile", locale) : undefined}
           >
             <Settings className="w-4 h-4 flex-shrink-0" />
-            {!collapsed && <span>{t("account.my_profile", locale)}</span>}
+            {!collapsed && <span>Mon Profil</span>}
           </Link>
 
-          {/* Sign out */}
           <button
             onClick={handleSignOut}
             className={cn(
               "flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-white/50 hover:bg-red-500/20 hover:text-red-400 text-sm transition-colors",
               collapsed && "justify-center"
             )}
-            title={collapsed ? t("common.logout", locale) : undefined}
           >
             <LogOut className="w-4 h-4 flex-shrink-0" />
-            {!collapsed && <span>{t("common.logout", locale)}</span>}
+            {!collapsed && <span>Déconnexion</span>}
           </button>
         </div>
       </aside>
