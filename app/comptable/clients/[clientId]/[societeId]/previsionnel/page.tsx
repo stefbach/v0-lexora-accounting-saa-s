@@ -286,7 +286,7 @@ export default function PrevisionnelPage() {
             Trésorerie prévisionnelle par compte
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="overflow-x-auto">
           {tresoParCompte.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground text-sm">
               Aucune donnée de trésorerie disponible.

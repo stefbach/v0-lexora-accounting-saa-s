@@ -201,7 +201,7 @@ export default function ImmobilisationsPage() {
 
       <Card>
         <CardHeader><CardTitle className="text-[#1E2A4A]">Registre des immobilisations ({immobilisations.length})</CardTitle></CardHeader>
-        <CardContent className="p-0">
+        <CardContent className="p-0 overflow-x-auto">
           {loading ? (
             <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-[#1E2A4A]" /></div>
           ) : immobilisations.length === 0 ? (

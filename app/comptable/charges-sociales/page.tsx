@@ -119,7 +119,7 @@ export default function BalancePage() {
         <CardHeader><CardTitle className="text-[#1E2A4A] flex items-center gap-2">
           <Scale className="w-5 h-5" /> Balance par classe
         </CardTitle></CardHeader>
-        <CardContent className="p-0">
+        <CardContent className="p-0 overflow-x-auto">
           {selectedSociete === "all" ? (
             <div className="text-center py-12 text-gray-500">Sélectionnez une société pour afficher la balance</div>
           ) : loading ? (

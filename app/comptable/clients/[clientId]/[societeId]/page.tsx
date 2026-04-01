@@ -750,7 +750,7 @@ export default function SocieteContextPage() {
                 <CardHeader className="py-3" style={{ backgroundColor: `${NAVY}08` }}>
                   <CardTitle className="text-sm">COMPTE: {account.compte} — {account.nom}</CardTitle>
                 </CardHeader>
-                <CardContent className="p-0">
+                <CardContent className="p-0 overflow-x-auto">
                   <Table>
                     <TableHeader><TableRow>
                       <TableHead>Date</TableHead><TableHead>Ref</TableHead><TableHead>Description</TableHead>
@@ -996,7 +996,7 @@ export default function SocieteContextPage() {
           {uploadedFiles.length > 0 && (
             <Card>
               <CardHeader className="pb-2"><CardTitle className="text-base">Documents uploadés</CardTitle></CardHeader>
-              <CardContent className="p-0">
+              <CardContent className="p-0 overflow-x-auto">
                 <Table>
                   <TableHeader><TableRow><TableHead>Fichier</TableHead><TableHead>Date</TableHead><TableHead>Type détecté</TableHead><TableHead>Statut</TableHead></TableRow></TableHeader>
                   <TableBody>
