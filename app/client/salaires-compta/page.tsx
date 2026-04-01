@@ -11,7 +11,7 @@ function fmt(n: number) { return new Intl.NumberFormat("fr-FR", { maximumFractio
 export default function SalairesComptaPage() {
   const [societes, setSocietes] = useState<any[]>([])
   const [societe, setSociete] = useState("")
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [periodes, setPeriodes] = useState<any[]>([])
 
   useEffect(() => {
@@ -22,7 +22,13 @@ export default function SalairesComptaPage() {
       const all = [...(d1.societes || []), ...(d2.societes || [])]
       const unique = Array.from(new Map(all.map((s: any) => [s.id, s])).values())
       setSocietes(unique)
-      if (unique.length >= 1) setSociete(unique[0].id)
+      if (unique.length >= 1) {
+        setSociete(unique[0].id)
+      }
+      // If no sociétés found, ensure we are not stuck in a loading state
+      if (unique.length === 0) {
+        setLoading(false)
+      }
     })
   }, [])
 

@@ -107,7 +107,7 @@ export async function GET(request: Request) {
 
       const { data: departs } = await supabase
         .from('employes')
-        .select('id, nom, prenom, poste, date_arrivee, date_depart, type_depart, raison_depart, salaire_base, societe_id')
+        .select('id, nom, prenom, poste, date_arrivee, date_depart, date_depart_type, raison_depart, salaire_base, societe_id')
         .in('societe_id', accessibleIds)
         .not('date_depart', 'is', null)
         .order('date_depart', { ascending: false })
@@ -317,7 +317,7 @@ export async function POST(request: Request) {
         .from('employes')
         .update({
           date_depart,
-          type_depart,
+          date_depart_type: type_depart,
           raison_depart: raison_depart || null,
         })
         .eq('id', employe_id)
@@ -328,31 +328,42 @@ export async function POST(request: Request) {
       const periodeDate = date_depart.slice(0, 7) + '-01' // YYYY-MM-01
       const totalBrut = breakdown?.total || 0
 
+      // Build bulletin insert — salaire_brut is GENERATED ALWAYS so must not be included
+      // The salaire_base field holds the prorata salary; all other components go into allowance slots
+      const salaireBaseBulletin = breakdown?.salaire_prorata?.montant || 0
+      const transportBulletin = breakdown?.allocations_prorata?.montant || 0
+      const alPayout = breakdown?.conges_al?.montant || 0
+      const slPayout = breakdown?.conges_sl?.montant || 0
+      const treizBulletin = breakdown?.treizieme_mois?.montant || 0
+      const preavisBulletin = breakdown?.preavis?.montant || 0
+      const severanceBulletin = breakdown?.indemnite_licenciement?.montant || 0
+
+      const typeLabel = type_depart === 'demission' ? 'Démission'
+        : type_depart === 'licenciement' ? 'Licenciement'
+        : type_depart === 'fin_contrat' ? 'Fin de contrat'
+        : type_depart === 'retraite' ? 'Retraite'
+        : 'Décès'
+
       const { data: bulletin, error: bulletinErr } = await supabase
         .from('bulletins_paie')
-        .insert({
+        .upsert({
           employe_id,
           societe_id: emp.societe_id,
           periode: periodeDate,
-          salaire_base: breakdown?.salaire_prorata?.montant || 0,
-          transport: breakdown?.allocations_prorata?.montant || 0,
-          prime_ot: 0,
-          heures_sup_15: 0,
-          heures_sup_2: 0,
-          montant_hs: 0,
-          brut: totalBrut,
-          cotisations_salariales: 0,
-          cotisations_patronales: 0,
-          net_a_payer: totalBrut,
+          salaire_base: salaireBaseBulletin,
+          transport_allowance: transportBulletin,
+          // AL + SL payouts mapped to special_allowance_1
+          special_allowance_1: alPayout + slPayout,
+          // 13th month in special_allowance_2
+          special_allowance_2: treizBulletin,
+          // Notice + severance in departure_notice / special_allowance_3
+          departure_notice: preavisBulletin,
+          special_allowance_3: severanceBulletin,
+          salaire_net: totalBrut,
+          total_deductions: 0,
           statut: 'valide',
-          commentaire: `Solde de tout compte — ${type_depart === 'demission' ? 'Démission' : type_depart === 'licenciement' ? 'Licenciement' : type_depart === 'fin_contrat' ? 'Fin de contrat' : type_depart === 'retraite' ? 'Retraite' : 'Décès'}`,
-          details_json: {
-            type: 'solde_tout_compte',
-            type_depart,
-            date_depart,
-            breakdown,
-          },
-        })
+          notes: `Solde de tout compte — ${typeLabel}`,
+        }, { onConflict: 'employe_id,periode' })
         .select()
         .single()
 
@@ -364,49 +375,63 @@ export async function POST(request: Request) {
       // 3. Create accounting entries (journal SAL)
       if (bulletin && totalBrut > 0) {
         try {
-          const entries = [
-            {
-              societe_id: emp.societe_id,
-              date_ecriture: date_depart,
-              journal: 'SAL',
-              compte: '641000',
-              libelle: `Solde tout compte — ${emp.prenom} ${emp.nom}`,
-              debit: totalBrut,
-              credit: 0,
-              piece_ref: `STC-${emp.code || employe_id.slice(0, 8)}`,
-              bulletin_id: bulletin.id,
-            },
-            {
-              societe_id: emp.societe_id,
-              date_ecriture: date_depart,
-              journal: 'SAL',
-              compte: '421000',
-              libelle: `Solde tout compte — ${emp.prenom} ${emp.nom}`,
-              debit: 0,
-              credit: totalBrut,
-              piece_ref: `STC-${emp.code || employe_id.slice(0, 8)}`,
-              bulletin_id: bulletin.id,
-            },
-          ]
+          // Look up the dossier for this société (required FK on ecritures_comptables)
+          const { data: dossier } = await supabase
+            .from('dossiers')
+            .select('id')
+            .eq('societe_id', emp.societe_id)
+            .limit(1)
+            .maybeSingle()
 
-          // Add specific severance entry if applicable
-          if (breakdown?.indemnite_licenciement?.montant > 0) {
-            entries.push({
-              societe_id: emp.societe_id,
-              date_ecriture: date_depart,
-              journal: 'SAL',
-              compte: '641700',
-              libelle: `Indemnité licenciement — ${emp.prenom} ${emp.nom}`,
-              debit: breakdown.indemnite_licenciement.montant,
-              credit: 0,
-              piece_ref: `STC-${emp.code || employe_id.slice(0, 8)}`,
-              bulletin_id: bulletin.id,
-            })
-            // Adjust main salary entry
-            entries[0].debit = totalBrut - breakdown.indemnite_licenciement.montant
+          if (dossier) {
+            const pieceRef = `STC-${emp.code || employe_id.slice(0, 8)}`
+            const severanceMontant = breakdown?.indemnite_licenciement?.montant || 0
+            const salaireSansIndemnite = severanceMontant > 0
+              ? totalBrut - severanceMontant
+              : totalBrut
+
+            const entries: any[] = [
+              {
+                dossier_id: dossier.id,
+                societe_id: emp.societe_id,
+                date_ecriture: date_depart,
+                journal: 'SAL',
+                compte: '641000',
+                libelle: `Solde tout compte — ${emp.prenom} ${emp.nom}`,
+                debit: salaireSansIndemnite,
+                credit: 0,
+                numero_piece: pieceRef,
+              },
+              {
+                dossier_id: dossier.id,
+                societe_id: emp.societe_id,
+                date_ecriture: date_depart,
+                journal: 'SAL',
+                compte: '421000',
+                libelle: `Solde tout compte — ${emp.prenom} ${emp.nom}`,
+                debit: 0,
+                credit: totalBrut,
+                numero_piece: pieceRef,
+              },
+            ]
+
+            // Add specific severance entry if applicable
+            if (severanceMontant > 0) {
+              entries.push({
+                dossier_id: dossier.id,
+                societe_id: emp.societe_id,
+                date_ecriture: date_depart,
+                journal: 'SAL',
+                compte: '641700',
+                libelle: `Indemnité licenciement — ${emp.prenom} ${emp.nom}`,
+                debit: severanceMontant,
+                credit: 0,
+                numero_piece: pieceRef,
+              })
+            }
+
+            await supabase.from('ecritures_comptables').insert(entries)
           }
-
-          await supabase.from('ecritures_comptables').insert(entries)
         } catch (err) {
           console.error('Erreur écritures comptables:', err)
           // Non-blocking
