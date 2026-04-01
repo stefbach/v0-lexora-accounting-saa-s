@@ -249,6 +249,64 @@ Taux: EUR={{TAUX_EUR}}, GBP={{TAUX_GBP}}, USD={{TAUX_USD}}`, tauxChange)
       }
     }
 
+    // === FACTURE: create/update factures record if invoice type ===
+    if ((finalTypeDocument === 'facture_fournisseur' || finalTypeDocument === 'facture_client') && finalDossierId) {
+      const factureSocieteId = dossier?.societe_id || null
+      if (factureSocieteId) {
+        const devise = finalExtraction.devise || 'MUR'
+        const fxRate = devise !== 'MUR' ? (tauxChange[devise] || 1) : 1
+        const montantHT = Number(finalExtraction.montant_ht) || 0
+        const montantTVA = Number(finalExtraction.montant_tva) || 0
+        let montantTTC = Number(finalExtraction.montant_ttc) || 0
+        if (montantTTC === 0 && montantHT > 0) montantTTC = montantHT + montantTVA
+
+        const tvaApplicable = finalExtraction.tva_applicable !== false && !finalExtraction.tva_exonere
+        const tauxTva = tvaApplicable ? (Number(finalExtraction.taux_tva) || 15) : 0
+        let finalTVA = montantTVA
+        if (tvaApplicable && finalTVA === 0 && montantHT > 0) {
+          finalTVA = Math.round(montantHT * tauxTva / 100 * 100) / 100
+        }
+        if (!tvaApplicable) finalTVA = 0
+
+        const factureTiers = finalExtraction.emetteur?.nom || finalExtraction.emetteur || finalExtraction.fournisseur || ''
+        const typeFact = finalTypeDocument === 'facture_fournisseur' ? 'fournisseur' : 'client'
+
+        // Check if facture already exists for this document
+        const { data: existingFacture } = await supabase
+          .from('factures').select('id').eq('document_id', id).maybeSingle()
+
+        const factureData = {
+          societe_id: factureSocieteId,
+          dossier_id: finalDossierId,
+          numero_facture: finalExtraction.numero_reference || finalExtraction.numero_facture || null,
+          type_facture: typeFact,
+          tiers: typeof factureTiers === 'string' ? factureTiers : JSON.stringify(factureTiers),
+          description: finalExtraction.description || doc.nom_fichier,
+          date_facture: finalExtraction.date_document || new Date().toISOString().split('T')[0],
+          date_echeance: finalExtraction.date_echeance || null,
+          devise,
+          taux_change: fxRate,
+          montant_ht: montantHT,
+          montant_tva: finalTVA,
+          montant_ttc: montantTTC || montantHT + finalTVA,
+          taux_tva: tauxTva,
+          montant_mur: Math.round((montantTTC || montantHT + finalTVA) * fxRate * 100) / 100,
+          statut: 'en_attente',
+          document_id: id,
+          notes: finalExtraction.analyse_tva || null,
+        }
+
+        if (existingFacture) {
+          await supabase.from('factures').update(factureData).eq('id', existingFacture.id)
+          console.log(`[reanalyze] Updated facture ${existingFacture.id}`)
+        } else {
+          const { error: factErr } = await supabase.from('factures').insert(factureData)
+          if (factErr) console.error('[reanalyze] facture insert error:', factErr.message)
+          else console.log(`[reanalyze] Created facture for document ${id}`)
+        }
+      }
+    }
+
     // === BANK STATEMENT: update comptes_bancaires + releves_bancaires ===
     if (finalTypeDocument === 'releve_bancaire' && dossier?.societe_id) {
       const bankSocieteId = dossier.societe_id
