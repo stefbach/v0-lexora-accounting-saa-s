@@ -87,8 +87,9 @@ export async function GET(request: Request) {
       useV2 = true
     }
 
-    // --- V1 fallback ---
-    if (allEntries.length === 0) {
+    // --- V1: ALWAYS load (contains SAL entries from import-paie) ---
+    // V1 uses dossier_id, V2 uses societe_id directly — both may have data
+    {
       const { data: dossiers } = await supabase
         .from('dossiers').select('id').eq('societe_id', societe_id)
       const dossierIds = (dossiers || []).map((d: any) => d.id)
@@ -129,16 +130,30 @@ export async function GET(request: Request) {
           if (fallback.error) console.error('[grand-livre] v1 fallback also failed:', fallback.error.message)
         }
 
-        allEntries = (v1Data || []).map((e: any) => ({
+        const v1Entries = (v1Data || []).map((e: any) => ({
           id: e.id, numero_compte: e.compte || '', nom_compte: '',
           description: e.libelle || '', debit_mur: Number(e.debit) || 0,
           credit_mur: Number(e.credit) || 0, date_ecriture: e.date_ecriture,
           journal: e.journal || '', ref_folio: e.numero_piece || '',
           lettre: e.lettre ?? null, date_lettrage: e.date_lettrage ?? null,
         }))
-        console.log(`[grand-livre] v1 loaded: ${allEntries.length} entries from ${dossierIds.length} dossier(s)`)
+        // Merge V1 entries with V2 (deduplicate by id)
+        const existingIds = new Set(allEntries.map(e => e.id))
+        for (const entry of v1Entries) {
+          if (!existingIds.has(entry.id)) {
+            allEntries.push(entry)
+          }
+        }
+        console.log(`[grand-livre] v1 loaded: ${v1Entries.length} entries from ${dossierIds.length} dossier(s), total: ${allEntries.length}`)
       }
     }
+
+    // Re-sort after merging V1+V2
+    allEntries.sort((a, b) => {
+      const cmp = (a.numero_compte || '').localeCompare(b.numero_compte || '')
+      if (cmp !== 0) return cmp
+      return (a.date_ecriture || '').localeCompare(b.date_ecriture || '')
+    })
 
     // Compute opening balances (report a nouveau) from prior year entries
     // Only for balance sheet accounts (classes 1-5) - P&L accounts (6, 7) reset each year
