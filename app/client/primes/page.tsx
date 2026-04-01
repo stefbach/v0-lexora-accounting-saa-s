@@ -283,7 +283,7 @@ export default function PrimesPage() {
           </div>
 
           <Card>
-            <CardContent className="p-0">
+            <CardContent className="p-0 overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-[#1E2A4A]/5">
@@ -348,7 +348,7 @@ export default function PrimesPage() {
 
           {calculs.length > 0 && (
             <Card>
-              <CardContent className="p-0">
+              <CardContent className="p-0 overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-[#1E2A4A]/5">
@@ -403,7 +403,7 @@ export default function PrimesPage() {
         {/* --- HISTORIQUE --- */}
         <TabsContent value="historique" className="space-y-4">
           <Card>
-            <CardContent className="p-0">
+            <CardContent className="p-0 overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-[#1E2A4A]/5">
