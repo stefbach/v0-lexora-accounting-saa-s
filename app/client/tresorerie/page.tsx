@@ -50,6 +50,7 @@ function AccessDenied() {
 function TresorerieView() {
   const [data, setData] = useState<any>(null)
   const [rates, setRates] = useState<Record<string, number>>({})
+  const [bfr, setBfr] = useState<{ creances: number; stocks: number; dettes_fournisseurs: number; bfr: number } | null>(null)
   const [fetching, setFetching] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [selectedSociete, setSelectedSociete] = useState<string>("all")
@@ -83,9 +84,28 @@ function TresorerieView() {
     }
   }
 
+  async function fetchBFR(societeId?: string) {
+    if (!societeId || societeId === "all") { setBfr(null); return }
+    try {
+      const res = await fetch(`/api/comptable/grand-livre?societe_id=${societeId}&mode=balances`)
+      if (!res.ok) { setBfr(null); return }
+      const json = await res.json()
+      const balances: any[] = json.balances || json.ecritures || []
+      let creances = 0, stocks = 0, dettes_fournisseurs = 0
+      for (const b of balances) {
+        const compte = b.compte || b.numero_compte || ""
+        const solde = Number(b.solde) || (Number(b.debit) || 0) - (Number(b.credit) || 0)
+        if (compte.startsWith("411")) creances += solde           // Créances clients
+        else if (compte.startsWith("3")) stocks += solde          // Stocks
+        else if (compte.startsWith("401")) dettes_fournisseurs += Math.abs(solde) // Dettes fournisseurs
+      }
+      setBfr({ creances, stocks, dettes_fournisseurs, bfr: creances + stocks - dettes_fournisseurs })
+    } catch { setBfr(null) }
+  }
+
   useEffect(() => {
     setFetching(true)
-    Promise.all([fetchData(selectedSociete), fetchRates()]).finally(() => setFetching(false))
+    Promise.all([fetchData(selectedSociete), fetchRates(), fetchBFR(selectedSociete)]).finally(() => setFetching(false))
   }, [selectedSociete])
 
   // Rafraichir les taux toutes les 5 minutes
@@ -237,6 +257,108 @@ function TresorerieView() {
           </CardContent>
         </Card>
       </div>
+
+      {/* BFR — Besoin en Fonds de Roulement */}
+      {bfr && (
+        <Card className="border-l-4 border-l-indigo-500">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base" style={{ color: "#1E2A4A" }}>
+              <ArrowDownUp className="h-5 w-5 text-indigo-500" />
+              Besoin en Fonds de Roulement (BFR)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+              <div className="p-3 bg-blue-50 rounded-lg">
+                <p className="text-xs text-blue-600 font-medium">411 — Créances clients</p>
+                <p className="text-xl font-bold text-blue-700">{formatMUR(Math.round(bfr.creances))}</p>
+              </div>
+              <div className="p-3 bg-amber-50 rounded-lg">
+                <p className="text-xs text-amber-600 font-medium">3xx — Stocks</p>
+                <p className="text-xl font-bold text-amber-700">{formatMUR(Math.round(bfr.stocks))}</p>
+              </div>
+              <div className="p-3 bg-red-50 rounded-lg">
+                <p className="text-xs text-red-600 font-medium">401 — Dettes fournisseurs</p>
+                <p className="text-xl font-bold text-red-700">- {formatMUR(Math.round(bfr.dettes_fournisseurs))}</p>
+              </div>
+              <div className={`p-3 rounded-lg ${bfr.bfr >= 0 ? "bg-indigo-50" : "bg-green-50"}`}>
+                <p className="text-xs font-medium" style={{ color: "#1E2A4A" }}>BFR</p>
+                <p className={`text-2xl font-bold ${bfr.bfr >= 0 ? "text-indigo-700" : "text-green-700"}`}>
+                  {formatMUR(Math.round(bfr.bfr))}
+                </p>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  {bfr.bfr > 0 ? "Besoin de financement" : bfr.bfr < 0 ? "Excédent de trésorerie" : "Équilibré"}
+                </p>
+              </div>
+            </div>
+
+            {/* Trésorerie nette = Solde bancaire - BFR */}
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+              <div>
+                <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>Trésorerie nette</p>
+                <p className="text-xs text-muted-foreground">Solde bancaire consolidé − BFR</p>
+              </div>
+              <div className="text-right">
+                <p className={`text-2xl font-bold ${(totalBankMUR - bfr.bfr) >= 0 ? "text-green-600" : "text-red-600"}`}>
+                  {formatMUR(Math.round(totalBankMUR - bfr.bfr))}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {totalBankMUR > 0 && bfr.bfr > 0
+                    ? `≈ ${Math.round(totalBankMUR / (bfr.bfr / 30))} jours de trésorerie`
+                    : ""}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Flux de trésorerie simplifié */}
+      {data && (
+        <Card className="border-l-4 border-l-emerald-500">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base" style={{ color: "#1E2A4A" }}>
+              <TrendingUp className="h-5 w-5 text-emerald-500" />
+              Flux de Trésorerie
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {/* Exploitation */}
+              <div className="p-3 rounded-lg bg-gray-50">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Flux d{"'"}exploitation</p>
+                <div className="space-y-1 text-sm">
+                  {(() => {
+                    const revenus = Number(data?.kpis?.chiffre_affaires) || 0
+                    const charges = Number(data?.kpis?.charges_totales) || 0
+                    const salaires = Number(data?.kpis?.salaires) || 0
+                    const resultat = revenus - charges
+                    return (
+                      <>
+                        <div className="flex justify-between"><span>Chiffre d{"'"}affaires (produits)</span><span className="font-mono text-green-600">+ {formatMUR(Math.round(revenus))}</span></div>
+                        <div className="flex justify-between"><span>Charges d{"'"}exploitation</span><span className="font-mono text-red-600">- {formatMUR(Math.round(charges))}</span></div>
+                        <div className="flex justify-between"><span>dont Salaires & charges</span><span className="font-mono text-red-500">- {formatMUR(Math.round(salaires))}</span></div>
+                        {bfr && <div className="flex justify-between"><span>Variation BFR</span><span className={`font-mono ${bfr.bfr >= 0 ? "text-red-600" : "text-green-600"}`}>{bfr.bfr >= 0 ? "-" : "+"} {formatMUR(Math.round(Math.abs(bfr.bfr)))}</span></div>}
+                        <div className="flex justify-between font-bold border-t pt-1 mt-1"><span>Flux net d{"'"}exploitation</span><span className={`font-mono ${(resultat - (bfr?.bfr || 0)) >= 0 ? "text-green-700" : "text-red-700"}`}>{formatMUR(Math.round(resultat - (bfr?.bfr || 0)))}</span></div>
+                      </>
+                    )
+                  })()}
+                </div>
+              </div>
+              {/* Investissement */}
+              <div className="p-3 rounded-lg bg-gray-50">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Flux d{"'"}investissement</p>
+                <p className="text-sm text-muted-foreground italic">Aucune donnée d{"'"}immobilisations disponible — à alimenter via le module FAR</p>
+              </div>
+              {/* Financement */}
+              <div className="p-3 rounded-lg bg-gray-50">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Flux de financement</p>
+                <p className="text-sm text-muted-foreground italic">Emprunts, remboursements, dividendes — à renseigner</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Comptes bancaires avec conversion temps réel */}
       <Card>
