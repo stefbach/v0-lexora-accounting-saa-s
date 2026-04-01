@@ -20,7 +20,7 @@ export const PARAMS_MRA_DEFAUT: ParametresPaieMRA = {
   csg_salarie_taux_reduit: 0.015,   // 1.5% si brut <= 50 000 MUR
   csg_salarie_taux_plein: 0.030,    // 3% si brut > 50 000 MUR
   csg_patronal: 0.060,              // 6% employeur
-  nsf_salarie: 0.015,               // 1.5% NSF salarie
+  nsf_salarie: 0.010,               // 1% NSF salarie
   nsf_patronal: 0.025,              // 2.5% NSF employeur
   training_levy: 0.010,             // 1% HRDC sur salaire de base
   prgf_patronal_par_jour: 4.50,     // PRGF par jour travaille

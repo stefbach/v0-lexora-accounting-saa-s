@@ -53,7 +53,7 @@ export default function SalairesPage() {
     .reduce((s: number, e: any) => s + e.total_debit, 0)
 
   const chargesSociales = {
-    csg_patronal: totalSalaires > 0 ? totalSalaires * 0.045 : 0, // ~4.5% moyen (3% ou 6% selon seuil)
+    csg_patronal: totalSalaires * 0.06, // 6% employeur (taux légal MRA)
     nsf_patronal: totalSalaires * 0.025,
     training_levy: totalSalaires * 0.01,
   }
@@ -110,7 +110,7 @@ export default function SalairesPage() {
           {/* Tableau charges sociales */}
           <Card>
             <CardHeader><CardTitle className="text-[#1E2A4A]">Décomposition des charges — Taux légaux Maurice</CardTitle></CardHeader>
-            <CardContent>
+            <CardContent className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -124,7 +124,7 @@ export default function SalairesPage() {
                 <TableBody>
                   {[
                     { label: "CSG salariale", taux: "1.5% ou 3%", qui: "Salarié", montant: totalSalaires * 0.03, note: "1.5% si brut ≤50K MUR, 3% si >50K" },
-                    { label: "CSG patronale", taux: "3% ou 6%", qui: "Employeur", montant: chargesSociales.csg_patronal, note: "3% si brut ≤50K MUR, 6% si >50K" },
+                    { label: "CSG patronale", taux: "6%", qui: "Employeur", montant: chargesSociales.csg_patronal, note: "6% sur salaire brut (taux unique employeur)" },
                     { label: "NSF salariale", taux: "1%", qui: "Salarié", montant: totalSalaires * 0.01, note: "National Savings Fund" },
                     { label: "NSF patronale", taux: "2.5%", qui: "Employeur", montant: chargesSociales.nsf_patronal, note: "National Savings Fund" },
                     { label: "Training Levy (1%)", taux: "1%", qui: "Employeur", montant: chargesSociales.training_levy, note: "Sur masse salariale >1.5M MUR" },
@@ -148,7 +148,7 @@ export default function SalairesPage() {
           {ecritures.length > 0 && (
             <Card>
               <CardHeader><CardTitle className="text-[#1E2A4A]">Comptes de personnel (Classe 6)</CardTitle></CardHeader>
-              <CardContent className="p-0">
+              <CardContent className="p-0 overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
