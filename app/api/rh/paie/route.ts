@@ -404,7 +404,9 @@ export async function POST(request: Request) {
           // salaire_brut is GENERATED ALWAYS — do NOT include it
           salaire_net: salaire_net_final,
           csg_salarie: resultat.csg_salarie,
+          csg_bonus: resultat.csg_bonus,
           csg_patronal: resultat.csg_patronal,
+          csg_patronal_bonus: resultat.csg_patronal_bonus,
           nsf_salarie: resultat.nsf_salarie,
           nsf_patronal: resultat.nsf_patronal,
           paye: resultat.paye,
@@ -417,6 +419,7 @@ export async function POST(request: Request) {
           transport_allowance: Number(emp.transport_allowance) || 0,
           petrol_allowance: Number(emp.petrol_allowance) || 0,
           montant_absence: montant_absence_final,
+          montant_refacture_mur: resultat.montant_refacture_mur,
           notes: notesResume,
           statut: 'brouillon',
         }
@@ -424,7 +427,7 @@ export async function POST(request: Request) {
         // Remove fields that may not exist in DB schema (ResultatPaie extras)
         const fieldsToRemove = [
           'salary_compensation_montant', 'total_emoluments', 'prgf_pct_emoluments',
-          'prgf_par_jour', 'montant_refacture_mur', 'csg_taux', 'csg_bonus',
+          'prgf_par_jour', 'csg_taux',
           'salaire_brut_base', 'resultat_net'
         ]
         for (const f of fieldsToRemove) delete (bulletin as any)[f]

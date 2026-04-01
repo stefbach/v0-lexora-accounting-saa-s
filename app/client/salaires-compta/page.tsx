@@ -220,7 +220,7 @@ export default function SalairesComptaPage() {
                   <p className="text-xs text-gray-500 font-medium mb-2">Dettes sociales (crédit)</p>
                   {[
                     { compte: "421000", label: "Net à payer", credit: totalNet, color: "text-emerald-600" },
-                    { compte: "431000", label: "CSG à payer", credit: totalCSG, color: "text-red-600" },
+                    { compte: "431000", label: "CSG à payer", credit: totalCSGSal + totalCSGPat, color: "text-red-600" },
                     { compte: "444000", label: "PAYE à payer", credit: 0, color: "text-red-500" },
                     { compte: "432000", label: "Training Levy à payer", credit: 0, color: "text-purple-600" },
                   ].map(c => (

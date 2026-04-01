@@ -104,6 +104,7 @@ export function calculerBulletin(
     ? elements.salary_compensation
     : (salaire_base <= params.salary_compensation_seuil ? params.salary_compensation : 0)
 
+  // Salaire brut hors EOY bonus
   const salaire_brut_base = salaire_base + salary_compensation_montant + increment_salaire +
     heures_sup_montant +
     transport_allowance + petrol_allowance +
@@ -112,6 +113,11 @@ export function calculerBulletin(
 
   const salaire_brut = salaire_brut_base + eoy_bonus
 
+  // Emoluments recurrents pour PAYE (base + indemnites fixes, HORS OT ponctuel et primes variables)
+  // L'annualisation PAYE doit se baser sur la remuneration recurrente, pas les elements ponctuels
+  const remuneration_recurrente = salaire_base + salary_compensation_montant + increment_salaire +
+    transport_allowance + petrol_allowance + commission
+
   // Total emoluments for PRGF calculation (basic + allowances + compensation, excl OT & EOY)
   const total_emoluments = salaire_base + salary_compensation_montant + increment_salaire +
     transport_allowance + petrol_allowance +
@@ -119,23 +125,30 @@ export function calculerBulletin(
     commission
 
   // CSG sur salaire (hors EOY bonus -- traite separement)
-  const csgTaux = salaire_brut_base <= params.csg_seuil_taux_reduit
+  // Le seuil CSG taux reduit se base sur le salaire de base uniquement (MRA)
+  const csgTaux = salaire_base <= params.csg_seuil_taux_reduit
     ? params.csg_salarie_taux_reduit
     : params.csg_salarie_taux_plein
 
   const csg_salarie = Math.round(salaire_brut_base * csgTaux)
   const csg_bonus = eoy_bonus > 0 ? Math.round(eoy_bonus * params.csg_salarie_taux_plein) : 0
-  const nsf_salarie = Math.round(salaire_brut * params.nsf_salarie)
+  // NSF: calculé sur salaire brut HORS EOY bonus (MRA)
+  const nsf_salarie = Math.round(salaire_brut_base * params.nsf_salarie)
 
   // PAYE -- bareme progressif annuel MRA 2025/26
-  // EOY Bonus (13th month) is EXEMPT from PAYE in Mauritius (but subject to CSG)
-  const salaireAnnuel = salaire_brut_base * 12 // eoy_bonus excluded from PAYE base
+  // Annualisation sur remuneration recurrente (hors OT ponctuel, primes, EOY bonus)
+  // Les heures sup et primes ponctuelles ne doivent pas etre multipliees x12
+  const salaireAnnuel = remuneration_recurrente * 12
+  // Ajouter OT + primes du mois en cours sans annualiser
+  const revenuImposableAnnuel = salaireAnnuel +
+    heures_sup_montant + special_allowance_1 + special_allowance_2 + special_allowance_3 +
+    other_refund + departure_notice
   let payeAnnuel = 0
-  if (salaireAnnuel > params.paye_seuil_exoneration) {
-    const tranche1 = Math.min(salaireAnnuel, params.paye_seuil_taux_2) - params.paye_seuil_exoneration
+  if (revenuImposableAnnuel > params.paye_seuil_exoneration) {
+    const tranche1 = Math.min(revenuImposableAnnuel, params.paye_seuil_taux_2) - params.paye_seuil_exoneration
     payeAnnuel += tranche1 * params.paye_taux_1
-    if (salaireAnnuel > params.paye_seuil_taux_2) {
-      payeAnnuel += (salaireAnnuel - params.paye_seuil_taux_2) * params.paye_taux_2
+    if (revenuImposableAnnuel > params.paye_seuil_taux_2) {
+      payeAnnuel += (revenuImposableAnnuel - params.paye_seuil_taux_2) * params.paye_taux_2
     }
   }
   const paye = Math.round(payeAnnuel / 12)
@@ -146,7 +159,8 @@ export function calculerBulletin(
   // Charges patronales
   const csg_patronal = Math.round(salaire_brut_base * params.csg_patronal)
   const csg_patronal_bonus = eoy_bonus > 0 ? Math.round(eoy_bonus * params.csg_patronal) : 0
-  const nsf_patronal = Math.round(salaire_brut * params.nsf_patronal)
+  // NSF patronal: sur salaire brut HORS EOY bonus
+  const nsf_patronal = Math.round(salaire_brut_base * params.nsf_patronal)
 
   // Training Levy (HRDC): 1% of basic salary only (not total emoluments)
   const training_levy = Math.round(salaire_base * params.training_levy)
@@ -244,13 +258,13 @@ export function calculerPAYE(
   salaireMensuelImposable: number,
   params: ParametresPaieMRA = PARAMS_MRA_DEFAUT
 ): number {
-  const salaireAnnuel = salaireMensuelImposable * 12
+  const revenuAnnuel = salaireMensuelImposable * 12
   let payeAnnuel = 0
-  if (salaireAnnuel > params.paye_seuil_exoneration) {
-    const tranche1 = Math.min(salaireAnnuel, params.paye_seuil_taux_2) - params.paye_seuil_exoneration
+  if (revenuAnnuel > params.paye_seuil_exoneration) {
+    const tranche1 = Math.min(revenuAnnuel, params.paye_seuil_taux_2) - params.paye_seuil_exoneration
     payeAnnuel += tranche1 * params.paye_taux_1
-    if (salaireAnnuel > params.paye_seuil_taux_2) {
-      payeAnnuel += (salaireAnnuel - params.paye_seuil_taux_2) * params.paye_taux_2
+    if (revenuAnnuel > params.paye_seuil_taux_2) {
+      payeAnnuel += (revenuAnnuel - params.paye_seuil_taux_2) * params.paye_taux_2
     }
   }
   return Math.round(payeAnnuel / 12)

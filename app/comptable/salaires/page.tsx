@@ -53,7 +53,7 @@ export default function SalairesPage() {
     .reduce((s: number, e: any) => s + e.total_debit, 0)
 
   const chargesSociales = {
-    csg_patronal: totalSalaires > 0 ? totalSalaires * 0.045 : 0, // ~4.5% moyen (3% ou 6% selon seuil)
+    csg_patronal: totalSalaires * 0.06, // 6% employeur (taux unique)
     nsf_patronal: totalSalaires * 0.025,
     hrdc: totalSalaires * 0.01,
   }
@@ -123,9 +123,9 @@ export default function SalairesPage() {
                 </TableHeader>
                 <TableBody>
                   {[
-                    { label: "CSG salariale", taux: "1.5% ou 3%", qui: "Salarié", montant: totalSalaires * 0.03, note: "1.5% si brut ≤50K MUR, 3% si >50K" },
-                    { label: "CSG patronale", taux: "3% ou 6%", qui: "Employeur", montant: chargesSociales.csg_patronal, note: "3% si brut ≤50K MUR, 6% si >50K" },
-                    { label: "NSF salariale", taux: "1%", qui: "Salarié", montant: totalSalaires * 0.01, note: "National Savings Fund" },
+                    { label: "CSG salariale", taux: "1.5% ou 3%", qui: "Salarié", montant: totalSalaires * 0.03, note: "1.5% si base ≤50K MUR, 3% si >50K" },
+                    { label: "CSG patronale", taux: "6%", qui: "Employeur", montant: chargesSociales.csg_patronal, note: "6% taux unique employeur" },
+                    { label: "NSF salariale", taux: "1.5%", qui: "Salarié", montant: totalSalaires * 0.015, note: "National Savings Fund" },
                     { label: "NSF patronale", taux: "2.5%", qui: "Employeur", montant: chargesSociales.nsf_patronal, note: "National Savings Fund" },
                     { label: "HRDC (Training Levy)", taux: "1%", qui: "Employeur", montant: chargesSociales.hrdc, note: "Sur masse salariale >1.5M MUR" },
                     { label: "PAYE", taux: "0% / 10% / 15%", qui: "Salarié", montant: 0, note: "Retenu à la source — barème progressif MRA" },

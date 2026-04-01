@@ -44,13 +44,20 @@ export default function ChargesSocialesPage() {
 
   // Calculs
   const totalCSGSalarie = bulletins.reduce((s, b) => s + (Number(b.csg_salarie) || 0), 0)
+  const totalCSGBonus = bulletins.reduce((s, b) => s + (Number(b.csg_bonus) || 0), 0)
   const totalCSGPatronal = bulletins.reduce((s, b) => s + (Number(b.csg_patronal) || 0), 0)
+  const totalCSGPatronalBonus = bulletins.reduce((s, b) => s + (Number(b.csg_patronal_bonus) || 0), 0)
   const totalNSFSalarie = bulletins.reduce((s, b) => s + (Number(b.nsf_salarie) || 0), 0)
   const totalNSFPatronal = bulletins.reduce((s, b) => s + (Number(b.nsf_patronal) || 0), 0)
   const totalTrainingLevy = bulletins.reduce((s, b) => s + (Number(b.training_levy) || 0), 0)
   const totalPAYE = bulletins.reduce((s, b) => s + (Number(b.paye) || 0), 0)
   const totalPRGF = bulletins.reduce((s, b) => s + (Number(b.prgf) || 0), 0)
-  const grandTotal = totalCSGSalarie + totalCSGPatronal + totalNSFSalarie + totalNSFPatronal + totalTrainingLevy + totalPAYE + totalPRGF
+  // Charges patronales = ce que l'employeur doit en plus du salaire
+  const totalChargesPatronales = totalCSGPatronal + totalCSGPatronalBonus + totalNSFPatronal + totalTrainingLevy + totalPRGF
+  // Retenues salariales = ce qui est déduit du salaire brut de l'employé
+  const totalRetenues = totalCSGSalarie + totalCSGBonus + totalNSFSalarie + totalPAYE
+  // Total à déclarer MRA (CSG + NSF parts salarié et patronal)
+  const totalDeclarationMRA = totalCSGSalarie + totalCSGBonus + totalCSGPatronal + totalCSGPatronalBonus + totalNSFSalarie + totalNSFPatronal + totalTrainingLevy + totalPRGF
 
   return (
     <div className="p-6 space-y-6">
@@ -73,12 +80,12 @@ export default function ChargesSocialesPage() {
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500 flex items-center gap-2"><Shield className="h-4 w-4" /> CSG Total</CardTitle></CardHeader>
-              <CardContent><p className="text-2xl font-bold" style={{ color: NAVY }}>{fmt(totalCSGSalarie + totalCSGPatronal)}</p><p className="text-xs text-gray-400">Salarié: {fmt(totalCSGSalarie)} | Patronal: {fmt(totalCSGPatronal)}</p></CardContent></Card>
-            <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500 flex items-center gap-2"><PiggyBank className="h-4 w-4" /> NSF Total</CardTitle></CardHeader>
-              <CardContent><p className="text-2xl font-bold text-blue-600">{fmt(totalNSFSalarie + totalNSFPatronal)}</p><p className="text-xs text-gray-400">Salarié: {fmt(totalNSFSalarie)} | Patronal: {fmt(totalNSFPatronal)}</p></CardContent></Card>
-            <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500 flex items-center gap-2"><Receipt className="h-4 w-4" /> PAYE</CardTitle></CardHeader>
-              <CardContent><p className="text-2xl font-bold text-orange-600">{fmt(totalPAYE)}</p></CardContent></Card>
+            <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500 flex items-center gap-2"><Shield className="h-4 w-4" /> Charges patronales</CardTitle></CardHeader>
+              <CardContent><p className="text-2xl font-bold" style={{ color: NAVY }}>{fmt(totalChargesPatronales)}</p><p className="text-xs text-gray-400">CSG: {fmt(totalCSGPatronal + totalCSGPatronalBonus)} | NSF: {fmt(totalNSFPatronal)}</p></CardContent></Card>
+            <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500 flex items-center gap-2"><PiggyBank className="h-4 w-4" /> Retenues salariales</CardTitle></CardHeader>
+              <CardContent><p className="text-2xl font-bold text-blue-600">{fmt(totalRetenues)}</p><p className="text-xs text-gray-400">CSG: {fmt(totalCSGSalarie + totalCSGBonus)} | NSF: {fmt(totalNSFSalarie)}</p></CardContent></Card>
+            <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500 flex items-center gap-2"><Receipt className="h-4 w-4" /> PAYE (impôt)</CardTitle></CardHeader>
+              <CardContent><p className="text-2xl font-bold text-orange-600">{fmt(totalPAYE)}</p><p className="text-xs text-gray-400">Retenu sur salaire</p></CardContent></Card>
             <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500 flex items-center gap-2"><GraduationCap className="h-4 w-4" /> Training + PRGF</CardTitle></CardHeader>
               <CardContent><p className="text-2xl font-bold text-purple-600">{fmt(totalTrainingLevy + totalPRGF)}</p><p className="text-xs text-gray-400">Levy: {fmt(totalTrainingLevy)} | PRGF: {fmt(totalPRGF)}</p></CardContent></Card>
           </div>
@@ -89,27 +96,57 @@ export default function ChargesSocialesPage() {
               {bulletins.length === 0 ? (
                 <p className="text-center text-gray-400 py-8">Aucun bulletin pour cette période</p>
               ) : (
-                <div className="space-y-2">
-                  {[
-                    { label: "CSG salarié (1.5% / 3%)", montant: totalCSGSalarie, compte: "431", color: "text-red-600" },
-                    { label: "CSG patronal (6%)", montant: totalCSGPatronal, compte: "431", color: "text-red-600" },
-                    { label: "NSF salarié (1.5%)", montant: totalNSFSalarie, compte: "431", color: "text-blue-600" },
-                    { label: "NSF patronal (2.5%)", montant: totalNSFPatronal, compte: "431", color: "text-blue-600" },
-                    { label: "Training Levy (1%)", montant: totalTrainingLevy, compte: "432", color: "text-purple-600" },
-                    { label: "PRGF (4.5% / 4.50 MUR/j)", montant: totalPRGF, compte: "432", color: "text-purple-600" },
-                    { label: "PAYE (impôt sur le revenu)", montant: totalPAYE, compte: "444", color: "text-orange-600" },
-                  ].map((c, i) => (
-                    <div key={i} className="flex items-center justify-between p-3 border rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <Badge variant="outline" className="text-xs font-mono">{c.compte}</Badge>
-                        <span className="text-sm">{c.label}</span>
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Charges patronales (coût employeur)</p>
+                    <div className="space-y-2">
+                      {[
+                        { label: "CSG patronal (6%)", montant: totalCSGPatronal + totalCSGPatronalBonus, compte: "645", color: "text-red-600" },
+                        { label: "NSF patronal (2.5%)", montant: totalNSFPatronal, compte: "645", color: "text-blue-600" },
+                        { label: "Training Levy HRDC (1%)", montant: totalTrainingLevy, compte: "645", color: "text-purple-600" },
+                        { label: "PRGF (4.5% émoluments / 4.50 MUR/j)", montant: totalPRGF, compte: "645", color: "text-purple-600" },
+                      ].map((c, i) => (
+                        <div key={i} className="flex items-center justify-between p-3 border rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <Badge variant="outline" className="text-xs font-mono">{c.compte}</Badge>
+                            <span className="text-sm">{c.label}</span>
+                          </div>
+                          <span className={`font-mono font-bold ${c.color}`}>{fmt(c.montant)}</span>
+                        </div>
+                      ))}
+                      <div className="flex items-center justify-between p-3 rounded-lg font-bold bg-red-50">
+                        <span>TOTAL CHARGES PATRONALES</span>
+                        <span className="font-mono text-lg text-red-700">{fmt(totalChargesPatronales)}</span>
                       </div>
-                      <span className={`font-mono font-bold ${c.color}`}>{fmt(c.montant)}</span>
                     </div>
-                  ))}
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Retenues salariales (prélevées sur salaire brut)</p>
+                    <div className="space-y-2">
+                      {[
+                        { label: "CSG salarié (1.5% / 3%)", montant: totalCSGSalarie + totalCSGBonus, compte: "431", color: "text-red-600" },
+                        { label: "NSF salarié (1.5%)", montant: totalNSFSalarie, compte: "431", color: "text-blue-600" },
+                        { label: "PAYE (impôt sur le revenu)", montant: totalPAYE, compte: "444", color: "text-orange-600" },
+                      ].map((c, i) => (
+                        <div key={i} className="flex items-center justify-between p-3 border rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <Badge variant="outline" className="text-xs font-mono">{c.compte}</Badge>
+                            <span className="text-sm">{c.label}</span>
+                          </div>
+                          <span className={`font-mono font-bold ${c.color}`}>{fmt(c.montant)}</span>
+                        </div>
+                      ))}
+                      <div className="flex items-center justify-between p-3 rounded-lg font-bold bg-blue-50">
+                        <span>TOTAL RETENUES SALARIALES</span>
+                        <span className="font-mono text-lg text-blue-700">{fmt(totalRetenues)}</span>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="flex items-center justify-between p-3 rounded-lg font-bold" style={{ backgroundColor: `${GOLD}15` }}>
-                    <span>TOTAL CHARGES</span>
-                    <span className="font-mono text-lg" style={{ color: NAVY }}>{fmt(grandTotal)}</span>
+                    <span>TOTAL À DÉCLARER MRA (CSG + NSF + Levy + PRGF)</span>
+                    <span className="font-mono text-lg" style={{ color: NAVY }}>{fmt(totalDeclarationMRA)}</span>
                   </div>
                 </div>
               )}
