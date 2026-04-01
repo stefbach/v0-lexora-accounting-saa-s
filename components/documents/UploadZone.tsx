@@ -11,7 +11,7 @@ interface UploadZoneProps {
 }
 
 const DEFAULT_ACCEPT = [".pdf", ".jpeg", ".jpg", ".png", ".xlsx"]
-const DEFAULT_MAX_SIZE = 10 * 1024 * 1024 // 10 MB
+const DEFAULT_MAX_SIZE = 20 * 1024 * 1024 // 20 MB
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} o`

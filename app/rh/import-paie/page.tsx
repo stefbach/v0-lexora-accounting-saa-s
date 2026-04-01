@@ -61,8 +61,8 @@ export default function ImportPaiePage() {
     setParsing(true)
     setParseError("")
     try {
-      if (file.size > 10 * 1024 * 1024) {
-        setParseError("Fichier trop volumineux (max 10 MB)")
+      if (file.size > 20 * 1024 * 1024) {
+        setParseError("Fichier trop volumineux (max 20 MB)")
         return
       }
       const fd = new FormData()
