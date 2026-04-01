@@ -298,10 +298,23 @@ export default function SocieteSettingsPage() {
 
   useEffect(() => {
     if (societeId) {
-      const s = societes.find(s => s.id === societeId)
-      if (s) setSociete(s)
+      setSociete(null)
+      const cached = societes.find(s => s.id === societeId)
+      // Fetch fresh data from API to ensure we have complete, up-to-date info
+      fetch(`/api/client/societes`).then(r => r.json()).then(d => {
+        const fresh = (d.societes || []).find((s: any) => s.id === societeId)
+        if (fresh) {
+          setSociete(fresh)
+          // Update cache
+          setSocietes(prev => prev.map(s => s.id === fresh.id ? fresh : s))
+        } else if (cached) {
+          setSociete(cached)
+        }
+      }).catch(() => {
+        if (cached) setSociete(cached)
+      })
     }
-  }, [societeId, societes])
+  }, [societeId])
 
   const handleSave = async (data: any) => {
     setSaving(true); setSaved(false)
@@ -353,6 +366,9 @@ export default function SocieteSettingsPage() {
       </div>
 
       {/* Tab content — key={societeId} forces re-mount when société changes */}
+      {!societe && societeId && (
+        <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin" /></div>
+      )}
       {societe && (
         <div>
           {tab === "details" && <DetailsTab key={`details-${societeId}`} data={societe} onSave={handleSave} />}
