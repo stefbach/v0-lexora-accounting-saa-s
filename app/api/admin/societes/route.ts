@@ -12,13 +12,32 @@ function getAdminClient() {
 export async function GET() {
   try {
     const supabase = getAdminClient()
-    const { data, error } = await supabase
+
+    // Simple select without FK join (avoids schema cache issues)
+    const { data: societes, error } = await supabase
       .from('societes')
-      .select('*, comptable:profiles!societes_comptable_id_fkey(id, full_name, email)')
+      .select('*')
       .order('created_at', { ascending: false })
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json({ societes: data })
+
+    // Enrich with comptable name separately
+    const comptableIds = [...new Set((societes || []).map(s => s.comptable_id).filter(Boolean))]
+    let comptableMap: Record<string, any> = {}
+    if (comptableIds.length > 0) {
+      const { data: comptables } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .in('id', comptableIds)
+      ;(comptables || []).forEach(c => { comptableMap[c.id] = c })
+    }
+
+    const enriched = (societes || []).map(s => ({
+      ...s,
+      comptable: s.comptable_id ? comptableMap[s.comptable_id] || null : null,
+    }))
+
+    return NextResponse.json({ societes: enriched })
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Unknown error' }, { status: 500 })
   }
@@ -54,30 +73,39 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PUT — Update a société
+// PUT — Update a société (tous les champs)
 export async function PUT(request: NextRequest) {
   try {
-    const { id, nom, brn, numero_tva_mra, statut_tva, comptable_id } = await request.json()
+    const body = await request.json()
+    const { id } = body
 
-    if (!id) {
-      return NextResponse.json({ error: "L'identifiant de la société est requis" }, { status: 400 })
-    }
-
-    if (!nom) {
-      return NextResponse.json({ error: 'Le nom de la société est requis' }, { status: 400 })
-    }
+    if (!id) return NextResponse.json({ error: "L'identifiant de la société est requis" }, { status: 400 })
 
     const supabase = getAdminClient()
 
+    // Build update object — only include fields that are present in the body
+    const updates: Record<string, unknown> = {}
+    const allowedFields = [
+      'nom', 'brn', 'numero_tva_mra', 'statut_tva', 'comptable_id',
+      'short_name', 'ern', 'npf_number', 'nature_business', 'date_incorporation', 'logo_url',
+      'secteur_activite', 'contact_name', 'contact_position',
+      'adresse', 'adresse2', 'ville', 'telephone', 'fax', 'email', 'email_dco',
+      'latitude', 'longitude', 'distance_pointage',
+      'period_closing_day', 'pay_day', 'salary_frequency', 'eoy_bonus_mode',
+      'declaration_type', 'payslip_template', 'payslip_language',
+      'devises_actives', 'client_id', 'modules_actifs',
+    ]
+    for (const field of allowedFields) {
+      if (body[field] !== undefined) updates[field] = body[field]
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json({ error: 'Aucun champ à mettre à jour' }, { status: 400 })
+    }
+
     const { data, error } = await supabase
       .from('societes')
-      .update({
-        nom,
-        brn: brn || null,
-        numero_tva_mra: numero_tva_mra || null,
-        statut_tva: statut_tva ?? false,
-        comptable_id: comptable_id || null,
-      })
+      .update(updates)
       .eq('id', id)
       .select()
       .single()

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { getTauxChange, convertToMUR } from '@/lib/taux-change'
+import { userHasAccessToSociete } from '@/lib/rh/access'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,13 +25,17 @@ export async function GET(request: Request) {
     // Verify role
     const supabase = getAdminClient()
     const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-    if (!profile || !['comptable', 'comptable_dedie', 'admin'].includes(profile.role)) {
+    if (!profile || !['comptable', 'comptable_dedie', 'admin', 'super_admin', 'client_admin', 'rh', 'rh_manager'].includes(profile.role)) {
       return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
     }
 
     const { searchParams } = new URL(request.url)
     const societe_id = searchParams.get('societe_id')
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
+
+    // Multi-tenant: verify user has access to this société
+    const hasAccess = await userHasAccessToSociete(user.id, societe_id)
+    if (!hasAccess) return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
 
     // Fetch bank accounts
     const { data: comptes, error: comptesError } = await supabase
@@ -105,10 +111,37 @@ export async function GET(request: Request) {
       }
     }
 
+    // Fetch exchange rates
+    const rates = await getTauxChange()
+
+    // Enrich comptes with MUR conversion
+    const enrichedComptes = (comptes || []).map((c: any) => ({
+      ...c,
+      solde_mur: convertToMUR(c.solde_actuel || 0, c.devise || 'MUR', rates),
+    }))
+
+    const totalBankMUR = enrichedComptes.reduce((sum: number, c: any) => sum + (c.solde_mur || 0), 0)
+
+    // Enrich releves transactions with devise and MUR amounts
+    const enrichedReleves = (releves || []).map((r: any) => {
+      // Find the matching compte to get the devise
+      const compte = (comptes || []).find((c: any) => c.id === r.compte_bancaire_id)
+      const devise = compte?.devise || 'MUR'
+      const enrichedTx = (r.transactions_json || []).map((tx: any) => ({
+        ...tx,
+        devise,
+        debit_mur: convertToMUR(Number(tx.debit) || 0, devise, rates),
+        credit_mur: convertToMUR(Number(tx.credit) || 0, devise, rates),
+      }))
+      return { ...r, transactions_json: enrichedTx, devise }
+    })
+
     return NextResponse.json({
-      comptes: comptes || [],
-      releves: releves || [],
+      comptes: enrichedComptes,
+      releves: enrichedReleves,
       documentsTransactions,
+      totalBankMUR,
+      rates,
     })
   } catch (e: unknown) {
     console.error('[banque] error:', e)

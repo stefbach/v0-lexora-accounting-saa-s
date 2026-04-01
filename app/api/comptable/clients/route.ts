@@ -1,33 +1,43 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 
-// GET — List clients visible to the current comptable
-// comptable: sees ALL clients
-// comptable_dedie: sees ONLY clients assigned via dossiers
+function getAdminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+}
+
+// GET — List clients visible to the current user
 export async function GET() {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const supabaseAuth = await createServerClient()
+    const { data: { user } } = await supabaseAuth.auth.getUser()
 
     if (!user) {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
+
+    const supabase = getAdminClient()
 
     // Get current user's role
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', user.id)
-      .single()
+      .maybeSingle()
 
-    const role = profile?.role
+    const role = profile?.role || ''
 
-    if (role !== 'comptable' && role !== 'comptable_dedie') {
+    // Admin and comptable roles can access
+    if (!['admin', 'super_admin', 'comptable', 'comptable_dedie', 'client_admin'].includes(role)) {
       return NextResponse.json({ error: 'Accès non autorisé' }, { status: 403 })
     }
 
-    if (role === 'comptable') {
-      // Comptable admin: sees all clients
+    if (['admin', 'super_admin', 'comptable'].includes(role)) {
+      // Sees all clients
       const { data: clients, error } = await supabase
         .from('profiles')
         .select('id, email, full_name, role, phone, comptable_id, is_active, created_at')
@@ -36,31 +46,51 @@ export async function GET() {
 
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-      // Get all dossiers for context
-      const { data: dossiers } = await supabase
-        .from('dossiers')
-        .select('*, societe:societes(id, nom)')
+      // Get all dossiers
+      const { data: dossiers } = await supabase.from('dossiers').select('*')
+      // Enrich with societe names
+      const societeIds = [...new Set((dossiers || []).map(d => d.societe_id).filter(Boolean))]
+      let societeMap: Record<string, any> = {}
+      if (societeIds.length > 0) {
+        const { data: societes } = await supabase.from('societes').select('id, nom').in('id', societeIds)
+        ;(societes || []).forEach(s => { societeMap[s.id] = s })
+      }
+      const enrichedDossiers = (dossiers || []).map(d => ({ ...d, societe: societeMap[d.societe_id] || null }))
 
-      return NextResponse.json({ clients, dossiers: dossiers || [] })
+      return NextResponse.json({ clients, dossiers: enrichedDossiers })
+    } else if (role === 'client_admin') {
+      // Client admin: sees own data
+      const { data: dossiers } = await supabase.from('dossiers').select('*').eq('client_id', user.id)
+      const societeIds = (dossiers || []).map(d => d.societe_id).filter(Boolean)
+      let societes: any[] = []
+      if (societeIds.length > 0) {
+        const { data } = await supabase.from('societes').select('id, nom').in('id', societeIds)
+        societes = data || []
+      }
+      return NextResponse.json({
+        clients: [{ id: user.id, ...profile }],
+        dossiers: (dossiers || []).map(d => ({ ...d, societe: societes.find(s => s.id === d.societe_id) || null })),
+      })
     } else {
       // Comptable dédié: only assigned clients via dossiers
-      const { data: dossiers, error: dossierError } = await supabase
-        .from('dossiers')
-        .select('*, client:profiles!dossiers_client_id_fkey(id, email, full_name, role, phone, is_active, created_at), societe:societes(id, nom)')
-        .eq('comptable_id', user.id)
-        .eq('statut', 'actif')
+      const { data: dossiers } = await supabase.from('dossiers').select('*').eq('comptable_id', user.id).eq('statut', 'actif')
+      const clientIds = [...new Set((dossiers || []).map(d => d.client_id).filter(Boolean))]
+      const societeIds = [...new Set((dossiers || []).map(d => d.societe_id).filter(Boolean))]
 
-      if (dossierError) return NextResponse.json({ error: dossierError.message }, { status: 500 })
-
-      // Extract unique clients
-      const clientMap = new Map<string, unknown>()
-      dossiers?.forEach(d => {
-        if (d.client) clientMap.set(d.client.id, d.client)
-      })
+      let clients: any[] = []
+      let societeMap: Record<string, any> = {}
+      if (clientIds.length > 0) {
+        const { data } = await supabase.from('profiles').select('id, email, full_name, role, phone, is_active, created_at').in('id', clientIds)
+        clients = data || []
+      }
+      if (societeIds.length > 0) {
+        const { data } = await supabase.from('societes').select('id, nom').in('id', societeIds)
+        ;(data || []).forEach(s => { societeMap[s.id] = s })
+      }
 
       return NextResponse.json({
-        clients: Array.from(clientMap.values()),
-        dossiers: dossiers || [],
+        clients,
+        dossiers: (dossiers || []).map(d => ({ ...d, societe: societeMap[d.societe_id] || null })),
       })
     }
   } catch (e: unknown) {

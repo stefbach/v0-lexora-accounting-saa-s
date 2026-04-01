@@ -1,20 +1,61 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase/server'
+import { userHasAccessToEmploye } from '@/lib/rh/access'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+function getAdminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+}
+
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const { id } = await params
+    const supabaseAuth = await createServerClient()
+    const { data: { user } } = await supabaseAuth.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
+    // Multi-tenant: verify user has access to this employee
+    const hasAccess = await userHasAccessToEmploye(user.id, id)
+    if (!hasAccess) return NextResponse.json({ error: 'Accès refusé à cet employé' }, { status: 403 })
+
+    const supabase = getAdminClient()
+
+    const { searchParams } = new URL(_req.url)
+    const year = searchParams.get('year')
+    const pointage_mois = searchParams.get('pointage_mois')
+
+    // Build bulletin query - all bulletins, optionally filtered by year
+    let bulletinQuery = supabase.from('bulletins_paie').select('*').eq('employe_id', id).order('periode', { ascending: false })
+    if (year) {
+      bulletinQuery = bulletinQuery.gte('periode', `${year}-01-01`).lte('periode', `${year}-12-31`)
+    }
+
+    // Build conges query - all leave requests, optionally filtered by year
+    let congesQuery = supabase.from('demandes_conges').select('*').eq('employe_id', id).order('date_debut', { ascending: false })
+    if (year) {
+      congesQuery = congesQuery.gte('date_debut', `${year}-01-01`).lte('date_debut', `${year}-12-31`)
+    }
+
+    // Build pointages query - month-based or last 31 days
+    let pointagesQuery = supabase.from('pointages').select('*').eq('employe_id', id).order('date_pointage', { ascending: false })
+    if (pointage_mois) {
+      pointagesQuery = pointagesQuery.gte('date_pointage', `${pointage_mois}-01`).lte('date_pointage', `${pointage_mois}-31`)
+    } else {
+      pointagesQuery = pointagesQuery.limit(31)
+    }
+
     const [emp, bulletins, conges, soldes, pointages] = await Promise.all([
-      supabase.from('employes').select('*').eq('id', params.id).single(),
-      supabase.from('bulletins_paie').select('*').eq('employe_id', params.id).order('periode', { ascending: false }).limit(12),
-      supabase.from('demandes_conges').select('*').eq('employe_id', params.id).order('date_debut', { ascending: false }).limit(20),
-      supabase.from('soldes_conges').select('*').eq('employe_id', params.id).order('annee', { ascending: false }).limit(3),
-      supabase.from('pointages').select('*').eq('employe_id', params.id).order('date_pointage', { ascending: false }).limit(31),
+      supabase.from('employes').select('*').eq('id', id).single(),
+      bulletinQuery,
+      congesQuery,
+      supabase.from('soldes_conges').select('*').eq('employe_id', id).order('annee', { ascending: false }),
+      pointagesQuery,
     ])
 
     return NextResponse.json({ employe: emp.data, bulletins: bulletins.data, conges: conges.data, soldes: soldes.data, pointages: pointages.data })
@@ -23,13 +64,31 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   }
 }
 
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const { id } = await params
+    const supabaseAuth = await createServerClient()
+    const { data: { user } } = await supabaseAuth.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+
+    // Multi-tenant: verify user has access to this employee
+    const hasAccess = await userHasAccessToEmploye(user.id, id)
+    if (!hasAccess) return NextResponse.json({ error: 'Accès refusé à cet employé' }, { status: 403 })
+
+    const supabase = getAdminClient()
     const body = await request.json()
-    const { data, error } = await supabase.from('employes').update({ ...body, updated_at: new Date().toISOString() }).eq('id', params.id).select().single()
+
+    // Remove fields that shouldn't be updated directly
+    delete body.id
+    delete body.created_at
+    delete body.actif
+
+    const { data, error } = await supabase
+      .from('employes')
+      .update(body)
+      .eq('id', id)
+      .select()
+      .single()
     if (error) throw error
     return NextResponse.json({ employe: data })
   } catch (e: unknown) {

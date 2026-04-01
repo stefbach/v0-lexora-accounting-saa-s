@@ -1,201 +1,156 @@
 "use client"
-
-import { useState } from "react"
-import Link from "next/link"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table"
-import { Search, Shield, GraduationCap, PiggyBank, Receipt } from "lucide-react"
-import { useProfile } from "@/hooks/use-profile"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Loader2, Shield, GraduationCap, PiggyBank, Receipt, Download } from "lucide-react"
 
-function formatMUR(amount: number) {
-  return amount.toLocaleString("fr-FR") + " MUR"
-}
+const NAVY = "#1E2A4A"
+const GOLD = "#C9A84C"
+function fmt(n: number) { return n.toLocaleString("fr-FR", { maximumFractionDigits: 0 }) + " MUR" }
 
-const chargesData: {
-  id: string
-  societe: string
-  periode: string
-  npfPatronal: number
-  npfSalarie: number
-  hrdc: number
-  nps: number
-  paye: number
-  total: number
-  echeance: string
-  statut: "Conforme" | "Écart détecté"
-}[] = []
+export default function ChargesSocialesPage() {
+  const [societes, setSocietes] = useState<any[]>([])
+  const [societe, setSociete] = useState("")
+  const [periode, setPeriode] = useState(new Date().toISOString().slice(0, 7))
+  const [loading, setLoading] = useState(true)
+  const [bulletins, setBulletins] = useState<any[]>([])
 
-function getStatutBadge(statut: string) {
-  switch (statut) {
-    case "Conforme":
-      return <Badge className="bg-green-100 text-green-700 border-green-200">Conforme</Badge>
-    case "Écart détecté":
-      return <Badge className="bg-red-100 text-red-700 border-red-200">Écart détecté</Badge>
-    default:
-      return <Badge variant="secondary">{statut}</Badge>
-  }
-}
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/client/societes").then(r => r.json()).catch(() => ({ societes: [] })),
+      fetch("/api/comptable/societes").then(r => r.json()).catch(() => ({ societes: [] })),
+    ]).then(([d1, d2]) => {
+      const all = [...(d1.societes || []), ...(d2.societes || [])]
+      const unique = Array.from(new Map(all.map((s: any) => [s.id, s])).values())
+      setSocietes(unique)
+      if (unique.length >= 1) setSociete(unique[0].id)
+    })
+  }, [])
 
-export default function ClientChargesSocialesPage() {
-  const [search, setSearch] = useState("")
-  const { profile } = useProfile()
+  const load = useCallback(async () => {
+    if (!societe) return
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/rh/paie?societe_id=${societe}&periode=${periode}`)
+      const data = await res.json()
+      setBulletins(data.bulletins || [])
+    } catch {}
+    setLoading(false)
+  }, [societe, periode])
 
-  if (profile?.role === "client_user") {
-    return (
-      <div className="p-6">
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground">Vous n&apos;avez pas acc&egrave;s &agrave; cette section.</p>
-            <Link href="/client" className="text-sm underline mt-4 inline-block" style={{ color: "#C9A84C" }}>
-              Retour au tableau de bord
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
+  useEffect(() => { load() }, [load])
 
-  const filtered = chargesData.filter(
-    (row) =>
-      row.societe.toLowerCase().includes(search.toLowerCase()) ||
-      row.periode.toLowerCase().includes(search.toLowerCase())
-  )
+  // Calculs
+  const totalCSGSalarie = bulletins.reduce((s, b) => s + (Number(b.csg_salarie) || 0), 0)
+  const totalCSGPatronal = bulletins.reduce((s, b) => s + (Number(b.csg_patronal) || 0), 0)
+  const totalNSFSalarie = bulletins.reduce((s, b) => s + (Number(b.nsf_salarie) || 0), 0)
+  const totalNSFPatronal = bulletins.reduce((s, b) => s + (Number(b.nsf_patronal) || 0), 0)
+  const totalTrainingLevy = bulletins.reduce((s, b) => s + (Number(b.training_levy) || 0), 0)
+  const totalPAYE = bulletins.reduce((s, b) => s + (Number(b.paye) || 0), 0)
+  const totalPRGF = bulletins.reduce((s, b) => s + (Number(b.prgf) || 0), 0)
+  const grandTotal = totalCSGSalarie + totalCSGPatronal + totalNSFSalarie + totalNSFPatronal + totalTrainingLevy + totalPAYE + totalPRGF
 
   return (
-    <div className="flex-1 overflow-auto p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
-          Charges Sociales
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Suivi des cotisations NPF, HRDC, NPS et PAYE
-        </p>
+    <div className="p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Charges Sociales — CSG / NSF / PAYE</h1>
+          <p className="text-sm text-gray-500">Cotisations calculées depuis les bulletins de paie</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Select value={societe} onValueChange={setSociete}>
+            <SelectTrigger className="w-[220px]"><SelectValue placeholder="Société" /></SelectTrigger>
+            <SelectContent>{societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent>
+          </Select>
+          <input type="month" value={periode} onChange={e => setPeriode(e.target.value)} className="border rounded px-3 py-2 text-sm" />
+        </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">NPF total</CardTitle>
-            <div className="rounded-lg p-2 bg-blue-50">
-              <Shield className="h-5 w-5" style={{ color: "#1E2A4A" }} />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
-              {formatMUR(chargesData.reduce((sum, r) => sum + r.npfPatronal + r.npfSalarie, 0))}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">HRDC total</CardTitle>
-            <div className="rounded-lg p-2 bg-amber-50">
-              <GraduationCap className="h-5 w-5" style={{ color: "#C9A84C" }} />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
-              {formatMUR(chargesData.reduce((sum, r) => sum + r.hrdc, 0))}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">NPS total</CardTitle>
-            <div className="rounded-lg p-2 bg-blue-50">
-              <PiggyBank className="h-5 w-5" style={{ color: "#1E2A4A" }} />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
-              {formatMUR(chargesData.reduce((sum, r) => sum + r.nps, 0))}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">PAYE total</CardTitle>
-            <div className="rounded-lg p-2 bg-red-50">
-              <Receipt className="h-5 w-5" style={{ color: "#DC2626" }} />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
-              {formatMUR(chargesData.reduce((sum, r) => sum + r.paye, 0))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {loading ? (
+        <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin" /></div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500 flex items-center gap-2"><Shield className="h-4 w-4" /> CSG Total</CardTitle></CardHeader>
+              <CardContent><p className="text-2xl font-bold" style={{ color: NAVY }}>{fmt(totalCSGSalarie + totalCSGPatronal)}</p><p className="text-xs text-gray-400">Salarié: {fmt(totalCSGSalarie)} | Patronal: {fmt(totalCSGPatronal)}</p></CardContent></Card>
+            <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500 flex items-center gap-2"><PiggyBank className="h-4 w-4" /> NSF Total</CardTitle></CardHeader>
+              <CardContent><p className="text-2xl font-bold text-blue-600">{fmt(totalNSFSalarie + totalNSFPatronal)}</p><p className="text-xs text-gray-400">Salarié: {fmt(totalNSFSalarie)} | Patronal: {fmt(totalNSFPatronal)}</p></CardContent></Card>
+            <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500 flex items-center gap-2"><Receipt className="h-4 w-4" /> PAYE</CardTitle></CardHeader>
+              <CardContent><p className="text-2xl font-bold text-orange-600">{fmt(totalPAYE)}</p></CardContent></Card>
+            <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500 flex items-center gap-2"><GraduationCap className="h-4 w-4" /> Training + PRGF</CardTitle></CardHeader>
+              <CardContent><p className="text-2xl font-bold text-purple-600">{fmt(totalTrainingLevy + totalPRGF)}</p><p className="text-xs text-gray-400">Levy: {fmt(totalTrainingLevy)} | PRGF: {fmt(totalPRGF)}</p></CardContent></Card>
+          </div>
 
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Rechercher société, période..."
-          className="pl-9"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle style={{ color: "#1E2A4A" }}>
-            Détail des charges sociales ({filtered.length})
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Société</TableHead>
-                <TableHead>Période</TableHead>
-                <TableHead className="text-right">NPF Patronal</TableHead>
-                <TableHead className="text-right">NPF Salarié</TableHead>
-                <TableHead className="text-right">HRDC</TableHead>
-                <TableHead className="text-right">NPS</TableHead>
-                <TableHead className="text-right">PAYE</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-                <TableHead>Échéance</TableHead>
-                <TableHead>Statut</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell>
-                    <Badge variant="outline" style={{ borderColor: "#1E2A4A", color: "#1E2A4A" }}>
-                      {row.societe}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="font-medium">{row.periode}</TableCell>
-                  <TableCell className="text-right">{formatMUR(row.npfPatronal)}</TableCell>
-                  <TableCell className="text-right">{formatMUR(row.npfSalarie)}</TableCell>
-                  <TableCell className="text-right">{formatMUR(row.hrdc)}</TableCell>
-                  <TableCell className="text-right">{formatMUR(row.nps)}</TableCell>
-                  <TableCell className="text-right">{formatMUR(row.paye)}</TableCell>
-                  <TableCell className="text-right font-semibold">{formatMUR(row.total)}</TableCell>
-                  <TableCell>{row.echeance}</TableCell>
-                  <TableCell>{getStatutBadge(row.statut)}</TableCell>
-                </TableRow>
-              ))}
-              {filtered.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
-                    {search
-                      ? "Aucune charge sociale trouvée pour cette recherche."
-                      : "Aucune charge sociale disponible. Les données apparaîtront ici une fois les charges traitées."}
-                  </TableCell>
-                </TableRow>
+          <Card>
+            <CardHeader><CardTitle className="text-base" style={{ color: NAVY }}>Détail par type de charge — {new Date(periode + "-01").toLocaleDateString("fr-FR", { month: "long", year: "numeric" })}</CardTitle></CardHeader>
+            <CardContent>
+              {bulletins.length === 0 ? (
+                <p className="text-center text-gray-400 py-8">Aucun bulletin pour cette période</p>
+              ) : (
+                <div className="space-y-2">
+                  {[
+                    { label: "CSG salarié (1.5% si brut ≤ 50K / 3% si > 50K)", montant: totalCSGSalarie, compte: "431", color: "text-red-600" },
+                    { label: "CSG patronal (3% si brut ≤ 50K / 6% si > 50K)", montant: totalCSGPatronal, compte: "431", color: "text-red-600" },
+                    { label: "NSF salarié (1.5%)", montant: totalNSFSalarie, compte: "431", color: "text-blue-600" },
+                    { label: "NSF patronal (2.5%)", montant: totalNSFPatronal, compte: "431", color: "text-blue-600" },
+                    { label: "Training Levy HRDC (1%)", montant: totalTrainingLevy, compte: "432", color: "text-purple-600" },
+                    { label: "PRGF (max 4.5% émoluments ou 4.50 MUR/jour)", montant: totalPRGF, compte: "432", color: "text-purple-600" },
+                    { label: "PAYE — Pay As You Earn (0% / 10% / 15%)", montant: totalPAYE, compte: "444", color: "text-orange-600" },
+                  ].map((c, i) => (
+                    <div key={i} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <Badge variant="outline" className="text-xs font-mono">{c.compte}</Badge>
+                        <span className="text-sm">{c.label}</span>
+                      </div>
+                      <span className={`font-mono font-bold ${c.color}`}>{fmt(c.montant)}</span>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between p-3 rounded-lg font-bold" style={{ backgroundColor: `${GOLD}15` }}>
+                    <span>TOTAL CHARGES</span>
+                    <span className="font-mono text-lg" style={{ color: NAVY }}>{fmt(grandTotal)}</span>
+                  </div>
+                </div>
               )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle className="text-base" style={{ color: NAVY }}>Bulletins ({bulletins.length} employés)</CardTitle></CardHeader>
+            <CardContent className="p-0 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Employé</th>
+                    <th className="px-3 py-2 text-right">Brut</th>
+                    <th className="px-3 py-2 text-right">CSG sal.</th>
+                    <th className="px-3 py-2 text-right">CSG pat.</th>
+                    <th className="px-3 py-2 text-right">NSF sal.</th>
+                    <th className="px-3 py-2 text-right">NSF pat.</th>
+                    <th className="px-3 py-2 text-right">PAYE</th>
+                    <th className="px-3 py-2 text-right">Levy</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {bulletins.map((b: any) => (
+                    <tr key={b.id}>
+                      <td className="px-3 py-2 font-medium">{b.employe?.prenom || ""} {b.employe?.nom || b.employe_id?.substring(0, 8)}</td>
+                      <td className="px-3 py-2 text-right font-mono">{fmt(b.salaire_base || 0)}</td>
+                      <td className="px-3 py-2 text-right font-mono">{fmt(b.csg_salarie || 0)}</td>
+                      <td className="px-3 py-2 text-right font-mono">{fmt(b.csg_patronal || 0)}</td>
+                      <td className="px-3 py-2 text-right font-mono">{fmt(b.nsf_salarie || 0)}</td>
+                      <td className="px-3 py-2 text-right font-mono">{fmt(b.nsf_patronal || 0)}</td>
+                      <td className="px-3 py-2 text-right font-mono">{fmt(b.paye || 0)}</td>
+                      <td className="px-3 py-2 text-right font-mono">{fmt(b.training_levy || 0)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
+        </>
+      )}
     </div>
   )
 }

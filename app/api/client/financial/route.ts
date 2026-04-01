@@ -19,9 +19,52 @@ function convertToMUR(amount: number, devise: string, rates: Record<string, numb
   return amount
 }
 
+// Helper: parse exercice string to date range
+// Mauritius fiscal year: July 1 to June 30 (e.g., "2025-2026" = 2025-07-01 to 2026-06-30)
+function parseExerciceDates(exercice: string): { debut: string; fin: string } | null {
+  const match = exercice.match(/^(\d{4})-(\d{4})$/)
+  if (!match) return null
+  const startYear = parseInt(match[1])
+  const endYear = parseInt(match[2])
+  return { debut: `${startYear}-07-01`, fin: `${endYear}-06-30` }
+}
+
+function getCurrentExercice(): string {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = now.getMonth() + 1
+  if (month >= 7) return `${year}-${year + 1}`
+  return `${year - 1}-${year}`
+}
+
+function getPreviousExercice(exercice: string): string {
+  const match = exercice.match(/^(\d{4})-(\d{4})$/)
+  if (!match) {
+    const current = getCurrentExercice()
+    const y = parseInt(current.split('-')[0])
+    return `${y - 1}-${y}`
+  }
+  const startYear = parseInt(match[1])
+  return `${startYear - 1}-${startYear}`
+}
+
+function getAvailableExercices(): string[] {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = now.getMonth() + 1
+  const currentStart = month >= 7 ? year : year - 1
+  const exercices: string[] = []
+  for (let i = 0; i < 5; i++) {
+    const s = currentStart - i
+    exercices.push(`${s}-${s + 1}`)
+  }
+  return exercices
+}
+
 // GET — Aggregated financial data for a client
 // For clients: returns their own data
 // For comptables: accepts ?client_id=xxx to view a client's data
+// Supports ?exercice=2025-2026 and ?date_debut=...&date_fin=... for period filtering
 export async function GET(request: Request) {
   try {
     const supabaseAuth = await createServerClient()
@@ -34,6 +77,23 @@ export async function GET(request: Request) {
     // Determine which client's data to fetch
     const { searchParams } = new URL(request.url)
     const requestedClientId = searchParams.get('client_id')
+
+    // Exercice / date range filtering
+    const requestedExercice = searchParams.get('exercice')
+    const requestedDateDebut = searchParams.get('date_debut')
+    const requestedDateFin = searchParams.get('date_fin')
+
+    let dateFilter: { debut: string; fin: string } | null = null
+    let exerciceActuel = getCurrentExercice()
+
+    if (requestedExercice) {
+      dateFilter = parseExerciceDates(requestedExercice)
+      exerciceActuel = requestedExercice
+    } else if (requestedDateDebut && requestedDateFin) {
+      dateFilter = { debut: requestedDateDebut, fin: requestedDateFin }
+    }
+
+    const exercicePrecedent = getPreviousExercice(exerciceActuel)
 
     let targetClientId = user.id
 
@@ -87,13 +147,25 @@ export async function GET(request: Request) {
       .map((s: any) => ({ id: s.id, nom: s.nom }))
 
     // Get all accounting entries — depuis v2 en priorité, sinon v1
-    const { data: ecrituresV2 } = await supabase
+    let ecrituresV2Query = supabase
       .from('ecritures_comptables_v2').select('*').in('societe_id', societeIds)
       .order('date_ecriture', { ascending: false })
+    if (dateFilter) {
+      ecrituresV2Query = ecrituresV2Query.gte('date_ecriture', dateFilter.debut).lte('date_ecriture', dateFilter.fin)
+    }
+    const { data: ecrituresV2 } = await ecrituresV2Query
 
-    const { data: ecrituresV1 } = allDossierIds.length > 0 ? await supabase
-      .from('ecritures_comptables').select('*').in('dossier_id', allDossierIds)
-      .order('date_ecriture', { ascending: false }) : { data: [] }
+    let ecrituresV1Result: { data: any[] | null } = { data: [] }
+    if (allDossierIds.length > 0) {
+      let v1Query = supabase
+        .from('ecritures_comptables').select('*').in('dossier_id', allDossierIds)
+        .order('date_ecriture', { ascending: false })
+      if (dateFilter) {
+        v1Query = v1Query.gte('date_ecriture', dateFilter.debut).lte('date_ecriture', dateFilter.fin)
+      }
+      ecrituresV1Result = await v1Query
+    }
+    const ecrituresV1 = ecrituresV1Result.data
 
     // Fusionner v1 + v2 (v2 prioritaire, normaliser les noms de colonnes)
     const ecrituresFromV2 = (ecrituresV2 || []).map((e: any) => ({
@@ -124,6 +196,26 @@ export async function GET(request: Request) {
     const { data: tvaRecords } = await supabase
       .from('tva_mensuelle').select('*').in('societe_id', societeIds)
       .order('periode', { ascending: false })
+
+    // Get factures from table (source of truth for CA/dépenses)
+    let facturesFromTable: any[] = []
+    let facturesQuery = supabase
+      .from('factures').select('*').in('societe_id', societeIds)
+      .order('date_facture', { ascending: false })
+    if (dateFilter) {
+      facturesQuery = facturesQuery.gte('date_facture', dateFilter.debut).lte('date_facture', dateFilter.fin)
+    }
+    const { data: facturesData, error: facturesErr } = await facturesQuery
+    if (!facturesErr) facturesFromTable = facturesData || []
+
+    // Compute CA and dépenses from factures table (more reliable than écritures)
+    const caFromFactures = facturesFromTable
+      .filter(f => f.type_facture === 'client' && f.statut !== 'annule')
+      .reduce((s, f) => s + (Number(f.montant_mur) || convertToMUR(Number(f.montant_ttc) || 0, f.devise || 'MUR', rates)), 0)
+
+    const depensesFromFactures = facturesFromTable
+      .filter(f => f.type_facture === 'fournisseur' && f.statut !== 'annule')
+      .reduce((s, f) => s + (Number(f.montant_mur) || convertToMUR(Number(f.montant_ttc) || 0, f.devise || 'MUR', rates)), 0)
 
     const allEcritures = ecritures || []
     const allDocs = documents || []
@@ -171,24 +263,57 @@ export async function GET(request: Request) {
     }))
     const totalBankMUR = bankAccounts.reduce((s, a) => s + a.solde_mur, 0)
 
-    // Revenue breakdown by account prefix
-    const revenueByAccount: Record<string, number> = {}
-    allEcritures.filter(e => e.compte?.startsWith('7')).forEach(e => {
-      const prefix = (e.compte || '7').substring(0, 3)
-      revenueByAccount[prefix] = (revenueByAccount[prefix] || 0) + (Number(e.credit) || 0) - (Number(e.debit) || 0)
-    })
+    // Revenue breakdown by account prefix — from factures if available, else from écritures
+    let revenueByAccount: Record<string, number> = {}
+    let expensesByAccount: Record<string, number> = {}
 
-    // Expense breakdown by account prefix (first 2 digits for grouping into ranges)
-    const expensesByAccount: Record<string, number> = {}
-    allEcritures.filter(e => e.compte?.startsWith('6')).forEach(e => {
-      const prefix = (e.compte || '6').substring(0, 3)
-      expensesByAccount[prefix] = (expensesByAccount[prefix] || 0) + (Number(e.debit) || 0) - (Number(e.credit) || 0)
-    })
+    if (facturesFromTable.length > 0) {
+      // Build revenue/expense breakdown from factures (amounts already in MUR)
+      facturesFromTable.filter(f => f.type_facture === 'client' && f.statut !== 'annule').forEach(f => {
+        const prefix = '706' // Default: prestations de services
+        const mur = Number(f.montant_mur) || convertToMUR(Number(f.montant_ht) || 0, f.devise || 'MUR', rates)
+        revenueByAccount[prefix] = (revenueByAccount[prefix] || 0) + mur
+      })
+      facturesFromTable.filter(f => f.type_facture === 'fournisseur' && f.statut !== 'annule').forEach(f => {
+        const prefix = '628' // Default: charges diverses
+        const mur = Number(f.montant_mur) || convertToMUR(Number(f.montant_ht) || 0, f.devise || 'MUR', rates)
+        expensesByAccount[prefix] = (expensesByAccount[prefix] || 0) + mur
+      })
+    } else {
+      // Fallback: from écritures (may be in foreign currency — not ideal)
+      allEcritures.filter(e => e.compte?.startsWith('7')).forEach(e => {
+        const prefix = (e.compte || '7').substring(0, 3)
+        revenueByAccount[prefix] = (revenueByAccount[prefix] || 0) + (Number(e.credit) || 0) - (Number(e.debit) || 0)
+      })
+      allEcritures.filter(e => e.compte?.startsWith('6')).forEach(e => {
+        const prefix = (e.compte || '6').substring(0, 3)
+        expensesByAccount[prefix] = (expensesByAccount[prefix] || 0) + (Number(e.debit) || 0) - (Number(e.credit) || 0)
+      })
+    }
 
-    // Creances (class 41 - clients receivables)
-    const creances = allEcritures
-      .filter(e => e.compte?.startsWith('41'))
-      .reduce((sum, e) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
+    // === BILAN: calculate from factures (MUR) when available, else from écritures ===
+
+    // Créances clients (compte 411) — from unpaid factures client (montant_mur)
+    let creances = 0
+    const facturesClientImpayees = facturesFromTable.filter(f => f.type_facture === 'client' && f.statut !== 'paye' && f.statut !== 'annule')
+    if (facturesClientImpayees.length > 0) {
+      creances = facturesClientImpayees.reduce((s, f) => s + (Number(f.montant_mur) || convertToMUR(Number(f.montant_ttc) || 0, f.devise || 'MUR', rates)), 0)
+    } else {
+      creances = allEcritures
+        .filter(e => e.compte?.startsWith('41'))
+        .reduce((sum, e) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
+    }
+
+    // Dettes fournisseurs (compte 401) — from unpaid factures fournisseur
+    let dettesFournisseurs = 0
+    const facturesFournImpayees = facturesFromTable.filter(f => f.type_facture === 'fournisseur' && f.statut !== 'paye' && f.statut !== 'annule')
+    if (facturesFournImpayees.length > 0) {
+      dettesFournisseurs = facturesFournImpayees.reduce((s, f) => s + (Number(f.montant_mur) || convertToMUR(Number(f.montant_ttc) || 0, f.devise || 'MUR', rates)), 0)
+    } else {
+      dettesFournisseurs = allEcritures
+        .filter(e => e.compte?.startsWith('40'))
+        .reduce((sum, e) => sum + (Number(e.credit) || 0) - (Number(e.debit) || 0), 0)
+    }
 
     // Monthly revenue for last 2 months for trend
     const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
@@ -201,16 +326,16 @@ export async function GET(request: Request) {
       .filter(e => e.compte?.startsWith('6') && e.date_ecriture?.startsWith(lastMonthStr))
       .reduce((sum, e) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
 
-    // Payroll
+    // Payroll — P&L accounts (641 = salaires, 645 = charges patronales)
     const salaires = allEcritures
-      .filter(e => e.compte?.startsWith('421') || e.compte?.startsWith('42'))
+      .filter(e => e.compte?.startsWith('641'))
       .reduce((sum, e) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
 
     const chargesSociales = allEcritures
-      .filter(e => e.compte?.startsWith('43'))
+      .filter(e => e.compte?.startsWith('645') || e.compte?.startsWith('43'))
       .reduce((sum, e) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
 
-    // Balance sheet items
+    // Balance sheet items (from écritures — these are less impacted by currency)
     const immobilisations = allEcritures
       .filter(e => e.compte?.startsWith('2'))
       .reduce((sum, e) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
@@ -231,9 +356,7 @@ export async function GET(request: Request) {
       .filter(e => e.compte?.startsWith('16'))
       .reduce((sum, e) => sum + (Number(e.credit) || 0) - (Number(e.debit) || 0), 0)
 
-    const dettesFournisseurs = allEcritures
-      .filter(e => e.compte?.startsWith('40'))
-      .reduce((sum, e) => sum + (Number(e.credit) || 0) - (Number(e.debit) || 0), 0)
+    // dettesFournisseurs already computed above from factures
 
     const dettesFiscales = allEcritures
       .filter(e => e.compte?.startsWith('44'))
@@ -248,24 +371,39 @@ export async function GET(request: Request) {
 
     const { data: relevesDB } = await supabase
       .from('releves_bancaires')
-      .select('id, transactions_json, date_debut, date_fin')
+      .select('id, transactions_json, date_debut, date_fin, compte_bancaire_id')
       .in('societe_id', societeIds)
       .order('date_fin', { ascending: false })
 
+    // Build a map of compte_bancaire_id → { banque, devise }
+    const compteBankMap: Record<string, { banque: string; devise: string }> = {}
+    ;(comptesBank || []).forEach((c: any) => {
+      compteBankMap[c.id] = { banque: c.banque, devise: c.devise || 'MUR' }
+    })
+
     if (relevesDB && relevesDB.length > 0) {
       relevesDB.forEach((releve: any) => {
+        const compteInfo = compteBankMap[releve.compte_bancaire_id] || { banque: '—', devise: 'MUR' }
+        const txDevise = compteInfo.devise || 'MUR'
+        const txRate = rates[txDevise] || 1
         const txs: any[] = releve.transactions_json || []
         txs.forEach((tx: any, idx: number) => {
+          const debit = Number(tx.debit) || 0
+          const credit = Number(tx.credit) || 0
           bankTransactions.push({
             id: `releve-${releve.id}-tx-${idx}`,
             date: tx.date || tx.date_operation || '',
             libelle: tx.libelle || tx.description || '',
-            debit: Number(tx.debit) || 0,
-            credit: Number(tx.credit) || 0,
+            debit,
+            credit,
+            debit_mur: Math.round(debit * txRate * 100) / 100,
+            credit_mur: Math.round(credit * txRate * 100) / 100,
+            devise: txDevise,
             solde_apres: tx.solde_apres ?? tx.solde ?? null,
             tiers: tx.tiers_detecte || tx.tiers || tx.tiers_identifie || null,
             compte_comptable: tx.compte_comptable || tx.compte || null,
             statut: tx.statut || 'non_identifie',
+            banque: compteInfo.banque,
           })
         })
       })
@@ -355,14 +493,27 @@ export async function GET(request: Request) {
         }
       })
 
+    // Use factures as source of truth for CA/dépenses, fallback to écritures
+    const finalCA = caFromFactures > 0 ? caFromFactures : totalRevenue
+    const finalDepenses = depensesFromFactures > 0 ? depensesFromFactures : totalExpenses
+    const finalResultat = finalCA - finalDepenses
+
     return NextResponse.json({
       financial: {
-        totalRevenue: Math.round(totalRevenue * 100) / 100,
+        // CA/Dépenses: factures table (MUR) prend priorité sur écritures comptables
+        totalRevenue: Math.round(finalCA * 100) / 100,
         monthlyRevenue: Math.round(monthlyRevenue * 100) / 100,
-        totalExpenses: Math.round(totalExpenses * 100) / 100,
+        totalExpenses: Math.round(finalDepenses * 100) / 100,
         monthlyExpenses: Math.round(monthlyExpenses * 100) / 100,
-        resultat: Math.round((totalRevenue - totalExpenses) * 100) / 100,
+        resultat: Math.round(finalResultat * 100) / 100,
         resultatMensuel: Math.round((monthlyRevenue - monthlyExpenses) * 100) / 100,
+        // Source info
+        caSource: caFromFactures > 0 ? 'factures' : 'ecritures',
+        caFromFactures: Math.round(caFromFactures * 100) / 100,
+        caFromEcritures: Math.round(totalRevenue * 100) / 100,
+        depensesFromFactures: Math.round(depensesFromFactures * 100) / 100,
+        depensesFromEcritures: Math.round(totalExpenses * 100) / 100,
+        factures: facturesFromTable,
         tvaCollectee: Math.round(tvaCollectee * 100) / 100,
         tvaDeductible: Math.round(tvaDeductible * 100) / 100,
         tvaNette: Math.round(tvaNette * 100) / 100,
@@ -400,6 +551,9 @@ export async function GET(request: Request) {
         taux_change: rates,
         availableSocietes,
         selectedSocieteId: requestedSocieteId || null,
+        exercice_actuel: exerciceActuel,
+        exercice_precedent: exercicePrecedent,
+        available_exercices: getAvailableExercices(),
       }
     })
   } catch (e: unknown) {

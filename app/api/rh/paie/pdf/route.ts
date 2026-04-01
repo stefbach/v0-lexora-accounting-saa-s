@@ -1,7 +1,17 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase/server'
+import { userHasAccessToEmploye } from '@/lib/rh/access'
 
 export const dynamic = 'force-dynamic'
+
+function getAdminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+}
 
 const MOIS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"]
 
@@ -10,12 +20,68 @@ function fmt(n: number | null | undefined): string {
   return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(n)
 }
 
+// GET handler — for window.open() calls
+export async function GET(request: Request) {
+  try {
+    const supabaseAuth = await createServerClient()
+    const { data: { user } } = await supabaseAuth.auth.getUser()
+    if (!user) return new NextResponse('Non autorisé', { status: 401 })
+
+    const supabase = getAdminClient()
+    const { searchParams } = new URL(request.url)
+    const bulletin_id = searchParams.get('bulletin_id')
+    const employe_id = searchParams.get('employe_id')
+    const periode = searchParams.get('periode')
+
+    let bulletin: any = null
+
+    if (bulletin_id) {
+      const { data } = await supabase.from('bulletins_paie').select('*').eq('id', bulletin_id).single()
+      bulletin = data
+    } else if (employe_id && periode) {
+      // periode can be YYYY-MM or YYYY-MM-DD — search for the month
+      const periodeMonth = periode.substring(0, 7) // YYYY-MM
+      const startDate = `${periodeMonth}-01`
+      const endDate = `${periodeMonth}-31`
+      const { data } = await supabase.from('bulletins_paie').select('*')
+        .eq('employe_id', employe_id)
+        .gte('periode', startDate)
+        .lte('periode', endDate)
+        .order('periode', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      bulletin = data
+    }
+
+    if (!bulletin) return new NextResponse('Bulletin non trouvé', { status: 404 })
+
+    // Multi-tenant: verify user has access to this employee's bulletin
+    const hasAccess = await userHasAccessToEmploye(user.id, bulletin.employe_id)
+    if (!hasAccess) return new NextResponse('Accès refusé à ce bulletin', { status: 403 })
+
+    // Get employee + société
+    const { data: emp } = await supabase.from('employes').select('*').eq('id', bulletin.employe_id).single()
+    const { data: soc } = await supabase.from('societes').select('*').eq('id', bulletin.societe_id).single()
+
+    if (!emp) return new NextResponse('Employé non trouvé', { status: 404 })
+
+    const periodeDate = new Date(bulletin.periode)
+    const moisLabel = MOIS_FR[periodeDate.getMonth()] || ''
+    const annee = periodeDate.getFullYear()
+
+    return generatePDFResponse(bulletin, emp, soc, moisLabel, annee)
+  } catch (e: any) {
+    return new NextResponse(`Erreur: ${e.message}`, { status: 500 })
+  }
+}
+
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const supabaseAuth = await createServerClient()
+    const { data: { user } } = await supabaseAuth.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
+    const supabase = getAdminClient()
     const { bulletin_id } = await request.json()
     if (!bulletin_id) return NextResponse.json({ error: 'bulletin_id requis' }, { status: 400 })
 
@@ -35,6 +101,10 @@ export async function POST(request: Request) {
       .single()
 
     if (error || !bulletin) return NextResponse.json({ error: 'Bulletin non trouvé' }, { status: 404 })
+
+    // Multi-tenant: verify user has access to this employee's bulletin
+    const hasAccessPost = await userHasAccessToEmploye(user.id, bulletin.employe_id)
+    if (!hasAccessPost) return NextResponse.json({ error: 'Accès refusé à ce bulletin' }, { status: 403 })
 
     const emp = bulletin.employe
     const soc = emp?.societe
@@ -236,4 +306,57 @@ export async function POST(request: Request) {
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
+}
+
+// Simple HTML bulletin for GET requests
+function generatePDFResponse(bulletin: any, emp: any, soc: any, moisLabel: string, annee: number) {
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Bulletin ${emp.prenom} ${emp.nom} — ${moisLabel} ${annee}</title>
+<style>body{font-family:Arial,sans-serif;max-width:800px;margin:0 auto;padding:20px;font-size:13px}
+h1{color:#1E2A4A;font-size:20px;border-bottom:2px solid #C9A84C;padding-bottom:8px}
+.header{display:flex;justify-content:space-between;margin-bottom:20px}
+.box{border:1px solid #ddd;padding:12px;border-radius:4px;margin-bottom:15px}
+table{width:100%;border-collapse:collapse;margin:10px 0}
+th{background:#1E2A4A;color:white;padding:8px;text-align:left;font-size:12px}
+td{padding:6px 8px;border-bottom:1px solid #eee;font-size:12px}
+.right{text-align:right}
+.bold{font-weight:bold}
+.net{background:#f0f7f0;font-size:16px;font-weight:bold;padding:12px;text-align:center;border:2px solid #059669;border-radius:4px;margin:15px 0}
+.section{font-weight:bold;color:#1E2A4A;margin-top:15px;padding:4px 0;border-bottom:1px solid #C9A84C}
+@media print{body{margin:0;padding:10px}}
+</style></head><body>
+<h1>${soc?.nom || 'LEXORA'}</h1>
+<div class="header"><div><strong>BRN:</strong> ${soc?.brn || '—'}<br><strong>Adresse:</strong> ${soc?.adresse || '—'}</div>
+<div style="text-align:right"><strong>BULLETIN DE PAIE</strong><br>${moisLabel} ${annee}</div></div>
+<div class="box"><strong>${emp.prenom} ${emp.nom}</strong> — ${emp.poste || '—'}<br>
+Code: ${emp.code || '—'} | NIC: ${emp.nic_number || emp.nic || '—'}<br>
+Banque: ${emp.bank_name || '—'} | Compte: ${emp.bank_account || '—'}</div>
+<div class="section">REVENUS</div>
+<table><tr><th>Libellé</th><th class="right">Montant (MUR)</th></tr>
+<tr><td>Salaire de base</td><td class="right">${fmt(bulletin.salaire_base)}</td></tr>
+${bulletin.transport_allowance > 0 ? `<tr><td>Transport Allowance</td><td class="right">${fmt(bulletin.transport_allowance)}</td></tr>` : ''}
+${bulletin.petrol_allowance > 0 ? `<tr><td>Petrol Allowance</td><td class="right">${fmt(bulletin.petrol_allowance)}</td></tr>` : ''}
+${bulletin.heures_sup_montant > 0 ? `<tr><td>Heures supplémentaires</td><td class="right">${fmt(bulletin.heures_sup_montant)}</td></tr>` : ''}
+${bulletin.special_allowance_1 > 0 ? `<tr><td>Primes</td><td class="right">${fmt(bulletin.special_allowance_1)}</td></tr>` : ''}
+<tr class="bold"><td>TOTAL BRUT</td><td class="right">${fmt(bulletin.salaire_brut)}</td></tr></table>
+<div class="section">DEDUCTIONS SALARIE</div>
+<table><tr><th>Libellé</th><th class="right">Montant (MUR)</th></tr>
+<tr><td>CSG (${bulletin.salaire_brut > 50000 ? '3%' : '1.5%'})</td><td class="right">${fmt(bulletin.csg_salarie)}</td></tr>
+<tr><td>NSF (1.5%)</td><td class="right">${fmt(bulletin.nsf_salarie)}</td></tr>
+<tr><td>PAYE (Impôt sur le revenu)</td><td class="right">${fmt(bulletin.paye)}</td></tr>
+${bulletin.montant_absence > 0 ? `<tr><td>Déduction absence</td><td class="right">${fmt(bulletin.montant_absence)}</td></tr>` : ''}
+<tr class="bold"><td>TOTAL DEDUCTIONS</td><td class="right">${fmt(bulletin.total_deductions)}</td></tr></table>
+<div class="net">NET A PAYER : ${fmt(bulletin.salaire_net)} MUR</div>
+<div class="section">CHARGES PATRONALES</div>
+<table><tr><th>Libellé</th><th class="right">Montant (MUR)</th></tr>
+<tr><td>CSG Patronal (6%)</td><td class="right">${fmt(bulletin.csg_patronal)}</td></tr>
+<tr><td>NSF Patronal (2.5%)</td><td class="right">${fmt(bulletin.nsf_patronal)}</td></tr>
+<tr><td>Training Levy HRDC (1%)</td><td class="right">${fmt(bulletin.training_levy)}</td></tr>
+<tr><td>PRGF</td><td class="right">${fmt(bulletin.prgf)}</td></tr>
+<tr class="bold"><td>TOTAL CHARGES PATRONALES</td><td class="right">${fmt(bulletin.total_charges_patronales)}</td></tr></table>
+<p style="text-align:center;font-size:10px;color:#999;margin-top:30px">Généré par LEXORA — Logiciel de paie Maurice</p>
+</body></html>`
+
+  return new NextResponse(html, {
+    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+  })
 }

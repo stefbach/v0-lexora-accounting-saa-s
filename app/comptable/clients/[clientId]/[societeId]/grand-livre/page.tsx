@@ -37,6 +37,8 @@ interface Ecriture {
   credit_mur: number
   solde_progressif: number
   document_id: string | null
+  lettre: string | null
+  date_lettrage: string | null
 }
 
 interface GrandLivreResp {
@@ -48,6 +50,11 @@ interface GrandLivreResp {
   total: number
   page: number
   pages: number
+  lettrage: {
+    lettrees: number
+    non_lettrees: number
+    total: number
+  }
 }
 
 export default function GrandLivrePage() {
@@ -103,11 +110,12 @@ export default function GrandLivrePage() {
   const exportCSV = () => {
     if (!data?.ecritures) return
     const rows = [
-      ["Date", "Journal", "N° Pièce", "Compte", "Libellé", "Débit", "Crédit", "Solde progressif"],
+      ["Date", "Journal", "N° Pièce", "Compte", "Libellé", "Débit", "Crédit", "Solde progressif", "Lettre"],
       ...data.ecritures.map(e => [
         fmtDate(e.date_ecriture), e.journal, e.ref_folio || "",
         e.numero_compte, e.description || e.nom_compte || "",
         e.debit_mur.toFixed(2), e.credit_mur.toFixed(2), e.solde_progressif.toFixed(2),
+        e.lettre || "",
       ]),
     ]
     const csv     = rows.map(r => r.map(v => `"${v}"`).join(";")).join("\n")
@@ -184,7 +192,7 @@ export default function GrandLivrePage() {
 
       {/* KPIs */}
       {data && (
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-4 gap-4">
           <Card><CardContent className="p-4">
             <p className="text-xs text-gray-500 uppercase tracking-wide">Total Débit</p>
             <p className="text-xl font-bold text-blue-700">{fmt(data.total_debit)} MUR</p>
@@ -199,6 +207,21 @@ export default function GrandLivrePage() {
               {fmt(Math.abs(data.solde_cloture))} MUR
               <span className="text-xs ml-1 text-gray-500">{data.solde_cloture >= 0 ? "D" : "C"}</span>
             </p>
+          </CardContent></Card>
+          <Card><CardContent className="p-4">
+            <p className="text-xs text-gray-500 uppercase tracking-wide">Lettrage</p>
+            <p className="text-xl font-bold text-green-700">
+              {data.lettrage.lettrees}
+              <span className="text-xs ml-1 font-normal text-gray-500">/ {data.lettrage.total}</span>
+            </p>
+            <div className="flex items-center gap-2 mt-1">
+              <Badge className="bg-green-100 text-green-800 text-[10px] px-1.5 py-0 hover:bg-green-100">
+                {data.lettrage.lettrees} lettrées
+              </Badge>
+              <Badge className="bg-gray-100 text-gray-600 text-[10px] px-1.5 py-0 hover:bg-gray-100">
+                {data.lettrage.non_lettrees} non lettrées
+              </Badge>
+            </div>
           </CardContent></Card>
         </div>
       )}
@@ -247,6 +270,7 @@ export default function GrandLivrePage() {
                     <TableHead className="text-xs text-right">Débit</TableHead>
                     <TableHead className="text-xs text-right">Crédit</TableHead>
                     <TableHead className="text-xs text-right">Solde progressif</TableHead>
+                    <TableHead className="text-xs text-center">Lettre</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -276,6 +300,15 @@ export default function GrandLivrePage() {
                       <TableCell className={`text-xs text-right font-mono ${soldeColor(e)}`}>
                         {fmt(e.solde_progressif)}
                       </TableCell>
+                      <TableCell className="text-xs text-center">
+                        {e.lettre ? (
+                          <Badge className="bg-green-100 text-green-800 text-[10px] px-1.5 py-0 hover:bg-green-100" title={e.date_lettrage ? `Lettré le ${fmtDate(e.date_lettrage)}` : "Rapproché"}>
+                            {e.lettre}
+                          </Badge>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -302,6 +335,10 @@ export default function GrandLivrePage() {
         <span className="flex items-center gap-1">
           <span className="inline-block w-3 h-3 rounded-full bg-purple-700"></span>
           Crédit
+        </span>
+        <span className="flex items-center gap-1">
+          <Badge className="bg-green-100 text-green-800 text-[10px] px-1 py-0 hover:bg-green-100">AB</Badge>
+          Lettré (rapproché)
         </span>
       </div>
     </div>

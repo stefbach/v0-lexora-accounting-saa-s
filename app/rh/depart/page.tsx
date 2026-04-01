@@ -1,0 +1,500 @@
+"use client"
+import { useState, useEffect, useCallback } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Badge } from "@/components/ui/badge"
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Loader2, UserMinus, Calculator, CheckCircle, AlertTriangle, Clock, Banknote } from "lucide-react"
+
+function fmt(n: number) {
+  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "MUR", maximumFractionDigits: 0 }).format(n)
+}
+
+function fmtDate(d: string | null) {
+  if (!d) return "—"
+  return new Date(d + "T00:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" })
+}
+
+const TYPE_LABELS: Record<string, string> = {
+  demission: "Démission",
+  licenciement: "Licenciement",
+  fin_contrat: "Fin de contrat",
+  retraite: "Retraite",
+  deces: "Décès",
+}
+
+// ── Sub-component: Departure Form (isolated state) ──
+function DepartureForm({ societes, onCalculated }: {
+  societes: any[]
+  onCalculated: (breakdown: any, formData: any) => void
+}) {
+  const [societeId, setSocieteId] = useState("")
+  const [employes, setEmployes] = useState<any[]>([])
+  const [employeId, setEmployeId] = useState("")
+  const [dateDepart, setDateDepart] = useState("")
+  const [typeDepart, setTypeDepart] = useState("")
+  const [raison, setRaison] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [loadingEmps, setLoadingEmps] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Load employees when société changes
+  useEffect(() => {
+    if (!societeId) { setEmployes([]); setEmployeId(""); return }
+    setLoadingEmps(true)
+    fetch(`/api/rh/employes?societe_id=${societeId}&statut=presents`)
+      .then(r => r.json())
+      .then(d => { setEmployes(d.employes || []); setEmployeId("") })
+      .catch(() => setEmployes([]))
+      .finally(() => setLoadingEmps(false))
+  }, [societeId])
+
+  const handleCalculer = async () => {
+    if (!employeId || !dateDepart || !typeDepart) {
+      setError("Veuillez remplir tous les champs obligatoires")
+      return
+    }
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch("/api/rh/depart", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "calculer_solde", employe_id: employeId, date_depart: dateDepart, type_depart: typeDepart }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Erreur")
+      onCalculated(data.breakdown, { employe_id: employeId, date_depart: dateDepart, type_depart: typeDepart, raison_depart: raison })
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Erreur")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-[#1E2A4A] flex items-center gap-2">
+          <UserMinus className="w-5 h-5" />
+          Nouveau départ
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {error && <p className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">{error}</p>}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div>
+            <Label>Société *</Label>
+            <Select value={societeId} onValueChange={setSocieteId}>
+              <SelectTrigger><SelectValue placeholder="Choisir une société..." /></SelectTrigger>
+              <SelectContent>
+                {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Employé *</Label>
+            <Select value={employeId} onValueChange={setEmployeId} disabled={!societeId || loadingEmps}>
+              <SelectTrigger>
+                <SelectValue placeholder={loadingEmps ? "Chargement..." : "Choisir un employé..."} />
+              </SelectTrigger>
+              <SelectContent>
+                {employes.map(e => (
+                  <SelectItem key={e.id} value={e.id}>
+                    {e.prenom} {e.nom} {e.poste ? `— ${e.poste}` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Date de départ *</Label>
+            <Input type="date" value={dateDepart} onChange={e => setDateDepart(e.target.value)} />
+          </div>
+          <div>
+            <Label>Type de départ *</Label>
+            <Select value={typeDepart} onValueChange={setTypeDepart}>
+              <SelectTrigger><SelectValue placeholder="Choisir..." /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="demission">Démission</SelectItem>
+                <SelectItem value="licenciement">Licenciement</SelectItem>
+                <SelectItem value="fin_contrat">Fin de contrat</SelectItem>
+                <SelectItem value="retraite">Retraite</SelectItem>
+                <SelectItem value="deces">Décès</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="md:col-span-2">
+            <Label>Motif / Raison</Label>
+            <Textarea
+              value={raison}
+              onChange={e => setRaison(e.target.value)}
+              placeholder="Raison du départ (optionnel)..."
+              rows={2}
+            />
+          </div>
+        </div>
+        <div className="flex justify-end gap-3">
+          <Button
+            variant="outline"
+            onClick={async () => {
+              if (!employeId || !dateDepart) { setError("Employé et date requis"); return }
+              setLoading(true); setError(null)
+              try {
+                const res = await fetch("/api/rh/depart", {
+                  method: "POST", headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ action: "sortie_manuelle", employe_id: employeId, date_depart: dateDepart, type_depart: typeDepart || "demission", raison_depart: raison }),
+                })
+                const data = await res.json()
+                if (!res.ok) throw new Error(data.error || "Erreur")
+                alert(data.message || "Sortie enregistrée")
+                setEmployeId(""); setDateDepart("")
+              } catch (e: unknown) { setError(e instanceof Error ? e.message : "Erreur") }
+              finally { setLoading(false) }
+            }}
+            disabled={loading || !employeId || !dateDepart}
+            className="border-red-300 text-red-600 hover:bg-red-50"
+          >
+            {loading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+            <UserMinus className="w-4 h-4 mr-2" />
+            Sortie manuelle (sans solde)
+          </Button>
+          <Button
+            onClick={handleCalculer}
+            disabled={loading || !employeId || !dateDepart || !typeDepart}
+            className="bg-[#1E2A4A] text-white"
+          >
+            {loading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+            <Calculator className="w-4 h-4 mr-2" />
+            Calculer le solde de tout compte
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ── Sub-component: Settlement Breakdown Display ──
+function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
+  breakdown: any
+  formData: any
+  onConfirm: () => void
+  confirming: boolean
+}) {
+  const emp = breakdown.employe
+  const anc = breakdown.anciennete
+
+  return (
+    <Card className="border-2 border-[#C9A84C]">
+      <CardHeader className="bg-[#1E2A4A] text-white rounded-t-lg">
+        <CardTitle className="flex items-center gap-2">
+          <Banknote className="w-5 h-5 text-[#C9A84C]" />
+          Solde de tout compte — {emp.prenom} {emp.nom}
+        </CardTitle>
+        <p className="text-white/70 text-sm">
+          {emp.poste || "—"} | Salaire base: {fmt(emp.salaire_base)} | Arrivée: {fmtDate(emp.date_arrivee)}
+        </p>
+      </CardHeader>
+      <CardContent className="p-6 space-y-4">
+        {/* Ancienneté */}
+        <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg">
+          <Clock className="w-5 h-5 text-blue-600" />
+          <div>
+            <p className="font-semibold text-[#1E2A4A]">Ancienneté</p>
+            <p className="text-sm text-gray-600">{anc.label}</p>
+          </div>
+          <Badge variant="outline" className="ml-auto border-blue-300 text-blue-700">
+            {TYPE_LABELS[formData.type_depart] || formData.type_depart}
+          </Badge>
+        </div>
+
+        {/* Breakdown table */}
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-gray-50">
+              <TableHead className="font-semibold">Élément</TableHead>
+              <TableHead className="text-center">Détails</TableHead>
+              <TableHead className="text-right font-semibold">Montant</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {/* Prorata salary */}
+            <TableRow>
+              <TableCell className="font-medium">Salaire prorata mois en cours</TableCell>
+              <TableCell className="text-center text-sm text-gray-500">
+                {breakdown.salaire_prorata.jours_travailles} / {breakdown.salaire_prorata.jours_mois} jours
+              </TableCell>
+              <TableCell className="text-right font-medium">{fmt(breakdown.salaire_prorata.montant)}</TableCell>
+            </TableRow>
+
+            {/* AL payout */}
+            <TableRow>
+              <TableCell className="font-medium">Congés annuels (AL) restants</TableCell>
+              <TableCell className="text-center text-sm text-gray-500">
+                {breakdown.conges_al.restant} jours ({breakdown.conges_al.droit_prorata} acquis - {breakdown.conges_al.pris} pris) x {fmt(breakdown.conges_al.taux_journalier)}/j
+              </TableCell>
+              <TableCell className="text-right font-medium">{fmt(breakdown.conges_al.montant)}</TableCell>
+            </TableRow>
+
+            {/* SL payout */}
+            <TableRow>
+              <TableCell className="font-medium">Congés maladie (SL) non utilisés</TableCell>
+              <TableCell className="text-center text-sm text-gray-500">
+                {breakdown.conges_sl.restant} jours ({breakdown.conges_sl.droit_prorata} acquis - {breakdown.conges_sl.pris} pris) x {fmt(breakdown.conges_sl.taux_journalier)}/j
+              </TableCell>
+              <TableCell className="text-right font-medium">{fmt(breakdown.conges_sl.montant)}</TableCell>
+            </TableRow>
+
+            {/* 13th month */}
+            <TableRow>
+              <TableCell className="font-medium">13ème mois prorata</TableCell>
+              <TableCell className="text-center text-sm text-gray-500">
+                ({fmt(breakdown.employe.salaire_base)} / 12) x {breakdown.treizieme_mois.mois_travailles} mois
+              </TableCell>
+              <TableCell className="text-right font-medium">{fmt(breakdown.treizieme_mois.montant)}</TableCell>
+            </TableRow>
+
+            {/* Allocations prorata */}
+            {breakdown.allocations_prorata.montant > 0 && (
+              <TableRow>
+                <TableCell className="font-medium">Allocations prorata (transport + essence)</TableCell>
+                <TableCell className="text-center text-sm text-gray-500">
+                  Transport: {fmt(breakdown.allocations_prorata.transport)} + Essence: {fmt(breakdown.allocations_prorata.petrol)}
+                </TableCell>
+                <TableCell className="text-right font-medium">{fmt(breakdown.allocations_prorata.montant)}</TableCell>
+              </TableRow>
+            )}
+
+            {/* Notice period */}
+            {breakdown.preavis.applicable && (
+              <TableRow className={breakdown.preavis.montant > 0 ? "bg-orange-50" : ""}>
+                <TableCell className="font-medium">
+                  Indemnité de préavis
+                  {!breakdown.preavis.applicable && <span className="text-xs text-gray-400 ml-2">(non applicable)</span>}
+                </TableCell>
+                <TableCell className="text-center text-sm text-gray-500">
+                  {breakdown.preavis.description} ({breakdown.preavis.duree_mois} mois x {fmt(breakdown.employe.salaire_base)})
+                </TableCell>
+                <TableCell className="text-right font-medium">{fmt(breakdown.preavis.montant)}</TableCell>
+              </TableRow>
+            )}
+
+            {/* Severance */}
+            {breakdown.indemnite_licenciement.applicable && (
+              <TableRow className="bg-red-50">
+                <TableCell className="font-medium text-red-800">Indemnité de licenciement</TableCell>
+                <TableCell className="text-center text-sm text-red-600">
+                  {breakdown.indemnite_licenciement.formule} ({breakdown.indemnite_licenciement.annees_service} ans)
+                </TableCell>
+                <TableCell className="text-right font-bold text-red-800">{fmt(breakdown.indemnite_licenciement.montant)}</TableCell>
+              </TableRow>
+            )}
+
+            {/* TOTAL */}
+            <TableRow className="bg-[#1E2A4A]">
+              <TableCell className="font-bold text-white text-base" colSpan={2}>
+                TOTAL SOLDE DE TOUT COMPTE
+              </TableCell>
+              <TableCell className="text-right font-bold text-[#C9A84C] text-lg">
+                {fmt(breakdown.total)}
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+
+        {/* Confirm button */}
+        <div className="flex items-center justify-between pt-4 border-t">
+          <div className="flex items-center gap-2 text-amber-700 bg-amber-50 p-3 rounded-lg">
+            <AlertTriangle className="w-5 h-5" />
+            <p className="text-sm font-medium">Cette action est irréversible. L'employé sera marqué comme "Sorti".</p>
+          </div>
+          <Button
+            onClick={onConfirm}
+            disabled={confirming}
+            className="bg-red-600 hover:bg-red-700 text-white px-6"
+          >
+            {confirming && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+            <CheckCircle className="w-4 h-4 mr-2" />
+            Confirmer le départ
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ── Sub-component: Recent Departures List ──
+function RecentDepartures({ refreshKey }: { refreshKey: number }) {
+  const [departs, setDeparts] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    setLoading(true)
+    fetch("/api/rh/depart?action=recent")
+      .then(r => r.json())
+      .then(d => setDeparts(d.departs || []))
+      .catch(() => setDeparts([]))
+      .finally(() => setLoading(false))
+  }, [refreshKey])
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-[#1E2A4A] flex items-center gap-2">
+          <Clock className="w-4 h-4" />
+          Départs récents
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        {loading ? (
+          <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-[#1E2A4A]" /></div>
+        ) : departs.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">Aucun départ enregistré</div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Employé</TableHead>
+                <TableHead>Poste</TableHead>
+                <TableHead>Date départ</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Ancienneté</TableHead>
+                <TableHead>Raison</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {departs.map(d => {
+                const arrivee = d.date_arrivee?.split("T")[0]
+                const depart = d.date_depart?.split("T")[0]
+                let ancLabel = "—"
+                if (arrivee && depart) {
+                  const start = new Date(arrivee)
+                  const end = new Date(depart)
+                  const diffMs = end.getTime() - start.getTime()
+                  const diffYears = Math.floor(diffMs / (365.25 * 24 * 60 * 60 * 1000))
+                  const diffMonths = Math.floor((diffMs % (365.25 * 24 * 60 * 60 * 1000)) / (30.44 * 24 * 60 * 60 * 1000))
+                  ancLabel = `${diffYears}a ${diffMonths}m`
+                }
+                return (
+                  <TableRow key={d.id}>
+                    <TableCell className="font-medium">{d.prenom} {d.nom}</TableCell>
+                    <TableCell className="text-sm text-gray-600">{d.poste || "—"}</TableCell>
+                    <TableCell>{fmtDate(depart)}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={
+                        d.type_depart === "licenciement" ? "border-red-300 text-red-700 bg-red-50" :
+                        d.type_depart === "demission" ? "border-orange-300 text-orange-700 bg-orange-50" :
+                        d.type_depart === "retraite" ? "border-blue-300 text-blue-700 bg-blue-50" :
+                        d.type_depart === "deces" ? "border-gray-400 text-gray-700 bg-gray-100" :
+                        "border-gray-300 text-gray-600"
+                      }>
+                        {TYPE_LABELS[d.type_depart] || d.type_depart || "—"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm">{ancLabel}</TableCell>
+                    <TableCell className="text-sm text-gray-500 max-w-[200px] truncate">{d.raison_depart || "—"}</TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ── Main page ──
+export default function DepartPage() {
+  const [societes, setSocietes] = useState<any[]>([])
+  const [breakdown, setBreakdown] = useState<any>(null)
+  const [formData, setFormData] = useState<any>(null)
+  const [confirming, setConfirming] = useState(false)
+  const [confirmResult, setConfirmResult] = useState<any>(null)
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  useEffect(() => {
+    fetch("/api/comptable/societes")
+      .then(r => r.json())
+      .then(d => setSocietes(d.societes || []))
+      .catch(() => {})
+  }, [])
+
+  const handleCalculated = (b: any, fd: any) => {
+    setBreakdown(b)
+    setFormData(fd)
+    setConfirmResult(null)
+  }
+
+  const handleConfirm = async () => {
+    if (!breakdown || !formData) return
+    setConfirming(true)
+    try {
+      const res = await fetch("/api/rh/depart", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "confirmer_depart",
+          ...formData,
+          breakdown,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Erreur")
+      setConfirmResult(data)
+      setBreakdown(null)
+      setFormData(null)
+      setRefreshKey(k => k + 1)
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : "Erreur")
+    } finally {
+      setConfirming(false)
+    }
+  }
+
+  return (
+    <div className="p-6 space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-[#1E2A4A]">Gestion des départs</h1>
+        <p className="text-sm text-gray-500">Calculer le solde de tout compte et enregistrer les départs</p>
+      </div>
+
+      {/* Success message */}
+      {confirmResult && (
+        <div className="p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3">
+          <CheckCircle className="w-5 h-5 text-green-600" />
+          <div>
+            <p className="font-semibold text-green-800">{confirmResult.message}</p>
+            {confirmResult.bulletin_id && (
+              <p className="text-sm text-green-600">Bulletin de solde créé (ID: {confirmResult.bulletin_id.slice(0, 8)}...)</p>
+            )}
+          </div>
+          <Button variant="outline" size="sm" className="ml-auto" onClick={() => setConfirmResult(null)}>
+            Fermer
+          </Button>
+        </div>
+      )}
+
+      {/* Form */}
+      <DepartureForm societes={societes} onCalculated={handleCalculated} />
+
+      {/* Breakdown */}
+      {breakdown && formData && (
+        <BreakdownDisplay
+          breakdown={breakdown}
+          formData={formData}
+          onConfirm={handleConfirm}
+          confirming={confirming}
+        />
+      )}
+
+      {/* Recent departures */}
+      <RecentDepartures refreshKey={refreshKey} />
+    </div>
+  )
+}

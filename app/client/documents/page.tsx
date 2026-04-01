@@ -299,10 +299,25 @@ export default function ClientDocumentsPage() {
   }
 
   const currentFolder = FOLDERS.find(f => f.key === selectedFolder) || FOLDERS[0]
-  const currentDocs = getDocsForFolder(documents, selectedFolder)
+
+  // Filter by selected société if not "auto"
+  const filteredDocuments = selectedUploadSociete === "auto"
+    ? documents
+    : documents.filter(d => {
+        // Match by societe_detectee or by dossier's société
+        const matchSociete = d.societe_detectee && societes.some(s =>
+          s.societe_id === selectedUploadSociete &&
+          (d.societe_detectee?.toLowerCase().includes(s.nom.toLowerCase().split(' ')[0]) || s.nom.toLowerCase().includes(d.societe_detectee?.toLowerCase() || ''))
+        )
+        // Also check dossier_id belongs to the selected société
+        const matchDossier = societes.some(s => s.societe_id === selectedUploadSociete && s.id === (d as any).dossier_id)
+        return matchSociete || matchDossier || !d.societe_detectee
+      })
+
+  const currentDocs = getDocsForFolder(filteredDocuments, selectedFolder)
 
   return (
-    <div className="flex-1 overflow-auto p-6 lg:p-8 space-y-6">
+    <div className="flex-1 overflow-auto p-4 pt-14 md:pt-6 md:p-6 lg:p-8 space-y-6">
       <div>
         <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Mes Documents</h1>
         <p className="text-sm text-muted-foreground">
@@ -312,13 +327,13 @@ export default function ClientDocumentsPage() {
 
       {/* Société selector for multi-société clients */}
       {societes.length > 1 && (
-        <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30">
+        <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg border bg-muted/30">
           <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
           <span className="text-sm text-muted-foreground">Société :</span>
           <Select value={selectedUploadSociete} onValueChange={setSelectedUploadSociete}>
-            <SelectTrigger className="w-[260px] h-9"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-[260px] h-9"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="auto">Détection automatique</SelectItem>
+              <SelectItem value="auto">Toutes les sociétés ({documents.length} docs)</SelectItem>
               {societes.map(s => <SelectItem key={s.societe_id} value={s.societe_id}>{s.nom}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -364,12 +379,17 @@ export default function ClientDocumentsPage() {
         </div>
       )}
 
+      {/* Document counter */}
+      <div className="text-xs text-gray-400 px-2">
+        {filteredDocuments.length} document(s) {selectedUploadSociete !== "auto" ? "(filtré par société)" : "(toutes sociétés)"}
+      </div>
+
       {/* Folder list */}
       <div>
         <h3 className="font-semibold mb-3" style={{ color: NAVY }}>Mes Dossiers</h3>
         <div className="grid gap-2">
           {FOLDERS.map((folder) => {
-            const count = getDocsForFolder(documents, folder.key).length
+            const count = getDocsForFolder(filteredDocuments, folder.key).length
             const isSelected = selectedFolder === folder.key
             return (
               <Card
@@ -424,6 +444,7 @@ export default function ClientDocumentsPage() {
           </div>
         </CardHeader>
         <CardContent className="p-0">
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -536,6 +557,7 @@ export default function ClientDocumentsPage() {
               )}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
 

@@ -4,186 +4,157 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import {
-  Users, UserCog, Building2, FileText, AlertTriangle,
-  TrendingUp, Clock, CheckCircle2, BarChart3
+  Users, UserCog, Building2, FileText, Briefcase, Loader2
 } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-interface KPIs {
+interface ComptableKPI {
+  id: string
+  full_name: string
+  email: string
   nb_clients: number
-  nb_comptables: number
+  nb_documents: number
+}
+
+interface ClientKPI {
+  id: string
+  full_name: string
+  email: string
   nb_societes: number
-  nb_documents_mois: number
-  nb_documents_en_attente: number
-  nb_alertes_urgentes: number
-  mrr_simule: number
+  nb_documents: number
 }
 
-interface DocumentMois {
-  mois: string
-  count: number
-}
-
-interface AlerteUrgente {
+interface RecentUser {
   id: string
-  titre: string
-  type_alerte: string
-  date_echeance?: string
-  societe_nom?: string
-}
-
-interface DernierDocument {
-  id: string
-  nom_fichier: string
-  type_document: string
+  full_name: string
+  email: string
+  role: string
   created_at: string
-  societe_nom?: string
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-const fmt = (n: number) =>
-  new Intl.NumberFormat('fr-MU', { style: 'currency', currency: 'MUR', minimumFractionDigits: 0 }).format(n)
+const ROLE_LABELS: Record<string, string> = {
+  admin: 'Admin',
+  super_admin: 'Super Admin',
+  comptable: 'Comptable',
+  comptable_dedie: 'Comptable Dedie',
+  client_admin: 'Client Admin',
+  client_user: 'Client Utilisateur',
+  rh: 'RH',
+  direction: 'Direction',
+  juridique: 'Juridique',
+  manager: 'Manager',
+  employe: 'Employe',
+}
 
 const fmtDate = (d: string) => new Date(d).toLocaleDateString('fr-FR')
 
-function getMonthLabel(moisStr: string) {
-  const [y, m] = moisStr.split('-')
-  return new Date(parseInt(y), parseInt(m) - 1, 1).toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' })
-}
-
-// ─── Mini Bar Chart ───────────────────────────────────────────────────────────
-
-function MiniBarChart({ data }: { data: DocumentMois[] }) {
-  const max = Math.max(...data.map(d => d.count), 1)
-  return (
-    <div className="flex items-end gap-1 h-16">
-      {data.map((d, i) => (
-        <div key={i} className="flex flex-col items-center flex-1 gap-1">
-          <div
-            className="w-full rounded-t"
-            style={{
-              height: `${(d.count / max) * 48}px`,
-              backgroundColor: '#C9A84C',
-              opacity: i === data.length - 1 ? 1 : 0.4 + (i / data.length) * 0.5,
-              minHeight: d.count > 0 ? 4 : 0
-            }}
-          />
-          <span className="text-muted-foreground" style={{ fontSize: 9 }}>
-            {getMonthLabel(d.mois)}
-          </span>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-// ─── Component ───────────────────────────────────────────────────────────────
-
 export default function AdminDashboardPage() {
-  const [kpis, setKpis] = useState<KPIs>({
-    nb_clients: 0, nb_comptables: 0, nb_societes: 0,
-    nb_documents_mois: 0, nb_documents_en_attente: 0,
-    nb_alertes_urgentes: 0, mrr_simule: 0
-  })
-  const [docsMois, setDocsMois] = useState<DocumentMois[]>([])
-  const [alertesUrgentes, setAlertesUrgentes] = useState<AlerteUrgente[]>([])
-  const [derniersDocuments, setDerniersDocuments] = useState<DernierDocument[]>([])
   const [loading, setLoading] = useState(true)
+  const [totalUsers, setTotalUsers] = useState(0)
+  const [totalClients, setTotalClients] = useState(0)
+  const [totalComptables, setTotalComptables] = useState(0)
+  const [totalSocietes, setTotalSocietes] = useState(0)
+  const [totalDocuments, setTotalDocuments] = useState(0)
+  const [comptableKpis, setComptableKpis] = useState<ComptableKPI[]>([])
+  const [clientKpis, setClientKpis] = useState<ClientKPI[]>([])
+  const [recentUsers, setRecentUsers] = useState<RecentUser[]>([])
 
   useEffect(() => {
     const load = async () => {
       try {
         const supabase = createClient()
-        const now = new Date()
-        const debutMois = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
-        const dans7jours = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
 
-        const [
-          { count: nbClients },
-          { count: nbComptables },
-          { count: nbSocietes },
-          { count: nbDocsMois },
-          { count: nbDocsAttente },
-          { data: alertes },
-          { data: derniersDocs },
-          { data: societesList }
-        ] = await Promise.all([
-          supabase.from('profiles').select('*', { count: 'exact', head: true })
-            .in('role', ['client_admin', 'client_user']),
-          supabase.from('profiles').select('*', { count: 'exact', head: true })
-            .in('role', ['comptable', 'comptable_dedie']),
-          supabase.from('societes').select('*', { count: 'exact', head: true }),
-          supabase.from('documents').select('*', { count: 'exact', head: true })
-            .gte('created_at', debutMois),
-          supabase.from('documents').select('*', { count: 'exact', head: true })
-            .in('statut', ['en_attente', 'en_cours']),
-          supabase.from('alertes')
-            .select('id, titre, type_alerte, date_echeance, societes(nom)')
-            .lte('date_echeance', dans7jours)
-            .eq('statut', 'active')
-            .order('date_echeance', { ascending: true })
-            .limit(5),
-          supabase.from('documents')
-            .select('id, nom_fichier, type_document, created_at, societes(nom)')
-            .order('created_at', { ascending: false })
-            .limit(5),
-          supabase.from('societes').select('id').limit(1000)
-        ])
+        // Fetch all profiles
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name, email, role, created_at')
+          .order('created_at', { ascending: false })
 
-        // Documents par mois (6 derniers mois)
-        const moisData: DocumentMois[] = []
-        for (let i = 5; i >= 0; i--) {
-          const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-          const debut = d.toISOString().split('T')[0]
-          const fin = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0]
-          const { count } = await supabase
-            .from('documents')
-            .select('*', { count: 'exact', head: true })
-            .gte('created_at', debut)
-            .lte('created_at', fin + 'T23:59:59')
-          moisData.push({
-            mois: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
-            count: count || 0
-          })
+        const allProfiles = profiles || []
+
+        // Counts
+        setTotalUsers(allProfiles.length)
+        const clients = allProfiles.filter(p => ['client_admin', 'client_user'].includes(p.role))
+        setTotalClients(clients.length)
+        const comptables = allProfiles.filter(p => ['comptable', 'comptable_dedie'].includes(p.role))
+        setTotalComptables(comptables.length)
+
+        // Recent users (last 5)
+        setRecentUsers(allProfiles.slice(0, 5))
+
+        // Societes count
+        const { count: nbSocietes } = await supabase
+          .from('societes')
+          .select('*', { count: 'exact', head: true })
+        setTotalSocietes(nbSocietes || 0)
+
+        // Documents count
+        const { count: nbDocs } = await supabase
+          .from('documents')
+          .select('*', { count: 'exact', head: true })
+        setTotalDocuments(nbDocs || 0)
+
+        // Dossiers for relationships
+        const { data: dossiers } = await supabase
+          .from('dossiers')
+          .select('id, client_id, comptable_id, societe_id')
+
+        const allDossiers = dossiers || []
+
+        // Documents per dossier for comptable KPIs
+        const { data: allDocs } = await supabase
+          .from('documents')
+          .select('id, dossier_id')
+
+        const docsByDossier: Record<string, number> = {}
+        for (const doc of allDocs || []) {
+          if (doc.dossier_id) {
+            docsByDossier[doc.dossier_id] = (docsByDossier[doc.dossier_id] || 0) + 1
+          }
         }
 
-        const mrr = (societesList?.length || 0) * 4500
+        // KPI par comptable
+        const comptableMap: Record<string, { clients: Set<string>; docs: number }> = {}
+        for (const d of allDossiers) {
+          if (d.comptable_id) {
+            if (!comptableMap[d.comptable_id]) {
+              comptableMap[d.comptable_id] = { clients: new Set(), docs: 0 }
+            }
+            if (d.client_id) comptableMap[d.comptable_id].clients.add(d.client_id)
+            comptableMap[d.comptable_id].docs += docsByDossier[d.id] || 0
+          }
+        }
 
-        setKpis({
-          nb_clients: nbClients || 0,
-          nb_comptables: nbComptables || 0,
-          nb_societes: nbSocietes || 0,
-          nb_documents_mois: nbDocsMois || 0,
-          nb_documents_en_attente: nbDocsAttente || 0,
-          nb_alertes_urgentes: alertes?.length || 0,
-          mrr_simule: mrr
-        })
+        const comptableKpiList: ComptableKPI[] = comptables.map(c => ({
+          id: c.id,
+          full_name: c.full_name || c.email,
+          email: c.email,
+          nb_clients: comptableMap[c.id]?.clients.size || 0,
+          nb_documents: comptableMap[c.id]?.docs || 0,
+        }))
+        setComptableKpis(comptableKpiList)
 
-        setDocsMois(moisData)
+        // KPI par client
+        const clientMap: Record<string, { societes: Set<string>; docs: number }> = {}
+        for (const d of allDossiers) {
+          if (d.client_id) {
+            if (!clientMap[d.client_id]) {
+              clientMap[d.client_id] = { societes: new Set(), docs: 0 }
+            }
+            if (d.societe_id) clientMap[d.client_id].societes.add(d.societe_id)
+            clientMap[d.client_id].docs += docsByDossier[d.id] || 0
+          }
+        }
 
-        setAlertesUrgentes(
-          (alertes || []).map(a => ({
-            id: a.id,
-            titre: a.titre,
-            type_alerte: a.type_alerte,
-            date_echeance: a.date_echeance,
-            societe_nom: (a.societes as { nom?: string } | null)?.nom
-          }))
-        )
-
-        setDerniersDocuments(
-          (derniersDocs || []).map(d => ({
-            id: d.id,
-            nom_fichier: d.nom_fichier,
-            type_document: d.type_document,
-            created_at: d.created_at,
-            societe_nom: (d.societes as { nom?: string } | null)?.nom
-          }))
-        )
+        const clientKpiList: ClientKPI[] = clients.map(c => ({
+          id: c.id,
+          full_name: c.full_name || c.email,
+          email: c.email,
+          nb_societes: clientMap[c.id]?.societes.size || 0,
+          nb_documents: clientMap[c.id]?.docs || 0,
+        }))
+        setClientKpis(clientKpiList)
       } catch (err) {
         console.error('Erreur dashboard admin:', err)
       } finally {
@@ -194,10 +165,11 @@ export default function AdminDashboardPage() {
   }, [])
 
   const kpiCards = [
-    { titre: 'Clients actifs', valeur: kpis.nb_clients, icon: Users, color: '#C9A84C', href: '/admin/clients' },
-    { titre: 'Comptables', valeur: kpis.nb_comptables, icon: UserCog, color: '#1E2A4A', href: '/admin/comptables' },
-    { titre: 'Sociétés actives', valeur: kpis.nb_societes, icon: Building2, color: '#16a34a', href: '/admin/clients' },
-    { titre: 'MRR simulé', valeur: fmt(kpis.mrr_simule), icon: TrendingUp, color: '#7c3aed', href: '/admin/parametres' }
+    { titre: 'Total utilisateurs', valeur: totalUsers, icon: Users, color: '#1E2A4A', href: '/admin/users' },
+    { titre: 'Total clients', valeur: totalClients, icon: Briefcase, color: '#C9A84C', href: '/admin/clients' },
+    { titre: 'Total comptables', valeur: totalComptables, icon: UserCog, color: '#2563eb', href: '/admin/comptables' },
+    { titre: 'Total societes', valeur: totalSocietes, icon: Building2, color: '#16a34a', href: '/admin/societes' },
+    { titre: 'Stockage documents', valeur: totalDocuments, icon: FileText, color: '#7c3aed', href: '/admin/documents' },
   ]
 
   if (loading) {
@@ -205,14 +177,10 @@ export default function AdminDashboardPage() {
       <div className="p-6 space-y-6">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: '#1E2A4A' }}>Tableau de bord administrateur</h1>
-          <p className="text-muted-foreground mt-1">Chargement des KPIs en temps réel...</p>
+          <p className="text-muted-foreground mt-1">Chargement...</p>
         </div>
-        <div className="grid gap-4 md:grid-cols-4">
-          {[1, 2, 3, 4].map(i => (
-            <Card key={i} className="animate-pulse">
-              <CardContent className="p-6"><div className="h-16 bg-gray-200 rounded" /></CardContent>
-            </Card>
-          ))}
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin" style={{ color: '#1E2A4A' }} />
         </div>
       </div>
     )
@@ -230,18 +198,8 @@ export default function AdminDashboardPage() {
         </p>
       </div>
 
-      {kpis.nb_alertes_urgentes > 0 && (
-        <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700">
-          <AlertTriangle className="h-5 w-5" />
-          <span className="font-medium">
-            {kpis.nb_alertes_urgentes} alerte(s) avec deadline dans les 7 prochains jours
-          </span>
-          <Link href="/comptable/alertes" className="ml-auto text-sm underline">Voir tout</Link>
-        </div>
-      )}
-
-      {/* 4 cartes KPI */}
-      <div className="grid gap-4 md:grid-cols-4">
+      {/* KPI Cards */}
+      <div className="grid gap-4 md:grid-cols-5">
         {kpiCards.map(card => (
           <Link key={card.titre} href={card.href}>
             <Card className="hover:shadow-md transition-shadow cursor-pointer">
@@ -259,126 +217,69 @@ export default function AdminDashboardPage() {
         ))}
       </div>
 
-      {/* Documents + Graphique */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <FileText className="h-5 w-5" style={{ color: '#C9A84C' }} />
-              <CardTitle className="text-sm">Documents ce mois</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Uploadés ce mois</span>
-              <span className="font-bold text-xl">{kpis.nb_documents_mois}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">En attente de validation</span>
-              <Badge className={kpis.nb_documents_en_attente > 0 ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}>
-                {kpis.nb_documents_en_attente}
-              </Badge>
-            </div>
-            {kpis.nb_documents_en_attente === 0 && (
-              <div className="flex items-center gap-1 text-green-600 text-sm">
-                <CheckCircle2 className="h-4 w-4" />
-                <span>Tous les documents sont traités</span>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="col-span-2">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <BarChart3 className="h-5 w-5" style={{ color: '#C9A84C' }} />
-              <CardTitle className="text-sm">Documents uploadés — 6 derniers mois</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <MiniBarChart data={docsMois} />
-            <div className="mt-2 flex justify-between text-xs text-muted-foreground">
-              <span>Total période : {docsMois.reduce((s, d) => s + d.count, 0)}</span>
-              <span>Mois courant : {docsMois[docsMois.length - 1]?.count || 0}</span>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Alertes + Dernières activités */}
+      {/* KPI par comptable + KPI par client */}
       <div className="grid gap-4 md:grid-cols-2">
+        {/* Par comptable */}
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-red-500" />
-                <CardTitle className="text-sm">Top 5 alertes urgentes</CardTitle>
-              </div>
-              <Link href="/comptable/alertes" className="text-xs text-muted-foreground hover:underline">Voir tout →</Link>
+            <div className="flex items-center gap-2">
+              <UserCog className="h-5 w-5" style={{ color: '#C9A84C' }} />
+              <CardTitle className="text-sm">KPI par comptable</CardTitle>
             </div>
           </CardHeader>
           <CardContent>
-            {alertesUrgentes.length === 0 ? (
-              <div className="flex items-center gap-2 text-green-600 py-4">
-                <CheckCircle2 className="h-5 w-5" />
-                <span className="text-sm">Aucune alerte urgente</span>
-              </div>
+            {comptableKpis.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">Aucun comptable enregistre</p>
             ) : (
-              <div className="space-y-2">
-                {alertesUrgentes.map(a => {
-                  const daysLeft = a.date_echeance
-                    ? Math.ceil((new Date(a.date_echeance).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-                    : null
-                  return (
-                    <div key={a.id} className="flex items-start gap-2 p-2 rounded bg-red-50 border border-red-100">
-                      <Clock className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{a.titre}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {a.societe_nom && <span>{a.societe_nom} • </span>}
-                          {daysLeft !== null && daysLeft < 0
-                            ? <span className="text-red-600 font-semibold">Dépassé de {Math.abs(daysLeft)} j</span>
-                            : daysLeft !== null
-                              ? <span>Dans {daysLeft} j — {a.date_echeance ? fmtDate(a.date_echeance) : ''}</span>
-                              : null
-                          }
-                        </p>
-                      </div>
-                      <Badge className="text-xs shrink-0 bg-red-100 text-red-700">{a.type_alerte}</Badge>
+              <div className="space-y-3">
+                {comptableKpis.map(c => (
+                  <div key={c.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{c.full_name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{c.email}</p>
                     </div>
-                  )
-                })}
+                    <div className="flex items-center gap-2 ml-3 shrink-0">
+                      <Badge variant="outline" className="text-xs">
+                        {c.nb_clients} client{c.nb_clients !== 1 ? 's' : ''}
+                      </Badge>
+                      <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                        {c.nb_documents} doc{c.nb_documents !== 1 ? 's' : ''}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </CardContent>
         </Card>
 
+        {/* Par client */}
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5" style={{ color: '#C9A84C' }} />
-                <CardTitle className="text-sm">Dernières activités</CardTitle>
-              </div>
-              <Link href="/comptable/documents" className="text-xs text-muted-foreground hover:underline">Voir tout →</Link>
+            <div className="flex items-center gap-2">
+              <Briefcase className="h-5 w-5" style={{ color: '#C9A84C' }} />
+              <CardTitle className="text-sm">KPI par client</CardTitle>
             </div>
           </CardHeader>
           <CardContent>
-            {derniersDocuments.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">Aucun document récent</p>
+            {clientKpis.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">Aucun client enregistre</p>
             ) : (
-              <div className="space-y-2">
-                {derniersDocuments.map(d => (
-                  <div key={d.id} className="flex items-start gap-2 p-2 rounded hover:bg-gray-50">
-                    <FileText className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{d.nom_fichier}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {d.societe_nom && <span>{d.societe_nom} • </span>}
-                        {fmtDate(d.created_at)}
-                      </p>
+              <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                {clientKpis.map(c => (
+                  <div key={c.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{c.full_name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{c.email}</p>
                     </div>
-                    <Badge variant="outline" className="text-xs shrink-0">{d.type_document}</Badge>
+                    <div className="flex items-center gap-2 ml-3 shrink-0">
+                      <Badge variant="outline" className="text-xs">
+                        {c.nb_societes} societe{c.nb_societes !== 1 ? 's' : ''}
+                      </Badge>
+                      <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
+                        {c.nb_documents} doc{c.nb_documents !== 1 ? 's' : ''}
+                      </Badge>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -386,6 +287,41 @@ export default function AdminDashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Recent user creations */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Users className="h-5 w-5" style={{ color: '#C9A84C' }} />
+            <CardTitle className="text-sm">Derniers comptes crees</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {recentUsers.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">Aucun utilisateur</p>
+          ) : (
+            <div className="space-y-2">
+              {recentUsers.map(u => (
+                <div key={u.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-full bg-[#1E2A4A] flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
+                      {(u.full_name || u.email).slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{u.full_name || '—'}</p>
+                      <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 ml-3 shrink-0">
+                    <Badge variant="outline" className="text-xs">{ROLE_LABELS[u.role] || u.role}</Badge>
+                    <span className="text-xs text-muted-foreground">{fmtDate(u.created_at)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

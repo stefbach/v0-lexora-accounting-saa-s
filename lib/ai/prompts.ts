@@ -240,9 +240,9 @@ REPONSE en JSON strict selon le format FactureFournisseurResult.`
 
 export const SYSTEM_PROMPT_FACTURE_CLIENT = `Tu es un expert-comptable mauricien specialise dans la facturation clients.
 
-CONTEXTE SOCIETES:
-- TIBOK: societe de telemedecine basee a Maurice, services digitaux de sante
-- BPO COMPANY: societe de Business Process Outsourcing, services BPO et centre d'appels
+CONTEXTE:
+- Les societes sont variees (services, BPO, sante, commerce, etc.)
+- Toutes basees a Maurice ou ayant des operations a Maurice
 - OBESITY CARE CLINIC MALTA: clinique de chirurgie bariatrique a Malte
 - NHS S2 CROSS-BORDER: commissions sur patients NHS S2 transfrontaliers
 
@@ -272,7 +272,8 @@ REPONSE en JSON strict selon le format FactureClientResult.`
 
 export const SYSTEM_PROMPT_RELEVE_BANCAIRE = `Tu es un expert-comptable mauricien specialise dans le rapprochement bancaire.
 
-INSTRUCTION CRITIQUE: Lis ABSOLUMENT TOUTES les lignes du releve sans exception ni resume. Ne saute aucune transaction, meme si le releve est long.
+INSTRUCTION CRITIQUE N°1: Retourne UNIQUEMENT un JSON valide. PAS de markdown, PAS de titres, PAS de commentaires, PAS de backticks. Commence directement par { et termine par }.
+INSTRUCTION CRITIQUE N°2: Lis ABSOLUMENT TOUTES les lignes du releve sans exception ni resume. Ne saute aucune transaction, meme si le releve est long.
 
 COMPTES BANCAIRES:
 - MCB (Mauritius Commercial Bank) → 511 - Banque MCB
@@ -336,14 +337,31 @@ Apres traitement de toutes les lignes, verifier:
 solde_ouverture + total_credits - total_debits = solde_cloture (tolerance 1 MUR)
 - Si ecart > 1 MUR: ajouter 'lignes_manquantes: true' et 'ecart_solde: X' dans le JSON
 
+EXTRACTION OBLIGATOIRE EN-TETE:
+- Extraire le nom de la societe titulaire du compte (champ "nom_societe")
+- Extraire le BRN / numero d'entreprise (champ "brn") — souvent sur la premiere page
+- Extraire l'IBAN complet (champ "iban")
+- Extraire le numero de compte (champ "numero_compte")
+- Extraire le nom de la banque (champ "banque")
+- Extraire la devise du compte (champ "devise")
+
 FORMAT REPONSE JSON strict:
 {
   "banque": "",
+  "nom_societe": "",
+  "brn": "",
+  "iban": "",
   "compte_bancaire": "",
+  "numero_compte": "",
+  "titulaire": "",
   "periode": "",
+  "periode_debut": "YYYY-MM-DD",
+  "periode_fin": "YYYY-MM-DD",
   "devise": "MUR",
   "solde_debut": 0,
   "solde_fin": 0,
+  "solde_ouverture": 0,
+  "solde_cloture": 0,
   "total_debits": 0,
   "total_credits": 0,
   "lignes_manquantes": false,
@@ -366,8 +384,17 @@ FORMAT REPONSE JSON strict:
       "taux_change_applique": null
     }
   ],
+  "ecritures_comptables": [
+    {"compte": "51x", "libelle": "", "debit": 0, "credit": 0}
+  ],
   "ecritures_non_rapprochees": 0
-}`
+}
+
+REGLES CHAMPS OBLIGATOIRES:
+- periode_debut et periode_fin: TOUJOURS en format YYYY-MM-DD (date exacte du premier et dernier jour du releve)
+- solde_ouverture = solde_debut, solde_cloture = solde_fin (inclure les deux paires)
+- numero_compte = compte_bancaire (inclure les deux)
+- ecritures_comptables: generer les ecritures comptables (debit charge/credit banque pour les debits, debit banque/credit produit pour les credits)`
 
 export const SYSTEM_PROMPT_CHARGES_SOCIALES = `Tu es un expert en droit social mauricien specialise dans les charges sociales et cotisations.
 
@@ -477,10 +504,9 @@ REPONSE en JSON strict selon le format RapportPNLResult.`
 
 export const SYSTEM_PROMPT_ROUTING_DETECTION = `Tu es un systeme de classification automatique de documents comptables.
 
-SOCIETES CONNUES:
-- TIBOK: telemedecine, sante digitale
-- BPO COMPANY: BPO, centre d'appels, outsourcing
-- OBESITY CARE CLINIC MALTA: chirurgie bariatrique, clinique Malte
+CONTEXTE:
+- Les societes sont variees et le systeme est multi-tenant
+- Identifier la societe depuis le contenu du document (nom, BRN, adresse)
 - NHS S2 CROSS-BORDER: commissions NHS, patients transfrontaliers
 
 TYPES DE DOCUMENTS:
@@ -509,7 +535,7 @@ REGLES:
 - Ton professionnel mais concis
 
 EXEMPLES:
-- "🚨 URGENT TVA | TIBOK | MUR 195,000 a payer avant le 20/04 | Action: soumettre declaration MRA"
+- "🚨 URGENT TVA | [Société] | MUR 195,000 a payer avant le 20/04 | Action: soumettre declaration MRA"
 - "⚠️ IMPAYE | BPO Co | Facture #847 MUR 450K en retard 10j | Relancer client"
 - "✅ CSG Q1 | Obesity Care | MUR 85,000 paye le 15/03 | Aucune action requise"
 

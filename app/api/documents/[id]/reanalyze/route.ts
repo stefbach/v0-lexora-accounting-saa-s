@@ -24,7 +24,7 @@ const TYPE_TO_PROMPT_ID: Record<string, PromptId> = {
 // ---------------------------------------------------------------------------
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabaseAuth = await createServerClient()
@@ -32,7 +32,7 @@ export async function POST(
     if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
 
     const supabase = getAdminClient()
-    const { id } = params
+    const { id } = await params
 
     // Fetch document
     const { data: doc, error: fetchError } = await supabase
@@ -139,13 +139,14 @@ Taux: EUR={{TAUX_EUR}}, GBP={{TAUX_GBP}}, USD={{TAUX_USD}}`, tauxChange)
     const { default: Anthropic } = await import('@anthropic-ai/sdk')
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
-    const aiResponse = await anthropic.messages.create({
+    const stream = anthropic.messages.stream({
       model: CLAUDE_CONFIG.model,
       max_tokens: maxTokensOverride,
       temperature: CLAUDE_CONFIG.temperature,
       system: systemPrompt,
       messages: [{ role: 'user', content: messageContent }],
     })
+    const aiResponse = await stream.finalMessage()
 
     const text = aiResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
     const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
@@ -179,7 +180,7 @@ Taux: EUR={{TAUX_EUR}}, GBP={{TAUX_GBP}}, USD={{TAUX_USD}}`, tauxChange)
         .delete()
         .eq('dossier_id', doc.dossier_id)
         .eq('piece_justificative', id)
-        .catch(() => {})
+
     }
 
     // Update document
@@ -243,7 +244,108 @@ Taux: EUR={{TAUX_EUR}}, GBP={{TAUX_GBP}}, USD={{TAUX_USD}}`, tauxChange)
           piece_justificative: id,
         }))
       if (entries.length > 0) {
-        await supabase.from('ecritures_comptables').insert(entries).catch(console.error)
+        const { error: insertErr } = await supabase.from('ecritures_comptables').insert(entries)
+        if (insertErr) console.error('[reanalyze] ecritures insert error:', insertErr.message)
+      }
+    }
+
+    // === BANK STATEMENT: update comptes_bancaires + releves_bancaires ===
+    if (finalTypeDocument === 'releve_bancaire' && dossier?.societe_id) {
+      const bankSocieteId = dossier.societe_id
+      const bankName = finalExtraction.banque || finalExtraction.compte_bancaire || finalSociete || 'Banque'
+      const bankDevise = finalExtraction.devise || 'MUR'
+      const solde = Number(finalExtraction.solde_cloture) || Number(finalExtraction.solde_fin) || 0
+
+      // Normalize dates
+      let normPeriodeFin = finalExtraction.periode_fin || finalExtraction.date_fin || null
+      if (!normPeriodeFin && finalExtraction.periode) {
+        const p = finalExtraction.periode
+        if (/^\d{4}-\d{2}$/.test(p)) {
+          const [y, m] = p.split('-').map(Number)
+          const lastDay = new Date(y, m, 0).getDate()
+          normPeriodeFin = `${p}-${String(lastDay).padStart(2, '0')}`
+        } else {
+          normPeriodeFin = p
+        }
+      }
+      if (!normPeriodeFin) normPeriodeFin = new Date().toISOString().split('T')[0]
+
+      let normPeriodeDebut = finalExtraction.periode_debut || finalExtraction.date_debut || null
+      if (!normPeriodeDebut && finalExtraction.periode) {
+        if (/^\d{4}-\d{2}$/.test(finalExtraction.periode)) {
+          normPeriodeDebut = `${finalExtraction.periode}-01`
+        }
+      }
+      if (!normPeriodeDebut) normPeriodeDebut = normPeriodeFin
+
+      const normNumeroCompte = finalExtraction.numero_compte || finalExtraction.compte_bancaire || null
+
+      // Upsert bank account
+      const { data: existingBank } = await supabase.from('comptes_bancaires')
+        .select('id').eq('societe_id', bankSocieteId).eq('banque', bankName).limit(1).maybeSingle()
+
+      if (existingBank) {
+        await supabase.from('comptes_bancaires').update({
+          solde_actuel: solde, date_dernier_releve: normPeriodeFin,
+          ...(normNumeroCompte ? { numero_compte: normNumeroCompte } : {}),
+          ...(bankDevise !== 'MUR' ? { devise: bankDevise } : {}),
+        }).eq('id', existingBank.id)
+      } else {
+        await supabase.from('comptes_bancaires').insert({
+          societe_id: bankSocieteId, banque: bankName,
+          nom_compte: normNumeroCompte || bankName,
+          numero_compte: normNumeroCompte, devise: bankDevise,
+          solde_actuel: solde, solde_dernier_releve: solde,
+          date_dernier_releve: normPeriodeFin, actif: true,
+        })
+      }
+
+      // Build normalized transactions
+      const rawTransactions: any[] = finalExtraction.transactions || []
+      const rawLignes: any[] = finalExtraction.lignes || []
+      const lignesAsTransactions = rawLignes.map((l: any) => ({
+        date: l.date || '', libelle: l.libelle || '',
+        debit: l.sens === 'debit' ? (Number(l.montant) || 0) : 0,
+        credit: l.sens === 'credit' ? (Number(l.montant) || 0) : 0,
+        solde_apres: null,
+        tiers_detecte: l.tiers_detecte || null,
+        compte_comptable: l.sens === 'debit' ? (l.compte_debit || null) : (l.compte_credit || null),
+        statut: (l.confiance || 0) >= 70 ? 'identifie' : ((l.confiance || 0) >= 40 ? 'a_verifier' : 'non_identifie'),
+      }))
+      const normalizedTransactions = rawTransactions.length > 0 ? rawTransactions : lignesAsTransactions
+
+      const totalDebits = Number(finalExtraction.total_debits) ||
+        normalizedTransactions.reduce((s: number, t: any) => s + (Number(t.debit) || 0), 0)
+      const totalCredits = Number(finalExtraction.total_credits) ||
+        normalizedTransactions.reduce((s: number, t: any) => s + (Number(t.credit) || 0), 0)
+      const soldeOuverture = Number(finalExtraction.solde_ouverture) || Number(finalExtraction.solde_debut) || 0
+      const soldeCloture = solde || Number(finalExtraction.solde_fin) || 0
+
+      // Delete old releve for this document
+      await supabase.from('releves_bancaires').delete().eq('document_id', id)
+
+      // Get bank account ID
+      const { data: bankAccount } = await supabase.from('comptes_bancaires')
+        .select('id').eq('societe_id', bankSocieteId).eq('banque', bankName).limit(1).maybeSingle()
+
+      if (bankAccount && normalizedTransactions.length > 0) {
+        const ecartSolde = Math.abs((soldeOuverture + totalCredits - totalDebits) - soldeCloture)
+        const { error: releveError } = await supabase.from('releves_bancaires').insert({
+          compte_bancaire_id: bankAccount.id,
+          societe_id: bankSocieteId,
+          periode: normPeriodeFin.substring(0, 7),
+          date_debut: normPeriodeDebut,
+          date_fin: normPeriodeFin,
+          solde_ouverture: soldeOuverture,
+          solde_cloture: soldeCloture,
+          total_debits: totalDebits,
+          total_credits: totalCredits,
+          document_id: id,
+          transactions_json: normalizedTransactions,
+          statut_rapprochement: ecartSolde > 1 ? 'ecart_detecte' : 'en_attente',
+        })
+        if (releveError) console.error('[reanalyze] releves_bancaires insert error:', releveError.message)
+        else console.log(`[reanalyze] Bank statement stored: ${normalizedTransactions.length} transactions`)
       }
     }
 
@@ -267,7 +369,10 @@ Taux: EUR={{TAUX_EUR}}, GBP={{TAUX_GBP}}, USD={{TAUX_USD}}`, tauxChange)
     // Try to mark as error
     try {
       const supabase = getAdminClient()
-      await supabase.from('documents').update({ statut: 'erreur' }).eq('id', params.id)
+      try {
+        const { id: resolvedId } = await params
+        if (resolvedId) await supabase.from('documents').update({ statut: 'erreur' }).eq('id', resolvedId)
+      } catch {}
     } catch {}
     return NextResponse.json({ error: errMsg }, { status: 500 })
   }

@@ -274,8 +274,9 @@ export default function FacturesClientsPage() {
                   <TableHead>Tiers</TableHead>
                   <TableHead>Description</TableHead>
                   <TableHead>Date</TableHead>
-                  <TableHead>Échéance</TableHead>
-                  <TableHead className="text-right">Montant</TableHead>
+                  <TableHead className="text-right">HT</TableHead>
+                  <TableHead className="text-right">TVA</TableHead>
+                  <TableHead className="text-right">TTC</TableHead>
                   <TableHead>Devise</TableHead>
                   <TableHead>Statut</TableHead>
                   <TableHead>Actions</TableHead>
@@ -288,7 +289,8 @@ export default function FacturesClientsPage() {
                     <TableCell className="font-medium">{f.tiers || "—"}</TableCell>
                     <TableCell className="text-sm text-gray-600 max-w-48 truncate">{f.description || "—"}</TableCell>
                     <TableCell className="text-sm">{f.date_facture ? new Date(f.date_facture).toLocaleDateString("fr-FR") : "—"}</TableCell>
-                    <TableCell className="text-sm">{f.date_echeance ? new Date(f.date_echeance).toLocaleDateString("fr-FR") : "—"}</TableCell>
+                    <TableCell className="text-right text-sm">{fmt(f.montant_ht, f.devise)}</TableCell>
+                    <TableCell className="text-right text-sm">{f.montant_tva > 0 ? <span className="text-orange-600">{fmt(f.montant_tva, f.devise)}</span> : <span className="text-gray-400">0</span>}</TableCell>
                     <TableCell className="text-right font-semibold">{fmt(f.montant_ttc, f.devise)}</TableCell>
                     <TableCell><Badge variant="outline">{f.devise}</Badge></TableCell>
                     <TableCell>

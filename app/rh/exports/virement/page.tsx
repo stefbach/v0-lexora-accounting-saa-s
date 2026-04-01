@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Loader2, Download, CreditCard, Building2, AlertTriangle, CheckCircle2, Users } from "lucide-react"
+import { Loader2, Download, CreditCard, Building2, AlertTriangle, CheckCircle2, Users, FileText } from "lucide-react"
 
 const BANQUES_LABELS: Record<string, string> = {
   MCB: "Mauritius Commercial Bank",
@@ -23,7 +23,7 @@ const BANQUES_LABELS: Record<string, string> = {
   BDM: "Banque des Mascareignes",
   CIM: "CIM Finance",
   AUTRE: "Autre banque",
-  SANS_BANQUE: "⚠️ Coordonnées manquantes",
+  SANS_BANQUE: "Coordonnees manquantes",
 }
 
 const FORMAT_LABELS: Record<string, string> = {
@@ -236,8 +236,8 @@ export default function ExportVirementPage() {
                     {comptesDisponibles.map((c: any) => (
                       <SelectItem key={c.id} value={c.id}>
                         {c.banque} — {c.numero_compte || c.nom_compte}
-                        {c.usage_paie && " ✓ Compte paie"}
-                        {c.compte_principal && " ★"}
+                        {c.usage_paie && " (Paie)"}
+                        {c.compte_principal && " (Principal)"}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -254,7 +254,7 @@ export default function ExportVirementPage() {
                     {compteEmetteur.iban && <span className="text-blue-500 ml-2 text-xs">IBAN: {compteEmetteur.iban}</span>}
                   </div>
                   <Badge className="bg-blue-100 text-blue-700 border-0 text-xs">
-                    📄 {formatFichier}
+                    {formatFichier}
                   </Badge>
                 </div>
               )}
@@ -367,7 +367,7 @@ export default function ExportVirementPage() {
             {/* Note format MCB */}
             {banqueEmettrice === 'MCB' && (
               <div className="p-4 bg-blue-50 border-t text-xs text-blue-700 flex items-start gap-2">
-                <span className="text-base">ℹ️</span>
+                <FileText className="w-4 h-4 shrink-0 mt-0.5" />
                 <div>
                   <strong>Banque émettrice MCB :</strong> Le format BP-V1 MCB regroupe tous les bénéficiaires dans un seul fichier <code>.txt</code>.
                   Les virements MCB→MCB sont en lignes <code>1</code>, les virements vers d'autres banques en lignes <code>2</code> (avec code banque MCB).

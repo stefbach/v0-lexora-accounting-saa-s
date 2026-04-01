@@ -88,8 +88,10 @@ const MENU: MenuSection[] = [
     items: [
       { href: "/client/tableau-de-bord", label: "Tableau de bord", labelKey: "nav.dashboard", icon: LayoutDashboard },
       { href: "/client/societes", label: "Mes Sociétés", labelKey: "nav.companies", icon: Building2 },
+      { href: "/client/societe", label: "Fiche Société", icon: Settings },
       { href: "/client/documents", label: "Documents & OCR", labelKey: "nav.documents", icon: FileText },
       { href: "/client/utilisateurs", label: "Utilisateurs", labelKey: "nav.users", icon: Users },
+      { href: "/client/acces", label: "Rôles & Accès", icon: Users },
       { href: "/client/equipe", label: "Mon Équipe", labelKey: "nav.team", icon: UserCog },
       { href: "/client/alertes", label: "Alertes", labelKey: "nav.alerts", icon: Bell },
       { href: "/client/assistant", label: "Espace Assistant", labelKey: "nav.assistant", icon: Upload },
@@ -101,6 +103,7 @@ const MENU: MenuSection[] = [
     items: [
       { href: "/client/factures", label: "Mes Factures", labelKey: "inv.my_invoices", icon: Receipt },
       { href: "/client/nouvelle-facture", label: "Nouvelle Facture", labelKey: "inv.new_invoice", icon: FilePlus2 },
+      { href: "/client/facture-template", label: "Template IA", icon: Lightbulb },
       { href: "/client/facturation-settings", label: "Paramètres Facturation", labelKey: "inv.settings", icon: SlidersHorizontal },
     ]
   },
@@ -112,6 +115,8 @@ const MENU: MenuSection[] = [
       { href: "/client/rapprochement", label: "Rapprochement & Lettrage", labelKey: "acc.reconciliation", icon: CreditCard },
       { href: "/client/tresorerie", label: "Trésorerie", labelKey: "acc.treasury", icon: Banknote },
       { href: "/client/fournisseurs", label: "Fournisseurs", labelKey: "acc.suppliers", icon: FileSpreadsheet },
+      { href: "/client/affectations", label: "Affectations comptables", icon: Settings },
+      { href: "/client/salaires-compta", label: "Salaires", icon: CreditCard },
       { href: "/client/compte-courant", label: "Comptes Courants Associés", labelKey: "acc.current_accounts", icon: Users },
       { href: "/client/finances", label: "Mes Chiffres", labelKey: "acc.my_figures", icon: BarChart3 },
     ]
@@ -143,24 +148,26 @@ const MENU: MenuSection[] = [
     section: "RH & Paie", sectionKey: "hr.hr_payroll",
     requiredModule: "rh",
     items: [
-      { href: "/client/elaboration-paie", label: "Elaboration Paie", labelKey: "hr.payroll_elaboration", icon: Calculator },
-      { href: "/client/salaires", label: "Paie & Bulletins", labelKey: "hr.payslips", icon: CreditCard },
-      { href: "/client/rapports-paie", label: "Rapports Statutaires", labelKey: "hr.statutory_reports", icon: FileSpreadsheet },
-      { href: "/client/declarations-sociales", label: "Déclarations Sociales", labelKey: "hr.social_declarations", icon: FileText },
-      { href: "/client/exports-rh", label: "Exports & Virements", labelKey: "hr.exports", icon: Download },
-      { href: "/client/employes", label: "Employés", labelKey: "hr.employees", icon: Users },
-      { href: "/client/pointage", label: "Pointage", labelKey: "hr.time_clock", icon: Clock },
-      { href: "/client/conges", label: "Congés", labelKey: "hr.leave", icon: Scale },
-      { href: "/client/demandes-rh", label: "Demandes RH", labelKey: "hr.hr_requests", icon: ClipboardList },
-      { href: "/client/parametres-rh", label: "Paramètres RH", labelKey: "hr.hr_settings", icon: Settings },
-      { href: "/client/primes", label: "Gestion Primes", labelKey: "hr.bonus_management", icon: Target },
-      { href: "/client/planning", label: "Planning", labelKey: "hr.planning", icon: CalendarDays },
-      { href: "/client/chat-rh", label: "CLARA — Assistant IA", icon: Lightbulb },
+      { href: "/rh/employes", label: "Employés", icon: Users },
+      { href: "/rh/groupes", label: "Groupes / Équipes", icon: Users },
+      { href: "/rh/planning", label: "Planning", icon: CalendarDays },
+      { href: "/rh/pointage", label: "Pointage", icon: Clock },
+      { href: "/rh/conges", label: "Congés", icon: Scale },
+      { href: "/rh/conges/parametres", label: "Règles congés", icon: Settings },
+      { href: "/rh/paie", label: "Paie & Bulletins", icon: CreditCard },
+      { href: "/rh/paie/validation", label: "Contrôle pré-paie", icon: ClipboardList },
+      { href: "/rh/paie/primes", label: "Primes & OT", icon: Target },
+      { href: "/rh/frais-km", label: "Frais kilométriques", icon: Download },
+      { href: "/rh/paie/exports-mra", label: "Exports MRA", icon: FileSpreadsheet },
+      { href: "/rh/exports/paie", label: "Export Paie & Virements", icon: FileText },
+      { href: "/rh/paie/parametres", label: "Paramètres paie", icon: Settings },
+      { href: "/rh/chat", label: "CLARA — Assistant IA", icon: Lightbulb },
     ]
   },
   {
     section: "Mon Compte", sectionKey: "account.my_account",
     items: [
+      { href: "/client/societe", label: "Paramètres société", icon: Settings },
       { href: "/client/profil", label: "Mon Profil", labelKey: "account.my_profile", icon: Settings },
     ]
   },
@@ -242,9 +249,6 @@ export function ClientSidebarFull() {
   // For client_assistant: override to show ONLY Espace Assistant + Mon Profil
   const isAssistant = profile?.role === "client_assistant"
 
-  // For RH role: override to show ONLY RH modules + CLARA + Mon Profil
-  const isRH = profile?.role === "rh"
-
   const visibleMenu = isAssistant
     ? [
         {
@@ -257,33 +261,6 @@ export function ClientSidebarFull() {
           section: "Mon Compte",
           items: [
             { href: "/client/profil", label: "Mon Profil", icon: Settings },
-          ],
-        },
-      ]
-    : isRH
-    ? [
-        {
-          section: "RH & Paie", sectionKey: "hr.hr_payroll",
-          items: [
-            { href: "/client/elaboration-paie", label: "Elaboration Paie", labelKey: "hr.payroll_elaboration", icon: Calculator },
-            { href: "/client/salaires", label: "Paie & Bulletins", labelKey: "hr.payslips", icon: CreditCard },
-            { href: "/client/rapports-paie", label: "Rapports Statutaires", labelKey: "hr.statutory_reports", icon: FileSpreadsheet },
-            { href: "/client/declarations-sociales", label: "Déclarations Sociales", labelKey: "hr.social_declarations", icon: FileText },
-            { href: "/client/exports-rh", label: "Exports & Virements", labelKey: "hr.exports", icon: Download },
-            { href: "/client/employes", label: "Employés", labelKey: "hr.employees", icon: Users },
-            { href: "/client/pointage", label: "Pointage", labelKey: "hr.time_clock", icon: Clock },
-            { href: "/client/conges", label: "Congés", labelKey: "hr.leave", icon: Scale },
-            { href: "/client/demandes-rh", label: "Demandes RH", labelKey: "hr.hr_requests", icon: ClipboardList },
-            { href: "/client/primes", label: "Gestion Primes", labelKey: "hr.bonus_management", icon: Target },
-            { href: "/client/planning", label: "Planning", labelKey: "hr.planning", icon: CalendarDays },
-            { href: "/client/parametres-rh", label: "Paramètres RH", labelKey: "hr.hr_settings", icon: Settings },
-            { href: "/client/chat-rh", label: "CLARA — Assistant IA", icon: Lightbulb },
-          ],
-        },
-        {
-          section: "Mon Compte", sectionKey: "account.my_account",
-          items: [
-            { href: "/client/profil", label: "Mon Profil", labelKey: "account.my_profile", icon: Settings },
           ],
         },
       ]

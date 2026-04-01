@@ -1,31 +1,58 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
 import {
   Card, CardContent, CardHeader, CardTitle,
 } from "@/components/ui/card"
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import {
-  TrendingUp, TrendingDown, DollarSign, Loader2, FileText, Receipt,
+  TrendingUp, TrendingDown, DollarSign, Loader2,
+  BookOpen, BarChart3, Calendar, Target, Wallet,
+  ArrowRight, Landmark, Percent, Building2,
 } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Building2 } from "lucide-react"
 
 const NAVY = "#1E2A4A"
 const GOLD = "#C9A84C"
 
-function formatMUR(n: number) {
+function fmt(n: number) {
   return Math.round(n).toLocaleString("fr-FR") + " MUR"
 }
 
-function formatAmount(n: number, devise: string) {
-  return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + devise
+// Account label map for P&L
+const REVENUE_LABELS: Record<string, string> = {
+  "700": "Ventes marchandises", "701": "Ventes produits finis", "706": "Prestations de services",
+  "707": "Ventes de marchandises", "708": "Produits annexes", "709": "Rabais/Remises",
+  "71": "Production stockee", "72": "Production immobilisee", "74": "Subventions", "75": "Autres produits",
+  "76": "Produits financiers", "77": "Produits exceptionnels", "78": "Reprises amortissements",
 }
+const EXPENSE_LABELS: Record<string, string> = {
+  "60": "Achats", "61": "Services exterieurs", "612": "Loyer", "613": "Locations",
+  "616": "Assurances", "622": "Honoraires", "624": "Transport", "625": "Deplacements",
+  "626": "Telecom", "627": "Frais bancaires", "628": "Charges diverses",
+  "63": "Impots & taxes", "64": "Charges personnel", "65": "Autres charges gestion",
+  "651": "SaaS / Logiciels", "66": "Charges financieres", "67": "Charges exceptionnelles",
+  "68": "Dotations amortissements",
+}
+
+function getLabel(prefix: string, map: Record<string, string>): string {
+  if (map[prefix]) return map[prefix]
+  // Try shorter prefixes
+  for (let len = prefix.length; len >= 2; len--) {
+    const short = prefix.substring(0, len)
+    if (map[short]) return map[short]
+  }
+  return `Compte ${prefix}`
+}
+
+const QUICK_LINKS = [
+  { href: "/client/grand-livre", label: "Grand Livre", icon: BookOpen },
+  { href: "/client/bilan", label: "Bilan & P&L", icon: BarChart3 },
+  { href: "/client/previsionnel", label: "Previsionnel", icon: Target },
+  { href: "/client/exercices", label: "Exercices", icon: Calendar },
+]
 
 export default function FinancesPage() {
   const { profile, loading } = useProfile()
@@ -49,6 +76,34 @@ export default function FinancesPage() {
       .finally(() => setFetching(false))
   }, [selectedSociete])
 
+  const ca = data?.totalRevenue || 0
+  const depenses = data?.totalExpenses || 0
+  const resultat = data?.resultat ?? (ca - depenses)
+  const tresorerie = data?.totalBankMUR || 0
+  const creances = data?.creances || 0
+  const dettes = data?.dettesFournisseurs || 0
+  const bfr = creances - dettes
+  const dso = ca > 0 ? (creances / ca) * 365 : 0
+  const dpo = depenses > 0 ? (dettes / depenses) * 365 : 0
+  const margeNette = ca > 0 ? (resultat / ca) * 100 : 0
+
+  // Revenue / expense breakdown sorted by value
+  const revenueBreakdown = useMemo(() => {
+    if (!data?.revenueByAccount) return []
+    return Object.entries(data.revenueByAccount as Record<string, number>)
+      .map(([k, v]) => ({ prefix: k, label: getLabel(k, REVENUE_LABELS), amount: v }))
+      .filter(r => r.amount !== 0)
+      .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
+  }, [data])
+
+  const expenseBreakdown = useMemo(() => {
+    if (!data?.expensesByAccount) return []
+    return Object.entries(data.expensesByAccount as Record<string, number>)
+      .map(([k, v]) => ({ prefix: k, label: getLabel(k, EXPENSE_LABELS), amount: v }))
+      .filter(r => r.amount !== 0)
+      .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
+  }, [data])
+
   if (loading || fetching) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -60,76 +115,21 @@ export default function FinancesPage() {
   if (profile?.role === "client_user") {
     return (
       <div className="p-6 flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-        <h1 className="text-xl font-bold" style={{ color: NAVY }}>Accès non autorisé</h1>
-        <p className="text-sm text-muted-foreground">Vous n&apos;avez pas la permission d&apos;accéder à cette page.</p>
+        <h1 className="text-xl font-bold" style={{ color: NAVY }}>Acces non autorise</h1>
+        <p className="text-sm text-muted-foreground">Vous n&apos;avez pas la permission d&apos;acceder a cette page.</p>
         <Link href="/client/upload" className="text-sm underline" style={{ color: GOLD }}>Retour</Link>
       </div>
     )
   }
 
-  const invoices: any[] = data?.extractedInvoices ?? []
-  const facturesFournisseurs = invoices.filter(i => i.type === "facture_fournisseur")
-  const facturesClients = invoices.filter(i => i.type === "facture_client")
-
-  // Use the MUR-converted amounts from the API for totals
-  const totalDepenses = facturesFournisseurs.reduce((sum: number, i: any) => sum + (i.montant_ttc_mur ?? 0), 0)
-  const totalRevenus = facturesClients.reduce((sum: number, i: any) => sum + (i.montant_ttc_mur ?? 0), 0)
-  const resultat = totalRevenus - totalDepenses
-
-  function InvoiceTable({ items, emptyMsg }: { items: any[]; emptyMsg: string }) {
-    if (items.length === 0) {
-      return (
-        <div className="flex flex-col items-center justify-center py-8 text-center">
-          <FileText className="h-8 w-8 text-muted-foreground/40 mb-2" />
-          <p className="text-sm text-muted-foreground">{emptyMsg}</p>
-        </div>
-      )
-    }
-    return (
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Émetteur / Destinataire</TableHead>
-            <TableHead>Date</TableHead>
-            <TableHead>N° Facture</TableHead>
-            <TableHead className="text-right">Montant HT</TableHead>
-            <TableHead className="text-right">TVA</TableHead>
-            <TableHead className="text-right">TTC</TableHead>
-            <TableHead className="text-right">TTC (MUR)</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {items.map((inv: any) => (
-            <TableRow key={inv.id}>
-              <TableCell className="font-medium">{inv.emetteur || inv.destinataire || "—"}</TableCell>
-              <TableCell>{inv.date || "—"}</TableCell>
-              <TableCell className="text-muted-foreground">{inv.numero || "—"}</TableCell>
-              <TableCell className="text-right">{formatAmount(inv.montant_ht ?? 0, inv.devise)}</TableCell>
-              <TableCell className="text-right">{formatAmount(inv.montant_tva ?? 0, inv.devise)}</TableCell>
-              <TableCell className="text-right font-medium">{formatAmount(inv.montant_ttc ?? 0, inv.devise)}</TableCell>
-              <TableCell className="text-right font-bold" style={{ color: NAVY }}>
-                {inv.devise !== "MUR" ? formatMUR(inv.montant_ttc_mur ?? 0) : "—"}
-              </TableCell>
-            </TableRow>
-          ))}
-          <TableRow className="bg-muted/30 font-bold">
-            <TableCell colSpan={6} className="text-right">Total (MUR)</TableCell>
-            <TableCell className="text-right" style={{ color: NAVY }}>
-              {formatMUR(items.reduce((s: number, i: any) => s + (i.montant_ttc_mur ?? 0), 0))}
-            </TableCell>
-          </TableRow>
-        </TableBody>
-      </Table>
-    )
-  }
-
   return (
     <div className="p-6 space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Mes Chiffres</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Suivez vos revenus, vos dépenses et votre résultat.
+            Vue d&apos;ensemble de votre situation financiere
           </p>
         </div>
         {societes.length > 1 && (
@@ -138,7 +138,7 @@ export default function FinancesPage() {
             <Select value={selectedSociete} onValueChange={setSelectedSociete}>
               <SelectTrigger className="w-[220px] h-9"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Toutes les sociétés</SelectItem>
+                <SelectItem value="all">Toutes les societes</SelectItem>
                 {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -146,65 +146,196 @@ export default function FinancesPage() {
         )}
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* 4 KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Revenus (factures clients)</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Chiffre d&apos;affaires</CardTitle>
             <TrendingUp className="h-5 w-5" style={{ color: "#22C55E" }} />
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold" style={{ color: NAVY }}>{formatMUR(totalRevenus)}</p>
-            <p className="text-xs text-muted-foreground mt-1">{facturesClients.length} facture(s) client</p>
+            <p className="text-2xl font-bold" style={{ color: NAVY }}>{fmt(ca)}</p>
+            {data?.monthlyRevenue ? (
+              <p className="text-xs text-muted-foreground mt-1">Mois en cours: {fmt(data.monthlyRevenue)}</p>
+            ) : null}
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Dépenses (factures fournisseurs)</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Depenses</CardTitle>
             <TrendingDown className="h-5 w-5" style={{ color: "#EF4444" }} />
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold" style={{ color: "#EF4444" }}>{formatMUR(totalDepenses)}</p>
-            <p className="text-xs text-muted-foreground mt-1">{facturesFournisseurs.length} facture(s) fournisseur</p>
+            <p className="text-2xl font-bold" style={{ color: "#EF4444" }}>{fmt(depenses)}</p>
+            {data?.monthlyExpenses ? (
+              <p className="text-xs text-muted-foreground mt-1">Mois en cours: {fmt(data.monthlyExpenses)}</p>
+            ) : null}
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Résultat net</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Benefice</CardTitle>
             <DollarSign className="h-5 w-5" style={{ color: GOLD }} />
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold" style={{ color: resultat >= 0 ? "#22C55E" : "#EF4444" }}>
-              {formatMUR(resultat)}
+              {fmt(resultat)}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">Revenus - Dépenses</p>
+            <p className="text-xs text-muted-foreground mt-1">CA - Depenses</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Tresorerie</CardTitle>
+            <Landmark className="h-5 w-5" style={{ color: NAVY }} />
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold" style={{ color: NAVY }}>{fmt(tresorerie)}</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {(data?.bankAccounts || []).length} compte(s) bancaire(s)
+            </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Factures Clients (Revenue) */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Receipt className="h-5 w-5" style={{ color: "#22C55E" }} />
-            <CardTitle style={{ color: NAVY }}>Factures Clients — Revenus ({facturesClients.length})</CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <InvoiceTable items={facturesClients} emptyMsg="Aucune facture client. Uploadez vos factures envoyées à vos clients." />
-        </CardContent>
-      </Card>
+      {/* BFR + Marge row */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className={bfr >= 0 ? "border-green-200" : "border-red-200"}>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">BFR</CardTitle>
+            <Wallet className="h-5 w-5" style={{ color: bfr >= 0 ? "#16A34A" : "#EF4444" }} />
+          </CardHeader>
+          <CardContent>
+            <p className={`text-2xl font-bold ${bfr >= 0 ? "text-green-600" : "text-red-600"}`}>
+              {fmt(bfr)}
+            </p>
+            <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
+              <span>DSO: {dso.toFixed(0)}j</span>
+              <span>DPO: {dpo.toFixed(0)}j</span>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Marge nette</CardTitle>
+            <Percent className="h-5 w-5" style={{ color: GOLD }} />
+          </CardHeader>
+          <CardContent>
+            <p className={`text-2xl font-bold ${margeNette >= 0 ? "text-green-600" : "text-red-600"}`}>
+              {margeNette.toFixed(1)}%
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">(Benefice / CA) x 100</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Exercice</CardTitle>
+            <Calendar className="h-5 w-5" style={{ color: NAVY }} />
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold" style={{ color: NAVY }}>{data?.exercice_actuel || "-"}</p>
+            <p className="text-xs text-muted-foreground mt-1">Exercice fiscal en cours</p>
+          </CardContent>
+        </Card>
+      </div>
 
-      {/* Factures Fournisseurs (Expenses) */}
+      {/* P&L Summary */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Revenue breakdown */}
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5" style={{ color: "#22C55E" }} />
+              <CardTitle style={{ color: NAVY }}>Revenus</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {revenueBreakdown.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">Aucune donnee de revenus</p>
+            ) : (
+              <div className="space-y-3">
+                {revenueBreakdown.map(r => {
+                  const pct = ca > 0 ? (Math.abs(r.amount) / ca) * 100 : 0
+                  return (
+                    <div key={r.prefix}>
+                      <div className="flex items-center justify-between text-sm mb-1">
+                        <span className="text-muted-foreground">{r.label} ({r.prefix})</span>
+                        <span className="font-medium" style={{ color: NAVY }}>{fmt(Math.abs(r.amount))}</span>
+                      </div>
+                      <div className="w-full bg-gray-100 rounded-full h-2">
+                        <div className="h-2 rounded-full bg-green-500" style={{ width: `${Math.min(100, pct)}%` }} />
+                      </div>
+                    </div>
+                  )
+                })}
+                <div className="flex items-center justify-between pt-2 border-t font-bold text-sm">
+                  <span>Total revenus</span>
+                  <span style={{ color: NAVY }}>{fmt(ca)}</span>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Expense breakdown */}
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <TrendingDown className="h-5 w-5" style={{ color: "#EF4444" }} />
+              <CardTitle style={{ color: NAVY }}>Depenses</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {expenseBreakdown.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">Aucune donnee de depenses</p>
+            ) : (
+              <div className="space-y-3">
+                {expenseBreakdown.map(r => {
+                  const pct = depenses > 0 ? (Math.abs(r.amount) / depenses) * 100 : 0
+                  return (
+                    <div key={r.prefix}>
+                      <div className="flex items-center justify-between text-sm mb-1">
+                        <span className="text-muted-foreground">{r.label} ({r.prefix})</span>
+                        <span className="font-medium text-red-600">{fmt(Math.abs(r.amount))}</span>
+                      </div>
+                      <div className="w-full bg-gray-100 rounded-full h-2">
+                        <div className="h-2 rounded-full bg-red-400" style={{ width: `${Math.min(100, pct)}%` }} />
+                      </div>
+                    </div>
+                  )
+                })}
+                <div className="flex items-center justify-between pt-2 border-t font-bold text-sm">
+                  <span>Total depenses</span>
+                  <span className="text-red-600">{fmt(depenses)}</span>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Quick links */}
       <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Receipt className="h-5 w-5" style={{ color: "#EF4444" }} />
-            <CardTitle style={{ color: NAVY }}>Factures Fournisseurs — Dépenses ({facturesFournisseurs.length})</CardTitle>
-          </div>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm" style={{ color: NAVY }}>Acces rapide</CardTitle>
         </CardHeader>
         <CardContent>
-          <InvoiceTable items={facturesFournisseurs} emptyMsg="Aucune facture fournisseur. Uploadez vos factures de fournisseurs." />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {QUICK_LINKS.map(link => {
+              const Icon = link.icon
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="flex items-center gap-2 p-3 rounded-lg border hover:bg-muted/50 transition-colors group"
+                >
+                  <Icon className="h-4 w-4 text-muted-foreground group-hover:text-[#C9A84C]" />
+                  <span className="text-sm font-medium" style={{ color: NAVY }}>{link.label}</span>
+                  <ArrowRight className="h-3 w-3 ml-auto text-muted-foreground" />
+                </Link>
+              )
+            })}
+          </div>
         </CardContent>
       </Card>
     </div>

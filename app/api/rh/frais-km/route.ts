@@ -1,0 +1,251 @@
+import { NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase/server'
+
+export const dynamic = 'force-dynamic'
+
+function getAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+  return createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
+}
+
+// GET /api/rh/frais-km?societe_id=...&employe_id=...&periode=YYYY-MM
+export async function GET(request: Request) {
+  try {
+    const supabaseAuth = await createServerClient()
+    const { data: { user } } = await supabaseAuth.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+
+    const supabase = getAdminClient()
+    const { searchParams } = new URL(request.url)
+    const societe_id = searchParams.get('societe_id')
+    const employe_id = searchParams.get('employe_id')
+    const periode = searchParams.get('periode') // YYYY-MM
+
+    if (!societe_id) {
+      return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
+    }
+
+    // Fetch km rule — try both table names (frais_km_rules or frais_km_regles)
+    let rule: any = null
+    const { data: r1, error: e1 } = await supabase
+      .from('frais_km_rules')
+      .select('*')
+      .eq('societe_id', societe_id)
+      .eq('actif', true)
+      .order('date_effet', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (!e1) {
+      rule = r1
+    } else {
+      const { data: r2 } = await supabase
+        .from('frais_km_regles')
+        .select('*')
+        .eq('societe_id', societe_id)
+        .eq('actif', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      rule = r2
+    }
+
+    // Fetch monthly entries
+    let entryQuery = supabase
+      .from('frais_km_mois')
+      .select('*, employe:employes(nom, prenom, poste)')
+      .order('periode', { ascending: false })
+
+    // Filter by employees of this société
+    if (employe_id) {
+      entryQuery = entryQuery.eq('employe_id', employe_id)
+    } else {
+      const { data: emps } = await supabase
+        .from('employes')
+        .select('id')
+        .eq('societe_id', societe_id)
+      const ids = emps?.map(e => e.id) || []
+      if (ids.length > 0) {
+        entryQuery = entryQuery.in('employe_id', ids)
+      } else {
+        return NextResponse.json({ rule, entries: [], total: 0 })
+      }
+    }
+
+    if (periode) {
+      entryQuery = entryQuery.eq('periode', `${periode}-01`)
+    }
+
+    const { data: entries, error: entErr } = await entryQuery
+
+    // Enrich entries with employee names (avoid FK join)
+    const empIds = [...new Set((entries || []).map((e: any) => e.employe_id))]
+    let empMap: Record<string, any> = {}
+    if (empIds.length > 0) {
+      const { data: emps } = await supabase.from('employes').select('id, nom, prenom, poste').in('id', empIds)
+      for (const e of emps || []) empMap[e.id] = e
+    }
+
+    const frais = (entries || []).map((e: any) => {
+      const emp = empMap[e.employe_id] || e.employe || {}
+      return {
+        id: e.id,
+        employe_id: e.employe_id,
+        employe_nom: emp.nom || '',
+        employe_prenom: emp.prenom || '',
+        employe_poste: emp.poste || '',
+        periode: e.periode,
+        km: Number(e.km_parcourus) || 0,
+        tarif: Number(e.tarif_par_km || e.tarif_applique) || Number(rule?.tarif_par_km) || 16,
+        montant: Number(e.montant) || 0,
+        statut: e.statut || 'en_attente',
+      }
+    })
+
+    return NextResponse.json({
+      rule,
+      frais,
+      tarif_km: Number(rule?.tarif_par_km) || 16,
+      entries: entries || [],
+      total: (entries || []).length,
+    })
+  } catch (e: unknown) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
+  }
+}
+
+// POST /api/rh/frais-km
+export async function POST(request: Request) {
+  try {
+    const supabaseAuth = await createServerClient()
+    const { data: { user } } = await supabaseAuth.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+
+    const supabase = getAdminClient()
+    const body = await request.json()
+    const { action } = body
+
+    // ── Set km tariff rule for a société ─────────────────────────────────────
+    if (action === 'set_rule' || action === 'update_tarif') {
+      const societe_id = body.societe_id
+      const tarifValue = Number(body.tarif_par_km || body.tarif_km)
+      if (!societe_id || !tarifValue) {
+        return NextResponse.json({ error: 'societe_id et tarif requis' }, { status: 400 })
+      }
+
+      // Try frais_km_rules first, fallback to frais_km_regles
+      let tableName = 'frais_km_rules'
+      let deactivateErr = null
+      const r1 = await supabase.from('frais_km_rules').update({ actif: false }).eq('societe_id', societe_id)
+      if (r1.error) {
+        tableName = 'frais_km_regles'
+        await supabase.from('frais_km_regles').update({ actif: false }).eq('societe_id', societe_id)
+      }
+
+      const { data, error } = await supabase
+        .from(tableName)
+        .insert({
+          societe_id,
+          tarif_par_km: tarifValue,
+          vehicule_type: body.vehicule_type || 'voiture',
+          plafond_mensuel: body.plafond_mensuel ? Number(body.plafond_mensuel) : null,
+          actif: true,
+          date_effet: new Date().toISOString().split('T')[0],
+        })
+        .select()
+        .single()
+
+      if (error) {
+        console.error('[frais-km set_rule]', error.message)
+        return NextResponse.json({ error: error.message }, { status: 500 })
+      }
+      return NextResponse.json({ rule: data, tarif_km: tarifValue })
+    }
+
+    // ── Enter km for an employee for a period ────────────────────────────────
+    if (action === 'saisir') {
+      const { employe_id, periode, km_parcourus, motif, societe_id } = body
+      if (!employe_id || !periode || km_parcourus === undefined) {
+        return NextResponse.json({ error: 'employe_id, periode et km_parcourus requis' }, { status: 400 })
+      }
+
+      // Get the active tariff for the société
+      let sid = societe_id
+      if (!sid) {
+        const { data: emp } = await supabase
+          .from('employes')
+          .select('societe_id')
+          .eq('id', employe_id)
+          .single()
+        sid = emp?.societe_id
+      }
+
+      // Try both table names
+      let saisieRule: any = null
+      const { data: sr1 } = await supabase.from('frais_km_rules').select('tarif_par_km, plafond_mensuel').eq('societe_id', sid).eq('actif', true).order('date_effet', { ascending: false }).limit(1).maybeSingle()
+      if (sr1) { saisieRule = sr1 } else {
+        const { data: sr2 } = await supabase.from('frais_km_regles').select('tarif_par_km, plafond_mensuel').eq('societe_id', sid).eq('actif', true).order('created_at', { ascending: false }).limit(1).maybeSingle()
+        saisieRule = sr2
+      }
+
+      const tarif = saisieRule?.tarif_par_km || 16
+      let montant = Math.round(Number(km_parcourus) * tarif * 100) / 100
+
+      // Apply monthly cap if set
+      if (saisieRule?.plafond_mensuel && montant > saisieRule.plafond_mensuel) {
+        montant = saisieRule.plafond_mensuel
+      }
+
+      const periodeDate = `${periode}-01`
+      const { data, error } = await supabase
+        .from('frais_km_mois')
+        .upsert({
+          employe_id,
+          periode: periodeDate,
+          km_parcourus: Number(km_parcourus),
+          tarif_par_km: tarif,
+          montant,
+          motif: motif || null,
+          statut: 'en_attente',
+          saisi_par: user.id,
+          created_at: new Date().toISOString(),
+        }, { onConflict: 'employe_id,periode' })
+        .select()
+        .single()
+
+      if (error) throw error
+      return NextResponse.json({
+        frais_km: data,
+        tarif_applique: tarif,
+        montant_calcule: montant,
+      })
+    }
+
+    // ── Approve km expense ───────────────────────────────────────────────────
+    if (action === 'approuver') {
+      const { id } = body
+      if (!id) {
+        return NextResponse.json({ error: 'id requis' }, { status: 400 })
+      }
+
+      const { data, error } = await supabase
+        .from('frais_km_mois')
+        .update({
+          statut: 'approuve',
+          approuve_par: user.id,
+          approuve_at: new Date().toISOString(),
+        })
+        .eq('id', id)
+        .select()
+        .single()
+
+      if (error) throw error
+      return NextResponse.json({ frais_km: data, message: 'Frais kilométriques approuvés' })
+    }
+
+    return NextResponse.json({ error: 'Action inconnue' }, { status: 400 })
+  } catch (e: unknown) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
+  }
+}

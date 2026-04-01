@@ -85,7 +85,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ success: true, timestamp: new Date().toISOString(), alertes: alertesEnvoyees })
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Erreur inconnue'
-    await supabase.from('cron_logs').insert({ cron_name: cronName, statut: 'error', erreurs: { message: msg } }).catch(() => {})
+    await supabase.from('cron_logs').insert({ cron_name: cronName, statut: 'error', erreurs: { message: msg } })
     return NextResponse.json({ success: false, error: msg }, { status: 500 })
   }
 }

@@ -512,17 +512,8 @@ export default function SocieteContextPage() {
 
         {/* Quick links to full pages */}
         <div className="flex flex-wrap gap-2 -mt-2">
-          <Link href={`/comptable/clients/${clientId}/${societeId}/bilan`}>
-            <Button variant="outline" size="sm" className="text-xs gap-1"><FileIcon className="h-3 w-3" />Bilan Officiel</Button>
-          </Link>
           <Link href={`/comptable/clients/${clientId}/${societeId}/tableau-de-bord`}>
             <Button variant="outline" size="sm" className="text-xs gap-1"><BarChart3 className="h-3 w-3" />Tableau de Bord</Button>
-          </Link>
-          <Link href={`/comptable/clients/${clientId}/${societeId}/previsionnel`}>
-            <Button variant="outline" size="sm" className="text-xs gap-1"><TrendingUp className="h-3 w-3" />Prévisionnel</Button>
-          </Link>
-          <Link href={`/comptable/clients/${clientId}/${societeId}/simulations`}>
-            <Button variant="outline" size="sm" className="text-xs gap-1"><Calculator className="h-3 w-3" />Simulations</Button>
           </Link>
           <Link href={`/comptable/clients/${clientId}/${societeId}/grand-livre`}>
             <Button variant="outline" size="sm" className="text-xs gap-1"><BarChart3 className="h-3 w-3" />Grand Livre</Button>
@@ -530,11 +521,23 @@ export default function SocieteContextPage() {
           <Link href={`/comptable/clients/${clientId}/${societeId}/balance`}>
             <Button variant="outline" size="sm" className="text-xs gap-1"><Landmark className="h-3 w-3" />Balance</Button>
           </Link>
+          <Link href={`/comptable/clients/${clientId}/${societeId}/bilan`}>
+            <Button variant="outline" size="sm" className="text-xs gap-1"><FileIcon className="h-3 w-3" />Bilan & P&L</Button>
+          </Link>
           <Link href={`/comptable/clients/${clientId}/${societeId}/far`}>
             <Button variant="outline" size="sm" className="text-xs gap-1"><Building2 className="h-3 w-3" />FAR / Immo</Button>
           </Link>
           <Link href={`/comptable/clients/${clientId}/${societeId}/it-form3`}>
             <Button variant="outline" size="sm" className="text-xs gap-1"><FileIcon className="h-3 w-3" />IT Form 3</Button>
+          </Link>
+          <Link href={`/comptable/clients/${clientId}/${societeId}/annual-return`}>
+            <Button variant="outline" size="sm" className="text-xs gap-1"><FileIcon className="h-3 w-3" />Annual Return</Button>
+          </Link>
+          <Link href={`/comptable/clients/${clientId}/${societeId}/previsionnel`}>
+            <Button variant="outline" size="sm" className="text-xs gap-1"><TrendingUp className="h-3 w-3" />Previsionnel</Button>
+          </Link>
+          <Link href={`/comptable/clients/${clientId}/${societeId}/simulations`}>
+            <Button variant="outline" size="sm" className="text-xs gap-1"><Calculator className="h-3 w-3" />Simulations</Button>
           </Link>
         </div>
 

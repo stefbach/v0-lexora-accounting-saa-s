@@ -67,7 +67,8 @@ const ROLES = [
   { value: "employe", label: "Employe", color: "bg-gray-100 text-gray-700 border-gray-200" },
 ]
 
-const NEEDS_SOCIETE = ["rh", "juridique", "employe", "manager", "direction", "client_assistant", "client_admin", "client_user"]
+const NEEDS_SOCIETE = ["rh", "juridique", "employe", "manager", "direction", "client_assistant", "client_admin", "client_user", "comptable", "comptable_dedie"]
+const MULTI_SOCIETE_ROLES = ["client_assistant", "client_admin", "client_user", "rh", "comptable", "comptable_dedie"]
 
 const MODULE_DEFS = [
   { key: "documents", label: "Documents & OCR", icon: FileText },
@@ -208,9 +209,6 @@ export default function UtilisateursPage() {
     modules_utilisateur: getDefaultModules("client_admin") as ModulesUtilisateur,
   })
 
-  // Multi-société roles (use checkboxes instead of single select)
-  const MULTI_SOCIETE_ROLES = ["client_assistant", "client_admin", "client_user", "rh", "comptable", "comptable_dedie"]
-
   // Edit form
   const [editForm, setEditForm] = useState({
     full_name: "", email: "", phone: "", role: "", societe_id: "", actif: true,
@@ -288,13 +286,12 @@ export default function UtilisateursPage() {
     if (!createForm.prenom || !createForm.nom || !createForm.email || !createForm.role) return
     const isMulti = MULTI_SOCIETE_ROLES.includes(createForm.role)
     if (NEEDS_SOCIETE.includes(createForm.role) && !isMulti && !createForm.societe_id) return
-    if (isMulti && createForm.societe_ids.length === 0 && !createForm.societe_id) return
+    if (isMulti && createForm.societe_ids.length === 0) return
     setSaving(true)
     try {
       const societePayload = isMulti && createForm.societe_ids.length > 0
         ? { societe_ids: createForm.societe_ids, societe_id: createForm.societe_ids[0] }
         : { societe_id: createForm.societe_id || undefined }
-
       const res = await fetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -321,14 +318,11 @@ export default function UtilisateursPage() {
 
   const openEdit = async (user: User) => {
     setEditUser(user)
-    // Load user's societe assignments
     let userSocieteIds: string[] = user.societe_id ? [user.societe_id] : []
     try {
       const res = await fetch(`/api/admin/users?user_id=${user.id}&action=societes`)
       const data = await res.json()
-      if (data.societe_ids && data.societe_ids.length > 0) {
-        userSocieteIds = data.societe_ids
-      }
+      if (data.societe_ids && data.societe_ids.length > 0) userSocieteIds = data.societe_ids
     } catch {}
     setEditForm({
       full_name: user.full_name || "",
@@ -356,13 +350,10 @@ export default function UtilisateursPage() {
         role: editForm.role,
         societe_id: isMultiEdit ? (editForm.societe_ids[0] || null) : (editForm.societe_id || null),
         actif: editForm.actif,
+        modules_utilisateur: editForm.modules_utilisateur,
       }
       if (isMultiEdit && editForm.societe_ids.length > 0) {
         payload.societe_ids = editForm.societe_ids
-      }
-      // Only send modules_utilisateur if non-empty
-      if (editForm.modules_utilisateur && Object.keys(editForm.modules_utilisateur).length > 0) {
-        payload.modules_utilisateur = editForm.modules_utilisateur
       }
       const res = await fetch("/api/admin/users", {
         method: "PATCH",
@@ -374,8 +365,8 @@ export default function UtilisateursPage() {
       setEditOpen(false)
       setEditUser(null)
       load()
-    } catch (e) {
-      alert("Erreur reseau: " + (e instanceof Error ? e.message : ""))
+    } catch {
+      alert("Erreur reseau")
     }
     setEditSaving(false)
   }
@@ -472,35 +463,18 @@ export default function UtilisateursPage() {
               )}
               {MULTI_SOCIETE_ROLES.includes(createForm.role) && (
                 <div>
-                  <Label className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" /> Societes a gerer (multi-selection) <span className="text-red-500">*</span></Label>
-                  <div className="mt-2 space-y-2 max-h-40 overflow-y-auto border rounded-lg p-2">
-                    {societes.length === 0 ? (
-                      <p className="text-xs text-gray-400">Aucune societe disponible</p>
-                    ) : societes.map(s => {
-                      const checked = createForm.societe_ids.includes(s.id)
-                      return (
-                        <label key={s.id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-2 py-1.5 rounded">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => {
-                              setCreateForm(f => ({
-                                ...f,
-                                societe_ids: checked
-                                  ? f.societe_ids.filter(id => id !== s.id)
-                                  : [...f.societe_ids, s.id],
-                              }))
-                            }}
-                            className="rounded border-gray-300 text-[#1E2A4A] focus:ring-[#C9A84C]"
-                          />
-                          <span className="text-sm">{s.nom}{s.brn ? ` — ${s.brn}` : ""}</span>
-                        </label>
-                      )
-                    })}
+                  <Label className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" /> Societes <span className="text-red-500">*</span></Label>
+                  <div className="mt-2 space-y-1 max-h-40 overflow-y-auto border rounded-lg p-2">
+                    {societes.map(s => (
+                      <label key={s.id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-2 py-1.5 rounded">
+                        <input type="checkbox" checked={createForm.societe_ids.includes(s.id)}
+                          onChange={() => setCreateForm(f => ({ ...f, societe_ids: f.societe_ids.includes(s.id) ? f.societe_ids.filter(id => id !== s.id) : [...f.societe_ids, s.id] }))}
+                          className="rounded border-gray-300" />
+                        <span className="text-sm">{s.nom}{s.brn ? ` — ${s.brn}` : ""}</span>
+                      </label>
+                    ))}
                   </div>
-                  {createForm.societe_ids.length > 0 && (
-                    <p className="text-xs text-gray-500 mt-1">{createForm.societe_ids.length} societe(s) selectionnee(s)</p>
-                  )}
+                  {createForm.societe_ids.length > 0 && <p className="text-xs text-gray-500 mt-1">{createForm.societe_ids.length} societe(s)</p>}
                 </div>
               )}
               <PermissionsEditor
@@ -794,38 +768,20 @@ export default function UtilisateursPage() {
                   </SelectContent>
                 </Select>
               </div>
-              {/* Société: multi-select for assistant/admin, single for others */}
               {MULTI_SOCIETE_ROLES.includes(editForm.role) ? (
                 <div>
-                  <Label className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" /> Societes (multi-selection)</Label>
-                  <div className="mt-2 space-y-2 max-h-40 overflow-y-auto border rounded-lg p-2">
-                    {societes.length === 0 ? (
-                      <p className="text-xs text-gray-400">Aucune societe disponible</p>
-                    ) : societes.map(s => {
-                      const checked = editForm.societe_ids.includes(s.id)
-                      return (
-                        <label key={s.id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-2 py-1.5 rounded">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => {
-                              setEditForm(f => ({
-                                ...f,
-                                societe_ids: checked
-                                  ? f.societe_ids.filter(id => id !== s.id)
-                                  : [...f.societe_ids, s.id],
-                              }))
-                            }}
-                            className="rounded border-gray-300 text-[#1E2A4A] focus:ring-[#C9A84C]"
-                          />
-                          <span className="text-sm">{s.nom}{s.brn ? ` — ${s.brn}` : ""}</span>
-                        </label>
-                      )
-                    })}
+                  <Label className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" /> Societes</Label>
+                  <div className="mt-2 space-y-1 max-h-40 overflow-y-auto border rounded-lg p-2">
+                    {societes.map(s => (
+                      <label key={s.id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-2 py-1.5 rounded">
+                        <input type="checkbox" checked={editForm.societe_ids.includes(s.id)}
+                          onChange={() => setEditForm(f => ({ ...f, societe_ids: f.societe_ids.includes(s.id) ? f.societe_ids.filter(id => id !== s.id) : [...f.societe_ids, s.id] }))}
+                          className="rounded border-gray-300" />
+                        <span className="text-sm">{s.nom}{s.brn ? ` — ${s.brn}` : ""}</span>
+                      </label>
+                    ))}
                   </div>
-                  {editForm.societe_ids.length > 0 && (
-                    <p className="text-xs text-gray-500 mt-1">{editForm.societe_ids.length} societe(s) selectionnee(s)</p>
-                  )}
+                  {editForm.societe_ids.length > 0 && <p className="text-xs text-gray-500 mt-1">{editForm.societe_ids.length} societe(s)</p>}
                 </div>
               ) : (
                 <div>

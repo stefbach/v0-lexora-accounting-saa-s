@@ -366,3 +366,42 @@ export interface Assignation {
   type: 'client' | 'societe'
   created_at: string
 }
+
+// ---------------------------------------------------------------------------
+// Parametres Paie MRA — Mauritius Revenue Authority
+// ---------------------------------------------------------------------------
+export interface ParametresPaieMRA {
+  csg_seuil_taux_reduit: number
+  csg_salarie_taux_reduit: number
+  csg_salarie_taux_plein: number
+  csg_patronal: number
+  csg_patronal_taux_reduit?: number
+  nsf_salarie: number
+  nsf_patronal: number
+  training_levy: number
+  prgf_patronal_par_jour: number
+  prgf_taux_emoluments: number
+  paye_seuil_exoneration: number
+  paye_taux_1: number
+  paye_seuil_taux_2: number
+  paye_taux_2: number
+  salary_compensation: number
+  salary_compensation_seuil: number
+}
+
+// ---------------------------------------------------------------------------
+// Period management for payroll
+// ---------------------------------------------------------------------------
+export type PeriodStatut = 'open' | 'closed'
+
+export interface PeriodePaie {
+  id: string
+  societe_id: string
+  periode: string
+  date_debut: string
+  date_fin: string
+  statut: PeriodStatut
+  cloture_par?: string
+  cloture_le?: string
+  created_at: string
+}

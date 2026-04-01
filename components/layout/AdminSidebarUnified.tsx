@@ -3,13 +3,13 @@ import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   LayoutDashboard, Building2, Users, FileText, BookOpen,
   Calculator, Receipt, BarChart3, Scale, Clock, CreditCard,
   Settings, LogOut, ChevronDown, ChevronRight, UserCog,
   Banknote, FileSpreadsheet, Gavel, MessageSquare, TrendingUp,
-  ClipboardList, AlertCircle, Globe
+  ClipboardList, AlertCircle, AlertTriangle, Globe
 } from "lucide-react"
 
 const MENU = [
@@ -34,6 +34,7 @@ const MENU = [
       { href: "/comptable/charges-sociales", label: "Charges sociales", icon: Calculator },
       { href: "/comptable/interco", label: "INTERCO", icon: Globe },
       { href: "/comptable/rapports", label: "Rapports", icon: BarChart3 },
+      { href: "/comptable/alertes", label: "Alertes", icon: AlertTriangle, badge: true },
     ]
   },
   {
@@ -54,6 +55,8 @@ const MENU = [
       { href: "/rh/paie", label: "Paie & Bulletins", icon: CreditCard },
       { href: "/rh/paie/primes", label: "Primes & OT", icon: TrendingUp },
       { href: "/rh/paie/exports-mra", label: "Exports MRA", icon: FileText },
+      { href: "/client/declarations-sociales", label: "Declarations Sociales", icon: FileText },
+      { href: "/client/demandes-rh", label: "Demandes RH", icon: ClipboardList },
       { href: "/rh/exports/virement", label: "Virements bancaires", icon: Banknote },
       { href: "/rh/juridique", label: "Juridique", icon: Gavel },
       { href: "/rh/paie/edf", label: "EDF Annuel", icon: Receipt },
@@ -89,6 +92,24 @@ export function AdminSidebarUnified() {
   const pathname = usePathname()
   const router = useRouter()
   const [collapsed, setCollapsed] = useState<string[]>([])
+  const [criticalAlertCount, setCriticalAlertCount] = useState(0)
+
+  useEffect(() => {
+    async function fetchAlertCount() {
+      try {
+        const res = await fetch("/api/comptable/alertes")
+        if (res.ok) {
+          const data = await res.json()
+          setCriticalAlertCount(data.counts?.critical || 0)
+        }
+      } catch {
+        // Silently fail — badge simply won't show
+      }
+    }
+    fetchAlertCount()
+    const interval = setInterval(fetchAlertCount, 5 * 60 * 1000)
+    return () => clearInterval(interval)
+  }, [])
 
   const toggleSection = (section: string) => {
     setCollapsed(prev => prev.includes(section) ? prev.filter(s => s !== section) : [...prev, section])
@@ -141,7 +162,8 @@ export function AdminSidebarUnified() {
                 <div className="space-y-0.5 ml-1">
                   {items.map(item => {
                     const Icon = item.icon
-                    const active = isActive(item.href, item.exact)
+                    const active = isActive(item.href, (item as any).exact)
+                    const showBadge = (item as any).badge && criticalAlertCount > 0
                     return (
                       <Link
                         key={item.href + item.label}
@@ -155,6 +177,11 @@ export function AdminSidebarUnified() {
                       >
                         <Icon className="w-4 h-4 flex-shrink-0" />
                         <span className="truncate">{item.label}</span>
+                        {showBadge && (
+                          <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
+                            {criticalAlertCount > 99 ? "99+" : criticalAlertCount}
+                          </span>
+                        )}
                       </Link>
                     )
                   })}

@@ -16,7 +16,7 @@ export async function POST(request: Request) {
 
     const { data: bulletins, error } = await supabase
       .from('bulletins_paie')
-      .select('*, employe:employes(code, nom, prenom, tan, nic)')
+      .select('*, employe:employes(code, nom, prenom, tan_number, nic_number)')
       .eq('societe_id', societe_id)
       .ilike('periode', `${periode}%`)
 
@@ -39,13 +39,13 @@ export async function POST(request: Request) {
       total_paye_retenu += paye
 
       // TAN : fallback NIC → TAN_MANQUANT
-      const tanValue = b.employe?.tan || b.employe?.nic || 'TAN_MANQUANT'
+      const tanValue = b.employe?.tan_number || b.employe?.nic_number || 'TAN_MANQUANT'
 
       detailLines.push([
         tanValue,
         b.employe?.nom || '',
         b.employe?.prenom || '',
-        b.employe?.nic || '',
+        b.employe?.nic_number || '',
         sb.toFixed(2),
         salaireAnnualise.toFixed(2),
         paye.toFixed(2),

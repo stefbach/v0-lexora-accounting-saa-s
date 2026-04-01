@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2, Download, CheckCircle, AlertTriangle, Clock } from "lucide-react"
+import { Loader2, Download, CheckCircle, AlertTriangle, Clock, CreditCard as CreditCardIcon, Building2, FileText, ClipboardList } from "lucide-react"
 
 
 function downloadCSV(content: string, filename: string) {
@@ -133,7 +133,7 @@ export default function ExportsMRAPage() {
           {checkingBulletins && <Loader2 className="w-4 h-4 animate-spin text-gray-400" />}
           {bulletinsCount !== null && (
             <span className={`text-sm px-3 py-1 rounded-full ${bulletinsCount > 0 ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>
-              {bulletinsCount > 0 ? `✅ ${bulletinsCount} bulletin(s) calculés` : "⚠️ Aucun bulletin — calculez la paie d'abord"}
+              {bulletinsCount > 0 ? `${bulletinsCount} bulletin(s) calcules` : "Aucun bulletin -- calculez la paie d'abord"}
             </span>
           )}
         </CardContent>
@@ -148,7 +148,7 @@ export default function ExportsMRAPage() {
           ].map(d => (
             <div key={d.label} className={`flex items-center gap-2 p-3 rounded-lg border text-sm ${isLate(d.deadline) ? "bg-red-50 border-red-200 text-red-700" : "bg-yellow-50 border-yellow-200 text-yellow-700"}`}>
               {isLate(d.deadline) ? <AlertTriangle className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
-              <span><strong>{d.label}</strong> — {d.text} {isLate(d.deadline) ? "🔴 En retard" : "⚠️ À faire"}</span>
+              <span><strong>{d.label}</strong> -- {d.text} {isLate(d.deadline) ? "EN RETARD" : "A faire"}</span>
             </div>
           ))}
         </div>
@@ -159,7 +159,7 @@ export default function ExportsMRAPage() {
         <Card className="border-l-4 border-l-green-500">
           <CardHeader className="pb-2">
             <CardTitle className="text-base text-[#1E2A4A] flex items-center gap-2">
-              💰 Virements Salaires
+              <CreditCardIcon className="w-4 h-4" /> Virements Salaires
               <span className="text-xs font-normal text-gray-500">Échéance : fin du mois</span>
             </CardTitle>
           </CardHeader>
@@ -195,7 +195,7 @@ export default function ExportsMRAPage() {
         <Card className="border-l-4 border-l-blue-500">
           <CardHeader className="pb-2">
             <CardTitle className="text-base text-[#1E2A4A] flex items-center gap-2">
-              🏛️ Déclarations MRA
+              <Building2 className="w-4 h-4" /> Declarations MRA
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -208,7 +208,7 @@ export default function ExportsMRAPage() {
                     <p className="text-xs text-gray-500">2 fichiers : Récap + Détail</p>
                     <p className={`text-xs mt-1 ${isLate(deadlineCsg) ? "text-red-600 font-medium" : "text-gray-400"}`}>
                       Deadline : 15/{String(periodeDate.getMonth() + 2).padStart(2, "0")}/{periodeDate.getFullYear()}
-                      {isLate(deadlineCsg) ? " 🔴" : ""}
+                      {isLate(deadlineCsg) ? " [EN RETARD]" : ""}
                     </p>
                     <StatusBadge status={csgStatus} />
                   </div>
@@ -232,7 +232,7 @@ export default function ExportsMRAPage() {
                     <p className="text-xs text-gray-500">2 fichiers : Récap + Détail</p>
                     <p className={`text-xs mt-1 ${isLate(deadlinePaye) ? "text-red-600 font-medium" : "text-gray-400"}`}>
                       Deadline : 20/{String(periodeDate.getMonth() + 2).padStart(2, "0")}/{periodeDate.getFullYear()}
-                      {isLate(deadlinePaye) ? " 🔴" : ""}
+                      {isLate(deadlinePaye) ? " [EN RETARD]" : ""}
                     </p>
                     <StatusBadge status={payeStatus} />
                   </div>
@@ -284,7 +284,7 @@ export default function ExportsMRAPage() {
         {/* BULLETINS PDF */}
         <Card className="border-l-4 border-l-purple-500">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base text-[#1E2A4A]">📄 Bulletins de Paie</CardTitle>
+            <CardTitle className="text-base text-[#1E2A4A] flex items-center gap-2"><FileText className="w-4 h-4" /> Bulletins de Paie</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex gap-4">
@@ -310,7 +310,7 @@ export default function ExportsMRAPage() {
       {/* Rappel légal */}
       <Card className="bg-blue-50 border-blue-200">
         <CardContent className="p-4">
-          <h3 className="font-medium text-blue-900 text-sm mb-2">📋 Calendrier des déclarations MRA</h3>
+          <h3 className="font-medium text-blue-900 text-sm mb-2 flex items-center gap-2"><ClipboardList className="w-4 h-4" /> Calendrier des declarations MRA</h3>
           <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-xs text-blue-800">
             <p>• <strong>CSG/NSF :</strong> avant le 15 du mois suivant</p>
             <p>• <strong>PAYE :</strong> avant le 20 du mois suivant</p>
