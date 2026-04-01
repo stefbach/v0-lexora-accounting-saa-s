@@ -326,13 +326,13 @@ export async function GET(request: Request) {
       .filter(e => e.compte?.startsWith('6') && e.date_ecriture?.startsWith(lastMonthStr))
       .reduce((sum, e) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
 
-    // Payroll
+    // Payroll — P&L accounts (641 = salaires, 645 = charges patronales)
     const salaires = allEcritures
-      .filter(e => e.compte?.startsWith('421') || e.compte?.startsWith('42'))
+      .filter(e => e.compte?.startsWith('641'))
       .reduce((sum, e) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
 
     const chargesSociales = allEcritures
-      .filter(e => e.compte?.startsWith('43'))
+      .filter(e => e.compte?.startsWith('645') || e.compte?.startsWith('43'))
       .reduce((sum, e) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
 
     // Balance sheet items (from écritures — these are less impacted by currency)
