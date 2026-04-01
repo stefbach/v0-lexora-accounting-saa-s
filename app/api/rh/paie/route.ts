@@ -292,7 +292,7 @@ export async function POST(request: Request) {
         // 5. Conversion EUR
         let salaire_base_mur = Number(emp.salaire_base)
         if (emp.devise_salaire === 'EUR') {
-          const taux = Number(emp.taux_change_eur) || params.taux_eur || 46.50
+          const taux = Number(emp.taux_change_eur) || (params as any).taux_eur || 46.50
           salaire_base_mur = Math.round(salaire_base_mur * taux)
         }
 

@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
     // Upsert: if pattern already exists for this société, increment usage count
     const { data: existing } = await supabase
       .from('tiers_patterns')
-      .select('id, nb_utilisations')
+      .select('id, nb_utilisations, tiers_identifie, compte_comptable')
       .eq('pattern', pattern)
       .eq('societe_id', societe_id || null)
       .maybeSingle()

@@ -364,7 +364,7 @@ export default function ClientFournisseursPage() {
             <Card
               key={cat.compte}
               className={`cursor-pointer transition-all hover:shadow-md ${filterCat === cat.compte ? "ring-2" : ""}`}
-              style={filterCat === cat.compte ? { ringColor: GOLD, borderColor: GOLD } : {}}
+              style={filterCat === cat.compte ? { borderColor: GOLD, outlineColor: GOLD } : undefined}
               onClick={() => setFilterCat(filterCat === cat.compte ? null : cat.compte)}
             >
               <CardContent className="pt-4 pb-4">

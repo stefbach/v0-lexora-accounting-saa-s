@@ -62,7 +62,7 @@ export async function GET(request: Request) {
     if (effectiveDateFin)   v2Query = v2Query.lte('date_ecriture', effectiveDateFin)
     if (journal)      v2Query = v2Query.eq('journal', journal)
 
-    let { data: v2Data, error: v2Err } = await v2Query
+    let { data: v2Data, error: v2Err }: { data: any[] | null, error: any } = await v2Query
     if (v2Err) {
       // Retry without lettrage columns
       let v2Fallback = supabase.from('ecritures_comptables_v2')
@@ -107,7 +107,7 @@ export async function GET(request: Request) {
         if (effectiveDateFin)   v1Query = v1Query.lte('date_ecriture', effectiveDateFin)
         if (journal)      v1Query = v1Query.eq('journal', journal)
 
-        let { data: v1Data, error: v1Err } = await v1Query
+        let { data: v1Data, error: v1Err }: { data: any[] | null, error: any } = await v1Query
 
         // If query failed (probably missing columns), retry without lettrage columns
         if (v1Err) {

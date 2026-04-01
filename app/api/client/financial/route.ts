@@ -458,8 +458,7 @@ export async function GET(request: Request) {
             devise: docsForBankName?.n8n_result?.extraction?.devise || 'MUR',
             solde_actuel: Number(socleCloture),
             solde_mur: Number(socleCloture),
-            date_dernier_releve: docsForBankName?.n8n_result?.extraction?.periode_fin || null,
-          })
+          } as any)
         }
       }
     }

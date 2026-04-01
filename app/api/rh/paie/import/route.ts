@@ -92,7 +92,7 @@ function normalizeHeader(h: string, prevRowCell?: string): string {
     // Numeric columns that are amounts (1000, 1100, 3010, etc.)
     '1000': 'col_1000', '1100': 'col_1100', '3010': 'col_3010', '3170': 'col_3170',
     '3200': 'col_3200', '3220': 'col_3220', '3230': 'col_3230', '3250': 'col_3250',
-    '3510': 'col_3510', '3900': 'col_3900', '4010': 'csg_patronal', '5000': 'col_5000',
+    '3510': 'col_3510', '3900': 'col_3900', '5000': 'col_5000',
   }
 
   // Try direct match first

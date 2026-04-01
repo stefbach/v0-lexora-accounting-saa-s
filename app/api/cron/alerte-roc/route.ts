@@ -98,7 +98,7 @@ export async function GET(request: Request) {
       statut: 'error',
       details: { error: message },
       executed_at: new Date().toISOString(),
-    }).catch(() => {})
+    }).then(() => {})
 
     return NextResponse.json({ success: false, error: message }, { status: 500 })
   }

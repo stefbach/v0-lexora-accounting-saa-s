@@ -174,7 +174,7 @@ export async function POST(request: Request) {
       for (const [banqueCode, lgnes] of groupesMUR.entries()) {
         const nomBanque = BANQUES_MAURITIUS.find(b => b.code === banqueCode)?.nom || banqueCode
         const { content, extension } = genererVirementBanque(lgnes, banqueCode, date, infoEmetteur)
-        const total = lgnes.reduce((s, l) => s + l.salaire_net, 0)
+        const total = lgnes.reduce((s: number, l: any) => s + l.salaire_net, 0)
         const filename = `virement_salaires_${periode}_${banqueCode}_MUR.${extension}`
         fichiersGeneres.push({
           banque: banqueCode,
@@ -184,7 +184,7 @@ export async function POST(request: Request) {
           montant_total: Math.round(total * 100) / 100,
           filename,
           content,
-          employes: lgnes.map(l => `${l.prenom} ${l.nom} (${l.bank_account || 'N/A'})`),
+          employes: lgnes.map((l: any) => `${l.prenom} ${l.nom} (${l.bank_account || 'N/A'})`),
         })
       }
     }
@@ -193,7 +193,7 @@ export async function POST(request: Request) {
     for (const [banqueCode, lgnes] of groupesEUR.entries()) {
       const nomBanque = BANQUES_MAURITIUS.find(b => b.code === banqueCode)?.nom || banqueCode
       const { content, extension } = genererVirementBanque(lgnes, banqueCode, date, infoEmetteur, 'EUR')
-      const total = lgnes.reduce((s, l) => s + l.salaire_net, 0)
+      const total = lgnes.reduce((s: number, l: any) => s + l.salaire_net, 0)
       const filename = `virement_salaires_${periode}_${banqueCode}_EUR.${extension}`
 
       fichiersGeneres.push({
@@ -204,7 +204,7 @@ export async function POST(request: Request) {
         montant_total: Math.round(total * 100) / 100,
         filename,
         content,
-        employes: lgnes.map(l => `${l.prenom} ${l.nom} (${l.bank_account || 'N/A'})`),
+        employes: lgnes.map((l: any) => `${l.prenom} ${l.nom} (${l.bank_account || 'N/A'})`),
       })
     }
 
