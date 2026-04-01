@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Upload, FileText, CheckCircle2, AlertCircle, Loader2, RefreshCw, Trash2 } from "lucide-react"
+import { Upload, FileText, CheckCircle2, AlertCircle, Loader2, RefreshCw, Trash2, Camera } from "lucide-react"
 
 const NAVY = "#1E2A4A"
 const GOLD = "#C9A84C"
@@ -27,6 +27,7 @@ export default function AssistantPage() {
   const [loadingDocs, setLoadingDocs] = useState(true)
   const [isDragging, setIsDragging] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  const cameraRef = useRef<HTMLInputElement>(null)
 
   // Fetch sociétés
   useEffect(() => {
@@ -166,11 +167,15 @@ export default function AssistantPage() {
             <input ref={fileRef} type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls" className="hidden"
               onChange={e => setFiles(Array.from(e.target.files || []))}
             />
+            <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden"
+              onChange={e => { if (e.target.files) setFiles(prev => [...prev, ...Array.from(e.target.files!)]) }}
+            />
             <Upload className="w-12 h-12 mb-3" style={{ color: GOLD }} />
             <p className="text-lg font-medium" style={{ color: NAVY }}>
               {files.length > 0 ? `${files.length} fichier(s) selectionne(s)` : "Glissez vos fichiers ici"}
             </p>
-            <p className="text-sm text-gray-400 mt-1">PDF, JPEG, PNG, Excel — Detection automatique du type</p>
+            <p className="text-sm text-gray-500 mt-1 font-medium">Documents accept&eacute;s : PDF, JPEG, PNG, XLSX — Max 20 MB</p>
+            <p className="text-sm text-gray-400 mt-1">Detection automatique du type</p>
             {files.length > 0 && (
               <div className="mt-3 space-y-1">
                 {files.map((f, i) => (
@@ -179,10 +184,19 @@ export default function AssistantPage() {
               </div>
             )}
           </div>
+          <div className="flex gap-2 mt-4">
+            <Button
+              variant="outline"
+              className="h-12"
+              onClick={(e) => { e.stopPropagation(); cameraRef.current?.click() }}
+            >
+              <Camera className="w-5 h-5 mr-2" />Photo
+            </Button>
+          </div>
           <Button
             onClick={handleUpload}
             disabled={uploading || !files.length || !selectedSociete}
-            className="w-full mt-4 h-12 text-base font-semibold"
+            className="w-full mt-2 h-12 text-base font-semibold"
             style={{ backgroundColor: GOLD, color: NAVY }}
           >
             {uploading ? <><Loader2 className="w-5 h-5 animate-spin mr-2" />Analyse en cours...</> : <><Upload className="w-5 h-5 mr-2" />Envoyer pour analyse</>}

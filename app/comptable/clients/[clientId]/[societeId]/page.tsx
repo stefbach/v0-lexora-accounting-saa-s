@@ -14,7 +14,7 @@ import {
   ArrowLeft, TrendingUp, TrendingDown, ChevronRight, Upload,
   BarChart3, Landmark, Wallet, Calculator, FolderOpen, Loader2,
   FileText as FileIcon, CheckCircle, AlertTriangle as AlertIcon, Pencil,
-  Building2,
+  Building2, Camera,
 } from "lucide-react"
 
 // ---------------------------------------------------------------------------
@@ -173,6 +173,7 @@ export default function SocieteContextPage() {
   const [selectedDossier, setSelectedDossier] = useState<string | null>(null)
   const [uploadedFiles, setUploadedFiles] = useState<Array<{ name: string; status: string; type?: string; date: string }>>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     async function fetchData() {
@@ -969,6 +970,7 @@ export default function SocieteContextPage() {
             onDragLeave={handleDragLeave}
           >
             <input ref={fileInputRef} type="file" className="hidden" multiple accept=".pdf,.jpeg,.jpg,.png,.xlsx" onChange={(e) => handleUpload(e.target.files)} />
+            <input ref={cameraInputRef} type="file" className="hidden" accept="image/*" capture="environment" onChange={(e) => handleUpload(e.target.files)} />
             {uploading ? (
               <div className="flex flex-col items-center gap-2">
                 <Loader2 className="h-8 w-8 animate-spin" style={{ color: GOLD }} />
@@ -978,8 +980,11 @@ export default function SocieteContextPage() {
               <div className="flex flex-col items-center gap-2">
                 <Upload className="h-8 w-8 text-muted-foreground" />
                 <p className="text-sm font-medium">Glissez-déposez vos fichiers ici</p>
-                <p className="text-xs text-muted-foreground">PDF, JPEG, PNG, XLSX — max 10 MB</p>
-                <Button size="sm" variant="outline" className="mt-2" onClick={() => fileInputRef.current?.click()}>Parcourir</Button>
+                <p className="text-xs text-muted-foreground font-medium">Documents accept&eacute;s : PDF, JPEG, PNG, XLSX — Max 20 MB</p>
+                <div className="flex gap-2 mt-2">
+                  <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()}>Parcourir</Button>
+                  <Button size="sm" variant="outline" onClick={() => cameraInputRef.current?.click()}><Camera className="h-4 w-4 mr-1" />Photo</Button>
+                </div>
               </div>
             )}
           </div>

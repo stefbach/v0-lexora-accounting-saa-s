@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, type DragEvent, type ChangeEvent } from "react"
 import { cn } from "@/lib/utils"
-import { Upload, File, X, FileText, Image, Table2 } from "lucide-react"
+import { Upload, File, X, FileText, Image, Table2, Camera } from "lucide-react"
 
 interface UploadZoneProps {
   onUpload?: (files: File[]) => void
@@ -11,7 +11,7 @@ interface UploadZoneProps {
 }
 
 const DEFAULT_ACCEPT = [".pdf", ".jpeg", ".jpg", ".png", ".xlsx"]
-const DEFAULT_MAX_SIZE = 10 * 1024 * 1024 // 10 MB
+const DEFAULT_MAX_SIZE = 20 * 1024 * 1024 // 20 MB
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} o`
@@ -45,6 +45,7 @@ export function UploadZone({
   const [isDragging, setIsDragging] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
 
   const validateFiles = useCallback(
     (fileList: File[]): File[] => {
@@ -145,14 +146,40 @@ export function UploadZone({
             ou cliquez pour parcourir
           </p>
         </div>
-        <p className="text-xs text-muted-foreground">
-          PDF, JPEG, PNG, XLSX — Max {formatFileSize(maxSize)}
+        <p className="text-xs text-muted-foreground font-medium">
+          Documents accept&eacute;s : PDF, JPEG, PNG, XLSX — Max {formatFileSize(maxSize)}
         </p>
+        <div className="flex gap-2 mt-1">
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); inputRef.current?.click() }}
+            className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
+          >
+            <Upload className="h-3.5 w-3.5" />
+            Parcourir
+          </button>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); cameraInputRef.current?.click() }}
+            className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
+          >
+            <Camera className="h-3.5 w-3.5" />
+            Photo
+          </button>
+        </div>
         <input
           ref={inputRef}
           type="file"
           multiple
           accept={accept.join(",")}
+          onChange={handleInputChange}
+          className="hidden"
+        />
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
           onChange={handleInputChange}
           className="hidden"
         />

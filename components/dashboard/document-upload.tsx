@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Upload, File, X } from "lucide-react"
+import { Upload, File, X, Camera } from "lucide-react"
 import { FieldGroup, Field, FieldLabel } from "@/components/ui/field"
 
 interface DocumentUploadProps {
