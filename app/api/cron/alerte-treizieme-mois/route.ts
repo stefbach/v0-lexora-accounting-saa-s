@@ -30,7 +30,6 @@ export async function GET(request: Request) {
     const { data: societes, error: societesError } = await supabase
       .from('societes')
       .select('id, nom, client_id, comptable_id, nombre_employes')
-      .eq('statut', 'active')
       .gt('nombre_employes', 0)
 
     if (societesError) throw societesError

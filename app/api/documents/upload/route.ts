@@ -3,6 +3,15 @@ import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { getSystemPrompt, injectTauxChange, CLAUDE_CONFIG } from '@/lib/ai/prompts'
 
+// Validate French PCG account codes (Plan Comptable Général)
+function isValidAccountCode(code: string): boolean {
+  if (typeof code !== 'string') return false
+  const trimmed = code.trim()
+  // Must be 3-4 digits, first digit 1-7
+  if (!/^[1-7]\d{2,3}$/.test(trimmed)) return false
+  return true
+}
+
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -154,10 +163,10 @@ export async function POST(request: NextRequest) {
       try {
         const XLSX = await import('xlsx')
         const wb = XLSX.read(fileArrayBuffer, { type: 'array', cellText: true, cellDates: true })
-        for (const sheetName of wb.SheetNames.slice(0, 3)) {
+        for (const sheetName of wb.SheetNames.slice(0, 5)) {
           const ws = wb.Sheets[sheetName]
           const csv = XLSX.utils.sheet_to_csv(ws, { blankrows: false })
-          xlsxText += `\n=== Feuille: ${sheetName} ===\n${csv.substring(0, 3000)}\n`
+          xlsxText += `\n=== Feuille: ${sheetName} ===\n${csv.substring(0, 10000)}\n`
         }
       } catch {
         xlsxText = Buffer.from(fileArrayBuffer).toString('utf-8', 0, 5000)
@@ -484,7 +493,16 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
       }
       if (!dateEcriture) dateEcriture = new Date().toISOString().split('T')[0]
 
-      const entries = ecritures
+      // Filter out entries with invalid account codes
+      const validEcritures = ecritures.filter((e: any) => {
+        if (!isValidAccountCode(String(e.compte || ''))) {
+          console.warn(`[upload] Skipping entry with invalid account code: "${e.compte}" (libelle: "${e.libelle}")`)
+          return false
+        }
+        return true
+      })
+
+      const entries = validEcritures
         .filter((e: any) => e.compte && (e.debit > 0 || e.credit > 0))
         .map((e: any) => ({
           dossier_id: finalDossierId,

@@ -52,7 +52,6 @@ export async function GET(request: Request) {
     const { data: societes, error: societesError } = await supabase
       .from('societes')
       .select('id, nom, client_id, comptable_id')
-      .eq('statut', 'active')
       .eq('assujetti_aps', true)
 
     if (societesError) throw societesError
@@ -65,10 +64,10 @@ export async function GET(request: Request) {
         .from('declarations_fiscales')
         .select('id')
         .eq('societe_id', societe.id)
-        .eq('type', 'APS')
+        .eq('type_declaration', 'aps')
         .gte('date_echeance', `${annee}-${String(mois + 1).padStart(2, '0')}-01`)
         .lte('date_echeance', `${annee}-${String(mois + 1).padStart(2, '0')}-31`)
-        .eq('statut', 'soumise')
+        .eq('statut', 'soumis')
         .maybeSingle()
 
       if (declaration) continue

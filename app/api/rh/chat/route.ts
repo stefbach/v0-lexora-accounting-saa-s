@@ -22,11 +22,12 @@ export async function POST(request: Request) {
     const { message, conversation_id, employe_id } = await request.json()
     if (!message) return NextResponse.json({ error: 'Message requis' }, { status: 400 })
 
-    // Charger historique
+    // Charger historique (limité aux 50 derniers messages pour éviter une explosion mémoire)
     let messages: Array<{ role: 'user' | 'assistant'; content: string }> = []
     if (conversation_id) {
       const { data: conv } = await supabase.from('chat_conversations').select('messages').eq('id', conversation_id).single()
-      messages = conv?.messages || []
+      const allMessages = conv?.messages || []
+      messages = allMessages.slice(-50)
     }
 
     messages.push({ role: 'user', content: message })

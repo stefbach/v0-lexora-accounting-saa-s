@@ -30,8 +30,7 @@ export async function GET(request: Request) {
     const { data: societes, error: societesError } = await supabase
       .from('societes')
       .select('id, nom, client_id, comptable_id')
-      .eq('statut', 'active')
-      .eq('assujetti_tva', true)
+      .eq('statut_tva', true)
 
     if (societesError) throw societesError
 
@@ -43,10 +42,10 @@ export async function GET(request: Request) {
         .from('declarations_fiscales')
         .select('id')
         .eq('societe_id', societe.id)
-        .eq('type', 'TVA')
+        .eq('type_declaration', 'tva')
         .gte('date_echeance', new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10))
         .lte('date_echeance', new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10))
-        .eq('statut', 'soumise')
+        .eq('statut', 'soumis')
         .maybeSingle()
 
       if (declaration) continue
