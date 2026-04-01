@@ -141,7 +141,7 @@ export function DocumentUpload({ onUpload, trigger }: DocumentUploadProps) {
           />
           <div className="mt-2 flex justify-center">
             <Button type="button" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); cameraInputRef.current?.click() }}>
-              <Camera className="h-4 w-4 mr-1" />Photo
+              <Camera className="h-4 w-4 mr-1" />Prendre une photo
             </Button>
           </div>
 

@@ -164,7 +164,7 @@ export function UploadZone({
             className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
           >
             <Camera className="h-3.5 w-3.5" />
-            Photo
+            Prendre une photo
           </button>
         </div>
         <input

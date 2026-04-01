@@ -190,7 +190,7 @@ export default function AssistantPage() {
               className="h-12"
               onClick={(e) => { e.stopPropagation(); cameraRef.current?.click() }}
             >
-              <Camera className="w-5 h-5 mr-2" />Photo
+              <Camera className="w-5 h-5 mr-2" />Prendre une photo
             </Button>
           </div>
           <Button

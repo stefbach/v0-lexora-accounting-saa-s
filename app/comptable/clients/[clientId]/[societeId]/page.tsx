@@ -983,7 +983,7 @@ export default function SocieteContextPage() {
                 <p className="text-xs text-muted-foreground font-medium">Documents accept&eacute;s : PDF, JPEG, PNG, XLSX — Max 20 MB</p>
                 <div className="flex gap-2 mt-2">
                   <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()}>Parcourir</Button>
-                  <Button size="sm" variant="outline" onClick={() => cameraInputRef.current?.click()}><Camera className="h-4 w-4 mr-1" />Photo</Button>
+                  <Button size="sm" variant="outline" onClick={() => cameraInputRef.current?.click()}><Camera className="h-4 w-4 mr-1" />Prendre une photo</Button>
                 </div>
               </div>
             )}
