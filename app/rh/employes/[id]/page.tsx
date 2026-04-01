@@ -166,9 +166,16 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
   const Field = ({ label, field, type = "text", disabled = false, placeholder = "" }: any) => (
     <div>
       <Label className="text-xs text-gray-500">{label}</Label>
-      <Input type={type} value={type === "date" ? dateVal(form[field]) : (form[field] ?? "")}
-        onChange={e => u(field, e.target.value)} disabled={disabled}
-        className={disabled ? "bg-gray-50" : ""} placeholder={placeholder} />
+      <Input
+        key={`${field}-${employe?.id}`}
+        type={type}
+        defaultValue={type === "date" ? dateVal(form[field]) : (form[field] ?? "")}
+        onBlur={e => u(field, e.target.value)}
+        onChange={type === "date" ? (e => u(field, e.target.value)) : undefined}
+        disabled={disabled}
+        className={disabled ? "bg-gray-50" : ""}
+        placeholder={placeholder}
+      />
     </div>
   )
 
