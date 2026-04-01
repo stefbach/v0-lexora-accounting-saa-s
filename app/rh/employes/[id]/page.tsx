@@ -15,7 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import {
   ArrowLeft, Save, Loader2, User, FileText, CalendarDays, Clock,
-  Briefcase, CreditCard, Gift, FolderOpen, History,
+  Briefcase, CreditCard, Gift, FolderOpen, History, Shield,
   CheckCircle2, XCircle, AlertCircle, Upload, Download
 } from "lucide-react"
 import { BANQUES_MAURITIUS } from "@/lib/rh/banques-mauritius"
@@ -415,6 +415,81 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
               </CardContent>
             </Card>
           </div>
+
+          {/* Régime fiscal & charges */}
+          <Card>
+            <CardHeader className="pb-3"><CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2"><Shield className="w-4 h-4" />Régime fiscal & charges</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <Label className="text-xs text-gray-500">Régime fiscal</Label>
+                  <Select value={form.regime_fiscal || "standard"} onValueChange={v => {
+                    u("regime_fiscal", v)
+                    if (v === "expatrie" || v === "consultant") {
+                      u("inclus_mra", false); u("inclus_csg", false); u("inclus_nsf", false)
+                      u("inclus_paye", false); u("inclus_training_levy", false); u("inclus_prgf", false)
+                    } else if (v === "standard") {
+                      u("inclus_mra", true); u("inclus_csg", true); u("inclus_nsf", true)
+                      u("inclus_paye", true); u("inclus_training_levy", true); u("inclus_prgf", true)
+                    }
+                  }}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="standard">Standard (charges MRA normales)</SelectItem>
+                      <SelectItem value="expatrie">Expatrié (hors charges MRA)</SelectItem>
+                      <SelectItem value="consultant">Consultant externe (hors tout)</SelectItem>
+                      <SelectItem value="special">Spécial (paramétrage custom)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs text-gray-500">Pays de résidence</Label>
+                  <Field label="" field="pays_residence" placeholder="MU" />
+                </div>
+                <div>
+                  <Label className="text-xs text-gray-500">Mode de paiement</Label>
+                  <Select value={form.mode_paiement || "bulk"} onValueChange={v => u("mode_paiement", v)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="bulk">Bulk (MCB)</SelectItem>
+                      <SelectItem value="individuel">Virement individuel</SelectItem>
+                      <SelectItem value="especes">Espèces</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {(form.regime_fiscal === "special" || form.regime_fiscal === "expatrie") && (
+                <div className="p-3 border rounded-lg bg-orange-50 space-y-2">
+                  <p className="text-xs font-medium text-orange-800">Paramétrage des charges</p>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {[
+                      { key: "inclus_csg", label: "CSG" },
+                      { key: "inclus_nsf", label: "NSF" },
+                      { key: "inclus_paye", label: "PAYE" },
+                      { key: "inclus_training_levy", label: "Training Levy" },
+                      { key: "inclus_prgf", label: "PRGF" },
+                      { key: "inclus_yeb", label: "13ème mois (YEB)" },
+                    ].map(c => (
+                      <div key={c.key} className="flex items-center gap-2">
+                        <Checkbox checked={form[c.key] !== false} onCheckedChange={v => u(c.key, v)} id={c.key} />
+                        <Label htmlFor={c.key} className="text-xs">{c.label}</Label>
+                      </div>
+                    ))}
+                  </div>
+                  <Field label="Motif d'exemption" field="hors_charges_motif" placeholder="Ex: Travaille depuis la France, hors juridiction MRA" />
+                </div>
+              )}
+
+              {form.regime_fiscal === "standard" && (
+                <p className="text-xs text-gray-400">Toutes les charges MRA s'appliquent (CSG, NSF, PAYE, Training Levy, PRGF, YEB)</p>
+              )}
+              {form.regime_fiscal === "consultant" && (
+                <p className="text-xs text-orange-600">Aucune charge MRA ne s'applique — prestataire externe</p>
+              )}
+            </CardContent>
+          </Card>
+
           <SaveBtn />
         </TabsContent>
 
