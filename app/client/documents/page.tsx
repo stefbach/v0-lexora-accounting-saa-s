@@ -313,7 +313,7 @@ export default function ClientDocumentsPage() {
 
       {/* Société selector for multi-société clients */}
       {societes.length > 1 && (
-        <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg border bg-muted/30">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border bg-muted/30">
           <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
           <span className="text-sm text-muted-foreground">Société :</span>
           <Select value={selectedUploadSociete} onValueChange={setSelectedUploadSociete}>

@@ -278,7 +278,7 @@ export default function ClientFacturesPage() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <Card><CardContent className="p-4 flex items-center gap-3"><FileText className="w-8 h-8 text-blue-600" /><div><p className="text-xs text-gray-500">Total CA (MUR)</p><p className="text-xl font-bold text-[#1E2A4A]">{fmt(totalMUR)}</p></div></CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3"><TrendingUp className="w-8 h-8 text-green-600" /><div><p className="text-xs text-gray-500">Factures</p><p className="text-xl font-bold text-[#1E2A4A]">{filtered.length}</p></div></CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3"><Clock className="w-8 h-8 text-yellow-600" /><div><p className="text-xs text-gray-500">En attente</p><p className="text-xl font-bold text-[#1E2A4A]">{nbEnAttente}</p></div></CardContent></Card>

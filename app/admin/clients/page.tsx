@@ -334,7 +334,7 @@ export default function AdminClientsPage() {
                 </DialogContent>
               </Dialog>
             </div>
-            <Card><CardContent className="p-0">
+            <Card><CardContent className="p-0 overflow-x-auto">
               <Table>
                 <TableHeader><TableRow>
                   <TableHead>Nom</TableHead><TableHead>Email</TableHead><TableHead>Téléphone</TableHead>
@@ -420,7 +420,7 @@ export default function AdminClientsPage() {
                 </DialogContent>
               </Dialog>
             </div>
-            <Card><CardContent className="p-0">
+            <Card><CardContent className="p-0 overflow-x-auto">
               <Table>
                 <TableHeader><TableRow>
                   <TableHead>Nom</TableHead><TableHead>BRN</TableHead><TableHead>N° TVA MRA</TableHead>

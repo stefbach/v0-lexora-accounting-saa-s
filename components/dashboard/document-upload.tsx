@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -38,6 +38,7 @@ export function DocumentUpload({ onUpload, trigger }: DocumentUploadProps) {
   const [files, setFiles] = useState<File[]>([])
   const [category, setCategory] = useState("")
   const [isDragging, setIsDragging] = useState(false)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -128,6 +129,20 @@ export function DocumentUpload({ onUpload, trigger }: DocumentUploadProps) {
               Drag and drop files here
             </p>
             <p className="text-xs text-muted-foreground">or click to browse</p>
+            <p className="text-xs text-muted-foreground font-medium mt-1">Documents accept&eacute;s : PDF, JPEG, PNG, XLSX — Max 20 MB</p>
+          </div>
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+          <div className="mt-2 flex justify-center">
+            <Button type="button" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); cameraInputRef.current?.click() }}>
+              <Camera className="h-4 w-4 mr-1" />Photo
+            </Button>
           </div>
 
           {files.length > 0 && (
