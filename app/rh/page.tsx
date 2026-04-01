@@ -68,7 +68,7 @@ export default function RHDashboard() {
     const load = async () => {
       setLoading(true)
       try {
-        const params = societe !== "all" ? `?societe_id=${societe}` : ""
+        const params = societe !== "all" ? `?societe_id=${societe}&statut=presents` : "?statut=presents"
         const [empRes, paieRes, congesRes] = await Promise.all([
           fetch(`/api/rh/employes${params}`),
           fetch(`/api/rh/paie?periode=${periode}${societe !== "all" ? `&societe_id=${societe}` : ""}`),
