@@ -15,15 +15,22 @@ export async function POST(request: Request) {
     // Récupérer la société (inclut ern et tan_societe)
     const { data: societe } = await supabase.from('societes').select('nom, brn, ern, tan_societe').eq('id', societe_id).single()
 
-    // Récupérer les bulletins du mois
+    // Récupérer les bulletins du mois (sans FK join — séparé)
     const { data: bulletins, error } = await supabase
       .from('bulletins_paie')
-      .select('*, employe:employes(code, nom, prenom, nic_number)')
+      .select('*')
       .eq('societe_id', societe_id)
       .ilike('periode', `${periode}%`)
 
     if (error) throw error
     if (!bulletins || bulletins.length === 0) return NextResponse.json({ error: 'Aucun bulletin pour cette période' }, { status: 404 })
+
+    // Récupérer les employés séparément
+    const empIds = [...new Set(bulletins.map(b => b.employe_id).filter(Boolean))]
+    const { data: employes } = empIds.length > 0
+      ? await supabase.from('employes').select('id, code, nom, prenom, nic_number').in('id', empIds)
+      : { data: [] }
+    const empMap = new Map((employes || []).map(e => [e.id, e]))
 
     // Calculs totaux
     let total_masse_salariale = 0, total_csg_sal = 0, total_csg_pat = 0
@@ -35,6 +42,7 @@ export async function POST(request: Request) {
     ]
 
     for (const b of bulletins) {
+      const emp = empMap.get(b.employe_id)
       const sb = Number(b.salaire_brut) || 0
       const csg_sal = Number(b.csg_salarie) || 0
       const csg_bon = Number(b.csg_bonus) || 0
@@ -54,10 +62,10 @@ export async function POST(request: Request) {
       total_prgf += prgf
 
       detailLines.push([
-        b.employe?.code || '',
-        b.employe?.nom || '',
-        b.employe?.prenom || '',
-        b.employe?.nic_number || '',
+        emp?.code || '',
+        emp?.nom || '',
+        emp?.prenom || '',
+        emp?.nic_number || '',
         sb.toFixed(2),
         (csg_sal + csg_bon).toFixed(2),
         (csg_pat + csg_pat_bon).toFixed(2),

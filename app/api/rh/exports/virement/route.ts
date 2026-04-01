@@ -75,15 +75,7 @@ export async function POST(request: Request) {
     const periodeDate = `${periode}-01`
     const { data: bulletins, error: bullErr } = await supabase
       .from('bulletins_paie')
-      .select(`
-        id, salaire_net, statut, devise_salaire,
-        employe:employes(
-          id, code, nom, prenom, poste,
-          bank_account, bank_name, bank_code, bank_iban,
-          bank_swift, bank_branch, bank_account_name,
-          devise
-        )
-      `)
+      .select('id, employe_id, salaire_net, statut, devise_salaire')
       .eq('societe_id', societe_id)
       .ilike('periode', `${periode}%`)
       .eq('statut', 'valide')
@@ -97,24 +89,34 @@ export async function POST(request: Request) {
       }, { status: 404 })
     }
 
+    // Récupérer les employés séparément (pas de FK join)
+    const empIds = [...new Set(bulletins.map(b => b.employe_id).filter(Boolean))]
+    const { data: employes } = empIds.length > 0
+      ? await supabase.from('employes').select('id, code, nom, prenom, poste, bank_account, bank_name, bank_code, bank_iban, bank_swift, bank_branch, bank_account_name, devise').in('id', empIds)
+      : { data: [] }
+    const empMap = new Map((employes || []).map(e => [e.id, e]))
+
     const date = new Date().toISOString().split('T')[0]
 
     // --- 3. Construire les lignes de virement ---
-    const lignes: LigneBulletin[] = bulletins.map((b: any) => ({
-      employe_code: b.employe?.code || '',
-      nom: b.employe?.nom || '',
-      prenom: b.employe?.prenom || '',
-      bank_account: b.employe?.bank_account || '',
-      bank_iban: b.employe?.bank_iban || '',
-      bank_swift: b.employe?.bank_swift || '',
-      bank_branch: b.employe?.bank_branch || '',
-      bank_account_name: b.employe?.bank_account_name || `${b.employe?.prenom} ${b.employe?.nom}`,
-      bank_name: b.employe?.bank_name || b.employe?.bank_code || '',
-      bank_code: b.employe?.bank_code || '',
-      salaire_net: Number(b.salaire_net),
-      devise_salaire: b.devise_salaire || b.employe?.devise || 'MUR',
-      periode,
-    }))
+    const lignes: LigneBulletin[] = bulletins.map((b: any) => {
+      const emp = empMap.get(b.employe_id)
+      return {
+        employe_code: emp?.code || '',
+        nom: emp?.nom || '',
+        prenom: emp?.prenom || '',
+        bank_account: emp?.bank_account || '',
+        bank_iban: emp?.bank_iban || '',
+        bank_swift: emp?.bank_swift || '',
+        bank_branch: emp?.bank_branch || '',
+        bank_account_name: emp?.bank_account_name || `${emp?.prenom} ${emp?.nom}`,
+        bank_name: emp?.bank_name || emp?.bank_code || '',
+        bank_code: emp?.bank_code || '',
+        salaire_net: Number(b.salaire_net),
+        devise_salaire: b.devise_salaire || emp?.devise || 'MUR',
+        periode,
+      }
+    })
 
     // Séparer MUR et EUR
     const lignesMUR = lignes.filter(l => l.devise_salaire !== 'EUR')
@@ -308,7 +310,7 @@ export async function GET(request: Request) {
 
     let query = supabase
       .from('virements_salaires')
-      .select('*, compte_emetteur:comptes_bancaires(banque, numero_compte, nom_compte)')
+      .select('*')
       .order('created_at', { ascending: false })
       .limit(50)
 

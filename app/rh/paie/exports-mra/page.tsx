@@ -30,7 +30,15 @@ export default function ExportsMRAPage() {
   const [virementSBMStatus, setVirementSBMStatus] = useState<ExportStatus>({ done: false, loading: false, error: null })
 
   useEffect(() => {
-    fetch("/api/comptable/societes").then(r => r.json()).then(d => setSocietes(d.societes || []))
+    Promise.all([
+      fetch("/api/client/societes").then(r => r.json()).catch(() => ({ societes: [] })),
+      fetch("/api/comptable/societes").then(r => r.json()).catch(() => ({ societes: [] })),
+    ]).then(([d1, d2]) => {
+      const all = [...(d1.societes || []), ...(d2.societes || [])]
+      const unique = Array.from(new Map(all.map((s: any) => [s.id, s])).values())
+      setSocietes(unique)
+      if (unique.length >= 1 && !societe) setSociete(unique[0].id)
+    })
   }, [])
 
   useEffect(() => {
