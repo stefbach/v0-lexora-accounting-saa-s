@@ -154,8 +154,8 @@ export async function GET() {
     // For client_user: filter to only their own uploads
     let documentsQuery: any = null // not used anymore
 
-    // For client_user: only their own uploads
-    if (userProfile?.role === 'client_user') {
+    // For client_user and client_assistant: only their own uploads
+    if (userProfile?.role === 'client_user' || userProfile?.role === 'client_assistant') {
       documents = documents.filter(d => d.uploaded_by === user.id)
     }
 

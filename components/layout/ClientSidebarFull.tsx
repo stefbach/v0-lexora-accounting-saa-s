@@ -92,7 +92,7 @@ const MENU: MenuSection[] = [
       { href: "/client/documents", label: "Documents & OCR", labelKey: "nav.documents", icon: FileText },
       { href: "/client/utilisateurs", label: "Mon Équipe", labelKey: "nav.team", icon: Users },
       { href: "/client/alertes", label: "Alertes", labelKey: "nav.alerts", icon: Bell },
-      { href: "/client/assistant", label: "Espace Assistant", labelKey: "nav.assistant", icon: Upload, visibleForRoles: ["client_admin", "client_user", "client_assistant", "super_admin", "admin"] },
+      { href: "/client/assistant", label: "Espace Assistant", labelKey: "nav.assistant", icon: Upload, visibleForRoles: ["client_assistant"] },
     ]
   },
   {
