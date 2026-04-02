@@ -208,10 +208,15 @@ function BankTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
   const [f, setF] = useState({ ...data })
   const u = (k: string, v: any) => setF((p: any) => ({ ...p, [k]: v }))
   const [bankAccounts, setBankAccounts] = useState<any[]>([])
+  const [bankError, setBankError] = useState(false)
 
   useEffect(() => {
     if (data.id) {
-      fetch(`/api/comptable/banque?societe_id=${data.id}`).then(r => r.json()).then(d => setBankAccounts(d.comptes || [])).catch(() => {})
+      setBankError(false)
+      fetch(`/api/comptable/banque?societe_id=${data.id}`)
+        .then(r => { if (!r.ok) throw new Error(); return r.json() })
+        .then(d => setBankAccounts(d.comptes || []))
+        .catch(() => setBankError(true))
     }
   }, [data.id])
 
@@ -224,8 +229,10 @@ function BankTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">Comptes bancaires</CardTitle></CardHeader>
           <CardContent>
-            {bankAccounts.length === 0 ? (
-              <p className="text-gray-400 text-sm py-4 text-center">Aucun compte bancaire. Les comptes sont créés automatiquement lors de l'upload d'un relevé bancaire.</p>
+            {bankError ? (
+              <p className="text-red-500 text-sm py-4 text-center">Impossible de charger les comptes bancaires.</p>
+            ) : bankAccounts.length === 0 ? (
+              <p className="text-gray-400 text-sm py-4 text-center">Aucun compte bancaire. Les comptes sont créés automatiquement lors de l&apos;upload d&apos;un relevé bancaire.</p>
             ) : (
               <div className="space-y-3">
                 {bankAccounts.map((b: any) => (

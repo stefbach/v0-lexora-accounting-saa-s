@@ -38,11 +38,16 @@ export default function ClientBanquePage() {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [selectedSociete, setSelectedSociete] = useState("all")
+  const [selectedCompte, setSelectedCompte] = useState("all")
+  const [dateFrom, setDateFrom] = useState("")
+  const [dateTo, setDateTo] = useState("")
   const { profile } = useProfile()
 
   async function fetchData(societeId?: string) {
     try {
+      setError(null)
       const url = societeId && societeId !== "all"
         ? `/api/client/financial?societe_id=${societeId}`
         : "/api/client/financial"
@@ -52,14 +57,17 @@ export default function ClientBanquePage() {
         setData(json.financial)
       } else {
         setData(null)
+        setError("Erreur de chargement des données bancaires.")
       }
     } catch {
       setData(null)
+      setError("Erreur de chargement des données bancaires.")
     }
   }
 
   useEffect(() => {
     setLoading(true)
+    setSelectedCompte("all")
     fetchData(selectedSociete).finally(() => setLoading(false))
   }, [selectedSociete])
 
@@ -92,9 +100,31 @@ export default function ClientBanquePage() {
     )
   }
 
-  const bankAccounts = data?.bankAccounts ?? []
-  const totalBankMUR = data?.totalBankMUR ?? 0
+  if (error && !data) {
+    return (
+      <div className="flex-1 overflow-auto p-6">
+        <Card>
+          <CardContent className="py-12 text-center space-y-4">
+            <AlertCircle className="h-8 w-8 mx-auto text-red-500" />
+            <p className="text-muted-foreground">{error}</p>
+            <Button variant="outline" onClick={() => { setLoading(true); fetchData(selectedSociete).finally(() => setLoading(false)) }}>
+              Réessayer
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  const allBankAccounts = data?.bankAccounts ?? []
+  const bankAccounts = selectedSociete !== "all"
+    ? allBankAccounts.filter((a: any) => a.societe_id === selectedSociete)
+    : allBankAccounts
+  const totalBankMUR = bankAccounts.reduce((s: number, a: any) => s + (a.solde_mur ?? 0), 0)
   const societes = data?.availableSocietes ?? []
+
+  // Account IDs for the selected accounts (used to filter transactions)
+  const bankAccountIds = new Set(bankAccounts.map((a: any) => a.id))
 
   // Transactions depuis releves_bancaires (extraction JSON)
   const rawTx: any[] = data?.bankTransactions ?? []
@@ -112,6 +142,7 @@ export default function ClientBanquePage() {
     compte_comptable: tx.compte_comptable || null,
     statut: tx.statut || "non_identifie",
     banque: tx.banque || "—",
+    compte_bancaire_id: tx.compte_bancaire_id || null,
     societe: tx.societe || "—",
     lettre: tx.lettre || null,
     facture_id: tx.facture_id || null,
@@ -123,12 +154,21 @@ export default function ClientBanquePage() {
     return new Date(b.date).getTime() - new Date(a.date).getTime()
   })
 
-  const filtered = allTransactions.filter(
-    (row) =>
-      row.libelle.toLowerCase().includes(search.toLowerCase()) ||
-      (row.tiers || "").toLowerCase().includes(search.toLowerCase()) ||
-      (row.banque || "").toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = allTransactions.filter((row) => {
+    // Search filter
+    if (search) {
+      const s = search.toLowerCase()
+      if (!row.libelle.toLowerCase().includes(s) &&
+          !(row.tiers || "").toLowerCase().includes(s) &&
+          !(row.banque || "").toLowerCase().includes(s)) return false
+    }
+    // Account filter
+    if (selectedCompte !== "all" && row.compte_bancaire_id !== selectedCompte) return false
+    // Date range filter
+    if (dateFrom && row.date < dateFrom) return false
+    if (dateTo && row.date > dateTo) return false
+    return true
+  })
 
   const nonRaprochees = allTransactions.filter(
     (t) => !t.lettre && (!t.tiers || t.statut?.includes("non_identifie"))
@@ -268,15 +308,46 @@ export default function ClientBanquePage() {
         </Card>
       )}
 
-      {/* Recherche */}
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Rechercher par libellé, tiers, banque..."
-          className="pl-9"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      {/* Filtres */}
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="relative flex-1 min-w-[200px] max-w-sm">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Rechercher par libellé, tiers, banque..."
+            className="pl-9"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        {bankAccounts.length > 1 && (
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1">Compte</label>
+            <Select value={selectedCompte} onValueChange={setSelectedCompte}>
+              <SelectTrigger className="w-[200px] h-9"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous les comptes</SelectItem>
+                {bankAccounts.map((acc: any) => (
+                  <SelectItem key={acc.id} value={acc.id}>
+                    {acc.banque || "Compte"} {acc.numero_compte ? `•${acc.numero_compte.slice(-4)}` : ""} ({acc.devise || "MUR"})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        <div>
+          <label className="text-xs text-muted-foreground block mb-1">De</label>
+          <Input type="date" className="w-[150px] h-9" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground block mb-1">À</label>
+          <Input type="date" className="w-[150px] h-9" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+        </div>
+        {(search || selectedCompte !== "all" || dateFrom || dateTo) && (
+          <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setSelectedCompte("all"); setDateFrom(""); setDateTo("") }}>
+            Effacer filtres
+          </Button>
+        )}
       </div>
 
       {/* Transactions */}

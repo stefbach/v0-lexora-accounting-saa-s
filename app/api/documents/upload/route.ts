@@ -409,7 +409,7 @@ export async function POST(request: NextRequest) {
         console.log('[upload] Bank JSON parsed OK. Keys:', Object.keys(bankParsed).join(', '),
           'lignes:', Array.isArray(bankParsed.lignes) ? bankParsed.lignes.length : 0,
           'transactions:', Array.isArray(bankParsed.transactions) ? bankParsed.transactions.length : 0)
-        parsed = { routing: { type_document: 'releve_bancaire', societe: bankParsed.banque || 'MCB', confiance_type: 95 }, extraction: bankParsed }
+        parsed = { routing: { type_document: 'releve_bancaire', societe: bankParsed.banque || 'INCONNU', confiance_type: 95 }, extraction: bankParsed }
       } else {
         console.error('[upload] FAILED to parse bank JSON. Raw text:', bankText.substring(0, 1000))
         parsed = {
@@ -1077,12 +1077,13 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
 
     // Handle bank statement: auto-detect société + create/update bank account + store statement
     if (typeDocument === 'releve_bancaire') {
-      if (!extraction.banque && !extraction.compte_bancaire) {
-        extraction.banque = detectedSociete !== 'INCONNU' ? detectedSociete : 'Banque'
+      if (!extraction.banque && !extraction.compte_bancaire && detectedSociete !== 'INCONNU') {
+        extraction.banque = detectedSociete
       }
       const bankDevise = extraction.devise || 'MUR'
-      const bankName = extraction.banque || extraction.compte_bancaire || 'Banque'
-      const solde = Number(extraction.solde_cloture) || Number(extraction.solde_fin) || 0
+      const bankName = extraction.banque || extraction.compte_bancaire || null
+      const rawSolde = parseFloat(extraction.solde_cloture) || parseFloat(extraction.solde_fin) || NaN
+      const solde = isNaN(rawSolde) ? null : rawSolde
       const extractedIBAN = extraction.iban || null
       const extractedNumeroCompte = extraction.numero_compte || extraction.compte_bancaire || null
       const extractedBRN = extraction.brn || null
@@ -1151,7 +1152,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
             normPeriodeFin = p
           }
         }
-        if (!normPeriodeFin) normPeriodeFin = new Date().toISOString().split('T')[0]
+        if (!normPeriodeFin) normPeriodeFin = null
 
         let normPeriodeDebut = extraction.periode_debut || extraction.date_debut || null
         if (!normPeriodeDebut && extraction.periode) {
@@ -1175,7 +1176,8 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
             .select('id').eq('societe_id', bankSocieteId).eq('numero_compte', normNumeroCompte).limit(1).maybeSingle()
           existingBank = byNum
         }
-        if (!existingBank) {
+        // Only match by banque+devise if bankName is known (avoid "null" collisions)
+        if (!existingBank && bankName) {
           const { data: byName } = await supabase.from('comptes_bancaires')
             .select('id').eq('societe_id', bankSocieteId).eq('banque', bankName).eq('devise', bankDevise).limit(1).maybeSingle()
           existingBank = byName
@@ -1184,17 +1186,21 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
         if (existingBank) {
           // Update balance
           console.log(`[upload] Updating existing bank account ${existingBank.id}: solde=${solde}, date=${normPeriodeFin}`)
-          const bankUpdate: Record<string, unknown> = { solde_actuel: solde, date_dernier_releve: normPeriodeFin }
+          const bankUpdate: Record<string, unknown> = {}
+          if (solde !== null) bankUpdate.solde_actuel = solde
+          if (normPeriodeFin) bankUpdate.date_dernier_releve = normPeriodeFin
           if (extractedIBAN) bankUpdate.iban = extractedIBAN
           if (normNumeroCompte) bankUpdate.numero_compte = normNumeroCompte
-          await supabase.from('comptes_bancaires').update(bankUpdate).eq('id', existingBank.id)
-        } else {
-          // Create new bank account
+          if (Object.keys(bankUpdate).length > 0) {
+            await supabase.from('comptes_bancaires').update(bankUpdate).eq('id', existingBank.id)
+          }
+        } else if (bankName) {
+          // Create new bank account only if bank name was identified
           console.log(`[upload] Creating new bank account: ${bankName} for societe=${bankSocieteId}`)
           const { error: bankInsertError } = await supabase.from('comptes_bancaires').insert({
             societe_id: bankSocieteId,
             banque: bankName,
-            nom_compte: normNumeroCompte || bankName,
+            nom_compte: normNumeroCompte || null,
             numero_compte: normNumeroCompte,
             iban: extractedIBAN,
             devise: bankDevise,
@@ -1206,6 +1212,9 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
           if (bankInsertError) {
             console.error('[upload] comptes_bancaires insert FAILED:', bankInsertError.message)
           }
+        } else {
+          // Bank name not identified — skip account creation, add warning
+          console.warn('[upload] Banque non identifiée — compte bancaire non créé. Document:', doc.id)
         }
 
         // Store bank statement record — find the account we just created/updated
@@ -1215,7 +1224,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
             .select('id').eq('societe_id', bankSocieteId).eq('numero_compte', normNumeroCompte).limit(1).maybeSingle()
           bankAccount = byNum
         }
-        if (!bankAccount) {
+        if (!bankAccount && bankName) {
           const { data: byName } = await supabase.from('comptes_bancaires')
             .select('id').eq('societe_id', bankSocieteId).eq('banque', bankName).eq('devise', bankDevise).limit(1).maybeSingle()
           bankAccount = byName

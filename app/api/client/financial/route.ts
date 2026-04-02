@@ -112,25 +112,36 @@ export async function GET(request: Request) {
     if (requestedSocieteId) dossierQuery = dossierQuery.eq('societe_id', requestedSocieteId)
     const { data: dossiers } = await dossierQuery
 
-    // Also include sociétés owned by client (created_by)
-    const { data: ownedSocietes } = await supabase
-      .from('societes').select('id')
-      .eq('created_by', targetClientId)
-
-    // Also include dossiers from the same sociétés (shared between client_admin and client_user)
     let allDossierIds: string[] = (dossiers || []).map(d => d.id)
-    let societeIds = [...new Set([
-      ...(dossiers || []).map(d => d.societe_id),
-      ...(ownedSocietes || []).map(s => s.id),
-      ...(requestedSocieteId ? [requestedSocieteId] : [])
-    ].filter(Boolean))]
+    let societeIds: string[]
 
-    if (dossiers && dossiers.length > 0) {
+    if (requestedSocieteId) {
+      // When a specific société is requested, use only that ID
+      societeIds = [requestedSocieteId]
+      // Include shared dossiers for that société only
       const { data: sharedDossiers } = await supabase
-        .from('dossiers').select('id, societe_id').in('societe_id', societeIds)
+        .from('dossiers').select('id, societe_id').eq('societe_id', requestedSocieteId)
       if (sharedDossiers) {
         allDossierIds = [...new Set([...allDossierIds, ...sharedDossiers.map(d => d.id)])]
-        societeIds = [...new Set([...societeIds, ...sharedDossiers.map(d => d.societe_id)])]
+      }
+    } else {
+      // No filter: include all sociétés owned by client + from dossiers
+      const { data: ownedSocietes } = await supabase
+        .from('societes').select('id')
+        .eq('created_by', targetClientId)
+
+      societeIds = [...new Set([
+        ...(dossiers || []).map(d => d.societe_id),
+        ...(ownedSocietes || []).map(s => s.id),
+      ].filter(Boolean))]
+
+      if (dossiers && dossiers.length > 0) {
+        const { data: sharedDossiers } = await supabase
+          .from('dossiers').select('id, societe_id').in('societe_id', societeIds)
+        if (sharedDossiers) {
+          allDossierIds = [...new Set([...allDossierIds, ...sharedDossiers.map(d => d.id)])]
+          societeIds = [...new Set([...societeIds, ...sharedDossiers.map(d => d.societe_id)])]
+        }
       }
     }
 
@@ -258,6 +269,8 @@ export async function GET(request: Request) {
     // Bank balances with currency conversion
     const bankAccounts = (comptesBank || []).map(c => ({
       id: c.id, banque: c.banque, nom_compte: c.nom_compte,
+      numero_compte: c.numero_compte, iban: c.iban,
+      date_dernier_releve: c.date_dernier_releve, societe_id: c.societe_id,
       devise: c.devise, solde_actuel: Number(c.solde_actuel) || 0,
       solde_mur: convertToMUR(Number(c.solde_actuel) || 0, c.devise, rates),
     }))

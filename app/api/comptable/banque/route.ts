@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     // Verify role
     const supabase = getAdminClient()
     const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-    if (!profile || !['comptable', 'comptable_dedie', 'admin', 'super_admin', 'client_admin', 'rh', 'rh_manager'].includes(profile.role)) {
+    if (!profile || !['comptable', 'comptable_dedie', 'admin', 'super_admin', 'client_admin'].includes(profile.role)) {
       return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
     }
 
@@ -105,7 +105,11 @@ export async function GET(request: Request) {
               transactions_json: extraction.transactions || [],
               statut_rapprochement: 'en_attente',
             }
-            releves?.push(syntheticReleve as any) || documentsTransactions.push()
+            if (releves) {
+              releves.push(syntheticReleve as any)
+            } else {
+              documentsTransactions.push(syntheticReleve as any)
+            }
           }
         })
       }
