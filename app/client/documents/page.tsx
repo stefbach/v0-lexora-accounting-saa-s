@@ -607,10 +607,11 @@ export default function ClientDocumentsPage() {
                       <div className="flex items-center gap-1">
                         <Select value={reassigningSocValue} onValueChange={async (v) => {
                           setReassigningSocValue(v)
+                          const reassignSocName = societes.find(s => s.societe_id === v)?.nom || null
                           try {
                             await fetch(`/api/documents/${doc.id}`, {
                               method: "PATCH", headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ societe_id: v, corrige_manuellement: true }),
+                              body: JSON.stringify({ societe_id: v, societe_detectee: reassignSocName, corrige_manuellement: true }),
                             })
                             await fetchDocuments()
                           } catch { /* silent */ }
@@ -767,10 +768,15 @@ export default function ClientDocumentsPage() {
                 if (!confirmSocDoc || !confirmSocId) return
                 setConfirmSocSaving(true)
                 try {
-                  // Reassign société
+                  // Reassign société + update societe_detectee to the real name
+                  const confirmedSocName = societes.find(s => s.societe_id === confirmSocId)?.nom || null
                   await fetch(`/api/documents/${confirmSocDoc.id}`, {
                     method: "PATCH", headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ societe_id: confirmSocId, corrige_manuellement: true }),
+                    body: JSON.stringify({
+                      societe_id: confirmSocId,
+                      societe_detectee: confirmedSocName,
+                      corrige_manuellement: true,
+                    }),
                   })
                   // Re-analyze with correct société context
                   await fetch(`/api/documents/${confirmSocDoc.id}/reanalyze`, {

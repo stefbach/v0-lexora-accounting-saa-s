@@ -43,15 +43,18 @@ export async function POST(request: NextRequest) {
     }
     if (file.size > 20 * 1024 * 1024) return NextResponse.json({ error: 'Fichier trop volumineux (max 20MB)' }, { status: 400 })
 
-    // Détection doublons par nom + taille, scopé par utilisateur
-    const { data: existingDoc } = await supabase
+    // Détection doublons — multi-level check
+    let existingDoc: { id: string; nom_fichier: string; statut: string } | null = null
+
+    // Level 1: filename + size (cross-user — catches same file uploaded by any user)
+    const { data: nameSizeDup } = await supabase
       .from('documents')
       .select('id, nom_fichier, statut')
       .eq('nom_fichier', file.name)
       .eq('taille_fichier', file.size)
-      .eq('uploaded_by', user.id)
       .limit(1)
       .maybeSingle()
+    if (nameSizeDup) existingDoc = nameSizeDup
     if (existingDoc && existingDoc.statut === 'traite') {
       return NextResponse.json({
         error: `Doublon détecté : "${file.name}" a déjà été uploadé (ID: ${existingDoc.id}). Utilisez "Réanalyser" pour retraiter ce document.`,
@@ -121,27 +124,36 @@ export async function POST(request: NextRequest) {
     const fileHash = createHash('sha256').update(fileBuffer).digest('hex')
     const base64 = fileBuffer.toString('base64')
 
-    // Hash-based dedup: check if identical content already exists in same dossier
-    const { data: hashDup } = await supabase
-      .from('documents')
-      .select('id, nom_fichier, statut')
-      .eq('file_hash', fileHash)
-      .eq('uploaded_by', user.id)
-      .limit(1)
-      .maybeSingle()
-    if (hashDup) {
-      if (hashDup.statut === 'traite') {
+    // Level 2: Hash-based dedup (catches renamed files with identical content)
+    // Wrapped in try/catch in case file_hash column doesn't exist yet
+    if (!existingDoc) {
+      try {
+        const { data: hashDup, error: hashErr } = await supabase
+          .from('documents')
+          .select('id, nom_fichier, statut')
+          .eq('file_hash', fileHash)
+          .limit(1)
+          .maybeSingle()
+        if (!hashErr && hashDup) existingDoc = hashDup
+      } catch {
+        console.log('[upload] file_hash column not available, skipping hash dedup')
+      }
+    }
+
+    // Handle duplicate found
+    if (existingDoc) {
+      if (existingDoc.statut === 'traite') {
         return NextResponse.json({
-          error: `Doublon détecté : un fichier identique existe déjà ("${hashDup.nom_fichier}").`,
+          error: `Doublon détecté : "${existingDoc.nom_fichier}" existe déjà.`,
           doublon: true,
-          doc_id: hashDup.id,
+          doc_id: existingDoc.id,
         }, { status: 409 })
       } else {
         return NextResponse.json({
           doublon: true,
-          statut: hashDup.statut,
-          message: "Un fichier identique existe déjà avec des erreurs de traitement. Voulez-vous le retraiter ?",
-          existingId: hashDup.id,
+          statut: existingDoc.statut,
+          message: "Un document identique existe déjà avec des erreurs de traitement. Voulez-vous le retraiter ?",
+          existingId: existingDoc.id,
         }, { status: 409 })
       }
     }
@@ -156,12 +168,24 @@ export async function POST(request: NextRequest) {
     if (storageError) return NextResponse.json({ error: `Upload storage: ${storageError.message}` }, { status: 500 })
 
     // Create document record
-    const { data: doc, error: docError } = await supabase.from('documents').insert({
+    // Try insert with file_hash, fall back without if column doesn't exist
+    let doc: any = null
+    let docError: any = null
+    const docFields: Record<string, unknown> = {
       dossier_id: resolvedDossierId, uploaded_by: user.id, nom_fichier: file.name,
       type_fichier: typeFichier, statut: 'en_cours', storage_path: storagePath,
       taille_fichier: file.size, societe_detectee: null, type_document: null,
-      file_hash: fileHash,
-    }).select().single()
+    }
+    const insertWithHash = await supabase.from('documents').insert({ ...docFields, file_hash: fileHash }).select().single()
+    if (insertWithHash.error?.message?.includes('file_hash')) {
+      // Column doesn't exist yet — insert without it
+      const insertWithout = await supabase.from('documents').insert(docFields).select().single()
+      doc = insertWithout.data
+      docError = insertWithout.error
+    } else {
+      doc = insertWithHash.data
+      docError = insertWithHash.error
+    }
     if (docError) return NextResponse.json({ error: `DB insert: ${docError.message}` }, { status: 500 })
     docId = doc.id
 
