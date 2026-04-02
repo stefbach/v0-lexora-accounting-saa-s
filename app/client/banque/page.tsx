@@ -27,6 +27,18 @@ function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" })
 }
 
+function getSocieteBadgeStyle(name?: string): Record<string, string> {
+  if (!name) return { backgroundColor: '#f3f4f6', color: '#374151', borderColor: '#e5e7eb' }
+  const n = name.toLowerCase()
+  if (n.includes('obesity') || n.includes('occ'))
+    return { backgroundColor: '#ccfbf1', color: '#0f766e', borderColor: '#99f6e4' }
+  if (n.includes('digital') || n.includes('dds'))
+    return { backgroundColor: '#dbeafe', color: '#1d4ed8', borderColor: '#bfdbfe' }
+  if (n.includes('tibok'))
+    return { backgroundColor: '#fef9c3', color: '#a16207', borderColor: '#fef08a' }
+  return { backgroundColor: '#f3f4f6', color: '#374151', borderColor: '#e5e7eb' }
+}
+
 function getStatutBadge(statut: string) {
   if (statut?.includes("non_identifie")) return <Badge className="bg-red-100 text-red-700 border-red-200">Non identifié</Badge>
   if (statut?.includes("a_verifier")) return <Badge className="bg-orange-100 text-orange-700 border-orange-200">À vérifier</Badge>
@@ -320,11 +332,13 @@ export default function ClientBanquePage() {
                   <TableHead>Devise</TableHead>
                   <TableHead className="text-right">Solde</TableHead>
                   <TableHead>Dernier relevé</TableHead>
+                  <TableHead>Société</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {bankAccounts.map((acc: any) => (
-                  <TableRow key={acc.id || acc.nom_compte}>
+                  <TableRow key={acc.id || acc.nom_compte} className="cursor-pointer hover:bg-blue-50/50"
+                    onClick={() => setSelectedCompte(selectedCompte === acc.id ? "all" : acc.id)}>
                     <TableCell>
                       <Badge variant="outline" style={{ borderColor: "#C9A84C", color: "#C9A84C" }}>
                         {acc.banque}
@@ -359,6 +373,11 @@ export default function ClientBanquePage() {
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {acc.date_dernier_releve ? formatDate(acc.date_dernier_releve) : "—"}
+                    </TableCell>
+                    <TableCell>
+                      {acc.societe_nom ? (
+                        <Badge variant="outline" className="text-xs" style={getSocieteBadgeStyle(acc.societe_nom)}>{acc.societe_nom}</Badge>
+                      ) : <span className="text-xs text-muted-foreground">—</span>}
                     </TableCell>
                   </TableRow>
                 ))}

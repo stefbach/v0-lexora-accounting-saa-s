@@ -267,10 +267,13 @@ export async function GET(request: Request) {
     const tvaNette = tvaCollectee - tvaDeductible
 
     // Bank balances with currency conversion
+    const societeNameMap: Record<string, string> = {}
+    availableSocietes.forEach((s: any) => { societeNameMap[s.id] = s.nom })
     const bankAccounts = (comptesBank || []).map(c => ({
       id: c.id, banque: c.banque, nom_compte: c.nom_compte,
       numero_compte: c.numero_compte, iban: c.iban,
       date_dernier_releve: c.date_dernier_releve, societe_id: c.societe_id,
+      societe_nom: societeNameMap[c.societe_id] || null,
       devise: c.devise, solde_actuel: Number(c.solde_actuel) || 0,
       solde_mur: convertToMUR(Number(c.solde_actuel) || 0, c.devise, rates),
     }))
