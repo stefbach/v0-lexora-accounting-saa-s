@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dialog"
 import {
   Upload, FolderOpen, Loader2, FileText, CheckCircle,
-  Clock, Download, ChevronRight, Lock, AlertTriangle, Building2, RefreshCw,
+  Clock, Download, ChevronRight, Lock, AlertTriangle, Building2, RefreshCw, Camera,
 } from "lucide-react"
 
 const NAVY = "#1E2A4A"
@@ -96,6 +96,7 @@ export default function ClientDocumentsPage() {
   const [selectedUploadSociete, setSelectedUploadSociete] = useState<string>("auto")
   const [selectedFolder, setSelectedFolder] = useState("recent")
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
   // Reassignment dialog for undetected société
   const [reassignDoc, setReassignDoc] = useState<{ id: string; nom_fichier: string } | null>(null)
   const [reassignSocieteId, setReassignSocieteId] = useState<string>("")
@@ -361,9 +362,13 @@ export default function ClientDocumentsPage() {
           <div className="flex flex-col items-center gap-2">
             <Upload className="h-8 w-8 text-muted-foreground" />
             <p className="text-sm font-medium">Glissez-déposez vos fichiers ici</p>
-            <p className="text-xs text-muted-foreground">PDF, JPEG, PNG, XLSX — max 10 MB</p>
+            <p className="text-xs text-muted-foreground">PDF, JPEG, PNG, XLSX — max 20 MB</p>
             <p className="text-xs text-muted-foreground mt-1">Le système analyse et classe automatiquement dans le bon dossier</p>
-            <Button size="sm" variant="outline" className="mt-2" onClick={() => fileInputRef.current?.click()}>Parcourir</Button>
+            <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => handleUpload(e.target.files)} />
+            <div className="flex gap-2 mt-2">
+              <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()}>Parcourir</Button>
+              <Button size="sm" variant="outline" onClick={() => cameraInputRef.current?.click()}><Camera className="h-4 w-4 mr-1" />Prendre une photo</Button>
+            </div>
           </div>
         )}
       </div>
