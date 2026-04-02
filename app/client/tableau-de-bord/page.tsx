@@ -76,6 +76,16 @@ export default function TableauDeBord() {
     </div>
   )
 
+  // Redirect assistant to their dedicated page
+  if (profile?.role === "client_assistant") {
+    if (typeof window !== "undefined") window.location.href = "/client/assistant"
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <Loader2 className="w-8 h-8 animate-spin text-[#1E2A4A]" />
+      </div>
+    )
+  }
+
   return (
     <div className="p-3 pt-12 sm:p-4 md:pt-6 md:p-6 space-y-4 sm:space-y-6">
       {/* En-tête */}

@@ -174,13 +174,13 @@ export default function ClientDocumentsPage() {
         const dosData = await dosRes.json()
         const myDossiers = (dosData.dossiers || []).filter((d: any) => d.client_id === profile?.id)
 
+        // Load société names from multiple sources
+        const socRes = await fetch("/api/admin/societes")
+        const socData = await socRes.json()
+        const allSocietes = (socData.societes || [])
+
         if (myDossiers.length > 0) {
           setSocieteId(myDossiers[0].societe_id)
-
-          // Load société names
-          const socRes = await fetch("/api/admin/societes")
-          const socData = await socRes.json()
-          const allSocietes = (socData.societes || [])
           const linked = myDossiers
             .map((d: any) => {
               const soc = allSocietes.find((s: any) => s.id === d.societe_id)
@@ -189,6 +189,19 @@ export default function ClientDocumentsPage() {
             .filter(Boolean)
             .filter((s: any) => !s.nom.endsWith("— Personnel") && !s.nom.endsWith("— En attente"))
           setSocietes(linked)
+        }
+
+        // Fallback for assistant/user roles: fetch from user_societes via client API
+        if (!myDossiers.length || societes.length === 0) {
+          const clientSocRes = await fetch("/api/client/societes")
+          const clientSocData = await clientSocRes.json()
+          const clientSocs = (clientSocData.societes || [])
+            .filter((s: any) => !s.nom?.endsWith("— Personnel") && !s.nom?.endsWith("— En attente"))
+            .map((s: any) => ({ id: s.id, nom: s.nom, societe_id: s.id }))
+          if (clientSocs.length > 0) {
+            setSocietes(clientSocs)
+            if (!societeId) setSocieteId(clientSocs[0].societe_id)
+          }
         }
 
         await fetchDocuments()
@@ -307,10 +320,10 @@ export default function ClientDocumentsPage() {
         } else {
           if (res.status === 409 && data.doublon) {
             if (data.existingId && data.statut && data.statut !== 'traite') {
-              // Show reprocess confirmation dialog
+              // Show reprocess confirmation dialog for erreur/en_attente docs
               setReprocessDoc({ id: data.existingId, filename: file.name })
             } else {
-              setUploadError(`⚠️ Doublon : "${file.name}" a déjà été uploadé. Utilisez "Réanalyser" pour retraiter.`)
+              setUploadError(`⚠️ Ce document a déjà été importé : "${file.name}"`)
             }
           } else {
             setUploadError(data.error || "Erreur lors de l'envoi")

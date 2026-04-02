@@ -98,19 +98,30 @@ export async function PATCH(
       return NextResponse.json({ error: 'Document non trouvé' }, { status: 404 })
     }
 
-    // Access control
+    // Access control — société-based, not just uploaded_by
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', user.id)
       .single()
 
-    const userRole = profile?.role
+    const userRole = profile?.role || ''
     const dossier = existingDoc.dossiers as any
-    const isOwner = existingDoc.uploaded_by === user.id || dossier?.client_id === user.id
-    const isComptableOrAdmin = ['admin', 'comptable', 'comptable_dedie'].includes(userRole || '')
+    const isAdminRole = ['admin', 'super_admin', 'client_admin'].includes(userRole)
+    const isComptableOrAdmin = ['admin', 'super_admin', 'client_admin', 'comptable', 'comptable_dedie'].includes(userRole)
+    const isOwner = existingDoc.uploaded_by === user.id
+    const isDossierClient = dossier?.client_id === user.id
+    const isDossierComptable = dossier?.comptable_id === user.id
 
-    if (!isOwner && !isComptableOrAdmin) {
+    // Check société access via user_societes
+    let hasSocieteAccess = false
+    if (dossier?.societe_id) {
+      const { data: us } = await supabase.from('user_societes')
+        .select('id').eq('user_id', user.id).eq('societe_id', dossier.societe_id).limit(1).maybeSingle()
+      hasSocieteAccess = !!us
+    }
+
+    if (!isOwner && !isDossierClient && !isDossierComptable && !isComptableOrAdmin && !hasSocieteAccess) {
       return NextResponse.json({ error: 'Accès non autorisé' }, { status: 403 })
     }
 
@@ -141,28 +152,16 @@ export async function PATCH(
     }
     // Otherwise resolve from societe_id
     else if (societe_id !== undefined) {
-      // Find the dossier for this société linked to this user
+      // Find any dossier for this société
       const { data: targetDossier } = await supabase
         .from('dossiers')
         .select('id')
         .eq('societe_id', societe_id)
-        .eq('client_id', user.id)
         .limit(1)
-        .single()
+        .maybeSingle()
 
       if (targetDossier) {
         updateFields.dossier_id = targetDossier.id
-      } else if (isComptableOrAdmin) {
-        // Comptables can reassign to any dossier
-        const { data: anyDossier } = await supabase
-          .from('dossiers')
-          .select('id')
-          .eq('societe_id', societe_id)
-          .limit(1)
-          .single()
-        if (anyDossier) {
-          updateFields.dossier_id = anyDossier.id
-        }
       }
     }
 
