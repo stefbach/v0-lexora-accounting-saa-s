@@ -78,15 +78,25 @@ function getSocieteBadgeStyle(name?: string): Record<string, string> {
   return { backgroundColor: '#f3f4f6', color: '#374151', borderColor: '#e5e7eb' }
 }
 
+function normalizeSocieteName(detected: string | null, knownSocietes: { nom: string }[]): string | null {
+  if (!detected) return null
+  const d = detected.toLowerCase().replace(/ ltd| limited| sarl| sas| co\.?/gi, '').trim()
+  for (const s of knownSocietes) {
+    const k = s.nom.toLowerCase().replace(/ ltd| limited| sarl| sas| co\.?/gi, '').trim()
+    if (k === d || k.includes(d) || d.includes(k)) return s.nom
+  }
+  return detected
+}
+
 function statutBadge(s: string) {
-  if (s === "traite") return <Badge className="bg-green-100 text-green-700">Classé</Badge>
+  if (s === "traite") return <Badge className="bg-green-100 text-green-700">Traité</Badge>
   if (s === "en_cours" || s === "en_attente") return <Badge className="bg-blue-100 text-blue-700"><Clock className="h-3 w-3 mr-1" />Analyse en cours...</Badge>
   if (s === "erreur") return <Badge className="bg-red-100 text-red-700"><AlertTriangle className="h-3 w-3 mr-1" />Erreur</Badge>
   return <Badge variant="outline">{s}</Badge>
 }
 
 function confianceBadge(confiance: number | undefined | null) {
-  if (confiance == null) return null
+  if (confiance == null) return <span className="text-xs text-muted-foreground">—</span>
   if (confiance >= 80) return <Badge className="bg-green-100 text-green-700 text-xs">{confiance}%</Badge>
   if (confiance >= 50) return <Badge className="bg-orange-100 text-orange-700 text-xs">{confiance}%</Badge>
   return <Badge className="bg-red-100 text-red-700 text-xs">{confiance}%</Badge>
@@ -566,8 +576,8 @@ export default function ClientDocumentsPage() {
           )}
         </div>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-          <Table>
+          <div className="overflow-x-auto [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded" style={{ scrollbarGutter: 'stable' }}>
+          <Table className="min-w-[900px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Fichier</TableHead>
@@ -588,7 +598,7 @@ export default function ClientDocumentsPage() {
                     <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
                     <Link
                       href={`/client/documents/${doc.id}`}
-                      className="hover:underline text-sm font-medium truncate max-w-[200px]"
+                      className="hover:underline text-sm font-medium truncate max-w-[260px] inline-block"
                       style={{ color: NAVY }}
                       title={doc.nom_fichier}
                     >
@@ -622,8 +632,8 @@ export default function ClientDocumentsPage() {
                     ) : (
                       <span className="flex items-center gap-1 group">
                         {doc.societe_detectee ? (
-                          <Badge variant="outline" className="text-xs" style={getSocieteBadgeStyle(doc.societe_detectee)}>
-                            {doc.societe_detectee}
+                          <Badge variant="outline" className="text-xs" style={getSocieteBadgeStyle(normalizeSocieteName(doc.societe_detectee, societes))}>
+                            {normalizeSocieteName(doc.societe_detectee, societes)}
                           </Badge>
                         ) : (
                           <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-xs">Non assignée</Badge>
@@ -667,6 +677,7 @@ export default function ClientDocumentsPage() {
                           style={{ color: doc.statut === "traite" ? undefined : GOLD }}
                           title={doc.statut === "traite" ? "Réanalyser" : "Réessayer"}
                           onClick={async () => {
+                            if (doc.statut === "traite" && !confirm("Ce document a déjà été traité. Voulez-vous relancer l'analyse ? Les écritures comptables seront recalculées.")) return
                             setDocuments(prev => prev.map(d => d.id === doc.id ? { ...d, statut: "en_cours" } : d))
                             try {
                               await fetch(`/api/documents/${doc.id}/reanalyze`, {
