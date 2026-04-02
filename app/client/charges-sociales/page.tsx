@@ -53,21 +53,33 @@ export default function ChargesSocialesPage() {
   const totalPRGF = bulletins.reduce((s, b) => s + (Number(b.prgf) || 0), 0)
   const grandTotal = totalCSGSalarie + totalCSGPatronal + totalNSFSalarie + totalNSFPatronal + totalTrainingLevy + totalPAYE + totalPRGF
 
-  function exportCSV() {
+  function buildExportData() {
     const socName = societes.find(s => s.id === societe)?.nom || "societe"
-    const header = "Employé;Brut;CSG sal.;CSG pat.;NSF sal.;NSF pat.;PAYE;Training Levy"
-    const rows = bulletins.map((b: any) => [
-      `${b.employe?.prenom || ""} ${b.employe?.nom || ""}`.trim(),
-      Number(b.salaire_base) || 0,
-      Number(b.csg_salarie) || 0,
-      Number(b.csg_patronal) || 0,
-      Number(b.nsf_salarie) || 0,
-      Number(b.nsf_patronal) || 0,
-      Number(b.paye) || 0,
-      Number(b.training_levy) || 0,
-    ].join(";"))
-    const totals = `TOTAL;${bulletins.reduce((s: number, b: any) => s + (Number(b.salaire_base) || 0), 0)};${totalCSGSalarie};${totalCSGPatronal};${totalNSFSalarie};${totalNSFPatronal};${totalPAYE};${totalTrainingLevy}`
-    const csv = [header, ...rows, totals].join("\n")
+    const header = ["Employé", "Période", "Salaire brut", "CSG salarié", "CSG patronal", "NSF salarié", "NSF patronal", "PAYE", "Training Levy", "PRGF", "Total charges", "Société"]
+    const rows = bulletins.map((b: any) => {
+      const brut = Number(b.salaire_base) || 0
+      const csgS = Number(b.csg_salarie) || 0
+      const csgP = Number(b.csg_patronal) || 0
+      const nsfS = Number(b.nsf_salarie) || 0
+      const nsfP = Number(b.nsf_patronal) || 0
+      const paye = Number(b.paye) || 0
+      const levy = Number(b.training_levy) || 0
+      const prgf = Number(b.prgf) || 0
+      return {
+        employe: `${b.employe?.prenom || ""} ${b.employe?.nom || ""}`.trim() || b.employe_id?.substring(0, 8) || "—",
+        periode, brut, csgS, csgP, nsfS, nsfP, paye, levy, prgf,
+        total: csgS + csgP + nsfS + nsfP + paye + levy + prgf,
+        societe: socName,
+      }
+    })
+    return { header, rows, socName }
+  }
+
+  function exportCSV() {
+    const { header, rows, socName } = buildExportData()
+    const csvRows = rows.map(r => [r.employe, r.periode, r.brut, r.csgS, r.csgP, r.nsfS, r.nsfP, r.paye, r.levy, r.prgf, r.total, r.societe].join(";"))
+    const totals = ["TOTAL", "", bulletins.reduce((s: number, b: any) => s + (Number(b.salaire_base) || 0), 0), totalCSGSalarie, totalCSGPatronal, totalNSFSalarie, totalNSFPatronal, totalPAYE, totalTrainingLevy, totalPRGF, grandTotal, ""].join(";")
+    const csv = [header.join(";"), ...csvRows, totals].join("\n")
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
@@ -75,6 +87,19 @@ export default function ChargesSocialesPage() {
     a.download = `CSG_${periode}_${socName.replace(/\s+/g, "_")}.csv`
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  async function exportExcel() {
+    const { header, rows, socName } = buildExportData()
+    const XLSX = (await import("xlsx")).default
+    const wsData = [header, ...rows.map(r => [r.employe, r.periode, r.brut, r.csgS, r.csgP, r.nsfS, r.nsfP, r.paye, r.levy, r.prgf, r.total, r.societe]),
+      ["TOTAL", "", bulletins.reduce((s: number, b: any) => s + (Number(b.salaire_base) || 0), 0), totalCSGSalarie, totalCSGPatronal, totalNSFSalarie, totalNSFPatronal, totalPAYE, totalTrainingLevy, totalPRGF, grandTotal, ""]
+    ]
+    const ws = XLSX.utils.aoa_to_sheet(wsData)
+    ws["!cols"] = header.map(() => ({ wch: 16 }))
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, "Charges Sociales")
+    XLSX.writeFile(wb, `CSG_${periode}_${socName.replace(/\s+/g, "_")}.xlsx`)
   }
 
   return (
@@ -98,7 +123,7 @@ export default function ChargesSocialesPage() {
             </DropdownMenuTrigger>
             <DropdownMenuContent>
               <DropdownMenuItem onClick={exportCSV}>Export CSV</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => alert("Export Excel — fonctionnalité à venir")}>Export Excel (.xlsx)</DropdownMenuItem>
+              <DropdownMenuItem onClick={exportExcel}>Export Excel (.xlsx)</DropdownMenuItem>
               <DropdownMenuItem onClick={() => alert("Export PDF — fonctionnalité à venir")}>Export PDF</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

@@ -309,7 +309,8 @@ export function ClientSidebarFull() {
               {!isCollapsed && (
                 <div className="space-y-0.5 ml-1">
                   {items.map(item => {
-                    if ((item as any).visibleForRoles && !(item as any).visibleForRoles.includes(profile?.role)) return null
+                    const vRoles = (item as any).visibleForRoles
+                    if (vRoles && (!profile?.role || !vRoles.includes(profile.role))) return null
                     const Icon = item.icon
                     const active = isActive(item.href)
                     const itemLabel = item.labelKey ? t(item.labelKey, locale) : item.label
