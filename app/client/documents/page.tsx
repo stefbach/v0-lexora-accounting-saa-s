@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import {
-  Upload, FolderOpen, Loader2, FileText, CheckCircle,
+  Upload, FolderOpen, Loader2, FileText, CheckCircle, Search,
   Clock, Download, ChevronRight, Lock, AlertTriangle, Building2, RefreshCw, Camera, Pencil,
 } from "lucide-react"
 
@@ -66,6 +66,18 @@ const DOCUMENT_TYPES = [
   { value: "autre", label: "Autre" },
 ]
 
+function getSocieteBadgeStyle(name?: string): Record<string, string> {
+  if (!name) return { backgroundColor: '#f3f4f6', color: '#374151', borderColor: '#e5e7eb' }
+  const n = name.toLowerCase()
+  if (n.includes('obesity') || n.includes('occ'))
+    return { backgroundColor: '#ccfbf1', color: '#0f766e', borderColor: '#99f6e4' }
+  if (n.includes('digital') || n.includes('dds'))
+    return { backgroundColor: '#dbeafe', color: '#1d4ed8', borderColor: '#bfdbfe' }
+  if (n.includes('tibok'))
+    return { backgroundColor: '#fef9c3', color: '#a16207', borderColor: '#fef08a' }
+  return { backgroundColor: '#f3f4f6', color: '#374151', borderColor: '#e5e7eb' }
+}
+
 function statutBadge(s: string) {
   if (s === "traite") return <Badge className="bg-green-100 text-green-700">Classé</Badge>
   if (s === "en_cours" || s === "en_attente") return <Badge className="bg-blue-100 text-blue-700"><Clock className="h-3 w-3 mr-1" />Analyse en cours...</Badge>
@@ -107,6 +119,8 @@ export default function ClientDocumentsPage() {
   const [societes, setSocietes] = useState<{ id: string; nom: string; societe_id: string }[]>([])
   const [selectedUploadSociete, setSelectedUploadSociete] = useState<string>("auto")
   const [selectedFolder, setSelectedFolder] = useState("recent")
+  const [docSearch, setDocSearch] = useState("")
+  const [statusFilter, setStatusFilter] = useState("all")
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
   // Reassignment dialog for undetected société
@@ -350,7 +364,14 @@ export default function ClientDocumentsPage() {
         return matchSociete || matchDossier || !d.societe_detectee
       })
 
-  const currentDocs = getDocsForFolder(filteredDocuments, selectedFolder)
+  const folderDocs = getDocsForFolder(filteredDocuments, selectedFolder)
+  const currentDocs = folderDocs.filter(d => {
+    if (docSearch) {
+      if (!d.nom_fichier.toLowerCase().includes(docSearch.toLowerCase())) return false
+    }
+    if (statusFilter !== "all" && d.statut !== statusFilter) return false
+    return true
+  })
 
   return (
     <div className="flex-1 overflow-auto p-4 pt-14 md:pt-6 md:p-6 lg:p-8 space-y-6">
@@ -483,6 +504,24 @@ export default function ClientDocumentsPage() {
             )}
           </div>
         </CardHeader>
+        <div className="flex flex-wrap items-center gap-3 px-4 pb-3">
+          <div className="relative flex-1 min-w-[180px] max-w-xs">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input placeholder="Rechercher par nom de fichier..." className="pl-9 h-8 text-sm" value={docSearch} onChange={(e) => setDocSearch(e.target.value)} />
+          </div>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[140px] h-8 text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tous statuts</SelectItem>
+              <SelectItem value="traite">Traité</SelectItem>
+              <SelectItem value="en_cours">En cours</SelectItem>
+              <SelectItem value="erreur">Erreur</SelectItem>
+            </SelectContent>
+          </Select>
+          {(docSearch || statusFilter !== "all") && (
+            <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setDocSearch(""); setStatusFilter("all") }}>Effacer</Button>
+          )}
+        </div>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
           <Table>
@@ -490,6 +529,7 @@ export default function ClientDocumentsPage() {
               <TableRow>
                 <TableHead>Fichier</TableHead>
                 <TableHead>Date</TableHead>
+                <TableHead>Société</TableHead>
                 <TableHead>Type détecté</TableHead>
                 <TableHead>Statut</TableHead>
                 <TableHead>Confiance IA</TableHead>
@@ -513,6 +553,13 @@ export default function ClientDocumentsPage() {
                     </Link>
                   </TableCell>
                   <TableCell>{new Date(doc.created_at).toLocaleDateString("fr-FR")}</TableCell>
+                  <TableCell>
+                    {doc.societe_detectee ? (
+                      <Badge variant="outline" className="text-xs" style={getSocieteBadgeStyle(doc.societe_detectee)}>
+                        {doc.societe_detectee}
+                      </Badge>
+                    ) : <span className="text-xs text-muted-foreground">—</span>}
+                  </TableCell>
                   <TableCell>
                     {doc.type_document ? (
                       <Badge variant="outline" className="text-xs">
@@ -587,7 +634,7 @@ export default function ClientDocumentsPage() {
               })}
               {currentDocs.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-12">
+                  <TableCell colSpan={7} className="text-center py-12">
                     <FileText className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
                     <p className="text-muted-foreground">Aucun document dans ce dossier.</p>
                   </TableCell>

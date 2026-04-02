@@ -417,6 +417,7 @@ export async function GET(request: Request) {
             compte_comptable: tx.compte_comptable || tx.compte || null,
             statut: tx.statut || 'non_identifie',
             banque: compteInfo.banque,
+            compte_bancaire_id: releve.compte_bancaire_id,
           })
         })
       })
