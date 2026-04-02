@@ -242,7 +242,7 @@ export default function TableauDeBord() {
                 <Badge variant="outline" className="text-xs">Juil. {exercice.split("-")[0]} → Juin {exercice.split("-")[1]}</Badge>
               </div>
               <Select value={exercice} onValueChange={setExercice}>
-                <SelectTrigger className="w-[180px] h-8 text-xs">
+                <SelectTrigger className="w-[220px] h-8 text-xs">
                   <Calendar className="w-3 h-3 mr-1" /><SelectValue />
                 </SelectTrigger>
                 <SelectContent>
