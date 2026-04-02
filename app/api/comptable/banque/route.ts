@@ -152,3 +152,34 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
+
+// ---------------------------------------------------------------------------
+// PATCH /api/comptable/banque — Update bank account fields (nom_compte, etc.)
+// ---------------------------------------------------------------------------
+export async function PATCH(request: Request) {
+  try {
+    const supabaseAuth = await createServerClient()
+    const { data: { user } } = await supabaseAuth.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+
+    const supabase = getAdminClient()
+    const body = await request.json()
+    const { id, nom_compte } = body
+
+    if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
+
+    // Fetch the account to check access
+    const { data: compte } = await supabase.from('comptes_bancaires').select('societe_id').eq('id', id).single()
+    if (!compte) return NextResponse.json({ error: 'Compte non trouvé' }, { status: 404 })
+
+    const hasAccess = await userHasAccessToSociete(user.id, compte.societe_id)
+    if (!hasAccess) return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+
+    const { error } = await supabase.from('comptes_bancaires').update({ nom_compte }).eq('id', id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    return NextResponse.json({ success: true })
+  } catch (e: unknown) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
+  }
+}

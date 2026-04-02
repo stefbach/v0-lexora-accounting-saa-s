@@ -11,7 +11,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
-import { Search, Landmark, AlertCircle, Clock, RefreshCw, Loader2, Building2, X } from "lucide-react"
+import { Search, Landmark, AlertCircle, Clock, RefreshCw, Loader2, Building2, X, Pencil } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
 
 function formatAmount(amount: number, devise?: string) {
@@ -47,6 +47,8 @@ export default function ClientBanquePage() {
   const [dateTo, setDateTo] = useState("")
   const [showOnlyNonRapprochees, setShowOnlyNonRapprochees] = useState(false)
   const [selectedTx, setSelectedTx] = useState<any>(null)
+  const [editingCompte, setEditingCompte] = useState<string | null>(null)
+  const [editingNom, setEditingNom] = useState("")
   const { profile } = useProfile()
 
   async function fetchData(societeId?: string) {
@@ -84,6 +86,24 @@ export default function ClientBanquePage() {
     setRefreshing(true)
     await fetchData(selectedSociete)
     setRefreshing(false)
+  }
+
+  function getDisplayName(acc: any): string {
+    if (acc.nom_compte && acc.nom_compte !== acc.numero_compte) return acc.nom_compte
+    if (acc.numero_compte) return `Compte •${acc.numero_compte.slice(-4)}`
+    return "Compte sans nom"
+  }
+
+  async function saveNomCompte(accId: string, newNom: string) {
+    try {
+      await fetch("/api/comptable/banque", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: accId, nom_compte: newNom }),
+      })
+      await fetchData(selectedSociete)
+    } catch { /* silent */ }
+    setEditingCompte(null)
   }
 
   if (profile?.role === "client_user") {
@@ -310,7 +330,25 @@ export default function ClientBanquePage() {
                         {acc.banque}
                       </Badge>
                     </TableCell>
-                    <TableCell>{acc.nom_compte || "—"}</TableCell>
+                    <TableCell>
+                      {editingCompte === acc.id ? (
+                        <Input
+                          autoFocus
+                          className="h-7 text-sm w-40"
+                          value={editingNom}
+                          onChange={(e) => setEditingNom(e.target.value)}
+                          onBlur={() => saveNomCompte(acc.id, editingNom)}
+                          onKeyDown={(e) => { if (e.key === "Enter") saveNomCompte(acc.id, editingNom); if (e.key === "Escape") setEditingCompte(null) }}
+                        />
+                      ) : (
+                        <span className="flex items-center gap-1 group">
+                          {getDisplayName(acc)}
+                          <button className="opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => { setEditingCompte(acc.id); setEditingNom(acc.nom_compte || "") }}>
+                            <Pencil className="h-3 w-3 text-muted-foreground hover:text-[#1E2A4A]" />
+                          </button>
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell className="font-mono text-sm text-muted-foreground">{acc.numero_compte || "—"}</TableCell>
                     <TableCell>{acc.devise || "MUR"}</TableCell>
                     <TableCell className="text-right font-bold" style={{ color: "#1E2A4A" }}>
