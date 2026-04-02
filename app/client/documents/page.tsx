@@ -189,12 +189,6 @@ export default function ClientDocumentsPage() {
             .filter(Boolean)
             .filter((s: any) => !s.nom.endsWith("— Personnel") && !s.nom.endsWith("— En attente"))
           setSocietes(linked)
-          // Default to first non-Personnel société
-          if (linked.length === 1) {
-            setSelectedUploadSociete(linked[0].societe_id)
-          } else if (linked.length > 1) {
-            setSelectedUploadSociete(linked[0].societe_id)
-          }
         }
 
         await fetchDocuments()
@@ -425,21 +419,23 @@ export default function ClientDocumentsPage() {
         </p>
       </div>
 
-      {/* Société selector — always visible */}
-      <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg border bg-muted/30">
-        <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
-        <span className="text-sm font-medium" style={{ color: NAVY }}>Société <span className="text-red-500">*</span></span>
-        <Select value={selectedUploadSociete} onValueChange={setSelectedUploadSociete}>
-          <SelectTrigger className={`w-full sm:w-[280px] h-9 ${selectedUploadSociete === "auto" ? "border-orange-300" : ""}`}><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {societes.length > 1 && <SelectItem value="auto">Toutes les sociétés (filtrage)</SelectItem>}
-            {societes.map(s => <SelectItem key={s.societe_id} value={s.societe_id}>{s.nom}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        {selectedUploadSociete === "auto" && societes.length > 1 && (
-          <span className="text-xs text-orange-600">Sélectionnez une société avant d&apos;uploader</span>
-        )}
-      </div>
+      {/* Société selector — optional */}
+      {societes.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg border bg-muted/30">
+          <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
+          <span className="text-sm font-medium" style={{ color: NAVY }}>Société (optionnel)</span>
+          <Select value={selectedUploadSociete} onValueChange={setSelectedUploadSociete}>
+            <SelectTrigger className="w-full sm:w-[280px] h-9"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="auto">Toutes les sociétés — détection auto</SelectItem>
+              {societes.map(s => <SelectItem key={s.societe_id} value={s.societe_id}>{s.nom}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          {selectedUploadSociete === "auto" && (
+            <span className="text-xs text-muted-foreground">Laissez vide pour détection automatique</span>
+          )}
+        </div>
+      )}
 
       {/* Upload Zone */}
       <div
