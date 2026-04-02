@@ -69,51 +69,48 @@ export async function POST(request: NextRequest) {
       }, { status: 409 })
     }
 
-    // Resolve dossier_id — IMPORTANT: use the société's dossier, not the user's personal dossier
+    // Resolve dossier_id — PRIORITY 1: explicit societe_id from FormData
     let resolvedDossierId = dossierId
+    let needsSocieteConfirmation = false
+    if (!resolvedDossierId && societeId) {
+      const { data: d } = await supabase.from('dossiers').select('id').eq('societe_id', societeId).limit(1).maybeSingle()
+      if (d) { resolvedDossierId = d.id }
+    }
+    // PRIORITY 2: user's profile société or user_societes
     if (!resolvedDossierId) {
-      // 1. Si societe_id fourni, chercher un dossier pour cette société
-      if (societeId) {
-        const { data: d } = await supabase.from('dossiers').select('id').eq('societe_id', societeId).limit(1).maybeSingle()
+      const { data: profile } = await supabase.from('profiles').select('societe_id').eq('id', user.id).maybeSingle()
+      if (profile?.societe_id) {
+        const { data: d } = await supabase.from('dossiers').select('id').eq('societe_id', profile.societe_id).limit(1).maybeSingle()
         if (d) { resolvedDossierId = d.id }
       }
-      // 2. Trouver la société du user (via profile.societe_id ou user_societes)
-      if (!resolvedDossierId) {
-        const { data: profile } = await supabase.from('profiles').select('societe_id').eq('id', user.id).maybeSingle()
-        if (profile?.societe_id) {
-          // Chercher un dossier existant pour CETTE société (peu importe le client_id)
-          const { data: d } = await supabase.from('dossiers').select('id').eq('societe_id', profile.societe_id).limit(1).maybeSingle()
-          if (d) { resolvedDossierId = d.id }
-        }
-      }
-      // 3. Via user_societes
-      if (!resolvedDossierId) {
-        const { data: us } = await supabase.from('user_societes').select('societe_id').eq('user_id', user.id).limit(1).maybeSingle()
-        if (us?.societe_id) {
-          const { data: d } = await supabase.from('dossiers').select('id').eq('societe_id', us.societe_id).limit(1).maybeSingle()
-          if (d) { resolvedDossierId = d.id }
-        }
-      }
-      // 4. Chercher un dossier du user (en tant que client)
-      if (!resolvedDossierId) {
-        const { data: d } = await supabase.from('dossiers').select('id').eq('client_id', user.id).limit(1).maybeSingle()
+    }
+    if (!resolvedDossierId) {
+      const { data: us } = await supabase.from('user_societes').select('societe_id').eq('user_id', user.id).limit(1).maybeSingle()
+      if (us?.societe_id) {
+        const { data: d } = await supabase.from('dossiers').select('id').eq('societe_id', us.societe_id).limit(1).maybeSingle()
         if (d) { resolvedDossierId = d.id }
       }
-      // 5. Si le user est comptable
-      if (!resolvedDossierId) {
-        const { data: d } = await supabase.from('dossiers').select('id').eq('comptable_id', user.id).limit(1).maybeSingle()
-        if (d) { resolvedDossierId = d.id }
-      }
-      // 4. Dernier recours : créer un dossier personnel
-      if (!resolvedDossierId) {
-        const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
-        const { data: newSoc } = await supabase.from('societes')
-          .insert({ nom: `${profile?.full_name || user.email} — Personnel`, statut_tva: false }).select('id').single()
-        if (newSoc) {
-          const { data: nd } = await supabase.from('dossiers')
-            .insert({ client_id: user.id, societe_id: newSoc.id, comptable_id: null }).select('id').single()
-          resolvedDossierId = nd?.id || null
-        }
+    }
+    // PRIORITY 3: any dossier owned by user (as client or comptable)
+    if (!resolvedDossierId) {
+      const { data: d } = await supabase.from('dossiers').select('id').eq('client_id', user.id).limit(1).maybeSingle()
+      if (d) { resolvedDossierId = d.id }
+    }
+    if (!resolvedDossierId) {
+      const { data: d } = await supabase.from('dossiers').select('id').eq('comptable_id', user.id).limit(1).maybeSingle()
+      if (d) { resolvedDossierId = d.id }
+    }
+    // NO FALLBACK to "Personnel" — if no dossier found, mark as needing confirmation
+    if (!resolvedDossierId) {
+      needsSocieteConfirmation = true
+      // Create a temporary dossier to store the file, but mark for confirmation
+      const { data: tempProfile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
+      const { data: tempSoc } = await supabase.from('societes')
+        .insert({ nom: `${tempProfile?.full_name || user.email} — En attente`, statut_tva: false }).select('id').single()
+      if (tempSoc) {
+        const { data: nd } = await supabase.from('dossiers')
+          .insert({ client_id: user.id, societe_id: tempSoc.id, comptable_id: null }).select('id').single()
+        resolvedDossierId = nd?.id || null
       }
       if (!resolvedDossierId) return NextResponse.json({ error: 'Impossible de créer un dossier' }, { status: 400 })
     }
@@ -1323,8 +1320,22 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
 
     // Return final state
     const { data: finalDoc } = await supabase.from('documents')
-      .select('id, nom_fichier, type_fichier, type_document, statut, storage_path, created_at, societe_detectee')
+      .select('id, nom_fichier, type_fichier, type_document, statut, storage_path, created_at, societe_detectee, confiance_type')
       .eq('id', doc.id).single()
+
+    // If no société was identified and the document needs confirmation
+    if (needsSocieteConfirmation || (!societeId && (!finalDoc?.societe_detectee || finalDoc.societe_detectee === 'INCONNU'))) {
+      // Mark as en_attente if not already processed
+      if (finalDoc?.statut !== 'traite') {
+        await supabase.from('documents').update({ statut: 'en_attente' }).eq('id', doc.id)
+      }
+      return NextResponse.json({
+        document: finalDoc || doc,
+        needs_confirmation: true,
+        societe_detectee: finalDoc?.societe_detectee || null,
+        message: 'Société non identifiée — veuillez confirmer la société',
+      })
+    }
 
     return NextResponse.json({ document: finalDoc || doc, message: `Classé: ${typeDocument}` })
 

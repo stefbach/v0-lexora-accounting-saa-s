@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import {
-  Upload, FolderOpen, Loader2, FileText, CheckCircle, Search,
+  Upload, FolderOpen, Loader2, FileText, CheckCircle, Search, X,
   Clock, Download, ChevronRight, Lock, AlertTriangle, Building2, RefreshCw, Camera, Pencil,
 } from "lucide-react"
 
@@ -133,6 +133,18 @@ export default function ClientDocumentsPage() {
   const [changeCatSaving, setChangeCatSaving] = useState(false)
   // Duplicate reprocess dialog
   const [reprocessDoc, setReprocessDoc] = useState<{ id: string; filename: string } | null>(null)
+  // Société confirmation dialog (when upload can't detect société)
+  const [confirmSocDoc, setConfirmSocDoc] = useState<{ id: string; filename: string; detected: string | null } | null>(null)
+  const [confirmSocId, setConfirmSocId] = useState("")
+  const [confirmSocSaving, setConfirmSocSaving] = useState(false)
+  // Société filter
+  const [filterSociete, setFilterSociete] = useState("all")
+  // Pagination
+  const [pageSize] = useState(20)
+  const [visibleCount, setVisibleCount] = useState(20)
+  // Inline société reassignment
+  const [reassigningSocDocId, setReassigningSocDocId] = useState<string | null>(null)
+  const [reassigningSocValue, setReassigningSocValue] = useState("")
 
   const fetchDocuments = useCallback(async () => {
     try {
@@ -165,8 +177,14 @@ export default function ClientDocumentsPage() {
               return soc ? { id: d.id, nom: soc.nom, societe_id: d.societe_id } : null
             })
             .filter(Boolean)
-            .filter((s: any) => !s.nom.endsWith("— Personnel"))
+            .filter((s: any) => !s.nom.endsWith("— Personnel") && !s.nom.endsWith("— En attente"))
           setSocietes(linked)
+          // Default to first non-Personnel société
+          if (linked.length === 1) {
+            setSelectedUploadSociete(linked[0].societe_id)
+          } else if (linked.length > 1) {
+            setSelectedUploadSociete(linked[0].societe_id)
+          }
         }
 
         await fetchDocuments()
@@ -242,7 +260,12 @@ export default function ClientDocumentsPage() {
           const detectedSociete = doc.societe_detectee
           const isAutoMode = selectedUploadSociete === "auto"
 
-          if (doc.statut === "traite" && doc.type_document) {
+          // Handle needs_confirmation response
+          if (data.needs_confirmation) {
+            setConfirmSocDoc({ id: doc.id, filename: file.name, detected: data.societe_detectee })
+            setConfirmSocId(societes.length > 0 ? societes[0].societe_id : "")
+            setUploadSuccess(`${file.name} envoyé — veuillez confirmer la société.`)
+          } else if (doc.statut === "traite" && doc.type_document) {
             const folderLabel = FOLDERS.find(f => f.key === doc.type_document)?.label || doc.type_document
 
             // Check if AI detected a société that doesn't match any known ones
@@ -365,13 +388,23 @@ export default function ClientDocumentsPage() {
       })
 
   const folderDocs = getDocsForFolder(filteredDocuments, selectedFolder)
-  const currentDocs = folderDocs.filter(d => {
+  const allCurrentDocs = folderDocs.filter(d => {
     if (docSearch) {
       if (!d.nom_fichier.toLowerCase().includes(docSearch.toLowerCase())) return false
     }
     if (statusFilter !== "all" && d.statut !== statusFilter) return false
+    if (filterSociete !== "all") {
+      const socName = societes.find(s => s.societe_id === filterSociete)?.nom
+      if (socName && d.societe_detectee) {
+        if (!d.societe_detectee.toLowerCase().includes(socName.toLowerCase().split(' ')[0])) return false
+      } else if (!d.societe_detectee) {
+        return false
+      }
+    }
     return true
   })
+  const currentDocs = allCurrentDocs.slice(0, visibleCount)
+  const unassignedCount = documents.filter(d => !d.societe_detectee).length
 
   return (
     <div className="flex-1 overflow-auto p-4 pt-14 md:pt-6 md:p-6 lg:p-8 space-y-6">
@@ -382,23 +415,21 @@ export default function ClientDocumentsPage() {
         </p>
       </div>
 
-      {/* Société selector for multi-société clients */}
-      {societes.length > 1 && (
-        <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg border bg-muted/30">
-          <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
-          <span className="text-sm text-muted-foreground">Société :</span>
-          <Select value={selectedUploadSociete} onValueChange={setSelectedUploadSociete}>
-            <SelectTrigger className="w-full sm:w-[260px] h-9"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="auto">Toutes les sociétés ({documents.length} docs)</SelectItem>
-              {societes.map(s => <SelectItem key={s.societe_id} value={s.societe_id}>{s.nom}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          {selectedUploadSociete === "auto" && (
-            <span className="text-xs text-muted-foreground">La société sera détectée depuis le document</span>
-          )}
-        </div>
-      )}
+      {/* Société selector — always visible */}
+      <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg border bg-muted/30">
+        <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
+        <span className="text-sm font-medium" style={{ color: NAVY }}>Société <span className="text-red-500">*</span></span>
+        <Select value={selectedUploadSociete} onValueChange={setSelectedUploadSociete}>
+          <SelectTrigger className={`w-full sm:w-[280px] h-9 ${selectedUploadSociete === "auto" ? "border-orange-300" : ""}`}><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {societes.length > 1 && <SelectItem value="auto">Toutes les sociétés (filtrage)</SelectItem>}
+            {societes.map(s => <SelectItem key={s.societe_id} value={s.societe_id}>{s.nom}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        {selectedUploadSociete === "auto" && societes.length > 1 && (
+          <span className="text-xs text-orange-600">Sélectionnez une société avant d&apos;uploader</span>
+        )}
+      </div>
 
       {/* Upload Zone */}
       <div
@@ -441,8 +472,11 @@ export default function ClientDocumentsPage() {
       )}
 
       {/* Document counter */}
-      <div className="text-xs text-gray-400 px-2">
-        {filteredDocuments.length} document(s) {selectedUploadSociete !== "auto" ? "(filtré par société)" : "(toutes sociétés)"}
+      <div className="flex items-center gap-3 text-xs text-gray-400 px-2">
+        <span>{filteredDocuments.length} document(s) {selectedUploadSociete !== "auto" ? "(filtré par société)" : "(toutes sociétés)"}</span>
+        {unassignedCount > 0 && (
+          <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-xs">{unassignedCount} non assigné{unassignedCount > 1 ? "s" : ""}</Badge>
+        )}
       </div>
 
       {/* Folder list */}
@@ -518,8 +552,17 @@ export default function ClientDocumentsPage() {
               <SelectItem value="erreur">Erreur</SelectItem>
             </SelectContent>
           </Select>
-          {(docSearch || statusFilter !== "all") && (
-            <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setDocSearch(""); setStatusFilter("all") }}>Effacer</Button>
+          {societes.length > 1 && (
+            <Select value={filterSociete} onValueChange={setFilterSociete}>
+              <SelectTrigger className="w-[180px] h-8 text-sm"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Toutes sociétés</SelectItem>
+                {societes.map(s => <SelectItem key={s.societe_id} value={s.societe_id}>{s.nom}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
+          {(docSearch || statusFilter !== "all" || filterSociete !== "all") && (
+            <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setDocSearch(""); setStatusFilter("all"); setFilterSociete("all") }}>Effacer</Button>
           )}
         </div>
         <CardContent className="p-0">
@@ -554,11 +597,42 @@ export default function ClientDocumentsPage() {
                   </TableCell>
                   <TableCell>{new Date(doc.created_at).toLocaleDateString("fr-FR")}</TableCell>
                   <TableCell>
-                    {doc.societe_detectee ? (
-                      <Badge variant="outline" className="text-xs" style={getSocieteBadgeStyle(doc.societe_detectee)}>
-                        {doc.societe_detectee}
-                      </Badge>
-                    ) : <span className="text-xs text-muted-foreground">—</span>}
+                    {reassigningSocDocId === doc.id ? (
+                      <div className="flex items-center gap-1">
+                        <Select value={reassigningSocValue} onValueChange={async (v) => {
+                          setReassigningSocValue(v)
+                          try {
+                            await fetch(`/api/documents/${doc.id}`, {
+                              method: "PATCH", headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ societe_id: v, corrige_manuellement: true }),
+                            })
+                            await fetchDocuments()
+                          } catch { /* silent */ }
+                          setReassigningSocDocId(null)
+                        }}>
+                          <SelectTrigger className="h-7 text-xs w-[160px]"><SelectValue placeholder="Choisir..." /></SelectTrigger>
+                          <SelectContent>
+                            {societes.map(s => <SelectItem key={s.societe_id} value={s.societe_id}>{s.nom}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setReassigningSocDocId(null)}>
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <span className="flex items-center gap-1 group">
+                        {doc.societe_detectee ? (
+                          <Badge variant="outline" className="text-xs" style={getSocieteBadgeStyle(doc.societe_detectee)}>
+                            {doc.societe_detectee}
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-xs">Non assignée</Badge>
+                        )}
+                        <button className="opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setReassigningSocDocId(doc.id); setReassigningSocValue("") }}>
+                          <Pencil className="h-3 w-3 text-muted-foreground hover:text-[#1E2A4A]" />
+                        </button>
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell>
                     {doc.type_document ? (
@@ -645,6 +719,68 @@ export default function ClientDocumentsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Pagination */}
+      {allCurrentDocs.length > visibleCount && (
+        <div className="text-center py-2">
+          <p className="text-xs text-muted-foreground mb-2">Affichage {visibleCount} sur {allCurrentDocs.length} documents</p>
+          <Button variant="outline" size="sm" onClick={() => setVisibleCount(v => v + pageSize)}>
+            Charger plus
+          </Button>
+        </div>
+      )}
+      {allCurrentDocs.length > 0 && allCurrentDocs.length <= visibleCount && (
+        <p className="text-xs text-muted-foreground text-center">{allCurrentDocs.length} document{allCurrentDocs.length > 1 ? "s" : ""}</p>
+      )}
+
+      {/* Société confirmation dialog */}
+      <Dialog open={!!confirmSocDoc} onOpenChange={(o) => { if (!o) setConfirmSocDoc(null) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Confirmer la société du document</DialogTitle>
+            <DialogDescription>
+              Le document &quot;{confirmSocDoc?.filename}&quot; n&apos;a pas pu être automatiquement associé à une société.
+              {confirmSocDoc?.detected && <><br />Société détectée : <strong>{confirmSocDoc.detected}</strong></>}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <Select value={confirmSocId} onValueChange={setConfirmSocId}>
+              <SelectTrigger><SelectValue placeholder="Sélectionner la société..." /></SelectTrigger>
+              <SelectContent>
+                {societes.map(s => <SelectItem key={s.societe_id} value={s.societe_id}>{s.nom}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmSocDoc(null)}>Ignorer</Button>
+            <Button
+              disabled={!confirmSocId || confirmSocSaving}
+              style={{ backgroundColor: NAVY }}
+              onClick={async () => {
+                if (!confirmSocDoc || !confirmSocId) return
+                setConfirmSocSaving(true)
+                try {
+                  // Reassign société
+                  await fetch(`/api/documents/${confirmSocDoc.id}`, {
+                    method: "PATCH", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ societe_id: confirmSocId, corrige_manuellement: true }),
+                  })
+                  // Re-analyze with correct société context
+                  await fetch(`/api/documents/${confirmSocDoc.id}/reanalyze`, {
+                    method: "POST", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({}),
+                  })
+                  await fetchDocuments()
+                } catch { /* silent */ }
+                setConfirmSocSaving(false)
+                setConfirmSocDoc(null)
+              }}
+            >
+              {confirmSocSaving ? "Traitement..." : "Confirmer et traiter"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Reassignment dialog for undetected société */}
       <Dialog open={!!reassignDoc} onOpenChange={(o) => { if (!o) { setReassignDoc(null); setReassignSocieteId("") } }}>
