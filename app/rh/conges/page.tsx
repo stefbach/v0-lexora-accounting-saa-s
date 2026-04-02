@@ -17,16 +17,16 @@ import {
 
 // ─── Constants ───────────────────────────────────────────────────
 const TYPE_LABELS: Record<string, string> = {
-  AL: "Conge annuel",
-  SL: "Conge maladie",
+  AL: "Congé annuel",
+  SL: "Congé maladie",
   UL: "Sans solde",
-  MAT: "Maternite (14 sem.)",
-  PAT: "Paternite (5j)",
+  MAT: "Maternité (14 sem.)",
+  PAT: "Paternité (5j)",
   CAR: "Soins famille",
   WI: "Accident travail",
-  COM: "Deces proche",
-  PH: "Jour ferie travaille",
-  ABS: "Absence injustifiee",
+  COM: "Décès proche",
+  PH: "Jour férié travaillé",
+  ABS: "Absence",
 }
 
 const TYPE_COLORS: Record<string, string> = {

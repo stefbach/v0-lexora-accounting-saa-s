@@ -77,7 +77,7 @@ export default function TableauDeBord() {
   )
 
   return (
-    <div className="p-4 pt-14 md:pt-6 md:p-6 space-y-6">
+    <div className="p-3 pt-12 sm:p-4 md:pt-6 md:p-6 space-y-4 sm:space-y-6">
       {/* En-tête */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
@@ -88,7 +88,7 @@ export default function TableauDeBord() {
         </div>
         {societes.length > 1 && (
           <Select value={selected} onValueChange={setSelected}>
-            <SelectTrigger className="w-56">
+            <SelectTrigger className="w-full sm:w-56">
               <SelectValue placeholder="Toutes les sociétés" />
             </SelectTrigger>
             <SelectContent>

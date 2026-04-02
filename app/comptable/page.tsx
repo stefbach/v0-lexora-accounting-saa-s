@@ -205,7 +205,7 @@ export default function ComptableDashboardPage() {
       {/* KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
-          <CardContent className="pt-6">
+          <CardContent className="pt-6 overflow-x-auto">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Clients</p>
@@ -227,7 +227,7 @@ export default function ComptableDashboardPage() {
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6">
+          <CardContent className="pt-6 overflow-x-auto">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Societes gerees</p>
@@ -249,7 +249,7 @@ export default function ComptableDashboardPage() {
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6">
+          <CardContent className="pt-6 overflow-x-auto">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">
@@ -278,7 +278,7 @@ export default function ComptableDashboardPage() {
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6">
+          <CardContent className="pt-6 overflow-x-auto">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">

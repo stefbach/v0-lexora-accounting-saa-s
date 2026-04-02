@@ -236,7 +236,7 @@ function DashboardTab({ stats, loading }: { stats: any; loading: boolean }) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: "Employes actifs", value: String(stats.nb_employes), icon: Users, color: "text-blue-600", bg: "bg-blue-50" },
-          { label: "Masse salariale", value: fmt(stats.masse_salariale), icon: Banknote, color: "text-green-600", bg: "bg-green-50" },
+          { label: "Masse salariale brute", value: fmt(stats.masse_salariale), icon: Banknote, color: "text-green-600", bg: "bg-green-50" },
           { label: "Charges patronales", value: fmt(stats.charges_patronales), icon: CreditCard, color: "text-orange-600", bg: "bg-orange-50" },
           { label: "Absences ce mois", value: String(stats.conges_attente), icon: Calendar, color: "text-red-500", bg: "bg-red-50" },
         ].map(k => (

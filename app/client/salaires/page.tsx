@@ -401,7 +401,7 @@ export default function ClientSalairesPage() {
 
       {/* Payroll Workflow Timeline */}
       <Card className="border border-gray-200">
-        <CardContent className="py-4 px-6">
+        <CardContent className="py-4 px-6 overflow-x-auto">
           <div className="flex items-center justify-between">
             {workflowSteps.map((step, idx) => {
               const StepIcon = step.icon
@@ -507,7 +507,7 @@ export default function ClientSalairesPage() {
 
       {/* Period Settings */}
       <Card className="border border-gray-200">
-        <CardContent className="py-4 px-6">
+        <CardContent className="py-4 px-6 overflow-x-auto">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div className="flex items-center gap-4">
               <div>

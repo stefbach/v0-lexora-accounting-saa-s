@@ -284,7 +284,7 @@ export default function EmployesPage() {
 
       <Card>
         <CardHeader><CardTitle className="text-[#1E2A4A] flex items-center gap-2"><Users className="w-4 h-4"/>Employés ({filtered.length})</CardTitle></CardHeader>
-        <CardContent className="p-0">
+        <CardContent className="p-0 overflow-x-auto">
           {loading ? <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-[#1E2A4A]"/></div> : filtered.length===0 ? <div className="text-center py-12 text-gray-500">Aucun employé</div> : (
             <Table>
               <TableHeader><TableRow><TableHead>Code</TableHead><TableHead>Nom</TableHead><TableHead>Statut</TableHead><TableHead>Poste</TableHead><TableHead>Email</TableHead><TableHead className="text-right">Salaire base</TableHead><TableHead>Banque</TableHead><TableHead>NIC</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
