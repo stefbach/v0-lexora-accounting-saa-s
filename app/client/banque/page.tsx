@@ -40,6 +40,7 @@ export default function ClientBanquePage() {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedSociete, setSelectedSociete] = useState("all")
+  const [availableSocietes, setAvailableSocietes] = useState<any[]>([])
   const [selectedCompte, setSelectedCompte] = useState("all")
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
@@ -55,6 +56,11 @@ export default function ClientBanquePage() {
       if (res.ok) {
         const json = await res.json()
         setData(json.financial)
+        // Preserve the full societes list from the initial unfiltered load
+        const socs = json.financial?.availableSocietes ?? []
+        if (socs.length > 0 && (!societeId || societeId === "all")) {
+          setAvailableSocietes(socs)
+        }
       } else {
         setData(null)
         setError("Erreur de chargement des données bancaires.")
@@ -116,12 +122,8 @@ export default function ClientBanquePage() {
     )
   }
 
-  const allBankAccounts = data?.bankAccounts ?? []
-  const bankAccounts = selectedSociete !== "all"
-    ? allBankAccounts.filter((a: any) => a.societe_id === selectedSociete)
-    : allBankAccounts
+  const bankAccounts = data?.bankAccounts ?? []
   const totalBankMUR = bankAccounts.reduce((s: number, a: any) => s + (a.solde_mur ?? 0), 0)
-  const societes = data?.availableSocietes ?? []
 
   // Account IDs for the selected accounts (used to filter transactions)
   const bankAccountIds = new Set(bankAccounts.map((a: any) => a.id))
@@ -164,9 +166,17 @@ export default function ClientBanquePage() {
     }
     // Account filter
     if (selectedCompte !== "all" && row.compte_bancaire_id !== selectedCompte) return false
-    // Date range filter
-    if (dateFrom && row.date < dateFrom) return false
-    if (dateTo && row.date > dateTo) return false
+    // Date range filter (normalize to timestamps for safe comparison)
+    if (dateFrom && row.date) {
+      const txDate = new Date(row.date).getTime()
+      const fromDate = new Date(dateFrom).getTime()
+      if (!isNaN(txDate) && !isNaN(fromDate) && txDate < fromDate) return false
+    }
+    if (dateTo && row.date) {
+      const txDate = new Date(row.date).getTime()
+      const toDate = new Date(dateTo).getTime()
+      if (!isNaN(txDate) && !isNaN(toDate) && txDate > toDate) return false
+    }
     return true
   })
 
@@ -190,14 +200,14 @@ export default function ClientBanquePage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {societes.length > 1 && (
+          {availableSocietes.length > 1 && (
             <div className="flex items-center gap-2">
               <Building2 className="h-4 w-4 text-muted-foreground" />
               <Select value={selectedSociete} onValueChange={setSelectedSociete}>
                 <SelectTrigger className="w-[200px] h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Toutes les sociétés</SelectItem>
-                  {societes.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
+                  {availableSocietes.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -220,7 +230,7 @@ export default function ClientBanquePage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
-              {totalBankMUR > 0 ? formatMUR(totalBankMUR) : "—"}
+              {bankAccounts.length > 0 ? formatMUR(totalBankMUR) : "—"}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               {bankAccounts.length} compte{bankAccounts.length > 1 ? "s" : ""}
