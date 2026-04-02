@@ -92,7 +92,7 @@ const MENU: MenuSection[] = [
       { href: "/client/documents", label: "Documents & OCR", labelKey: "nav.documents", icon: FileText },
       { href: "/client/utilisateurs", label: "Mon Équipe", labelKey: "nav.team", icon: Users },
       { href: "/client/alertes", label: "Alertes", labelKey: "nav.alerts", icon: Bell },
-      { href: "/client/assistant", label: "Espace Assistant", labelKey: "nav.assistant", icon: Upload },
+      { href: "/client/assistant", label: "Espace Assistant", labelKey: "nav.assistant", icon: Upload, visibleForRoles: ["client_admin", "client_user", "client_assistant", "super_admin", "admin"] },
     ]
   },
   {
@@ -253,12 +253,6 @@ export function ClientSidebarFull() {
             { href: "/client/assistant", label: "Espace Assistant", icon: Upload },
           ],
         },
-        {
-          section: "Mon Compte",
-          items: [
-            { href: "/client/profil", label: "Mon Profil", icon: Settings },
-          ],
-        },
       ]
     : MENU.filter(section => {
         if (!section.requiredModule) return true
@@ -315,6 +309,7 @@ export function ClientSidebarFull() {
               {!isCollapsed && (
                 <div className="space-y-0.5 ml-1">
                   {items.map(item => {
+                    if ((item as any).visibleForRoles && !(item as any).visibleForRoles.includes(profile?.role)) return null
                     const Icon = item.icon
                     const active = isActive(item.href)
                     const itemLabel = item.labelKey ? t(item.labelKey, locale) : item.label

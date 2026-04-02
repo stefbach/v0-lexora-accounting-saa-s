@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Loader2, Shield, GraduationCap, PiggyBank, Receipt, Download } from "lucide-react"
 
 const NAVY = "#1E2A4A"
@@ -52,6 +53,30 @@ export default function ChargesSocialesPage() {
   const totalPRGF = bulletins.reduce((s, b) => s + (Number(b.prgf) || 0), 0)
   const grandTotal = totalCSGSalarie + totalCSGPatronal + totalNSFSalarie + totalNSFPatronal + totalTrainingLevy + totalPAYE + totalPRGF
 
+  function exportCSV() {
+    const socName = societes.find(s => s.id === societe)?.nom || "societe"
+    const header = "Employé;Brut;CSG sal.;CSG pat.;NSF sal.;NSF pat.;PAYE;Training Levy"
+    const rows = bulletins.map((b: any) => [
+      `${b.employe?.prenom || ""} ${b.employe?.nom || ""}`.trim(),
+      Number(b.salaire_base) || 0,
+      Number(b.csg_salarie) || 0,
+      Number(b.csg_patronal) || 0,
+      Number(b.nsf_salarie) || 0,
+      Number(b.nsf_patronal) || 0,
+      Number(b.paye) || 0,
+      Number(b.training_levy) || 0,
+    ].join(";"))
+    const totals = `TOTAL;${bulletins.reduce((s: number, b: any) => s + (Number(b.salaire_base) || 0), 0)};${totalCSGSalarie};${totalCSGPatronal};${totalNSFSalarie};${totalNSFPatronal};${totalPAYE};${totalTrainingLevy}`
+    const csv = [header, ...rows, totals].join("\n")
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `CSG_${periode}_${socName.replace(/\s+/g, "_")}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -65,6 +90,18 @@ export default function ChargesSocialesPage() {
             <SelectContent>{societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent>
           </Select>
           <input type="month" value={periode} onChange={e => setPeriode(e.target.value)} className="border rounded px-3 py-2 text-sm" />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2">
+                <Download className="h-4 w-4" /> Exporter
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onClick={exportCSV}>Export CSV</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => alert("Export Excel — fonctionnalité à venir")}>Export Excel (.xlsx)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => alert("Export PDF — fonctionnalité à venir")}>Export PDF</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
