@@ -361,7 +361,7 @@ export default function AdminServicesPage() {
                       </div>
                       <CardDescription className="text-xs">{plan.description}</CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-3">
+                    <CardContent className="space-y-3 overflow-x-auto">
                       <div className="space-y-1.5">
                         {moduleKeys.map(key => (
                           <div key={key} className="flex items-center gap-2 text-sm">

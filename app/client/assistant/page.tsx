@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Upload, FileText, CheckCircle2, AlertCircle, Loader2, RefreshCw, Trash2 } from "lucide-react"
+import { Upload, FileText, CheckCircle2, AlertCircle, Loader2, RefreshCw, Trash2, Camera } from "lucide-react"
 
 const NAVY = "#1E2A4A"
 const GOLD = "#C9A84C"
@@ -27,6 +27,7 @@ export default function AssistantPage() {
   const [loadingDocs, setLoadingDocs] = useState(true)
   const [isDragging, setIsDragging] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  const cameraRef = useRef<HTMLInputElement>(null)
 
   // Fetch sociétés
   useEffect(() => {
@@ -170,7 +171,10 @@ export default function AssistantPage() {
             <p className="text-lg font-medium" style={{ color: NAVY }}>
               {files.length > 0 ? `${files.length} fichier(s) selectionne(s)` : "Glissez vos fichiers ici"}
             </p>
-            <p className="text-sm text-gray-400 mt-1">PDF, JPEG, PNG, Excel — Detection automatique du type</p>
+            <p className="text-sm text-gray-400 mt-1">PDF, JPEG, PNG, Excel — max 20 MB — Détection automatique du type</p>
+            <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden"
+              onChange={e => setFiles(prev => [...prev, ...Array.from(e.target.files || [])])}
+            />
             {files.length > 0 && (
               <div className="mt-3 space-y-1">
                 {files.map((f, i) => (
@@ -179,14 +183,23 @@ export default function AssistantPage() {
               </div>
             )}
           </div>
-          <Button
-            onClick={handleUpload}
-            disabled={uploading || !files.length || !selectedSociete}
-            className="w-full mt-4 h-12 text-base font-semibold"
-            style={{ backgroundColor: GOLD, color: NAVY }}
-          >
-            {uploading ? <><Loader2 className="w-5 h-5 animate-spin mr-2" />Analyse en cours...</> : <><Upload className="w-5 h-5 mr-2" />Envoyer pour analyse</>}
-          </Button>
+          <div className="flex gap-2 mt-4">
+            <Button
+              variant="outline"
+              className="h-12 text-base"
+              onClick={(e) => { e.stopPropagation(); cameraRef.current?.click() }}
+            >
+              <Camera className="w-5 h-5 mr-2" />Prendre une photo
+            </Button>
+            <Button
+              onClick={handleUpload}
+              disabled={uploading || !files.length || !selectedSociete}
+              className="flex-1 h-12 text-base font-semibold"
+              style={{ backgroundColor: GOLD, color: NAVY }}
+            >
+              {uploading ? <><Loader2 className="w-5 h-5 animate-spin mr-2" />Analyse en cours...</> : <><Upload className="w-5 h-5 mr-2" />Envoyer pour analyse</>}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

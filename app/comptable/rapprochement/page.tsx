@@ -137,7 +137,7 @@ export default function RapprochementPage() {
           {matched.length > 0 && (
             <Card>
               <CardHeader><CardTitle className="text-[#1E2A4A] flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-green-600" />Rapprochees ({matched.length})</CardTitle></CardHeader>
-              <CardContent className="p-0">
+              <CardContent className="p-0 overflow-x-auto">
                 <Table>
                   <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Libelle</TableHead><TableHead className="text-right">Montant</TableHead><TableHead>Tiers</TableHead><TableHead>Lettre</TableHead><TableHead>Action</TableHead></TableRow></TableHeader>
                   <TableBody>
@@ -160,7 +160,7 @@ export default function RapprochementPage() {
           {/* Non rapprochees */}
           <Card>
             <CardHeader><CardTitle className="text-[#1E2A4A] flex items-center gap-2"><AlertCircle className="w-5 h-5 text-orange-500" />Non rapprochees ({unmatched.length})</CardTitle></CardHeader>
-            <CardContent className="p-0">
+            <CardContent className="p-0 overflow-x-auto">
               {unmatched.length === 0 ? (
                 <div className="p-8 text-center text-gray-400">Toutes les transactions sont rapprochees</div>
               ) : (
@@ -189,7 +189,7 @@ export default function RapprochementPage() {
           {factures.length > 0 && (
             <Card>
               <CardHeader><CardTitle className="text-[#1E2A4A] flex items-center gap-2"><ArrowRightLeft className="w-5 h-5" style={{ color: "#C9A84C" }} />Factures en attente ({factures.length})</CardTitle></CardHeader>
-              <CardContent className="p-0">
+              <CardContent className="p-0 overflow-x-auto">
                 <Table>
                   <TableHeader><TableRow><TableHead>N° Facture</TableHead><TableHead>Type</TableHead><TableHead>Tiers</TableHead><TableHead>Date</TableHead><TableHead>Echeance</TableHead><TableHead className="text-right">Montant TTC</TableHead><TableHead>Statut</TableHead></TableRow></TableHeader>
                   <TableBody>

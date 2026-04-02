@@ -12,7 +12,7 @@ import {
   Receipt, Calculator, BarChart3, TrendingUp, Target,
   Users, Clock, CreditCard, Gavel, Scale, Bell,
   Settings, LogOut, ChevronDown, ChevronRight, FileSpreadsheet,
-  UserCog, Globe, Lightbulb, ClipboardList, Download, Upload, Calendar,
+  Globe, Lightbulb, ClipboardList, Download, Upload, Calendar,
   CalendarDays, FilePlus2, SlidersHorizontal, Menu, X
 } from "lucide-react"
 
@@ -90,11 +90,9 @@ const MENU: MenuSection[] = [
       { href: "/client/societes", label: "Mes Sociétés", labelKey: "nav.companies", icon: Building2 },
       { href: "/client/societe", label: "Fiche Société", icon: Settings },
       { href: "/client/documents", label: "Documents & OCR", labelKey: "nav.documents", icon: FileText },
-      { href: "/client/utilisateurs", label: "Utilisateurs", labelKey: "nav.users", icon: Users },
-      { href: "/client/acces", label: "Rôles & Accès", icon: Users },
-      { href: "/client/equipe", label: "Mon Équipe", labelKey: "nav.team", icon: UserCog },
+      { href: "/client/utilisateurs", label: "Mon Équipe", labelKey: "nav.team", icon: Users },
       { href: "/client/alertes", label: "Alertes", labelKey: "nav.alerts", icon: Bell },
-      { href: "/client/assistant", label: "Espace Assistant", labelKey: "nav.assistant", icon: Upload },
+      { href: "/client/assistant", label: "Espace Assistant", labelKey: "nav.assistant", icon: Upload, visibleForRoles: ["client_admin", "client_user", "client_assistant", "super_admin", "admin"] },
     ]
   },
   {
@@ -255,12 +253,6 @@ export function ClientSidebarFull() {
             { href: "/client/assistant", label: "Espace Assistant", icon: Upload },
           ],
         },
-        {
-          section: "Mon Compte",
-          items: [
-            { href: "/client/profil", label: "Mon Profil", icon: Settings },
-          ],
-        },
       ]
     : MENU.filter(section => {
         if (!section.requiredModule) return true
@@ -317,6 +309,8 @@ export function ClientSidebarFull() {
               {!isCollapsed && (
                 <div className="space-y-0.5 ml-1">
                   {items.map(item => {
+                    const vRoles = (item as any).visibleForRoles
+                    if (vRoles && (!profile?.role || !vRoles.includes(profile.role))) return null
                     const Icon = item.icon
                     const active = isActive(item.href)
                     const itemLabel = item.labelKey ? t(item.labelKey, locale) : item.label

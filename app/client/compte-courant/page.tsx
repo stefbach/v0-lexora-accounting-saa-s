@@ -236,7 +236,7 @@ export default function CompteCourantPage() {
                 <Plus className="w-4 h-4 mr-2" />Nouveau compte
               </Button>
             </CardHeader>
-            <CardContent className="p-0">
+            <CardContent className="p-0 overflow-x-auto">
               {comptes.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">
                   Aucun compte courant associe. Creez-en un pour commencer.
@@ -294,7 +294,7 @@ export default function CompteCourantPage() {
               <CardHeader>
                 <CardTitle className="text-[#1E2A4A]">Derniers mouvements</CardTitle>
               </CardHeader>
-              <CardContent className="p-0">
+              <CardContent className="p-0 overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -358,7 +358,7 @@ export default function CompteCourantPage() {
               </Button>
             </div>
           </CardHeader>
-          <CardContent className="p-0">
+          <CardContent className="p-0 overflow-x-auto">
             {filteredMouvements.length === 0 ? (
               <div className="text-center py-12 text-gray-500">Aucun mouvement enregistre pour ce compte.</div>
             ) : (

@@ -199,7 +199,7 @@ export default function DemandesRHPage() {
           { label: "Refusees", value: String(requests.filter(r => r.status === "rejected").length), icon: XCircle, color: "text-red-600", bg: "bg-red-50" },
         ].map(k => (
           <Card key={k.label} className="border border-gray-200">
-            <CardContent className="p-4">
+            <CardContent className="p-4 overflow-x-auto">
               <div className="flex items-center gap-2 mb-2">
                 <div className={`w-8 h-8 rounded-lg ${k.bg} flex items-center justify-center`}>
                   <k.icon className={`w-4 h-4 ${k.color}`} />

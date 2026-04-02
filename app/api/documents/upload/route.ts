@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { getSystemPrompt, injectTauxChange, CLAUDE_CONFIG } from '@/lib/ai/prompts'
+import { createHash } from 'crypto'
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -42,14 +43,18 @@ export async function POST(request: NextRequest) {
     }
     if (file.size > 20 * 1024 * 1024) return NextResponse.json({ error: 'Fichier trop volumineux (max 20MB)' }, { status: 400 })
 
-    // Détection doublons par nom + taille
-    const { data: existingDoc } = await supabase
+    // Détection doublons — multi-level check
+    let existingDoc: { id: string; nom_fichier: string; statut: string } | null = null
+
+    // Level 1: filename + size (cross-user — catches same file uploaded by any user)
+    const { data: nameSizeDup } = await supabase
       .from('documents')
       .select('id, nom_fichier, statut')
       .eq('nom_fichier', file.name)
       .eq('taille_fichier', file.size)
       .limit(1)
       .maybeSingle()
+    if (nameSizeDup) existingDoc = nameSizeDup
     if (existingDoc && existingDoc.statut === 'traite') {
       return NextResponse.json({
         error: `Doublon détecté : "${file.name}" a déjà été uploadé (ID: ${existingDoc.id}). Utilisez "Réanalyser" pour retraiter ce document.`,
@@ -57,65 +62,101 @@ export async function POST(request: NextRequest) {
         doc_id: existingDoc.id
       }, { status: 409 })
     }
-    // Si le document existe mais en erreur ou en_attente, supprimer l'ancien pour permettre le re-upload
+    // Si le document existe mais en erreur ou en_attente, demander confirmation
     if (existingDoc && existingDoc.statut !== 'traite') {
-      await supabase.from('ecritures_comptables').delete().eq('piece_justificative', existingDoc.id)
-      await supabase.from('releves_bancaires').delete().eq('document_id', existingDoc.id)
-      await supabase.from('documents').delete().eq('id', existingDoc.id)
+      return NextResponse.json({
+        doublon: true,
+        statut: existingDoc.statut,
+        message: "Un document identique existe déjà avec des erreurs de traitement. Voulez-vous le retraiter ?",
+        existingId: existingDoc.id,
+      }, { status: 409 })
     }
 
-    // Resolve dossier_id — IMPORTANT: use the société's dossier, not the user's personal dossier
+    // Resolve dossier_id — PRIORITY 1: explicit societe_id from FormData
     let resolvedDossierId = dossierId
+    let needsSocieteConfirmation = false
+    if (!resolvedDossierId && societeId) {
+      const { data: d } = await supabase.from('dossiers').select('id').eq('societe_id', societeId).limit(1).maybeSingle()
+      if (d) { resolvedDossierId = d.id }
+    }
+    // PRIORITY 2: user's profile société or user_societes
     if (!resolvedDossierId) {
-      // 1. Si societe_id fourni, chercher un dossier pour cette société
-      if (societeId) {
-        const { data: d } = await supabase.from('dossiers').select('id').eq('societe_id', societeId).limit(1).maybeSingle()
+      const { data: profile } = await supabase.from('profiles').select('societe_id').eq('id', user.id).maybeSingle()
+      if (profile?.societe_id) {
+        const { data: d } = await supabase.from('dossiers').select('id').eq('societe_id', profile.societe_id).limit(1).maybeSingle()
         if (d) { resolvedDossierId = d.id }
       }
-      // 2. Trouver la société du user (via profile.societe_id ou user_societes)
-      if (!resolvedDossierId) {
-        const { data: profile } = await supabase.from('profiles').select('societe_id').eq('id', user.id).maybeSingle()
-        if (profile?.societe_id) {
-          // Chercher un dossier existant pour CETTE société (peu importe le client_id)
-          const { data: d } = await supabase.from('dossiers').select('id').eq('societe_id', profile.societe_id).limit(1).maybeSingle()
-          if (d) { resolvedDossierId = d.id }
-        }
-      }
-      // 3. Via user_societes
-      if (!resolvedDossierId) {
-        const { data: us } = await supabase.from('user_societes').select('societe_id').eq('user_id', user.id).limit(1).maybeSingle()
-        if (us?.societe_id) {
-          const { data: d } = await supabase.from('dossiers').select('id').eq('societe_id', us.societe_id).limit(1).maybeSingle()
-          if (d) { resolvedDossierId = d.id }
-        }
-      }
-      // 4. Chercher un dossier du user (en tant que client)
-      if (!resolvedDossierId) {
-        const { data: d } = await supabase.from('dossiers').select('id').eq('client_id', user.id).limit(1).maybeSingle()
+    }
+    if (!resolvedDossierId) {
+      const { data: us } = await supabase.from('user_societes').select('societe_id').eq('user_id', user.id).limit(1).maybeSingle()
+      if (us?.societe_id) {
+        const { data: d } = await supabase.from('dossiers').select('id').eq('societe_id', us.societe_id).limit(1).maybeSingle()
         if (d) { resolvedDossierId = d.id }
       }
-      // 5. Si le user est comptable
-      if (!resolvedDossierId) {
-        const { data: d } = await supabase.from('dossiers').select('id').eq('comptable_id', user.id).limit(1).maybeSingle()
-        if (d) { resolvedDossierId = d.id }
-      }
-      // 4. Dernier recours : créer un dossier personnel
-      if (!resolvedDossierId) {
-        const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
-        const { data: newSoc } = await supabase.from('societes')
-          .insert({ nom: `${profile?.full_name || user.email} — Personnel`, statut_tva: false }).select('id').single()
-        if (newSoc) {
-          const { data: nd } = await supabase.from('dossiers')
-            .insert({ client_id: user.id, societe_id: newSoc.id, comptable_id: null }).select('id').single()
-          resolvedDossierId = nd?.id || null
-        }
+    }
+    // PRIORITY 3: any dossier owned by user (as client or comptable)
+    if (!resolvedDossierId) {
+      const { data: d } = await supabase.from('dossiers').select('id').eq('client_id', user.id).limit(1).maybeSingle()
+      if (d) { resolvedDossierId = d.id }
+    }
+    if (!resolvedDossierId) {
+      const { data: d } = await supabase.from('dossiers').select('id').eq('comptable_id', user.id).limit(1).maybeSingle()
+      if (d) { resolvedDossierId = d.id }
+    }
+    // NO FALLBACK to "Personnel" — if no dossier found, mark as needing confirmation
+    if (!resolvedDossierId) {
+      needsSocieteConfirmation = true
+      // Create a temporary dossier to store the file, but mark for confirmation
+      const { data: tempProfile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
+      const { data: tempSoc } = await supabase.from('societes')
+        .insert({ nom: `${tempProfile?.full_name || user.email} — En attente`, statut_tva: false }).select('id').single()
+      if (tempSoc) {
+        const { data: nd } = await supabase.from('dossiers')
+          .insert({ client_id: user.id, societe_id: tempSoc.id, comptable_id: null }).select('id').single()
+        resolvedDossierId = nd?.id || null
       }
       if (!resolvedDossierId) return NextResponse.json({ error: 'Impossible de créer un dossier' }, { status: 400 })
     }
 
     // Read file ONCE
     const fileArrayBuffer = await file.arrayBuffer()
-    const base64 = Buffer.from(fileArrayBuffer).toString('base64')
+    const fileBuffer = Buffer.from(fileArrayBuffer)
+    const fileHash = createHash('sha256').update(fileBuffer).digest('hex')
+    const base64 = fileBuffer.toString('base64')
+
+    // Level 2: Hash-based dedup (catches renamed files with identical content)
+    // Wrapped in try/catch in case file_hash column doesn't exist yet
+    if (!existingDoc) {
+      try {
+        const { data: hashDup, error: hashErr } = await supabase
+          .from('documents')
+          .select('id, nom_fichier, statut')
+          .eq('file_hash', fileHash)
+          .limit(1)
+          .maybeSingle()
+        if (!hashErr && hashDup) existingDoc = hashDup
+      } catch {
+        console.log('[upload] file_hash column not available, skipping hash dedup')
+      }
+    }
+
+    // Handle duplicate found
+    if (existingDoc) {
+      if (existingDoc.statut === 'traite') {
+        return NextResponse.json({
+          error: `Doublon détecté : "${existingDoc.nom_fichier}" existe déjà.`,
+          doublon: true,
+          doc_id: existingDoc.id,
+        }, { status: 409 })
+      } else {
+        return NextResponse.json({
+          doublon: true,
+          statut: existingDoc.statut,
+          message: "Un document identique existe déjà avec des erreurs de traitement. Voulez-vous le retraiter ?",
+          existingId: existingDoc.id,
+        }, { status: 409 })
+      }
+    }
     const ext2 = file.name.split('.').pop()?.toLowerCase() || 'pdf'
     const typeFichier = ext2 === 'jpg' ? 'jpeg' : ext2 as 'pdf' | 'jpeg' | 'png' | 'xlsx'
     const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
@@ -127,11 +168,24 @@ export async function POST(request: NextRequest) {
     if (storageError) return NextResponse.json({ error: `Upload storage: ${storageError.message}` }, { status: 500 })
 
     // Create document record
-    const { data: doc, error: docError } = await supabase.from('documents').insert({
+    // Try insert with file_hash, fall back without if column doesn't exist
+    let doc: any = null
+    let docError: any = null
+    const docFields: Record<string, unknown> = {
       dossier_id: resolvedDossierId, uploaded_by: user.id, nom_fichier: file.name,
       type_fichier: typeFichier, statut: 'en_cours', storage_path: storagePath,
       taille_fichier: file.size, societe_detectee: null, type_document: null,
-    }).select().single()
+    }
+    const insertWithHash = await supabase.from('documents').insert({ ...docFields, file_hash: fileHash }).select().single()
+    if (insertWithHash.error?.message?.includes('file_hash')) {
+      // Column doesn't exist yet — insert without it
+      const insertWithout = await supabase.from('documents').insert(docFields).select().single()
+      doc = insertWithout.data
+      docError = insertWithout.error
+    } else {
+      doc = insertWithHash.data
+      docError = insertWithHash.error
+    }
     if (docError) return NextResponse.json({ error: `DB insert: ${docError.message}` }, { status: 500 })
     docId = doc.id
 
@@ -409,7 +463,7 @@ export async function POST(request: NextRequest) {
         console.log('[upload] Bank JSON parsed OK. Keys:', Object.keys(bankParsed).join(', '),
           'lignes:', Array.isArray(bankParsed.lignes) ? bankParsed.lignes.length : 0,
           'transactions:', Array.isArray(bankParsed.transactions) ? bankParsed.transactions.length : 0)
-        parsed = { routing: { type_document: 'releve_bancaire', societe: bankParsed.banque || 'MCB', confiance_type: 95 }, extraction: bankParsed }
+        parsed = { routing: { type_document: 'releve_bancaire', societe: bankParsed.banque || 'INCONNU', confiance_type: 95 }, extraction: bankParsed }
       } else {
         console.error('[upload] FAILED to parse bank JSON. Raw text:', bankText.substring(0, 1000))
         parsed = {
@@ -1077,12 +1131,13 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
 
     // Handle bank statement: auto-detect société + create/update bank account + store statement
     if (typeDocument === 'releve_bancaire') {
-      if (!extraction.banque && !extraction.compte_bancaire) {
-        extraction.banque = detectedSociete !== 'INCONNU' ? detectedSociete : 'Banque'
+      if (!extraction.banque && !extraction.compte_bancaire && detectedSociete !== 'INCONNU') {
+        extraction.banque = detectedSociete
       }
       const bankDevise = extraction.devise || 'MUR'
-      const bankName = extraction.banque || extraction.compte_bancaire || 'Banque'
-      const solde = Number(extraction.solde_cloture) || Number(extraction.solde_fin) || 0
+      const bankName = extraction.banque || extraction.compte_bancaire || null
+      const rawSolde = parseFloat(extraction.solde_cloture) || parseFloat(extraction.solde_fin) || NaN
+      const solde = isNaN(rawSolde) ? null : rawSolde
       const extractedIBAN = extraction.iban || null
       const extractedNumeroCompte = extraction.numero_compte || extraction.compte_bancaire || null
       const extractedBRN = extraction.brn || null
@@ -1151,7 +1206,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
             normPeriodeFin = p
           }
         }
-        if (!normPeriodeFin) normPeriodeFin = new Date().toISOString().split('T')[0]
+        if (!normPeriodeFin) normPeriodeFin = null
 
         let normPeriodeDebut = extraction.periode_debut || extraction.date_debut || null
         if (!normPeriodeDebut && extraction.periode) {
@@ -1175,7 +1230,8 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
             .select('id').eq('societe_id', bankSocieteId).eq('numero_compte', normNumeroCompte).limit(1).maybeSingle()
           existingBank = byNum
         }
-        if (!existingBank) {
+        // Only match by banque+devise if bankName is known (avoid "null" collisions)
+        if (!existingBank && bankName) {
           const { data: byName } = await supabase.from('comptes_bancaires')
             .select('id').eq('societe_id', bankSocieteId).eq('banque', bankName).eq('devise', bankDevise).limit(1).maybeSingle()
           existingBank = byName
@@ -1184,17 +1240,21 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
         if (existingBank) {
           // Update balance
           console.log(`[upload] Updating existing bank account ${existingBank.id}: solde=${solde}, date=${normPeriodeFin}`)
-          const bankUpdate: Record<string, unknown> = { solde_actuel: solde, date_dernier_releve: normPeriodeFin }
+          const bankUpdate: Record<string, unknown> = {}
+          if (solde !== null) bankUpdate.solde_actuel = solde
+          if (normPeriodeFin) bankUpdate.date_dernier_releve = normPeriodeFin
           if (extractedIBAN) bankUpdate.iban = extractedIBAN
           if (normNumeroCompte) bankUpdate.numero_compte = normNumeroCompte
-          await supabase.from('comptes_bancaires').update(bankUpdate).eq('id', existingBank.id)
-        } else {
-          // Create new bank account
+          if (Object.keys(bankUpdate).length > 0) {
+            await supabase.from('comptes_bancaires').update(bankUpdate).eq('id', existingBank.id)
+          }
+        } else if (bankName) {
+          // Create new bank account only if bank name was identified
           console.log(`[upload] Creating new bank account: ${bankName} for societe=${bankSocieteId}`)
           const { error: bankInsertError } = await supabase.from('comptes_bancaires').insert({
             societe_id: bankSocieteId,
             banque: bankName,
-            nom_compte: normNumeroCompte || bankName,
+            nom_compte: normNumeroCompte || null,
             numero_compte: normNumeroCompte,
             iban: extractedIBAN,
             devise: bankDevise,
@@ -1206,6 +1266,9 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
           if (bankInsertError) {
             console.error('[upload] comptes_bancaires insert FAILED:', bankInsertError.message)
           }
+        } else {
+          // Bank name not identified — skip account creation, add warning
+          console.warn('[upload] Banque non identifiée — compte bancaire non créé. Document:', doc.id)
         }
 
         // Store bank statement record — find the account we just created/updated
@@ -1215,7 +1278,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
             .select('id').eq('societe_id', bankSocieteId).eq('numero_compte', normNumeroCompte).limit(1).maybeSingle()
           bankAccount = byNum
         }
-        if (!bankAccount) {
+        if (!bankAccount && bankName) {
           const { data: byName } = await supabase.from('comptes_bancaires')
             .select('id').eq('societe_id', bankSocieteId).eq('banque', bankName).eq('devise', bankDevise).limit(1).maybeSingle()
           bankAccount = byName
@@ -1281,8 +1344,22 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
 
     // Return final state
     const { data: finalDoc } = await supabase.from('documents')
-      .select('id, nom_fichier, type_fichier, type_document, statut, storage_path, created_at, societe_detectee')
+      .select('id, nom_fichier, type_fichier, type_document, statut, storage_path, created_at, societe_detectee, confiance_type')
       .eq('id', doc.id).single()
+
+    // If no société was identified and the document needs confirmation
+    if (needsSocieteConfirmation || (!societeId && (!finalDoc?.societe_detectee || finalDoc.societe_detectee === 'INCONNU'))) {
+      // Mark as en_attente if not already processed
+      if (finalDoc?.statut !== 'traite') {
+        await supabase.from('documents').update({ statut: 'en_attente' }).eq('id', doc.id)
+      }
+      return NextResponse.json({
+        document: finalDoc || doc,
+        needs_confirmation: true,
+        societe_detectee: finalDoc?.societe_detectee || null,
+        message: 'Société non identifiée — veuillez confirmer la société',
+      })
+    }
 
     return NextResponse.json({ document: finalDoc || doc, message: `Classé: ${typeDocument}` })
 

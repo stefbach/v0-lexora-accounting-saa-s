@@ -15,9 +15,10 @@ import {
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
 import {
-  Upload, FolderOpen, Loader2, FileText, CheckCircle,
-  Clock, Download, ChevronRight, Lock, AlertTriangle, Building2, RefreshCw,
+  Upload, FolderOpen, Loader2, FileText, CheckCircle, Search, X,
+  Clock, Download, ChevronRight, Lock, AlertTriangle, Building2, RefreshCw, Camera, Pencil,
 } from "lucide-react"
 
 const NAVY = "#1E2A4A"
@@ -54,15 +55,48 @@ const FOLDERS: Folder[] = [
   { key: "autre", label: "Autres Documents", readOnly: false },
 ]
 
+const DOCUMENT_TYPES = [
+  { value: "facture_fournisseur", label: "Facture fournisseur" },
+  { value: "facture_client", label: "Facture client" },
+  { value: "releve_bancaire", label: "Relevé bancaire" },
+  { value: "fiche_paie", label: "Fiche de paie" },
+  { value: "payroll_report", label: "Rapport paie (Excel)" },
+  { value: "charges_sociales", label: "Charges sociales" },
+  { value: "contrat", label: "Contrat" },
+  { value: "autre", label: "Autre" },
+]
+
+function getSocieteBadgeStyle(name?: string): Record<string, string> {
+  if (!name) return { backgroundColor: '#f3f4f6', color: '#374151', borderColor: '#e5e7eb' }
+  const n = name.toLowerCase()
+  if (n.includes('obesity') || n.includes('occ'))
+    return { backgroundColor: '#ccfbf1', color: '#0f766e', borderColor: '#99f6e4' }
+  if (n.includes('digital') || n.includes('dds'))
+    return { backgroundColor: '#dbeafe', color: '#1d4ed8', borderColor: '#bfdbfe' }
+  if (n.includes('tibok'))
+    return { backgroundColor: '#fef9c3', color: '#a16207', borderColor: '#fef08a' }
+  return { backgroundColor: '#f3f4f6', color: '#374151', borderColor: '#e5e7eb' }
+}
+
+function normalizeSocieteName(detected: string | null, knownSocietes: { nom: string }[]): string | null {
+  if (!detected) return null
+  const d = detected.toLowerCase().replace(/ ltd| limited| sarl| sas| co\.?/gi, '').trim()
+  for (const s of knownSocietes) {
+    const k = s.nom.toLowerCase().replace(/ ltd| limited| sarl| sas| co\.?/gi, '').trim()
+    if (k === d || k.includes(d) || d.includes(k)) return s.nom
+  }
+  return detected
+}
+
 function statutBadge(s: string) {
-  if (s === "traite") return <Badge className="bg-green-100 text-green-700">Classé</Badge>
+  if (s === "traite") return <Badge className="bg-green-100 text-green-700">Traité</Badge>
   if (s === "en_cours" || s === "en_attente") return <Badge className="bg-blue-100 text-blue-700"><Clock className="h-3 w-3 mr-1" />Analyse en cours...</Badge>
   if (s === "erreur") return <Badge className="bg-red-100 text-red-700"><AlertTriangle className="h-3 w-3 mr-1" />Erreur</Badge>
   return <Badge variant="outline">{s}</Badge>
 }
 
 function confianceBadge(confiance: number | undefined | null) {
-  if (confiance == null) return null
+  if (confiance == null) return <span className="text-xs text-muted-foreground">—</span>
   if (confiance >= 80) return <Badge className="bg-green-100 text-green-700 text-xs">{confiance}%</Badge>
   if (confiance >= 50) return <Badge className="bg-orange-100 text-orange-700 text-xs">{confiance}%</Badge>
   return <Badge className="bg-red-100 text-red-700 text-xs">{confiance}%</Badge>
@@ -95,10 +129,32 @@ export default function ClientDocumentsPage() {
   const [societes, setSocietes] = useState<{ id: string; nom: string; societe_id: string }[]>([])
   const [selectedUploadSociete, setSelectedUploadSociete] = useState<string>("auto")
   const [selectedFolder, setSelectedFolder] = useState("recent")
+  const [docSearch, setDocSearch] = useState("")
+  const [statusFilter, setStatusFilter] = useState("all")
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
   // Reassignment dialog for undetected société
   const [reassignDoc, setReassignDoc] = useState<{ id: string; nom_fichier: string } | null>(null)
   const [reassignSocieteId, setReassignSocieteId] = useState<string>("")
+  // Category change dialog
+  const [changeCatDoc, setChangeCatDoc] = useState<Document | null>(null)
+  const [changeCatType, setChangeCatType] = useState("")
+  const [changeCatHint, setChangeCatHint] = useState("")
+  const [changeCatSaving, setChangeCatSaving] = useState(false)
+  // Duplicate reprocess dialog
+  const [reprocessDoc, setReprocessDoc] = useState<{ id: string; filename: string } | null>(null)
+  // Société confirmation dialog (when upload can't detect société)
+  const [confirmSocDoc, setConfirmSocDoc] = useState<{ id: string; filename: string; detected: string | null } | null>(null)
+  const [confirmSocId, setConfirmSocId] = useState("")
+  const [confirmSocSaving, setConfirmSocSaving] = useState(false)
+  // Société filter
+  const [filterSociete, setFilterSociete] = useState("all")
+  // Pagination
+  const [pageSize] = useState(20)
+  const [visibleCount, setVisibleCount] = useState(20)
+  // Inline société reassignment
+  const [reassigningSocDocId, setReassigningSocDocId] = useState<string | null>(null)
+  const [reassigningSocValue, setReassigningSocValue] = useState("")
 
   const fetchDocuments = useCallback(async () => {
     try {
@@ -131,7 +187,7 @@ export default function ClientDocumentsPage() {
               return soc ? { id: d.id, nom: soc.nom, societe_id: d.societe_id } : null
             })
             .filter(Boolean)
-            .filter((s: any) => !s.nom.endsWith("— Personnel"))
+            .filter((s: any) => !s.nom.endsWith("— Personnel") && !s.nom.endsWith("— En attente"))
           setSocietes(linked)
         }
 
@@ -208,7 +264,12 @@ export default function ClientDocumentsPage() {
           const detectedSociete = doc.societe_detectee
           const isAutoMode = selectedUploadSociete === "auto"
 
-          if (doc.statut === "traite" && doc.type_document) {
+          // Handle needs_confirmation response
+          if (data.needs_confirmation) {
+            setConfirmSocDoc({ id: doc.id, filename: file.name, detected: data.societe_detectee })
+            setConfirmSocId(societes.length > 0 ? societes[0].societe_id : "")
+            setUploadSuccess(`${file.name} envoyé — veuillez confirmer la société.`)
+          } else if (doc.statut === "traite" && doc.type_document) {
             const folderLabel = FOLDERS.find(f => f.key === doc.type_document)?.label || doc.type_document
 
             // Check if AI detected a société that doesn't match any known ones
@@ -227,6 +288,17 @@ export default function ClientDocumentsPage() {
             } else {
               setUploadSuccess(`${file.name} analysé et classé dans "${folderLabel}" !`)
             }
+          // Auto-reanalyze "autre" documents with low confidence
+          if (doc.type_document === "autre") {
+            const conf = doc.confiance_type ?? doc.n8n_result?.routing?.confiance_type ?? 100
+            if (conf < 70) {
+              setUploadSuccess(`${file.name} — Type non reconnu. Nouvelle analyse en cours...`)
+              fetch(`/api/documents/${doc.id}/reanalyze`, {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({}),
+              }).then(() => fetchDocuments()).catch(() => fetchDocuments())
+            }
+          }
           } else if (doc.statut === "erreur") {
             setUploadError(`${file.name} : erreur d'analyse. Utilisez Réessayer.`)
           } else {
@@ -234,7 +306,12 @@ export default function ClientDocumentsPage() {
           }
         } else {
           if (res.status === 409 && data.doublon) {
-            setUploadError(`⚠️ Doublon : "${file.name}" a déjà été uploadé. Supprimez-le d'abord si vous souhaitez le réimporter.`)
+            if (data.existingId && data.statut && data.statut !== 'traite') {
+              // Show reprocess confirmation dialog
+              setReprocessDoc({ id: data.existingId, filename: file.name })
+            } else {
+              setUploadError(`⚠️ Doublon : "${file.name}" a déjà été uploadé. Utilisez "Réanalyser" pour retraiter.`)
+            }
           } else {
             setUploadError(data.error || "Erreur lors de l'envoi")
           }
@@ -314,7 +391,24 @@ export default function ClientDocumentsPage() {
         return matchSociete || matchDossier || !d.societe_detectee
       })
 
-  const currentDocs = getDocsForFolder(filteredDocuments, selectedFolder)
+  const folderDocs = getDocsForFolder(filteredDocuments, selectedFolder)
+  const allCurrentDocs = folderDocs.filter(d => {
+    if (docSearch) {
+      if (!d.nom_fichier.toLowerCase().includes(docSearch.toLowerCase())) return false
+    }
+    if (statusFilter !== "all" && d.statut !== statusFilter) return false
+    if (filterSociete !== "all") {
+      const socName = societes.find(s => s.societe_id === filterSociete)?.nom
+      if (socName && d.societe_detectee) {
+        if (!d.societe_detectee.toLowerCase().includes(socName.toLowerCase().split(' ')[0])) return false
+      } else if (!d.societe_detectee) {
+        return false
+      }
+    }
+    return true
+  })
+  const currentDocs = allCurrentDocs.slice(0, visibleCount)
+  const unassignedCount = documents.filter(d => !d.societe_detectee).length
 
   return (
     <div className="flex-1 overflow-auto p-4 pt-14 md:pt-6 md:p-6 lg:p-8 space-y-6">
@@ -325,20 +419,20 @@ export default function ClientDocumentsPage() {
         </p>
       </div>
 
-      {/* Société selector for multi-société clients */}
-      {societes.length > 1 && (
+      {/* Société selector — optional */}
+      {societes.length > 0 && (
         <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg border bg-muted/30">
           <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
-          <span className="text-sm text-muted-foreground">Société :</span>
+          <span className="text-sm font-medium" style={{ color: NAVY }}>Société (optionnel)</span>
           <Select value={selectedUploadSociete} onValueChange={setSelectedUploadSociete}>
-            <SelectTrigger className="w-full sm:w-[260px] h-9"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-[280px] h-9"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="auto">Toutes les sociétés ({documents.length} docs)</SelectItem>
+              <SelectItem value="auto">Toutes les sociétés — détection auto</SelectItem>
               {societes.map(s => <SelectItem key={s.societe_id} value={s.societe_id}>{s.nom}</SelectItem>)}
             </SelectContent>
           </Select>
           {selectedUploadSociete === "auto" && (
-            <span className="text-xs text-muted-foreground">La société sera détectée depuis le document</span>
+            <span className="text-xs text-muted-foreground">Laissez vide pour détection automatique</span>
           )}
         </div>
       )}
@@ -361,9 +455,13 @@ export default function ClientDocumentsPage() {
           <div className="flex flex-col items-center gap-2">
             <Upload className="h-8 w-8 text-muted-foreground" />
             <p className="text-sm font-medium">Glissez-déposez vos fichiers ici</p>
-            <p className="text-xs text-muted-foreground">PDF, JPEG, PNG, XLSX — max 10 MB</p>
+            <p className="text-xs text-muted-foreground">PDF, JPEG, PNG, XLSX — max 20 MB</p>
             <p className="text-xs text-muted-foreground mt-1">Le système analyse et classe automatiquement dans le bon dossier</p>
-            <Button size="sm" variant="outline" className="mt-2" onClick={() => fileInputRef.current?.click()}>Parcourir</Button>
+            <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => handleUpload(e.target.files)} />
+            <div className="flex gap-2 mt-2">
+              <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()}>Parcourir</Button>
+              <Button size="sm" variant="outline" onClick={() => cameraInputRef.current?.click()}><Camera className="h-4 w-4 mr-1" />Prendre une photo</Button>
+            </div>
           </div>
         )}
       </div>
@@ -380,8 +478,11 @@ export default function ClientDocumentsPage() {
       )}
 
       {/* Document counter */}
-      <div className="text-xs text-gray-400 px-2">
-        {filteredDocuments.length} document(s) {selectedUploadSociete !== "auto" ? "(filtré par société)" : "(toutes sociétés)"}
+      <div className="flex items-center gap-3 text-xs text-gray-400 px-2">
+        <span>{filteredDocuments.length} document(s) {selectedUploadSociete !== "auto" ? "(filtré par société)" : "(toutes sociétés)"}</span>
+        {unassignedCount > 0 && (
+          <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-xs">{unassignedCount} non assigné{unassignedCount > 1 ? "s" : ""}</Badge>
+        )}
       </div>
 
       {/* Folder list */}
@@ -443,13 +544,41 @@ export default function ClientDocumentsPage() {
             )}
           </div>
         </CardHeader>
+        <div className="flex flex-wrap items-center gap-3 px-4 pb-3">
+          <div className="relative flex-1 min-w-[180px] max-w-xs">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input placeholder="Rechercher par nom de fichier..." className="pl-9 h-8 text-sm" value={docSearch} onChange={(e) => setDocSearch(e.target.value)} />
+          </div>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[140px] h-8 text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tous statuts</SelectItem>
+              <SelectItem value="traite">Traité</SelectItem>
+              <SelectItem value="en_cours">En cours</SelectItem>
+              <SelectItem value="erreur">Erreur</SelectItem>
+            </SelectContent>
+          </Select>
+          {societes.length > 1 && (
+            <Select value={filterSociete} onValueChange={setFilterSociete}>
+              <SelectTrigger className="w-[180px] h-8 text-sm"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Toutes sociétés</SelectItem>
+                {societes.map(s => <SelectItem key={s.societe_id} value={s.societe_id}>{s.nom}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
+          {(docSearch || statusFilter !== "all" || filterSociete !== "all") && (
+            <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setDocSearch(""); setStatusFilter("all"); setFilterSociete("all") }}>Effacer</Button>
+          )}
+        </div>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-          <Table>
+          <div className="overflow-x-auto [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded" style={{ scrollbarGutter: 'stable' }}>
+          <Table className="min-w-[900px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Fichier</TableHead>
                 <TableHead>Date</TableHead>
+                <TableHead>Société</TableHead>
                 <TableHead>Type détecté</TableHead>
                 <TableHead>Statut</TableHead>
                 <TableHead>Confiance IA</TableHead>
@@ -465,7 +594,7 @@ export default function ClientDocumentsPage() {
                     <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
                     <Link
                       href={`/client/documents/${doc.id}`}
-                      className="hover:underline text-sm font-medium truncate max-w-[200px]"
+                      className="hover:underline text-sm font-medium truncate max-w-[260px] inline-block"
                       style={{ color: NAVY }}
                       title={doc.nom_fichier}
                     >
@@ -473,6 +602,45 @@ export default function ClientDocumentsPage() {
                     </Link>
                   </TableCell>
                   <TableCell>{new Date(doc.created_at).toLocaleDateString("fr-FR")}</TableCell>
+                  <TableCell>
+                    {reassigningSocDocId === doc.id ? (
+                      <div className="flex items-center gap-1">
+                        <Select value={reassigningSocValue} onValueChange={async (v) => {
+                          setReassigningSocValue(v)
+                          const reassignSocName = societes.find(s => s.societe_id === v)?.nom || null
+                          try {
+                            await fetch(`/api/documents/${doc.id}`, {
+                              method: "PATCH", headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ societe_id: v, societe_detectee: reassignSocName, corrige_manuellement: true }),
+                            })
+                            await fetchDocuments()
+                          } catch { /* silent */ }
+                          setReassigningSocDocId(null)
+                        }}>
+                          <SelectTrigger className="h-7 text-xs w-[160px]"><SelectValue placeholder="Choisir..." /></SelectTrigger>
+                          <SelectContent>
+                            {societes.map(s => <SelectItem key={s.societe_id} value={s.societe_id}>{s.nom}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setReassigningSocDocId(null)}>
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <span className="flex items-center gap-1 group">
+                        {doc.societe_detectee ? (
+                          <Badge variant="outline" className="text-xs" style={getSocieteBadgeStyle(normalizeSocieteName(doc.societe_detectee, societes))}>
+                            {normalizeSocieteName(doc.societe_detectee, societes)}
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-xs">Non assignée</Badge>
+                        )}
+                        <button className="opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setReassigningSocDocId(doc.id); setReassigningSocValue("") }}>
+                          <Pencil className="h-3 w-3 text-muted-foreground hover:text-[#1E2A4A]" />
+                        </button>
+                      </span>
+                    )}
+                  </TableCell>
                   <TableCell>
                     {doc.type_document ? (
                       <Badge variant="outline" className="text-xs">
@@ -493,51 +661,50 @@ export default function ClientDocumentsPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
-                      <Button variant="ghost" size="sm"><Download className="h-3.5 w-3.5" /></Button>
-                      {(doc.statut === "erreur" || doc.statut === "en_attente" || doc.statut === "en_cours") && doc.storage_path && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-xs"
-                          style={{ color: GOLD }}
-                          onClick={async () => {
-                            setDocuments(prev => prev.map(d => d.id === doc.id ? { ...d, statut: "en_cours" } : d))
-                            try {
-                              const res = await fetch(`/api/documents/${doc.id}/reanalyze`, {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({}),
-                              })
-                              const data = await res.json()
-                              if (data.success) {
-                                await fetchDocuments()
-                              }
-                            } catch {
-                              await fetchDocuments()
-                            }
-                          }}
+                      {doc.storage_path && (
+                        <Button variant="ghost" size="sm" title="Télécharger"
+                          onClick={() => window.open(`/api/documents/${doc.id}/download`, '_blank')}
                         >
-                          <RefreshCw className="h-3 w-3 mr-1" />Réessayer
+                          <Download className="h-3.5 w-3.5" />
                         </Button>
                       )}
+                      {doc.storage_path && (
+                        <Button
+                          variant="ghost" size="sm" className="text-xs"
+                          style={{ color: doc.statut === "traite" ? undefined : GOLD }}
+                          title={doc.statut === "traite" ? "Réanalyser" : "Réessayer"}
+                          onClick={async () => {
+                            if (doc.statut === "traite" && !confirm("Ce document a déjà été traité. Voulez-vous relancer l'analyse ? Les écritures comptables seront recalculées.")) return
+                            setDocuments(prev => prev.map(d => d.id === doc.id ? { ...d, statut: "en_cours" } : d))
+                            try {
+                              await fetch(`/api/documents/${doc.id}/reanalyze`, {
+                                method: "POST", headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({}),
+                              })
+                            } catch { /* silent */ }
+                            await fetchDocuments()
+                          }}
+                        >
+                          <RefreshCw className="h-3 w-3 mr-1" />
+                          {doc.statut === "traite" ? "Réanalyser" : "Réessayer"}
+                        </Button>
+                      )}
+                      <Button variant="ghost" size="sm" title="Changer catégorie"
+                        onClick={() => { setChangeCatDoc(doc); setChangeCatType(doc.type_document || "autre"); setChangeCatHint("") }}
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </Button>
                       <Button
-                        variant="ghost"
-                        size="sm"
+                        variant="ghost" size="sm"
                         className="text-red-400 hover:text-red-600 hover:bg-red-50"
-                        title="Supprimer ce document"
+                        title="Supprimer"
                         onClick={async () => {
                           if (!confirm(`Supprimer "${doc.nom_fichier}" ? Cette action est irréversible.`)) return
                           try {
                             const res = await fetch(`/api/documents/${doc.id}`, { method: 'DELETE' })
-                            if (res.ok) {
-                              setDocuments(prev => prev.filter(d => d.id !== doc.id))
-                            } else {
-                              const d = await res.json()
-                              alert(d.error || 'Erreur suppression')
-                            }
-                          } catch {
-                            alert('Erreur de connexion')
-                          }
+                            if (res.ok) { setDocuments(prev => prev.filter(d => d.id !== doc.id)) }
+                            else { const d = await res.json(); alert(d.error || 'Erreur suppression') }
+                          } catch { alert('Erreur de connexion') }
                         }}
                       >
                         🗑️
@@ -549,7 +716,7 @@ export default function ClientDocumentsPage() {
               })}
               {currentDocs.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-12">
+                  <TableCell colSpan={7} className="text-center py-12">
                     <FileText className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
                     <p className="text-muted-foreground">Aucun document dans ce dossier.</p>
                   </TableCell>
@@ -560,6 +727,73 @@ export default function ClientDocumentsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Pagination */}
+      {allCurrentDocs.length > visibleCount && (
+        <div className="text-center py-2">
+          <p className="text-xs text-muted-foreground mb-2">Affichage {visibleCount} sur {allCurrentDocs.length} documents</p>
+          <Button variant="outline" size="sm" onClick={() => setVisibleCount(v => v + pageSize)}>
+            Charger plus
+          </Button>
+        </div>
+      )}
+      {allCurrentDocs.length > 0 && allCurrentDocs.length <= visibleCount && (
+        <p className="text-xs text-muted-foreground text-center">{allCurrentDocs.length} document{allCurrentDocs.length > 1 ? "s" : ""}</p>
+      )}
+
+      {/* Société confirmation dialog */}
+      <Dialog open={!!confirmSocDoc} onOpenChange={(o) => { if (!o) setConfirmSocDoc(null) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Confirmer la société du document</DialogTitle>
+            <DialogDescription>
+              Le document &quot;{confirmSocDoc?.filename}&quot; n&apos;a pas pu être automatiquement associé à une société.
+              {confirmSocDoc?.detected && <><br />Société détectée : <strong>{confirmSocDoc.detected}</strong></>}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <Select value={confirmSocId} onValueChange={setConfirmSocId}>
+              <SelectTrigger><SelectValue placeholder="Sélectionner la société..." /></SelectTrigger>
+              <SelectContent>
+                {societes.map(s => <SelectItem key={s.societe_id} value={s.societe_id}>{s.nom}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmSocDoc(null)}>Ignorer</Button>
+            <Button
+              disabled={!confirmSocId || confirmSocSaving}
+              style={{ backgroundColor: NAVY }}
+              onClick={async () => {
+                if (!confirmSocDoc || !confirmSocId) return
+                setConfirmSocSaving(true)
+                try {
+                  // Reassign société + update societe_detectee to the real name
+                  const confirmedSocName = societes.find(s => s.societe_id === confirmSocId)?.nom || null
+                  await fetch(`/api/documents/${confirmSocDoc.id}`, {
+                    method: "PATCH", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      societe_id: confirmSocId,
+                      societe_detectee: confirmedSocName,
+                      corrige_manuellement: true,
+                    }),
+                  })
+                  // Re-analyze with correct société context
+                  await fetch(`/api/documents/${confirmSocDoc.id}/reanalyze`, {
+                    method: "POST", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({}),
+                  })
+                  await fetchDocuments()
+                } catch { /* silent */ }
+                setConfirmSocSaving(false)
+                setConfirmSocDoc(null)
+              }}
+            >
+              {confirmSocSaving ? "Traitement..." : "Confirmer et traiter"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Reassignment dialog for undetected société */}
       <Dialog open={!!reassignDoc} onOpenChange={(o) => { if (!o) { setReassignDoc(null); setReassignSocieteId("") } }}>
@@ -581,6 +815,83 @@ export default function ClientDocumentsPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => { setReassignDoc(null); setReassignSocieteId("") }}>Ignorer</Button>
             <Button style={{ backgroundColor: GOLD }} onClick={handleReassign} disabled={!reassignSocieteId}>Confirmer</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Category change dialog */}
+      <Dialog open={!!changeCatDoc} onOpenChange={(o) => { if (!o) setChangeCatDoc(null) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Changer le type de document</DialogTitle>
+            <DialogDescription>
+              {changeCatDoc?.nom_fichier}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <Select value={changeCatType} onValueChange={setChangeCatType}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {DOCUMENT_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Input
+              placeholder="Indice pour l'IA (optionnel)"
+              value={changeCatHint}
+              onChange={(e) => setChangeCatHint(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setChangeCatDoc(null)}>Annuler</Button>
+            <Button
+              disabled={changeCatSaving}
+              style={{ backgroundColor: NAVY }}
+              onClick={async () => {
+                if (!changeCatDoc) return
+                setChangeCatSaving(true)
+                try {
+                  await fetch(`/api/documents/${changeCatDoc.id}/reanalyze`, {
+                    method: "POST", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ type_force: changeCatType, hint: changeCatHint || undefined }),
+                  })
+                  await fetchDocuments()
+                } catch { /* silent */ }
+                setChangeCatSaving(false)
+                setChangeCatDoc(null)
+              }}
+            >
+              {changeCatSaving ? <><Loader2 className="h-4 w-4 animate-spin mr-1" />Analyse...</> : "Confirmer"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reprocess duplicate confirmation dialog */}
+      <Dialog open={!!reprocessDoc} onOpenChange={(o) => { if (!o) setReprocessDoc(null) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Document existant avec erreurs</DialogTitle>
+            <DialogDescription>
+              &quot;{reprocessDoc?.filename}&quot; a déjà été importé mais contient des erreurs. Voulez-vous le retraiter ?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReprocessDoc(null)}>Annuler</Button>
+            <Button
+              style={{ backgroundColor: GOLD, color: NAVY }}
+              onClick={async () => {
+                if (!reprocessDoc) return
+                try {
+                  await fetch(`/api/documents/${reprocessDoc.id}/reanalyze`, {
+                    method: "POST", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({}),
+                  })
+                  await fetchDocuments()
+                } catch { /* silent */ }
+                setReprocessDoc(null)
+              }}
+            >
+              Retraiter
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -661,7 +661,7 @@ export default function RapportsStatutairesPage() {
                     </Button>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-6">
+                <CardContent className="space-y-6 overflow-x-auto">
                   {Object.entries(bankGroups).sort(([a], [b]) => a.localeCompare(b)).map(([bank, employees]) => {
                     const bankTotal = employees.reduce((s, e) => s + e.netpay, 0)
                     return (

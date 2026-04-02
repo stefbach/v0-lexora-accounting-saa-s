@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     // Verify role
     const supabase = getAdminClient()
     const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-    if (!profile || !['comptable', 'comptable_dedie', 'admin', 'super_admin', 'client_admin', 'rh', 'rh_manager'].includes(profile.role)) {
+    if (!profile || !['comptable', 'comptable_dedie', 'admin', 'super_admin', 'client_admin'].includes(profile.role)) {
       return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
     }
 
@@ -105,7 +105,11 @@ export async function GET(request: Request) {
               transactions_json: extraction.transactions || [],
               statut_rapprochement: 'en_attente',
             }
-            releves?.push(syntheticReleve as any) || documentsTransactions.push()
+            if (releves) {
+              releves.push(syntheticReleve as any)
+            } else {
+              documentsTransactions.push(syntheticReleve as any)
+            }
           }
         })
       }
@@ -145,6 +149,37 @@ export async function GET(request: Request) {
     })
   } catch (e: unknown) {
     console.error('[banque] error:', e)
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
+  }
+}
+
+// ---------------------------------------------------------------------------
+// PATCH /api/comptable/banque — Update bank account fields (nom_compte, etc.)
+// ---------------------------------------------------------------------------
+export async function PATCH(request: Request) {
+  try {
+    const supabaseAuth = await createServerClient()
+    const { data: { user } } = await supabaseAuth.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+
+    const supabase = getAdminClient()
+    const body = await request.json()
+    const { id, nom_compte } = body
+
+    if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
+
+    // Fetch the account to check access
+    const { data: compte } = await supabase.from('comptes_bancaires').select('societe_id').eq('id', id).single()
+    if (!compte) return NextResponse.json({ error: 'Compte non trouvé' }, { status: 404 })
+
+    const hasAccess = await userHasAccessToSociete(user.id, compte.societe_id)
+    if (!hasAccess) return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+
+    const { error } = await supabase.from('comptes_bancaires').update({ nom_compte }).eq('id', id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    return NextResponse.json({ success: true })
+  } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

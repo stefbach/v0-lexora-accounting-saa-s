@@ -67,6 +67,13 @@ const ROLES = [
   { value: "employe", label: "Employe", color: "bg-gray-100 text-gray-700 border-gray-200" },
 ]
 
+const HR_ROLE_GUIDE = [
+  { value: 'rh', label: 'RH', desc: 'Employés, Pointage, Paie, Congés', color: 'bg-orange-100 text-orange-800 border-orange-200' },
+  { value: 'manager', label: 'Manager', desc: 'Supervision équipe, validation', color: 'bg-teal-100 text-teal-800 border-teal-200' },
+  { value: 'juridique', label: 'Juridique', desc: 'Contrats, Documents légaux', color: 'bg-purple-100 text-purple-800 border-purple-200' },
+  { value: 'employe', label: 'Employé', desc: 'Portail salarié uniquement', color: 'bg-gray-100 text-gray-700 border-gray-200' },
+]
+
 const NEEDS_SOCIETE = ["rh", "juridique", "employe", "manager", "direction", "client_assistant", "client_admin", "client_user", "comptable", "comptable_dedie"]
 const MULTI_SOCIETE_ROLES = ["client_assistant", "client_admin", "client_user", "rh", "comptable", "comptable_dedie"]
 
@@ -159,6 +166,27 @@ function getInitials(name: string) {
   const parts = name.trim().split(/\s+/)
   if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
   return name.slice(0, 2).toUpperCase()
+}
+
+function getSocieteBadgeStyle(name?: string): React.CSSProperties {
+  if (!name) return { backgroundColor: '#f3f4f6', color: '#374151', borderColor: '#e5e7eb' }
+  const n = name.toLowerCase()
+  if (n.includes('obesity') || n.includes('occ'))
+    return { backgroundColor: '#ccfbf1', color: '#0f766e', borderColor: '#99f6e4' }
+  if (n.includes('digital') || n.includes('dds'))
+    return { backgroundColor: '#dbeafe', color: '#1d4ed8', borderColor: '#bfdbfe' }
+  if (n.includes('tibok'))
+    return { backgroundColor: '#fef9c3', color: '#a16207', borderColor: '#fef08a' }
+  return { backgroundColor: '#f3f4f6', color: '#374151', borderColor: '#e5e7eb' }
+}
+
+function SocieteBadge({ name }: { name?: string }) {
+  if (!name) return <span className="text-gray-400 text-sm">--</span>
+  return (
+    <Badge variant="outline" className="text-xs" style={getSocieteBadgeStyle(name)}>
+      <Building2 className="w-3 h-3 mr-1" />{name}
+    </Badge>
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -447,6 +475,19 @@ export default function UtilisateursPage() {
                 {createForm.role === "client_assistant" && (
                   <p className="text-xs text-gray-500 mt-1">Acces uniquement a la numerisation des documents</p>
                 )}
+                {HR_ROLE_GUIDE.some(r => r.value === createForm.role) && (
+                  <div className="mt-2 border rounded-lg p-3 bg-gray-50">
+                    <p className="text-xs font-medium text-gray-500 mb-2">Guide des rôles RH</p>
+                    <div className="space-y-1.5">
+                      {HR_ROLE_GUIDE.map(r => (
+                        <div key={r.value} className={`flex items-center gap-2 text-xs px-2 py-1.5 rounded ${r.value === createForm.role ? 'ring-1 ring-[#C9A84C]' : ''}`}>
+                          <Badge className={`text-xs border ${r.color} shrink-0`}>{r.label}</Badge>
+                          <span className="text-gray-600">{r.desc}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
               {NEEDS_SOCIETE.includes(createForm.role) && !MULTI_SOCIETE_ROLES.includes(createForm.role) && (
                 <div>
@@ -668,8 +709,8 @@ export default function UtilisateursPage() {
                         </td>
                         <td className="px-4 py-3 text-gray-600">{user.email}</td>
                         <td className="px-4 py-3"><RoleBadge role={user.role} /></td>
-                        <td className="px-4 py-3 text-gray-600 text-sm">
-                          {user.societes?.nom || (societes.find((s) => s.id === user.societe_id)?.nom) || "--"}
+                        <td className="px-4 py-3">
+                          <SocieteBadge name={user.societes?.nom || societes.find((s) => s.id === user.societe_id)?.nom} />
                         </td>
                         <td className="px-4 py-3"><StatusBadge actif={user.actif} /></td>
                         <td className="px-4 py-3 text-gray-500 text-xs">{formatDate(user.created_at)}</td>
@@ -708,10 +749,7 @@ export default function UtilisateursPage() {
                               </div>
                               <div>
                                 <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Societe</p>
-                                <div className="flex items-center gap-2">
-                                  <Building2 className="w-3.5 h-3.5 text-gray-400" />
-                                  <span>{user.societes?.nom || (societes.find((s) => s.id === user.societe_id)?.nom) || "Non assignee"}</span>
-                                </div>
+                                <SocieteBadge name={user.societes?.nom || societes.find((s) => s.id === user.societe_id)?.nom} />
                               </div>
                               <div>
                                 <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Derniere connexion</p>
@@ -777,7 +815,7 @@ export default function UtilisateursPage() {
                         <input type="checkbox" checked={editForm.societe_ids.includes(s.id)}
                           onChange={() => setEditForm(f => ({ ...f, societe_ids: f.societe_ids.includes(s.id) ? f.societe_ids.filter(id => id !== s.id) : [...f.societe_ids, s.id] }))}
                           className="rounded border-gray-300" />
-                        <span className="text-sm">{s.nom}{s.brn ? ` — ${s.brn}` : ""}</span>
+                        <Badge variant="outline" className="text-xs" style={getSocieteBadgeStyle(s.nom)}>{s.nom}</Badge>
                       </label>
                     ))}
                   </div>

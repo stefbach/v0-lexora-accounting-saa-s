@@ -10,7 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
-import { Search, Landmark, AlertCircle, Clock, RefreshCw, Loader2, Building2 } from "lucide-react"
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import { Search, Landmark, AlertCircle, Clock, RefreshCw, Loader2, Building2, X, Pencil } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
 
 function formatAmount(amount: number, devise?: string) {
@@ -26,6 +27,18 @@ function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" })
 }
 
+function getSocieteBadgeStyle(name?: string): Record<string, string> {
+  if (!name) return { backgroundColor: '#f3f4f6', color: '#374151', borderColor: '#e5e7eb' }
+  const n = name.toLowerCase()
+  if (n.includes('obesity') || n.includes('occ'))
+    return { backgroundColor: '#ccfbf1', color: '#0f766e', borderColor: '#99f6e4' }
+  if (n.includes('digital') || n.includes('dds'))
+    return { backgroundColor: '#dbeafe', color: '#1d4ed8', borderColor: '#bfdbfe' }
+  if (n.includes('tibok'))
+    return { backgroundColor: '#fef9c3', color: '#a16207', borderColor: '#fef08a' }
+  return { backgroundColor: '#f3f4f6', color: '#374151', borderColor: '#e5e7eb' }
+}
+
 function getStatutBadge(statut: string) {
   if (statut?.includes("non_identifie")) return <Badge className="bg-red-100 text-red-700 border-red-200">Non identifié</Badge>
   if (statut?.includes("a_verifier")) return <Badge className="bg-orange-100 text-orange-700 border-orange-200">À vérifier</Badge>
@@ -38,11 +51,21 @@ export default function ClientBanquePage() {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [selectedSociete, setSelectedSociete] = useState("all")
+  const [availableSocietes, setAvailableSocietes] = useState<any[]>([])
+  const [selectedCompte, setSelectedCompte] = useState("all")
+  const [dateFrom, setDateFrom] = useState("")
+  const [dateTo, setDateTo] = useState("")
+  const [showOnlyNonRapprochees, setShowOnlyNonRapprochees] = useState(false)
+  const [selectedTx, setSelectedTx] = useState<any>(null)
+  const [editingCompte, setEditingCompte] = useState<string | null>(null)
+  const [editingNom, setEditingNom] = useState("")
   const { profile } = useProfile()
 
   async function fetchData(societeId?: string) {
     try {
+      setError(null)
       const url = societeId && societeId !== "all"
         ? `/api/client/financial?societe_id=${societeId}`
         : "/api/client/financial"
@@ -50,16 +73,24 @@ export default function ClientBanquePage() {
       if (res.ok) {
         const json = await res.json()
         setData(json.financial)
+        // Preserve the full societes list from the initial unfiltered load
+        const socs = json.financial?.availableSocietes ?? []
+        if (socs.length > 0 && (!societeId || societeId === "all")) {
+          setAvailableSocietes(socs)
+        }
       } else {
         setData(null)
+        setError("Erreur de chargement des données bancaires.")
       }
     } catch {
       setData(null)
+      setError("Erreur de chargement des données bancaires.")
     }
   }
 
   useEffect(() => {
     setLoading(true)
+    setSelectedCompte("all")
     fetchData(selectedSociete).finally(() => setLoading(false))
   }, [selectedSociete])
 
@@ -67,6 +98,24 @@ export default function ClientBanquePage() {
     setRefreshing(true)
     await fetchData(selectedSociete)
     setRefreshing(false)
+  }
+
+  function getDisplayName(acc: any): string {
+    if (acc.nom_compte && acc.nom_compte !== acc.numero_compte) return acc.nom_compte
+    if (acc.numero_compte) return `Compte •${acc.numero_compte.slice(-4)}`
+    return "Compte sans nom"
+  }
+
+  async function saveNomCompte(accId: string, newNom: string) {
+    try {
+      await fetch("/api/comptable/banque", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: accId, nom_compte: newNom }),
+      })
+      await fetchData(selectedSociete)
+    } catch { /* silent */ }
+    setEditingCompte(null)
   }
 
   if (profile?.role === "client_user") {
@@ -92,9 +141,27 @@ export default function ClientBanquePage() {
     )
   }
 
+  if (error && !data) {
+    return (
+      <div className="flex-1 overflow-auto p-6">
+        <Card>
+          <CardContent className="py-12 text-center space-y-4">
+            <AlertCircle className="h-8 w-8 mx-auto text-red-500" />
+            <p className="text-muted-foreground">{error}</p>
+            <Button variant="outline" onClick={() => { setLoading(true); fetchData(selectedSociete).finally(() => setLoading(false)) }}>
+              Réessayer
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   const bankAccounts = data?.bankAccounts ?? []
-  const totalBankMUR = data?.totalBankMUR ?? 0
-  const societes = data?.availableSocietes ?? []
+  const totalBankMUR = bankAccounts.reduce((s: number, a: any) => s + (a.solde_mur ?? 0), 0)
+
+  // Account IDs for the selected accounts (used to filter transactions)
+  const bankAccountIds = new Set(bankAccounts.map((a: any) => a.id))
 
   // Transactions depuis releves_bancaires (extraction JSON)
   const rawTx: any[] = data?.bankTransactions ?? []
@@ -112,6 +179,7 @@ export default function ClientBanquePage() {
     compte_comptable: tx.compte_comptable || null,
     statut: tx.statut || "non_identifie",
     banque: tx.banque || "—",
+    compte_bancaire_id: tx.compte_bancaire_id || null,
     societe: tx.societe || "—",
     lettre: tx.lettre || null,
     facture_id: tx.facture_id || null,
@@ -123,15 +191,36 @@ export default function ClientBanquePage() {
     return new Date(b.date).getTime() - new Date(a.date).getTime()
   })
 
-  const filtered = allTransactions.filter(
-    (row) =>
-      row.libelle.toLowerCase().includes(search.toLowerCase()) ||
-      (row.tiers || "").toLowerCase().includes(search.toLowerCase()) ||
-      (row.banque || "").toLowerCase().includes(search.toLowerCase())
-  )
+  const hasActiveFilters = !!(search || selectedCompte !== "all" || dateFrom || dateTo || showOnlyNonRapprochees)
+
+  const filtered = allTransactions.filter((row) => {
+    // Non-rapprochées filter (from KPI click)
+    if (showOnlyNonRapprochees && (row.statut?.includes("rapproche") || row.statut?.includes("lettre"))) return false
+    // Search filter
+    if (search) {
+      const s = search.toLowerCase()
+      if (!row.libelle.toLowerCase().includes(s) &&
+          !(row.tiers || "").toLowerCase().includes(s) &&
+          !(row.banque || "").toLowerCase().includes(s)) return false
+    }
+    // Account filter
+    if (selectedCompte !== "all" && row.compte_bancaire_id !== selectedCompte) return false
+    // Date range filter (normalize to timestamps for safe comparison)
+    if (dateFrom && row.date) {
+      const txDate = new Date(row.date).getTime()
+      const fromDate = new Date(dateFrom).getTime()
+      if (!isNaN(txDate) && !isNaN(fromDate) && txDate < fromDate) return false
+    }
+    if (dateTo && row.date) {
+      const txDate = new Date(row.date).getTime()
+      const toDate = new Date(dateTo).getTime()
+      if (!isNaN(txDate) && !isNaN(toDate) && txDate > toDate) return false
+    }
+    return true
+  })
 
   const nonRaprochees = allTransactions.filter(
-    (t) => !t.lettre && (!t.tiers || t.statut?.includes("non_identifie"))
+    (t) => !t.statut?.includes("rapproche") && !t.statut?.includes("lettre")
   ).length
 
   const derniereMaj = bankAccounts.length > 0
@@ -150,14 +239,14 @@ export default function ClientBanquePage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {societes.length > 1 && (
+          {availableSocietes.length > 1 && (
             <div className="flex items-center gap-2">
               <Building2 className="h-4 w-4 text-muted-foreground" />
               <Select value={selectedSociete} onValueChange={setSelectedSociete}>
                 <SelectTrigger className="w-[200px] h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Toutes les sociétés</SelectItem>
-                  {societes.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
+                  {availableSocietes.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -180,14 +269,15 @@ export default function ClientBanquePage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
-              {totalBankMUR > 0 ? formatMUR(totalBankMUR) : "—"}
+              {bankAccounts.length > 0 ? formatMUR(totalBankMUR) : "—"}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               {bankAccounts.length} compte{bankAccounts.length > 1 ? "s" : ""}
             </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className={`cursor-pointer transition-all ${showOnlyNonRapprochees ? "ring-2 ring-red-300" : "hover:shadow-md"}`}
+          onClick={() => setShowOnlyNonRapprochees(v => !v)}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Opérations non rapprochées</CardTitle>
             <div className="rounded-lg p-2 bg-red-50">
@@ -198,7 +288,11 @@ export default function ClientBanquePage() {
             <div className="text-2xl font-bold" style={{ color: nonRaprochees > 0 ? "#DC2626" : "#1E2A4A" }}>
               {nonRaprochees}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">sur {allTransactions.length} transaction{allTransactions.length > 1 ? "s" : ""}</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {hasActiveFilters
+                ? `sur ${filtered.length} filtrées (${allTransactions.length} au total)`
+                : `sur ${allTransactions.length} transaction${allTransactions.length > 1 ? "s" : ""}`}
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -238,17 +332,37 @@ export default function ClientBanquePage() {
                   <TableHead>Devise</TableHead>
                   <TableHead className="text-right">Solde</TableHead>
                   <TableHead>Dernier relevé</TableHead>
+                  <TableHead>Société</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {bankAccounts.map((acc: any) => (
-                  <TableRow key={acc.id || acc.nom_compte}>
+                  <TableRow key={acc.id || acc.nom_compte} className="cursor-pointer hover:bg-blue-50/50"
+                    onClick={() => setSelectedCompte(selectedCompte === acc.id ? "all" : acc.id)}>
                     <TableCell>
                       <Badge variant="outline" style={{ borderColor: "#C9A84C", color: "#C9A84C" }}>
                         {acc.banque}
                       </Badge>
                     </TableCell>
-                    <TableCell>{acc.nom_compte || "—"}</TableCell>
+                    <TableCell>
+                      {editingCompte === acc.id ? (
+                        <Input
+                          autoFocus
+                          className="h-7 text-sm w-40"
+                          value={editingNom}
+                          onChange={(e) => setEditingNom(e.target.value)}
+                          onBlur={() => saveNomCompte(acc.id, editingNom)}
+                          onKeyDown={(e) => { if (e.key === "Enter") saveNomCompte(acc.id, editingNom); if (e.key === "Escape") setEditingCompte(null) }}
+                        />
+                      ) : (
+                        <span className="flex items-center gap-1 group">
+                          {getDisplayName(acc)}
+                          <button className="opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => { setEditingCompte(acc.id); setEditingNom(acc.nom_compte || "") }}>
+                            <Pencil className="h-3 w-3 text-muted-foreground hover:text-[#1E2A4A]" />
+                          </button>
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell className="font-mono text-sm text-muted-foreground">{acc.numero_compte || "—"}</TableCell>
                     <TableCell>{acc.devise || "MUR"}</TableCell>
                     <TableCell className="text-right font-bold" style={{ color: "#1E2A4A" }}>
@@ -260,6 +374,11 @@ export default function ClientBanquePage() {
                     <TableCell className="text-sm text-muted-foreground">
                       {acc.date_dernier_releve ? formatDate(acc.date_dernier_releve) : "—"}
                     </TableCell>
+                    <TableCell>
+                      {acc.societe_nom ? (
+                        <Badge variant="outline" className="text-xs" style={getSocieteBadgeStyle(acc.societe_nom)}>{acc.societe_nom}</Badge>
+                      ) : <span className="text-xs text-muted-foreground">—</span>}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -268,15 +387,46 @@ export default function ClientBanquePage() {
         </Card>
       )}
 
-      {/* Recherche */}
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Rechercher par libellé, tiers, banque..."
-          className="pl-9"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      {/* Filtres */}
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="relative flex-1 min-w-[200px] max-w-sm">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Rechercher par libellé, tiers, banque..."
+            className="pl-9"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        {bankAccounts.length > 1 && (
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1">Compte</label>
+            <Select value={selectedCompte} onValueChange={setSelectedCompte}>
+              <SelectTrigger className="w-[200px] h-9"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous les comptes</SelectItem>
+                {bankAccounts.map((acc: any) => (
+                  <SelectItem key={acc.id} value={acc.id}>
+                    {acc.banque || "Compte"} {acc.numero_compte ? `•${acc.numero_compte.slice(-4)}` : ""} ({acc.devise || "MUR"})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        <div>
+          <label className="text-xs text-muted-foreground block mb-1">De</label>
+          <Input type="date" className="w-[150px] h-9" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground block mb-1">À</label>
+          <Input type="date" className="w-[150px] h-9" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+        </div>
+        {hasActiveFilters && (
+          <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setSelectedCompte("all"); setDateFrom(""); setDateTo(""); setShowOnlyNonRapprochees(false) }}>
+            Effacer filtres
+          </Button>
+        )}
       </div>
 
       {/* Transactions */}
@@ -286,7 +436,8 @@ export default function ClientBanquePage() {
             Opérations bancaires ({filtered.length})
           </CardTitle>
         </CardHeader>
-        <CardContent className="p-0">
+        <CardContent className="p-0 relative">
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -304,7 +455,7 @@ export default function ClientBanquePage() {
             </TableHeader>
             <TableBody>
               {filtered.map((row) => (
-                <TableRow key={row.id}>
+                <TableRow key={row.id} className="cursor-pointer hover:bg-blue-50/50" onClick={() => setSelectedTx(row)}>
                   <TableCell className="whitespace-nowrap">{formatDate(row.date)}</TableCell>
                   <TableCell className="text-xs">
                     <Badge variant="outline" className="text-xs" style={{ borderColor: "#C9A84C" }}>{row.banque}</Badge>
@@ -365,8 +516,82 @@ export default function ClientBanquePage() {
               )}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
+
+      {/* Transaction detail sheet */}
+      <Sheet open={!!selectedTx} onOpenChange={(o) => { if (!o) setSelectedTx(null) }}>
+        <SheetContent className="sm:max-w-md overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="text-[#1E2A4A]">Détail de l&apos;opération</SheetTitle>
+          </SheetHeader>
+          {selectedTx && (
+            <div className="space-y-4 mt-4">
+              <div>
+                <p className="text-xs text-muted-foreground uppercase mb-1">Libellé complet</p>
+                <p className="font-medium">{selectedTx.libelle}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase mb-1">Date</p>
+                  <p>{formatDate(selectedTx.date)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase mb-1">Banque</p>
+                  <Badge variant="outline" style={{ borderColor: "#C9A84C" }}>{selectedTx.banque}</Badge>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase mb-1">Débit</p>
+                  <p className={selectedTx.debit > 0 ? "text-red-600 font-semibold" : "text-muted-foreground"}>
+                    {selectedTx.debit > 0 ? formatAmount(selectedTx.debit, selectedTx.devise) : "—"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase mb-1">Crédit</p>
+                  <p className={selectedTx.credit > 0 ? "text-green-600 font-semibold" : "text-muted-foreground"}>
+                    {selectedTx.credit > 0 ? formatAmount(selectedTx.credit, selectedTx.devise) : "—"}
+                  </p>
+                </div>
+              </div>
+              {selectedTx.solde_apres != null && (
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase mb-1">Solde après</p>
+                  <p className="font-semibold">{formatAmount(selectedTx.solde_apres, selectedTx.devise)}</p>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase mb-1">Tiers identifié</p>
+                  <p>{selectedTx.tiers || <span className="text-muted-foreground italic">Non identifié</span>}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase mb-1">Compte comptable</p>
+                  <p className="font-mono">{selectedTx.compte_comptable || "—"}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase mb-1">Statut</p>
+                  {getStatutBadge(selectedTx.statut)}
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase mb-1">Lettre</p>
+                  {selectedTx.lettre
+                    ? <Badge className="bg-green-100 text-green-700">{selectedTx.lettre}</Badge>
+                    : <span className="text-muted-foreground">—</span>}
+                </div>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground uppercase mb-1">Devise</p>
+                <p>{selectedTx.devise}</p>
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }

@@ -351,7 +351,7 @@ export default function ITForm3Page() {
             <div className="flex items-center gap-2">
               <input
                 type="file"
-                accept=".pdf"
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
                 id="pdf-import-itform3"
                 className="hidden"
                 onChange={e => {
@@ -368,7 +368,7 @@ export default function ITForm3Page() {
                 className="flex items-center gap-2"
               >
                 {importingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                {importingPdf ? "Import en cours..." : "Choisir un PDF"}
+                {importingPdf ? "Import en cours..." : "Uploader un document"}
               </Button>
             </div>
           </div>

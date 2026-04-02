@@ -217,20 +217,31 @@ export async function DELETE(
     }
 
     // Supprimer toutes les données liées (FK vers documents)
-    await supabase.from('releves_bancaires').delete().eq('document_id', id)
-    await supabase.from('factures').delete().eq('document_id', id)
-    await supabase.from('ecritures_comptables').delete().eq('piece_justificative', id)
-    await supabase.from('ecritures_comptables_v2').delete().eq('document_id', id)
-    await supabase.from('transactions_bancaires').delete().eq('document_lie_id', id)
-    await supabase.from('messages_document').delete().eq('document_id', id)
-    await supabase.from('immobilisations').delete().eq('document_id', id)
-    await supabase.from('depenses').delete().eq('document_id', id)
+    // NOTE: comptes_bancaires.solde_actuel is NOT rolled back on deletion — known limitation
+    const warnings: string[] = []
+    const childDeletes = [
+      { table: 'releves_bancaires', field: 'document_id' },
+      { table: 'factures', field: 'document_id' },
+      { table: 'ecritures_comptables', field: 'piece_justificative' },
+      { table: 'ecritures_comptables_v2', field: 'document_id' },
+      { table: 'transactions_bancaires', field: 'document_lie_id' },
+      { table: 'messages_document', field: 'document_id' },
+      { table: 'immobilisations', field: 'document_id' },
+      { table: 'depenses', field: 'document_id' },
+    ]
+    for (const { table, field } of childDeletes) {
+      const { error: childErr } = await supabase.from(table).delete().eq(field, id)
+      if (childErr) {
+        console.error(`[delete] Failed to delete from ${table}: ${childErr.message}`)
+        warnings.push(`${table}: ${childErr.message}`)
+      }
+    }
 
     // Supprimer le document
     const { error: delErr } = await supabase.from('documents').delete().eq('id', id)
     if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 })
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true, deleted: id, warnings })
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
