@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { getSystemPrompt, injectTauxChange, CLAUDE_CONFIG } from '@/lib/ai/prompts'
+import { createHash } from 'crypto'
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -42,12 +43,13 @@ export async function POST(request: NextRequest) {
     }
     if (file.size > 20 * 1024 * 1024) return NextResponse.json({ error: 'Fichier trop volumineux (max 20MB)' }, { status: 400 })
 
-    // Détection doublons par nom + taille
+    // Détection doublons par nom + taille, scopé par utilisateur
     const { data: existingDoc } = await supabase
       .from('documents')
       .select('id, nom_fichier, statut')
       .eq('nom_fichier', file.name)
       .eq('taille_fichier', file.size)
+      .eq('uploaded_by', user.id)
       .limit(1)
       .maybeSingle()
     if (existingDoc && existingDoc.statut === 'traite') {
@@ -57,11 +59,14 @@ export async function POST(request: NextRequest) {
         doc_id: existingDoc.id
       }, { status: 409 })
     }
-    // Si le document existe mais en erreur ou en_attente, supprimer l'ancien pour permettre le re-upload
+    // Si le document existe mais en erreur ou en_attente, demander confirmation
     if (existingDoc && existingDoc.statut !== 'traite') {
-      await supabase.from('ecritures_comptables').delete().eq('piece_justificative', existingDoc.id)
-      await supabase.from('releves_bancaires').delete().eq('document_id', existingDoc.id)
-      await supabase.from('documents').delete().eq('id', existingDoc.id)
+      return NextResponse.json({
+        doublon: true,
+        statut: existingDoc.statut,
+        message: "Un document identique existe déjà avec des erreurs de traitement. Voulez-vous le retraiter ?",
+        existingId: existingDoc.id,
+      }, { status: 409 })
     }
 
     // Resolve dossier_id — IMPORTANT: use the société's dossier, not the user's personal dossier
@@ -115,7 +120,34 @@ export async function POST(request: NextRequest) {
 
     // Read file ONCE
     const fileArrayBuffer = await file.arrayBuffer()
-    const base64 = Buffer.from(fileArrayBuffer).toString('base64')
+    const fileBuffer = Buffer.from(fileArrayBuffer)
+    const fileHash = createHash('sha256').update(fileBuffer).digest('hex')
+    const base64 = fileBuffer.toString('base64')
+
+    // Hash-based dedup: check if identical content already exists in same dossier
+    const { data: hashDup } = await supabase
+      .from('documents')
+      .select('id, nom_fichier, statut')
+      .eq('file_hash', fileHash)
+      .eq('uploaded_by', user.id)
+      .limit(1)
+      .maybeSingle()
+    if (hashDup) {
+      if (hashDup.statut === 'traite') {
+        return NextResponse.json({
+          error: `Doublon détecté : un fichier identique existe déjà ("${hashDup.nom_fichier}").`,
+          doublon: true,
+          doc_id: hashDup.id,
+        }, { status: 409 })
+      } else {
+        return NextResponse.json({
+          doublon: true,
+          statut: hashDup.statut,
+          message: "Un fichier identique existe déjà avec des erreurs de traitement. Voulez-vous le retraiter ?",
+          existingId: hashDup.id,
+        }, { status: 409 })
+      }
+    }
     const ext2 = file.name.split('.').pop()?.toLowerCase() || 'pdf'
     const typeFichier = ext2 === 'jpg' ? 'jpeg' : ext2 as 'pdf' | 'jpeg' | 'png' | 'xlsx'
     const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
@@ -131,6 +163,7 @@ export async function POST(request: NextRequest) {
       dossier_id: resolvedDossierId, uploaded_by: user.id, nom_fichier: file.name,
       type_fichier: typeFichier, statut: 'en_cours', storage_path: storagePath,
       taille_fichier: file.size, societe_detectee: null, type_document: null,
+      file_hash: fileHash,
     }).select().single()
     if (docError) return NextResponse.json({ error: `DB insert: ${docError.message}` }, { status: 500 })
     docId = doc.id

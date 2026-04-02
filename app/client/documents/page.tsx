@@ -15,9 +15,10 @@ import {
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
 import {
   Upload, FolderOpen, Loader2, FileText, CheckCircle,
-  Clock, Download, ChevronRight, Lock, AlertTriangle, Building2, RefreshCw, Camera,
+  Clock, Download, ChevronRight, Lock, AlertTriangle, Building2, RefreshCw, Camera, Pencil,
 } from "lucide-react"
 
 const NAVY = "#1E2A4A"
@@ -52,6 +53,17 @@ const FOLDERS: Folder[] = [
   { key: "contrat", label: "Contrats", readOnly: false },
   { key: "rapport", label: "Rapports Mensuels", readOnly: true },
   { key: "autre", label: "Autres Documents", readOnly: false },
+]
+
+const DOCUMENT_TYPES = [
+  { value: "facture_fournisseur", label: "Facture fournisseur" },
+  { value: "facture_client", label: "Facture client" },
+  { value: "releve_bancaire", label: "Relevé bancaire" },
+  { value: "fiche_paie", label: "Fiche de paie" },
+  { value: "payroll_report", label: "Rapport paie (Excel)" },
+  { value: "charges_sociales", label: "Charges sociales" },
+  { value: "contrat", label: "Contrat" },
+  { value: "autre", label: "Autre" },
 ]
 
 function statutBadge(s: string) {
@@ -100,6 +112,13 @@ export default function ClientDocumentsPage() {
   // Reassignment dialog for undetected société
   const [reassignDoc, setReassignDoc] = useState<{ id: string; nom_fichier: string } | null>(null)
   const [reassignSocieteId, setReassignSocieteId] = useState<string>("")
+  // Category change dialog
+  const [changeCatDoc, setChangeCatDoc] = useState<Document | null>(null)
+  const [changeCatType, setChangeCatType] = useState("")
+  const [changeCatHint, setChangeCatHint] = useState("")
+  const [changeCatSaving, setChangeCatSaving] = useState(false)
+  // Duplicate reprocess dialog
+  const [reprocessDoc, setReprocessDoc] = useState<{ id: string; filename: string } | null>(null)
 
   const fetchDocuments = useCallback(async () => {
     try {
@@ -228,6 +247,17 @@ export default function ClientDocumentsPage() {
             } else {
               setUploadSuccess(`${file.name} analysé et classé dans "${folderLabel}" !`)
             }
+          // Auto-reanalyze "autre" documents with low confidence
+          if (doc.type_document === "autre") {
+            const conf = doc.confiance_type ?? doc.n8n_result?.routing?.confiance_type ?? 100
+            if (conf < 70) {
+              setUploadSuccess(`${file.name} — Type non reconnu. Nouvelle analyse en cours...`)
+              fetch(`/api/documents/${doc.id}/reanalyze`, {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({}),
+              }).then(() => fetchDocuments()).catch(() => fetchDocuments())
+            }
+          }
           } else if (doc.statut === "erreur") {
             setUploadError(`${file.name} : erreur d'analyse. Utilisez Réessayer.`)
           } else {
@@ -235,7 +265,12 @@ export default function ClientDocumentsPage() {
           }
         } else {
           if (res.status === 409 && data.doublon) {
-            setUploadError(`⚠️ Doublon : "${file.name}" a déjà été uploadé. Supprimez-le d'abord si vous souhaitez le réimporter.`)
+            if (data.existingId && data.statut && data.statut !== 'traite') {
+              // Show reprocess confirmation dialog
+              setReprocessDoc({ id: data.existingId, filename: file.name })
+            } else {
+              setUploadError(`⚠️ Doublon : "${file.name}" a déjà été uploadé. Utilisez "Réanalyser" pour retraiter.`)
+            }
           } else {
             setUploadError(data.error || "Erreur lors de l'envoi")
           }
@@ -498,51 +533,57 @@ export default function ClientDocumentsPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
-                      <Button variant="ghost" size="sm"><Download className="h-3.5 w-3.5" /></Button>
-                      {(doc.statut === "erreur" || doc.statut === "en_attente" || doc.statut === "en_cours") && doc.storage_path && (
+                      {doc.storage_path && (
+                        <Button variant="ghost" size="sm" title="Télécharger"
+                          onClick={async () => {
+                            try {
+                              const res = await fetch(`/api/documents/${doc.id}`)
+                              const data = await res.json()
+                              if (data.document?.signed_url) {
+                                window.open(data.document.signed_url, '_blank')
+                              }
+                            } catch { /* silent */ }
+                          }}
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                      {doc.storage_path && (
                         <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-xs"
-                          style={{ color: GOLD }}
+                          variant="ghost" size="sm" className="text-xs"
+                          style={{ color: doc.statut === "traite" ? undefined : GOLD }}
+                          title={doc.statut === "traite" ? "Réanalyser" : "Réessayer"}
                           onClick={async () => {
                             setDocuments(prev => prev.map(d => d.id === doc.id ? { ...d, statut: "en_cours" } : d))
                             try {
-                              const res = await fetch(`/api/documents/${doc.id}/reanalyze`, {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
+                              await fetch(`/api/documents/${doc.id}/reanalyze`, {
+                                method: "POST", headers: { "Content-Type": "application/json" },
                                 body: JSON.stringify({}),
                               })
-                              const data = await res.json()
-                              if (data.success) {
-                                await fetchDocuments()
-                              }
-                            } catch {
-                              await fetchDocuments()
-                            }
+                            } catch { /* silent */ }
+                            await fetchDocuments()
                           }}
                         >
-                          <RefreshCw className="h-3 w-3 mr-1" />Réessayer
+                          <RefreshCw className="h-3 w-3 mr-1" />
+                          {doc.statut === "traite" ? "Réanalyser" : "Réessayer"}
                         </Button>
                       )}
+                      <Button variant="ghost" size="sm" title="Changer catégorie"
+                        onClick={() => { setChangeCatDoc(doc); setChangeCatType(doc.type_document || "autre"); setChangeCatHint("") }}
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </Button>
                       <Button
-                        variant="ghost"
-                        size="sm"
+                        variant="ghost" size="sm"
                         className="text-red-400 hover:text-red-600 hover:bg-red-50"
-                        title="Supprimer ce document"
+                        title="Supprimer"
                         onClick={async () => {
                           if (!confirm(`Supprimer "${doc.nom_fichier}" ? Cette action est irréversible.`)) return
                           try {
                             const res = await fetch(`/api/documents/${doc.id}`, { method: 'DELETE' })
-                            if (res.ok) {
-                              setDocuments(prev => prev.filter(d => d.id !== doc.id))
-                            } else {
-                              const d = await res.json()
-                              alert(d.error || 'Erreur suppression')
-                            }
-                          } catch {
-                            alert('Erreur de connexion')
-                          }
+                            if (res.ok) { setDocuments(prev => prev.filter(d => d.id !== doc.id)) }
+                            else { const d = await res.json(); alert(d.error || 'Erreur suppression') }
+                          } catch { alert('Erreur de connexion') }
                         }}
                       >
                         🗑️
@@ -586,6 +627,83 @@ export default function ClientDocumentsPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => { setReassignDoc(null); setReassignSocieteId("") }}>Ignorer</Button>
             <Button style={{ backgroundColor: GOLD }} onClick={handleReassign} disabled={!reassignSocieteId}>Confirmer</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Category change dialog */}
+      <Dialog open={!!changeCatDoc} onOpenChange={(o) => { if (!o) setChangeCatDoc(null) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Changer le type de document</DialogTitle>
+            <DialogDescription>
+              {changeCatDoc?.nom_fichier}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <Select value={changeCatType} onValueChange={setChangeCatType}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {DOCUMENT_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Input
+              placeholder="Indice pour l'IA (optionnel)"
+              value={changeCatHint}
+              onChange={(e) => setChangeCatHint(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setChangeCatDoc(null)}>Annuler</Button>
+            <Button
+              disabled={changeCatSaving}
+              style={{ backgroundColor: NAVY }}
+              onClick={async () => {
+                if (!changeCatDoc) return
+                setChangeCatSaving(true)
+                try {
+                  await fetch(`/api/documents/${changeCatDoc.id}/reanalyze`, {
+                    method: "POST", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ type_force: changeCatType, hint: changeCatHint || undefined }),
+                  })
+                  await fetchDocuments()
+                } catch { /* silent */ }
+                setChangeCatSaving(false)
+                setChangeCatDoc(null)
+              }}
+            >
+              {changeCatSaving ? <><Loader2 className="h-4 w-4 animate-spin mr-1" />Analyse...</> : "Confirmer"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reprocess duplicate confirmation dialog */}
+      <Dialog open={!!reprocessDoc} onOpenChange={(o) => { if (!o) setReprocessDoc(null) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Document existant avec erreurs</DialogTitle>
+            <DialogDescription>
+              &quot;{reprocessDoc?.filename}&quot; a déjà été importé mais contient des erreurs. Voulez-vous le retraiter ?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReprocessDoc(null)}>Annuler</Button>
+            <Button
+              style={{ backgroundColor: GOLD, color: NAVY }}
+              onClick={async () => {
+                if (!reprocessDoc) return
+                try {
+                  await fetch(`/api/documents/${reprocessDoc.id}/reanalyze`, {
+                    method: "POST", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({}),
+                  })
+                  await fetchDocuments()
+                } catch { /* silent */ }
+                setReprocessDoc(null)
+              }}
+            >
+              Retraiter
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
