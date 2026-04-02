@@ -128,7 +128,7 @@ export default function AssistantPage() {
   const [dragActive, setDragActive] = useState(false)
   const [societeId, setSocieteId] = useState<string | null>(null)
   const [societes, setSocietes] = useState<{ id: string; nom: string; societe_id: string }[]>([])
-  const [selectedUploadSociete, setSelectedUploadSociete] = useState<string>("")
+  const [selectedUploadSociete, setSelectedUploadSociete] = useState<string>("auto")
   const [selectedFolder, setSelectedFolder] = useState("recent")
   const [docSearch, setDocSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
@@ -190,7 +190,6 @@ export default function AssistantPage() {
             .filter(Boolean)
             .filter((s: any) => !s.nom.endsWith("— Personnel") && !s.nom.endsWith("— En attente"))
           setSocietes(linked)
-          if (linked.length > 0 && !selectedUploadSociete) setSelectedUploadSociete(linked[0].societe_id)
         }
 
         // Fallback for assistant/user roles: fetch from user_societes via client API
@@ -203,7 +202,6 @@ export default function AssistantPage() {
           if (clientSocs.length > 0) {
             setSocietes(clientSocs)
             if (!societeId) setSocieteId(clientSocs[0].societe_id)
-            if (!selectedUploadSociete) setSelectedUploadSociete(clientSocs[0].societe_id)
           }
         }
 
@@ -223,17 +221,43 @@ export default function AssistantPage() {
     const interval = setInterval(fetchDocuments, 10000)
     return () => clearInterval(interval)
   }, [profile?.id, fetchDocuments])
+  const autoProvision = async (): Promise<string | null> => {
+    if (!profile) return null
+    try {
+      const socRes = await fetch("/api/admin/societes", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nom: `${profile.full_name || profile.email} — Personnel`, brn: null, numero_tva_mra: null, statut_tva: false }),
+      })
+      const socData = await socRes.json()
+      if (!socRes.ok || !socData.societe?.id) return null
 
+      await fetch("/api/admin/dossiers", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ client_id: profile.id, societe_id: socData.societe.id, comptable_id: null }),
+      })
+
+      setSocieteId(socData.societe.id)
+      return socData.societe.id
+    } catch {
+      return null
+    }
+  }
 
   const handleUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return
 
-    // Determine which société to use — mandatory for assistant
-    const uploadSocieteId = selectedUploadSociete || societeId
+    // Determine which société to use
+    let uploadSocieteId = selectedUploadSociete !== "auto"
+      ? selectedUploadSociete
+      : societeId
+
     if (!uploadSocieteId) {
-      setUploadError("Veuillez sélectionner une société avant d'envoyer.")
-      setTimeout(() => setUploadError(null), 5000)
-      return
+      uploadSocieteId = await autoProvision()
+      if (!uploadSocieteId) {
+        setUploadError("Impossible de créer votre espace personnel. Contactez votre comptable.")
+        setTimeout(() => setUploadError(null), 5000)
+        return
+      }
     }
 
     setUploading(true)
@@ -408,24 +432,23 @@ export default function AssistantPage() {
         </p>
       </div>
 
-      {/* Société selector — mandatory for assistant */}
-      <Card className="border-2" style={{ borderColor: GOLD }}>
-        <CardContent className="p-4">
-          <label className="text-sm font-bold block mb-2" style={{ color: NAVY }}>
-            Pour quelle société scannez-vous ? <span className="text-red-500">*</span>
-          </label>
-          {societes.length === 0 ? (
-            <p className="text-sm text-red-600">Aucune société assignée. Demandez à votre administrateur de vous assigner des sociétés.</p>
-          ) : (
-            <Select value={selectedUploadSociete} onValueChange={setSelectedUploadSociete}>
-              <SelectTrigger className="w-full text-base h-12"><SelectValue placeholder="Sélectionner la société..." /></SelectTrigger>
-              <SelectContent>
-                {societes.map(s => <SelectItem key={s.societe_id} value={s.societe_id}>{s.nom}</SelectItem>)}
-              </SelectContent>
-            </Select>
+      {/* Société selector — optional */}
+      {societes.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg border bg-muted/30">
+          <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
+          <span className="text-sm font-medium" style={{ color: NAVY }}>Société (optionnel)</span>
+          <Select value={selectedUploadSociete} onValueChange={setSelectedUploadSociete}>
+            <SelectTrigger className="w-full sm:w-[280px] h-9"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="auto">Toutes les sociétés — détection auto</SelectItem>
+              {societes.map(s => <SelectItem key={s.societe_id} value={s.societe_id}>{s.nom}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          {selectedUploadSociete === "auto" && (
+            <span className="text-xs text-muted-foreground">Laissez vide pour détection automatique</span>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      )}
 
       {/* Upload Zone */}
       <div
@@ -468,11 +491,8 @@ export default function AssistantPage() {
       )}
 
       {/* Document counter */}
-      <div className="flex items-center gap-3 text-xs text-gray-400 px-2">
-        <span>{filteredDocuments.length} document(s) {selectedUploadSociete !== "auto" ? "(filtré par société)" : "(toutes sociétés)"}</span>
-        {unassignedCount > 0 && (
-          <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-xs">{unassignedCount} non assigné{unassignedCount > 1 ? "s" : ""}</Badge>
-        )}
+      <div className="text-xs text-gray-400 px-2">
+        {filteredDocuments.length} document(s) {selectedUploadSociete !== "auto" ? "(filtré par société)" : "(toutes sociétés)"}
       </div>
 
       {/* Folder list */}
