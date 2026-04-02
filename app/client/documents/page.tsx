@@ -535,15 +535,7 @@ export default function ClientDocumentsPage() {
                     <div className="flex gap-1">
                       {doc.storage_path && (
                         <Button variant="ghost" size="sm" title="Télécharger"
-                          onClick={async () => {
-                            try {
-                              const res = await fetch(`/api/documents/${doc.id}`)
-                              const data = await res.json()
-                              if (data.document?.signed_url) {
-                                window.open(data.document.signed_url, '_blank')
-                              }
-                            } catch { /* silent */ }
-                          }}
+                          onClick={() => window.open(`/api/documents/${doc.id}/download`, '_blank')}
                         >
                           <Download className="h-3.5 w-3.5" />
                         </Button>
