@@ -19,8 +19,11 @@ export async function POST(request: NextRequest) {
 
   try {
     const supabaseAuth = await createServerClient()
-    const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser()
+    if (!user) {
+      console.error('[upload] Auth failed:', authError?.message || 'No user in session')
+      return NextResponse.json({ error: 'Non authentifié — veuillez vous reconnecter' }, { status: 401 })
+    }
 
     const formData = await request.formData()
     const file = formData.get('file') as File

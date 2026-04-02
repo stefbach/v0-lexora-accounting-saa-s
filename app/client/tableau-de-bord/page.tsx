@@ -1,6 +1,7 @@
 "use client"
 import { useState, useEffect } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useProfile } from "@/hooks/use-profile"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -22,6 +23,7 @@ function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigi
 
 export default function TableauDeBord() {
   const { profile, loading: profileLoading } = useProfile()
+  const router = useRouter()
   const [societes, setSocietes] = useState<Societe[]>([])
   const [selected, setSelected] = useState<string>("all")
   const [stats, setStats] = useState<Stats | null>(null)
@@ -70,21 +72,18 @@ export default function TableauDeBord() {
   const mois = new Date().toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
   const societeActive = societes.find(s => s.id === selected)
 
-  if (profileLoading) return (
+  // Redirect assistant to their dedicated page
+  useEffect(() => {
+    if (!profileLoading && profile?.role === "client_assistant") {
+      router.replace("/client/assistant")
+    }
+  }, [profileLoading, profile?.role, router])
+
+  if (profileLoading || profile?.role === "client_assistant") return (
     <div className="flex items-center justify-center h-screen">
       <Loader2 className="w-8 h-8 animate-spin text-[#1E2A4A]" />
     </div>
   )
-
-  // Redirect assistant to their dedicated page
-  if (profile?.role === "client_assistant") {
-    if (typeof window !== "undefined") window.location.href = "/client/assistant"
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <Loader2 className="w-8 h-8 animate-spin text-[#1E2A4A]" />
-      </div>
-    )
-  }
 
   return (
     <div className="p-3 pt-12 sm:p-4 md:pt-6 md:p-6 space-y-4 sm:space-y-6">
