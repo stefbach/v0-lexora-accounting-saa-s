@@ -1178,38 +1178,39 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
       // ──── AUTO-DETECT SOCIÉTÉ from PDF (BRN, IBAN, numéro compte, nom) ────
       let bankSocieteId = societeId || null
 
+      // Get user's société IDs for scoped matching
+      const { data: userDossiersSoc } = await supabase.from('dossiers').select('societe_id').eq('client_id', user.id)
+      const { data: userSocLinks } = await supabase.from('user_societes').select('societe_id').eq('user_id', user.id)
+      const userSocieteIds = [...new Set([
+        ...(userDossiersSoc || []).map(d => d.societe_id),
+        ...(userSocLinks || []).map(us => us.societe_id),
+      ].filter(Boolean))]
+
       if (!bankSocieteId) {
-        // 1. Match by BRN
+        // 1. Match by BRN — only within user's sociétés
         if (extractedBRN) {
-          const { data: byBRN } = await supabase.from('societes').select('id, nom').eq('brn', extractedBRN).limit(1).maybeSingle()
+          const { data: byBRN } = await supabase.from('societes').select('id, nom').eq('brn', extractedBRN).in('id', userSocieteIds.length > 0 ? userSocieteIds : ['_none_']).limit(1).maybeSingle()
           if (byBRN) { bankSocieteId = byBRN.id; console.log(`[upload] Société by BRN ${extractedBRN} → ${byBRN.nom}`) }
         }
-        // 2. Match by IBAN on existing bank accounts
+        // 2. Match by IBAN on existing bank accounts — only within user's sociétés
         if (!bankSocieteId && extractedIBAN) {
-          const { data: byIBAN } = await supabase.from('comptes_bancaires').select('id, societe_id').eq('iban', extractedIBAN).limit(1).maybeSingle()
+          const { data: byIBAN } = await supabase.from('comptes_bancaires').select('id, societe_id').eq('iban', extractedIBAN).in('societe_id', userSocieteIds.length > 0 ? userSocieteIds : ['_none_']).limit(1).maybeSingle()
           if (byIBAN) { bankSocieteId = byIBAN.societe_id; console.log(`[upload] Société by IBAN`) }
         }
-        // 3. Match by account number
+        // 3. Match by account number — only within user's sociétés
         if (!bankSocieteId && extractedNumeroCompte) {
-          const { data: byNum } = await supabase.from('comptes_bancaires').select('id, societe_id').eq('numero_compte', extractedNumeroCompte).limit(1).maybeSingle()
+          const { data: byNum } = await supabase.from('comptes_bancaires').select('id, societe_id').eq('numero_compte', extractedNumeroCompte).in('societe_id', userSocieteIds.length > 0 ? userSocieteIds : ['_none_']).limit(1).maybeSingle()
           if (byNum) { bankSocieteId = byNum.societe_id; console.log(`[upload] Société by account number ${extractedNumeroCompte}`) }
         }
         // 4. Match by société name (fuzzy) — only against user's own sociétés, skip bank names
         if (!bankSocieteId && extractedNomSociete && extractedNomSociete !== 'INCONNU' && !isBankName(extractedNomSociete)) {
           const sn = extractedNomSociete.toLowerCase().replace(/ ltd| limited| sarl| sas/gi, '').trim()
-          // Only search user's sociétés via dossiers + user_societes
-          const { data: userDossiers } = await supabase.from('dossiers').select('societe_id, societes(id, nom)').eq('client_id', user.id)
-          const { data: userSocs } = await supabase.from('user_societes').select('societe_id, societes(id, nom)').eq('user_id', user.id)
-          const allUserSocs = [
-            ...(userDossiers || []).map((d: any) => d.societes).filter(Boolean),
-            ...(userSocs || []).map((us: any) => us.societes).filter(Boolean),
-          ]
-          const uniqueSocs = Array.from(new Map(allUserSocs.map((s: any) => [s.id, s])).values())
-          const matched = uniqueSocs.find((s: any) => {
+          const { data: userSocNames } = await supabase.from('societes').select('id, nom').in('id', userSocieteIds.length > 0 ? userSocieteIds : ['_none_'])
+          const matched = (userSocNames || []).find((s: any) => {
             const n = (s.nom || '').toLowerCase().replace(/ ltd| limited| sarl| sas/gi, '').trim()
             return n === sn || n.includes(sn) || sn.includes(n)
           })
-          if (matched) { bankSocieteId = (matched as any).id; console.log(`[upload] Société by name "${extractedNomSociete}" → ${(matched as any).nom}`) }
+          if (matched) { bankSocieteId = matched.id; console.log(`[upload] Société by name "${extractedNomSociete}" → ${matched.nom}`) }
         }
         // 5. Fallback: user's dossier
         if (!bankSocieteId) {
@@ -1311,16 +1312,20 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
         }
 
         // Store bank statement record — find the account we just created/updated
+        // MUST match both numero_compte/banque AND societe_id to prevent cross-société linking
         let bankAccount: any = null
         if (normNumeroCompte) {
           const { data: byNum } = await supabase.from('comptes_bancaires')
-            .select('id').eq('societe_id', bankSocieteId).eq('numero_compte', normNumeroCompte).limit(1).maybeSingle()
-          bankAccount = byNum
+            .select('id, societe_id').eq('societe_id', bankSocieteId).eq('numero_compte', normNumeroCompte).limit(1).maybeSingle()
+          if (byNum && byNum.societe_id === bankSocieteId) bankAccount = byNum
         }
         if (!bankAccount && bankName) {
           const { data: byName } = await supabase.from('comptes_bancaires')
-            .select('id').eq('societe_id', bankSocieteId).eq('banque', bankName).eq('devise', bankDevise).limit(1).maybeSingle()
-          bankAccount = byName
+            .select('id, societe_id').eq('societe_id', bankSocieteId).eq('banque', bankName).eq('devise', bankDevise).limit(1).maybeSingle()
+          if (byName && byName.societe_id === bankSocieteId) bankAccount = byName
+        }
+        if (!bankAccount) {
+          console.warn(`[upload] No matching bank account found for société ${bankSocieteId} — releve will not be stored`)
         }
 
         if (bankAccount) {
