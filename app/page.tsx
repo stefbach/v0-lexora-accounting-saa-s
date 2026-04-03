@@ -98,33 +98,6 @@ export default function HomePage() {
     { icon: Bot, text: t('home.ai.alerts', locale) },
   ]
 
-  const plans = [
-    {
-      name: t('home.plan.premium', locale),
-      description: t('home.plan.premium_desc', locale),
-      highlight: true,
-      features: Array.from({ length: 13 }, (_, i) => t(`home.plan.premium_f${i + 1}`, locale)),
-    },
-    {
-      name: t('home.plan.accounting', locale),
-      description: t('home.plan.accounting_desc', locale),
-      highlight: false,
-      features: Array.from({ length: 9 }, (_, i) => t(`home.plan.accounting_f${i + 1}`, locale)),
-    },
-    {
-      name: t('home.plan.hr', locale),
-      description: t('home.plan.hr_desc', locale),
-      highlight: false,
-      features: Array.from({ length: 10 }, (_, i) => t(`home.plan.hr_f${i + 1}`, locale)),
-    },
-    {
-      name: t('home.plan.combo', locale),
-      description: t('home.plan.combo_desc', locale),
-      highlight: false,
-      features: Array.from({ length: 6 }, (_, i) => t(`home.plan.combo_f${i + 1}`, locale)),
-    },
-  ]
-
   const compliance = [
     { icon: Landmark, label: t('home.compliance.mra', locale) },
     { icon: Scale, label: t('home.compliance.wra', locale) },
@@ -298,66 +271,36 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* PLANS — white */}
+        {/* PLANS — teaser CTA vers /tarifs */}
         <section id="plans" className="py-20 md:py-28" style={{ backgroundColor: "#FFFFFF" }}>
-          <div className="mx-auto max-w-5xl px-6">
-            <div className="mb-16 text-center">
-              <h2 className="mb-4 text-3xl font-bold md:text-4xl" style={{ color: "#0B0F2E", fontFamily: "'Poppins', sans-serif", fontWeight: 700 }}>
-                {t('home.adapted_plans', locale)}
-              </h2>
-              <p className="mx-auto max-w-2xl" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif", fontWeight: 300, lineHeight: 1.7 }}>
-                {t('home.adapted_plans_desc', locale)}
-              </p>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {plans.map((plan) => (
-                <Card
-                  key={plan.name}
-                  className="relative text-center transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
-                  style={{
-                    backgroundColor: "#FFFFFF",
-                    border: plan.highlight ? "2px solid #D4AF37" : "1px solid #E2E5F0",
-                    borderRadius: "12px",
-                  }}
+          <div className="mx-auto max-w-3xl px-6 text-center">
+            <h2 className="mb-4 text-3xl font-bold md:text-4xl" style={{ color: "#0B0F2E", fontFamily: "'Poppins', sans-serif", fontWeight: 700 }}>
+              {t('home.adapted_plans', locale)}
+            </h2>
+            <p className="mx-auto mb-8 max-w-2xl" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif", fontWeight: 300, lineHeight: 1.7 }}>
+              {t('home.adapted_plans_desc', locale)}
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-4 mb-10">
+              {["Comptabilité + Facturation", "RH & Paie", "Pack Complet ERP"].map((label) => (
+                <div
+                  key={label}
+                  className="rounded-full px-5 py-2 text-sm font-medium"
+                  style={{ backgroundColor: "#F0F2F8", color: "#0B0F2E", border: "1px solid #E2E5F0", fontFamily: "'Poppins', sans-serif" }}
                 >
-                  {plan.highlight && (
-                    <div
-                      className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-0.5 text-xs font-semibold"
-                      style={{ backgroundColor: "#D4AF37", color: "#0B0F2E", fontFamily: "'Poppins', sans-serif", fontWeight: 700 }}
-                    >
-                      {t('home.popular', locale)}
-                    </div>
-                  )}
-                  <CardHeader className="pb-2 pt-8">
-                    <CardTitle className="text-xl" style={{ color: "#0B0F2E", fontFamily: "'Poppins', sans-serif", fontWeight: 500 }}>
-                      {plan.name}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="pb-8">
-                    <p className="mb-4 text-sm" style={{ color: "#4A5490", fontWeight: 300 }}>{plan.description}</p>
-                    <ul className="mb-6 space-y-2 text-left">
-                      {plan.features.map((f: string, i: number) => (
-                        <li key={i} className="flex items-start gap-2 text-sm" style={{ color: "#4A5490" }}>
-                          <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0" style={{ color: "#D4AF37" }} />
-                          <span>{f}</span>
-                        </li>
-                      ))}
-                    </ul>
-                    <Link href="/auth/login">
-                      <Button
-                        className="w-full"
-                        style={plan.highlight
-                          ? { backgroundColor: "#D4AF37", color: "#0B0F2E", fontFamily: "'Poppins', sans-serif", fontWeight: 700, borderRadius: "6px" }
-                          : { backgroundColor: "transparent", border: "1px solid #4191FF", color: "#4191FF", fontFamily: "'Poppins', sans-serif", fontWeight: 500, borderRadius: "6px" }
-                        }
-                      >
-                        {t('home.choose', locale)}
-                      </Button>
-                    </Link>
-                  </CardContent>
-                </Card>
+                  {label}
+                </div>
               ))}
             </div>
+            <Link href="/tarifs">
+              <Button
+                size="lg"
+                className="px-10 text-base font-semibold"
+                style={{ backgroundColor: "#D4AF37", color: "#0B0F2E", fontFamily: "'Poppins', sans-serif", fontWeight: 700, borderRadius: "6px" }}
+              >
+                {locale === "fr" ? "Voir tous les tarifs" : "View all pricing"}
+                <ArrowRight className="ml-2 h-5 w-5" />
+              </Button>
+            </Link>
           </div>
         </section>
 
