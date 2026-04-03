@@ -236,7 +236,8 @@ Taux: EUR={{TAUX_EUR}}, GBP={{TAUX_GBP}}, USD={{TAUX_USD}}`, tauxChange)
       }
     }
 
-    await supabase.from('documents').update(updateFields).eq('id', id)
+    const { error: docUpdateErr } = await supabase.from('documents').update(updateFields).eq('id', id)
+    if (docUpdateErr) console.error('[reanalyze] document update FAILED:', docUpdateErr.message)
 
     // Re-create accounting entries
     const ecritures = finalExtraction.ecritures_comptables || finalExtraction.lignes
@@ -365,9 +366,18 @@ Taux: EUR={{TAUX_EUR}}, GBP={{TAUX_GBP}}, USD={{TAUX_USD}}`, tauxChange)
         existingBank = data
       }
       if (!existingBank && normNumeroCompte) {
-        const { data } = await supabase.from('comptes_bancaires')
-          .select('id, numero_compte, devise, societe_id').eq('societe_id', bankSocieteId).eq('numero_compte', normNumeroCompte).limit(1).maybeSingle()
-        existingBank = data
+        // Prefer matching with IBAN-derived devise first
+        const ibanDev = extractedIBAN?.match(/[A-Z]{3}$/)?.[0] || null
+        if (ibanDev) {
+          const { data } = await supabase.from('comptes_bancaires')
+            .select('id, numero_compte, devise, societe_id').eq('societe_id', bankSocieteId).eq('numero_compte', normNumeroCompte).eq('devise', ibanDev).limit(1).maybeSingle()
+          existingBank = data
+        }
+        if (!existingBank) {
+          const { data } = await supabase.from('comptes_bancaires')
+            .select('id, numero_compte, devise, societe_id').eq('societe_id', bankSocieteId).eq('numero_compte', normNumeroCompte).limit(1).maybeSingle()
+          existingBank = data
+        }
       }
       if (!existingBank && bankName) {
         const { data } = await supabase.from('comptes_bancaires')
@@ -422,13 +432,30 @@ Taux: EUR={{TAUX_EUR}}, GBP={{TAUX_GBP}}, USD={{TAUX_USD}}`, tauxChange)
       // Delete old releve for this document
       await supabase.from('releves_bancaires').delete().eq('document_id', id)
 
-      // Get bank account ID — strict societe_id match
+      // Get bank account ID — strict societe_id match + IBAN-based devise routing
+      const ibanDevise = extractedIBAN?.match(/[A-Z]{3}$/)?.[0] || null
       let bankAccount: any = null
-      if (normNumeroCompte) {
+      // Strategy 1: exact IBAN match
+      if (extractedIBAN) {
+        const { data } = await supabase.from('comptes_bancaires')
+          .select('id, societe_id').eq('societe_id', bankSocieteId).eq('iban', extractedIBAN).limit(1).maybeSingle()
+        if (data && data.societe_id === bankSocieteId) bankAccount = data
+      }
+      // Strategy 2: numero_compte + devise (from IBAN suffix)
+      if (!bankAccount && normNumeroCompte) {
+        let q = supabase.from('comptes_bancaires')
+          .select('id, societe_id').eq('societe_id', bankSocieteId).eq('numero_compte', normNumeroCompte)
+        if (ibanDevise) q = q.eq('devise', ibanDevise)
+        const { data } = await q.limit(1).maybeSingle()
+        if (data && data.societe_id === bankSocieteId) bankAccount = data
+      }
+      // Strategy 3: numero_compte without devise filter
+      if (!bankAccount && normNumeroCompte) {
         const { data } = await supabase.from('comptes_bancaires')
           .select('id, societe_id').eq('societe_id', bankSocieteId).eq('numero_compte', normNumeroCompte).limit(1).maybeSingle()
         if (data && data.societe_id === bankSocieteId) bankAccount = data
       }
+      // Strategy 4: banque + devise
       if (!bankAccount && bankName) {
         const { data } = await supabase.from('comptes_bancaires')
           .select('id, societe_id').eq('societe_id', bankSocieteId).eq('banque', bankName).eq('devise', bankDevise).limit(1).maybeSingle()
