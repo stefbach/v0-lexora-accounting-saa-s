@@ -326,9 +326,12 @@ Taux: EUR={{TAUX_EUR}}, GBP={{TAUX_GBP}}, USD={{TAUX_USD}}`, tauxChange)
     // === BANK STATEMENT: update comptes_bancaires + releves_bancaires ===
     if (finalTypeDocument === 'releve_bancaire' && dossier?.societe_id) {
       const bankSocieteId = dossier.societe_id
-      const bankName = finalExtraction.banque || finalExtraction.compte_bancaire || finalSociete || 'Banque'
-      const bankDevise = finalExtraction.devise || 'MUR'
-      const solde = Number(finalExtraction.solde_cloture) || Number(finalExtraction.solde_fin) || 0
+      const rawBankName = finalExtraction.banque || finalExtraction.compte_bancaire || null
+      const bankName = rawBankName && !isBankName(rawBankName) ? rawBankName : (rawBankName || null)
+      const ibanCurrency = finalExtraction.iban?.match(/[A-Z]{3}$/)?.[0] || null
+      const bankDevise = (finalExtraction.devise || ibanCurrency || 'MUR').toUpperCase().replace(/[^A-Z]/g, '') || 'MUR'
+      const rawSolde = parseFloat(finalExtraction.solde_cloture) || parseFloat(finalExtraction.solde_fin) || NaN
+      const solde = isNaN(rawSolde) ? null : rawSolde
 
       // Normalize dates
       let normPeriodeFin = finalExtraction.periode_fin || finalExtraction.date_fin || null
@@ -342,7 +345,6 @@ Taux: EUR={{TAUX_EUR}}, GBP={{TAUX_GBP}}, USD={{TAUX_USD}}`, tauxChange)
           normPeriodeFin = p
         }
       }
-      if (!normPeriodeFin) normPeriodeFin = new Date().toISOString().split('T')[0]
 
       let normPeriodeDebut = finalExtraction.periode_debut || finalExtraction.date_debut || null
       if (!normPeriodeDebut && finalExtraction.periode) {
@@ -353,22 +355,44 @@ Taux: EUR={{TAUX_EUR}}, GBP={{TAUX_GBP}}, USD={{TAUX_USD}}`, tauxChange)
       if (!normPeriodeDebut) normPeriodeDebut = normPeriodeFin
 
       const normNumeroCompte = finalExtraction.numero_compte || finalExtraction.compte_bancaire || null
+      const extractedIBAN = finalExtraction.iban || null
 
-      // Upsert bank account
-      const { data: existingBank } = await supabase.from('comptes_bancaires')
-        .select('id').eq('societe_id', bankSocieteId).eq('banque', bankName).limit(1).maybeSingle()
+      // Find existing bank account — strict by societe_id + multiple match strategies
+      let existingBank: any = null
+      if (extractedIBAN) {
+        const { data } = await supabase.from('comptes_bancaires')
+          .select('id, numero_compte, devise, societe_id').eq('societe_id', bankSocieteId).eq('iban', extractedIBAN).limit(1).maybeSingle()
+        existingBank = data
+      }
+      if (!existingBank && normNumeroCompte) {
+        const { data } = await supabase.from('comptes_bancaires')
+          .select('id, numero_compte, devise, societe_id').eq('societe_id', bankSocieteId).eq('numero_compte', normNumeroCompte).limit(1).maybeSingle()
+        existingBank = data
+      }
+      if (!existingBank && bankName) {
+        const { data } = await supabase.from('comptes_bancaires')
+          .select('id, numero_compte, devise, societe_id').eq('societe_id', bankSocieteId).eq('banque', bankName).eq('devise', bankDevise).limit(1).maybeSingle()
+        existingBank = data
+      }
 
       if (existingBank) {
-        await supabase.from('comptes_bancaires').update({
-          solde_actuel: solde, date_dernier_releve: normPeriodeFin,
-          ...(normNumeroCompte ? { numero_compte: normNumeroCompte } : {}),
-          ...(bankDevise !== 'MUR' ? { devise: bankDevise } : {}),
-        }).eq('id', existingBank.id)
-      } else {
+        // SAFE UPDATE: never overwrite numero_compte or societe_id if already set
+        const safeUpdate: Record<string, unknown> = {}
+        if (solde !== null) safeUpdate.solde_actuel = solde
+        if (normPeriodeFin) safeUpdate.date_dernier_releve = normPeriodeFin
+        if (bankName) safeUpdate.banque = bankName
+        if (!existingBank.numero_compte && normNumeroCompte) safeUpdate.numero_compte = normNumeroCompte
+        if (!existingBank.devise && bankDevise) safeUpdate.devise = bankDevise
+        if (extractedIBAN) safeUpdate.iban = extractedIBAN
+        if (Object.keys(safeUpdate).length > 0) {
+          await supabase.from('comptes_bancaires').update(safeUpdate).eq('id', existingBank.id)
+        }
+      } else if (bankName) {
         await supabase.from('comptes_bancaires').insert({
           societe_id: bankSocieteId, banque: bankName,
-          nom_compte: normNumeroCompte || bankName,
-          numero_compte: normNumeroCompte, devise: bankDevise,
+          nom_compte: normNumeroCompte || null,
+          numero_compte: normNumeroCompte, iban: extractedIBAN,
+          devise: bankDevise,
           solde_actuel: solde, solde_dernier_releve: solde,
           date_dernier_releve: normPeriodeFin, actif: true,
         })
@@ -381,7 +405,7 @@ Taux: EUR={{TAUX_EUR}}, GBP={{TAUX_GBP}}, USD={{TAUX_USD}}`, tauxChange)
         date: l.date || '', libelle: l.libelle || '',
         debit: l.sens === 'debit' ? (Number(l.montant) || 0) : 0,
         credit: l.sens === 'credit' ? (Number(l.montant) || 0) : 0,
-        solde_apres: null,
+        solde_apres: l.solde_apres ?? null,
         tiers_detecte: l.tiers_detecte || null,
         compte_comptable: l.sens === 'debit' ? (l.compte_debit || null) : (l.compte_credit || null),
         statut: (l.confiance || 0) >= 70 ? 'identifie' : ((l.confiance || 0) >= 40 ? 'a_verifier' : 'non_identifie'),
@@ -398,16 +422,25 @@ Taux: EUR={{TAUX_EUR}}, GBP={{TAUX_GBP}}, USD={{TAUX_USD}}`, tauxChange)
       // Delete old releve for this document
       await supabase.from('releves_bancaires').delete().eq('document_id', id)
 
-      // Get bank account ID
-      const { data: bankAccount } = await supabase.from('comptes_bancaires')
-        .select('id').eq('societe_id', bankSocieteId).eq('banque', bankName).limit(1).maybeSingle()
+      // Get bank account ID — strict societe_id match
+      let bankAccount: any = null
+      if (normNumeroCompte) {
+        const { data } = await supabase.from('comptes_bancaires')
+          .select('id, societe_id').eq('societe_id', bankSocieteId).eq('numero_compte', normNumeroCompte).limit(1).maybeSingle()
+        if (data && data.societe_id === bankSocieteId) bankAccount = data
+      }
+      if (!bankAccount && bankName) {
+        const { data } = await supabase.from('comptes_bancaires')
+          .select('id, societe_id').eq('societe_id', bankSocieteId).eq('banque', bankName).eq('devise', bankDevise).limit(1).maybeSingle()
+        if (data && data.societe_id === bankSocieteId) bankAccount = data
+      }
 
       if (bankAccount && normalizedTransactions.length > 0) {
         const ecartSolde = Math.abs((soldeOuverture + totalCredits - totalDebits) - soldeCloture)
         const { error: releveError } = await supabase.from('releves_bancaires').insert({
           compte_bancaire_id: bankAccount.id,
           societe_id: bankSocieteId,
-          periode: normPeriodeFin.substring(0, 7),
+          periode: normPeriodeFin ? normPeriodeFin.substring(0, 7) : null,
           date_debut: normPeriodeDebut,
           date_fin: normPeriodeFin,
           solde_ouverture: soldeOuverture,
