@@ -3,6 +3,7 @@ import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { getSystemPrompt, injectTauxChange, CLAUDE_CONFIG } from '@/lib/ai/prompts'
 import type { PromptId } from '@/lib/ai/prompts'
+import { isBankName } from '@/lib/utils/bank-utils'
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -163,7 +164,10 @@ Taux: EUR={{TAUX_EUR}}, GBP={{TAUX_GBP}}, USD={{TAUX_USD}}`, tauxChange)
 
     if (isReleveBancaire && !parsed.routing) {
       // The releve bancaire prompt returns directly the extraction object
-      finalRouting = { type_document: 'releve_bancaire', societe: parsed.banque || 'INCONNU', confiance_type: 90 }
+      // Use account holder (nom_societe/titulaire), NOT the bank name
+      const accountHolder = parsed.nom_societe || parsed.titulaire || null
+      const routingSociete = accountHolder && !isBankName(accountHolder) ? accountHolder : 'INCONNU'
+      finalRouting = { type_document: 'releve_bancaire', societe: routingSociete, confiance_type: 90 }
       finalExtraction = parsed
     } else {
       finalRouting = parsed.routing || { type_document: typeForce, societe: 'INCONNU', confiance_type: 50 }
@@ -171,8 +175,20 @@ Taux: EUR={{TAUX_EUR}}, GBP={{TAUX_GBP}}, USD={{TAUX_USD}}`, tauxChange)
     }
 
     const finalTypeDocument = finalRouting.type_document || typeForce
-    const finalSociete = finalRouting.societe
+    let finalSociete = finalRouting.societe
     const finalConfiance = finalRouting.confiance_type || null
+
+    // Post-processing: never use bank name as société
+    if (finalSociete && isBankName(finalSociete)) {
+      console.warn(`[reanalyze] societe "${finalSociete}" is a bank name — clearing to INCONNU`)
+      finalSociete = 'INCONNU'
+    }
+    if (finalExtraction?.nom_societe && isBankName(finalExtraction.nom_societe)) {
+      finalExtraction.nom_societe = null
+    }
+    if (finalExtraction?.titulaire && isBankName(finalExtraction.titulaire)) {
+      finalExtraction.titulaire = null
+    }
 
     // Delete old accounting entries for this document
     if (doc.dossier_id) {

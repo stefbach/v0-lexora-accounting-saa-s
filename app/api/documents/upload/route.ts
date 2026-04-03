@@ -3,17 +3,7 @@ import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { getSystemPrompt, injectTauxChange, CLAUDE_CONFIG } from '@/lib/ai/prompts'
 import { createHash } from 'crypto'
-
-const BANK_NAMES_BLACKLIST = [
-  'mcb', 'mauritius commercial bank', 'sbm', 'state bank of mauritius',
-  'absa', 'barclays', 'hsbc', 'maubank', 'bank', 'banque', 'banking',
-  'bmo', 'bnp', 'afrasia', 'abc banking', 'warwyck', 'standard chartered',
-]
-
-function isBankName(name: string): boolean {
-  const lower = name.toLowerCase().trim()
-  return BANK_NAMES_BLACKLIST.some(b => lower.includes(b))
-}
+import { isBankName } from '@/lib/utils/bank-utils'
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
