@@ -100,7 +100,6 @@ const CLIENT_SECTIONS: NavSection[] = [
       { href: "/client/banque", label: "Banque", icon: Landmark },
       { href: "/client/rapprochement", label: "Rapprochement", icon: CreditCard },
       { href: "/client/grand-livre", label: "Grand Livre", icon: BookOpen },
-      { href: "/client/tresorerie", label: "Trésorerie & BFR", icon: Banknote },
       { href: "/client/affectations", label: "Affectations comptables", icon: ClipboardList },
     ],
   },
@@ -116,7 +115,6 @@ const CLIENT_SECTIONS: NavSection[] = [
     title: "Fiscal MRA",
     items: [
       { href: "/client/tva", label: "TVA MRA", icon: Receipt },
-      { href: "/client/charges-sociales", label: "CSG / NSF / PAYE", icon: Calculator },
       { href: "/client/itform3", label: "IT Form 3 / IS", icon: FileText },
       { href: "/client/salaires-compta", label: "Salaires — Plan comptable", icon: CreditCard },
     ],
