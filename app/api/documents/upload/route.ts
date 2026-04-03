@@ -684,7 +684,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
           libelle: l.libelle || '',
           debit: l.sens === 'debit' ? (Number(l.montant) || 0) : 0,
           credit: l.sens === 'credit' ? (Number(l.montant) || 0) : 0,
-          solde_apres: null,
+          solde_apres: l.solde_apres ?? null,
           tiers_detecte: l.tiers_detecte || null,
           compte_comptable: l.sens === 'debit' ? (l.compte_debit || null) : (l.compte_credit || null),
           statut: (l.confiance || 0) >= 70 ? 'identifie' : ((l.confiance || 0) >= 40 ? 'a_verifier' : 'non_identifie'),
@@ -1163,7 +1163,10 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
     // Handle bank statement: auto-detect société + create/update bank account + store statement
     if (typeDocument === 'releve_bancaire') {
       // Do NOT set banque from detectedSociete — it's the account holder, not the bank
-      const bankDevise = extraction.devise || 'MUR'
+      // Currency: use extracted devise, validate against IBAN suffix, default MUR
+      const ibanCurrency = extraction.iban?.match(/[A-Z]{3}$/)?.[0] || null
+      const rawDevise = extraction.devise || ibanCurrency || 'MUR'
+      const bankDevise = rawDevise.toUpperCase().replace(/[^A-Z]/g, '') || 'MUR'
       const bankName = extraction.banque || extraction.compte_bancaire || null
       const rawSolde = parseFloat(extraction.solde_cloture) || parseFloat(extraction.solde_fin) || NaN
       const solde = isNaN(rawSolde) ? null : rawSolde

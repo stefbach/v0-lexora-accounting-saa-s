@@ -343,7 +343,7 @@ EXTRACTION OBLIGATOIRE EN-TETE:
 - Extraire l'IBAN complet (champ "iban")
 - Extraire le numero de compte (champ "numero_compte")
 - Extraire le nom de la banque (champ "banque")
-- Extraire la devise du compte (champ "devise")
+- Extraire la devise du compte (champ "devise") — LIRE EXACTEMENT le champ "Currency:" ou "Devise:" dans l'en-tete du releve. Ne PAS deviner. Ne PAS utiliser EUR par defaut. A Maurice, la devise par defaut est MUR.
 
 FORMAT REPONSE JSON strict:
 {
@@ -372,6 +372,7 @@ FORMAT REPONSE JSON strict:
       "libelle": "",
       "montant": 0,
       "sens": "debit|credit",
+      "solde_apres": 0,
       "compte_debit": "",
       "compte_credit": "",
       "libelle_ecriture": "",
@@ -394,6 +395,7 @@ REGLES CHAMPS OBLIGATOIRES:
 - periode_debut et periode_fin: TOUJOURS en format YYYY-MM-DD (date exacte du premier et dernier jour du releve)
 - solde_ouverture = solde_debut, solde_cloture = solde_fin (inclure les deux paires)
 - numero_compte = compte_bancaire (inclure les deux)
+- solde_apres: pour CHAQUE transaction, extraire la colonne BALANCE / SOLDE du releve. C'est le solde progressif apres cette transaction. Si le releve a une colonne "BALANCE", "SOLDE" ou "BAL" → la lire pour chaque ligne.
 - ecritures_comptables: generer les ecritures comptables (debit charge/credit banque pour les debits, debit banque/credit produit pour les credits)`
 
 export const SYSTEM_PROMPT_CHARGES_SOCIALES = `Tu es un expert en droit social mauricien specialise dans les charges sociales et cotisations.
