@@ -593,7 +593,7 @@ Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
     }
 
     if (!typeDocument) typeDocument = parsed.routing?.type_document || 'autre'
-    const detectedSociete = parsed.routing?.societe || 'INCONNU'
+    let detectedSociete = parsed.routing?.societe || 'INCONNU'
     const confianceType = parsed.routing?.confiance_type || null
     if (!extraction || Object.keys(extraction).length === 0) extraction = parsed.extraction || {}
 
@@ -689,6 +689,21 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
           compte_comptable: l.sens === 'debit' ? (l.compte_debit || null) : (l.compte_credit || null),
           statut: (l.confiance || 0) >= 70 ? 'identifie' : ((l.confiance || 0) >= 40 ? 'a_verifier' : 'non_identifie'),
         }))
+      }
+    }
+
+    // Post-processing: validate nom_societe is NOT a bank name
+    if (typeDocument === 'releve_bancaire') {
+      if (extraction.nom_societe && isBankName(extraction.nom_societe)) {
+        console.warn(`[upload] OCR returned bank name "${extraction.nom_societe}" as nom_societe — clearing it`)
+        extraction.nom_societe = null
+      }
+      if (extraction.titulaire && isBankName(extraction.titulaire)) {
+        extraction.titulaire = null
+      }
+      // Also fix detectedSociete if it's a bank name
+      if (detectedSociete && isBankName(detectedSociete)) {
+        detectedSociete = 'INCONNU'
       }
     }
 
