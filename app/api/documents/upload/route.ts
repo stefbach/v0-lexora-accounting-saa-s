@@ -1264,36 +1264,49 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
         const normNumeroCompte = extraction.numero_compte || extraction.compte_bancaire || null
 
         // Check if bank account exists — match by IBAN, numero_compte, or banque+devise
+        // ALL lookups MUST be scoped to bankSocieteId
         let existingBank: any = null
         if (extractedIBAN) {
           const { data: byIBAN } = await supabase.from('comptes_bancaires')
-            .select('id').eq('societe_id', bankSocieteId).eq('iban', extractedIBAN).limit(1).maybeSingle()
-          existingBank = byIBAN
+            .select('id, societe_id, numero_compte, devise').eq('societe_id', bankSocieteId).eq('iban', extractedIBAN).limit(1).maybeSingle()
+          if (byIBAN && byIBAN.societe_id === bankSocieteId) existingBank = byIBAN
         }
         if (!existingBank && normNumeroCompte) {
           const { data: byNum } = await supabase.from('comptes_bancaires')
-            .select('id').eq('societe_id', bankSocieteId).eq('numero_compte', normNumeroCompte).limit(1).maybeSingle()
-          existingBank = byNum
+            .select('id, societe_id, numero_compte, devise').eq('societe_id', bankSocieteId).eq('numero_compte', normNumeroCompte).limit(1).maybeSingle()
+          if (byNum && byNum.societe_id === bankSocieteId) existingBank = byNum
         }
         // Only match by banque+devise if bankName is known (avoid "null" collisions)
         if (!existingBank && bankName) {
           const { data: byName } = await supabase.from('comptes_bancaires')
-            .select('id').eq('societe_id', bankSocieteId).eq('banque', bankName).eq('devise', bankDevise).limit(1).maybeSingle()
-          existingBank = byName
+            .select('id, societe_id, numero_compte, devise').eq('societe_id', bankSocieteId).eq('banque', bankName).eq('devise', bankDevise).limit(1).maybeSingle()
+          if (byName && byName.societe_id === bankSocieteId) existingBank = byName
         }
 
         if (existingBank) {
-          // Update balance
-          console.log(`[upload] Updating existing bank account ${existingBank.id}: solde=${solde}, date=${normPeriodeFin}`)
-          const bankUpdate: Record<string, unknown> = {}
-          if (solde !== null) bankUpdate.solde_actuel = solde
-          if (normPeriodeFin) bankUpdate.date_dernier_releve = normPeriodeFin
-          if (extractedIBAN) bankUpdate.iban = extractedIBAN
-          if (normNumeroCompte) bankUpdate.numero_compte = normNumeroCompte
-          if (Object.keys(bankUpdate).length > 0) {
-            await supabase.from('comptes_bancaires').update(bankUpdate).eq('id', existingBank.id)
+          // HARD GUARD: verify société matches before ANY update
+          const { data: guardCheck } = await supabase.from('comptes_bancaires')
+            .select('societe_id, numero_compte').eq('id', existingBank.id).single()
+
+          if (guardCheck && guardCheck.societe_id !== bankSocieteId) {
+            console.error(`[upload] BLOCKED: Attempt to update account ${existingBank.id} from société ${guardCheck.societe_id} with data for société ${bankSocieteId}`)
+            existingBank = null // Force creation of new account instead
+          } else {
+            // SAFE UPDATE: never overwrite numero_compte if already set
+            console.log(`[upload] Updating existing bank account ${existingBank.id}: solde=${solde}, date=${normPeriodeFin}`)
+            const bankUpdate: Record<string, unknown> = {}
+            if (solde !== null) bankUpdate.solde_actuel = solde
+            if (normPeriodeFin) bankUpdate.date_dernier_releve = normPeriodeFin
+            if (extractedIBAN && !existingBank.iban) bankUpdate.iban = extractedIBAN
+            // NEVER overwrite numero_compte if it already has a value
+            if (!guardCheck?.numero_compte && normNumeroCompte) bankUpdate.numero_compte = normNumeroCompte
+            if (Object.keys(bankUpdate).length > 0) {
+              await supabase.from('comptes_bancaires').update(bankUpdate).eq('id', existingBank.id)
+            }
           }
-        } else if (bankName) {
+        }
+
+        if (!existingBank && bankName) {
           // Create new bank account only if bank name was identified
           console.log(`[upload] Creating new bank account: ${bankName} for societe=${bankSocieteId}`)
           const { error: bankInsertError } = await supabase.from('comptes_bancaires').insert({
@@ -1317,17 +1330,42 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
         }
 
         // Store bank statement record — find the account we just created/updated
-        // MUST match both numero_compte/banque AND societe_id to prevent cross-société linking
+        // HARD GUARD: every lookup must verify societe_id matches
         let bankAccount: any = null
-        if (normNumeroCompte) {
-          const { data: byNum } = await supabase.from('comptes_bancaires')
-            .select('id, societe_id').eq('societe_id', bankSocieteId).eq('numero_compte', normNumeroCompte).limit(1).maybeSingle()
-          if (byNum && byNum.societe_id === bankSocieteId) bankAccount = byNum
+        // Strategy 1: exact IBAN match
+        if (extractedIBAN) {
+          const { data } = await supabase.from('comptes_bancaires')
+            .select('id, societe_id').eq('societe_id', bankSocieteId).eq('iban', extractedIBAN).limit(1).maybeSingle()
+          if (data && data.societe_id === bankSocieteId) bankAccount = data
         }
+        // Strategy 2: numero_compte + IBAN-derived devise
+        if (!bankAccount && normNumeroCompte) {
+          const ibanDev = extractedIBAN?.match(/[A-Z]{3}$/)?.[0] || null
+          if (ibanDev) {
+            const { data } = await supabase.from('comptes_bancaires')
+              .select('id, societe_id').eq('societe_id', bankSocieteId).eq('numero_compte', normNumeroCompte).eq('devise', ibanDev).limit(1).maybeSingle()
+            if (data && data.societe_id === bankSocieteId) bankAccount = data
+          }
+          if (!bankAccount) {
+            const { data } = await supabase.from('comptes_bancaires')
+              .select('id, societe_id').eq('societe_id', bankSocieteId).eq('numero_compte', normNumeroCompte).limit(1).maybeSingle()
+            if (data && data.societe_id === bankSocieteId) bankAccount = data
+          }
+        }
+        // Strategy 3: banque + devise
         if (!bankAccount && bankName) {
-          const { data: byName } = await supabase.from('comptes_bancaires')
+          const { data } = await supabase.from('comptes_bancaires')
             .select('id, societe_id').eq('societe_id', bankSocieteId).eq('banque', bankName).eq('devise', bankDevise).limit(1).maybeSingle()
-          if (byName && byName.societe_id === bankSocieteId) bankAccount = byName
+          if (data && data.societe_id === bankSocieteId) bankAccount = data
+        }
+        // Final guard: verify the account belongs to the correct société
+        if (bankAccount) {
+          const { data: finalCheck } = await supabase.from('comptes_bancaires')
+            .select('societe_id').eq('id', bankAccount.id).single()
+          if (finalCheck && finalCheck.societe_id !== bankSocieteId) {
+            console.error(`[upload] BLOCKED releve linking: account ${bankAccount.id} belongs to société ${finalCheck.societe_id}, not ${bankSocieteId}`)
+            bankAccount = null
+          }
         }
         if (!bankAccount) {
           console.warn(`[upload] No matching bank account found for société ${bankSocieteId} — releve will not be stored`)
