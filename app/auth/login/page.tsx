@@ -84,10 +84,9 @@ export default function AuthLoginPage() {
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="text-center">
           <Link href="/" className="mx-auto mb-4 flex items-center gap-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg" style={{ backgroundColor: "#0B0F2E" }}>
-              <span className="text-lg font-bold" style={{ color: "#D4AF37" }}>L</span>
-            </div>
-            <span className="text-2xl font-semibold tracking-tight" style={{ color: "#0B0F2E" }}>LEXORA</span>
+            <span className="text-2xl font-bold" style={{ color: "#0B0F2E", letterSpacing: "0.04em", fontFamily: "'Poppins', sans-serif" }}>
+              LE<span style={{ color: "#D4AF37" }}>X</span>ORA
+            </span>
           </Link>
           <CardTitle className="text-xl" style={{ color: "#0B0F2E" }}>{txt.title}</CardTitle>
           <CardDescription>{txt.subtitle}</CardDescription>
