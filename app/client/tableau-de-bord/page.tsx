@@ -46,7 +46,7 @@ export default function TableauDeBord() {
   const { profile, loading: profileLoading } = useProfile()
   const router = useRouter()
   const [societes, setSocietes] = useState<Societe[]>([])
-  const [selected, setSelected] = useState<string>("all")
+  const [selected, setSelected] = useState<string>("")
   const [loading, setLoading] = useState(true)
 
   // Period state
@@ -67,7 +67,7 @@ export default function TableauDeBord() {
       .then(r => r.json())
       .then(d => {
         setSocietes(d.societes || [])
-        if (d.societes?.length === 1) setSelected(d.societes[0].id)
+        if (d.societes?.length > 0) setSelected(d.societes[0].id)
       })
   }, [])
 
@@ -161,24 +161,18 @@ export default function TableauDeBord() {
           </h1>
           <p className="text-gray-500 text-sm mt-0.5 capitalize">{formatMoisLabel(mois)}</p>
         </div>
-        {societes.length > 1 && (
+        {societes.length > 0 && (
           <Select value={selected} onValueChange={setSelected}>
             <SelectTrigger className="w-full sm:w-56">
-              <SelectValue placeholder="Toutes les sociétés" />
+              <SelectValue placeholder="Sélectionner une société" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Toutes mes sociétés</SelectItem>
               {societes.map(s => (
                 <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>
               ))}
+              {societes.length > 1 && <SelectItem value="all">Toutes mes sociétés</SelectItem>}
             </SelectContent>
           </Select>
-        )}
-        {societes.length === 1 && (
-          <div className="text-right">
-            <p className="font-semibold text-[#1E2A4A]">{societes[0].nom}</p>
-            {societes[0].brn && <p className="text-xs text-gray-400">BRN : {societes[0].brn}</p>}
-          </div>
         )}
       </div>
 

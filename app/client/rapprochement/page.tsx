@@ -152,7 +152,7 @@ export default function ClientRapprochementPage() {
           <p className="text-sm text-gray-500">Rapprocher les transactions avec les factures et ecritures</p>
         </div>
         <div className="flex gap-2 items-center">
-          {societes.length > 1 && (
+          {societes.length > 0 && (
             <Select value={societeId || ""} onValueChange={v => setSocieteId(v)}>
               <SelectTrigger className="w-[220px]"><SelectValue placeholder="Société" /></SelectTrigger>
               <SelectContent>

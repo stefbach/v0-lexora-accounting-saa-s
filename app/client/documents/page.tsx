@@ -571,12 +571,12 @@ export default function ClientDocumentsPage() {
               <SelectItem value="erreur">Erreur</SelectItem>
             </SelectContent>
           </Select>
-          {societes.length > 1 && (
+          {societes.length > 0 && (
             <Select value={filterSociete} onValueChange={setFilterSociete}>
               <SelectTrigger className="w-[180px] h-8 text-sm"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Toutes sociétés</SelectItem>
                 {societes.map(s => <SelectItem key={s.societe_id} value={s.societe_id}>{s.nom}</SelectItem>)}
+                <SelectItem value="all">Toutes sociétés</SelectItem>
               </SelectContent>
             </Select>
           )}
