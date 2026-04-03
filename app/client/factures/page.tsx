@@ -60,6 +60,7 @@ export default function ClientFacturesPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [filterStatut, setFilterStatut] = useState("all")
+  const [selectedSociete, setSelectedSociete] = useState("")
   const [activeTab, setActiveTab] = useState("factures")
 
   // Recurring templates
@@ -109,16 +110,21 @@ export default function ClientFacturesPage() {
     }
   }
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (societeId?: string) => {
     setLoading(true)
     try {
+      const finUrl = societeId && societeId !== "all"
+        ? `/api/client/financial?societe_id=${societeId}`
+        : "/api/client/financial"
       const [socRes, facRes] = await Promise.all([
         fetch("/api/client/societes"),
-        fetch("/api/client/financial"),
+        fetch(finUrl),
       ])
       const socData = await socRes.json()
       const finData = await facRes.json()
-      setSocietes(socData.societes || [])
+      const socs = socData.societes || []
+      setSocietes(socs)
+      if (socs.length > 0 && !selectedSociete) setSelectedSociete(socs[0].id)
       const allFactures = finData.financial?.factures || []
       setFactures(allFactures.filter((f: Facture) => f.type_facture === 'client'))
     } catch { }
@@ -131,9 +137,9 @@ export default function ClientFacturesPage() {
       const c = localStorage.getItem("lexora_invoice_clients")
       if (c) setClients(JSON.parse(c))
     } catch { }
-  }, [])
+  }, [selectedSociete])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { fetchData(selectedSociete) }, [selectedSociete])
 
   const filtered = factures.filter(f => {
     const matchSearch = !search ||
@@ -271,7 +277,16 @@ export default function ClientFacturesPage() {
           <h1 className="text-2xl font-bold text-[#1E2A4A]">Factures Clients</h1>
           <p className="text-sm text-gray-500">Gestion des creances clients - Conforme MRA</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          {societes.length > 0 && (
+            <Select value={selectedSociete} onValueChange={setSelectedSociete}>
+              <SelectTrigger className="w-[200px]"><SelectValue placeholder="Société" /></SelectTrigger>
+              <SelectContent>
+                {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
+                {societes.length > 1 && <SelectItem value="all">Toutes les sociétés</SelectItem>}
+              </SelectContent>
+            </Select>
+          )}
           <Button variant="outline" onClick={() => router.push("/client/facturation-settings")}><Settings className="w-4 h-4 mr-2" />Parametres</Button>
           <Button className="bg-[#1E2A4A]" onClick={() => router.push("/client/nouvelle-facture")}><Plus className="w-4 h-4 mr-2" />Nouvelle facture</Button>
         </div>

@@ -74,19 +74,22 @@ export default function TVAPage() {
   const [data, setData] = useState<any>(null)
   const [fetching, setFetching] = useState(true)
   const [computing, setComputing] = useState(false)
-  const [selectedSociete, setSelectedSociete] = useState<string>("all")
+  const [selectedSociete, setSelectedSociete] = useState<string>("")
   const [societes, setSocietes] = useState<{ id: string; nom: string }[]>([])
 
   useEffect(() => {
     setFetching(true)
-    const url = selectedSociete !== "all"
+    const url = selectedSociete && selectedSociete !== "all"
       ? `/api/client/financial?societe_id=${selectedSociete}`
       : "/api/client/financial"
     fetch(url)
       .then((res) => res.json())
       .then((json) => {
         setData(json.financial)
-        if (json.financial?.availableSocietes) setSocietes(json.financial.availableSocietes)
+        if (json.financial?.availableSocietes) {
+          setSocietes(json.financial.availableSocietes)
+          if (json.financial.availableSocietes.length > 0 && !selectedSociete) setSelectedSociete(json.financial.availableSocietes[0].id)
+        }
       })
       .catch(() => setData(null))
       .finally(() => setFetching(false))
@@ -191,14 +194,14 @@ export default function TVAPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {societes.length > 1 && (
+          {societes.length > 0 && (
             <div className="flex items-center gap-2">
               <Building2 className="h-4 w-4 text-muted-foreground" />
               <Select value={selectedSociete} onValueChange={setSelectedSociete}>
                 <SelectTrigger className="w-[220px] h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Toutes les soci&eacute;t&eacute;s</SelectItem>
                   {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
+                  {societes.length > 1 && <SelectItem value="all">Toutes les soci&eacute;t&eacute;s</SelectItem>}
                 </SelectContent>
               </Select>
             </div>

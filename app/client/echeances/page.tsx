@@ -46,20 +46,23 @@ export default function EcheancesPage() {
   const { profile, loading } = useProfile()
   const [data, setData] = useState<any>(null)
   const [fetching, setFetching] = useState(true)
-  const [selectedSociete, setSelectedSociete] = useState<string>("all")
+  const [selectedSociete, setSelectedSociete] = useState<string>("")
   const [societes, setSocietes] = useState<{ id: string; nom: string }[]>([])
   const [currentDate, setCurrentDate] = useState(() => new Date())
 
   const fetchData = useCallback(async () => {
     setFetching(true)
     try {
-      const url = selectedSociete !== "all"
+      const url = selectedSociete && selectedSociete !== "all"
         ? `/api/client/financial?societe_id=${selectedSociete}`
         : "/api/client/financial"
       const res = await fetch(url)
       const json = await res.json()
       setData(json.financial)
-      if (json.financial?.availableSocietes) setSocietes(json.financial.availableSocietes)
+      if (json.financial?.availableSocietes) {
+        setSocietes(json.financial.availableSocietes)
+        if (json.financial.availableSocietes.length > 0 && !selectedSociete) setSelectedSociete(json.financial.availableSocietes[0].id)
+      }
     } catch { setData(null) }
     finally { setFetching(false) }
   }, [selectedSociete])
@@ -221,14 +224,14 @@ export default function EcheancesPage() {
             <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Echeances</h1>
             <p className="text-sm text-muted-foreground mt-1">Calendrier des echeances fiscales et factures</p>
           </div>
-          {societes.length > 1 && (
+          {societes.length > 0 && (
             <div className="flex items-center gap-2">
               <Building2 className="h-4 w-4 text-muted-foreground" />
               <Select value={selectedSociete} onValueChange={setSelectedSociete}>
                 <SelectTrigger className="w-[220px] h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Toutes les societes</SelectItem>
                   {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
+                  {societes.length > 1 && <SelectItem value="all">Toutes les societes</SelectItem>}
                 </SelectContent>
               </Select>
             </div>
