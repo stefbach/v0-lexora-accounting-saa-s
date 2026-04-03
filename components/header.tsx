@@ -14,6 +14,7 @@ export function Header() {
     { href: "#features", label: "Fonctionnalités" },
     { href: "#about", label: "À propos" },
     { href: "#contact", label: "Contact" },
+    { href: "/tarifs", label: "Tarifs" },
   ]
 
   return (

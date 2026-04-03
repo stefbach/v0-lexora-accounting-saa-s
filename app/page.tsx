@@ -134,8 +134,8 @@ export default function HomePage() {
   ]
 
   return (
-    <div className="flex min-h-screen flex-col" style={{ backgroundColor: "#0B0F2E" }}>
-      {/* NAVBAR */}
+    <div className="flex min-h-screen flex-col" style={{ backgroundColor: "#F8F9FC" }}>
+      {/* NAVBAR — dark */}
       <header className="sticky top-0 z-50" style={{ backgroundColor: "#0B0F2E", borderBottom: "1px solid #1E2760" }}>
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
           <LexoraLogo href="/" size="sm" />
@@ -152,6 +152,9 @@ export default function HomePage() {
             <a href="#compliance" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif" }}>
               {t('home.compliance', locale)}
             </a>
+            <Link href="/tarifs" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#D4AF37", fontFamily: "'Poppins', sans-serif" }}>
+              Tarifs
+            </Link>
           </nav>
           <div className="flex items-center gap-3">
             <LanguageSwitcherLight />
@@ -170,7 +173,7 @@ export default function HomePage() {
       </header>
 
       <main className="flex-1">
-        {/* HERO */}
+        {/* HERO — dark section for impact */}
         <section
           className="relative overflow-hidden py-24 md:py-32"
           style={{ backgroundColor: "#0B0F2E" }}
@@ -193,7 +196,7 @@ export default function HomePage() {
             >
               {t('home.hero_title', locale)}
             </h1>
-            <p className="mx-auto mb-10 max-w-2xl text-lg" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif", fontWeight: 300, lineHeight: 1.7 }}>
+            <p className="mx-auto mb-10 max-w-2xl text-lg" style={{ color: "#8B90B8", fontFamily: "'Poppins', sans-serif", fontWeight: 300, lineHeight: 1.7 }}>
               {t('home.hero_subtitle', locale)}
             </p>
             <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
@@ -201,7 +204,7 @@ export default function HomePage() {
                 <Button
                   size="lg"
                   className="px-8 text-base font-semibold"
-                  style={{ backgroundColor: "#4191FF", color: "#E8EAFC", fontFamily: "'Poppins', sans-serif", fontWeight: 500, borderRadius: "6px" }}
+                  style={{ backgroundColor: "#4191FF", color: "#FFFFFF", fontFamily: "'Poppins', sans-serif", fontWeight: 500, borderRadius: "6px" }}
                 >
                   {t('home.get_started', locale)}
                   <ArrowRight className="ml-2 h-5 w-5" />
@@ -219,11 +222,11 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* FEATURES */}
-        <section id="features" className="py-20 md:py-28" style={{ backgroundColor: "#0E1338" }}>
+        {/* FEATURES — white */}
+        <section id="features" className="py-20 md:py-28" style={{ backgroundColor: "#FFFFFF" }}>
           <div className="mx-auto max-w-7xl px-6">
             <div className="mb-16 text-center">
-              <h2 className="mb-4 text-3xl font-bold md:text-4xl" style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif", fontWeight: 500 }}>
+              <h2 className="mb-4 text-3xl font-bold md:text-4xl" style={{ color: "#0B0F2E", fontFamily: "'Poppins', sans-serif", fontWeight: 700 }}>
                 {t('home.smart_modules', locale)}
               </h2>
               <p className="mx-auto max-w-2xl" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif", fontWeight: 300, lineHeight: 1.7 }}>
@@ -234,17 +237,17 @@ export default function HomePage() {
               {features.map((feature) => (
                 <Card
                   key={feature.title}
-                  className="group transition-all duration-300 hover:-translate-y-1"
-                  style={{ backgroundColor: "#141C4A", border: "1px solid #1E2760", borderRadius: "12px" }}
+                  className="group transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
+                  style={{ backgroundColor: "#FFFFFF", border: "1px solid #E2E5F0", borderRadius: "12px" }}
                 >
                   <CardHeader className="pb-3">
                     <div
                       className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl"
-                      style={{ backgroundColor: "rgba(65,145,255,0.12)" }}
+                      style={{ backgroundColor: "rgba(65,145,255,0.08)" }}
                     >
                       <feature.icon className="h-6 w-6" style={{ color: "#4191FF" }} />
                     </div>
-                    <CardTitle className="text-lg" style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif", fontWeight: 500 }}>
+                    <CardTitle className="text-lg" style={{ color: "#0B0F2E", fontFamily: "'Poppins', sans-serif", fontWeight: 500 }}>
                       {feature.title}
                     </CardTitle>
                   </CardHeader>
@@ -264,11 +267,11 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* AI SECTION */}
-        <section id="ai" className="py-20 md:py-28" style={{ backgroundColor: "#111840" }}>
+        {/* AI SECTION — light grey */}
+        <section id="ai" className="py-20 md:py-28" style={{ backgroundColor: "#F0F2F8" }}>
           <div className="mx-auto max-w-7xl px-6">
             <div className="mb-16 text-center">
-              <h2 className="mb-4 text-3xl font-bold md:text-4xl" style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif", fontWeight: 500 }}>
+              <h2 className="mb-4 text-3xl font-bold md:text-4xl" style={{ color: "#0B0F2E", fontFamily: "'Poppins', sans-serif", fontWeight: 700 }}>
                 {t('home.ai_at_core', locale)}
               </h2>
               <p className="mx-auto max-w-2xl" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif", fontWeight: 300, lineHeight: 1.7 }}>
@@ -279,14 +282,14 @@ export default function HomePage() {
               {aiCapabilities.map((cap, i) => (
                 <div
                   key={i}
-                  className="flex items-start gap-4 rounded-xl p-6 transition-all duration-300 hover:border-[#4191FF]"
-                  style={{ backgroundColor: "#141C4A", border: "1px solid #1E2760", borderRadius: "12px" }}
+                  className="flex items-start gap-4 rounded-xl p-6 transition-all duration-300 hover:shadow-md"
+                  style={{ backgroundColor: "#FFFFFF", border: "1px solid #E2E5F0", borderRadius: "12px" }}
                 >
                   <div
                     className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
-                    style={{ backgroundColor: "rgba(65,145,255,0.12)" }}
+                    style={{ backgroundColor: "#0B0F2E" }}
                   >
-                    <cap.icon className="h-5 w-5" style={{ color: "#4191FF" }} />
+                    <cap.icon className="h-5 w-5 text-white" />
                   </div>
                   <p className="text-sm leading-relaxed" style={{ color: "#4A5490", fontWeight: 300, lineHeight: 1.7 }}>{cap.text}</p>
                 </div>
@@ -295,11 +298,11 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* PLANS */}
-        <section id="plans" className="py-20 md:py-28" style={{ backgroundColor: "#0E1338" }}>
+        {/* PLANS — white */}
+        <section id="plans" className="py-20 md:py-28" style={{ backgroundColor: "#FFFFFF" }}>
           <div className="mx-auto max-w-5xl px-6">
             <div className="mb-16 text-center">
-              <h2 className="mb-4 text-3xl font-bold md:text-4xl" style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif", fontWeight: 500 }}>
+              <h2 className="mb-4 text-3xl font-bold md:text-4xl" style={{ color: "#0B0F2E", fontFamily: "'Poppins', sans-serif", fontWeight: 700 }}>
                 {t('home.adapted_plans', locale)}
               </h2>
               <p className="mx-auto max-w-2xl" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif", fontWeight: 300, lineHeight: 1.7 }}>
@@ -310,10 +313,10 @@ export default function HomePage() {
               {plans.map((plan) => (
                 <Card
                   key={plan.name}
-                  className="relative text-center transition-all duration-300 hover:-translate-y-1"
+                  className="relative text-center transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
                   style={{
-                    backgroundColor: "#141C4A",
-                    border: plan.highlight ? "1px solid #D4AF37" : "1px solid #1E2760",
+                    backgroundColor: "#FFFFFF",
+                    border: plan.highlight ? "2px solid #D4AF37" : "1px solid #E2E5F0",
                     borderRadius: "12px",
                   }}
                 >
@@ -326,7 +329,7 @@ export default function HomePage() {
                     </div>
                   )}
                   <CardHeader className="pb-2 pt-8">
-                    <CardTitle className="text-xl" style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif", fontWeight: 500 }}>
+                    <CardTitle className="text-xl" style={{ color: "#0B0F2E", fontFamily: "'Poppins', sans-serif", fontWeight: 500 }}>
                       {plan.name}
                     </CardTitle>
                   </CardHeader>
@@ -358,11 +361,11 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* COMPLIANCE */}
-        <section id="compliance" className="py-20 md:py-28" style={{ backgroundColor: "#111840" }}>
+        {/* COMPLIANCE — light grey */}
+        <section id="compliance" className="py-20 md:py-28" style={{ backgroundColor: "#F0F2F8" }}>
           <div className="mx-auto max-w-5xl px-6">
             <div className="mb-16 text-center">
-              <h2 className="mb-4 text-3xl font-bold md:text-4xl" style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif", fontWeight: 500 }}>
+              <h2 className="mb-4 text-3xl font-bold md:text-4xl" style={{ color: "#0B0F2E", fontFamily: "'Poppins', sans-serif", fontWeight: 700 }}>
                 {t('home.compliance_title', locale)}
               </h2>
             </div>
@@ -370,11 +373,11 @@ export default function HomePage() {
               {compliance.map((item, i) => (
                 <div
                   key={i}
-                  className="flex items-center gap-3 rounded-full px-6 py-3"
-                  style={{ backgroundColor: "#141C4A", border: "1px solid #1E2760" }}
+                  className="flex items-center gap-3 rounded-full px-6 py-3 shadow-sm"
+                  style={{ backgroundColor: "#FFFFFF", border: "1px solid #E2E5F0" }}
                 >
                   <item.icon className="h-5 w-5" style={{ color: "#D4AF37" }} />
-                  <span className="text-sm font-medium" style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif" }}>
+                  <span className="text-sm font-medium" style={{ color: "#0B0F2E", fontFamily: "'Poppins', sans-serif" }}>
                     {item.label}
                   </span>
                 </div>
@@ -383,20 +386,20 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* CTA */}
+        {/* CTA — dark for contrast */}
         <section className="py-20 md:py-28" style={{ backgroundColor: "#0B0F2E" }}>
           <div className="mx-auto max-w-3xl px-6 text-center">
             <h2 className="mb-4 text-3xl font-bold md:text-4xl" style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif", fontWeight: 700 }}>
               {t('home.cta_title', locale)}
             </h2>
-            <p className="mb-10" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif", fontWeight: 300, lineHeight: 1.7 }}>
+            <p className="mb-10" style={{ color: "#8B90B8", fontFamily: "'Poppins', sans-serif", fontWeight: 300, lineHeight: 1.7 }}>
               {t('home.cta_subtitle', locale)}
             </p>
             <Link href="/auth/login">
               <Button
                 size="lg"
                 className="px-10 text-base font-semibold"
-                style={{ backgroundColor: "#4191FF", color: "#E8EAFC", fontFamily: "'Poppins', sans-serif", fontWeight: 500, borderRadius: "6px" }}
+                style={{ backgroundColor: "#4191FF", color: "#FFFFFF", fontFamily: "'Poppins', sans-serif", fontWeight: 500, borderRadius: "6px" }}
               >
                 {t('home.cta_button', locale)}
                 <ArrowRight className="ml-2 h-5 w-5" />
@@ -406,7 +409,7 @@ export default function HomePage() {
         </section>
       </main>
 
-      {/* FOOTER */}
+      {/* FOOTER — dark */}
       <footer style={{ backgroundColor: "#0B0F2E", borderTop: "1px solid #1E2760" }} className="py-12">
         <div className="mx-auto max-w-7xl px-6">
           <div className="flex flex-col items-center justify-between gap-6 md:flex-row">

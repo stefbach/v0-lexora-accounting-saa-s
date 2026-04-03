@@ -10,7 +10,7 @@ export function Hero() {
   ]
 
   return (
-    <section className="relative overflow-hidden py-20 sm:py-28 lg:py-32" style={{ backgroundColor: "#0B0F2E" }}>
+    <section className="relative overflow-hidden py-20 sm:py-28 lg:py-32" style={{ backgroundColor: "#FFFFFF" }}>
       <div className="absolute inset-0 -z-10 overflow-hidden">
         <div className="absolute left-1/2 top-0 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl" style={{ backgroundColor: "rgba(65,145,255,0.05)" }} />
         <div className="absolute bottom-0 right-0 h-[400px] w-[400px] translate-x-1/2 translate-y-1/2 rounded-full blur-3xl" style={{ backgroundColor: "rgba(212,175,55,0.05)" }} />
@@ -20,7 +20,7 @@ export function Hero() {
         <div className="mx-auto max-w-3xl text-center">
           <div
             className="mb-6 inline-flex items-center gap-2 rounded-full px-4 py-1.5"
-            style={{ backgroundColor: "rgba(65,145,255,0.12)", border: "1px solid rgba(65,145,255,0.25)" }}
+            style={{ backgroundColor: "rgba(65,145,255,0.08)", border: "1px solid rgba(65,145,255,0.15)" }}
           >
             <span className="h-2 w-2 rounded-full" style={{ backgroundColor: "#D4AF37" }} />
             <span className="text-sm font-medium" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif" }}>
@@ -30,7 +30,7 @@ export function Hero() {
 
           <h1
             className="text-balance text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl"
-            style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif", fontWeight: 700 }}
+            style={{ color: "#0B0F2E", fontFamily: "'Poppins', sans-serif", fontWeight: 700 }}
           >
             Comptabilité Professionnelle
             <span className="block" style={{ color: "#4191FF" }}>Simplifiée et Automatisée</span>
@@ -50,7 +50,7 @@ export function Hero() {
               size="lg"
               asChild
               className="gap-2"
-              style={{ backgroundColor: "#4191FF", color: "#E8EAFC", fontFamily: "'Poppins', sans-serif", fontWeight: 500, borderRadius: "6px" }}
+              style={{ backgroundColor: "#4191FF", color: "#FFFFFF", fontFamily: "'Poppins', sans-serif", fontWeight: 500, borderRadius: "6px" }}
             >
               <Link href="/redirect">
                 Accéder au tableau de bord
