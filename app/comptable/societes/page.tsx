@@ -222,13 +222,13 @@ export default function ComptableSocietesPage() {
     <div className="flex-1 overflow-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>Sociétés</h1>
+          <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>Sociétés</h1>
           <p className="text-muted-foreground">Gestion des sociétés</p>
         </div>
         {isComptableAdmin && (
           <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm() }}>
             <DialogTrigger asChild>
-              <Button style={{ backgroundColor: "#1E2A4A" }}>
+              <Button style={{ backgroundColor: "#0B0F2E" }}>
                 <Plus className="mr-2 h-4 w-4" />
                 Ajouter une société
               </Button>
@@ -301,7 +301,7 @@ export default function ComptableSocietesPage() {
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => { setDialogOpen(false); resetForm() }}>Annuler</Button>
-                <Button style={{ backgroundColor: "#C9A84C" }} onClick={handleCreate} disabled={creating}>
+                <Button style={{ backgroundColor: "#D4AF37" }} onClick={handleCreate} disabled={creating}>
                   {creating ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Création...</> : "Créer la société"}
                 </Button>
               </DialogFooter>
@@ -324,7 +324,7 @@ export default function ComptableSocietesPage() {
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle style={{ color: "#1E2A4A" }}>
+            <CardTitle style={{ color: "#0B0F2E" }}>
               <div className="flex items-center gap-2">
                 <Building2 className="h-5 w-5" />
                 Sociétés ({filtered.length})
@@ -359,7 +359,7 @@ export default function ComptableSocietesPage() {
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
                           {societeClients.length > 0 ? societeClients.map((c) => (
-                            <Badge key={c.id} variant="outline" style={{ borderColor: "#C9A84C", color: "#1E2A4A" }}>{c.full_name}</Badge>
+                            <Badge key={c.id} variant="outline" style={{ borderColor: "#D4AF37", color: "#0B0F2E" }}>{c.full_name}</Badge>
                           )) : <span className="text-muted-foreground text-sm">Aucun</span>}
                         </div>
                       </TableCell>
@@ -368,7 +368,7 @@ export default function ComptableSocietesPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            style={{ borderColor: "#C9A84C", color: "#C9A84C" }}
+                            style={{ borderColor: "#D4AF37", color: "#D4AF37" }}
                             onClick={() => { setLinkSocieteId(societe.id); setLinkClientId(""); setLinkError(null); setLinkDialogOpen(true) }}
                           >
                             <UserPlus className="mr-1 h-4 w-4" />
@@ -417,7 +417,7 @@ export default function ComptableSocietesPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setLinkDialogOpen(false)}>Annuler</Button>
-            <Button style={{ backgroundColor: "#C9A84C" }} onClick={handleLinkClient} disabled={linking}>
+            <Button style={{ backgroundColor: "#D4AF37" }} onClick={handleLinkClient} disabled={linking}>
               {linking ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Liaison...</> : "Lier le client"}
             </Button>
           </DialogFooter>

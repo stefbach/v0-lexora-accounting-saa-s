@@ -8,8 +8,8 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, Clock, Calendar, CreditCard, TrendingUp, LogIn, LogOut, Coffee, Download, User, Save, CheckCircle } from "lucide-react"
 
-const NAVY = "#1E2A4A"
-const GOLD = "#C9A84C"
+const NAVY = "#0B0F2E"
+const GOLD = "#D4AF37"
 const MU_TZ = "Indian/Mauritius"
 
 function fmtH(h: string | null) { return h ? h.slice(0, 5) : "—" }

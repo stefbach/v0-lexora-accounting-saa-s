@@ -165,8 +165,8 @@ export default function AdminDashboardPage() {
   }, [])
 
   const kpiCards = [
-    { titre: 'Total utilisateurs', valeur: totalUsers, icon: Users, color: '#1E2A4A', href: '/admin/users' },
-    { titre: 'Total clients', valeur: totalClients, icon: Briefcase, color: '#C9A84C', href: '/admin/clients' },
+    { titre: 'Total utilisateurs', valeur: totalUsers, icon: Users, color: '#0B0F2E', href: '/admin/users' },
+    { titre: 'Total clients', valeur: totalClients, icon: Briefcase, color: '#D4AF37', href: '/admin/clients' },
     { titre: 'Total comptables', valeur: totalComptables, icon: UserCog, color: '#2563eb', href: '/admin/comptables' },
     { titre: 'Total societes', valeur: totalSocietes, icon: Building2, color: '#16a34a', href: '/admin/societes' },
     { titre: 'Stockage documents', valeur: totalDocuments, icon: FileText, color: '#7c3aed', href: '/admin/documents' },
@@ -176,11 +176,11 @@ export default function AdminDashboardPage() {
     return (
       <div className="p-6 space-y-6">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: '#1E2A4A' }}>Tableau de bord administrateur</h1>
+          <h1 className="text-2xl font-bold" style={{ color: '#0B0F2E' }}>Tableau de bord administrateur</h1>
           <p className="text-muted-foreground mt-1">Chargement...</p>
         </div>
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin" style={{ color: '#1E2A4A' }} />
+          <Loader2 className="h-8 w-8 animate-spin" style={{ color: '#0B0F2E' }} />
         </div>
       </div>
     )
@@ -189,7 +189,7 @@ export default function AdminDashboardPage() {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold" style={{ color: '#1E2A4A' }}>
+        <h1 className="text-2xl font-bold" style={{ color: '#0B0F2E' }}>
           Tableau de bord administrateur
         </h1>
         <p className="text-muted-foreground mt-1">
@@ -210,7 +210,7 @@ export default function AdminDashboardPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-bold" style={{ color: '#1E2A4A' }}>{card.valeur}</p>
+                <p className="text-2xl font-bold" style={{ color: '#0B0F2E' }}>{card.valeur}</p>
               </CardContent>
             </Card>
           </Link>
@@ -223,7 +223,7 @@ export default function AdminDashboardPage() {
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
-              <UserCog className="h-5 w-5" style={{ color: '#C9A84C' }} />
+              <UserCog className="h-5 w-5" style={{ color: '#D4AF37' }} />
               <CardTitle className="text-sm">KPI par comptable</CardTitle>
             </div>
           </CardHeader>
@@ -257,7 +257,7 @@ export default function AdminDashboardPage() {
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
-              <Briefcase className="h-5 w-5" style={{ color: '#C9A84C' }} />
+              <Briefcase className="h-5 w-5" style={{ color: '#D4AF37' }} />
               <CardTitle className="text-sm">KPI par client</CardTitle>
             </div>
           </CardHeader>
@@ -292,7 +292,7 @@ export default function AdminDashboardPage() {
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
-            <Users className="h-5 w-5" style={{ color: '#C9A84C' }} />
+            <Users className="h-5 w-5" style={{ color: '#D4AF37' }} />
             <CardTitle className="text-sm">Derniers comptes crees</CardTitle>
           </div>
         </CardHeader>
@@ -304,7 +304,7 @@ export default function AdminDashboardPage() {
               {recentUsers.map(u => (
                 <div key={u.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-9 h-9 rounded-full bg-[#1E2A4A] flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
+                    <div className="w-9 h-9 rounded-full bg-[#0B0F2E] flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
                       {(u.full_name || u.email).slice(0, 2).toUpperCase()}
                     </div>
                     <div className="min-w-0">

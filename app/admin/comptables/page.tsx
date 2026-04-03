@@ -103,12 +103,12 @@ export default function AdminComptablesPage() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#1E2A4A]">Gestion des Comptables</h1>
+          <h1 className="text-2xl font-bold text-[#0B0F2E]">Gestion des Comptables</h1>
           <p className="text-sm text-gray-500">Assignation comptable ↔ sociétés</p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-[#1E2A4A]">+ Assigner un comptable</Button>
+            <Button className="bg-[#0B0F2E]">+ Assigner un comptable</Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
@@ -152,7 +152,7 @@ export default function AdminComptablesPage() {
                 <Label>Notes (optionnel)</Label>
                 <Textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Ex: responsable TVA uniquement" />
               </div>
-              <Button onClick={assigner} disabled={saving || !selectedComptable || !selectedSociete} className="w-full bg-[#1E2A4A]">
+              <Button onClick={assigner} disabled={saving || !selectedComptable || !selectedSociete} className="w-full bg-[#0B0F2E]">
                 {saving ? "Enregistrement..." : "Confirmer l'assignation"}
               </Button>
             </div>

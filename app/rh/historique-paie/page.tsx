@@ -6,8 +6,8 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, Calendar, Users, Banknote, ChevronDown, ChevronRight, FileText, Download, ExternalLink } from "lucide-react"
 
-const NAVY = "#1E2A4A"
-const GOLD = "#C9A84C"
+const NAVY = "#0B0F2E"
+const GOLD = "#D4AF37"
 function fmt(n: number) { return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(n) }
 
 export default function HistoriquePaiePage() {

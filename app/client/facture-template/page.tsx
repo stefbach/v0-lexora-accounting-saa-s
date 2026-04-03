@@ -8,8 +8,8 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, Upload, FileText, Palette, CheckCircle, Eye, Wand2 } from "lucide-react"
 
-const NAVY = "#1E2A4A"
-const GOLD = "#C9A84C"
+const NAVY = "#0B0F2E"
+const GOLD = "#D4AF37"
 
 export default function FactureTemplatePage() {
   const [societes, setSocietes] = useState<any[]>([])
@@ -86,7 +86,7 @@ export default function FactureTemplatePage() {
           <div className="flex items-center gap-3">
             <input type="file" accept=".pdf,.jpg,.jpeg,.png" disabled={uploading}
               onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f) }}
-              className="flex-1 text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-[#1E2A4A] file:text-white hover:file:bg-[#2a3d66]" />
+              className="flex-1 text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-[#0B0F2E] file:text-white hover:file:bg-[#2a3d66]" />
             {uploading && <div className="flex items-center gap-2"><Loader2 className="h-5 w-5 animate-spin" style={{ color: GOLD }} /><span className="text-sm text-gray-500">Analyse IA en cours...</span></div>}
           </div>
           {error && <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{error}</div>}

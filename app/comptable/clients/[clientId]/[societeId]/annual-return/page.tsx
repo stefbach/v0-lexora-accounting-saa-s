@@ -279,7 +279,7 @@ export default function AnnualReturnPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: '#C9A84C' }} />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: '#D4AF37' }} />
       </div>
     )
   }
@@ -289,7 +289,7 @@ export default function AnnualReturnPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: '#1E2A4A' }}>
+          <h1 className="text-2xl font-bold" style={{ color: '#0B0F2E' }}>
             Annual Return ROC
           </h1>
           <p className="text-muted-foreground mt-1">{societe?.nom} — Exercice {annee}</p>
@@ -337,7 +337,7 @@ export default function AnnualReturnPage() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Building2 className="h-5 w-5" style={{ color: '#C9A84C' }} />
+              <Building2 className="h-5 w-5" style={{ color: '#D4AF37' }} />
               <CardTitle className="text-base">Informations légales société</CardTitle>
             </div>
             <Button variant="outline" size="sm" onClick={() => setShowSocieteEdit(!showSocieteEdit)}>
@@ -427,7 +427,7 @@ export default function AnnualReturnPage() {
                   setShowSocieteEdit(false)
                   fetchData()
                 }}
-                style={{ backgroundColor: '#1E2A4A', color: 'white' }}
+                style={{ backgroundColor: '#0B0F2E', color: 'white' }}
               >
                 Enregistrer
               </Button>
@@ -441,13 +441,13 @@ export default function AnnualReturnPage() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Users className="h-5 w-5" style={{ color: '#C9A84C' }} />
+              <Users className="h-5 w-5" style={{ color: '#D4AF37' }} />
               <CardTitle className="text-base">Actionnariat</CardTitle>
               <Badge variant="secondary">{actionnaires.filter(a => a.actif).length} actionnaire(s)</Badge>
             </div>
             <Dialog open={showActionnaire} onOpenChange={setShowActionnaire}>
               <DialogTrigger asChild>
-                <Button size="sm" style={{ backgroundColor: '#C9A84C', color: 'white' }}>
+                <Button size="sm" style={{ backgroundColor: '#D4AF37', color: 'white' }}>
                   <Plus className="h-4 w-4 mr-1" /> Ajouter
                 </Button>
               </DialogTrigger>
@@ -513,7 +513,7 @@ export default function AnnualReturnPage() {
                       <Input type="date" value={newActionnaire.date_entree} onChange={e => setNewActionnaire(f => ({ ...f, date_entree: e.target.value }))} />
                     </div>
                   </div>
-                  <Button onClick={handleAddActionnaire} className="w-full" style={{ backgroundColor: '#1E2A4A', color: 'white' }}>
+                  <Button onClick={handleAddActionnaire} className="w-full" style={{ backgroundColor: '#0B0F2E', color: 'white' }}>
                     Ajouter l&apos;actionnaire
                   </Button>
                 </div>
@@ -580,13 +580,13 @@ export default function AnnualReturnPage() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <UserCog className="h-5 w-5" style={{ color: '#C9A84C' }} />
+              <UserCog className="h-5 w-5" style={{ color: '#D4AF37' }} />
               <CardTitle className="text-base">Administrateurs & Dirigeants</CardTitle>
               <Badge variant="secondary">{administrateurs.filter(a => a.actif).length} actif(s)</Badge>
             </div>
             <Dialog open={showAdministrateur} onOpenChange={setShowAdministrateur}>
               <DialogTrigger asChild>
-                <Button size="sm" style={{ backgroundColor: '#C9A84C', color: 'white' }}>
+                <Button size="sm" style={{ backgroundColor: '#D4AF37', color: 'white' }}>
                   <Plus className="h-4 w-4 mr-1" /> Ajouter
                 </Button>
               </DialogTrigger>
@@ -634,7 +634,7 @@ export default function AnnualReturnPage() {
                       <Input type="date" value={newAdmin.date_nomination} onChange={e => setNewAdmin(f => ({ ...f, date_nomination: e.target.value }))} />
                     </div>
                   </div>
-                  <Button onClick={handleAddAdmin} className="w-full" style={{ backgroundColor: '#1E2A4A', color: 'white' }}>
+                  <Button onClick={handleAddAdmin} className="w-full" style={{ backgroundColor: '#0B0F2E', color: 'white' }}>
                     Ajouter l&apos;administrateur
                   </Button>
                 </div>
@@ -660,7 +660,7 @@ export default function AnnualReturnPage() {
                 <TableRow key={a.id}>
                   <TableCell className="font-medium">{a.prenom ? `${a.prenom} ${a.nom}` : a.nom}</TableCell>
                   <TableCell>
-                    <Badge style={{ backgroundColor: '#1E2A4A15', color: '#1E2A4A' }}>
+                    <Badge style={{ backgroundColor: '#0B0F2E15', color: '#0B0F2E' }}>
                       {TYPE_LABELS[a.type] || a.type}
                     </Badge>
                   </TableCell>
@@ -702,7 +702,7 @@ export default function AnnualReturnPage() {
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
-            <TrendingUp className="h-5 w-5" style={{ color: '#C9A84C' }} />
+            <TrendingUp className="h-5 w-5" style={{ color: '#D4AF37' }} />
             <CardTitle className="text-base">États financiers simplifiés</CardTitle>
           </div>
         </CardHeader>
@@ -765,7 +765,7 @@ export default function AnnualReturnPage() {
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
-            <CalendarDays className="h-5 w-5" style={{ color: '#C9A84C' }} />
+            <CalendarDays className="h-5 w-5" style={{ color: '#D4AF37' }} />
             <CardTitle className="text-base">Soumission ROC</CardTitle>
             {annualReturn && (
               <Badge className={STATUT_COLORS[annualReturn.statut]}>
@@ -836,7 +836,7 @@ export default function AnnualReturnPage() {
             <Button
               onClick={handleSaveReturn}
               disabled={savingReturn}
-              style={{ backgroundColor: '#1E2A4A', color: 'white' }}
+              style={{ backgroundColor: '#0B0F2E', color: 'white' }}
             >
               {savingReturn ? 'Enregistrement...' : annualReturn ? 'Mettre à jour' : 'Créer Annual Return'}
             </Button>

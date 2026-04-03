@@ -217,7 +217,7 @@ export default function PointageMensuelPage() {
     <div className="p-6 space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#1E2A4A]">Pointage Mensuel</h1>
+          <h1 className="text-2xl font-bold text-[#0B0F2E]">Pointage Mensuel</h1>
           <p className="text-sm text-gray-500">Corrections, validation OT, absences — source de vérité pour la paie</p>
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -272,7 +272,7 @@ export default function PointageMensuelPage() {
             </SelectContent>
           </Select>
           <Input type="month" value={periode} onChange={e => setPeriode(e.target.value)} className="w-36" />
-          <Button onClick={load} className="bg-[#1E2A4A] text-white">Afficher</Button>
+          <Button onClick={load} className="bg-[#0B0F2E] text-white">Afficher</Button>
         </CardContent>
       </Card>
 
@@ -306,7 +306,7 @@ export default function PointageMensuelPage() {
             <Card key={k.label}>
               <CardContent className="p-3">
                 <p className="text-xs text-gray-500">{k.label}</p>
-                <p className="text-sm font-bold text-[#1E2A4A]">{k.v ?? "—"}</p>
+                <p className="text-sm font-bold text-[#0B0F2E]">{k.v ?? "—"}</p>
               </CardContent>
             </Card>
           ))}
@@ -316,7 +316,7 @@ export default function PointageMensuelPage() {
       {/* Tableau mensuel */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-[#1E2A4A]">
+          <CardTitle className="text-[#0B0F2E]">
             Pointages — {periode} ({rows.length} entrées)
           </CardTitle>
         </CardHeader>
@@ -448,7 +448,7 @@ export default function PointageMensuelPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCorrDialog(null)}>Annuler</Button>
-            <Button onClick={saveCorr} disabled={saving || !corrMotif} className="bg-[#1E2A4A] text-white">
+            <Button onClick={saveCorr} disabled={saving || !corrMotif} className="bg-[#0B0F2E] text-white">
               {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}Sauvegarder
             </Button>
           </DialogFooter>
@@ -480,7 +480,7 @@ export default function PointageMensuelPage() {
                   {ot.ot15 > 0 && <p className="text-orange-700">OT 1.5x : <strong>{ot.ot15.toFixed(2)}h</strong></p>}
                   {ot.ot2 > 0 && <p className="text-red-700">OT 2x : <strong>{ot.ot2.toFixed(2)}h</strong></p>}
                   {montantEstime > 0 && (
-                    <p className="font-semibold text-[#1E2A4A] pt-1 border-t border-orange-200">
+                    <p className="font-semibold text-[#0B0F2E] pt-1 border-t border-orange-200">
                       Montant estimé : {fmt(montantEstime)}
                     </p>
                   )}

@@ -34,9 +34,9 @@ export default function RedirectPage() {
   }, [])
 
   return (
-    <div className="flex items-center justify-center h-screen bg-[#1E2A4A]">
+    <div className="flex items-center justify-center h-screen bg-[#0B0F2E]">
       <div className="text-center text-white">
-        <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-[#C9A84C]" />
+        <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-[#D4AF37]" />
         <p className="font-medium">Redirection en cours...</p>
       </div>
     </div>

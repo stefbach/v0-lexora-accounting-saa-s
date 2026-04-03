@@ -58,7 +58,7 @@ export default function ProfilPage() {
     window.location.href = '/auth/login'
   }
 
-  if (loading) return <div className="flex justify-center items-center h-screen"><Loader2 className="w-8 h-8 animate-spin text-[#1E2A4A]"/></div>
+  if (loading) return <div className="flex justify-center items-center h-screen"><Loader2 className="w-8 h-8 animate-spin text-[#0B0F2E]"/></div>
 
   const roleInfo = ROLE_LABELS[profile?.role] || { label: profile?.role, color: "bg-gray-100 text-gray-700", desc: "" }
   const dashUrl = ROLE_DASHBOARD[profile?.role] || '/'
@@ -69,7 +69,7 @@ export default function ProfilPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-[#1E2A4A]">Mon profil</h1>
+            <h1 className="text-2xl font-bold text-[#0B0F2E]">Mon profil</h1>
             <p className="text-sm text-gray-500">Gérez vos informations personnelles et préférences</p>
           </div>
           <div className="flex gap-2">
@@ -82,14 +82,14 @@ export default function ProfilPage() {
 
         {/* Identité & Rôle */}
         <Card>
-          <CardHeader><CardTitle className="text-[#1E2A4A] flex items-center gap-2 text-base"><User className="w-4 h-4"/>Identité</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2 text-base"><User className="w-4 h-4"/>Identité</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-full bg-[#1E2A4A] flex items-center justify-center text-white text-xl font-bold">
+              <div className="w-14 h-14 rounded-full bg-[#0B0F2E] flex items-center justify-center text-white text-xl font-bold">
                 {(profile?.full_name || profile?.email || '?')[0].toUpperCase()}
               </div>
               <div>
-                <p className="font-semibold text-[#1E2A4A]">{profile?.full_name || '—'}</p>
+                <p className="font-semibold text-[#0B0F2E]">{profile?.full_name || '—'}</p>
                 <p className="text-sm text-gray-500">{profile?.email}</p>
                 <Badge className={`text-xs mt-1 ${roleInfo.color}`}>
                   <Shield className="w-3 h-3 mr-1"/>{roleInfo.label}
@@ -104,7 +104,7 @@ export default function ProfilPage() {
 
         {/* Modifier informations */}
         <Card>
-          <CardHeader><CardTitle className="text-[#1E2A4A] flex items-center gap-2 text-base"><Key className="w-4 h-4"/>Informations personnelles</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2 text-base"><Key className="w-4 h-4"/>Informations personnelles</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -120,7 +120,7 @@ export default function ProfilPage() {
               <Label>Email (non modifiable)</Label>
               <Input value={profile?.email || ''} disabled className="bg-gray-50 text-gray-500"/>
             </div>
-            <Button onClick={save} disabled={saving || saved} className="bg-[#1E2A4A] text-white">
+            <Button onClick={save} disabled={saving || saved} className="bg-[#0B0F2E] text-white">
               {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : saved ? <CheckCircle className="w-4 h-4 mr-2 text-green-400"/> : null}
               {saved ? "Enregistré !" : "Enregistrer"}
             </Button>
@@ -129,7 +129,7 @@ export default function ProfilPage() {
 
         {/* Informations du compte */}
         <Card>
-          <CardHeader><CardTitle className="text-[#1E2A4A] flex items-center gap-2 text-base"><Shield className="w-4 h-4"/>Compte & Sécurité</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2 text-base"><Shield className="w-4 h-4"/>Compte & Sécurité</CardTitle></CardHeader>
           <CardContent className="space-y-3 text-sm">
             <div className="flex justify-between py-2 border-b">
               <span className="text-gray-500">Rôle</span>
@@ -154,7 +154,7 @@ export default function ProfilPage() {
 
         {/* Mot de passe */}
         <Card>
-          <CardHeader><CardTitle className="text-[#1E2A4A] flex items-center gap-2 text-base"><Bell className="w-4 h-4"/>Modifier le mot de passe</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2 text-base"><Bell className="w-4 h-4"/>Modifier le mot de passe</CardTitle></CardHeader>
           <CardContent>
             <p className="text-sm text-gray-500 mb-3">Un email de réinitialisation sera envoyé à votre adresse.</p>
             <Button variant="outline" onClick={async () => {

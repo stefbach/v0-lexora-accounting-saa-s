@@ -16,8 +16,8 @@ import {
   Landmark, CreditCard, BarChart3, PiggyBank, Wallet
 } from "lucide-react"
 
-const NAVY = "#1E2A4A"
-const GOLD = "#C9A84C"
+const NAVY = "#0B0F2E"
+const GOLD = "#D4AF37"
 
 function fmt(n: number) {
   return Math.round(n).toLocaleString("fr-FR") + " MUR"

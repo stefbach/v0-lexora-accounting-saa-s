@@ -131,7 +131,7 @@ export default function ComptableBanquePage() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#1E2A4A]">Banque & Relevés</h1>
+          <h1 className="text-2xl font-bold text-[#0B0F2E]">Banque & Relevés</h1>
           <p className="text-sm text-gray-500 mt-1">Comptes bancaires et transactions importées</p>
         </div>
         <div className="flex gap-2">
@@ -165,7 +165,7 @@ export default function ComptableBanquePage() {
         </Card>
       ) : loading ? (
         <div className="flex justify-center py-16">
-          <Loader2 className="w-8 h-8 animate-spin text-[#1E2A4A]" />
+          <Loader2 className="w-8 h-8 animate-spin text-[#0B0F2E]" />
         </div>
       ) : (
         <>
@@ -174,7 +174,7 @@ export default function ComptableBanquePage() {
             <Card>
               <CardContent className="p-4">
                 <p className="text-xs text-gray-500">Solde total (consolidé MUR)</p>
-                <p className="text-2xl font-bold text-[#1E2A4A]">
+                <p className="text-2xl font-bold text-[#0B0F2E]">
                   {totalBankMUR > 0 ? fmtMUR(totalBankMUR) : "—"}
                 </p>
                 <p className="text-xs text-gray-400 mt-1">{comptes.length} compte{comptes.length > 1 ? "s" : ""}</p>
@@ -183,7 +183,7 @@ export default function ComptableBanquePage() {
             <Card>
               <CardContent className="p-4">
                 <p className="text-xs text-gray-500">Transactions totales</p>
-                <p className="text-2xl font-bold text-[#1E2A4A]">{transactions.length}</p>
+                <p className="text-2xl font-bold text-[#0B0F2E]">{transactions.length}</p>
                 <p className="text-xs text-gray-400 mt-1">{releves.length} relevé{releves.length > 1 ? "s" : ""} importé{releves.length > 1 ? "s" : ""}</p>
               </CardContent>
             </Card>
@@ -200,7 +200,7 @@ export default function ComptableBanquePage() {
 
           {/* Taux de change */}
           {hasMultiCurrency && Object.keys(rates).length > 0 && (
-            <Card className="bg-gradient-to-r from-[#1E2A4A] to-[#2a3d6b]">
+            <Card className="bg-gradient-to-r from-[#0B0F2E] to-[#2a3d6b]">
               <CardContent className="py-4">
                 <div className="flex items-center gap-6 flex-wrap">
                   <p className="text-xs font-semibold text-white/60 uppercase tracking-wider">Taux de change</p>
@@ -208,7 +208,7 @@ export default function ComptableBanquePage() {
                     <div key={d} className="flex items-center gap-2">
                       <span className="text-white font-bold text-sm">1 {d}</span>
                       <span className="text-white/60">=</span>
-                      <span className="text-[#C9A84C] font-bold text-sm">{rates[d].toFixed(2)} MUR</span>
+                      <span className="text-[#D4AF37] font-bold text-sm">{rates[d].toFixed(2)} MUR</span>
                     </div>
                   ) : null)}
                 </div>
@@ -220,7 +220,7 @@ export default function ComptableBanquePage() {
           {comptes.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-[#1E2A4A] flex items-center gap-2">
+                <CardTitle className="text-[#0B0F2E] flex items-center gap-2">
                   <Landmark className="w-5 h-5" /> Comptes bancaires ({comptes.length})
                 </CardTitle>
               </CardHeader>
@@ -242,12 +242,12 @@ export default function ComptableBanquePage() {
                     {comptes.map(c => (
                       <TableRow key={c.id}>
                         <TableCell>
-                          <Badge variant="outline" style={{ borderColor: "#C9A84C", color: "#C9A84C" }}>{c.banque}</Badge>
+                          <Badge variant="outline" style={{ borderColor: "#D4AF37", color: "#D4AF37" }}>{c.banque}</Badge>
                         </TableCell>
                         <TableCell>{c.nom_compte || "—"}</TableCell>
                         <TableCell className="font-mono text-sm text-gray-500">{c.numero_compte || "—"}</TableCell>
                         <TableCell>{c.devise || "MUR"}</TableCell>
-                        <TableCell className="text-right font-bold text-[#1E2A4A]">
+                        <TableCell className="text-right font-bold text-[#0B0F2E]">
                           {fmt(c.solde_actuel || 0, c.devise || "MUR")}
                         </TableCell>
                         <TableCell className="text-sm text-gray-500">
@@ -255,7 +255,7 @@ export default function ComptableBanquePage() {
                             ? `1 ${c.devise} = ${rates[c.devise].toFixed(2)} MUR`
                             : "—"}
                         </TableCell>
-                        <TableCell className="text-right font-medium text-[#1E2A4A]">
+                        <TableCell className="text-right font-medium text-[#0B0F2E]">
                           {c.devise && c.devise !== "MUR"
                             ? fmtMUR(c.solde_mur || 0)
                             : "—"}
@@ -275,7 +275,7 @@ export default function ComptableBanquePage() {
           {releves.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-[#1E2A4A] text-base">Relevés importés ({releves.length})</CardTitle>
+                <CardTitle className="text-[#0B0F2E] text-base">Relevés importés ({releves.length})</CardTitle>
               </CardHeader>
               <CardContent className="p-0">
                 <Table>
@@ -299,7 +299,7 @@ export default function ComptableBanquePage() {
                         <TableCell className="text-right font-mono">{fmt(r.solde_ouverture)}</TableCell>
                         <TableCell className="text-right font-mono text-red-600">{fmt(r.total_debits)}</TableCell>
                         <TableCell className="text-right font-mono text-green-600">{fmt(r.total_credits)}</TableCell>
-                        <TableCell className="text-right font-mono font-bold text-[#1E2A4A]">{fmt(r.solde_cloture)}</TableCell>
+                        <TableCell className="text-right font-mono font-bold text-[#0B0F2E]">{fmt(r.solde_cloture)}</TableCell>
                         <TableCell>{(r.transactions_json || []).length}</TableCell>
                         <TableCell>
                           <Badge className={
@@ -322,7 +322,7 @@ export default function ComptableBanquePage() {
           {/* Transactions */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-[#1E2A4A]">
+              <CardTitle className="text-[#0B0F2E]">
                 Transactions ({filteredTxs.length})
               </CardTitle>
               <div className="relative w-64">
@@ -367,7 +367,7 @@ export default function ComptableBanquePage() {
                           <TableCell className="whitespace-nowrap text-sm">{formatDate(tx.date)}</TableCell>
                           <TableCell>
                             {tx.banque ? (
-                              <Badge variant="outline" style={{ borderColor: "#C9A84C", color: "#C9A84C" }}>{tx.banque}</Badge>
+                              <Badge variant="outline" style={{ borderColor: "#D4AF37", color: "#D4AF37" }}>{tx.banque}</Badge>
                             ) : "—"}
                           </TableCell>
                           <TableCell className="text-sm max-w-[240px] truncate">{tx.libelle}</TableCell>

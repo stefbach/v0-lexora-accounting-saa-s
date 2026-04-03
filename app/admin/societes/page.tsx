@@ -383,7 +383,7 @@ export default function SocietesPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
+          <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>
             Societes
           </h1>
           <p className="text-muted-foreground mt-1">
@@ -394,7 +394,7 @@ export default function SocietesPage() {
         {/* ---- Add societe dialog ---- */}
         <Dialog open={addOpen} onOpenChange={setAddOpen}>
           <DialogTrigger asChild>
-            <Button style={{ backgroundColor: "#1E2A4A" }}>
+            <Button style={{ backgroundColor: "#0B0F2E" }}>
               <Plus className="mr-2 h-4 w-4" />
               Ajouter une societe
             </Button>
@@ -511,7 +511,7 @@ export default function SocietesPage() {
                 Annuler
               </Button>
               <Button
-                style={{ backgroundColor: "#C9A84C" }}
+                style={{ backgroundColor: "#D4AF37" }}
                 onClick={handleAdd}
                 disabled={addSubmitting}
               >
@@ -583,7 +583,7 @@ export default function SocietesPage() {
               Annuler
             </Button>
             <Button
-              style={{ backgroundColor: "#C9A84C" }}
+              style={{ backgroundColor: "#D4AF37" }}
               onClick={handleLinkClient}
               disabled={linkSubmitting || !linkClientId}
             >
@@ -608,7 +608,7 @@ export default function SocietesPage() {
       >
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle style={{ color: "#1E2A4A" }}>
+            <DialogTitle style={{ color: "#0B0F2E" }}>
               Modifier la societe
             </DialogTitle>
             <DialogDescription>
@@ -693,7 +693,7 @@ export default function SocietesPage() {
               Annuler
             </Button>
             <Button
-              style={{ backgroundColor: "#C9A84C" }}
+              style={{ backgroundColor: "#D4AF37" }}
               onClick={handleEdit}
               disabled={editSubmitting}
             >
@@ -754,8 +754,8 @@ export default function SocietesPage() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Building2 className="h-5 w-5" style={{ color: "#C9A84C" }} />
-              <CardTitle style={{ color: "#1E2A4A" }}>
+              <Building2 className="h-5 w-5" style={{ color: "#D4AF37" }} />
+              <CardTitle style={{ color: "#0B0F2E" }}>
                 Liste des societes
               </CardTitle>
             </div>
@@ -783,7 +783,7 @@ export default function SocietesPage() {
             <div className="flex items-center justify-center py-12">
               <Loader2
                 className="h-8 w-8 animate-spin"
-                style={{ color: "#1E2A4A" }}
+                style={{ color: "#0B0F2E" }}
               />
               <span className="ml-3 text-muted-foreground">
                 Chargement des societes...
@@ -845,8 +845,8 @@ export default function SocietesPage() {
                                 key={c.id}
                                 variant="outline"
                                 style={{
-                                  borderColor: "#C9A84C",
-                                  color: "#1E2A4A",
+                                  borderColor: "#D4AF37",
+                                  color: "#0B0F2E",
                                 }}
                               >
                                 {c.full_name}
@@ -868,7 +868,7 @@ export default function SocietesPage() {
                               setLinkOpen(true)
                             }}
                           >
-                            <UserPlus className="h-4 w-4" style={{ color: "#C9A84C" }} />
+                            <UserPlus className="h-4 w-4" style={{ color: "#D4AF37" }} />
                           </Button>
                           {/* Edit */}
                           <Button

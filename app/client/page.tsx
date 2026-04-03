@@ -170,7 +170,7 @@ function ClientUserDashboard({ firstName }: { firstName: string }) {
 
   return (
     <div className="p-6 space-y-6 max-w-3xl mx-auto">
-      <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
+      <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>
         Bonjour {firstName}
       </h1>
       <p className="text-muted-foreground">
@@ -185,22 +185,22 @@ function ClientUserDashboard({ firstName }: { firstName: string }) {
         className={`
           border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-colors
           ${dragOver
-            ? "border-[#C9A84C] bg-[#C9A84C]/10"
-            : "border-gray-300 hover:border-[#C9A84C] hover:bg-[#C9A84C]/5"
+            ? "border-[#D4AF37] bg-[#D4AF37]/10"
+            : "border-gray-300 hover:border-[#D4AF37] hover:bg-[#D4AF37]/5"
           }
         `}
       >
         <Upload
           className="h-12 w-12 mx-auto mb-4"
-          style={{ color: dragOver ? "#C9A84C" : "#1E2A4A" }}
+          style={{ color: dragOver ? "#D4AF37" : "#0B0F2E" }}
         />
-        <p className="text-lg font-semibold" style={{ color: "#1E2A4A" }}>
+        <p className="text-lg font-semibold" style={{ color: "#0B0F2E" }}>
           Deposez vos fichiers ici
         </p>
         <p className="text-sm text-muted-foreground mt-1">
           ou cliquez pour choisir un fichier
         </p>
-        <Button className="mt-4 text-white" style={{ backgroundColor: "#C9A84C" }}>
+        <Button className="mt-4 text-white" style={{ backgroundColor: "#D4AF37" }}>
           <Upload className="h-4 w-4 mr-2" />
           Choisir un fichier
         </Button>
@@ -208,14 +208,14 @@ function ClientUserDashboard({ firstName }: { firstName: string }) {
 
       {/* Recent uploads */}
       <div>
-        <h2 className="text-lg font-semibold mb-3" style={{ color: "#1E2A4A" }}>
+        <h2 className="text-lg font-semibold mb-3" style={{ color: "#0B0F2E" }}>
           Mes envois recents
         </h2>
         <Card>
           <CardContent className="p-0">
             {loadingUploads ? (
               <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-6 w-6 animate-spin" style={{ color: "#C9A84C" }} />
+                <Loader2 className="h-6 w-6 animate-spin" style={{ color: "#D4AF37" }} />
               </div>
             ) : recentUploads.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground text-sm">
@@ -351,7 +351,7 @@ function ClientAdminDashboard({ firstName, societe }: { firstName: string; socie
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#C9A84C" }} />
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#D4AF37" }} />
       </div>
     )
   }
@@ -364,7 +364,7 @@ function ClientAdminDashboard({ firstName, societe }: { firstName: string; socie
       {/* Section 1 -- Resume du mois */}
       {/* ================================================================== */}
       <Card className="overflow-hidden border-0 shadow-md">
-        <CardHeader className="py-5 px-6" style={{ backgroundColor: "#1E2A4A" }}>
+        <CardHeader className="py-5 px-6" style={{ backgroundColor: "#0B0F2E" }}>
           <CardTitle className="text-white text-2xl">
             Bonjour {firstName}
           </CardTitle>
@@ -373,7 +373,7 @@ function ClientAdminDashboard({ firstName, societe }: { firstName: string; socie
           </p>
         </CardHeader>
         <CardContent className="p-6">
-          <h3 className="text-sm font-semibold mb-2" style={{ color: "#C9A84C" }}>
+          <h3 className="text-sm font-semibold mb-2" style={{ color: "#D4AF37" }}>
             Resume du mois
           </h3>
           <p className="text-sm leading-relaxed text-muted-foreground">
@@ -388,19 +388,19 @@ function ClientAdminDashboard({ firstName, societe }: { firstName: string; socie
       {/* Section 2 -- Mes 4 chiffres cles */}
       {/* ================================================================== */}
       <div>
-        <h2 className="text-lg font-semibold mb-3" style={{ color: "#1E2A4A" }}>
+        <h2 className="text-lg font-semibold mb-3" style={{ color: "#0B0F2E" }}>
           Mes 4 chiffres cles
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <BarChart3 className="h-4 w-4" style={{ color: "#C9A84C" }} />
+                <BarChart3 className="h-4 w-4" style={{ color: "#D4AF37" }} />
                 Chiffre d{"'"}Affaires
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
+              <div className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>
                 {kpis.chiffreAffaires !== null ? fmtMUR(kpis.chiffreAffaires) : "\u2014"}
               </div>
               {kpis.tendanceCA ? (
@@ -417,12 +417,12 @@ function ClientAdminDashboard({ firstName, societe }: { firstName: string; socie
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <Wallet className="h-4 w-4" style={{ color: "#C9A84C" }} />
+                <Wallet className="h-4 w-4" style={{ color: "#D4AF37" }} />
                 Depenses
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
+              <div className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>
                 {kpis.depenses !== null ? fmtMUR(kpis.depenses) : "\u2014"}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
@@ -434,12 +434,12 @@ function ClientAdminDashboard({ firstName, societe }: { firstName: string; socie
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <CircleDollarSign className="h-4 w-4" style={{ color: "#C9A84C" }} />
+                <CircleDollarSign className="h-4 w-4" style={{ color: "#D4AF37" }} />
                 Benefice
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
+              <div className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>
                 {kpis.benefice !== null ? fmtMUR(kpis.benefice) : "\u2014"}
               </div>
               {kpis.benefice !== null ? (
@@ -455,12 +455,12 @@ function ClientAdminDashboard({ firstName, societe }: { firstName: string; socie
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <Banknote className="h-4 w-4" style={{ color: "#C9A84C" }} />
+                <Banknote className="h-4 w-4" style={{ color: "#D4AF37" }} />
                 Tresorerie
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
+              <div className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>
                 {kpis.tresorerie !== null ? fmtMUR(kpis.tresorerie) : "\u2014"}
               </div>
               {kpis.tresorerie !== null ? (
@@ -479,7 +479,7 @@ function ClientAdminDashboard({ firstName, societe }: { firstName: string; socie
       {/* Section 3 -- Mes actions ce mois */}
       {/* ================================================================== */}
       <div>
-        <h2 className="text-lg font-semibold mb-3" style={{ color: "#1E2A4A" }}>
+        <h2 className="text-lg font-semibold mb-3" style={{ color: "#0B0F2E" }}>
           Mes actions ce mois
         </h2>
         <Card>
@@ -501,7 +501,7 @@ function ClientAdminDashboard({ firstName, societe }: { firstName: string; socie
                 <TableBody>
                   {actions.map((action, i) => (
                     <TableRow key={i}>
-                      <TableCell className="font-medium" style={{ color: "#1E2A4A" }}>
+                      <TableCell className="font-medium" style={{ color: "#0B0F2E" }}>
                         {action.quoi}
                       </TableCell>
                       <TableCell className="text-muted-foreground">{action.pourQuand}</TableCell>
@@ -530,7 +530,7 @@ function ClientAdminDashboard({ firstName, societe }: { firstName: string; socie
       {/* Section 4 -- Mes alertes */}
       {/* ================================================================== */}
       <div>
-        <h2 className="text-lg font-semibold mb-3" style={{ color: "#1E2A4A" }}>
+        <h2 className="text-lg font-semibold mb-3" style={{ color: "#0B0F2E" }}>
           Mes alertes
         </h2>
         {alerts.length === 0 ? (
@@ -563,12 +563,12 @@ function ClientAdminDashboard({ firstName, societe }: { firstName: string; socie
       {/* Section 5 -- Conseil du mois */}
       {/* ================================================================== */}
       <div>
-        <h2 className="text-lg font-semibold mb-3" style={{ color: "#1E2A4A" }}>
+        <h2 className="text-lg font-semibold mb-3" style={{ color: "#0B0F2E" }}>
           Conseil du mois
         </h2>
-        <Card className="border-[#C9A84C]/30 bg-[#C9A84C]/5">
+        <Card className="border-[#D4AF37]/30 bg-[#D4AF37]/5">
           <CardContent className="py-6 flex gap-4">
-            <Lightbulb className="h-6 w-6 shrink-0 mt-0.5" style={{ color: "#C9A84C" }} />
+            <Lightbulb className="h-6 w-6 shrink-0 mt-0.5" style={{ color: "#D4AF37" }} />
             <div>
               {brief.conseil_texte ? (
                 <p className="text-sm text-muted-foreground leading-relaxed">
@@ -589,7 +589,7 @@ function ClientAdminDashboard({ firstName, societe }: { firstName: string; socie
       {/* ================================================================== */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold" style={{ color: "#1E2A4A" }}>
+          <h2 className="text-lg font-semibold" style={{ color: "#0B0F2E" }}>
             Documents recents
           </h2>
           <Button
@@ -597,7 +597,7 @@ function ClientAdminDashboard({ firstName, societe }: { firstName: string; socie
             size="sm"
             asChild
             className="text-sm"
-            style={{ color: "#C9A84C" }}
+            style={{ color: "#D4AF37" }}
           >
             <Link href="/client/documents">
               Voir tous les documents
@@ -670,7 +670,7 @@ export default function ClientDashboard() {
   if (loading || loadingSociete) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#C9A84C" }} />
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#D4AF37" }} />
       </div>
     )
   }

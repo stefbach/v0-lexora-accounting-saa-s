@@ -17,13 +17,13 @@ export default function FiscalFreelancePage() {
   if (profile?.role === "client_user") {
     return (
       <div className="p-6 flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-        <h1 className="text-xl font-bold" style={{ color: "#1E2A4A" }}>
+        <h1 className="text-xl font-bold" style={{ color: "#0B0F2E" }}>
           Accès non autorisé
         </h1>
         <p className="text-sm text-muted-foreground">
           Vous n&apos;avez pas la permission d&apos;accéder à cette page.
         </p>
-        <Link href="/client/upload" className="text-sm underline" style={{ color: "#C9A84C" }}>
+        <Link href="/client/upload" className="text-sm underline" style={{ color: "#D4AF37" }}>
           Retour à l&apos;envoi de documents
         </Link>
       </div>
@@ -33,7 +33,7 @@ export default function FiscalFreelancePage() {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
+        <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>
           Mes Obligations Fiscales
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
@@ -42,14 +42,14 @@ export default function FiscalFreelancePage() {
       </div>
 
       {/* Déclaration annuelle */}
-      <Card className="border-2" style={{ borderColor: "#C9A84C" }}>
+      <Card className="border-2" style={{ borderColor: "#D4AF37" }}>
         <CardHeader>
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: "#C9A84C20" }}>
-              <FileText className="h-5 w-5" style={{ color: "#C9A84C" }} />
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: "#D4AF3720" }}>
+              <FileText className="h-5 w-5" style={{ color: "#D4AF37" }} />
             </div>
             <div>
-              <CardTitle style={{ color: "#1E2A4A" }}>Déclaration d&apos;impôt annuelle</CardTitle>
+              <CardTitle style={{ color: "#0B0F2E" }}>Déclaration d&apos;impôt annuelle</CardTitle>
               <Badge className="bg-green-100 text-green-700 border-green-200 mt-1">
                 <CheckCircle className="h-3 w-3 mr-1" />
                 Votre comptable s&apos;en occupe
@@ -58,8 +58,8 @@ export default function FiscalFreelancePage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="rounded-lg p-4" style={{ backgroundColor: "#1E2A4A08" }}>
-            <p className="text-sm" style={{ color: "#1E2A4A" }}>
+          <div className="rounded-lg p-4" style={{ backgroundColor: "#0B0F2E08" }}>
+            <p className="text-sm" style={{ color: "#0B0F2E" }}>
               Votre déclaration d&apos;impôt annuelle est à soumettre avant le{" "}
               <strong>30 septembre 2026</strong>.
               Votre comptable s&apos;en occupe. Vous n&apos;avez rien à faire de votre côté,
@@ -68,9 +68,9 @@ export default function FiscalFreelancePage() {
           </div>
 
           <div className="flex items-center gap-3">
-            <CalendarClock className="h-5 w-5" style={{ color: "#1E2A4A" }} />
+            <CalendarClock className="h-5 w-5" style={{ color: "#0B0F2E" }} />
             <div>
-              <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>Date limite</p>
+              <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>Date limite</p>
               <p className="text-sm text-muted-foreground">30 septembre 2026</p>
             </div>
           </div>
@@ -78,7 +78,7 @@ export default function FiscalFreelancePage() {
           <div className="flex items-center gap-3">
             <CheckCircle className="h-5 w-5 text-green-500" />
             <div>
-              <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>Statut actuel</p>
+              <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>Statut actuel</p>
               <p className="text-sm text-muted-foreground">
                 En préparation par votre comptable
               </p>
@@ -91,13 +91,13 @@ export default function FiscalFreelancePage() {
       <Card>
         <CardHeader>
           <div className="flex items-center gap-3">
-            <AlertTriangle className="h-5 w-5" style={{ color: "#C9A84C" }} />
-            <CardTitle style={{ color: "#1E2A4A" }}>TVA — Êtes-vous concerné ?</CardTitle>
+            <AlertTriangle className="h-5 w-5" style={{ color: "#D4AF37" }} />
+            <CardTitle style={{ color: "#0B0F2E" }}>TVA — Êtes-vous concerné ?</CardTitle>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="rounded-lg border p-4 bg-yellow-50/50">
-            <p className="text-sm" style={{ color: "#1E2A4A" }}>
+            <p className="text-sm" style={{ color: "#0B0F2E" }}>
               <strong>Le seuil TVA à Maurice est de 6 000 000 MUR par an.</strong>
             </p>
             <p className="text-sm text-muted-foreground mt-2">
@@ -110,7 +110,7 @@ export default function FiscalFreelancePage() {
             <Card>
               <CardContent className="py-4">
                 <p className="text-sm text-muted-foreground">Votre chiffre d&apos;affaires estimé</p>
-                <p className="text-2xl font-bold mt-1" style={{ color: "#1E2A4A" }}>
+                <p className="text-2xl font-bold mt-1" style={{ color: "#0B0F2E" }}>
                   3 360 000 MUR
                 </p>
                 <Badge className="bg-green-100 text-green-700 border-green-200 mt-2">
@@ -121,7 +121,7 @@ export default function FiscalFreelancePage() {
             <Card>
               <CardContent className="py-4">
                 <p className="text-sm text-muted-foreground">Seuil TVA</p>
-                <p className="text-2xl font-bold mt-1" style={{ color: "#1E2A4A" }}>
+                <p className="text-2xl font-bold mt-1" style={{ color: "#0B0F2E" }}>
                   6 000 000 MUR
                 </p>
                 <p className="text-xs text-muted-foreground mt-2">
@@ -140,7 +140,7 @@ export default function FiscalFreelancePage() {
       {/* Rappel simple */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm" style={{ color: "#1E2A4A" }}>
+          <CardTitle className="text-sm" style={{ color: "#0B0F2E" }}>
             Ce que vous devez retenir
           </CardTitle>
         </CardHeader>

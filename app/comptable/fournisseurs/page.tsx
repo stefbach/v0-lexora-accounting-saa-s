@@ -123,12 +123,12 @@ export default function FournisseursPage() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#1E2A4A]">Fournisseurs</h1>
+          <h1 className="text-2xl font-bold text-[#0B0F2E]">Fournisseurs</h1>
           <p className="text-sm text-gray-500 mt-1">Gestion des dettes fournisseurs (AP)</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-[#1E2A4A] text-white hover:bg-[#2a3a5a]">
+            <Button className="bg-[#0B0F2E] text-white hover:bg-[#2a3a5a]">
               <Plus className="w-4 h-4 mr-2" /> Nouvelle facture fournisseur
             </Button>
           </DialogTrigger>
@@ -171,7 +171,7 @@ export default function FournisseursPage() {
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setDialogOpen(false)}>Annuler</Button>
-              <Button onClick={handleCreate} disabled={saving} className="bg-[#1E2A4A] text-white">
+              <Button onClick={handleCreate} disabled={saving} className="bg-[#0B0F2E] text-white">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} Créer
               </Button>
             </DialogFooter>
@@ -188,7 +188,7 @@ export default function FournisseursPage() {
         ].map(k => (
           <Card key={k.label}><CardContent className="p-4 flex items-center gap-3">
             <k.icon className={`w-8 h-8 ${k.color}`} />
-            <div><p className="text-xs text-gray-500">{k.label}</p><p className="text-xl font-bold text-[#1E2A4A]">{k.value}</p></div>
+            <div><p className="text-xs text-gray-500">{k.label}</p><p className="text-xl font-bold text-[#0B0F2E]">{k.value}</p></div>
           </CardContent></Card>
         ))}
       </div>
@@ -219,10 +219,10 @@ export default function FournisseursPage() {
       </CardContent></Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-[#1E2A4A]">Factures fournisseurs ({filtered.length})</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-[#0B0F2E]">Factures fournisseurs ({filtered.length})</CardTitle></CardHeader>
         <CardContent className="p-0">
           {loading ? (
-            <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-[#1E2A4A]" /></div>
+            <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-[#0B0F2E]" /></div>
           ) : filtered.length === 0 ? (
             <div className="text-center py-12 text-gray-500">Aucune facture fournisseur</div>
           ) : (

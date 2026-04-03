@@ -21,8 +21,8 @@ import {
   Clock, Download, ChevronRight, Lock, AlertTriangle, Building2, RefreshCw, Camera, Pencil,
 } from "lucide-react"
 
-const NAVY = "#1E2A4A"
-const GOLD = "#C9A84C"
+const NAVY = "#0B0F2E"
+const GOLD = "#D4AF37"
 
 interface Document {
   id: string
@@ -649,7 +649,7 @@ export default function ClientDocumentsPage() {
                           <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-xs">Non assignée</Badge>
                         )}
                         <button className="opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setReassigningSocDocId(doc.id); setReassigningSocValue("") }}>
-                          <Pencil className="h-3 w-3 text-muted-foreground hover:text-[#1E2A4A]" />
+                          <Pencil className="h-3 w-3 text-muted-foreground hover:text-[#0B0F2E]" />
                         </button>
                       </span>
                     )}

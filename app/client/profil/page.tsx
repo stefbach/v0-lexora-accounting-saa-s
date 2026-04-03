@@ -77,7 +77,7 @@ export default function ProfilPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#C9A84C" }} />
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#D4AF37" }} />
       </div>
     )
   }
@@ -85,13 +85,13 @@ export default function ProfilPage() {
   if (profile?.role === "client_user") {
     return (
       <div className="p-6 flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-        <h1 className="text-xl font-bold" style={{ color: "#1E2A4A" }}>
+        <h1 className="text-xl font-bold" style={{ color: "#0B0F2E" }}>
           Acc&egrave;s non autoris&eacute;
         </h1>
         <p className="text-sm text-muted-foreground">
           Vous n&apos;avez pas la permission d&apos;acc&eacute;der &agrave; cette page.
         </p>
-        <Link href="/client/upload" className="text-sm underline" style={{ color: "#C9A84C" }}>
+        <Link href="/client/upload" className="text-sm underline" style={{ color: "#D4AF37" }}>
           Retour &agrave; l&apos;envoi de documents
         </Link>
       </div>
@@ -101,7 +101,7 @@ export default function ProfilPage() {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
+        <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>
           Mon Profil
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
@@ -113,8 +113,8 @@ export default function ProfilPage() {
       <Card>
         <CardHeader>
           <div className="flex items-center gap-3">
-            <User className="h-5 w-5" style={{ color: "#1E2A4A" }} />
-            <CardTitle style={{ color: "#1E2A4A" }}>Informations personnelles</CardTitle>
+            <User className="h-5 w-5" style={{ color: "#0B0F2E" }} />
+            <CardTitle style={{ color: "#0B0F2E" }}>Informations personnelles</CardTitle>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -147,14 +147,14 @@ export default function ProfilPage() {
             <div className="space-y-2">
               <Label>R&ocirc;le</Label>
               <div className="flex items-center h-9">
-                <Badge style={{ backgroundColor: "#1E2A4A", color: "white" }}>
+                <Badge style={{ backgroundColor: "#0B0F2E", color: "white" }}>
                   {profile?.role === "client_admin" ? "Administrateur" : profile?.role || "---"}
                 </Badge>
               </div>
             </div>
           </div>
           <div className="flex justify-end">
-            <Button style={{ backgroundColor: "#C9A84C", color: "white" }}>
+            <Button style={{ backgroundColor: "#D4AF37", color: "white" }}>
               Enregistrer les modifications
             </Button>
           </div>
@@ -165,39 +165,39 @@ export default function ProfilPage() {
       <Card>
         <CardHeader>
           <div className="flex items-center gap-3">
-            <Building2 className="h-5 w-5" style={{ color: "#1E2A4A" }} />
-            <CardTitle style={{ color: "#1E2A4A" }}>Ma Soci&eacute;t&eacute;</CardTitle>
+            <Building2 className="h-5 w-5" style={{ color: "#0B0F2E" }} />
+            <CardTitle style={{ color: "#0B0F2E" }}>Ma Soci&eacute;t&eacute;</CardTitle>
           </div>
         </CardHeader>
         <CardContent>
           {loadingSociete ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin" style={{ color: "#C9A84C" }} />
+              <Loader2 className="h-6 w-6 animate-spin" style={{ color: "#D4AF37" }} />
             </div>
           ) : societe ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <p className="text-sm text-muted-foreground">Nom de la soci&eacute;t&eacute;</p>
-                <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>
+                <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>
                   {societe.nom}
                 </p>
               </div>
               <div className="space-y-1">
                 <p className="text-sm text-muted-foreground">Num&eacute;ro BRN</p>
-                <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>
+                <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>
                   {societe.brn || "---"}
                 </p>
               </div>
               <div className="space-y-1">
                 <p className="text-sm text-muted-foreground">Num&eacute;ro TVA (MRA)</p>
-                <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>
+                <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>
                   {societe.numero_tva_mra || "---"}
                 </p>
               </div>
               {societe.comptable && (
                 <div className="space-y-1">
                   <p className="text-sm text-muted-foreground">Comptable assign&eacute;</p>
-                  <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>
+                  <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>
                     {societe.comptable.full_name}
                   </p>
                 </div>
@@ -224,42 +224,42 @@ export default function ProfilPage() {
       <Card>
         <CardHeader>
           <div className="flex items-center gap-3">
-            <Bell className="h-5 w-5" style={{ color: "#1E2A4A" }} />
-            <CardTitle style={{ color: "#1E2A4A" }}>Pr&eacute;f&eacute;rences de notifications</CardTitle>
+            <Bell className="h-5 w-5" style={{ color: "#0B0F2E" }} />
+            <CardTitle style={{ color: "#0B0F2E" }}>Pr&eacute;f&eacute;rences de notifications</CardTitle>
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>Notifications par email</p>
+              <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>Notifications par email</p>
               <p className="text-sm text-muted-foreground">Recevez les alertes par email.</p>
             </div>
             <Switch checked={notifEmail} onCheckedChange={setNotifEmail} />
           </div>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>Notifications WhatsApp</p>
+              <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>Notifications WhatsApp</p>
               <p className="text-sm text-muted-foreground">Recevez les alertes par WhatsApp.</p>
             </div>
             <Switch checked={notifWhatsapp} onCheckedChange={setNotifWhatsapp} />
           </div>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>Rappels TVA</p>
+              <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>Rappels TVA</p>
               <p className="text-sm text-muted-foreground">Soyez pr&eacute;venu avant chaque date limite de TVA.</p>
             </div>
             <Switch checked={notifTva} onCheckedChange={setNotifTva} />
           </div>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>Documents trait&eacute;s</p>
+              <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>Documents trait&eacute;s</p>
               <p className="text-sm text-muted-foreground">Notification quand vos documents sont class&eacute;s.</p>
             </div>
             <Switch checked={notifDocuments} onCheckedChange={setNotifDocuments} />
           </div>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>Salaires</p>
+              <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>Salaires</p>
               <p className="text-sm text-muted-foreground">Notification quand les fiches de paie sont pr&ecirc;tes.</p>
             </div>
             <Switch checked={notifSalaires} onCheckedChange={setNotifSalaires} />
@@ -271,19 +271,19 @@ export default function ProfilPage() {
       <Card>
         <CardHeader>
           <div className="flex items-center gap-3">
-            <Shield className="h-5 w-5" style={{ color: "#1E2A4A" }} />
-            <CardTitle style={{ color: "#1E2A4A" }}>S&eacute;curit&eacute;</CardTitle>
+            <Shield className="h-5 w-5" style={{ color: "#0B0F2E" }} />
+            <CardTitle style={{ color: "#0B0F2E" }}>S&eacute;curit&eacute;</CardTitle>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>Mot de passe</p>
+              <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>Mot de passe</p>
               <p className="text-sm text-muted-foreground">
                 Modifiez votre mot de passe pour s&eacute;curiser votre compte.
               </p>
             </div>
-            <Button variant="outline" style={{ borderColor: "#1E2A4A", color: "#1E2A4A" }}>
+            <Button variant="outline" style={{ borderColor: "#0B0F2E", color: "#0B0F2E" }}>
               Changer le mot de passe
             </Button>
           </div>

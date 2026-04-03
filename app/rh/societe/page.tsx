@@ -13,8 +13,8 @@ import {
   MapPin, CheckCircle, AlertCircle, FileText, Scale,
 } from "lucide-react"
 
-const NAVY = "#1E2A4A"
-const GOLD = "#C9A84C"
+const NAVY = "#0B0F2E"
+const GOLD = "#D4AF37"
 
 // ── Fluid input: defaultValue + onBlur, never re-renders on every keystroke ──
 function Field({

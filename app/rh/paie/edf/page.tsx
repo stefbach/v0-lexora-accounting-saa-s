@@ -193,7 +193,7 @@ export default function EDFPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: '#1E2A4A' }}>
+          <h1 className="text-2xl font-bold" style={{ color: '#0B0F2E' }}>
             Déclaration EDF Annuelle MRA
           </h1>
           <p className="text-muted-foreground mt-1">
@@ -242,7 +242,7 @@ export default function EDFPage() {
             <Button
               onClick={handleGenerer}
               disabled={!selectedSocieteId || generating}
-              style={{ backgroundColor: '#C9A84C', color: 'white' }}
+              style={{ backgroundColor: '#D4AF37', color: 'white' }}
             >
               {generating ? (
                 <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Génération...</>
@@ -276,7 +276,7 @@ export default function EDFPage() {
       {loading ? (
         <Card>
           <CardContent className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: '#C9A84C' }} />
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: '#D4AF37' }} />
           </CardContent>
         </Card>
       ) : declaration ? (
@@ -284,7 +284,7 @@ export default function EDFPage() {
           <Card>
             <CardHeader>
               <div className="flex items-center gap-2">
-                <FileSpreadsheet className="h-5 w-5" style={{ color: '#C9A84C' }} />
+                <FileSpreadsheet className="h-5 w-5" style={{ color: '#D4AF37' }} />
                 <CardTitle className="text-base">
                   Récapitulatif EDF — {exercice}
                 </CardTitle>
@@ -355,7 +355,7 @@ export default function EDFPage() {
           <Card>
             <CardHeader>
               <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5" style={{ color: '#C9A84C' }} />
+                <CheckCircle2 className="h-5 w-5" style={{ color: '#D4AF37' }} />
                 <CardTitle className="text-base">Soumission MRA</CardTitle>
               </div>
             </CardHeader>
@@ -417,7 +417,7 @@ export default function EDFPage() {
                   <Button
                     onClick={handleMarquerSoumis}
                     disabled={saving}
-                    style={{ backgroundColor: '#1E2A4A', color: 'white' }}
+                    style={{ backgroundColor: '#0B0F2E', color: 'white' }}
                   >
                     {saving ? 'Enregistrement...' : 'Marquer soumis à la MRA'}
                   </Button>

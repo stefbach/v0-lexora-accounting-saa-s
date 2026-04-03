@@ -17,7 +17,7 @@ import {
 } from "lucide-react"
 
 const ACCENT_COLORS = [
-  { name: "Navy", hex: "#1E2A4A" }, { name: "Gold", hex: "#C9A84C" },
+  { name: "Navy", hex: "#0B0F2E" }, { name: "Gold", hex: "#D4AF37" },
   { name: "Blue", hex: "#2563EB" }, { name: "Green", hex: "#059669" },
   { name: "Red", hex: "#DC2626" }, { name: "Purple", hex: "#7C3AED" },
   { name: "Teal", hex: "#0D9488" }, { name: "Orange", hex: "#EA580C" },
@@ -58,7 +58,7 @@ const DEFAULT_SETTINGS: CompanySettings = {
 }
 
 const TEMPLATES: InvoiceTemplate[] = [
-  { id: "standard", nom: "Standard", description: "Mise en page classique avec en-tete complet, ideal pour la plupart des entreprises.", style: { couleur_primaire: "#1E2A4A", couleur_secondaire: "#C9A84C", police: "Inter", layout: "standard" } },
+  { id: "standard", nom: "Standard", description: "Mise en page classique avec en-tete complet, ideal pour la plupart des entreprises.", style: { couleur_primaire: "#0B0F2E", couleur_secondaire: "#D4AF37", police: "Inter", layout: "standard" } },
   { id: "professional", nom: "Professionnel", description: "Design epure avec accents dores, parfait pour les cabinets et consultants.", style: { couleur_primaire: "#0F172A", couleur_secondaire: "#B8860B", police: "Inter", layout: "professional" } },
   { id: "minimal", nom: "Minimal", description: "Design minimaliste avec espacement genereux, moderne et lisible.", style: { couleur_primaire: "#374151", couleur_secondaire: "#6B7280", police: "Inter", layout: "minimal" } },
 ]
@@ -70,7 +70,7 @@ export default function FacturationSettingsPage() {
   const [clients, setClients] = useState<InvoiceClient[]>([])
   const [catalogue, setCatalogue] = useState<CatalogueItem[]>([])
   const [selectedTemplate, setSelectedTemplate] = useState("standard")
-  const [templateColors, setTemplateColors] = useState({ primaire: "#1E2A4A", secondaire: "#C9A84C" })
+  const [templateColors, setTemplateColors] = useState({ primaire: "#0B0F2E", secondaire: "#D4AF37" })
   const [saved, setSaved] = useState(false)
   const [clientDialog, setClientDialog] = useState(false)
   const [editingClient, setEditingClient] = useState<InvoiceClient | null>(null)
@@ -221,10 +221,10 @@ export default function FacturationSettingsPage() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#1E2A4A]">Parametres de Facturation</h1>
+          <h1 className="text-2xl font-bold text-[#0B0F2E]">Parametres de Facturation</h1>
           <p className="text-sm text-gray-500">Configuration MRA pour vos factures</p>
         </div>
-        <Button onClick={saveAll} className="bg-[#1E2A4A] hover:bg-[#2a3d6b]">
+        <Button onClick={saveAll} className="bg-[#0B0F2E] hover:bg-[#2a3d6b]">
           {saved ? <><Check className="w-4 h-4 mr-2" />Sauvegarde !</> : <><Save className="w-4 h-4 mr-2" />Sauvegarder tout</>}
         </Button>
       </div>
@@ -243,7 +243,7 @@ export default function FacturationSettingsPage() {
           <div className="grid grid-cols-2 gap-4">
             {/* Company identity */}
             <Card>
-              <CardHeader><CardTitle className="text-[#1E2A4A] text-base">Identite de l&apos;entreprise</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-[#0B0F2E] text-base">Identite de l&apos;entreprise</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <div><Label>Nom de l&apos;entreprise</Label><Input value={settings.nom} onChange={e => setSettings(s => ({ ...s, nom: e.target.value }))} placeholder="DDS Consulting Ltd" /></div>
                 <div className="grid grid-cols-2 gap-3">
@@ -271,7 +271,7 @@ export default function FacturationSettingsPage() {
             {/* Bank details & invoicing */}
             <div className="space-y-4">
               <Card>
-                <CardHeader><CardTitle className="text-[#1E2A4A] text-base">Coordonnees bancaires</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-[#0B0F2E] text-base">Coordonnees bancaires</CardTitle></CardHeader>
                 <CardContent className="space-y-3">
                   <div><Label>Nom de la banque</Label><Input value={settings.banque_nom} onChange={e => setSettings(s => ({ ...s, banque_nom: e.target.value }))} placeholder="MCB / SBM / AfrAsia" /></div>
                   <div><Label>Numero de compte</Label><Input value={settings.banque_compte} onChange={e => setSettings(s => ({ ...s, banque_compte: e.target.value }))} /></div>
@@ -283,7 +283,7 @@ export default function FacturationSettingsPage() {
               </Card>
 
               <Card>
-                <CardHeader><CardTitle className="text-[#1E2A4A] text-base">Parametres de facturation</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-[#0B0F2E] text-base">Parametres de facturation</CardTitle></CardHeader>
                 <CardContent className="space-y-3">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -321,7 +321,7 @@ export default function FacturationSettingsPage() {
         <TabsContent value="clients" className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-gray-500">Base de donnees clients pour la facturation</p>
-            <Button onClick={openNewClient} className="bg-[#1E2A4A]"><Plus className="w-4 h-4 mr-2" />Nouveau client</Button>
+            <Button onClick={openNewClient} className="bg-[#0B0F2E]"><Plus className="w-4 h-4 mr-2" />Nouveau client</Button>
           </div>
           <Card>
             <CardContent className="p-0 overflow-x-auto">
@@ -405,7 +405,7 @@ export default function FacturationSettingsPage() {
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setClientDialog(false)}>Annuler</Button>
-                <Button onClick={saveClient} disabled={!cNom} className="bg-[#1E2A4A]">{editingClient ? "Modifier" : "Ajouter"}</Button>
+                <Button onClick={saveClient} disabled={!cNom} className="bg-[#0B0F2E]">{editingClient ? "Modifier" : "Ajouter"}</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -415,7 +415,7 @@ export default function FacturationSettingsPage() {
         <TabsContent value="catalogue" className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-gray-500">Catalogue de services et produits reutilisables</p>
-            <Button onClick={openNewItem} className="bg-[#1E2A4A]"><Plus className="w-4 h-4 mr-2" />Nouveau service/produit</Button>
+            <Button onClick={openNewItem} className="bg-[#0B0F2E]"><Plus className="w-4 h-4 mr-2" />Nouveau service/produit</Button>
           </div>
           <Card>
             <CardContent className="p-0 overflow-x-auto">
@@ -479,7 +479,7 @@ export default function FacturationSettingsPage() {
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setCatalogueDialog(false)}>Annuler</Button>
-                <Button onClick={saveCatalogueItem} disabled={!catDesc} className="bg-[#1E2A4A]">{editingItem ? "Modifier" : "Ajouter"}</Button>
+                <Button onClick={saveCatalogueItem} disabled={!catDesc} className="bg-[#0B0F2E]">{editingItem ? "Modifier" : "Ajouter"}</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -490,7 +490,7 @@ export default function FacturationSettingsPage() {
           <p className="text-sm text-gray-500">Choisissez et personnalisez votre modele de facture</p>
           <div className="grid grid-cols-3 gap-4">
             {TEMPLATES.map(t => (
-              <Card key={t.id} className={`cursor-pointer transition-all ${selectedTemplate === t.id ? "ring-2 ring-[#C9A84C] shadow-lg" : "hover:shadow-md"}`}
+              <Card key={t.id} className={`cursor-pointer transition-all ${selectedTemplate === t.id ? "ring-2 ring-[#D4AF37] shadow-lg" : "hover:shadow-md"}`}
                 onClick={() => { setSelectedTemplate(t.id); setTemplateColors(t.style.couleur_primaire ? { primaire: t.style.couleur_primaire, secondaire: t.style.couleur_secondaire } : templateColors) }}>
                 <CardContent className="p-4">
                   {/* Template Preview */}
@@ -522,10 +522,10 @@ export default function FacturationSettingsPage() {
                   </div>
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="font-semibold text-[#1E2A4A]">{t.nom}</h3>
+                      <h3 className="font-semibold text-[#0B0F2E]">{t.nom}</h3>
                       <p className="text-xs text-gray-500">{t.description}</p>
                     </div>
-                    {selectedTemplate === t.id && <Check className="w-5 h-5 text-[#C9A84C]" />}
+                    {selectedTemplate === t.id && <Check className="w-5 h-5 text-[#D4AF37]" />}
                   </div>
                 </CardContent>
               </Card>
@@ -534,7 +534,7 @@ export default function FacturationSettingsPage() {
 
           {/* Color Swatches */}
           <Card>
-            <CardHeader><CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2"><Palette className="w-4 h-4" />Couleur d&apos;accent par defaut</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><Palette className="w-4 h-4" />Couleur d&apos;accent par defaut</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-gray-500">Selectionnez la couleur primaire par defaut pour vos factures. Elle sera utilisee pour l&apos;en-tete, le tableau et les totaux.</p>
               <div className="flex flex-wrap gap-3">
@@ -543,7 +543,7 @@ export default function FacturationSettingsPage() {
                     key={color.hex}
                     type="button"
                     onClick={() => setTemplateColors(c => ({ ...c, primaire: color.hex }))}
-                    className={`group relative w-11 h-11 rounded-lg border-2 transition-all ${templateColors.primaire === color.hex ? "border-[#C9A84C] ring-2 ring-[#C9A84C]/30 scale-110" : "border-gray-200 hover:border-gray-400 hover:scale-105"}`}
+                    className={`group relative w-11 h-11 rounded-lg border-2 transition-all ${templateColors.primaire === color.hex ? "border-[#D4AF37] ring-2 ring-[#D4AF37]/30 scale-110" : "border-gray-200 hover:border-gray-400 hover:scale-105"}`}
                     style={{ backgroundColor: color.hex }}
                     title={color.name}
                   >
@@ -610,7 +610,7 @@ export default function FacturationSettingsPage() {
             <div className="space-y-4">
               {/* Activation toggle */}
               <Card>
-                <CardHeader><CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2"><Shield className="w-4 h-4" />Fiscalisation MRA</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><Shield className="w-4 h-4" />Fiscalisation MRA</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div>
@@ -620,7 +620,7 @@ export default function FacturationSettingsPage() {
                     <button
                       type="button"
                       onClick={() => setMraActive(!mraActive)}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${mraActive ? "bg-[#1E2A4A]" : "bg-gray-300"}`}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${mraActive ? "bg-[#0B0F2E]" : "bg-gray-300"}`}
                     >
                       <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${mraActive ? "translate-x-6" : "translate-x-1"}`} />
                     </button>
@@ -639,7 +639,7 @@ export default function FacturationSettingsPage() {
 
               {/* EBS Credentials */}
               <Card className={!mraActive ? "opacity-50 pointer-events-none" : ""}>
-                <CardHeader><CardTitle className="text-[#1E2A4A] text-base">Identifiants EBS</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-[#0B0F2E] text-base">Identifiants EBS</CardTitle></CardHeader>
                 <CardContent className="space-y-3">
                   <div>
                     <Label>EBS ID (Identifiant d&apos;enregistrement)</Label>
@@ -705,7 +705,7 @@ export default function FacturationSettingsPage() {
                     }}
                     disabled={mraTesting || !mraEbsId || !mraApiKey}
                     variant="outline"
-                    className="w-full border-[#1E2A4A] text-[#1E2A4A]"
+                    className="w-full border-[#0B0F2E] text-[#0B0F2E]"
                   >
                     {mraTesting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Test en cours...</> : <><Wifi className="w-4 h-4 mr-2" />Tester la connexion</>}
                   </Button>
@@ -720,15 +720,15 @@ export default function FacturationSettingsPage() {
 
             {/* Info card */}
             <div className="space-y-4">
-              <Card className="border-[#C9A84C]/30 bg-[#C9A84C]/5">
-                <CardHeader><CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2"><Info className="w-4 h-4" />A propos de la fiscalisation MRA</CardTitle></CardHeader>
+              <Card className="border-[#D4AF37]/30 bg-[#D4AF37]/5">
+                <CardHeader><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><Info className="w-4 h-4" />A propos de la fiscalisation MRA</CardTitle></CardHeader>
                 <CardContent className="space-y-3 text-sm text-gray-700">
                   <p>
                     Le <strong>Mauritius Revenue Authority (MRA)</strong> exige la fiscalisation electronique des factures
                     via l&apos;Invoice Fiscalization Platform (IFP) pour les entreprises enregistrees a la TVA.
                   </p>
                   <div className="space-y-2">
-                    <h4 className="font-semibold text-[#1E2A4A]">Seuils et obligations</h4>
+                    <h4 className="font-semibold text-[#0B0F2E]">Seuils et obligations</h4>
                     <ul className="list-disc pl-5 space-y-1 text-xs text-gray-600">
                       <li>Toutes les entreprises enregistrees a la TVA doivent se conformer</li>
                       <li>Chaque facture finalisee recoit un <strong>IRN</strong> (Invoice Reference Number)</li>
@@ -737,7 +737,7 @@ export default function FacturationSettingsPage() {
                     </ul>
                   </div>
                   <div className="space-y-2">
-                    <h4 className="font-semibold text-[#1E2A4A]">Pre-requis</h4>
+                    <h4 className="font-semibold text-[#0B0F2E]">Pre-requis</h4>
                     <ul className="list-disc pl-5 space-y-1 text-xs text-gray-600">
                       <li>Enregistrement EBS (Electronic Billing System) aupres du MRA</li>
                       <li>Obtention d&apos;un EBS ID et d&apos;une cle API</li>
@@ -746,10 +746,10 @@ export default function FacturationSettingsPage() {
                     </ul>
                   </div>
                   <div className="space-y-2">
-                    <h4 className="font-semibold text-[#1E2A4A]">Codes de document</h4>
+                    <h4 className="font-semibold text-[#0B0F2E]">Codes de document</h4>
                     <div className="grid grid-cols-3 gap-2 text-xs">
                       <div className="bg-white rounded p-2 border text-center">
-                        <p className="font-mono font-bold text-[#1E2A4A]">01</p>
+                        <p className="font-mono font-bold text-[#0B0F2E]">01</p>
                         <p className="text-gray-500">Facture</p>
                       </div>
                       <div className="bg-white rounded p-2 border text-center">
@@ -766,7 +766,7 @@ export default function FacturationSettingsPage() {
               </Card>
 
               <Card>
-                <CardHeader><CardTitle className="text-[#1E2A4A] text-base">Mode actuel</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-[#0B0F2E] text-base">Mode actuel</CardTitle></CardHeader>
                 <CardContent>
                   <div className="flex items-center gap-3 p-3 rounded-lg bg-yellow-50 border border-yellow-200">
                     <Info className="w-5 h-5 text-yellow-600 flex-shrink-0" />

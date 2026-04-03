@@ -63,9 +63,9 @@ export default function DirectionPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header Direction */}
-      <div className="bg-[#1E2A4A] text-white px-6 py-4 flex items-center justify-between">
+      <div className="bg-[#0B0F2E] text-white px-6 py-4 flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold flex items-center gap-2"><Building2 className="w-5 h-5 text-[#C9A84C]"/>Direction — Vue Groupe</h1>
+          <h1 className="text-xl font-bold flex items-center gap-2"><Building2 className="w-5 h-5 text-[#D4AF37]"/>Direction — Vue Groupe</h1>
           <p className="text-white/60 text-sm">Consolidation multi-sociétés LEXORA Group</p>
         </div>
         <div className="flex items-center gap-3">
@@ -76,7 +76,7 @@ export default function DirectionPage() {
               <SelectItem value="2023-2024">2023–2024</SelectItem>
             </SelectContent>
           </Select>
-          <Button onClick={() => setCerveauOpen(true)} className="bg-[#C9A84C] text-[#1E2A4A] hover:bg-[#b8973a]">
+          <Button onClick={() => setCerveauOpen(true)} className="bg-[#D4AF37] text-[#0B0F2E] hover:bg-[#b8973a]">
             <Brain className="w-4 h-4 mr-2"/>Assistant LEXORA
           </Button>
         </div>
@@ -93,7 +93,7 @@ export default function DirectionPage() {
           ].map(k => (
             <Card key={k.label}><CardContent className="p-4 flex items-center gap-3">
               <k.icon className={`w-8 h-8 ${k.color}`}/>
-              <div><p className="text-xs text-gray-500">{k.label}</p><p className="text-xl font-bold text-[#1E2A4A]">{loading ? "..." : k.value}</p></div>
+              <div><p className="text-xs text-gray-500">{k.label}</p><p className="text-xl font-bold text-[#0B0F2E]">{loading ? "..." : k.value}</p></div>
             </CardContent></Card>
           ))}
         </div>
@@ -105,9 +105,9 @@ export default function DirectionPage() {
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-[#1E2A4A] rounded-lg flex items-center justify-center text-[#C9A84C] font-bold text-sm">{s.code?.slice(0,3) || "?"}</div>
+                    <div className="w-10 h-10 bg-[#0B0F2E] rounded-lg flex items-center justify-center text-[#D4AF37] font-bold text-sm">{s.code?.slice(0,3) || "?"}</div>
                     <div>
-                      <p className="font-semibold text-[#1E2A4A]">{s.nom}</p>
+                      <p className="font-semibold text-[#0B0F2E]">{s.nom}</p>
                       <p className="text-xs text-gray-500">{s.nb_employes} employé(s)</p>
                     </div>
                   </div>
@@ -135,7 +135,7 @@ export default function DirectionPage() {
           ].map(a => (
             <a key={a.href} href={a.href}>
               <Card className="hover:shadow-md cursor-pointer transition-shadow">
-                <CardContent className="p-4 text-center"><div className="text-2xl mb-1">{a.icon}</div><p className="text-sm font-medium text-[#1E2A4A]">{a.label}</p></CardContent>
+                <CardContent className="p-4 text-center"><div className="text-2xl mb-1">{a.icon}</div><p className="text-sm font-medium text-[#0B0F2E]">{a.label}</p></CardContent>
               </Card>
             </a>
           ))}
@@ -147,7 +147,7 @@ export default function DirectionPage() {
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between p-4 border-b">
-              <h2 className="font-bold text-[#1E2A4A] flex items-center gap-2"><Brain className="w-4 h-4 text-[#C9A84C]"/>Assistant LEXORA</h2>
+              <h2 className="font-bold text-[#0B0F2E] flex items-center gap-2"><Brain className="w-4 h-4 text-[#D4AF37]"/>Assistant LEXORA</h2>
               <Button variant="ghost" size="sm" onClick={() => setCerveauOpen(false)}>✕</Button>
             </div>
             <CerveauTIBOK mode="panel" />

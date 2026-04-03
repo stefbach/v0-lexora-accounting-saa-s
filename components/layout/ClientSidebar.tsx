@@ -93,18 +93,23 @@ export function ClientSidebar() {
   }
 
   return (
-    <aside className={cn("sticky top-0 flex h-screen flex-col transition-all duration-300", collapsed ? "w-16" : "w-64")} style={{ backgroundColor: "#1E2A4A" }}>
+    <aside className={cn("sticky top-0 flex h-screen flex-col transition-all duration-300", collapsed ? "w-16" : "w-64")} style={{ backgroundColor: "#0B0F2E" }}>
       <div className="flex h-16 items-center justify-between border-b border-white/10 px-4">
         {!collapsed ? (
           <Link href="/client" className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: "#C9A84C" }}><span className="text-sm font-bold text-white">L</span></div>
             <div className="flex flex-col">
-              <span className="text-lg font-semibold" style={{ color: "#C9A84C" }}>Lexora</span>
-              <span className="text-[10px] font-medium uppercase tracking-wider text-white/50">{roleLabel}</span>
+              <div className="flex items-baseline">
+                <span className="text-base font-bold" style={{ color: "#E8EAFC", letterSpacing: "0.04em", fontFamily: "'Poppins', sans-serif" }}>LE</span>
+                <span className="text-base font-bold" style={{ color: "#D4AF37", letterSpacing: "0.04em", fontFamily: "'Poppins', sans-serif" }}>X</span>
+                <span className="text-base font-bold" style={{ color: "#E8EAFC", letterSpacing: "0.04em", fontFamily: "'Poppins', sans-serif" }}>ORA</span>
+              </div>
+              <span className="text-[10px] font-light tracking-wider" style={{ color: "#4A5490" }}>{roleLabel}</span>
             </div>
           </Link>
         ) : (
-          <div className="mx-auto flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: "#C9A84C" }}><span className="text-sm font-bold text-white">L</span></div>
+          <div className="mx-auto flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: "#141C4A", border: "1px solid #1E2760" }}>
+            <span className="text-sm font-bold" style={{ color: "#E8EAFC" }}>L<span style={{ color: "#D4AF37" }}>X</span></span>
+          </div>
         )}
       </div>
 
@@ -122,7 +127,7 @@ export function ClientSidebar() {
                   <Link key={item.href} href={item.href}
                     className={cn("flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
                       isActive ? "bg-white/10 shadow-sm" : "text-white/70 hover:bg-white/5 hover:text-white", collapsed && "justify-center")}
-                    style={isActive ? { color: "#C9A84C" } : undefined}>
+                    style={isActive ? { color: "#D4AF37" } : undefined}>
                     <item.icon className="h-4 w-4 shrink-0" />
                     {!collapsed && <span>{item.label}</span>}
                   </Link>

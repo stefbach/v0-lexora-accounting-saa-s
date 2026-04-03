@@ -87,7 +87,7 @@ function FacturePreviewContent() {
   const grandTotal = subtotalHT + totalTVA - discount
   const colors = (() => {
     // Prefer accent_color from invoice data (set in nouvelle-facture), fall back to localStorage template colors
-    const fallback = { primaire: "#1E2A4A", secondaire: "#C9A84C" }
+    const fallback = { primaire: "#0B0F2E", secondaire: "#D4AF37" }
     try {
       const tc = localStorage.getItem("lexora_invoice_template_colors")
       const stored = tc ? JSON.parse(tc) : fallback
@@ -111,7 +111,7 @@ function FacturePreviewContent() {
 
       {/* Print button */}
       <div className="no-print fixed top-4 right-4 z-50 flex gap-2">
-        <button onClick={() => window.print()} className="bg-[#1E2A4A] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#2a3d6b] transition-colors">
+        <button onClick={() => window.print()} className="bg-[#0B0F2E] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#2a3d6b] transition-colors">
           Imprimer / PDF
         </button>
         <button onClick={() => window.close()} className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors">

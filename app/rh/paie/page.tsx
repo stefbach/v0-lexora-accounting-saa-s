@@ -126,11 +126,11 @@ export default function PaiePage() {
       <div className="p-6 space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-[#1E2A4A]">Paie & Bulletins</h1>
+            <h1 className="text-2xl font-bold text-[#0B0F2E]">Paie & Bulletins</h1>
             <p className="text-sm text-gray-500">Calcul MRA — CSG/NSF/PAYE + OT + Primes + Absences</p>
           </div>
           <div className="flex gap-2">
-            <Button onClick={calculerBatch} disabled={calculating} className="bg-[#1E2A4A] text-white">
+            <Button onClick={calculerBatch} disabled={calculating} className="bg-[#0B0F2E] text-white">
               <Calculator className="w-4 h-4 mr-2" />{calculating ? "Calcul en cours..." : "Calculer la paie"}
             </Button>
             <Button onClick={exportVirements} variant="outline"><Download className="w-4 h-4 mr-2" />MCB Virement</Button>
@@ -148,7 +148,7 @@ export default function PaiePage() {
               onClick={() => setActiveTab(tab.id)}
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === tab.id
-                  ? "border-[#1E2A4A] text-[#1E2A4A]"
+                  ? "border-[#0B0F2E] text-[#0B0F2E]"
                   : "border-transparent text-gray-500 hover:text-gray-700"
               }`}
             >
@@ -192,7 +192,7 @@ export default function PaiePage() {
               <Card key={k.label}>
                 <CardContent className="p-4">
                   <p className="text-xs text-gray-500">{k.label}</p>
-                  <p className="text-lg font-bold text-[#1E2A4A]">{k.v}</p>
+                  <p className="text-lg font-bold text-[#0B0F2E]">{k.v}</p>
                 </CardContent>
               </Card>
             ))}
@@ -203,7 +203,7 @@ export default function PaiePage() {
         {activeTab === "bulletins" && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-[#1E2A4A]">Bulletins de paie — {periode} ({bulletins.length})</CardTitle>
+              <CardTitle className="text-[#0B0F2E]">Bulletins de paie — {periode} ({bulletins.length})</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               {loading ? (
@@ -303,7 +303,7 @@ export default function PaiePage() {
         {activeTab === "comptabilisation" && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-[#1E2A4A] flex items-center gap-2">
+              <CardTitle className="text-[#0B0F2E] flex items-center gap-2">
                 <BookOpen className="w-5 h-5" />
                 Comptabilisation de la paie — {periode}
               </CardTitle>
@@ -332,7 +332,7 @@ export default function PaiePage() {
                 <Button
                   onClick={comptabiliserPaie}
                   disabled={comptabilisationLoading || societe === "all" || bulletinsNonComptabilises.length === 0}
-                  className="bg-[#1E2A4A] text-white"
+                  className="bg-[#0B0F2E] text-white"
                 >
                   {comptabilisationLoading
                     ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Comptabilisation...</>

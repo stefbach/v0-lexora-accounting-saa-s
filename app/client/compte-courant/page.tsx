@@ -142,7 +142,7 @@ export default function CompteCourantPage() {
     : mouvements
 
   if (loading && comptes.length === 0) {
-    return <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-[#1E2A4A]" /></div>
+    return <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-[#0B0F2E]" /></div>
   }
 
   return (
@@ -156,7 +156,7 @@ export default function CompteCourantPage() {
             </Button>
           )}
           <div>
-            <h1 className="text-2xl font-bold text-[#1E2A4A]">
+            <h1 className="text-2xl font-bold text-[#0B0F2E]">
               {selectedCompte ? `Compte Courant — ${selectedCompte.nom}` : "Comptes Courants Associes"}
             </h1>
             <p className="text-sm text-gray-500">
@@ -174,10 +174,10 @@ export default function CompteCourantPage() {
             </Select>
           )}
           <Button variant="outline" onClick={load}><RefreshCw className="w-4 h-4 mr-2" />Actualiser</Button>
-          <Button onClick={() => setAvanceDialog(true)} className="bg-[#C9A84C] text-[#1E2A4A] hover:bg-[#C9A84C]/90">
+          <Button onClick={() => setAvanceDialog(true)} className="bg-[#D4AF37] text-[#0B0F2E] hover:bg-[#D4AF37]/90">
             <ArrowUpRight className="w-4 h-4 mr-2" />Enregistrer une avance
           </Button>
-          <Button onClick={() => setRemboursementDialog(true)} className="bg-[#1E2A4A]">
+          <Button onClick={() => setRemboursementDialog(true)} className="bg-[#0B0F2E]">
             <ArrowDownLeft className="w-4 h-4 mr-2" />Enregistrer un remboursement
           </Button>
         </div>
@@ -187,19 +187,19 @@ export default function CompteCourantPage() {
       <div className="grid grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
-            <Users className="w-8 h-8 text-[#1E2A4A]" />
+            <Users className="w-8 h-8 text-[#0B0F2E]" />
             <div>
               <p className="text-xs text-gray-500">Comptes ouverts</p>
-              <p className="text-xl font-bold text-[#1E2A4A]">{comptes.length}</p>
+              <p className="text-xl font-bold text-[#0B0F2E]">{comptes.length}</p>
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
-            <Wallet className="w-8 h-8" style={{ color: "#C9A84C" }} />
+            <Wallet className="w-8 h-8" style={{ color: "#D4AF37" }} />
             <div>
               <p className="text-xs text-gray-500">Solde total du</p>
-              <p className="text-xl font-bold text-[#1E2A4A]">{fmt(totalSolde)} MUR</p>
+              <p className="text-xl font-bold text-[#0B0F2E]">{fmt(totalSolde)} MUR</p>
             </div>
           </CardContent>
         </Card>
@@ -208,7 +208,7 @@ export default function CompteCourantPage() {
             <ArrowUpRight className="w-8 h-8 text-orange-600" />
             <div>
               <p className="text-xs text-gray-500">Associes</p>
-              <p className="text-xl font-bold text-[#1E2A4A]">{comptes.filter(c => c.type === 'associe').length}</p>
+              <p className="text-xl font-bold text-[#0B0F2E]">{comptes.filter(c => c.type === 'associe').length}</p>
             </div>
           </CardContent>
         </Card>
@@ -217,7 +217,7 @@ export default function CompteCourantPage() {
             <Users className="w-8 h-8 text-blue-600" />
             <div>
               <p className="text-xs text-gray-500">Collaborateurs</p>
-              <p className="text-xl font-bold text-[#1E2A4A]">{comptes.filter(c => c.type === 'collaborateur').length}</p>
+              <p className="text-xl font-bold text-[#0B0F2E]">{comptes.filter(c => c.type === 'collaborateur').length}</p>
             </div>
           </CardContent>
         </Card>
@@ -229,7 +229,7 @@ export default function CompteCourantPage() {
           {/* Comptes table */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-[#1E2A4A] flex items-center gap-2">
+              <CardTitle className="text-[#0B0F2E] flex items-center gap-2">
                 <Users className="w-5 h-5" />Comptes courants ({comptes.length})
               </CardTitle>
               <Button variant="outline" size="sm" onClick={() => setCreateDialog(true)}>
@@ -292,7 +292,7 @@ export default function CompteCourantPage() {
           {mouvements.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-[#1E2A4A]">Derniers mouvements</CardTitle>
+                <CardTitle className="text-[#0B0F2E]">Derniers mouvements</CardTitle>
               </CardHeader>
               <CardContent className="p-0 overflow-x-auto">
                 <Table>
@@ -343,17 +343,17 @@ export default function CompteCourantPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
-              <CardTitle className="text-[#1E2A4A]">Mouvements — {selectedCompte.nom}</CardTitle>
+              <CardTitle className="text-[#0B0F2E]">Mouvements — {selectedCompte.nom}</CardTitle>
               <p className="text-sm text-gray-500 mt-1">
                 Solde actuel: <span className="font-bold">{fmt(Number(selectedCompte.solde))}</span> MUR
                 {Number(selectedCompte.solde) > 0 ? " (la societe doit a l'associe)" : Number(selectedCompte.solde) < 0 ? " (l'associe doit a la societe)" : ""}
               </p>
             </div>
             <div className="flex gap-2">
-              <Button size="sm" onClick={() => { setFormAvanceCompte(selectedCompte.id); setAvanceDialog(true) }} className="bg-[#C9A84C] text-[#1E2A4A] hover:bg-[#C9A84C]/90">
+              <Button size="sm" onClick={() => { setFormAvanceCompte(selectedCompte.id); setAvanceDialog(true) }} className="bg-[#D4AF37] text-[#0B0F2E] hover:bg-[#D4AF37]/90">
                 <ArrowUpRight className="w-4 h-4 mr-1" />Avance
               </Button>
-              <Button size="sm" onClick={() => { setFormRembCompte(selectedCompte.id); setRemboursementDialog(true) }} className="bg-[#1E2A4A]">
+              <Button size="sm" onClick={() => { setFormRembCompte(selectedCompte.id); setRemboursementDialog(true) }} className="bg-[#0B0F2E]">
                 <ArrowDownLeft className="w-4 h-4 mr-1" />Remboursement
               </Button>
             </div>
@@ -423,7 +423,7 @@ export default function CompteCourantPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateDialog(false)}>Annuler</Button>
-            <Button onClick={handleCreateCompte} disabled={saving || !formNom} className="bg-[#1E2A4A]">
+            <Button onClick={handleCreateCompte} disabled={saving || !formNom} className="bg-[#0B0F2E]">
               {saving ? "Creation..." : "Creer"}
             </Button>
           </DialogFooter>
@@ -482,7 +482,7 @@ export default function CompteCourantPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAvanceDialog(false)}>Annuler</Button>
-            <Button onClick={handleAvance} disabled={saving || !formAvanceCompte || !formAvanceMontant} className="bg-[#C9A84C] text-[#1E2A4A] hover:bg-[#C9A84C]/90">
+            <Button onClick={handleAvance} disabled={saving || !formAvanceCompte || !formAvanceMontant} className="bg-[#D4AF37] text-[#0B0F2E] hover:bg-[#D4AF37]/90">
               {saving ? "Enregistrement..." : "Enregistrer l'avance"}
             </Button>
           </DialogFooter>
@@ -525,7 +525,7 @@ export default function CompteCourantPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRemboursementDialog(false)}>Annuler</Button>
-            <Button onClick={handleRemboursement} disabled={saving || !formRembCompte || !formRembMontant} className="bg-[#1E2A4A]">
+            <Button onClick={handleRemboursement} disabled={saving || !formRembCompte || !formRembMontant} className="bg-[#0B0F2E]">
               {saving ? "Enregistrement..." : "Enregistrer le remboursement"}
             </Button>
           </DialogFooter>

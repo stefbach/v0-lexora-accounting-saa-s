@@ -32,8 +32,8 @@ import {
   ExternalLink,
 } from "lucide-react"
 
-const NAVY = "#1E2A4A"
-const GOLD = "#C9A84C"
+const NAVY = "#0B0F2E"
+const GOLD = "#D4AF37"
 
 function fmt(n: number) {
   return n.toLocaleString("fr-FR", { maximumFractionDigits: 0 }) + " MUR"

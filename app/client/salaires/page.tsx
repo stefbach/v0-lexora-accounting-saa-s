@@ -306,7 +306,7 @@ export default function ClientSalairesPage() {
   if (profileLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#C9A84C" }} />
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#D4AF37" }} />
       </div>
     )
   }
@@ -365,7 +365,7 @@ export default function ClientSalairesPage() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
+          <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>
             Gestion de la paie
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
@@ -407,8 +407,8 @@ export default function ClientSalairesPage() {
               const StepIcon = step.icon
               const isDone = step.done
               const isCurrent = idx === currentStepIdx
-              const bgColor = isDone ? "bg-green-500" : isCurrent ? "bg-[#C9A84C]" : "bg-gray-300"
-              const textColor = isDone ? "text-green-700" : isCurrent ? "text-[#C9A84C]" : "text-gray-400"
+              const bgColor = isDone ? "bg-green-500" : isCurrent ? "bg-[#D4AF37]" : "bg-gray-300"
+              const textColor = isDone ? "text-green-700" : isCurrent ? "text-[#D4AF37]" : "text-gray-400"
               const toggleStep = () => {
                 if (idx === 2) setPeriodClosed(!periodClosed)
                 else if (idx === 3) setVirementDone(!virementDone)
@@ -442,7 +442,7 @@ export default function ClientSalairesPage() {
       {varianceAlerts.length > 0 && (
         <Card className="border border-gray-200">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2" style={{ color: "#1E2A4A" }}>
+            <CardTitle className="text-sm font-semibold flex items-center gap-2" style={{ color: "#0B0F2E" }}>
               <AlertTriangle className="w-4 h-4 text-amber-500" /> Alertes Paie
             </CardTitle>
           </CardHeader>
@@ -470,37 +470,37 @@ export default function ClientSalairesPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Masse salariale brute</CardTitle>
-            <DollarSign className="h-5 w-5" style={{ color: "#1E2A4A" }} />
+            <DollarSign className="h-5 w-5" style={{ color: "#0B0F2E" }} />
           </CardHeader>
           <CardContent>
-            <p className="text-xl font-bold" style={{ color: "#1E2A4A" }}>{fmt(masseSalariale)}</p>
+            <p className="text-xl font-bold" style={{ color: "#0B0F2E" }}>{fmt(masseSalariale)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Employ&eacute;s</CardTitle>
-            <Users className="h-5 w-5" style={{ color: "#C9A84C" }} />
+            <Users className="h-5 w-5" style={{ color: "#D4AF37" }} />
           </CardHeader>
           <CardContent>
-            <p className="text-xl font-bold" style={{ color: "#1E2A4A" }}>{nbEmployes}</p>
+            <p className="text-xl font-bold" style={{ color: "#0B0F2E" }}>{nbEmployes}</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Charges patronales</CardTitle>
-            <TrendingUp className="h-5 w-5" style={{ color: "#C9A84C" }} />
+            <TrendingUp className="h-5 w-5" style={{ color: "#D4AF37" }} />
           </CardHeader>
           <CardContent>
-            <p className="text-xl font-bold" style={{ color: "#C9A84C" }}>{fmt(chargesPatronales)}</p>
+            <p className="text-xl font-bold" style={{ color: "#D4AF37" }}>{fmt(chargesPatronales)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Masse nette</CardTitle>
-            <FileText className="h-5 w-5" style={{ color: "#1E2A4A" }} />
+            <FileText className="h-5 w-5" style={{ color: "#0B0F2E" }} />
           </CardHeader>
           <CardContent>
-            <p className="text-xl font-bold" style={{ color: "#1E2A4A" }}>{fmt(masseNette)}</p>
+            <p className="text-xl font-bold" style={{ color: "#0B0F2E" }}>{fmt(masseNette)}</p>
           </CardContent>
         </Card>
       </div>
@@ -512,7 +512,7 @@ export default function ClientSalairesPage() {
             <div className="flex items-center gap-4">
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Current Period</p>
-                <p className="text-sm font-bold mt-0.5" style={{ color: "#1E2A4A" }}>
+                <p className="text-sm font-bold mt-0.5" style={{ color: "#0B0F2E" }}>
                   {periodeInfo.label}
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">
@@ -583,14 +583,14 @@ export default function ClientSalairesPage() {
         <TabsContent value="bulletins">
           <Card>
             <CardHeader>
-              <CardTitle style={{ color: "#1E2A4A" }}>
+              <CardTitle style={{ color: "#0B0F2E" }}>
                 Bulletins de paie &mdash; {selectedPeriode} ({bulletins.length})
               </CardTitle>
             </CardHeader>
             <CardContent>
               {fetching ? (
                 <div className="flex justify-center py-12">
-                  <Loader2 className="h-6 w-6 animate-spin" style={{ color: "#C9A84C" }} />
+                  <Loader2 className="h-6 w-6 animate-spin" style={{ color: "#D4AF37" }} />
                 </div>
               ) : bulletins.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
@@ -661,7 +661,7 @@ export default function ClientSalairesPage() {
         <TabsContent value="calculer">
           <Card>
             <CardHeader>
-              <CardTitle style={{ color: "#1E2A4A" }}>Calcul de paie</CardTitle>
+              <CardTitle style={{ color: "#0B0F2E" }}>Calcul de paie</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-muted-foreground">
@@ -685,7 +685,7 @@ export default function ClientSalairesPage() {
               <Button
                 onClick={handleCalculerPaie}
                 disabled={calculating || !selectedSociete || periodClosed}
-                style={{ backgroundColor: "#1E2A4A" }}
+                style={{ backgroundColor: "#0B0F2E" }}
                 className="text-white"
               >
                 {calculating ? (
@@ -706,8 +706,8 @@ export default function ClientSalairesPage() {
                 )}
               </Button>
               {bulletins.length > 0 && (
-                <div className="mt-4 p-4 rounded-lg border" style={{ borderColor: "#C9A84C33" }}>
-                  <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>
+                <div className="mt-4 p-4 rounded-lg border" style={{ borderColor: "#D4AF3733" }}>
+                  <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>
                     R&eacute;sultat du dernier calcul
                   </p>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-2">
@@ -740,7 +740,7 @@ export default function ClientSalairesPage() {
             {/* Exports */}
             <Card>
               <CardHeader>
-                <CardTitle style={{ color: "#1E2A4A" }}>Exports MRA</CardTitle>
+                <CardTitle style={{ color: "#0B0F2E" }}>Exports MRA</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <p className="text-sm text-muted-foreground mb-4">
@@ -779,7 +779,7 @@ export default function ClientSalairesPage() {
             {/* Import */}
             <Card>
               <CardHeader>
-                <CardTitle style={{ color: "#1E2A4A" }}>Importer paie</CardTitle>
+                <CardTitle style={{ color: "#0B0F2E" }}>Importer paie</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <p className="text-sm text-muted-foreground mb-4">
@@ -803,7 +803,7 @@ export default function ClientSalairesPage() {
                   <Button
                     onClick={handleImport}
                     disabled={!importFile || importLoading || !selectedSociete}
-                    style={{ backgroundColor: "#C9A84C" }}
+                    style={{ backgroundColor: "#D4AF37" }}
                     className="text-white w-full"
                   >
                     {importLoading ? (

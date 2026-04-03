@@ -15,8 +15,8 @@ import {
 import { useProfile } from "@/hooks/use-profile"
 import Link from "next/link"
 
-const NAVY = "#1E2A4A"
-const GOLD = "#C9A84C"
+const NAVY = "#0B0F2E"
+const GOLD = "#D4AF37"
 
 function formatMUR(n: number) {
   return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -491,7 +491,7 @@ export default function AnnualReturnPage() {
             onClick={handleExportPDF}
             variant="outline"
             style={{ borderColor: GOLD, color: GOLD }}
-            className="hover:bg-[#C9A84C]/10"
+            className="hover:bg-[#D4AF37]/10"
           >
             <FileDown className="h-4 w-4 mr-2" />
             Exporter PDF

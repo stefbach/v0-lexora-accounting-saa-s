@@ -73,7 +73,7 @@ export default function BalancePage() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#1E2A4A]">Balance Générale</h1>
+          <h1 className="text-2xl font-bold text-[#0B0F2E]">Balance Générale</h1>
           <p className="text-sm text-gray-500 mt-1">Soldes débiteurs et créditeurs par compte</p>
         </div>
         <Button variant="outline" className="gap-2"><Download className="w-4 h-4" /> Exporter</Button>
@@ -93,7 +93,7 @@ export default function BalancePage() {
           <Input type="date" className="w-40" value={dateFin} onChange={e => setDateFin(e.target.value)} />
         </div>
         {selectedSociete !== "all" && (
-          <Button onClick={fetchData} className="bg-[#1E2A4A] text-white">Actualiser</Button>
+          <Button onClick={fetchData} className="bg-[#0B0F2E] text-white">Actualiser</Button>
         )}
       </CardContent></Card>
 
@@ -108,7 +108,7 @@ export default function BalancePage() {
           ].map(k => (
             <Card key={k.label}><CardContent className="p-4 flex items-center gap-3">
               <k.icon className={`w-7 h-7 ${k.color}`} />
-              <div><p className="text-xs text-gray-500">{k.label}</p><p className="text-lg font-bold text-[#1E2A4A]">{k.value}</p></div>
+              <div><p className="text-xs text-gray-500">{k.label}</p><p className="text-lg font-bold text-[#0B0F2E]">{k.value}</p></div>
             </CardContent></Card>
           ))}
         </div>
@@ -116,14 +116,14 @@ export default function BalancePage() {
 
       {/* Balance par classe */}
       <Card>
-        <CardHeader><CardTitle className="text-[#1E2A4A] flex items-center gap-2">
+        <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2">
           <Scale className="w-5 h-5" /> Balance par classe
         </CardTitle></CardHeader>
         <CardContent className="p-0">
           {selectedSociete === "all" ? (
             <div className="text-center py-12 text-gray-500">Sélectionnez une société pour afficher la balance</div>
           ) : loading ? (
-            <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-[#1E2A4A]" /></div>
+            <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-[#0B0F2E]" /></div>
           ) : balance.length === 0 ? (
             <div className="text-center py-12 text-gray-500">Aucune écriture comptable enregistrée</div>
           ) : (
@@ -137,10 +137,10 @@ export default function BalancePage() {
                   <div key={classe}>
                     {/* En-tête classe */}
                     <div
-                      className="flex items-center justify-between p-3 bg-[#1E2A4A]/5 cursor-pointer hover:bg-[#1E2A4A]/10"
+                      className="flex items-center justify-between p-3 bg-[#0B0F2E]/5 cursor-pointer hover:bg-[#0B0F2E]/10"
                       onClick={() => toggleClasse(classe)}
                     >
-                      <span className="font-semibold text-[#1E2A4A] text-sm">
+                      <span className="font-semibold text-[#0B0F2E] text-sm">
                         Classe {classe} — {NOMS_CLASSES[classe] || ""}
                         <span className="ml-2 text-xs font-normal text-gray-500">({lignes.length} compte{lignes.length > 1 ? "s" : ""})</span>
                       </span>
@@ -189,7 +189,7 @@ export default function BalancePage() {
                 )
               })}
               {/* Ligne TOTAL GÉNÉRAL */}
-              <div className="flex items-center justify-between p-4 bg-[#1E2A4A] text-white font-bold text-sm">
+              <div className="flex items-center justify-between p-4 bg-[#0B0F2E] text-white font-bold text-sm">
                 <span>TOTAL GÉNÉRAL</span>
                 <div className="flex gap-6">
                   <span>Débit: {fmt(totaux.total_debit)}</span>

@@ -157,7 +157,7 @@ export default function PlanningPage() {
   if (profileLoading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="w-8 h-8 animate-spin text-[#C9A84C]" />
+        <Loader2 className="w-8 h-8 animate-spin text-[#D4AF37]" />
       </div>
     )
   }
@@ -169,12 +169,12 @@ export default function PlanningPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#1E2A4A]">Planning</h1>
+          <h1 className="text-2xl font-bold text-[#0B0F2E]">Planning</h1>
           <p className="text-sm text-gray-500">Planification des horaires hebdomadaires</p>
         </div>
         <Select value={selectedSociete} onValueChange={setSelectedSociete}>
           <SelectTrigger className="w-64">
-            <Building2 className="w-4 h-4 mr-2 text-[#1E2A4A]" />
+            <Building2 className="w-4 h-4 mr-2 text-[#0B0F2E]" />
             <SelectValue placeholder="Societe" />
           </SelectTrigger>
           <SelectContent>
@@ -192,14 +192,14 @@ export default function PlanningPage() {
             <Button variant="outline" size="icon" onClick={() => setWeekOffset(o => o - 1)}>
               <ChevronLeft className="w-4 h-4" />
             </Button>
-            <div className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-[#1E2A4A]/5 min-w-[240px] justify-center">
-              <CalendarDays className="w-4 h-4 text-[#1E2A4A]" />
-              <span className="font-medium text-[#1E2A4A] text-sm">{week.label}</span>
+            <div className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-[#0B0F2E]/5 min-w-[240px] justify-center">
+              <CalendarDays className="w-4 h-4 text-[#0B0F2E]" />
+              <span className="font-medium text-[#0B0F2E] text-sm">{week.label}</span>
             </div>
             <Button variant="outline" size="icon" onClick={() => setWeekOffset(o => o + 1)}>
               <ChevronRight className="w-4 h-4" />
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => setWeekOffset(0)} className="text-xs text-[#C9A84C]">
+            <Button variant="ghost" size="sm" onClick={() => setWeekOffset(0)} className="text-xs text-[#D4AF37]">
               Aujourd&apos;hui
             </Button>
           </div>
@@ -215,7 +215,7 @@ export default function PlanningPage() {
         <CardContent className="p-0 overflow-x-auto">
           {fetching ? (
             <div className="py-16 text-center">
-              <Loader2 className="w-6 h-6 animate-spin mx-auto text-[#C9A84C]" />
+              <Loader2 className="w-6 h-6 animate-spin mx-auto text-[#D4AF37]" />
             </div>
           ) : rows.length === 0 ? (
             <div className="py-16 text-center text-gray-400">
@@ -225,7 +225,7 @@ export default function PlanningPage() {
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-[#1E2A4A] text-white">
+                <tr className="bg-[#0B0F2E] text-white">
                   <th className="text-left px-4 py-3 font-medium w-48">Employe</th>
                   {JOURS.map((j, idx) => {
                     const d = new Date(week.start)
@@ -244,7 +244,7 @@ export default function PlanningPage() {
                   const realIdx = planning.findIndex(p => p.employe.id === row.employe.id)
                   return (
                     <tr key={row.employe.id} className="border-b hover:bg-gray-50/50">
-                      <td className="px-4 py-2 font-medium text-[#1E2A4A] whitespace-nowrap">
+                      <td className="px-4 py-2 font-medium text-[#0B0F2E] whitespace-nowrap">
                         {row.employe.prenom} {row.employe.nom}
                       </td>
                       {row.shifts.map((shift, colIdx) => {
@@ -288,7 +288,7 @@ export default function PlanningPage() {
         {/* Templates */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2">
+            <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
               <Clock className="w-4 h-4" /> Modeles de planning
             </CardTitle>
           </CardHeader>
@@ -296,7 +296,7 @@ export default function PlanningPage() {
             {templates.map(t => (
               <div key={t.id} className="flex items-center justify-between p-3 rounded-lg border bg-gray-50/50">
                 <div>
-                  <p className="font-medium text-sm text-[#1E2A4A]">{t.nom}</p>
+                  <p className="font-medium text-sm text-[#0B0F2E]">{t.nom}</p>
                   <p className="text-xs text-gray-500 mt-0.5">
                     {t.shifts.join(" / ")}
                   </p>
@@ -314,13 +314,13 @@ export default function PlanningPage() {
 
             <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="w-full border-dashed border-[#C9A84C] text-[#C9A84C]">
+                <Button variant="outline" size="sm" className="w-full border-dashed border-[#D4AF37] text-[#D4AF37]">
                   <Save className="w-3.5 h-3.5 mr-1.5" /> Sauvegarder le planning actuel comme modele
                 </Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle className="text-[#1E2A4A]">Sauvegarder comme modele</DialogTitle>
+                  <DialogTitle className="text-[#0B0F2E]">Sauvegarder comme modele</DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-2 py-2">
                   <Label>Nom du modele</Label>
@@ -329,7 +329,7 @@ export default function PlanningPage() {
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setSaveDialogOpen(false)}>Annuler</Button>
-                  <Button className="bg-[#1E2A4A] hover:bg-[#16203a] text-white" onClick={handleSaveTemplate}>Sauvegarder</Button>
+                  <Button className="bg-[#0B0F2E] hover:bg-[#16203a] text-white" onClick={handleSaveTemplate}>Sauvegarder</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -339,7 +339,7 @@ export default function PlanningPage() {
         {/* AI generation */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2">
+            <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
               <Wand2 className="w-4 h-4" /> Generation IA
             </CardTitle>
           </CardHeader>
@@ -348,7 +348,7 @@ export default function PlanningPage() {
               Decrivez le planning souhaite en langage naturel et laissez l&apos;IA remplir la grille.
             </p>
             <textarea
-              className="w-full border rounded-lg p-3 text-sm min-h-[100px] resize-none focus:outline-none focus:ring-2 focus:ring-[#C9A84C]/50"
+              className="w-full border rounded-lg p-3 text-sm min-h-[100px] resize-none focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50"
               placeholder="Ex: Equipe A en matin du lundi au vendredi, equipe B en apres-midi. Week-end repos pour tous sauf Jean qui travaille le samedi matin."
               value={aiPrompt}
               onChange={e => setAiPrompt(e.target.value)}
@@ -356,7 +356,7 @@ export default function PlanningPage() {
             <Button
               onClick={handleAiGenerate}
               disabled={aiLoading || !aiPrompt.trim()}
-              className="w-full bg-[#C9A84C] hover:bg-[#b8963f] text-[#1E2A4A]"
+              className="w-full bg-[#D4AF37] hover:bg-[#b8963f] text-[#0B0F2E]"
             >
               {aiLoading ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <Wand2 className="w-4 h-4 mr-1.5" />}
               Generer

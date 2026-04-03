@@ -38,7 +38,7 @@ export default function MesClientsPage() {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-[#1E2A4A]">Mes Clients</h1>
+        <h1 className="text-2xl font-bold text-[#0B0F2E]">Mes Clients</h1>
         <p className="text-sm text-gray-500">Sociétés dont vous êtes le comptable</p>
       </div>
 
@@ -46,7 +46,7 @@ export default function MesClientsPage() {
       <div className="grid grid-cols-3 gap-4">
         <Card><CardContent className="p-4">
           <p className="text-xs text-gray-500">Sociétés</p>
-          <p className="text-2xl font-bold text-[#1E2A4A]">{societes.length}</p>
+          <p className="text-2xl font-bold text-[#0B0F2E]">{societes.length}</p>
         </CardContent></Card>
         <Card><CardContent className="p-4">
           <p className="text-xs text-gray-500">Docs en attente</p>
@@ -70,11 +70,11 @@ export default function MesClientsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {societes.map(s => (
-            <Card key={s.id} className="hover:shadow-md transition-shadow border-l-4 border-l-[#1E2A4A]">
+            <Card key={s.id} className="hover:shadow-md transition-shadow border-l-4 border-l-[#0B0F2E]">
               <CardContent className="p-5 space-y-3">
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="font-bold text-[#1E2A4A] text-base">{s.nom}</p>
+                    <p className="font-bold text-[#0B0F2E] text-base">{s.nom}</p>
                     {s.brn && <p className="text-xs text-gray-400">BRN : {s.brn}</p>}
                   </div>
                   {badgeAcces(s.type_acces)}

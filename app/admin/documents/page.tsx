@@ -122,7 +122,7 @@ export default function AdminDocumentsPage() {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>Documents</h1>
+        <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>Documents</h1>
         <p className="text-muted-foreground">Suivi des documents de la plateforme (stockage / usage)</p>
       </div>
 
@@ -130,7 +130,7 @@ export default function AdminDocumentsPage() {
       <div className="grid gap-4 sm:grid-cols-4">
         <Card>
           <CardContent className="pt-6">
-            <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>{stats.total}</div>
+            <div className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>{stats.total}</div>
             <p className="text-sm text-muted-foreground">Total documents</p>
           </CardContent>
         </Card>
@@ -210,7 +210,7 @@ export default function AdminDocumentsPage() {
         <CardContent className="p-0 overflow-x-auto">
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#1E2A4A" }} />
+              <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#0B0F2E" }} />
             </div>
           ) : (
             <Table>

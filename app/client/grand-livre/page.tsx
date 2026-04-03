@@ -84,7 +84,7 @@ export default function ClientGrandLivrePage() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#1E2A4A]">Grand Livre</h1>
+          <h1 className="text-2xl font-bold text-[#0B0F2E]">Grand Livre</h1>
           <p className="text-sm text-gray-500">Ecritures comptables avec solde progressif et lettrage</p>
         </div>
         <div className="flex gap-2">
@@ -144,7 +144,7 @@ export default function ClientGrandLivrePage() {
       {selectedSociete === "all" ? (
         <Card><CardContent className="py-16 text-center text-gray-400">Selectionnez une societe</CardContent></Card>
       ) : loading ? (
-        <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-[#1E2A4A]" /></div>
+        <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-[#0B0F2E]" /></div>
       ) : !data ? (
         <Card><CardContent className="py-16 text-center text-gray-400">Erreur de chargement</CardContent></Card>
       ) : (
@@ -152,10 +152,10 @@ export default function ClientGrandLivrePage() {
           {/* KPIs */}
           <div className="grid grid-cols-5 gap-4">
             {hasSoldeOuverture && (
-              <Card className="border-l-4 border-l-[#C9A84C]">
+              <Card className="border-l-4 border-l-[#D4AF37]">
                 <CardContent className="p-4">
                   <p className="text-xs text-gray-500">Report a nouveau</p>
-                  <p className={`text-xl font-bold ${data.solde_ouverture >= 0 ? "text-[#C9A84C]" : "text-red-600"}`}>{fmt(data.solde_ouverture)} MUR</p>
+                  <p className={`text-xl font-bold ${data.solde_ouverture >= 0 ? "text-[#D4AF37]" : "text-red-600"}`}>{fmt(data.solde_ouverture)} MUR</p>
                   <p className="text-xs text-gray-400">{Object.keys(soldeOuvertureParCompte).length} comptes</p>
                 </CardContent>
               </Card>
@@ -163,13 +163,13 @@ export default function ClientGrandLivrePage() {
             <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Total Debit</p><p className="text-xl font-bold text-blue-700">{fmt(data.total_debit)} MUR</p></CardContent></Card>
             <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Total Credit</p><p className="text-xl font-bold text-purple-700">{fmt(data.total_credit)} MUR</p></CardContent></Card>
             <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Solde Cloture</p><p className={`text-xl font-bold ${data.solde_cloture >= 0 ? "text-green-700" : "text-red-600"}`}>{fmt(Math.abs(data.solde_cloture))} MUR</p></CardContent></Card>
-            <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Lettrage</p><p className="text-xl font-bold text-[#1E2A4A]">{lettrage.lettrees} / {lettrage.total}</p><p className="text-xs text-gray-400">{lettrage.non_lettrees} non lettrees</p></CardContent></Card>
+            <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Lettrage</p><p className="text-xl font-bold text-[#0B0F2E]">{lettrage.lettrees} / {lettrage.total}</p><p className="text-xs text-gray-400">{lettrage.non_lettrees} non lettrees</p></CardContent></Card>
           </div>
 
           {/* Tableau */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-3">
-              <CardTitle className="text-[#1E2A4A]">
+              <CardTitle className="text-[#0B0F2E]">
                 Ecritures <span className="ml-2 text-sm font-normal text-gray-500">({data.total} lignes — source: {data.source})</span>
               </CardTitle>
               {data.pages > 1 && (
@@ -225,17 +225,17 @@ export default function ClientGrandLivrePage() {
                         if (openingRows.length === 0) return null
                         return (
                           <>
-                            <TableRow className="bg-[#C9A84C]/10 border-b-2 border-[#C9A84C]/30">
-                              <TableCell colSpan={9} className="text-xs font-bold text-[#1E2A4A] py-2">
+                            <TableRow className="bg-[#D4AF37]/10 border-b-2 border-[#D4AF37]/30">
+                              <TableCell colSpan={9} className="text-xs font-bold text-[#0B0F2E] py-2">
                                 Report a nouveau (soldes d&apos;ouverture)
                               </TableCell>
                             </TableRow>
                             {openingRows.map(row => (
-                              <TableRow key={`opening-${row.compte}`} className="bg-[#C9A84C]/5">
+                              <TableRow key={`opening-${row.compte}`} className="bg-[#D4AF37]/5">
                                 <TableCell className="text-xs font-mono whitespace-nowrap text-gray-400">Ouverture</TableCell>
-                                <TableCell><Badge variant="outline" className="text-[10px] px-1 py-0 border-[#C9A84C] text-[#C9A84C]">RAN</Badge></TableCell>
+                                <TableCell><Badge variant="outline" className="text-[10px] px-1 py-0 border-[#D4AF37] text-[#D4AF37]">RAN</Badge></TableCell>
                                 <TableCell className="text-xs font-mono text-gray-400">--</TableCell>
-                                <TableCell className="text-xs font-mono font-semibold text-[#1E2A4A]">{row.compte}</TableCell>
+                                <TableCell className="text-xs font-mono font-semibold text-[#0B0F2E]">{row.compte}</TableCell>
                                 <TableCell className="text-xs text-gray-500 italic">Solde d&apos;ouverture (report a nouveau)</TableCell>
                                 <TableCell className="text-xs text-right font-mono">{row.solde > 0 ? <span className="text-blue-700">{fmt(row.solde)}</span> : "—"}</TableCell>
                                 <TableCell className="text-xs text-right font-mono">{row.solde < 0 ? <span className="text-purple-700">{fmt(Math.abs(row.solde))}</span> : "—"}</TableCell>
@@ -243,7 +243,7 @@ export default function ClientGrandLivrePage() {
                                 <TableCell><span className="text-gray-300">—</span></TableCell>
                               </TableRow>
                             ))}
-                            <TableRow className="border-b-2 border-[#1E2A4A]/20">
+                            <TableRow className="border-b-2 border-[#0B0F2E]/20">
                               <TableCell colSpan={9} className="py-0.5" />
                             </TableRow>
                           </>
@@ -254,7 +254,7 @@ export default function ClientGrandLivrePage() {
                           <TableCell className="text-xs font-mono whitespace-nowrap">{fmtDate(e.date_ecriture)}</TableCell>
                           <TableCell><Badge variant="outline" className="text-[10px] px-1 py-0">{e.journal || "—"}</Badge></TableCell>
                           <TableCell className="text-xs font-mono text-gray-500">{e.ref_folio || "—"}</TableCell>
-                          <TableCell className="text-xs font-mono font-semibold text-[#1E2A4A]">{e.numero_compte}</TableCell>
+                          <TableCell className="text-xs font-mono font-semibold text-[#0B0F2E]">{e.numero_compte}</TableCell>
                           <TableCell className="text-xs max-w-[200px] truncate text-gray-700">{e.description || e.nom_compte || "—"}</TableCell>
                           <TableCell className="text-xs text-right font-mono">{e.debit_mur > 0 ? <span className="text-blue-700">{fmt(e.debit_mur)}</span> : "—"}</TableCell>
                           <TableCell className="text-xs text-right font-mono">{e.credit_mur > 0 ? <span className="text-purple-700">{fmt(e.credit_mur)}</span> : "—"}</TableCell>

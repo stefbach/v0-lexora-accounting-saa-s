@@ -32,7 +32,7 @@ export default function TestDocuments() {
       {result?.documents?.length > 0 && (
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
-            <tr style={{ background: "#1E2A4A", color: "white" }}>
+            <tr style={{ background: "#0B0F2E", color: "white" }}>
               <th style={{ padding: 8, textAlign: "left" }}>Fichier</th>
               <th style={{ padding: 8 }}>Type</th>
               <th style={{ padding: 8 }}>Statut</th>

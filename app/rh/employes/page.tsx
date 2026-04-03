@@ -54,7 +54,7 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
       </div>
       <DialogFooter>
         <Button variant="outline" onClick={onClose}>Annuler</Button>
-        <Button onClick={handleCreate} disabled={saving} className="bg-[#1E2A4A] text-white">{saving&&<Loader2 className="w-4 h-4 animate-spin mr-2"/>}Créer</Button>
+        <Button onClick={handleCreate} disabled={saving} className="bg-[#0B0F2E] text-white">{saving&&<Loader2 className="w-4 h-4 animate-spin mr-2"/>}Créer</Button>
       </DialogFooter>
     </div>
   )
@@ -109,7 +109,7 @@ function EditEmployeForm({ emp, onSaved, onClose }: { emp: any; onSaved: () => v
       <div><Label>IBAN</Label><Input value={e.iban||""} onChange={ev=>u("iban",ev.target.value)}/></div>
       <DialogFooter className="col-span-2">
         <Button variant="outline" onClick={onClose}>Annuler</Button>
-        <Button onClick={handleSave} disabled={saving} className="bg-[#1E2A4A] text-white">{saving&&<Loader2 className="w-4 h-4 animate-spin mr-2"/>}Enregistrer</Button>
+        <Button onClick={handleSave} disabled={saving} className="bg-[#0B0F2E] text-white">{saving&&<Loader2 className="w-4 h-4 animate-spin mr-2"/>}Enregistrer</Button>
       </DialogFooter>
     </div>
   )
@@ -227,10 +227,10 @@ export default function EmployesPage() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <div><h1 className="text-2xl font-bold text-[#1E2A4A]">Employés</h1><p className="text-sm text-gray-500">{employes.length} employé(s) {filterStatut === "sortis" ? "sorti(s)" : filterStatut === "tous" ? "au total" : "actif(s)"}</p></div>
+        <div><h1 className="text-2xl font-bold text-[#0B0F2E]">Employés</h1><p className="text-sm text-gray-500">{employes.length} employé(s) {filterStatut === "sortis" ? "sorti(s)" : filterStatut === "tous" ? "au total" : "actif(s)"}</p></div>
         <div className="flex gap-2">
         <Dialog open={importOpen} onOpenChange={(v) => { setImportOpen(v); if(!v){ setImportFile(null); setImportResult(null); setImportError(null) } }}>
-          <DialogTrigger asChild><Button variant="outline" className="border-[#1E2A4A] text-[#1E2A4A]"><Upload className="w-4 h-4 mr-2"/>Importer CSV</Button></DialogTrigger>
+          <DialogTrigger asChild><Button variant="outline" className="border-[#0B0F2E] text-[#0B0F2E]"><Upload className="w-4 h-4 mr-2"/>Importer CSV</Button></DialogTrigger>
           <DialogContent className="max-w-lg">
             <DialogHeader><DialogTitle className="flex items-center gap-2"><FileSpreadsheet className="w-5 h-5"/>Importer des employés</DialogTitle></DialogHeader>
             <div className="space-y-4 py-2">
@@ -258,16 +258,16 @@ export default function EmployesPage() {
                 <Input type="file" accept=".csv,.xlsx,.xls" onChange={e => setImportFile(e.target.files?.[0] || null)} className="mt-1"/>
                 <p className="text-xs text-gray-500 mt-1">Colonnes: nom, prenom, email, poste, salaire_base, devise_salaire, date_arrivee, nic, bank_name, bank_account</p>
               </div>
-              <Button variant="ghost" size="sm" onClick={downloadTemplate} className="text-[#1E2A4A]"><Download className="w-4 h-4 mr-2"/>Télécharger modèle CSV</Button>
+              <Button variant="ghost" size="sm" onClick={downloadTemplate} className="text-[#0B0F2E]"><Download className="w-4 h-4 mr-2"/>Télécharger modèle CSV</Button>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={()=>setImportOpen(false)}>Fermer</Button>
-              <Button onClick={handleImport} disabled={importing || !importFile || !importSociete} className="bg-[#1E2A4A] text-white">{importing&&<Loader2 className="w-4 h-4 animate-spin mr-2"/>}Importer</Button>
+              <Button onClick={handleImport} disabled={importing || !importFile || !importSociete} className="bg-[#0B0F2E] text-white">{importing&&<Loader2 className="w-4 h-4 animate-spin mr-2"/>}Importer</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild><Button className="bg-[#1E2A4A] text-white"><Plus className="w-4 h-4 mr-2"/>Nouvel employé</Button></DialogTrigger>
+          <DialogTrigger asChild><Button className="bg-[#0B0F2E] text-white"><Plus className="w-4 h-4 mr-2"/>Nouvel employé</Button></DialogTrigger>
           <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" onOpenAutoFocus={e => e.preventDefault()}>
             <DialogHeader><DialogTitle>Nouvel employé</DialogTitle></DialogHeader>
             <CreateEmployeForm societes={societes} onCreated={load} onClose={() => setDialogOpen(false)} />
@@ -283,9 +283,9 @@ export default function EmployesPage() {
       </CardContent></Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-[#1E2A4A] flex items-center gap-2"><Users className="w-4 h-4"/>Employés ({filtered.length})</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2"><Users className="w-4 h-4"/>Employés ({filtered.length})</CardTitle></CardHeader>
         <CardContent className="p-0 overflow-x-auto">
-          {loading ? <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-[#1E2A4A]"/></div> : filtered.length===0 ? <div className="text-center py-12 text-gray-500">Aucun employé</div> : (
+          {loading ? <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-[#0B0F2E]"/></div> : filtered.length===0 ? <div className="text-center py-12 text-gray-500">Aucun employé</div> : (
             <Table>
               <TableHeader><TableRow><TableHead>Code</TableHead><TableHead>Nom</TableHead><TableHead>Statut</TableHead><TableHead>Poste</TableHead><TableHead>Email</TableHead><TableHead className="text-right">Salaire base</TableHead><TableHead>Banque</TableHead><TableHead>NIC</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
               <TableBody>
@@ -301,8 +301,8 @@ export default function EmployesPage() {
                     <TableCell className="text-xs text-gray-500">{e.nic_number||"—"}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="sm" onClick={(ev)=>{ev.stopPropagation();router.push(`/rh/employes/${e.id}`)}} title="Voir fiche"><ExternalLink className="w-4 h-4 text-[#1E2A4A]"/></Button>
-                        <Button variant="ghost" size="sm" onClick={(ev)=>{ev.stopPropagation();openEdit(e)}} title="Modifier"><Pencil className="w-4 h-4 text-[#C9A84C]"/></Button>
+                        <Button variant="ghost" size="sm" onClick={(ev)=>{ev.stopPropagation();router.push(`/rh/employes/${e.id}`)}} title="Voir fiche"><ExternalLink className="w-4 h-4 text-[#0B0F2E]"/></Button>
+                        <Button variant="ghost" size="sm" onClick={(ev)=>{ev.stopPropagation();openEdit(e)}} title="Modifier"><Pencil className="w-4 h-4 text-[#D4AF37]"/></Button>
                         <Button variant="ghost" size="sm" onClick={(ev)=>{ev.stopPropagation();openAccess(e)}} title="Créer accès utilisateur"><Key className="w-4 h-4 text-purple-600"/></Button>
                       </div>
                     </TableCell>
@@ -326,7 +326,7 @@ export default function EmployesPage() {
       <Dialog open={accessOpen} onOpenChange={o => { setAccessOpen(o); if (!o) { setAccessEmp(null); setAccessResult(null) } }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-[#1E2A4A]">
+            <DialogTitle className="flex items-center gap-2 text-[#0B0F2E]">
               <Key className="w-5 h-5 text-purple-600" />
               Créer un accès utilisateur
             </DialogTitle>
@@ -366,7 +366,7 @@ export default function EmployesPage() {
                 <p className="text-xs text-orange-600 mt-1">Notez ce mot de passe avant de confirmer</p>
               </div>
               <Button onClick={handleCreateAccess} disabled={accessSaving || !accessEmp.email}
-                className="w-full bg-[#1E2A4A] text-white">
+                className="w-full bg-[#0B0F2E] text-white">
                 {accessSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <UserPlus className="w-4 h-4 mr-2" />}
                 Créer le compte
               </Button>

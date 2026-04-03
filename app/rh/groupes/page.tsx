@@ -8,8 +8,8 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, Plus, Trash2, Users, UserPlus, X, Check, ChevronRight } from "lucide-react"
 
-const NAVY = "#1E2A4A"
-const GOLD = "#C9A84C"
+const NAVY = "#0B0F2E"
+const GOLD = "#D4AF37"
 
 export default function GroupesPage() {
   const [societes, setSocietes] = useState<any[]>([])

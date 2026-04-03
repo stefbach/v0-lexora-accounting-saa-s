@@ -454,15 +454,15 @@ export default function PointagePage() {
     <div className="min-h-screen bg-gray-50 p-4 md:p-8 space-y-6 max-w-6xl mx-auto">
       {/* TOP SECTION: Clock + Punch buttons */}
       <Card className="border-0 shadow-lg overflow-hidden">
-        <div className="bg-[#1E2A4A] text-white p-6 md:p-10 text-center">
+        <div className="bg-[#0B0F2E] text-white p-6 md:p-10 text-center">
           <div className="flex items-center justify-center gap-3 mb-2">
-            <Clock className="w-8 h-8 text-[#C9A84C]" />
+            <Clock className="w-8 h-8 text-[#D4AF37]" />
             <span className="text-5xl md:text-7xl font-mono font-bold tracking-wider">
               {now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
             </span>
           </div>
           <p className="text-lg text-gray-300 capitalize">{frenchDate(now)}</p>
-          <p className="text-sm text-[#C9A84C] mt-1">Heure Maurice (UTC+4)</p>
+          <p className="text-sm text-[#D4AF37] mt-1">Heure Maurice (UTC+4)</p>
         </div>
 
         <CardContent className="p-6 space-y-5">
@@ -560,8 +560,8 @@ export default function PointagePage() {
       {employeId && (
         <Card className="border shadow-sm">
           <CardHeader className="pb-3">
-            <CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2">
-              <Clock className="w-5 h-5 text-[#C9A84C]" />
+            <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
+              <Clock className="w-5 h-5 text-[#D4AF37]" />
               Statut du jour
               {(() => {
                 const emp = employes.find((e) => e.id === employeId)
@@ -587,13 +587,13 @@ export default function PointagePage() {
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Duree</p>
-                    <p className="text-2xl font-mono font-semibold text-[#1E2A4A]">
+                    <p className="text-2xl font-mono font-semibold text-[#0B0F2E]">
                       {dureeFmt(selectedEmployeePointage.duree_minutes)}
                     </p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">H. Sup</p>
-                    <p className="text-2xl font-mono font-semibold text-[#C9A84C]">
+                    <p className="text-2xl font-mono font-semibold text-[#D4AF37]">
                       {selectedEmployeePointage.heures_sup
                         ? `${selectedEmployeePointage.heures_sup.toFixed(1)}h`
                         : "--"}
@@ -627,15 +627,15 @@ export default function PointagePage() {
       <Card className="border shadow-sm">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2">
-              <Users className="w-5 h-5 text-[#C9A84C]" />
+            <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
+              <Users className="w-5 h-5 text-[#D4AF37]" />
               Tous les employes -- Aujourd'hui
             </CardTitle>
             <Button
               variant="outline"
               size="sm"
               onClick={() => setShowCalendar(!showCalendar)}
-              className="text-[#1E2A4A] border-[#1E2A4A]/20"
+              className="text-[#0B0F2E] border-[#0B0F2E]/20"
             >
               <Calendar className="w-4 h-4 mr-2" />
               {showCalendar ? "Masquer calendrier" : "Vue mensuelle"}
@@ -645,7 +645,7 @@ export default function PointagePage() {
         <CardContent className="p-0 overflow-x-auto">
           {loading ? (
             <div className="flex justify-center py-12">
-              <Loader2 className="w-6 h-6 animate-spin text-[#1E2A4A]" />
+              <Loader2 className="w-6 h-6 animate-spin text-[#0B0F2E]" />
             </div>
           ) : sortedPointages.length === 0 ? (
             <div className="text-center py-12 text-gray-400">
@@ -656,13 +656,13 @@ export default function PointagePage() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-gray-50">
-                    <TableHead className="font-semibold text-[#1E2A4A]">Employe</TableHead>
-                    <TableHead className="font-semibold text-[#1E2A4A] text-center">Entree</TableHead>
-                    <TableHead className="font-semibold text-[#1E2A4A] text-center">Pause</TableHead>
-                    <TableHead className="font-semibold text-[#1E2A4A] text-center">Sortie</TableHead>
-                    <TableHead className="font-semibold text-[#1E2A4A] text-center">Heures</TableHead>
-                    <TableHead className="font-semibold text-[#1E2A4A] text-center">H. Sup</TableHead>
-                    <TableHead className="font-semibold text-[#1E2A4A] text-center">Statut</TableHead>
+                    <TableHead className="font-semibold text-[#0B0F2E]">Employe</TableHead>
+                    <TableHead className="font-semibold text-[#0B0F2E] text-center">Entree</TableHead>
+                    <TableHead className="font-semibold text-[#0B0F2E] text-center">Pause</TableHead>
+                    <TableHead className="font-semibold text-[#0B0F2E] text-center">Sortie</TableHead>
+                    <TableHead className="font-semibold text-[#0B0F2E] text-center">Heures</TableHead>
+                    <TableHead className="font-semibold text-[#0B0F2E] text-center">H. Sup</TableHead>
+                    <TableHead className="font-semibold text-[#0B0F2E] text-center">Statut</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -736,7 +736,7 @@ export default function PointagePage() {
                         <TableCell className="text-center font-mono">
                           {dureeFmt(p.duree_minutes)}
                         </TableCell>
-                        <TableCell className="text-center font-mono text-[#C9A84C]">
+                        <TableCell className="text-center font-mono text-[#D4AF37]">
                           {p.heures_sup && p.heures_sup > 0
                             ? `${p.heures_sup.toFixed(1)}h`
                             : "--"}
@@ -760,8 +760,8 @@ export default function PointagePage() {
       {showCalendar && (
         <Card className="border shadow-sm">
           <CardHeader className="pb-3">
-            <CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-[#C9A84C]" />
+            <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-[#D4AF37]" />
               Calendrier mensuel
             </CardTitle>
           </CardHeader>
@@ -776,7 +776,7 @@ export default function PointagePage() {
                   <Button variant="outline" size="sm" onClick={() => navigateMonth(-1)}>
                     <ChevronLeft className="w-4 h-4" />
                   </Button>
-                  <span className="text-lg font-semibold text-[#1E2A4A] capitalize">
+                  <span className="text-lg font-semibold text-[#0B0F2E] capitalize">
                     {calendarData.monthLabel}
                   </span>
                   <Button variant="outline" size="sm" onClick={() => navigateMonth(1)}>
@@ -786,7 +786,7 @@ export default function PointagePage() {
 
                 {calLoading ? (
                   <div className="flex justify-center py-8">
-                    <Loader2 className="w-6 h-6 animate-spin text-[#1E2A4A]" />
+                    <Loader2 className="w-6 h-6 animate-spin text-[#0B0F2E]" />
                   </div>
                 ) : (
                   <>
@@ -817,8 +817,8 @@ export default function PointagePage() {
                             key={cell.date}
                             onClick={() => setSelectedCalDay(cell.date === selectedCalDay ? null : cell.date)}
                             className={`aspect-square flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${bg} ${
-                              isToday ? "ring-2 ring-[#C9A84C] ring-offset-1" : ""
-                            } ${selectedCalDay === cell.date ? "ring-2 ring-[#1E2A4A]" : ""}`}
+                              isToday ? "ring-2 ring-[#D4AF37] ring-offset-1" : ""
+                            } ${selectedCalDay === cell.date ? "ring-2 ring-[#0B0F2E]" : ""}`}
                           >
                             {cell.day}
                           </button>
@@ -841,7 +841,7 @@ export default function PointagePage() {
                     {selectedCalDay && (
                       <div className="border rounded-lg p-4 bg-gray-50">
                         <div className="flex items-center justify-between mb-3">
-                          <p className="font-semibold text-[#1E2A4A] capitalize">
+                          <p className="font-semibold text-[#0B0F2E] capitalize">
                             {new Date(selectedCalDay + "T12:00:00").toLocaleDateString("fr-FR", {
                               weekday: "long",
                               day: "numeric",
@@ -868,7 +868,7 @@ export default function PointagePage() {
                             </div>
                             <div>
                               <p className="text-xs text-gray-500 mb-1">Duree</p>
-                              <p className="text-lg font-mono font-semibold text-[#1E2A4A]">
+                              <p className="text-lg font-mono font-semibold text-[#0B0F2E]">
                                 {dureeFmt(selectedDayPointage.duree_minutes)}
                               </p>
                             </div>

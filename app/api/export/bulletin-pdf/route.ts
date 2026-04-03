@@ -33,14 +33,14 @@ export async function GET(request: Request) {
 <meta charset="UTF-8">
 <title>Bulletin de paie — ${emp?.prenom} ${emp?.nom} — ${periode}</title>
 <style>
-  body { font-family: Arial, sans-serif; font-size: 11px; color: #1E2A4A; margin: 20px; }
-  .header { display: flex; justify-content: space-between; margin-bottom: 20px; border-bottom: 2px solid #1E2A4A; padding-bottom: 10px; }
-  .logo { font-size: 18px; font-weight: bold; color: #C9A84C; }
-  h2 { font-size: 14px; text-align: center; margin: 15px 0; background: #1E2A4A; color: white; padding: 8px; }
+  body { font-family: Arial, sans-serif; font-size: 11px; color: #0B0F2E; margin: 20px; }
+  .header { display: flex; justify-content: space-between; margin-bottom: 20px; border-bottom: 2px solid #0B0F2E; padding-bottom: 10px; }
+  .logo { font-size: 18px; font-weight: bold; color: #D4AF37; }
+  h2 { font-size: 14px; text-align: center; margin: 15px 0; background: #0B0F2E; color: white; padding: 8px; }
   table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
   th { background: #f0f4ff; text-align: left; padding: 6px; border: 1px solid #ddd; font-size: 10px; }
   td { padding: 5px 6px; border: 1px solid #eee; }
-  .total-row { background: #1E2A4A; color: white; font-weight: bold; }
+  .total-row { background: #0B0F2E; color: white; font-weight: bold; }
   .net { font-size: 16px; font-weight: bold; color: #22c55e; text-align: right; padding: 10px; background: #f0fff4; border: 2px solid #22c55e; }
   .footer { font-size: 9px; color: #666; text-align: center; margin-top: 20px; border-top: 1px solid #ddd; padding-top: 10px; }
   .section-title { font-weight: bold; background: #e8ecf8; padding: 4px 6px; }

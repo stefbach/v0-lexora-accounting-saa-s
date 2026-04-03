@@ -111,13 +111,13 @@ export default function AlertesPage() {
   if (profile?.role === "client_user") {
     return (
       <div className="p-6 flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-        <h1 className="text-xl font-bold" style={{ color: "#1E2A4A" }}>
+        <h1 className="text-xl font-bold" style={{ color: "#0B0F2E" }}>
           Acces non autorise
         </h1>
         <p className="text-sm text-muted-foreground">
           Vous n&apos;avez pas la permission d&apos;acceder a cette page.
         </p>
-        <Link href="/client/upload" className="text-sm underline" style={{ color: "#C9A84C" }}>
+        <Link href="/client/upload" className="text-sm underline" style={{ color: "#D4AF37" }}>
           Retour a l&apos;envoi de documents
         </Link>
       </div>
@@ -127,7 +127,7 @@ export default function AlertesPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#C9A84C" }} />
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#D4AF37" }} />
       </div>
     )
   }
@@ -189,7 +189,7 @@ export default function AlertesPage() {
               <div className="flex items-center gap-2 mb-1">
                 <h3
                   className={`text-sm ${!alert.lue ? "font-bold" : "font-medium"}`}
-                  style={{ color: "#1E2A4A" }}
+                  style={{ color: "#0B0F2E" }}
                 >
                   {alert.titre}
                 </h3>
@@ -200,7 +200,7 @@ export default function AlertesPage() {
               </div>
               <p className="text-sm text-muted-foreground">{alert.description}</p>
               {alert.montant !== null && (
-                <p className="text-sm font-semibold mt-1" style={{ color: "#1E2A4A" }}>
+                <p className="text-sm font-semibold mt-1" style={{ color: "#0B0F2E" }}>
                   Montant: {formatMUR(alert.montant)}
                 </p>
               )}
@@ -209,7 +209,7 @@ export default function AlertesPage() {
                   Echeance: {formatDate(alert.echeance)}
                 </p>
               )}
-              <p className="text-xs mt-2 font-medium" style={{ color: "#C9A84C" }}>
+              <p className="text-xs mt-2 font-medium" style={{ color: "#D4AF37" }}>
                 {alert.action_requise}
               </p>
             </div>
@@ -254,7 +254,7 @@ export default function AlertesPage() {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
+        <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>
           Mes Alertes
         </h1>
         <p className="text-sm text-muted-foreground mt-1">

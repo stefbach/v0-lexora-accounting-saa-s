@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Users, Clock, Calendar, AlertTriangle, CheckCircle, UserX, Coffee, TrendingUp, Loader2 } from "lucide-react"
 
-const NAVY = "#1E2A4A"
-const GOLD = "#C9A84C"
+const NAVY = "#0B0F2E"
+const GOLD = "#D4AF37"
 
 function fmtH(h: string | null) { return h ? h.slice(0, 5) : "—" }
 

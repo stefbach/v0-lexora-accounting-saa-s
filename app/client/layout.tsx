@@ -10,7 +10,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50">
-        <Loader2 className="h-8 w-8 animate-spin text-[#C9A84C]" />
+        <Loader2 className="h-8 w-8 animate-spin text-[#D4AF37]" />
       </div>
     )
   }

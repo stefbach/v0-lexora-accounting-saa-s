@@ -8,8 +8,8 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, Upload, FileSpreadsheet, CheckCircle, AlertTriangle, Download, Users, Banknote, ChevronDown } from "lucide-react"
 
-const NAVY = "#1E2A4A"
-const GOLD = "#C9A84C"
+const NAVY = "#0B0F2E"
+const GOLD = "#D4AF37"
 function fmt(n: number) { return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(n) }
 
 type Step = "upload" | "preview" | "result"
@@ -163,13 +163,13 @@ export default function ImportPaiePage() {
         <Card>
           <CardContent className="p-8 space-y-4">
             <div
-              className="border-2 border-dashed border-gray-300 rounded-xl p-12 text-center hover:border-[#C9A84C] transition-colors"
-              onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('border-[#C9A84C]', 'bg-[#C9A84C]/5') }}
-              onDragLeave={e => { e.currentTarget.classList.remove('border-[#C9A84C]', 'bg-[#C9A84C]/5') }}
-              onDrop={e => { e.preventDefault(); e.currentTarget.classList.remove('border-[#C9A84C]', 'bg-[#C9A84C]/5'); const f = e.dataTransfer.files[0]; if (f) handleFile(f) }}
+              className="border-2 border-dashed border-gray-300 rounded-xl p-12 text-center hover:border-[#D4AF37] transition-colors"
+              onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('border-[#D4AF37]', 'bg-[#D4AF37]/5') }}
+              onDragLeave={e => { e.currentTarget.classList.remove('border-[#D4AF37]', 'bg-[#D4AF37]/5') }}
+              onDrop={e => { e.preventDefault(); e.currentTarget.classList.remove('border-[#D4AF37]', 'bg-[#D4AF37]/5'); const f = e.dataTransfer.files[0]; if (f) handleFile(f) }}
             >
               {parsing ? (
-                <div><Loader2 className="h-12 w-12 animate-spin mx-auto mb-3 text-[#C9A84C]" /><p className="text-gray-500">Analyse du fichier <strong>{fileName}</strong> en cours...</p></div>
+                <div><Loader2 className="h-12 w-12 animate-spin mx-auto mb-3 text-[#D4AF37]" /><p className="text-gray-500">Analyse du fichier <strong>{fileName}</strong> en cours...</p></div>
               ) : (
                 <div>
                   <FileSpreadsheet className="h-12 w-12 mx-auto mb-3 text-gray-400" />
@@ -185,7 +185,7 @@ export default function ImportPaiePage() {
                 type="file"
                 accept=".xlsx,.xls,.csv"
                 onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }}
-                className="flex-1 text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-[#1E2A4A] file:text-white hover:file:bg-[#2a3d66]"
+                className="flex-1 text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-[#0B0F2E] file:text-white hover:file:bg-[#2a3d66]"
                 disabled={parsing}
               />
               {fileName && !parsing && <Badge variant="outline">{fileName}</Badge>}

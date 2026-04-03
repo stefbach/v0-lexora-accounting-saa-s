@@ -230,7 +230,7 @@ export default function JuridiquePage() {
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       <div>
-        <h1 className="text-2xl font-bold text-[#1E2A4A]">Module Juridique</h1>
+        <h1 className="text-2xl font-bold text-[#0B0F2E]">Module Juridique</h1>
         <p className="text-sm text-gray-500">Contrats de travail — Droit mauricien (WRA 2019, Companies Act 2001)</p>
       </div>
 
@@ -333,7 +333,7 @@ export default function JuridiquePage() {
         <TabsContent value="generer" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-[#1E2A4A] flex items-center gap-2 text-base">
+              <CardTitle className="text-[#0B0F2E] flex items-center gap-2 text-base">
                 <FileText className="w-4 h-4" /> Générer un contrat de travail
               </CardTitle>
             </CardHeader>
@@ -386,7 +386,7 @@ export default function JuridiquePage() {
               <Button
                 onClick={genererContrat}
                 disabled={generating || !genForm.employe_id || !genForm.date_debut || !genForm.salaire}
-                className="bg-[#1E2A4A] text-white"
+                className="bg-[#0B0F2E] text-white"
               >
                 {generating ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Génération en cours...</> : "✨ Générer avec IA"}
               </Button>
@@ -394,7 +394,7 @@ export default function JuridiquePage() {
               {genResult && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold text-[#1E2A4A]">Contrat généré</p>
+                    <p className="text-sm font-semibold text-[#0B0F2E]">Contrat généré</p>
                     <div className="flex gap-2">
                       <Button size="sm" variant="outline" onClick={() => imprimerContrat(genResult)}>
                         <Printer className="w-4 h-4 mr-1" />Imprimer / PDF
@@ -428,7 +428,7 @@ export default function JuridiquePage() {
         <TabsContent value="verifier" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-[#1E2A4A] flex items-center gap-2 text-base">
+              <CardTitle className="text-[#0B0F2E] flex items-center gap-2 text-base">
                 🔍 Vérification de conformité (WRA 2019)
               </CardTitle>
             </CardHeader>
@@ -446,14 +446,14 @@ export default function JuridiquePage() {
               <Button
                 onClick={verifierContrat}
                 disabled={verifying || !verifyText.trim()}
-                className="bg-[#1E2A4A] text-white"
+                className="bg-[#0B0F2E] text-white"
               >
                 {verifying ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Analyse en cours...</> : "🔍 Analyser avec IA"}
               </Button>
 
               {verifyResult && (
                 <div className="space-y-2 mt-4">
-                  <p className="text-sm font-semibold text-[#1E2A4A]">Résultats de conformité</p>
+                  <p className="text-sm font-semibold text-[#0B0F2E]">Résultats de conformité</p>
                   <div className="space-y-1.5">
                     {verifyResult.map((point: any, i: number) => {
                       const isOk = point.statut === "ok" || point.texte?.startsWith("✅")
@@ -501,7 +501,7 @@ export default function JuridiquePage() {
                 key={v}
                 size="sm"
                 variant={viewContrat?.statut === v ? "default" : "outline"}
-                className={`h-7 text-xs ${viewContrat?.statut === v ? "bg-[#1E2A4A] text-white" : ""}`}
+                className={`h-7 text-xs ${viewContrat?.statut === v ? "bg-[#0B0F2E] text-white" : ""}`}
                 disabled={updatingStatut || viewContrat?.statut === v}
                 onClick={() => updateStatut(viewContrat!.id, v)}
               >

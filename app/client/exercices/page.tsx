@@ -16,8 +16,8 @@ import { Loader2, Calendar, Lock, Unlock, ArrowRight, Building2, AlertTriangle, 
 import { useProfile } from "@/hooks/use-profile"
 import Link from "next/link"
 
-const NAVY = "#1E2A4A"
-const GOLD = "#C9A84C"
+const NAVY = "#0B0F2E"
+const GOLD = "#D4AF37"
 
 function fmt(n: number) {
   return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -270,7 +270,7 @@ export default function ExercicesPage() {
                   return (
                     <TableRow
                       key={ex.exercice}
-                      className={isCurrent ? "bg-[#C9A84C]/5 border-l-4 border-l-[#C9A84C]" : ""}
+                      className={isCurrent ? "bg-[#D4AF37]/5 border-l-4 border-l-[#D4AF37]" : ""}
                     >
                       <TableCell className="font-mono font-semibold text-sm" style={{ color: NAVY }}>
                         {ex.exercice}

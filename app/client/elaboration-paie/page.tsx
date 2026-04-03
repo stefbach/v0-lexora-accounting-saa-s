@@ -159,7 +159,7 @@ export default function ElaborationPaiePage() {
   }
 
   if (profileLoading || loading) {
-    return <div className="flex items-center justify-center min-h-[60vh]"><Loader2 className="w-8 h-8 animate-spin text-[#C9A84C]" /></div>
+    return <div className="flex items-center justify-center min-h-[60vh]"><Loader2 className="w-8 h-8 animate-spin text-[#D4AF37]" /></div>
   }
 
   const societeNom = societes.find(s => s.id === selectedSociete)?.nom || ""
@@ -180,7 +180,7 @@ export default function ElaborationPaiePage() {
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#1E2A4A]">Elaboration de la Paie</h1>
+          <h1 className="text-2xl font-bold text-[#0B0F2E]">Elaboration de la Paie</h1>
           <p className="text-sm text-gray-500 mt-1">
             {societeNom && <span className="font-medium">{societeNom}</span>}
             {periode && <span className="ml-2">-- Periode : {MONTHS[parseInt(month) - 1]} {year}</span>}
@@ -202,11 +202,11 @@ export default function ElaborationPaiePage() {
             <div key={s.num} className="flex items-center flex-1 last:flex-none">
               <div className="flex flex-col items-center">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-colors ${
-                  done ? "bg-green-500 border-green-500 text-white" : active ? "bg-[#1E2A4A] border-[#C9A84C] text-[#C9A84C]" : "bg-gray-100 border-gray-300 text-gray-400"
+                  done ? "bg-green-500 border-green-500 text-white" : active ? "bg-[#0B0F2E] border-[#D4AF37] text-[#D4AF37]" : "bg-gray-100 border-gray-300 text-gray-400"
                 }`}>
                   {done ? <CheckCircle className="w-5 h-5" /> : <Icon className="w-5 h-5" />}
                 </div>
-                <span className={`text-xs mt-1 font-medium ${active ? "text-[#1E2A4A]" : done ? "text-green-600" : "text-gray-400"}`}>{s.label}</span>
+                <span className={`text-xs mt-1 font-medium ${active ? "text-[#0B0F2E]" : done ? "text-green-600" : "text-gray-400"}`}>{s.label}</span>
               </div>
               {i < STEPS.length - 1 && <div className={`flex-1 h-0.5 mx-2 ${step > s.num ? "bg-green-400" : "bg-gray-200"}`} />}
             </div>
@@ -217,7 +217,7 @@ export default function ElaborationPaiePage() {
       {/* Step 1: Periode */}
       {step === 1 && (
         <Card>
-          <CardHeader><CardTitle className="flex items-center gap-2 text-[#1E2A4A]"><Calendar className="w-5 h-5 text-[#C9A84C]" />Selectionner la periode de paie</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="flex items-center gap-2 text-[#0B0F2E]"><Calendar className="w-5 h-5 text-[#D4AF37]" />Selectionner la periode de paie</CardTitle></CardHeader>
           <CardContent>
             <div className="flex gap-4 items-end">
               <div className="space-y-1">
@@ -234,7 +234,7 @@ export default function ElaborationPaiePage() {
                   <SelectContent>{[2024, 2025, 2026].map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              <Button onClick={handleStart} className="bg-[#1E2A4A] hover:bg-[#1E2A4A]/90 text-white">
+              <Button onClick={handleStart} className="bg-[#0B0F2E] hover:bg-[#0B0F2E]/90 text-white">
                 <ArrowRight className="w-4 h-4 mr-2" />Demarrer
               </Button>
             </div>
@@ -245,13 +245,13 @@ export default function ElaborationPaiePage() {
       {/* Step 2: Employes */}
       {step === 2 && (
         <Card>
-          <CardHeader><CardTitle className="flex items-center gap-2 text-[#1E2A4A]"><Users className="w-5 h-5 text-[#C9A84C]" />Selection des employes</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="flex items-center gap-2 text-[#0B0F2E]"><Users className="w-5 h-5 text-[#D4AF37]" />Selection des employes</CardTitle></CardHeader>
           <CardContent>
             {processing ? (
-              <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-[#C9A84C]" /><span className="ml-2 text-gray-500">Chargement...</span></div>
+              <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-[#D4AF37]" /><span className="ml-2 text-gray-500">Chargement...</span></div>
             ) : (<>
               <div className="mb-3 flex items-center gap-3">
-                <Badge variant="outline" className="text-[#1E2A4A]">{selected.size} / {employes.length} selectionnes</Badge>
+                <Badge variant="outline" className="text-[#0B0F2E]">{selected.size} / {employes.length} selectionnes</Badge>
                 <Button variant="ghost" size="sm" onClick={() => setSelected(new Set(employes.map(e => e.id)))}>Tout selectionner</Button>
                 <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>Tout deselectionner</Button>
               </div>
@@ -279,7 +279,7 @@ export default function ElaborationPaiePage() {
               </div>
               <div className="mt-4 flex justify-between">
                 <Button variant="outline" onClick={() => setStep(1)}>Retour</Button>
-                <Button onClick={handleValidateEmployees} disabled={selected.size === 0} className="bg-[#1E2A4A] hover:bg-[#1E2A4A]/90 text-white">
+                <Button onClick={handleValidateEmployees} disabled={selected.size === 0} className="bg-[#0B0F2E] hover:bg-[#0B0F2E]/90 text-white">
                   <CheckCircle className="w-4 h-4 mr-2" />Valider ({selected.size})
                 </Button>
               </div>
@@ -291,7 +291,7 @@ export default function ElaborationPaiePage() {
       {/* Step 3: Variables */}
       {step === 3 && (
         <Card>
-          <CardHeader><CardTitle className="flex items-center gap-2 text-[#1E2A4A]"><Calculator className="w-5 h-5 text-[#C9A84C]" />Saisie des variables de paie</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="flex items-center gap-2 text-[#0B0F2E]"><Calculator className="w-5 h-5 text-[#D4AF37]" />Saisie des variables de paie</CardTitle></CardHeader>
           <CardContent>
             <div className="border rounded-lg overflow-x-auto">
               <Table>
@@ -315,7 +315,7 @@ export default function ElaborationPaiePage() {
             </div>
             <div className="mt-4 flex justify-between">
               <Button variant="outline" onClick={() => setStep(2)}>Retour</Button>
-              <Button onClick={handleCalculate} disabled={processing} className="bg-[#C9A84C] hover:bg-[#C9A84C]/90 text-[#1E2A4A] font-semibold">
+              <Button onClick={handleCalculate} disabled={processing} className="bg-[#D4AF37] hover:bg-[#D4AF37]/90 text-[#0B0F2E] font-semibold">
                 {processing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Calculator className="w-4 h-4 mr-2" />}Calculer
               </Button>
             </div>
@@ -327,9 +327,9 @@ export default function ElaborationPaiePage() {
       {step === 4 && (<>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {[
-            { label: "Masse salariale brute", val: summary.masse, border: "border-l-[#1E2A4A]", color: "text-[#1E2A4A]" },
+            { label: "Masse salariale brute", val: summary.masse, border: "border-l-[#0B0F2E]", color: "text-[#0B0F2E]" },
             { label: "Total net a payer", val: summary.totalNet, border: "border-l-green-500", color: "text-green-700" },
-            { label: "Charges patronales", val: summary.charges, border: "border-l-[#C9A84C]", color: "text-[#C9A84C]" },
+            { label: "Charges patronales", val: summary.charges, border: "border-l-[#D4AF37]", color: "text-[#D4AF37]" },
           ].map(c => (
             <Card key={c.label} className={`border-l-4 ${c.border}`}>
               <CardContent className="pt-4">
@@ -340,7 +340,7 @@ export default function ElaborationPaiePage() {
           ))}
         </div>
         <Card>
-          <CardHeader><CardTitle className="flex items-center gap-2 text-[#1E2A4A]"><FileText className="w-5 h-5 text-[#C9A84C]" />Resultats du calcul</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="flex items-center gap-2 text-[#0B0F2E]"><FileText className="w-5 h-5 text-[#D4AF37]" />Resultats du calcul</CardTitle></CardHeader>
           <CardContent>
             <div className="border rounded-lg overflow-x-auto">
               <Table>
@@ -368,7 +368,7 @@ export default function ElaborationPaiePage() {
             </div>
             <div className="mt-4 flex justify-between">
               <Button variant="outline" onClick={() => setStep(3)}>Retour</Button>
-              <Button onClick={() => { setStep(5) }} className="bg-[#1E2A4A] hover:bg-[#1E2A4A]/90 text-white">
+              <Button onClick={() => { setStep(5) }} className="bg-[#0B0F2E] hover:bg-[#0B0F2E]/90 text-white">
                 <CheckCircle className="w-4 h-4 mr-2" />Valider bulletins
               </Button>
             </div>
@@ -379,7 +379,7 @@ export default function ElaborationPaiePage() {
       {/* Step 5: Bulletins */}
       {step === 5 && (
         <Card>
-          <CardHeader><CardTitle className="flex items-center gap-2 text-[#1E2A4A]"><FileSpreadsheet className="w-5 h-5 text-[#C9A84C]" />Bulletins de paie -- {MONTHS[parseInt(month) - 1]} {year}</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="flex items-center gap-2 text-[#0B0F2E]"><FileSpreadsheet className="w-5 h-5 text-[#D4AF37]" />Bulletins de paie -- {MONTHS[parseInt(month) - 1]} {year}</CardTitle></CardHeader>
           <CardContent>
             <div className="space-y-2">
               {resultats.map(r => (
@@ -387,7 +387,7 @@ export default function ElaborationPaiePage() {
                   <div className="flex items-center gap-3">
                     <CheckCircle className="w-5 h-5 text-green-500" />
                     <div>
-                      <p className="font-medium text-[#1E2A4A]">{r.prenom} {r.nom}</p>
+                      <p className="font-medium text-[#0B0F2E]">{r.prenom} {r.nom}</p>
                       <p className="text-sm text-gray-500">Net : {fmt(r.net)}</p>
                     </div>
                   </div>
@@ -404,7 +404,7 @@ export default function ElaborationPaiePage() {
                 <Button variant="outline" onClick={() => window.open(
                   `/api/rh/paie/bulletins-zip?societe_id=${selectedSociete}&periode=${periode}`, "_blank"
                 )}><Download className="w-4 h-4 mr-2" />Telecharger tout</Button>
-                <Button onClick={() => setStep(6)} className="bg-[#1E2A4A] hover:bg-[#1E2A4A]/90 text-white">
+                <Button onClick={() => setStep(6)} className="bg-[#0B0F2E] hover:bg-[#0B0F2E]/90 text-white">
                   <ChevronRight className="w-4 h-4 mr-2" />Exports
                 </Button>
               </div>
@@ -416,18 +416,18 @@ export default function ElaborationPaiePage() {
       {/* Step 6: Exports */}
       {step === 6 && (
         <Card>
-          <CardHeader><CardTitle className="flex items-center gap-2 text-[#1E2A4A]"><Download className="w-5 h-5 text-[#C9A84C]" />Exports et cloture -- {MONTHS[parseInt(month) - 1]} {year}</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="flex items-center gap-2 text-[#0B0F2E]"><Download className="w-5 h-5 text-[#D4AF37]" />Exports et cloture -- {MONTHS[parseInt(month) - 1]} {year}</CardTitle></CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {exportBtn("virement", <Banknote className="w-5 h-5 mr-3 text-[#1E2A4A]" />, "Fichier de virement bancaire", "Format bancaire standard")}
-              {exportBtn("csg", <Calculator className="w-5 h-5 mr-3 text-[#1E2A4A]" />, "Declaration CSG (MRA)", "Contribution Sociale Generalisee")}
-              {exportBtn("paye", <FileText className="w-5 h-5 mr-3 text-[#1E2A4A]" />, "Declaration PAYE (MRA)", "Pay As You Earn")}
-              {exportBtn("compta", <FileSpreadsheet className="w-5 h-5 mr-3 text-[#1E2A4A]" />, "Comptabilisation", "Ecritures comptables de paie")}
+              {exportBtn("virement", <Banknote className="w-5 h-5 mr-3 text-[#0B0F2E]" />, "Fichier de virement bancaire", "Format bancaire standard")}
+              {exportBtn("csg", <Calculator className="w-5 h-5 mr-3 text-[#0B0F2E]" />, "Declaration CSG (MRA)", "Contribution Sociale Generalisee")}
+              {exportBtn("paye", <FileText className="w-5 h-5 mr-3 text-[#0B0F2E]" />, "Declaration PAYE (MRA)", "Pay As You Earn")}
+              {exportBtn("compta", <FileSpreadsheet className="w-5 h-5 mr-3 text-[#0B0F2E]" />, "Comptabilisation", "Ecritures comptables de paie")}
             </div>
             <div className="mt-6 pt-4 border-t flex justify-between items-center">
               <Button variant="outline" onClick={() => setStep(5)}>Retour</Button>
               <Button onClick={handleCloture} disabled={exports.cloture || processing}
-                className={exports.cloture ? "bg-green-600 text-white cursor-not-allowed" : "bg-[#C9A84C] hover:bg-[#C9A84C]/90 text-[#1E2A4A] font-semibold"}>
+                className={exports.cloture ? "bg-green-600 text-white cursor-not-allowed" : "bg-[#D4AF37] hover:bg-[#D4AF37]/90 text-[#0B0F2E] font-semibold"}>
                 {processing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Lock className="w-4 h-4 mr-2" />}
                 {exports.cloture ? "Periode cloturee" : "Cloturer periode"}
               </Button>

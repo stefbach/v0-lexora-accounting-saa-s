@@ -143,7 +143,7 @@ export default function ExportsRHPage() {
   return (
     <div className="p-6 space-y-6 max-w-6xl">
       <div>
-        <h1 className="text-2xl font-bold text-[#1E2A4A]">Exports RH</h1>
+        <h1 className="text-2xl font-bold text-[#0B0F2E]">Exports RH</h1>
         <p className="text-sm text-gray-500">
           Virements bancaires et declarations MRA
         </p>
@@ -191,17 +191,17 @@ export default function ExportsRHPage() {
 
       {societe && (
         <Tabs defaultValue="virement" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 bg-[#1E2A4A]/5">
+          <TabsList className="grid w-full grid-cols-2 bg-[#0B0F2E]/5">
             <TabsTrigger
               value="virement"
-              className="data-[state=active]:bg-[#1E2A4A] data-[state=active]:text-white"
+              className="data-[state=active]:bg-[#0B0F2E] data-[state=active]:text-white"
             >
               <CreditCard className="w-4 h-4 mr-2" />
               Virement bancaire
             </TabsTrigger>
             <TabsTrigger
               value="mra"
-              className="data-[state=active]:bg-[#1E2A4A] data-[state=active]:text-white"
+              className="data-[state=active]:bg-[#0B0F2E] data-[state=active]:text-white"
             >
               <Calculator className="w-4 h-4 mr-2" />
               Export MRA
@@ -398,7 +398,7 @@ function VirementSection({
       {/* Issuing bank account */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-[#1E2A4A] flex items-center gap-2 text-base">
+          <CardTitle className="text-[#0B0F2E] flex items-center gap-2 text-base">
             <Building2 className="w-4 h-4" />
             Compte emetteur
           </CardTitle>
@@ -457,7 +457,7 @@ function VirementSection({
           <Button
             onClick={generer}
             disabled={loadingPreview || !compteEmetteur}
-            className="bg-[#1E2A4A] text-white"
+            className="bg-[#0B0F2E] text-white"
           >
             {loadingPreview ? (
               <Loader2 className="w-4 h-4 animate-spin mr-2" />
@@ -490,7 +490,7 @@ function VirementSection({
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2">
+              <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
                 <Users className="w-4 h-4" />
                 {preview.nb_bulletins_total} bulletin(s) valide(s)
               </CardTitle>
@@ -509,7 +509,7 @@ function VirementSection({
                 <Button
                   onClick={telechargerTous}
                   disabled={loading || !compteEmetteur}
-                  className="bg-[#C9A84C] text-[#1E2A4A] hover:bg-[#C9A84C]/90"
+                  className="bg-[#D4AF37] text-[#0B0F2E] hover:bg-[#D4AF37]/90"
                 >
                   {loading ? (
                     <Loader2 className="w-4 h-4 animate-spin mr-2" />
@@ -524,7 +524,7 @@ function VirementSection({
           <CardContent className="p-0 overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow className="bg-[#1E2A4A]/5">
+                <TableRow className="bg-[#0B0F2E]/5">
                   <TableHead>Banque beneficiaire</TableHead>
                   <TableHead className="text-center">Employes</TableHead>
                   <TableHead className="text-right">Montant total</TableHead>
@@ -779,7 +779,7 @@ function MRASection({
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle className="text-[#1E2A4A] flex items-center gap-2 text-base">
+          <CardTitle className="text-[#0B0F2E] flex items-center gap-2 text-base">
             <Calculator className="w-4 h-4" />
             Export MRA -- CSG/NSF + PAYE
           </CardTitle>
@@ -793,7 +793,7 @@ function MRASection({
             <Button
               onClick={genererExport}
               disabled={loading}
-              className="bg-[#1E2A4A] text-white"
+              className="bg-[#0B0F2E] text-white"
             >
               {loading ? (
                 <Loader2 className="w-4 h-4 animate-spin mr-2" />
@@ -806,7 +806,7 @@ function MRASection({
               <Button
                 onClick={telecharger}
                 variant="outline"
-                className="border-[#C9A84C] text-[#C9A84C] hover:bg-[#C9A84C]/10"
+                className="border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37]/10"
               >
                 <Download className="w-4 h-4 mr-2" />
                 Telecharger CSV
@@ -828,7 +828,7 @@ function MRASection({
       {generated && csgRows.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-[#1E2A4A] text-sm flex items-center gap-2">
+            <CardTitle className="text-[#0B0F2E] text-sm flex items-center gap-2">
               <FileText className="w-4 h-4" />
               Section 1 -- CSG / NSF ({csgRows.length} employes)
             </CardTitle>
@@ -836,7 +836,7 @@ function MRASection({
           <CardContent className="p-0 overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow className="bg-[#1E2A4A]/5 text-xs">
+                <TableRow className="bg-[#0B0F2E]/5 text-xs">
                   <TableHead>Employe</TableHead>
                   <TableHead>NIC</TableHead>
                   <TableHead className="text-right">Salaire brut</TableHead>
@@ -878,7 +878,7 @@ function MRASection({
                 ))}
                 {/* Totals row */}
                 {csgTotals && (
-                  <TableRow className="bg-[#1E2A4A]/5 font-semibold">
+                  <TableRow className="bg-[#0B0F2E]/5 font-semibold">
                     <TableCell colSpan={2}>TOTAL</TableCell>
                     <TableCell className="text-right">
                       {fmtN(csgTotals.total_masse_salariale)}
@@ -910,7 +910,7 @@ function MRASection({
       {generated && payeRows.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-[#1E2A4A] text-sm flex items-center gap-2">
+            <CardTitle className="text-[#0B0F2E] text-sm flex items-center gap-2">
               <FileText className="w-4 h-4" />
               Section 2 -- PAYE ({payeRows.length} employes)
             </CardTitle>
@@ -918,7 +918,7 @@ function MRASection({
           <CardContent className="p-0 overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow className="bg-[#1E2A4A]/5 text-xs">
+                <TableRow className="bg-[#0B0F2E]/5 text-xs">
                   <TableHead>Employe</TableHead>
                   <TableHead>TAN</TableHead>
                   <TableHead className="text-right">Salaire brut</TableHead>
@@ -961,7 +961,7 @@ function MRASection({
                 ))}
                 {/* Totals row */}
                 {payeTotals && (
-                  <TableRow className="bg-[#1E2A4A]/5 font-semibold">
+                  <TableRow className="bg-[#0B0F2E]/5 font-semibold">
                     <TableCell colSpan={2}>TOTAL</TableCell>
                     <TableCell className="text-right">
                       {fmtN(payeTotals.total_salaires_bruts)}

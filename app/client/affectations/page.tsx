@@ -233,11 +233,11 @@ export default function AffectationsPage() {
     <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <div className="w-10 h-10 bg-[#1E2A4A] rounded-lg flex items-center justify-center">
-          <Settings className="w-5 h-5 text-[#C9A84C]" />
+        <div className="w-10 h-10 bg-[#0B0F2E] rounded-lg flex items-center justify-center">
+          <Settings className="w-5 h-5 text-[#D4AF37]" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-[#1E2A4A]">Affectations comptables</h1>
+          <h1 className="text-2xl font-bold text-[#0B0F2E]">Affectations comptables</h1>
           <p className="text-sm text-gray-500">Regles automatiques fournisseur &rarr; compte comptable</p>
         </div>
       </div>
@@ -260,7 +260,7 @@ export default function AffectationsPage() {
         <select
           value={selectedSociete}
           onChange={e => setSelectedSociete(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#C9A84C] focus:border-transparent"
+          className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#D4AF37] focus:border-transparent"
         >
           <option value="">-- Choisir une societe --</option>
           {societes.map(s => (
@@ -275,13 +275,13 @@ export default function AffectationsPage() {
             placeholder="Rechercher..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#C9A84C] focus:border-transparent"
+            className="pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#D4AF37] focus:border-transparent"
           />
         </div>
 
         <button
           onClick={() => setShowAdd(!showAdd)}
-          className="flex items-center gap-2 px-4 py-2 bg-[#1E2A4A] text-white rounded-lg text-sm hover:bg-[#2a3d6b] transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-[#0B0F2E] text-white rounded-lg text-sm hover:bg-[#2a3d6b] transition-colors"
         >
           <Plus className="w-4 h-4" /> Nouvelle affectation
         </button>
@@ -289,7 +289,7 @@ export default function AffectationsPage() {
         <button
           onClick={handleInitDefaults}
           disabled={!selectedSociete}
-          className="flex items-center gap-2 px-4 py-2 bg-[#C9A84C] text-[#1E2A4A] rounded-lg text-sm hover:bg-[#d4b65e] transition-colors font-semibold disabled:opacity-50"
+          className="flex items-center gap-2 px-4 py-2 bg-[#D4AF37] text-[#0B0F2E] rounded-lg text-sm hover:bg-[#d4b65e] transition-colors font-semibold disabled:opacity-50"
         >
           <Zap className="w-4 h-4" /> Initialiser les affectations courantes
         </button>
@@ -298,7 +298,7 @@ export default function AffectationsPage() {
       {/* Add form */}
       {showAdd && (
         <div className="mb-6 p-4 bg-white border border-gray-200 rounded-xl shadow-sm">
-          <h3 className="font-semibold text-[#1E2A4A] mb-3">Nouvelle affectation</h3>
+          <h3 className="font-semibold text-[#0B0F2E] mb-3">Nouvelle affectation</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Fournisseur *</label>
@@ -307,7 +307,7 @@ export default function AffectationsPage() {
                 value={form.fournisseur}
                 onChange={e => setForm({ ...form, fournisseur: e.target.value })}
                 placeholder="Ex: EMTEL"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#C9A84C]"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#D4AF37]"
               />
             </div>
             <div>
@@ -317,7 +317,7 @@ export default function AffectationsPage() {
                 value={form.fournisseur_patterns}
                 onChange={e => setForm({ ...form, fournisseur_patterns: e.target.value })}
                 placeholder="EMTEL, MTML, ORANGE"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#C9A84C]"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#D4AF37]"
               />
             </div>
             <div>
@@ -327,7 +327,7 @@ export default function AffectationsPage() {
                 value={form.compte}
                 onChange={e => setForm({ ...form, compte: e.target.value })}
                 placeholder="626"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#C9A84C]"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#D4AF37]"
               />
             </div>
             <div>
@@ -337,7 +337,7 @@ export default function AffectationsPage() {
                 value={form.libelle_compte}
                 onChange={e => setForm({ ...form, libelle_compte: e.target.value })}
                 placeholder="Telecom"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#C9A84C]"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#D4AF37]"
               />
             </div>
             <div>
@@ -347,7 +347,7 @@ export default function AffectationsPage() {
                 value={form.journal}
                 onChange={e => setForm({ ...form, journal: e.target.value })}
                 placeholder="ACH"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#C9A84C]"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#D4AF37]"
               />
             </div>
             <div>
@@ -357,7 +357,7 @@ export default function AffectationsPage() {
                 value={form.notes}
                 onChange={e => setForm({ ...form, notes: e.target.value })}
                 placeholder="Notes optionnelles"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#C9A84C]"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#D4AF37]"
               />
             </div>
             <div className="flex items-end gap-4">
@@ -366,7 +366,7 @@ export default function AffectationsPage() {
                   type="checkbox"
                   checked={form.auto_lettrage}
                   onChange={e => setForm({ ...form, auto_lettrage: e.target.checked })}
-                  className="rounded border-gray-300 text-[#C9A84C] focus:ring-[#C9A84C]"
+                  className="rounded border-gray-300 text-[#D4AF37] focus:ring-[#D4AF37]"
                 />
                 Auto-lettrage
               </label>
@@ -375,7 +375,7 @@ export default function AffectationsPage() {
                   type="checkbox"
                   checked={form.recurrent}
                   onChange={e => setForm({ ...form, recurrent: e.target.checked })}
-                  className="rounded border-gray-300 text-[#C9A84C] focus:ring-[#C9A84C]"
+                  className="rounded border-gray-300 text-[#D4AF37] focus:ring-[#D4AF37]"
                 />
                 Recurrent
               </label>
@@ -384,7 +384,7 @@ export default function AffectationsPage() {
                   type="checkbox"
                   checked={form.tva_deductible}
                   onChange={e => setForm({ ...form, tva_deductible: e.target.checked })}
-                  className="rounded border-gray-300 text-[#C9A84C] focus:ring-[#C9A84C]"
+                  className="rounded border-gray-300 text-[#D4AF37] focus:ring-[#D4AF37]"
                 />
                 TVA deductible
               </label>
@@ -392,7 +392,7 @@ export default function AffectationsPage() {
             <div className="flex items-end gap-2">
               <button
                 onClick={handleAdd}
-                className="flex items-center gap-1 px-4 py-2 bg-[#1E2A4A] text-white rounded-lg text-sm hover:bg-[#2a3d6b]"
+                className="flex items-center gap-1 px-4 py-2 bg-[#0B0F2E] text-white rounded-lg text-sm hover:bg-[#2a3d6b]"
               >
                 <Save className="w-4 h-4" /> Enregistrer
               </button>
@@ -412,7 +412,7 @@ export default function AffectationsPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-[#1E2A4A] text-white">
+              <tr className="bg-[#0B0F2E] text-white">
                 <th className="px-4 py-3 text-left font-semibold">Fournisseur</th>
                 <th className="px-4 py-3 text-left font-semibold">Patterns</th>
                 <th className="px-4 py-3 text-left font-semibold">Compte</th>
@@ -478,7 +478,7 @@ export default function AffectationsPage() {
                             type="checkbox"
                             checked={editForm.auto_lettrage}
                             onChange={e => setEditForm({ ...editForm, auto_lettrage: e.target.checked })}
-                            className="rounded border-gray-300 text-[#C9A84C]"
+                            className="rounded border-gray-300 text-[#D4AF37]"
                           />
                         </td>
                         <td className="px-4 py-2 text-center">
@@ -486,7 +486,7 @@ export default function AffectationsPage() {
                             type="checkbox"
                             checked={editForm.recurrent}
                             onChange={e => setEditForm({ ...editForm, recurrent: e.target.checked })}
-                            className="rounded border-gray-300 text-[#C9A84C]"
+                            className="rounded border-gray-300 text-[#D4AF37]"
                           />
                         </td>
                         <td className="px-4 py-2 text-center text-gray-400">{aff.nb_utilisations}</td>
@@ -511,18 +511,18 @@ export default function AffectationsPage() {
                       </>
                     ) : (
                       <>
-                        <td className="px-4 py-3 font-medium text-[#1E2A4A]">{aff.fournisseur}</td>
+                        <td className="px-4 py-3 font-medium text-[#0B0F2E]">{aff.fournisseur}</td>
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap gap-1">
                             {(aff.fournisseur_patterns || []).map((p, i) => (
-                              <span key={i} className="inline-block px-2 py-0.5 bg-[#1E2A4A]/10 text-[#1E2A4A] rounded text-xs">
+                              <span key={i} className="inline-block px-2 py-0.5 bg-[#0B0F2E]/10 text-[#0B0F2E] rounded text-xs">
                                 {p}
                               </span>
                             ))}
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          <span className="inline-block px-2 py-0.5 bg-[#C9A84C]/20 text-[#1E2A4A] rounded font-mono text-xs font-bold">
+                          <span className="inline-block px-2 py-0.5 bg-[#D4AF37]/20 text-[#0B0F2E] rounded font-mono text-xs font-bold">
                             {aff.compte}
                           </span>
                         </td>
@@ -542,7 +542,7 @@ export default function AffectationsPage() {
                           )}
                         </td>
                         <td className="px-4 py-3 text-center">
-                          <span className="font-semibold text-[#1E2A4A]">{aff.nb_utilisations}</span>
+                          <span className="font-semibold text-[#0B0F2E]">{aff.nb_utilisations}</span>
                           {aff.derniere_utilisation && (
                             <div className="text-xs text-gray-400">
                               {new Date(aff.derniere_utilisation).toLocaleDateString("fr-FR")}
@@ -553,7 +553,7 @@ export default function AffectationsPage() {
                           <div className="flex items-center justify-end gap-1">
                             <button
                               onClick={() => startEdit(aff)}
-                              className="p-1.5 text-[#C9A84C] hover:bg-[#C9A84C]/10 rounded"
+                              className="p-1.5 text-[#D4AF37] hover:bg-[#D4AF37]/10 rounded"
                               title="Modifier"
                             >
                               <Edit2 className="w-4 h-4" />

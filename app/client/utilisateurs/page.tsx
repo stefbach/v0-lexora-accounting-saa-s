@@ -115,10 +115,10 @@ function PermissionsEditor({ modules, onChange, role }: { modules: ModulesUtilis
   const isCustom = Object.keys(modules).some(k => (modules as Record<string, boolean>)[k] !== (defaults as Record<string, boolean>)[k])
   return (
     <div className="border rounded-lg">
-      <button type="button" onClick={() => setOpen(!open)} className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium text-[#1E2A4A] hover:bg-gray-50 rounded-lg">
+      <button type="button" onClick={() => setOpen(!open)} className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium text-[#0B0F2E] hover:bg-gray-50 rounded-lg">
         <span className="flex items-center gap-2">
           Permissions avancees
-          {isCustom && <Badge className="text-[10px] bg-[#C9A84C]/10 text-[#C9A84C] border-[#C9A84C]/30">Personnalise</Badge>}
+          {isCustom && <Badge className="text-[10px] bg-[#D4AF37]/10 text-[#D4AF37] border-[#D4AF37]/30">Personnalise</Badge>}
         </span>
         {open ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
       </button>
@@ -126,12 +126,12 @@ function PermissionsEditor({ modules, onChange, role }: { modules: ModulesUtilis
         <div className="px-3 pb-3 space-y-2 border-t pt-2">
           <div className="flex items-center justify-between mb-2">
             <p className="text-xs text-gray-500">Modules accessibles pour cet utilisateur</p>
-            <button type="button" onClick={() => onChange(getDefaultModules(role))} className="text-xs text-[#C9A84C] hover:underline">Reinitialiser</button>
+            <button type="button" onClick={() => onChange(getDefaultModules(role))} className="text-xs text-[#D4AF37] hover:underline">Reinitialiser</button>
           </div>
           {MODULE_DEFS.map(({ key, label, icon: Icon }) => (
             <div key={key} className="flex items-center justify-between py-1.5">
               <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                <Icon className="w-4 h-4 text-[#1E2A4A]/60" />
+                <Icon className="w-4 h-4 text-[#0B0F2E]/60" />
                 {label}
               </label>
               <Switch
@@ -426,24 +426,24 @@ export default function UtilisateursPage() {
       {/* ---- HEADER ---- */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-[#1E2A4A] flex items-center justify-center">
-            <Users className="w-5 h-5 text-[#C9A84C]" />
+          <div className="w-10 h-10 rounded-xl bg-[#0B0F2E] flex items-center justify-center">
+            <Users className="w-5 h-5 text-[#D4AF37]" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-[#1E2A4A]">Gestion des utilisateurs</h1>
+            <h1 className="text-2xl font-bold text-[#0B0F2E]">Gestion des utilisateurs</h1>
             <p className="text-sm text-gray-500">{users.length} compte{users.length !== 1 ? "s" : ""} enregistre{users.length !== 1 ? "s" : ""}</p>
           </div>
         </div>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-[#1E2A4A] hover:bg-[#2a3d66] gap-2">
+            <Button className="bg-[#0B0F2E] hover:bg-[#2a3d66] gap-2">
               <UserPlus className="w-4 h-4" /> Creer un compte
             </Button>
           </DialogTrigger>
           {/* Create dialog content rendered below */}
           <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-[#1E2A4A]">
+              <DialogTitle className="flex items-center gap-2 text-[#0B0F2E]">
                 <UserPlus className="w-5 h-5" /> Creer un compte utilisateur
               </DialogTitle>
             </DialogHeader>
@@ -480,7 +480,7 @@ export default function UtilisateursPage() {
                     <p className="text-xs font-medium text-gray-500 mb-2">Guide des rôles RH</p>
                     <div className="space-y-1.5">
                       {HR_ROLE_GUIDE.map(r => (
-                        <div key={r.value} className={`flex items-center gap-2 text-xs px-2 py-1.5 rounded ${r.value === createForm.role ? 'ring-1 ring-[#C9A84C]' : ''}`}>
+                        <div key={r.value} className={`flex items-center gap-2 text-xs px-2 py-1.5 rounded ${r.value === createForm.role ? 'ring-1 ring-[#D4AF37]' : ''}`}>
                           <Badge className={`text-xs border ${r.color} shrink-0`}>{r.label}</Badge>
                           <span className="text-gray-600">{r.desc}</span>
                         </div>
@@ -542,7 +542,7 @@ export default function UtilisateursPage() {
               <Button
                 onClick={handleCreate}
                 disabled={saving || !createForm.prenom || !createForm.nom || !createForm.email || (NEEDS_SOCIETE.includes(createForm.role) && !MULTI_SOCIETE_ROLES.includes(createForm.role) && !createForm.societe_id) || (MULTI_SOCIETE_ROLES.includes(createForm.role) && createForm.societe_ids.length === 0)}
-                className="w-full bg-[#1E2A4A] hover:bg-[#2a3d66]"
+                className="w-full bg-[#0B0F2E] hover:bg-[#2a3d66]"
               >
                 {saving ? "Creation en cours..." : "Creer le compte"}
               </Button>
@@ -574,13 +574,13 @@ export default function UtilisateursPage() {
 
       {/* ---- KPIs ---- */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border-l-4 border-l-[#1E2A4A]">
+        <Card className="border-l-4 border-l-[#0B0F2E]">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <p className="text-sm text-gray-500">Total utilisateurs</p>
-              <Users className="w-5 h-5 text-[#1E2A4A]" />
+              <Users className="w-5 h-5 text-[#0B0F2E]" />
             </div>
-            <p className="text-3xl font-bold text-[#1E2A4A] mt-1">{kpis.total}</p>
+            <p className="text-3xl font-bold text-[#0B0F2E] mt-1">{kpis.total}</p>
           </CardContent>
         </Card>
         <Card className="border-l-4 border-l-emerald-500">
@@ -592,17 +592,17 @@ export default function UtilisateursPage() {
             <p className="text-3xl font-bold text-emerald-700 mt-1">{kpis.activeThisMonth}</p>
           </CardContent>
         </Card>
-        <Card className="border-l-4 border-l-[#C9A84C]">
+        <Card className="border-l-4 border-l-[#D4AF37]">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <p className="text-sm text-gray-500">Par role (top 3)</p>
-              <Shield className="w-5 h-5 text-[#C9A84C]" />
+              <Shield className="w-5 h-5 text-[#D4AF37]" />
             </div>
             <div className="mt-2 space-y-1">
               {kpis.topRoles.map((r) => (
                 <div key={r.value} className="flex items-center justify-between text-sm">
                   <span className="text-gray-600 truncate">{r.label}</span>
-                  <span className="font-semibold text-[#1E2A4A]">{r.count}</span>
+                  <span className="font-semibold text-[#0B0F2E]">{r.count}</span>
                 </div>
               ))}
               {kpis.topRoles.length === 0 && <p className="text-xs text-gray-400">--</p>}
@@ -617,7 +617,7 @@ export default function UtilisateursPage() {
             </div>
             {kpis.latest ? (
               <div className="mt-1">
-                <p className="font-semibold text-[#1E2A4A] text-sm truncate">{kpis.latest.full_name || kpis.latest.email}</p>
+                <p className="font-semibold text-[#0B0F2E] text-sm truncate">{kpis.latest.full_name || kpis.latest.email}</p>
                 <p className="text-xs text-gray-400">{formatDate(kpis.latest.created_at)}</p>
               </div>
             ) : (
@@ -670,20 +670,20 @@ export default function UtilisateursPage() {
               <thead>
                 <tr className="bg-gray-50 border-b text-left">
                   <th className="px-4 py-3 font-semibold text-gray-600">
-                    <button className="flex items-center gap-1 hover:text-[#1E2A4A]" onClick={() => handleSort("full_name")}>
+                    <button className="flex items-center gap-1 hover:text-[#0B0F2E]" onClick={() => handleSort("full_name")}>
                       Nom {sortField === "full_name" ? (sortDir === "asc" ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />) : <ArrowUpDown className="w-3.5 h-3.5 text-gray-300" />}
                     </button>
                   </th>
                   <th className="px-4 py-3 font-semibold text-gray-600">Email</th>
                   <th className="px-4 py-3 font-semibold text-gray-600">
-                    <button className="flex items-center gap-1 hover:text-[#1E2A4A]" onClick={() => handleSort("role")}>
+                    <button className="flex items-center gap-1 hover:text-[#0B0F2E]" onClick={() => handleSort("role")}>
                       Role {sortField === "role" ? (sortDir === "asc" ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />) : <ArrowUpDown className="w-3.5 h-3.5 text-gray-300" />}
                     </button>
                   </th>
                   <th className="px-4 py-3 font-semibold text-gray-600">Societe</th>
                   <th className="px-4 py-3 font-semibold text-gray-600">Statut</th>
                   <th className="px-4 py-3 font-semibold text-gray-600">
-                    <button className="flex items-center gap-1 hover:text-[#1E2A4A]" onClick={() => handleSort("created_at")}>
+                    <button className="flex items-center gap-1 hover:text-[#0B0F2E]" onClick={() => handleSort("created_at")}>
                       Date creation {sortField === "created_at" ? (sortDir === "asc" ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />) : <ArrowUpDown className="w-3.5 h-3.5 text-gray-300" />}
                     </button>
                   </th>
@@ -701,10 +701,10 @@ export default function UtilisateursPage() {
                       >
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-full bg-[#1E2A4A] flex items-center justify-center text-white font-bold text-xs shrink-0">
+                            <div className="w-9 h-9 rounded-full bg-[#0B0F2E] flex items-center justify-center text-white font-bold text-xs shrink-0">
                               {getInitials(user.full_name || user.email)}
                             </div>
-                            <span className="font-medium text-[#1E2A4A]">{user.full_name || "--"}</span>
+                            <span className="font-medium text-[#0B0F2E]">{user.full_name || "--"}</span>
                           </div>
                         </td>
                         <td className="px-4 py-3 text-gray-600">{user.email}</td>
@@ -777,7 +777,7 @@ export default function UtilisateursPage() {
       <Dialog open={editOpen} onOpenChange={(v) => { setEditOpen(v); if (!v) setEditUser(null) }}>
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-[#1E2A4A]">
+            <DialogTitle className="flex items-center gap-2 text-[#0B0F2E]">
               <Pencil className="w-5 h-5" /> Modifier l&apos;utilisateur
             </DialogTitle>
           </DialogHeader>
@@ -842,7 +842,7 @@ export default function UtilisateursPage() {
               />
               <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
                 <div>
-                  <p className="font-medium text-sm text-[#1E2A4A]">Statut du compte</p>
+                  <p className="font-medium text-sm text-[#0B0F2E]">Statut du compte</p>
                   <p className="text-xs text-gray-500">{editForm.actif ? "Le compte est actif" : "Le compte est desactive"}</p>
                 </div>
                 <Button
@@ -855,7 +855,7 @@ export default function UtilisateursPage() {
                   {editForm.actif ? "Actif" : "Inactif"}
                 </Button>
               </div>
-              <Button onClick={handleEdit} disabled={editSaving || !editForm.full_name || !editForm.email} className="w-full bg-[#1E2A4A] hover:bg-[#2a3d66]">
+              <Button onClick={handleEdit} disabled={editSaving || !editForm.full_name || !editForm.email} className="w-full bg-[#0B0F2E] hover:bg-[#2a3d66]">
                 {editSaving ? "Enregistrement..." : "Enregistrer les modifications"}
               </Button>
             </div>

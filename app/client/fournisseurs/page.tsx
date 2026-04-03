@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/table"
 import { Search, Loader2, FileText, AlertTriangle } from "lucide-react"
 
-const NAVY = "#1E2A4A"
+const NAVY = "#0B0F2E"
 function formatMUR(amount: number) {
   return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(amount) + " MUR"
 }

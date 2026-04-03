@@ -91,7 +91,7 @@ export default function AdminParametresPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center p-12">
-        <Loader2 className="w-6 h-6 animate-spin text-[#1E2A4A]" />
+        <Loader2 className="w-6 h-6 animate-spin text-[#0B0F2E]" />
       </div>
     )
   }
@@ -100,10 +100,10 @@ export default function AdminParametresPage() {
     <div className="flex-1 overflow-auto p-6 space-y-6 max-w-3xl">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>Paramètres plateforme</h1>
+          <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>Paramètres plateforme</h1>
           <p className="text-muted-foreground">Configuration persistante de Lexora</p>
         </div>
-        <Button onClick={handleSave} disabled={saving} style={{ backgroundColor: "#C9A84C" }} className="gap-2">
+        <Button onClick={handleSave} disabled={saving} style={{ backgroundColor: "#D4AF37" }} className="gap-2">
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
           Enregistrer tout
         </Button>
@@ -263,7 +263,7 @@ export default function AdminParametresPage() {
       </Card>
 
       <div className="flex justify-end pb-8">
-        <Button onClick={handleSave} disabled={saving} style={{ backgroundColor: "#C9A84C" }} className="gap-2 px-8">
+        <Button onClick={handleSave} disabled={saving} style={{ backgroundColor: "#D4AF37" }} className="gap-2 px-8">
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
           Enregistrer tous les paramètres
         </Button>

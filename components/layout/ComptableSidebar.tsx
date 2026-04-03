@@ -177,7 +177,7 @@ function NavSection({
                 isActive ? "bg-white/10 shadow-sm" : "text-white/70 hover:bg-white/5 hover:text-white",
                 collapsed && "justify-center"
               )}
-              style={isActive ? { color: "#C9A84C" } : undefined}
+              style={isActive ? { color: "#D4AF37" } : undefined}
             >
               <item.icon className="h-4 w-4 shrink-0" />
               {!collapsed && <span>{item.label}</span>}
@@ -238,7 +238,7 @@ export function ComptableSidebar() {
         "sticky top-0 flex h-screen flex-col transition-all duration-300",
         collapsed ? "w-16" : "w-64"
       )}
-      style={{ backgroundColor: "#1E2A4A" }}
+      style={{ backgroundColor: "#0B0F2E" }}
     >
       {/* Logo */}
       <div className="flex h-16 items-center justify-between border-b border-white/10 px-4">
@@ -246,12 +246,12 @@ export function ComptableSidebar() {
           <Link href="/comptable" className="flex items-center gap-2">
             <div
               className="flex h-8 w-8 items-center justify-center rounded-lg"
-              style={{ backgroundColor: "#C9A84C" }}
+              style={{ backgroundColor: "#D4AF37" }}
             >
               <span className="text-sm font-bold text-white">L</span>
             </div>
             <div className="flex flex-col">
-              <span className="text-lg font-semibold" style={{ color: "#C9A84C" }}>
+              <span className="text-lg font-semibold" style={{ color: "#D4AF37" }}>
                 Lexora
               </span>
               <span className="text-[10px] font-medium uppercase tracking-wider text-white/50">
@@ -262,7 +262,7 @@ export function ComptableSidebar() {
         ) : (
           <div
             className="mx-auto flex h-8 w-8 items-center justify-center rounded-lg"
-            style={{ backgroundColor: "#C9A84C" }}
+            style={{ backgroundColor: "#D4AF37" }}
           >
             <span className="text-sm font-bold text-white">L</span>
           </div>

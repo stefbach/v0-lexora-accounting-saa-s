@@ -95,14 +95,14 @@ export default function RapprochementPage() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#1E2A4A]">Rapprochement bancaire</h1>
+          <h1 className="text-2xl font-bold text-[#0B0F2E]">Rapprochement bancaire</h1>
           <p className="text-sm text-gray-500">Rapprocher transactions bancaires et factures — lettrage auto et manuel</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={load} disabled={loading || selectedSociete === "all"}>
             <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />Actualiser
           </Button>
-          <Button onClick={handleAutoMatch} disabled={autoMatching || selectedSociete === "all"} className="bg-[#1E2A4A]">
+          <Button onClick={handleAutoMatch} disabled={autoMatching || selectedSociete === "all"} className="bg-[#0B0F2E]">
             <Zap className={`w-4 h-4 mr-2 ${autoMatching ? "animate-spin" : ""}`} />
             {autoMatching ? "Analyse..." : "Rapprochement auto"}
           </Button>
@@ -122,12 +122,12 @@ export default function RapprochementPage() {
       {selectedSociete === "all" ? (
         <Card><CardContent className="py-16 text-center text-gray-400">Selectionnez une societe</CardContent></Card>
       ) : loading ? (
-        <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-[#1E2A4A]" /></div>
+        <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-[#0B0F2E]" /></div>
       ) : (
         <>
           {/* KPIs */}
           <div className="grid grid-cols-4 gap-4">
-            <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Transactions</p><p className="text-2xl font-bold text-[#1E2A4A]">{transactions.length}</p></CardContent></Card>
+            <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Transactions</p><p className="text-2xl font-bold text-[#0B0F2E]">{transactions.length}</p></CardContent></Card>
             <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Rapprochees</p><p className="text-2xl font-bold text-green-600">{matched.length}</p></CardContent></Card>
             <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Non rapprochees</p><p className="text-2xl font-bold text-red-600">{unmatched.length}</p></CardContent></Card>
             <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Factures en attente</p><p className="text-2xl font-bold text-orange-600">{factures.length}</p></CardContent></Card>
@@ -136,7 +136,7 @@ export default function RapprochementPage() {
           {/* Rapprochees */}
           {matched.length > 0 && (
             <Card>
-              <CardHeader><CardTitle className="text-[#1E2A4A] flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-green-600" />Rapprochees ({matched.length})</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-green-600" />Rapprochees ({matched.length})</CardTitle></CardHeader>
               <CardContent className="p-0 overflow-x-auto">
                 <Table>
                   <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Libelle</TableHead><TableHead className="text-right">Montant</TableHead><TableHead>Tiers</TableHead><TableHead>Lettre</TableHead><TableHead>Action</TableHead></TableRow></TableHeader>
@@ -159,7 +159,7 @@ export default function RapprochementPage() {
 
           {/* Non rapprochees */}
           <Card>
-            <CardHeader><CardTitle className="text-[#1E2A4A] flex items-center gap-2"><AlertCircle className="w-5 h-5 text-orange-500" />Non rapprochees ({unmatched.length})</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2"><AlertCircle className="w-5 h-5 text-orange-500" />Non rapprochees ({unmatched.length})</CardTitle></CardHeader>
             <CardContent className="p-0 overflow-x-auto">
               {unmatched.length === 0 ? (
                 <div className="p-8 text-center text-gray-400">Toutes les transactions sont rapprochees</div>
@@ -170,7 +170,7 @@ export default function RapprochementPage() {
                     {unmatched.map((tx: any) => (
                       <TableRow key={tx.id}>
                         <TableCell className="text-sm">{formatDate(tx.date)}</TableCell>
-                        <TableCell><Badge variant="outline" style={{ borderColor: "#C9A84C" }}>{tx.banque}</Badge></TableCell>
+                        <TableCell><Badge variant="outline" style={{ borderColor: "#D4AF37" }}>{tx.banque}</Badge></TableCell>
                         <TableCell className="text-sm max-w-[200px] truncate">{tx.libelle}</TableCell>
                         <TableCell className="text-right text-sm text-red-600 font-medium">{tx.debit > 0 ? fmt(tx.debit) : "—"}</TableCell>
                         <TableCell className="text-right text-sm text-green-600 font-medium">{tx.credit > 0 ? fmt(tx.credit) : "—"}</TableCell>
@@ -188,7 +188,7 @@ export default function RapprochementPage() {
           {/* Factures en attente */}
           {factures.length > 0 && (
             <Card>
-              <CardHeader><CardTitle className="text-[#1E2A4A] flex items-center gap-2"><ArrowRightLeft className="w-5 h-5" style={{ color: "#C9A84C" }} />Factures en attente ({factures.length})</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2"><ArrowRightLeft className="w-5 h-5" style={{ color: "#D4AF37" }} />Factures en attente ({factures.length})</CardTitle></CardHeader>
               <CardContent className="p-0 overflow-x-auto">
                 <Table>
                   <TableHeader><TableRow><TableHead>N° Facture</TableHead><TableHead>Type</TableHead><TableHead>Tiers</TableHead><TableHead>Date</TableHead><TableHead>Echeance</TableHead><TableHead className="text-right">Montant TTC</TableHead><TableHead>Statut</TableHead></TableRow></TableHeader>

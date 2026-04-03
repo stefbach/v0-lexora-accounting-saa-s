@@ -376,7 +376,7 @@ export default function CongesPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#1E2A4A]">Absences & Conges</h1>
+          <h1 className="text-2xl font-bold text-[#0B0F2E]">Absences & Conges</h1>
           <p className="text-sm text-gray-500">
             Gestion des conges - Workers&apos; Rights Act 2019 (Maurice)
           </p>
@@ -393,7 +393,7 @@ export default function CongesPage() {
               ))}
             </SelectContent>
           </Select>
-          <Button onClick={() => { setDialogOpen(true); setFormError(null) }} className="bg-[#1E2A4A] text-white">
+          <Button onClick={() => { setDialogOpen(true); setFormError(null) }} className="bg-[#0B0F2E] text-white">
             <Plus className="w-4 h-4 mr-2" />Nouvelle demande
           </Button>
         </div>
@@ -476,7 +476,7 @@ export default function CongesPage() {
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle className="text-[#1E2A4A]">
+                <CardTitle className="text-[#0B0F2E]">
                   Soldes de conges par employe - {new Date().getFullYear()}
                 </CardTitle>
                 <Input
@@ -564,7 +564,7 @@ export default function CongesPage() {
         <TabsContent value="demandes">
           <Card>
             <CardHeader>
-              <CardTitle className="text-[#1E2A4A]">
+              <CardTitle className="text-[#0B0F2E]">
                 Demandes en attente de validation
               </CardTitle>
             </CardHeader>
@@ -650,7 +650,7 @@ export default function CongesPage() {
             {/* Employees on approved leave today */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-[#1E2A4A] flex items-center gap-2">
+                <CardTitle className="text-[#0B0F2E] flex items-center gap-2">
                   <Calendar className="w-5 h-5 text-blue-500" />
                   En conge aujourd&apos;hui ({new Date().toLocaleDateString("fr-FR")})
                 </CardTitle>
@@ -696,7 +696,7 @@ export default function CongesPage() {
             {/* Employees with no leave (potential unplanned absences) */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-[#1E2A4A] flex items-center gap-2">
+                <CardTitle className="text-[#0B0F2E] flex items-center gap-2">
                   <AlertTriangle className="w-5 h-5 text-yellow-500" />
                   Employes sans conge approuve ({employesSansConge.length})
                 </CardTitle>
@@ -774,7 +774,7 @@ export default function CongesPage() {
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle className="text-[#1E2A4A]">Historique des conges</CardTitle>
+                <CardTitle className="text-[#0B0F2E]">Historique des conges</CardTitle>
                 <div className="flex gap-2">
                   <Input
                     placeholder="Rechercher..."
@@ -928,7 +928,7 @@ export default function CongesPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Annuler</Button>
-            <Button onClick={handleCreate} disabled={saving} className="bg-[#1E2A4A] text-white">
+            <Button onClick={handleCreate} disabled={saving} className="bg-[#0B0F2E] text-white">
               {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
               Soumettre la demande
             </Button>

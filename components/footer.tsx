@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { LexoraLogo } from "@/components/LexoraLogo"
 
 const navigation = {
   produit: [
@@ -18,29 +19,25 @@ const navigation = {
 
 export function Footer() {
   return (
-    <footer className="border-t border-border bg-background">
+    <footer style={{ backgroundColor: "#0B0F2E", borderTop: "1px solid #1E2760" }}>
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
           <div>
-            <Link href="/" className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-                <span className="text-sm font-bold text-primary-foreground">L</span>
-              </div>
-              <span className="text-xl font-semibold tracking-tight text-foreground">Lexora</span>
-            </Link>
-            <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
+            <LexoraLogo href="/" size="sm" />
+            <p className="mt-4 text-sm leading-relaxed" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif", fontWeight: 300, lineHeight: 1.7 }}>
               Logiciel de comptabilité moderne pour les entreprises, comptables et leurs clients à Maurice.
             </p>
           </div>
 
           <div>
-            <h3 className="text-sm font-semibold text-foreground">Produit</h3>
+            <h3 className="text-sm font-semibold" style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif", fontWeight: 500 }}>Produit</h3>
             <ul className="mt-4 space-y-3">
               {navigation.produit.map((item) => (
                 <li key={item.name}>
                   <Link
                     href={item.href}
-                    className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                    className="text-sm transition-colors hover:text-[#E8EAFC]"
+                    style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif", fontWeight: 300 }}
                   >
                     {item.name}
                   </Link>
@@ -50,13 +47,14 @@ export function Footer() {
           </div>
 
           <div>
-            <h3 className="text-sm font-semibold text-foreground">Entreprise</h3>
+            <h3 className="text-sm font-semibold" style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif", fontWeight: 500 }}>Entreprise</h3>
             <ul className="mt-4 space-y-3">
               {navigation.entreprise.map((item) => (
                 <li key={item.name}>
                   <Link
                     href={item.href}
-                    className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                    className="text-sm transition-colors hover:text-[#E8EAFC]"
+                    style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif", fontWeight: 300 }}
                   >
                     {item.name}
                   </Link>
@@ -66,13 +64,14 @@ export function Footer() {
           </div>
 
           <div>
-            <h3 className="text-sm font-semibold text-foreground">Légal</h3>
+            <h3 className="text-sm font-semibold" style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif", fontWeight: 500 }}>Légal</h3>
             <ul className="mt-4 space-y-3">
               {navigation.legal.map((item) => (
                 <li key={item.name}>
                   <Link
                     href={item.href}
-                    className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                    className="text-sm transition-colors hover:text-[#E8EAFC]"
+                    style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif", fontWeight: 300 }}
                   >
                     {item.name}
                   </Link>
@@ -82,8 +81,8 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="mt-12 border-t border-border pt-8">
-          <p className="text-center text-sm text-muted-foreground">
+        <div className="mt-12 pt-8" style={{ borderTop: "1px solid #1E2760" }}>
+          <p className="text-center text-sm" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif", fontWeight: 300 }}>
             &copy; {new Date().getFullYear()} Lexora. Tous droits réservés.
           </p>
         </div>

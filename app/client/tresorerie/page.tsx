@@ -34,7 +34,7 @@ function AccessDenied() {
       <Card className="border-orange-200 bg-orange-50">
         <CardContent className="py-12 text-center space-y-4">
           <Lock className="h-12 w-12 mx-auto text-orange-400" />
-          <h2 className="text-lg font-semibold" style={{ color: "#1E2A4A" }}>Acces reserve</h2>
+          <h2 className="text-lg font-semibold" style={{ color: "#0B0F2E" }}>Acces reserve</h2>
           <p className="text-sm text-muted-foreground max-w-md mx-auto">
             Cette page est reservee au responsable de l{"'"}entreprise.
           </p>
@@ -126,7 +126,7 @@ function TresorerieView() {
   }
 
   if (fetching) {
-    return <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin" style={{ color: "#C9A84C" }} /></div>
+    return <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin" style={{ color: "#D4AF37" }} /></div>
   }
 
   const bankAccounts: any[] = data?.bankAccounts ?? []
@@ -170,7 +170,7 @@ function TresorerieView() {
     <div className="p-6 space-y-6 max-w-6xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>Ma Tresorerie</h1>
+          <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>Ma Tresorerie</h1>
           <p className="text-sm text-muted-foreground mt-1">Situation financiere consolidee en temps reel</p>
         </div>
         <div className="flex items-center gap-3">
@@ -195,7 +195,7 @@ function TresorerieView() {
 
       {/* Taux de change en temps réel */}
       {hasMultiCurrency && Object.keys(rates).length > 0 && (
-        <Card className="bg-gradient-to-r from-[#1E2A4A] to-[#2a3d6b]">
+        <Card className="bg-gradient-to-r from-[#0B0F2E] to-[#2a3d6b]">
           <CardContent className="py-4">
             <div className="flex items-center gap-6 flex-wrap">
               <p className="text-xs font-semibold text-white/60 uppercase tracking-wider">Taux de change (MRA)</p>
@@ -203,7 +203,7 @@ function TresorerieView() {
                 <div key={d} className="flex items-center gap-2">
                   <span className="text-white font-bold text-sm">1 {d}</span>
                   <span className="text-white/60">=</span>
-                  <span className="text-[#C9A84C] font-bold text-sm">{rates[d].toFixed(2)} MUR</span>
+                  <span className="text-[#D4AF37] font-bold text-sm">{rates[d].toFixed(2)} MUR</span>
                 </div>
               ) : null)}
               <span className="text-white/40 text-xs ml-auto">Mise a jour automatique toutes les 5 min</span>
@@ -217,12 +217,12 @@ function TresorerieView() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <Banknote className="h-4 w-4" style={{ color: "#C9A84C" }} />
+              <Banknote className="h-4 w-4" style={{ color: "#D4AF37" }} />
               Solde consolide (MUR)
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold" style={{ color: "#1E2A4A" }}>
+            <p className="text-3xl font-bold" style={{ color: "#0B0F2E" }}>
               {totalBankMUR > 0 ? formatMUR(Math.round(totalBankMUR)) : "—"}
             </p>
             <p className="text-xs text-muted-foreground mt-1">{bankAccounts.length} compte{bankAccounts.length !== 1 ? "s" : ""} actif{bankAccounts.length !== 1 ? "s" : ""}</p>
@@ -262,7 +262,7 @@ function TresorerieView() {
       {bfr && (
         <Card className="border-l-4 border-l-indigo-500">
           <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-base" style={{ color: "#1E2A4A" }}>
+            <CardTitle className="flex items-center gap-2 text-base" style={{ color: "#0B0F2E" }}>
               <ArrowDownUp className="h-5 w-5 text-indigo-500" />
               Besoin en Fonds de Roulement (BFR)
             </CardTitle>
@@ -282,7 +282,7 @@ function TresorerieView() {
                 <p className="text-xl font-bold text-red-700">- {formatMUR(Math.round(bfr.dettes_fournisseurs))}</p>
               </div>
               <div className={`p-3 rounded-lg ${bfr.bfr >= 0 ? "bg-indigo-50" : "bg-green-50"}`}>
-                <p className="text-xs font-medium" style={{ color: "#1E2A4A" }}>BFR</p>
+                <p className="text-xs font-medium" style={{ color: "#0B0F2E" }}>BFR</p>
                 <p className={`text-2xl font-bold ${bfr.bfr >= 0 ? "text-indigo-700" : "text-green-700"}`}>
                   {formatMUR(Math.round(bfr.bfr))}
                 </p>
@@ -295,7 +295,7 @@ function TresorerieView() {
             {/* Trésorerie nette = Solde bancaire - BFR */}
             <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
               <div>
-                <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>Trésorerie nette</p>
+                <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>Trésorerie nette</p>
                 <p className="text-xs text-muted-foreground">Solde bancaire consolidé − BFR</p>
               </div>
               <div className="text-right">
@@ -317,7 +317,7 @@ function TresorerieView() {
       {data && (
         <Card className="border-l-4 border-l-emerald-500">
           <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-base" style={{ color: "#1E2A4A" }}>
+            <CardTitle className="flex items-center gap-2 text-base" style={{ color: "#0B0F2E" }}>
               <TrendingUp className="h-5 w-5 text-emerald-500" />
               Flux de Trésorerie
             </CardTitle>
@@ -363,8 +363,8 @@ function TresorerieView() {
       {/* Comptes bancaires avec conversion temps réel */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2" style={{ color: "#1E2A4A" }}>
-            <Wallet className="h-5 w-5" style={{ color: "#C9A84C" }} />
+          <CardTitle className="flex items-center gap-2" style={{ color: "#0B0F2E" }}>
+            <Wallet className="h-5 w-5" style={{ color: "#D4AF37" }} />
             Comptes bancaires ({bankAccounts.length})
           </CardTitle>
         </CardHeader>
@@ -395,7 +395,7 @@ function TresorerieView() {
                   return (
                     <TableRow key={acc.id || acc.nom_compte}>
                       <TableCell>
-                        <Badge variant="outline" style={{ borderColor: "#C9A84C", color: "#C9A84C" }}>{acc.banque}</Badge>
+                        <Badge variant="outline" style={{ borderColor: "#D4AF37", color: "#D4AF37" }}>{acc.banque}</Badge>
                       </TableCell>
                       <TableCell className="font-mono text-sm text-muted-foreground">{acc.numero_compte || acc.nom_compte || "—"}</TableCell>
                       <TableCell><Badge variant="secondary">{devise}</Badge></TableCell>
@@ -403,7 +403,7 @@ function TresorerieView() {
                       <TableCell className="text-right text-sm text-muted-foreground">
                         {devise !== "MUR" ? `1 ${devise} = ${taux.toFixed(2)} MUR` : "—"}
                       </TableCell>
-                      <TableCell className="text-right font-bold" style={{ color: "#1E2A4A" }}>
+                      <TableCell className="text-right font-bold" style={{ color: "#0B0F2E" }}>
                         {formatMUR(Math.round(soldeMur * 100) / 100)}
                       </TableCell>
                     </TableRow>
@@ -411,7 +411,7 @@ function TresorerieView() {
                 })}
                 <TableRow className="bg-muted/30 font-bold">
                   <TableCell colSpan={5} className="text-right">Total consolide IAS 21</TableCell>
-                  <TableCell className="text-right text-lg" style={{ color: "#1E2A4A" }}>{formatMUR(Math.round(totalBankMUR))}</TableCell>
+                  <TableCell className="text-right text-lg" style={{ color: "#0B0F2E" }}>{formatMUR(Math.round(totalBankMUR))}</TableCell>
                 </TableRow>
               </TableBody>
             </Table>
@@ -422,8 +422,8 @@ function TresorerieView() {
       {/* Transactions avec devise + MUR */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2" style={{ color: "#1E2A4A" }}>
-            <ArrowDownUp className="h-5 w-5" style={{ color: "#C9A84C" }} />
+          <CardTitle className="flex items-center gap-2" style={{ color: "#0B0F2E" }}>
+            <ArrowDownUp className="h-5 w-5" style={{ color: "#D4AF37" }} />
             Transactions bancaires ({transactions.length})
           </CardTitle>
         </CardHeader>
@@ -487,7 +487,7 @@ function TresorerieView() {
       {anomalies.length > 0 && (
         <Card className="border-orange-200">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2" style={{ color: "#1E2A4A" }}>
+            <CardTitle className="flex items-center gap-2" style={{ color: "#0B0F2E" }}>
               <AlertTriangle className="h-5 w-5 text-orange-500" />
               Anomalies ({anomalies.length})
             </CardTitle>
@@ -532,7 +532,7 @@ function TresorerieView() {
 // ---------------------------------------------------------------------------
 export default function TresoreriePage() {
   const { profile, loading } = useProfile()
-  if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin" style={{ color: "#C9A84C" }} /></div>
+  if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin" style={{ color: "#D4AF37" }} /></div>
   if (profile?.role === "client_user") return <AccessDenied />
   return <TresorerieView />
 }

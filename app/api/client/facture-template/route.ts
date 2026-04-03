@@ -77,8 +77,8 @@ export async function POST(request: Request) {
       const { data, error } = await supabase.from('facture_templates').upsert({
         societe_id: societe_id || null,
         nom: template.nom_template || `Template ${file.name}`,
-        couleur_primaire: template.couleur_primaire || '#1E2A4A',
-        couleur_secondaire: template.couleur_secondaire || '#C9A84C',
+        couleur_primaire: template.couleur_primaire || '#0B0F2E',
+        couleur_secondaire: template.couleur_secondaire || '#D4AF37',
         logo_position: template.logo_position || 'top-left',
         entete_html: template.entete_html || '',
         pied_page_html: template.pied_page_html || '',

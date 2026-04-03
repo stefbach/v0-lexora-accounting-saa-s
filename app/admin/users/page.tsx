@@ -60,10 +60,10 @@ function PermissionsEditor({ modules, onChange, role }: { modules: ModulesUtilis
   const isCustom = Object.keys(modules).some(k => (modules as Record<string, boolean>)[k] !== (defaults as Record<string, boolean>)[k])
   return (
     <div className="border rounded-lg">
-      <button type="button" onClick={() => setOpen(!open)} className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium text-[#1E2A4A] hover:bg-gray-50 rounded-lg">
+      <button type="button" onClick={() => setOpen(!open)} className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium text-[#0B0F2E] hover:bg-gray-50 rounded-lg">
         <span className="flex items-center gap-2">
           Permissions avancees
-          {isCustom && <Badge className="text-[10px] bg-[#C9A84C]/10 text-[#C9A84C] border-[#C9A84C]/30">Personnalise</Badge>}
+          {isCustom && <Badge className="text-[10px] bg-[#D4AF37]/10 text-[#D4AF37] border-[#D4AF37]/30">Personnalise</Badge>}
         </span>
         {open ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
       </button>
@@ -71,12 +71,12 @@ function PermissionsEditor({ modules, onChange, role }: { modules: ModulesUtilis
         <div className="px-3 pb-3 space-y-2 border-t pt-2">
           <div className="flex items-center justify-between mb-2">
             <p className="text-xs text-gray-500">Modules accessibles pour cet utilisateur</p>
-            <button type="button" onClick={() => onChange(getDefaultModules(role))} className="text-xs text-[#C9A84C] hover:underline">Reinitialiser</button>
+            <button type="button" onClick={() => onChange(getDefaultModules(role))} className="text-xs text-[#D4AF37] hover:underline">Reinitialiser</button>
           </div>
           {MODULE_DEFS.map(({ key, label, icon: Icon }) => (
             <div key={key} className="flex items-center justify-between py-1.5">
               <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                <Icon className="w-4 h-4 text-[#1E2A4A]/60" />
+                <Icon className="w-4 h-4 text-[#0B0F2E]/60" />
                 {label}
               </label>
               <Switch
@@ -198,12 +198,12 @@ export default function UsersPage() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#1E2A4A]">Utilisateurs</h1>
+          <h1 className="text-2xl font-bold text-[#0B0F2E]">Utilisateurs</h1>
           <p className="text-sm text-gray-500">{users.length} compte{users.length !== 1 ? 's' : ''} au total</p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-[#1E2A4A]">+ Créer un compte</Button>
+            <Button className="bg-[#0B0F2E]">+ Créer un compte</Button>
           </DialogTrigger>
           <DialogContent className="max-w-md">
             <DialogHeader><DialogTitle>Créer un compte utilisateur</DialogTitle></DialogHeader>
@@ -273,7 +273,7 @@ export default function UsersPage() {
                 </div>
                 <p className="text-xs text-orange-600 mt-1">⚠️ Notez ce mot de passe — il ne sera plus affiché après création</p>
               </div>
-              <Button onClick={creer} disabled={saving || !form.prenom || !form.nom || !form.email || (['rh','juridique','employe','manager','direction'].includes(form.role) && !form.societe_id)} className="w-full bg-[#1E2A4A]">
+              <Button onClick={creer} disabled={saving || !form.prenom || !form.nom || !form.email || (['rh','juridique','employe','manager','direction'].includes(form.role) && !form.societe_id)} className="w-full bg-[#0B0F2E]">
                 {saving ? 'Création...' : 'Créer le compte'}
               </Button>
             </div>
@@ -294,12 +294,12 @@ export default function UsersPage() {
 
       {/* Stats par rôle */}
       <div className="flex flex-wrap gap-2">
-        <button onClick={() => setFilterRole('all')} className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${filterRole === 'all' ? 'bg-[#1E2A4A] text-white border-[#1E2A4A]' : 'border-gray-200 hover:border-gray-300'}`}>
+        <button onClick={() => setFilterRole('all')} className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${filterRole === 'all' ? 'bg-[#0B0F2E] text-white border-[#0B0F2E]' : 'border-gray-200 hover:border-gray-300'}`}>
           Tous ({users.length})
         </button>
         {stats.filter(s => s.count > 0).map(s => (
           <button key={s.value} onClick={() => setFilterRole(s.value)}
-            className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${filterRole === s.value ? 'bg-[#1E2A4A] text-white border-[#1E2A4A]' : 'border-gray-200 hover:border-gray-300'}`}>
+            className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${filterRole === s.value ? 'bg-[#0B0F2E] text-white border-[#0B0F2E]' : 'border-gray-200 hover:border-gray-300'}`}>
             {s.label} ({s.count})
           </button>
         ))}
@@ -321,7 +321,7 @@ export default function UsersPage() {
               <CardContent className="p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-[#1E2A4A] flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                    <div className="w-10 h-10 rounded-full bg-[#0B0F2E] flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
                       {(u.full_name || u.email).slice(0,2).toUpperCase()}
                     </div>
                     <div>

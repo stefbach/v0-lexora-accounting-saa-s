@@ -80,7 +80,7 @@ function DepartureForm({ societes, onCalculated }: {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-[#1E2A4A] flex items-center gap-2">
+        <CardTitle className="text-[#0B0F2E] flex items-center gap-2">
           <UserMinus className="w-5 h-5" />
           Nouveau départ
         </CardTitle>
@@ -167,7 +167,7 @@ function DepartureForm({ societes, onCalculated }: {
           <Button
             onClick={handleCalculer}
             disabled={loading || !employeId || !dateDepart || !typeDepart}
-            className="bg-[#1E2A4A] text-white"
+            className="bg-[#0B0F2E] text-white"
           >
             {loading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
             <Calculator className="w-4 h-4 mr-2" />
@@ -190,10 +190,10 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
   const anc = breakdown.anciennete
 
   return (
-    <Card className="border-2 border-[#C9A84C]">
-      <CardHeader className="bg-[#1E2A4A] text-white rounded-t-lg">
+    <Card className="border-2 border-[#D4AF37]">
+      <CardHeader className="bg-[#0B0F2E] text-white rounded-t-lg">
         <CardTitle className="flex items-center gap-2">
-          <Banknote className="w-5 h-5 text-[#C9A84C]" />
+          <Banknote className="w-5 h-5 text-[#D4AF37]" />
           Solde de tout compte — {emp.prenom} {emp.nom}
         </CardTitle>
         <p className="text-white/70 text-sm">
@@ -205,7 +205,7 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
         <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg">
           <Clock className="w-5 h-5 text-blue-600" />
           <div>
-            <p className="font-semibold text-[#1E2A4A]">Ancienneté</p>
+            <p className="font-semibold text-[#0B0F2E]">Ancienneté</p>
             <p className="text-sm text-gray-600">{anc.label}</p>
           </div>
           <Badge variant="outline" className="ml-auto border-blue-300 text-blue-700">
@@ -296,11 +296,11 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
             )}
 
             {/* TOTAL */}
-            <TableRow className="bg-[#1E2A4A]">
+            <TableRow className="bg-[#0B0F2E]">
               <TableCell className="font-bold text-white text-base" colSpan={2}>
                 TOTAL SOLDE DE TOUT COMPTE
               </TableCell>
-              <TableCell className="text-right font-bold text-[#C9A84C] text-lg">
+              <TableCell className="text-right font-bold text-[#D4AF37] text-lg">
                 {fmt(breakdown.total)}
               </TableCell>
             </TableRow>
@@ -345,14 +345,14 @@ function RecentDepartures({ refreshKey }: { refreshKey: number }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-[#1E2A4A] flex items-center gap-2">
+        <CardTitle className="text-[#0B0F2E] flex items-center gap-2">
           <Clock className="w-4 h-4" />
           Départs récents
         </CardTitle>
       </CardHeader>
       <CardContent className="p-0">
         {loading ? (
-          <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-[#1E2A4A]" /></div>
+          <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-[#0B0F2E]" /></div>
         ) : departs.length === 0 ? (
           <div className="text-center py-8 text-gray-500">Aucun départ enregistré</div>
         ) : (
@@ -460,7 +460,7 @@ export default function DepartPage() {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-[#1E2A4A]">Gestion des départs</h1>
+        <h1 className="text-2xl font-bold text-[#0B0F2E]">Gestion des départs</h1>
         <p className="text-sm text-gray-500">Calculer le solde de tout compte et enregistrer les départs</p>
       </div>
 

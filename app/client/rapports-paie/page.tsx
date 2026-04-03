@@ -291,7 +291,7 @@ export default function RapportsStatutairesPage() {
   if (profileLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#C9A84C" }} />
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#D4AF37" }} />
       </div>
     )
   }
@@ -313,7 +313,7 @@ export default function RapportsStatutairesPage() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
+          <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>
             Rapports Statutaires
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
@@ -347,52 +347,52 @@ export default function RapportsStatutairesPage() {
 
       {/* Summary KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border-l-4" style={{ borderLeftColor: "#1E2A4A" }}>
+        <Card className="border-l-4" style={{ borderLeftColor: "#0B0F2E" }}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Employes</CardTitle>
-            <Users className="h-5 w-5" style={{ color: "#1E2A4A" }} />
+            <Users className="h-5 w-5" style={{ color: "#0B0F2E" }} />
           </CardHeader>
           <CardContent>
-            <p className="text-xl font-bold" style={{ color: "#1E2A4A" }}>{bulletins.length}</p>
+            <p className="text-xl font-bold" style={{ color: "#0B0F2E" }}>{bulletins.length}</p>
           </CardContent>
         </Card>
-        <Card className="border-l-4" style={{ borderLeftColor: "#C9A84C" }}>
+        <Card className="border-l-4" style={{ borderLeftColor: "#D4AF37" }}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total PAYE</CardTitle>
-            <DollarSign className="h-5 w-5" style={{ color: "#C9A84C" }} />
+            <DollarSign className="h-5 w-5" style={{ color: "#D4AF37" }} />
           </CardHeader>
           <CardContent>
-            <p className="text-xl font-bold" style={{ color: "#C9A84C" }}>{fmt(payeTotals.paye)} MUR</p>
+            <p className="text-xl font-bold" style={{ color: "#D4AF37" }}>{fmt(payeTotals.paye)} MUR</p>
           </CardContent>
         </Card>
-        <Card className="border-l-4" style={{ borderLeftColor: "#1E2A4A" }}>
+        <Card className="border-l-4" style={{ borderLeftColor: "#0B0F2E" }}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total PRGF</CardTitle>
-            <FileSpreadsheet className="h-5 w-5" style={{ color: "#1E2A4A" }} />
+            <FileSpreadsheet className="h-5 w-5" style={{ color: "#0B0F2E" }} />
           </CardHeader>
           <CardContent>
-            <p className="text-xl font-bold" style={{ color: "#1E2A4A" }}>{fmt(prgfTotals.prgf)} MUR</p>
+            <p className="text-xl font-bold" style={{ color: "#0B0F2E" }}>{fmt(prgfTotals.prgf)} MUR</p>
           </CardContent>
         </Card>
-        <Card className="border-l-4" style={{ borderLeftColor: "#C9A84C" }}>
+        <Card className="border-l-4" style={{ borderLeftColor: "#D4AF37" }}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Masse salariale brute</CardTitle>
-            <Banknote className="h-5 w-5" style={{ color: "#C9A84C" }} />
+            <Banknote className="h-5 w-5" style={{ color: "#D4AF37" }} />
           </CardHeader>
           <CardContent>
-            <p className="text-xl font-bold" style={{ color: "#C9A84C" }}>{fmt(payeTotals.wages)} MUR</p>
+            <p className="text-xl font-bold" style={{ color: "#D4AF37" }}>{fmt(payeTotals.wages)} MUR</p>
           </CardContent>
         </Card>
       </div>
 
       {fetching ? (
         <div className="flex justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#C9A84C" }} />
+          <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#D4AF37" }} />
         </div>
       ) : bulletins.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
-            <FileSpreadsheet className="h-10 w-10 mx-auto mb-3 opacity-40" style={{ color: "#1E2A4A" }} />
+            <FileSpreadsheet className="h-10 w-10 mx-auto mb-3 opacity-40" style={{ color: "#0B0F2E" }} />
             <p className="text-muted-foreground">Aucun bulletin pour la periode {getPeriodeLabel(selectedPeriode)}.</p>
             <p className="text-sm text-muted-foreground mt-1">Calculez d&apos;abord la paie dans la section Paie &amp; Bulletins.</p>
           </CardContent>
@@ -412,7 +412,7 @@ export default function RapportsStatutairesPage() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle style={{ color: "#1E2A4A" }}>
+                  <CardTitle style={{ color: "#0B0F2E" }}>
                     PAYE Report -- {getPeriodeLabel(selectedPeriode)}
                   </CardTitle>
                   <p className="text-sm text-muted-foreground mt-1">Pay As You Earn -- MRA Declaration</p>
@@ -430,7 +430,7 @@ export default function RapportsStatutairesPage() {
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
-                      <TableRow className="bg-[#1E2A4A]/5">
+                      <TableRow className="bg-[#0B0F2E]/5">
                         <TableHead>Code</TableHead>
                         <TableHead>NIC</TableHead>
                         <TableHead>Nom</TableHead>
@@ -456,12 +456,12 @@ export default function RapportsStatutairesPage() {
                       ))}
                     </TableBody>
                     <TableFooter>
-                      <TableRow className="bg-[#1E2A4A]/10 font-bold">
-                        <TableCell colSpan={4} className="font-bold" style={{ color: "#1E2A4A" }}>TOTAUX</TableCell>
+                      <TableRow className="bg-[#0B0F2E]/10 font-bold">
+                        <TableCell colSpan={4} className="font-bold" style={{ color: "#0B0F2E" }}>TOTAUX</TableCell>
                         <TableCell className="text-right font-bold">{fmt(payeTotals.contributions)}</TableCell>
                         <TableCell className="text-right font-bold">{fmt(payeTotals.wages)}</TableCell>
                         <TableCell className="text-right font-bold">{fmt(payeTotals.taxable)}</TableCell>
-                        <TableCell className="text-right font-bold" style={{ color: "#C9A84C" }}>{fmt(payeTotals.paye)}</TableCell>
+                        <TableCell className="text-right font-bold" style={{ color: "#D4AF37" }}>{fmt(payeTotals.paye)}</TableCell>
                       </TableRow>
                     </TableFooter>
                   </Table>
@@ -475,7 +475,7 @@ export default function RapportsStatutairesPage() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle style={{ color: "#1E2A4A" }}>
+                  <CardTitle style={{ color: "#0B0F2E" }}>
                     PRGF Report -- {getPeriodeLabel(selectedPeriode)}
                   </CardTitle>
                   <p className="text-sm text-muted-foreground mt-1">Portable Retirement Gratuity Fund -- 4.5% of total emoluments</p>
@@ -491,29 +491,29 @@ export default function RapportsStatutairesPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {/* PRGF Summary */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-lg border" style={{ borderColor: "#C9A84C33", background: "#C9A84C08" }}>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-lg border" style={{ borderColor: "#D4AF3733", background: "#D4AF3708" }}>
                   <div>
                     <p className="text-xs text-muted-foreground">Number of Employees</p>
-                    <p className="text-lg font-bold" style={{ color: "#1E2A4A" }}>{prgfData.length}</p>
+                    <p className="text-lg font-bold" style={{ color: "#0B0F2E" }}>{prgfData.length}</p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Total Wages</p>
-                    <p className="text-lg font-bold" style={{ color: "#1E2A4A" }}>{fmt(prgfTotals.wages)} MUR</p>
+                    <p className="text-lg font-bold" style={{ color: "#0B0F2E" }}>{fmt(prgfTotals.wages)} MUR</p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Total Emoluments</p>
-                    <p className="text-lg font-bold" style={{ color: "#1E2A4A" }}>{fmt(prgfTotals.total)} MUR</p>
+                    <p className="text-lg font-bold" style={{ color: "#0B0F2E" }}>{fmt(prgfTotals.total)} MUR</p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Total PRGF Payable</p>
-                    <p className="text-lg font-bold" style={{ color: "#C9A84C" }}>{fmt(prgfTotals.prgf)} MUR</p>
+                    <p className="text-lg font-bold" style={{ color: "#D4AF37" }}>{fmt(prgfTotals.prgf)} MUR</p>
                   </div>
                 </div>
 
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
-                      <TableRow className="bg-[#1E2A4A]/5">
+                      <TableRow className="bg-[#0B0F2E]/5">
                         <TableHead>NID</TableHead>
                         <TableHead>Nom</TableHead>
                         <TableHead>Prenom</TableHead>
@@ -534,18 +534,18 @@ export default function RapportsStatutairesPage() {
                           <TableCell className="text-right">{fmt(r.allowances)}</TableCell>
                           <TableCell className="text-right">{fmt(r.commission)}</TableCell>
                           <TableCell className="text-right font-semibold">{fmt(r.total)}</TableCell>
-                          <TableCell className="text-right font-bold" style={{ color: "#C9A84C" }}>{fmt(r.prgf)}</TableCell>
+                          <TableCell className="text-right font-bold" style={{ color: "#D4AF37" }}>{fmt(r.prgf)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                     <TableFooter>
-                      <TableRow className="bg-[#1E2A4A]/10 font-bold">
-                        <TableCell colSpan={3} className="font-bold" style={{ color: "#1E2A4A" }}>TOTAUX</TableCell>
+                      <TableRow className="bg-[#0B0F2E]/10 font-bold">
+                        <TableCell colSpan={3} className="font-bold" style={{ color: "#0B0F2E" }}>TOTAUX</TableCell>
                         <TableCell className="text-right font-bold">{fmt(prgfTotals.wages)}</TableCell>
                         <TableCell className="text-right font-bold">{fmt(prgfTotals.allowances)}</TableCell>
                         <TableCell className="text-right font-bold">{fmt(prgfTotals.commission)}</TableCell>
                         <TableCell className="text-right font-bold">{fmt(prgfTotals.total)}</TableCell>
-                        <TableCell className="text-right font-bold" style={{ color: "#C9A84C" }}>{fmt(prgfTotals.prgf)}</TableCell>
+                        <TableCell className="text-right font-bold" style={{ color: "#D4AF37" }}>{fmt(prgfTotals.prgf)}</TableCell>
                       </TableRow>
                     </TableFooter>
                   </Table>
@@ -559,7 +559,7 @@ export default function RapportsStatutairesPage() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle style={{ color: "#1E2A4A" }}>
+                  <CardTitle style={{ color: "#0B0F2E" }}>
                     Emoluments Report -- {getPeriodeLabel(selectedPeriode)}
                   </CardTitle>
                   <p className="text-sm text-muted-foreground mt-1">Detail of all emoluments per employee</p>
@@ -577,7 +577,7 @@ export default function RapportsStatutairesPage() {
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
-                      <TableRow className="bg-[#1E2A4A]/5">
+                      <TableRow className="bg-[#0B0F2E]/5">
                         <TableHead>Code</TableHead>
                         <TableHead>NID</TableHead>
                         <TableHead>Nom</TableHead>
@@ -603,12 +603,12 @@ export default function RapportsStatutairesPage() {
                       ))}
                     </TableBody>
                     <TableFooter>
-                      <TableRow className="bg-[#1E2A4A]/10 font-bold">
-                        <TableCell colSpan={4} className="font-bold" style={{ color: "#1E2A4A" }}>TOTAUX</TableCell>
+                      <TableRow className="bg-[#0B0F2E]/10 font-bold">
+                        <TableCell colSpan={4} className="font-bold" style={{ color: "#0B0F2E" }}>TOTAUX</TableCell>
                         <TableCell className="text-right font-bold">{fmt(emolumentsTotals.basic)}</TableCell>
                         <TableCell className="text-right font-bold">{fmt(emolumentsTotals.overtime)}</TableCell>
                         <TableCell className="text-right font-bold">{fmt(emolumentsTotals.allowances)}</TableCell>
-                        <TableCell className="text-right font-bold" style={{ color: "#C9A84C" }}>{fmt(emolumentsTotals.total)}</TableCell>
+                        <TableCell className="text-right font-bold" style={{ color: "#D4AF37" }}>{fmt(emolumentsTotals.total)}</TableCell>
                       </TableRow>
                     </TableFooter>
                   </Table>
@@ -622,10 +622,10 @@ export default function RapportsStatutairesPage() {
             <div className="space-y-4">
               {/* Bank Amount Summary */}
               <div className="flex items-center gap-4 flex-wrap">
-                <Card className="flex-1 min-w-[200px] border-l-4" style={{ borderLeftColor: "#1E2A4A" }}>
+                <Card className="flex-1 min-w-[200px] border-l-4" style={{ borderLeftColor: "#0B0F2E" }}>
                   <CardContent className="py-4">
                     <p className="text-xs text-muted-foreground">Total Bank Amount</p>
-                    <p className="text-xl font-bold" style={{ color: "#1E2A4A" }}>{fmt(totalBankAmount)} MUR</p>
+                    <p className="text-xl font-bold" style={{ color: "#0B0F2E" }}>{fmt(totalBankAmount)} MUR</p>
                   </CardContent>
                 </Card>
                 {cashEmployees.length > 0 && (
@@ -647,7 +647,7 @@ export default function RapportsStatutairesPage() {
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
                   <div>
-                    <CardTitle style={{ color: "#1E2A4A" }}>
+                    <CardTitle style={{ color: "#0B0F2E" }}>
                       Bank Report -- {getPeriodeLabel(selectedPeriode)}
                     </CardTitle>
                     <p className="text-sm text-muted-foreground mt-1">Employees grouped by bank for payment processing</p>
@@ -667,16 +667,16 @@ export default function RapportsStatutairesPage() {
                     return (
                       <div key={bank}>
                         <div className="flex items-center justify-between mb-2">
-                          <h3 className="text-sm font-bold flex items-center gap-2" style={{ color: "#1E2A4A" }}>
+                          <h3 className="text-sm font-bold flex items-center gap-2" style={{ color: "#0B0F2E" }}>
                             <Banknote className="h-4 w-4" />
                             {bank}
                             <Badge variant="secondary" className="ml-2">{employees.length}</Badge>
                           </h3>
-                          <span className="text-sm font-bold" style={{ color: "#C9A84C" }}>Subtotal: {fmt(bankTotal)} MUR</span>
+                          <span className="text-sm font-bold" style={{ color: "#D4AF37" }}>Subtotal: {fmt(bankTotal)} MUR</span>
                         </div>
                         <Table>
                           <TableHeader>
-                            <TableRow className="bg-[#1E2A4A]/5">
+                            <TableRow className="bg-[#0B0F2E]/5">
                               <TableHead>Code</TableHead>
                               <TableHead>NID</TableHead>
                               <TableHead>Nom</TableHead>
@@ -708,7 +708,7 @@ export default function RapportsStatutairesPage() {
 
                   {/* Cash Payment Report */}
                   {cashEmployees.length > 0 && (
-                    <div className="border-t-2 pt-4" style={{ borderTopColor: "#C9A84C" }}>
+                    <div className="border-t-2 pt-4" style={{ borderTopColor: "#D4AF37" }}>
                       <h3 className="text-sm font-bold flex items-center gap-2 mb-2 text-amber-700">
                         <AlertTriangle className="h-4 w-4" />
                         Cash Payment Report
@@ -758,7 +758,7 @@ export default function RapportsStatutairesPage() {
             <Card>
               <CardHeader>
                 <div>
-                  <CardTitle style={{ color: "#1E2A4A" }}>
+                  <CardTitle style={{ color: "#0B0F2E" }}>
                     Negative Income Tax (NIT) -- {getPeriodeLabel(selectedPeriode)}
                   </CardTitle>
                   <p className="text-sm text-muted-foreground mt-1">
@@ -769,7 +769,7 @@ export default function RapportsStatutairesPage() {
               <CardContent>
                 {nitData.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
-                    <CheckCircle className="h-8 w-8 mx-auto mb-2 opacity-40" style={{ color: "#1E2A4A" }} />
+                    <CheckCircle className="h-8 w-8 mx-auto mb-2 opacity-40" style={{ color: "#0B0F2E" }} />
                     <p>No employees eligible for Negative Income Tax this period.</p>
                     <p className="text-sm mt-1">NIT applies to employees earning &lt;= Rs 25,000 / month.</p>
                   </div>
@@ -777,7 +777,7 @@ export default function RapportsStatutairesPage() {
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
-                        <TableRow className="bg-[#1E2A4A]/5">
+                        <TableRow className="bg-[#0B0F2E]/5">
                           <TableHead>Code</TableHead>
                           <TableHead>Name</TableHead>
                           <TableHead className="text-right">Basic Salary</TableHead>
@@ -795,8 +795,8 @@ export default function RapportsStatutairesPage() {
                         ))}
                       </TableBody>
                       <TableFooter>
-                        <TableRow className="bg-[#1E2A4A]/10 font-bold">
-                          <TableCell colSpan={2} className="font-bold" style={{ color: "#1E2A4A" }}>TOTAL NIT</TableCell>
+                        <TableRow className="bg-[#0B0F2E]/10 font-bold">
+                          <TableCell colSpan={2} className="font-bold" style={{ color: "#0B0F2E" }}>TOTAL NIT</TableCell>
                           <TableCell className="text-right font-bold">{fmt(nitData.reduce((s, r) => s + r.basic, 0))}</TableCell>
                           <TableCell className="text-right font-bold" style={{ color: "#22c55e" }}>{fmt(nitData.reduce((s, r) => s + r.nit_amount, 0))}</TableCell>
                         </TableRow>

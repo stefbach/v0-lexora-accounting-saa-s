@@ -12,8 +12,8 @@ import {
   AlertTriangle, Receipt, FileText, RefreshCw
 } from "lucide-react"
 
-const NAVY = "#1E2A4A"
-const GOLD = "#C9A84C"
+const NAVY = "#0B0F2E"
+const GOLD = "#D4AF37"
 
 interface CalendarEvent {
   date: string // YYYY-MM-DD
@@ -283,9 +283,9 @@ export default function EcheancesPage() {
                   return (
                     <div
                       key={cell.date}
-                      className={`min-h-[80px] border rounded-md p-1 ${isToday ? "border-2 border-[#C9A84C] bg-amber-50/50" : "border-gray-200"}`}
+                      className={`min-h-[80px] border rounded-md p-1 ${isToday ? "border-2 border-[#D4AF37] bg-amber-50/50" : "border-gray-200"}`}
                     >
-                      <div className={`text-xs font-medium mb-0.5 ${isToday ? "text-[#C9A84C] font-bold" : "text-muted-foreground"}`}>
+                      <div className={`text-xs font-medium mb-0.5 ${isToday ? "text-[#D4AF37] font-bold" : "text-muted-foreground"}`}>
                         {cell.day}
                       </div>
                       <div className="space-y-0.5">

@@ -85,25 +85,26 @@ export function RHSidebarDedicated() {
 
   return (
     <>
-      <button onClick={() => setMobileOpen(true)} className="fixed top-4 left-4 z-50 md:hidden bg-[#1E2A4A] text-white p-2 rounded-lg shadow-lg">
+      <button onClick={() => setMobileOpen(true)} className="fixed top-4 left-4 z-50 md:hidden bg-[#0B0F2E] text-white p-2 rounded-lg shadow-lg">
         <Menu className="w-5 h-5" />
       </button>
 
       {mobileOpen && <div onClick={() => setMobileOpen(false)} className="fixed inset-0 bg-black/50 z-40 md:hidden" />}
 
-    <aside className={`w-60 bg-[#1E2A4A] min-h-screen flex flex-col fixed left-0 top-0 bottom-0 z-50 overflow-y-auto transition-transform duration-300 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
+    <aside className={`w-60 bg-[#0B0F2E] min-h-screen flex flex-col fixed left-0 top-0 bottom-0 z-50 overflow-y-auto transition-transform duration-300 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
       <button onClick={() => setMobileOpen(false)} className="absolute top-4 right-4 md:hidden text-white/60 hover:text-white z-10">
         <X className="w-5 h-5" />
       </button>
 
       <div className="p-4 border-b border-white/10">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-[#C9A84C] rounded-lg flex items-center justify-center">
-            <span className="text-[#1E2A4A] font-black text-sm">L</span>
-          </div>
-          <div>
-            <p className="text-white font-bold text-base leading-tight">LEXORA</p>
-            <p className="text-white/40 text-xs">{subtitle}</p>
+          <div className="flex flex-col">
+            <div className="flex items-baseline">
+              <span className="text-base font-bold" style={{ color: "#E8EAFC", letterSpacing: "0.04em", fontFamily: "'Poppins', sans-serif" }}>LE</span>
+              <span className="text-base font-bold" style={{ color: "#D4AF37", letterSpacing: "0.04em", fontFamily: "'Poppins', sans-serif" }}>X</span>
+              <span className="text-base font-bold" style={{ color: "#E8EAFC", letterSpacing: "0.04em", fontFamily: "'Poppins', sans-serif" }}>ORA</span>
+            </div>
+            <span className="text-[10px] font-light tracking-wider" style={{ color: "#4A5490" }}>{subtitle}</span>
           </div>
         </div>
       </div>
@@ -112,7 +113,7 @@ export function RHSidebarDedicated() {
         {['client_admin', 'client_user', 'comptable', 'comptable_dedie', 'admin', 'super_admin'].includes(userRole) && (
           <>
             <Link href="/client/tableau-de-bord"
-              className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[#C9A84C] hover:bg-[#C9A84C]/20 text-sm transition-colors mb-2 border border-[#C9A84C]/30">
+              className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[#D4AF37] hover:bg-[#D4AF37]/20 text-sm transition-colors mb-2 border border-[#D4AF37]/30">
               <ArrowLeft className="w-4 h-4 flex-shrink-0" />
               <span>Retour espace client</span>
             </Link>
@@ -125,7 +126,7 @@ export function RHSidebarDedicated() {
           return (
             <Link key={l.href} href={l.href}
               className={cn("flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors",
-                active ? "bg-[#C9A84C] text-[#1E2A4A] font-semibold" : "text-white/70 hover:bg-white/10 hover:text-white"
+                active ? "bg-[#D4AF37] text-[#0B0F2E] font-semibold" : "text-white/70 hover:bg-white/10 hover:text-white"
               )}>
               <Icon className="w-4 h-4 flex-shrink-0" />
               <span>{l.labelKey ? t(l.labelKey, locale) : l.label}</span>

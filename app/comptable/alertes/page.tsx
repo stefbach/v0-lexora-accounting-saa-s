@@ -153,7 +153,7 @@ export default function ComptableAlertesPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
+          <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>
             Alertes & Surveillance
           </h1>
           <p className="text-muted-foreground">
@@ -308,8 +308,8 @@ export default function ComptableAlertesPage() {
       {groupedByClient.map(([clientName, alerts]) => (
         <Card key={clientName}>
           <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-lg" style={{ color: "#1E2A4A" }}>
-              <Shield className="h-5 w-5" style={{ color: "#C9A84C" }} />
+            <CardTitle className="flex items-center gap-2 text-lg" style={{ color: "#0B0F2E" }}>
+              <Shield className="h-5 w-5" style={{ color: "#D4AF37" }} />
               {clientName}
               <Badge variant="outline" className="ml-2">
                 {alerts.length} alerte{alerts.length > 1 ? "s" : ""}
@@ -348,7 +348,7 @@ export default function ComptableAlertesPage() {
                           </span>
                         )}
                       </div>
-                      <p className="font-medium text-sm" style={{ color: "#1E2A4A" }}>
+                      <p className="font-medium text-sm" style={{ color: "#0B0F2E" }}>
                         {alert.title}
                       </p>
                       <p className="text-sm text-muted-foreground mt-0.5">

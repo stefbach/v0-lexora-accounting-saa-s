@@ -165,7 +165,7 @@ export default function PrimesPage() {
   if (profileLoading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="w-8 h-8 animate-spin text-[#C9A84C]" />
+        <Loader2 className="w-8 h-8 animate-spin text-[#D4AF37]" />
       </div>
     )
   }
@@ -174,12 +174,12 @@ export default function PrimesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#1E2A4A]">Gestion des Primes</h1>
+          <h1 className="text-2xl font-bold text-[#0B0F2E]">Gestion des Primes</h1>
           <p className="text-sm text-gray-500">Catalogue, calcul et suivi des primes</p>
         </div>
         <Select value={selectedSociete} onValueChange={setSelectedSociete}>
           <SelectTrigger className="w-64">
-            <Building2 className="w-4 h-4 mr-2 text-[#1E2A4A]" />
+            <Building2 className="w-4 h-4 mr-2 text-[#0B0F2E]" />
             <SelectValue placeholder="Societe" />
           </SelectTrigger>
           <SelectContent>
@@ -191,14 +191,14 @@ export default function PrimesPage() {
       </div>
 
       <Tabs defaultValue="catalogue">
-        <TabsList className="bg-[#1E2A4A]/5">
-          <TabsTrigger value="catalogue" className="data-[state=active]:bg-[#1E2A4A] data-[state=active]:text-white">
+        <TabsList className="bg-[#0B0F2E]/5">
+          <TabsTrigger value="catalogue" className="data-[state=active]:bg-[#0B0F2E] data-[state=active]:text-white">
             <Target className="w-4 h-4 mr-1.5" /> Catalogue
           </TabsTrigger>
-          <TabsTrigger value="calcul" className="data-[state=active]:bg-[#1E2A4A] data-[state=active]:text-white">
+          <TabsTrigger value="calcul" className="data-[state=active]:bg-[#0B0F2E] data-[state=active]:text-white">
             <Calculator className="w-4 h-4 mr-1.5" /> Calcul mensuel
           </TabsTrigger>
-          <TabsTrigger value="historique" className="data-[state=active]:bg-[#1E2A4A] data-[state=active]:text-white">
+          <TabsTrigger value="historique" className="data-[state=active]:bg-[#0B0F2E] data-[state=active]:text-white">
             <History className="w-4 h-4 mr-1.5" /> Historique
           </TabsTrigger>
         </TabsList>
@@ -208,13 +208,13 @@ export default function PrimesPage() {
           <div className="flex justify-end">
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <DialogTrigger asChild>
-                <Button className="bg-[#C9A84C] hover:bg-[#b8963f] text-[#1E2A4A]">
+                <Button className="bg-[#D4AF37] hover:bg-[#b8963f] text-[#0B0F2E]">
                   <Plus className="w-4 h-4 mr-1.5" /> Creer une prime
                 </Button>
               </DialogTrigger>
               <DialogContent className="max-w-lg">
                 <DialogHeader>
-                  <DialogTitle className="text-[#1E2A4A]">Creer une prime</DialogTitle>
+                  <DialogTitle className="text-[#0B0F2E]">Creer une prime</DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-4 py-2">
                   <div className="grid gap-1.5">
@@ -276,7 +276,7 @@ export default function PrimesPage() {
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setDialogOpen(false)}>Annuler</Button>
-                  <Button className="bg-[#1E2A4A] hover:bg-[#16203a] text-white" onClick={handleCreerRegle}>Enregistrer</Button>
+                  <Button className="bg-[#0B0F2E] hover:bg-[#16203a] text-white" onClick={handleCreerRegle}>Enregistrer</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -286,7 +286,7 @@ export default function PrimesPage() {
             <CardContent className="p-0 overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-[#1E2A4A]/5">
+                  <TableRow className="bg-[#0B0F2E]/5">
                     <TableHead>Nom</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead className="text-right">Montant / Taux</TableHead>
@@ -297,7 +297,7 @@ export default function PrimesPage() {
                 <TableBody>
                   {fetching ? (
                     <TableRow><TableCell colSpan={5} className="text-center py-8">
-                      <Loader2 className="w-5 h-5 animate-spin mx-auto text-[#C9A84C]" />
+                      <Loader2 className="w-5 h-5 animate-spin mx-auto text-[#D4AF37]" />
                     </TableCell></TableRow>
                   ) : regles.length === 0 ? (
                     <TableRow><TableCell colSpan={5} className="text-center py-8 text-gray-400">
@@ -305,9 +305,9 @@ export default function PrimesPage() {
                     </TableCell></TableRow>
                   ) : regles.map(r => (
                     <TableRow key={r.id}>
-                      <TableCell className="font-medium text-[#1E2A4A]">{r.nom}</TableCell>
+                      <TableCell className="font-medium text-[#0B0F2E]">{r.nom}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="border-[#C9A84C] text-[#C9A84C]">
+                        <Badge variant="outline" className="border-[#D4AF37] text-[#D4AF37]">
                           {TYPE_LABELS[r.type] || r.type}
                         </Badge>
                       </TableCell>
@@ -330,7 +330,7 @@ export default function PrimesPage() {
         <TabsContent value="calcul" className="space-y-4">
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-[#1E2A4A] text-base">Calcul des primes</CardTitle>
+              <CardTitle className="text-[#0B0F2E] text-base">Calcul des primes</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-end gap-4">
@@ -338,7 +338,7 @@ export default function PrimesPage() {
                   <Label>Periode</Label>
                   <Input type="month" value={periode} onChange={e => setPeriode(e.target.value)} className="w-48" />
                 </div>
-                <Button onClick={handleCalculer} disabled={calculating} className="bg-[#1E2A4A] hover:bg-[#16203a] text-white">
+                <Button onClick={handleCalculer} disabled={calculating} className="bg-[#0B0F2E] hover:bg-[#16203a] text-white">
                   {calculating ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <Calculator className="w-4 h-4 mr-1.5" />}
                   Calculer primes
                 </Button>
@@ -351,7 +351,7 @@ export default function PrimesPage() {
               <CardContent className="p-0 overflow-x-auto">
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-[#1E2A4A]/5">
+                    <TableRow className="bg-[#0B0F2E]/5">
                       <TableHead>Employe</TableHead>
                       <TableHead>Prime</TableHead>
                       <TableHead className="text-right">Montant</TableHead>
@@ -375,13 +375,13 @@ export default function PrimesPage() {
                 </Table>
                 <div className="flex justify-between items-center p-4 border-t">
                   <div className="text-sm text-gray-500">
-                    {calculs.length} ligne(s) - Total: <span className="font-semibold text-[#1E2A4A]">{fmt(calculs.reduce((s, c) => s + c.montant, 0))}</span>
+                    {calculs.length} ligne(s) - Total: <span className="font-semibold text-[#0B0F2E]">{fmt(calculs.reduce((s, c) => s + c.montant, 0))}</span>
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" onClick={handleValider} className="border-[#1E2A4A] text-[#1E2A4A]">
+                    <Button variant="outline" onClick={handleValider} className="border-[#0B0F2E] text-[#0B0F2E]">
                       <CheckCircle className="w-4 h-4 mr-1.5" /> Valider
                     </Button>
-                    <Button onClick={handleIntegrerPaie} className="bg-[#C9A84C] hover:bg-[#b8963f] text-[#1E2A4A]">
+                    <Button onClick={handleIntegrerPaie} className="bg-[#D4AF37] hover:bg-[#b8963f] text-[#0B0F2E]">
                       <ArrowRight className="w-4 h-4 mr-1.5" /> Integrer en paie
                     </Button>
                   </div>
@@ -406,7 +406,7 @@ export default function PrimesPage() {
             <CardContent className="p-0 overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-[#1E2A4A]/5">
+                  <TableRow className="bg-[#0B0F2E]/5">
                     <TableHead>Periode</TableHead>
                     <TableHead>Employe</TableHead>
                     <TableHead>Prime</TableHead>
@@ -422,7 +422,7 @@ export default function PrimesPage() {
                     </TableCell></TableRow>
                   ) : historique.map(h => (
                     <TableRow key={h.id}>
-                      <TableCell className="font-medium text-[#1E2A4A]">{h.periode}</TableCell>
+                      <TableCell className="font-medium text-[#0B0F2E]">{h.periode}</TableCell>
                       <TableCell>{h.employe_nom}</TableCell>
                       <TableCell>{h.prime_nom}</TableCell>
                       <TableCell className="text-right font-mono">{fmt(h.montant)}</TableCell>

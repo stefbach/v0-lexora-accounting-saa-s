@@ -11,8 +11,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, Calendar, Star, Plus, Trash2, Info, RefreshCw } from "lucide-react"
 
-const NAVY = "#1E2A4A"
-const GOLD = "#C9A84C"
+const NAVY = "#0B0F2E"
+const GOLD = "#D4AF37"
 
 interface JourFerie {
   id: string
@@ -199,7 +199,7 @@ export default function JoursFeriesPage() {
           variant="outline"
           onClick={initAnnee}
           disabled={initializing}
-          className="border-[#1E2A4A]/30 text-[#1E2A4A] hover:bg-[#1E2A4A]/5"
+          className="border-[#0B0F2E]/30 text-[#0B0F2E] hover:bg-[#0B0F2E]/5"
         >
           {initializing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
           Pré-remplir jours fixes {annee}

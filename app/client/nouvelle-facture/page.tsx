@@ -26,7 +26,7 @@ const UNITES = ["Heure", "Jour", "Mois", "Forfait", "Unite"] as const
 const DEVISES = ["MUR", "EUR", "USD", "GBP"] as const
 const MODES_PAIEMENT = ["Virement", "Cheque", "Especes", "Carte"] as const
 const ACCENT_COLORS = [
-  { name: "Navy", hex: "#1E2A4A" }, { name: "Gold", hex: "#C9A84C" },
+  { name: "Navy", hex: "#0B0F2E" }, { name: "Gold", hex: "#D4AF37" },
   { name: "Blue", hex: "#2563EB" }, { name: "Green", hex: "#059669" },
   { name: "Red", hex: "#DC2626" }, { name: "Purple", hex: "#7C3AED" },
   { name: "Teal", hex: "#0D9488" }, { name: "Orange", hex: "#EA580C" },
@@ -76,7 +76,7 @@ export default function NouvelleFacturePage() {
   const [echeancePreset, setEcheancePreset] = useState(30)
   const [notesVisibles, setNotesVisibles] = useState("")
   const [notesInternes, setNotesInternes] = useState("")
-  const [accentColor, setAccentColor] = useState("#1E2A4A")
+  const [accentColor, setAccentColor] = useState("#0B0F2E")
 
   useEffect(() => {
     try {
@@ -210,7 +210,7 @@ export default function NouvelleFacturePage() {
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="sm" onClick={() => router.push("/client/factures")}><ArrowLeft className="w-4 h-4 mr-1" />Retour</Button>
           <div>
-            <h1 className="text-2xl font-bold" style={{ color: typeDocument === "avoir" ? "#DC2626" : "#1E2A4A" }}>
+            <h1 className="text-2xl font-bold" style={{ color: typeDocument === "avoir" ? "#DC2626" : "#0B0F2E" }}>
               {typeDocument === "avoir" ? "Nouvel Avoir" : typeDocument === "note_debit" ? "Nouvelle Note de Debit" : "Nouvelle Facture"}
             </h1>
             <p className="text-sm text-gray-500">Conforme MRA - Maurice</p>
@@ -222,18 +222,18 @@ export default function NouvelleFacturePage() {
       {error && <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{error}</div>}
 
       {/* Document type selector */}
-      <Card className={`border-t-4 ${typeDocument === "avoir" ? "border-t-red-500" : typeDocument === "note_debit" ? "border-t-orange-500" : "border-t-[#1E2A4A]"}`}>
-        <CardHeader className="pb-2"><CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2"><FileText className="w-4 h-4" />Type de document</CardTitle></CardHeader>
+      <Card className={`border-t-4 ${typeDocument === "avoir" ? "border-t-red-500" : typeDocument === "note_debit" ? "border-t-orange-500" : "border-t-[#0B0F2E]"}`}>
+        <CardHeader className="pb-2"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><FileText className="w-4 h-4" />Type de document</CardTitle></CardHeader>
         <CardContent>
           <div className="grid grid-cols-3 gap-3">
             <button
               type="button"
               onClick={() => { setTypeDocument("facture"); setFactureReferenceId("") }}
-              className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all ${typeDocument === "facture" ? "border-[#1E2A4A] bg-[#1E2A4A]/5" : "border-gray-200 hover:border-gray-300"}`}
+              className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all ${typeDocument === "facture" ? "border-[#0B0F2E] bg-[#0B0F2E]/5" : "border-gray-200 hover:border-gray-300"}`}
             >
-              <FileText className={`w-5 h-5 ${typeDocument === "facture" ? "text-[#1E2A4A]" : "text-gray-400"}`} />
+              <FileText className={`w-5 h-5 ${typeDocument === "facture" ? "text-[#0B0F2E]" : "text-gray-400"}`} />
               <div className="text-left">
-                <p className={`font-medium text-sm ${typeDocument === "facture" ? "text-[#1E2A4A]" : "text-gray-700"}`}>Facture</p>
+                <p className={`font-medium text-sm ${typeDocument === "facture" ? "text-[#0B0F2E]" : "text-gray-700"}`}>Facture</p>
                 <p className="text-xs text-gray-400">Invoice (code 01)</p>
               </div>
             </button>
@@ -283,8 +283,8 @@ export default function NouvelleFacturePage() {
       </Card>
 
       {/* 1. Invoice header fields */}
-      <Card className="border-t-4 border-t-[#1E2A4A]">
-        <CardHeader className="pb-2"><CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2"><FileText className="w-4 h-4" />Informations facture</CardTitle></CardHeader>
+      <Card className="border-t-4 border-t-[#0B0F2E]">
+        <CardHeader className="pb-2"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><FileText className="w-4 h-4" />Informations facture</CardTitle></CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <Field label="Societe"><Sel value={societeId} onValueChange={setSocieteId} placeholder="Choisir...">{societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</Sel></Field>
@@ -298,7 +298,7 @@ export default function NouvelleFacturePage() {
 
       {/* 2. Client */}
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2"><User className="w-4 h-4" />Client</CardTitle></CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><User className="w-4 h-4" />Client</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <Field label="Selectionner un client">
@@ -329,7 +329,7 @@ export default function NouvelleFacturePage() {
 
       {/* 3. Descriptif */}
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2"><FileText className="w-4 h-4" />Descriptif</CardTitle></CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><FileText className="w-4 h-4" />Descriptif</CardTitle></CardHeader>
         <CardContent>
           <Textarea value={descriptif} onChange={e => setDescriptif(e.target.value)} placeholder="Objet de la facture / description generale des prestations..." rows={3} className="resize-y" />
         </CardContent>
@@ -339,7 +339,7 @@ export default function NouvelleFacturePage() {
       <Card>
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2"><ListOrdered className="w-4 h-4" />Lignes de facture</CardTitle>
+            <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><ListOrdered className="w-4 h-4" />Lignes de facture</CardTitle>
             <div className="flex gap-2">
               {catalogue.length > 0 && (
                 <Select onValueChange={v => { const item = catalogue.find(i => i.id === v); if (item) addFromCatalogue(item) }}>
@@ -347,14 +347,14 @@ export default function NouvelleFacturePage() {
                   <SelectContent>{catalogue.map(item => <SelectItem key={item.id} value={item.id}>{item.description} - {fmt(item.prix_unitaire)} {item.devise}</SelectItem>)}</SelectContent>
                 </Select>
               )}
-              <Button onClick={addLigne} variant="outline" size="sm" className="border-[#C9A84C] text-[#C9A84C] hover:bg-[#C9A84C]/10"><Plus className="w-4 h-4 mr-1" />Ajouter une ligne</Button>
+              <Button onClick={addLigne} variant="outline" size="sm" className="border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37]/10"><Plus className="w-4 h-4 mr-1" />Ajouter une ligne</Button>
             </div>
           </div>
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
           <Table>
             <TableHeader>
-              <TableRow className="bg-[#1E2A4A]/5">
+              <TableRow className="bg-[#0B0F2E]/5">
                 <TableHead className="w-[4%] text-center">#</TableHead>
                 <TableHead className="w-[28%]">Description</TableHead>
                 <TableHead className="w-[11%]">Unite</TableHead>
@@ -386,7 +386,7 @@ export default function NouvelleFacturePage() {
                       <SelectContent><SelectItem value="15">15%</SelectItem><SelectItem value="0">0%</SelectItem></SelectContent>
                     </Select>
                   </TableCell>
-                  <TableCell className="text-right font-mono font-semibold text-[#1E2A4A]">{fmt(l.montant_ht)}</TableCell>
+                  <TableCell className="text-right font-mono font-semibold text-[#0B0F2E]">{fmt(l.montant_ht)}</TableCell>
                   <TableCell><Button variant="ghost" size="sm" onClick={() => removeLigne(l.id)} className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4" /></Button></TableCell>
                 </TableRow>
               ))}
@@ -400,7 +400,7 @@ export default function NouvelleFacturePage() {
         <div className="space-y-4">
           {/* Discount */}
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2"><Calculator className="w-4 h-4" />Remise</CardTitle></CardHeader>
+            <CardHeader className="pb-2"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><Calculator className="w-4 h-4" />Remise</CardTitle></CardHeader>
             <CardContent>
               <div className="flex items-end gap-3">
                 <Field label="Type">
@@ -417,7 +417,7 @@ export default function NouvelleFacturePage() {
           </Card>
           {/* Devise */}
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-[#1E2A4A] text-base">Devise</CardTitle></CardHeader>
+            <CardHeader className="pb-2"><CardTitle className="text-[#0B0F2E] text-base">Devise</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               <Sel value={devise} onValueChange={setDevise}>{DEVISES.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</Sel>
               {devise !== "MUR" && (
@@ -434,14 +434,14 @@ export default function NouvelleFacturePage() {
           </Card>
         </div>
         {/* Totals card */}
-        <Card className="border-2 border-[#1E2A4A]/20">
+        <Card className="border-2 border-[#0B0F2E]/20">
           <CardContent className="p-5 space-y-3">
             <div className="flex justify-between text-sm"><span className="text-gray-600">Sous-total HT</span><span className="font-mono">{fmt(sousTotal)} {devise}</span></div>
             {remiseMontant > 0 && <div className="flex justify-between text-sm text-red-600"><span>Remise{remiseType === "pct" ? ` (${remiseValue}%)` : ""}</span><span className="font-mono">-{fmt(remiseMontant)} {devise}</span></div>}
             <div className="flex justify-between text-sm"><span className="text-gray-600">Total HT apres remise</span><span className="font-mono">{fmt(totalHTApresRemise)} {devise}</span></div>
             <div className="flex justify-between text-sm"><span className="text-gray-600">TVA {clientOffshore ? "(zero-rated)" : "15%"}</span><span className="font-mono">{fmt(totalTVA)} {devise}</span></div>
-            <div className="border-t-2 border-[#1E2A4A] pt-3 flex justify-between font-bold text-xl">
-              <span className="text-[#1E2A4A]">TOTAL TTC</span><span className="text-[#1E2A4A] font-mono">{fmt(totalTTC)} {devise}</span>
+            <div className="border-t-2 border-[#0B0F2E] pt-3 flex justify-between font-bold text-xl">
+              <span className="text-[#0B0F2E]">TOTAL TTC</span><span className="text-[#0B0F2E] font-mono">{fmt(totalTTC)} {devise}</span>
             </div>
             {contreValeurMUR !== null && (
               <div className="bg-gray-50 rounded-lg p-3 mt-2 space-y-1">
@@ -455,7 +455,7 @@ export default function NouvelleFacturePage() {
 
       {/* 7. Payment */}
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2"><CreditCard className="w-4 h-4" />Paiement</CardTitle></CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><CreditCard className="w-4 h-4" />Paiement</CardTitle></CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <Field label="Mode de paiement"><Sel value={modePaiement} onValueChange={setModePaiement}>{MODES_PAIEMENT.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</Sel></Field>
@@ -464,7 +464,7 @@ export default function NouvelleFacturePage() {
           </div>
           {settings && modePaiement === "Virement" && (settings.banque_nom || settings.banque_iban) && (
             <div className="mt-4 bg-gray-50 rounded-lg p-4 text-sm space-y-1">
-              <p className="font-semibold text-[#1E2A4A] mb-1">Coordonnees bancaires</p>
+              <p className="font-semibold text-[#0B0F2E] mb-1">Coordonnees bancaires</p>
               {settings.banque_nom && <p>Banque : {settings.banque_nom}</p>}
               {settings.banque_compte && <p>Compte : {settings.banque_compte}</p>}
               {settings.banque_iban && <p>IBAN : {settings.banque_iban}</p>}
@@ -476,7 +476,7 @@ export default function NouvelleFacturePage() {
 
       {/* 8. Accent Color */}
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2"><Palette className="w-4 h-4" />Couleur de la facture</CardTitle></CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><Palette className="w-4 h-4" />Couleur de la facture</CardTitle></CardHeader>
         <CardContent>
           <p className="text-sm text-gray-500 mb-3">Choisissez la couleur d&apos;accent pour l&apos;en-tete, le tableau et les totaux de votre facture.</p>
           <div className="flex flex-wrap gap-3">
@@ -485,7 +485,7 @@ export default function NouvelleFacturePage() {
                 key={color.hex}
                 type="button"
                 onClick={() => setAccentColor(color.hex)}
-                className={`group relative w-10 h-10 rounded-lg border-2 transition-all ${accentColor === color.hex ? "border-[#C9A84C] ring-2 ring-[#C9A84C]/30 scale-110" : "border-gray-200 hover:border-gray-400 hover:scale-105"}`}
+                className={`group relative w-10 h-10 rounded-lg border-2 transition-all ${accentColor === color.hex ? "border-[#D4AF37] ring-2 ring-[#D4AF37]/30 scale-110" : "border-gray-200 hover:border-gray-400 hover:scale-105"}`}
                 style={{ backgroundColor: color.hex }}
                 title={color.name}
               >
@@ -501,7 +501,7 @@ export default function NouvelleFacturePage() {
 
       {/* 9. Notes */}
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2"><StickyNote className="w-4 h-4" />Notes</CardTitle></CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><StickyNote className="w-4 h-4" />Notes</CardTitle></CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Field label="Notes visibles sur la facture"><Textarea value={notesVisibles} onChange={e => setNotesVisibles(e.target.value)} placeholder="Conditions de paiement, mentions legales..." rows={3} className="resize-y" /></Field>
@@ -514,12 +514,12 @@ export default function NouvelleFacturePage() {
       <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-lg">
         <div className="max-w-5xl mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex gap-2">
-            <Button variant="outline" onClick={handlePreview} className="text-[#1E2A4A]"><Eye className="w-4 h-4 mr-2" />Apercu</Button>
+            <Button variant="outline" onClick={handlePreview} className="text-[#0B0F2E]"><Eye className="w-4 h-4 mr-2" />Apercu</Button>
             <Button variant="outline" onClick={handleDownloadPDF}><Download className="w-4 h-4 mr-2" />Telecharger PDF</Button>
           </div>
           <div className="flex gap-2">
-            <Button onClick={() => handleSave("brouillon")} disabled={saving} variant="outline" className="border-[#1E2A4A] text-[#1E2A4A]"><Save className="w-4 h-4 mr-2" />{saving ? "..." : "Sauvegarder brouillon"}</Button>
-            <Button onClick={() => handleSave("en_attente")} disabled={saving} className="bg-[#C9A84C] hover:bg-[#b8973e] text-white font-semibold"><Lock className="w-4 h-4 mr-2" />{saving ? "..." : "Finaliser"}</Button>
+            <Button onClick={() => handleSave("brouillon")} disabled={saving} variant="outline" className="border-[#0B0F2E] text-[#0B0F2E]"><Save className="w-4 h-4 mr-2" />{saving ? "..." : "Sauvegarder brouillon"}</Button>
+            <Button onClick={() => handleSave("en_attente")} disabled={saving} className="bg-[#D4AF37] hover:bg-[#b8973e] text-white font-semibold"><Lock className="w-4 h-4 mr-2" />{saving ? "..." : "Finaliser"}</Button>
           </div>
         </div>
       </div>

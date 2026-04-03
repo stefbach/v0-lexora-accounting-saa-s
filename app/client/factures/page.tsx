@@ -268,21 +268,21 @@ export default function ClientFacturesPage() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#1E2A4A]">Factures Clients</h1>
+          <h1 className="text-2xl font-bold text-[#0B0F2E]">Factures Clients</h1>
           <p className="text-sm text-gray-500">Gestion des creances clients - Conforme MRA</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => router.push("/client/facturation-settings")}><Settings className="w-4 h-4 mr-2" />Parametres</Button>
-          <Button className="bg-[#1E2A4A]" onClick={() => router.push("/client/nouvelle-facture")}><Plus className="w-4 h-4 mr-2" />Nouvelle facture</Button>
+          <Button className="bg-[#0B0F2E]" onClick={() => router.push("/client/nouvelle-facture")}><Plus className="w-4 h-4 mr-2" />Nouvelle facture</Button>
         </div>
       </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <Card><CardContent className="p-4 flex items-center gap-3"><FileText className="w-8 h-8 text-blue-600" /><div><p className="text-xs text-gray-500">Total CA (MUR)</p><p className="text-xl font-bold text-[#1E2A4A]">{fmt(totalMUR)}</p></div></CardContent></Card>
-        <Card><CardContent className="p-4 flex items-center gap-3"><TrendingUp className="w-8 h-8 text-green-600" /><div><p className="text-xs text-gray-500">Factures</p><p className="text-xl font-bold text-[#1E2A4A]">{filtered.length}</p></div></CardContent></Card>
-        <Card><CardContent className="p-4 flex items-center gap-3"><Clock className="w-8 h-8 text-yellow-600" /><div><p className="text-xs text-gray-500">En attente</p><p className="text-xl font-bold text-[#1E2A4A]">{nbEnAttente}</p></div></CardContent></Card>
-        <Card><CardContent className="p-4 flex items-center gap-3"><AlertCircle className="w-8 h-8 text-red-600" /><div><p className="text-xs text-gray-500">En retard</p><p className="text-xl font-bold text-[#1E2A4A]">{nbRetard}</p></div></CardContent></Card>
+        <Card><CardContent className="p-4 flex items-center gap-3"><FileText className="w-8 h-8 text-blue-600" /><div><p className="text-xs text-gray-500">Total CA (MUR)</p><p className="text-xl font-bold text-[#0B0F2E]">{fmt(totalMUR)}</p></div></CardContent></Card>
+        <Card><CardContent className="p-4 flex items-center gap-3"><TrendingUp className="w-8 h-8 text-green-600" /><div><p className="text-xs text-gray-500">Factures</p><p className="text-xl font-bold text-[#0B0F2E]">{filtered.length}</p></div></CardContent></Card>
+        <Card><CardContent className="p-4 flex items-center gap-3"><Clock className="w-8 h-8 text-yellow-600" /><div><p className="text-xs text-gray-500">En attente</p><p className="text-xl font-bold text-[#0B0F2E]">{nbEnAttente}</p></div></CardContent></Card>
+        <Card><CardContent className="p-4 flex items-center gap-3"><AlertCircle className="w-8 h-8 text-red-600" /><div><p className="text-xs text-gray-500">En retard</p><p className="text-xl font-bold text-[#0B0F2E]">{nbRetard}</p></div></CardContent></Card>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -315,7 +315,7 @@ export default function ClientFacturesPage() {
           <Card>
             <CardContent className="p-0 overflow-x-auto">
               {loading ? (
-                <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-[#1E2A4A]" /></div>
+                <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-[#0B0F2E]" /></div>
               ) : filtered.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">Aucune facture client. Creez votre premiere facture.</div>
               ) : (
@@ -338,7 +338,7 @@ export default function ClientFacturesPage() {
                         <TableCell className="text-right text-sm">{f.montant_tva > 0 ? <span className="text-orange-600">{fmt(f.montant_tva)}</span> : <span className="text-gray-400">0</span>}</TableCell>
                         <TableCell className="text-right font-semibold">{fmt(f.montant_ttc)}</TableCell>
                         <TableCell><Badge variant="outline">{f.devise}</Badge></TableCell>
-                        <TableCell className="text-right font-bold text-[#1E2A4A]">{fmt(Number(f.montant_mur) || 0)}</TableCell>
+                        <TableCell className="text-right font-bold text-[#0B0F2E]">{fmt(Number(f.montant_mur) || 0)}</TableCell>
                         <TableCell>
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUT_COLORS[f.statut] || ""}`}>
                             {f.statut === "en_attente" ? "en attente" : f.statut}
@@ -355,7 +355,7 @@ export default function ClientFacturesPage() {
                               size="sm"
                               onClick={() => handleFiscalise(f)}
                               disabled={fiscalisingId === f.id}
-                              className="text-xs border-[#C9A84C] text-[#C9A84C] hover:bg-[#C9A84C]/10 h-7 px-2"
+                              className="text-xs border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37]/10 h-7 px-2"
                             >
                               {fiscalisingId === f.id ? (
                                 <Loader2 className="w-3 h-3 animate-spin mr-1" />
@@ -391,22 +391,22 @@ export default function ClientFacturesPage() {
             <p className="text-sm text-gray-500">Gerez vos factures recurrentes mensuelles ou trimestrielles</p>
             <div className="flex gap-2">
               <Button variant="outline" onClick={generateMonthlyInvoices}><CalendarDays className="w-4 h-4 mr-2" />Generer les factures du mois</Button>
-              <Button onClick={() => setRecurringDialog(true)} className="bg-[#1E2A4A]"><Plus className="w-4 h-4 mr-2" />Nouveau modele recurrent</Button>
+              <Button onClick={() => setRecurringDialog(true)} className="bg-[#0B0F2E]"><Plus className="w-4 h-4 mr-2" />Nouveau modele recurrent</Button>
             </div>
           </div>
 
           {/* Generation preview */}
           {generatedPreview.length > 0 && (
-            <Card className="border-[#C9A84C] bg-[#C9A84C]/5">
+            <Card className="border-[#D4AF37] bg-[#D4AF37]/5">
               <CardHeader>
-                <CardTitle className="text-[#1E2A4A] text-base">Factures a generer</CardTitle>
+                <CardTitle className="text-[#0B0F2E] text-base">Factures a generer</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2 mb-4">
                   {generatedPreview.map(g => (
                     <div key={g.id} className="flex items-center justify-between bg-white rounded-lg p-3 border">
                       <div>
-                        <p className="font-medium text-[#1E2A4A]">{g.client_nom}</p>
+                        <p className="font-medium text-[#0B0F2E]">{g.client_nom}</p>
                         <p className="text-sm text-gray-500">{g.services.map(s => s.description).join(", ")}</p>
                       </div>
                       <div className="text-right">
@@ -418,7 +418,7 @@ export default function ClientFacturesPage() {
                 </div>
                 <div className="flex gap-2 justify-end">
                   <Button variant="outline" onClick={() => setGeneratedPreview([])}>Annuler</Button>
-                  <Button onClick={confirmGeneration} disabled={generating} className="bg-[#1E2A4A]">
+                  <Button onClick={confirmGeneration} disabled={generating} className="bg-[#0B0F2E]">
                     <CheckCircle2 className="w-4 h-4 mr-2" />{generating ? "Generation..." : `Confirmer (${generatedPreview.length} factures)`}
                   </Button>
                 </div>
@@ -507,7 +507,7 @@ export default function ClientFacturesPage() {
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setRecurringDialog(false)}>Annuler</Button>
-                <Button onClick={saveRecurring} disabled={!rClientId || !rMontant} className="bg-[#1E2A4A]">Creer</Button>
+                <Button onClick={saveRecurring} disabled={!rClientId || !rMontant} className="bg-[#0B0F2E]">Creer</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>

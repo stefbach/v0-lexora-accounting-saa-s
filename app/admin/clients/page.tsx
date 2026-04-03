@@ -255,7 +255,7 @@ export default function AdminClientsPage() {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>Clients</h1>
+        <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>Clients</h1>
         <p className="text-muted-foreground">Gestion des clients et sociétés de la plateforme</p>
       </div>
 
@@ -279,7 +279,7 @@ export default function AdminClientsPage() {
           <TabsContent value="clients" className="space-y-4">
             <div className="flex justify-end">
               <Dialog open={clientDialog} onOpenChange={(o) => { setClientDialog(o); if (!o) resetClientForm() }}>
-                <DialogTrigger asChild><Button style={{ backgroundColor: "#1E2A4A" }}><Plus className="mr-2 h-4 w-4" />Ajouter un client</Button></DialogTrigger>
+                <DialogTrigger asChild><Button style={{ backgroundColor: "#0B0F2E" }}><Plus className="mr-2 h-4 w-4" />Ajouter un client</Button></DialogTrigger>
                 <DialogContent className="max-h-[90vh] overflow-y-auto">
                   <DialogHeader><DialogTitle>Nouveau client</DialogTitle><DialogDescription>Créez un compte client.</DialogDescription></DialogHeader>
                   <div className="space-y-4 py-4">
@@ -327,7 +327,7 @@ export default function AdminClientsPage() {
                   </div>
                   <DialogFooter>
                     <Button variant="outline" onClick={() => { setClientDialog(false); resetClientForm() }}>Annuler</Button>
-                    <Button style={{ backgroundColor: "#C9A84C" }} onClick={handleCreateClient} disabled={creating}>
+                    <Button style={{ backgroundColor: "#D4AF37" }} onClick={handleCreateClient} disabled={creating}>
                       {creating ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Création...</> : "Créer"}
                     </Button>
                   </DialogFooter>
@@ -350,7 +350,7 @@ export default function AdminClientsPage() {
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
                           {getClientSocietes(c.id).length > 0
-                            ? getClientSocietes(c.id).map((s, i) => <Badge key={i} variant="outline" style={{ borderColor: "#C9A84C", color: "#1E2A4A" }}>{s}</Badge>)
+                            ? getClientSocietes(c.id).map((s, i) => <Badge key={i} variant="outline" style={{ borderColor: "#D4AF37", color: "#0B0F2E" }}>{s}</Badge>)
                             : <span className="text-muted-foreground text-sm">Aucune</span>}
                         </div>
                       </TableCell>
@@ -358,7 +358,7 @@ export default function AdminClientsPage() {
                       <TableCell className="text-muted-foreground">{new Date(c.created_at).toLocaleDateString("fr-FR")}</TableCell>
                       <TableCell>
                         <Button variant="ghost" size="sm" title="Lier des sociétés" onClick={() => openLinkDialog(c)}>
-                          <Link className="h-4 w-4 mr-1" style={{ color: "#C9A84C" }} />
+                          <Link className="h-4 w-4 mr-1" style={{ color: "#D4AF37" }} />
                           <span className="text-xs">Lier</span>
                         </Button>
                       </TableCell>
@@ -374,7 +374,7 @@ export default function AdminClientsPage() {
           <TabsContent value="societes" className="space-y-4">
             <div className="flex justify-end">
               <Dialog open={societeDialog} onOpenChange={(o) => { setSocieteDialog(o); if (!o) resetSocieteForm() }}>
-                <DialogTrigger asChild><Button style={{ backgroundColor: "#1E2A4A" }}><Plus className="mr-2 h-4 w-4" />Ajouter une société</Button></DialogTrigger>
+                <DialogTrigger asChild><Button style={{ backgroundColor: "#0B0F2E" }}><Plus className="mr-2 h-4 w-4" />Ajouter une société</Button></DialogTrigger>
                 <DialogContent className="max-h-[90vh] overflow-y-auto">
                   <DialogHeader><DialogTitle>Nouvelle société</DialogTitle></DialogHeader>
                   <div className="space-y-4 py-4">
@@ -413,7 +413,7 @@ export default function AdminClientsPage() {
                   </div>
                   <DialogFooter>
                     <Button variant="outline" onClick={() => { setSocieteDialog(false); resetSocieteForm() }}>Annuler</Button>
-                    <Button style={{ backgroundColor: "#C9A84C" }} onClick={handleCreateSociete} disabled={creatingSociete}>
+                    <Button style={{ backgroundColor: "#D4AF37" }} onClick={handleCreateSociete} disabled={creatingSociete}>
                       {creatingSociete ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Création...</> : "Créer"}
                     </Button>
                   </DialogFooter>
@@ -436,7 +436,7 @@ export default function AdminClientsPage() {
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
                           {getSocieteClients(s.id).length > 0
-                            ? getSocieteClients(s.id).map(c => <Badge key={c.id} variant="outline" style={{ borderColor: "#C9A84C", color: "#1E2A4A" }}>{c.full_name}</Badge>)
+                            ? getSocieteClients(s.id).map(c => <Badge key={c.id} variant="outline" style={{ borderColor: "#D4AF37", color: "#0B0F2E" }}>{c.full_name}</Badge>)
                             : <span className="text-muted-foreground text-sm">Aucun</span>}
                         </div>
                       </TableCell>
@@ -485,7 +485,7 @@ export default function AdminClientsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setLinkDialog(false)}>Annuler</Button>
-            <Button style={{ backgroundColor: "#C9A84C" }} onClick={handleLinkSocietes} disabled={linking || societes.length === 0}>
+            <Button style={{ backgroundColor: "#D4AF37" }} onClick={handleLinkSocietes} disabled={linking || societes.length === 0}>
               {linking ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Liaison...</> : "Enregistrer"}
             </Button>
           </DialogFooter>

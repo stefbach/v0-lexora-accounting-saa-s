@@ -76,7 +76,7 @@ const MODULE_DETAILS: Record<keyof ModulesConfig, string> = {
 }
 
 const PLAN_COLORS: Record<string, string> = {
-  premium: "#C9A84C",
+  premium: "#D4AF37",
   comptabilite: "#2563eb",
   rh_paie: "#16a34a",
   compta_rh: "#7c3aed",
@@ -285,11 +285,11 @@ export default function AdminServicesPage() {
     return (
       <div className="p-6 space-y-6">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>Services & Plans</h1>
+          <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>Services & Plans</h1>
           <p className="text-muted-foreground mt-1">Chargement...</p>
         </div>
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#1E2A4A" }} />
+          <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#0B0F2E" }} />
         </div>
       </div>
     )
@@ -302,7 +302,7 @@ export default function AdminServicesPage() {
     <div className="p-6 space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>Services & Plans</h1>
+        <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>Services & Plans</h1>
         <p className="text-muted-foreground mt-1">
           Gestion des plans de service et attribution aux societes
         </p>
@@ -330,8 +330,8 @@ export default function AdminServicesPage() {
             className="w-full flex items-center justify-between"
           >
             <div className="flex items-center gap-2">
-              <Settings className="h-5 w-5" style={{ color: "#C9A84C" }} />
-              <CardTitle style={{ color: "#1E2A4A" }}>Plans disponibles</CardTitle>
+              <Settings className="h-5 w-5" style={{ color: "#D4AF37" }} />
+              <CardTitle style={{ color: "#0B0F2E" }}>Plans disponibles</CardTitle>
             </div>
             {section1Open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
           </button>
@@ -347,7 +347,7 @@ export default function AdminServicesPage() {
                     <div className="h-1.5" style={{ backgroundColor: color }} />
                     <CardHeader className="pb-2">
                       <div className="flex items-center justify-between">
-                        <CardTitle className="text-base" style={{ color: "#1E2A4A" }}>
+                        <CardTitle className="text-base" style={{ color: "#0B0F2E" }}>
                           {plan.nom}
                         </CardTitle>
                         <Button
@@ -356,7 +356,7 @@ export default function AdminServicesPage() {
                           onClick={() => openEditPlan(plan)}
                           title="Modifier le plan"
                         >
-                          <Pencil className="h-3.5 w-3.5" style={{ color: "#C9A84C" }} />
+                          <Pencil className="h-3.5 w-3.5" style={{ color: "#D4AF37" }} />
                         </Button>
                       </div>
                       <CardDescription className="text-xs">{plan.description}</CardDescription>
@@ -379,7 +379,7 @@ export default function AdminServicesPage() {
                       <div className="pt-2 border-t">
                         <div className="flex items-center justify-between">
                           <span className="text-xs text-muted-foreground">Prix mensuel</span>
-                          <span className="font-semibold text-sm" style={{ color: "#1E2A4A" }}>
+                          <span className="font-semibold text-sm" style={{ color: "#0B0F2E" }}>
                             {plan.prix_mensuel > 0 ? `Rs ${Number(plan.prix_mensuel).toLocaleString("fr-FR")}` : "Sur devis"}
                           </span>
                         </div>
@@ -409,8 +409,8 @@ export default function AdminServicesPage() {
             className="w-full flex items-center justify-between"
           >
             <div className="flex items-center gap-2">
-              <Building2 className="h-5 w-5" style={{ color: "#C9A84C" }} />
-              <CardTitle style={{ color: "#1E2A4A" }}>Attribution par societe</CardTitle>
+              <Building2 className="h-5 w-5" style={{ color: "#D4AF37" }} />
+              <CardTitle style={{ color: "#0B0F2E" }}>Attribution par societe</CardTitle>
             </div>
             <div className="flex items-center gap-2">
               <CardDescription>{societes.length} societe(s)</CardDescription>
@@ -444,7 +444,7 @@ export default function AdminServicesPage() {
                         <div className="flex flex-wrap gap-1">
                           {soc.clients.length > 0
                             ? soc.clients.map(c => (
-                                <Badge key={c.id} variant="outline" className="text-xs" style={{ borderColor: "#C9A84C", color: "#1E2A4A" }}>
+                                <Badge key={c.id} variant="outline" className="text-xs" style={{ borderColor: "#D4AF37", color: "#0B0F2E" }}>
                                   {c.full_name}
                                 </Badge>
                               ))
@@ -473,7 +473,7 @@ export default function AdminServicesPage() {
                             variant="ghost"
                             size="sm"
                             className="text-xs"
-                            style={{ color: "#C9A84C" }}
+                            style={{ color: "#D4AF37" }}
                             onClick={() => openCustomDialog(soc)}
                           >
                             Personnaliser
@@ -506,8 +506,8 @@ export default function AdminServicesPage() {
             className="w-full flex items-center justify-between"
           >
             <div className="flex items-center gap-2">
-              <CreditCard className="h-5 w-5" style={{ color: "#C9A84C" }} />
-              <CardTitle style={{ color: "#1E2A4A" }}>Statistiques</CardTitle>
+              <CreditCard className="h-5 w-5" style={{ color: "#D4AF37" }} />
+              <CardTitle style={{ color: "#0B0F2E" }}>Statistiques</CardTitle>
             </div>
             {section3Open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
           </button>
@@ -519,7 +519,7 @@ export default function AdminServicesPage() {
               <Card>
                 <CardHeader className="pb-2">
                   <div className="flex items-center gap-2">
-                    <Building2 className="h-4 w-4" style={{ color: "#C9A84C" }} />
+                    <Building2 className="h-4 w-4" style={{ color: "#D4AF37" }} />
                     <CardTitle className="text-sm">Societes par plan</CardTitle>
                   </div>
                 </CardHeader>
@@ -530,7 +530,7 @@ export default function AdminServicesPage() {
                     return (
                       <div key={ps.id} className="space-y-1">
                         <div className="flex items-center justify-between text-sm">
-                          <span style={{ color: "#1E2A4A" }}>{ps.nom}</span>
+                          <span style={{ color: "#0B0F2E" }}>{ps.nom}</span>
                           <span className="font-medium">{ps.count} societe(s)</span>
                         </div>
                         <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -545,7 +545,7 @@ export default function AdminServicesPage() {
                   {customCount > 0 && (
                     <div className="space-y-1">
                       <div className="flex items-center justify-between text-sm">
-                        <span style={{ color: "#1E2A4A" }}>Personnalise</span>
+                        <span style={{ color: "#0B0F2E" }}>Personnalise</span>
                         <span className="font-medium">{customCount} societe(s)</span>
                       </div>
                       <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -577,7 +577,7 @@ export default function AdminServicesPage() {
               <Card>
                 <CardHeader className="pb-2">
                   <div className="flex items-center gap-2">
-                    <CreditCard className="h-4 w-4" style={{ color: "#C9A84C" }} />
+                    <CreditCard className="h-4 w-4" style={{ color: "#D4AF37" }} />
                     <CardTitle className="text-sm">Revenue estimatif par plan</CardTitle>
                   </div>
                 </CardHeader>
@@ -590,11 +590,11 @@ export default function AdminServicesPage() {
                         <div className="flex items-center gap-2">
                           <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
                           <div>
-                            <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>{ps.nom}</p>
+                            <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>{ps.nom}</p>
                             <p className="text-xs text-muted-foreground">{ps.count} societe(s)</p>
                           </div>
                         </div>
-                        <span className="font-semibold text-sm" style={{ color: "#1E2A4A" }}>
+                        <span className="font-semibold text-sm" style={{ color: "#0B0F2E" }}>
                           {revenue > 0 ? `Rs ${revenue.toLocaleString("fr-FR")}` : "Sur devis"}
                         </span>
                       </div>
@@ -602,8 +602,8 @@ export default function AdminServicesPage() {
                   })}
                   <div className="pt-3 border-t">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium" style={{ color: "#1E2A4A" }}>Total mensuel estimatif</span>
-                      <span className="font-bold" style={{ color: "#C9A84C" }}>
+                      <span className="text-sm font-medium" style={{ color: "#0B0F2E" }}>Total mensuel estimatif</span>
+                      <span className="font-bold" style={{ color: "#D4AF37" }}>
                         Rs {planStats.reduce((sum, ps) => sum + ps.count * (Number(ps.prix_mensuel) || 0), 0).toLocaleString("fr-FR")}
                       </span>
                     </div>
@@ -621,7 +621,7 @@ export default function AdminServicesPage() {
       <Dialog open={editPlanDialog} onOpenChange={(o) => { setEditPlanDialog(o); if (!o) setEditingPlan(null) }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle style={{ color: "#1E2A4A" }}>
+            <DialogTitle style={{ color: "#0B0F2E" }}>
               Modifier le plan: {editingPlan?.nom}
             </DialogTitle>
             <DialogDescription>
@@ -632,7 +632,7 @@ export default function AdminServicesPage() {
             {(Object.keys(MODULE_LABELS) as (keyof ModulesConfig)[]).map(key => (
               <div key={key} className="flex items-center justify-between p-3 rounded-lg border">
                 <div>
-                  <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>{MODULE_LABELS[key]}</p>
+                  <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>{MODULE_LABELS[key]}</p>
                   <p className="text-xs text-muted-foreground">{MODULE_DETAILS[key]}</p>
                 </div>
                 <Switch
@@ -657,7 +657,7 @@ export default function AdminServicesPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditPlanDialog(false)}>Annuler</Button>
             <Button
-              style={{ backgroundColor: "#C9A84C" }}
+              style={{ backgroundColor: "#D4AF37" }}
               onClick={handleSavePlan}
               disabled={savingPlan}
             >
@@ -674,7 +674,7 @@ export default function AdminServicesPage() {
       <Dialog open={assignDialog} onOpenChange={(o) => { setAssignDialog(o); if (!o) setAssignSociete(null) }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle style={{ color: "#1E2A4A" }}>
+            <DialogTitle style={{ color: "#0B0F2E" }}>
               Changer de plan
             </DialogTitle>
             <DialogDescription>
@@ -721,7 +721,7 @@ export default function AdminServicesPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setAssignDialog(false)}>Annuler</Button>
             <Button
-              style={{ backgroundColor: "#C9A84C" }}
+              style={{ backgroundColor: "#D4AF37" }}
               onClick={handleAssignPlan}
               disabled={assignSaving || !assignPlanCode}
             >
@@ -738,7 +738,7 @@ export default function AdminServicesPage() {
       <Dialog open={customDialog} onOpenChange={(o) => { setCustomDialog(o); if (!o) setCustomSociete(null) }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle style={{ color: "#1E2A4A" }}>
+            <DialogTitle style={{ color: "#0B0F2E" }}>
               Plan personnalise
             </DialogTitle>
             <DialogDescription>
@@ -750,7 +750,7 @@ export default function AdminServicesPage() {
             {(Object.keys(MODULE_LABELS) as (keyof ModulesConfig)[]).map(key => (
               <div key={key} className="flex items-center justify-between p-3 rounded-lg border">
                 <div>
-                  <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>{MODULE_LABELS[key]}</p>
+                  <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>{MODULE_LABELS[key]}</p>
                   <p className="text-xs text-muted-foreground">{MODULE_DETAILS[key]}</p>
                 </div>
                 <Switch
@@ -764,7 +764,7 @@ export default function AdminServicesPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setCustomDialog(false)}>Annuler</Button>
             <Button
-              style={{ backgroundColor: "#C9A84C" }}
+              style={{ backgroundColor: "#D4AF37" }}
               onClick={handleSaveCustom}
               disabled={customSaving}
             >

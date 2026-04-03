@@ -89,7 +89,7 @@ export default function ComptableDocumentsPage() {
   return (
     <div className="flex-1 overflow-auto p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>Documents</h1>
+        <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>Documents</h1>
         <p className="text-muted-foreground">Documents de tous vos clients</p>
       </div>
 

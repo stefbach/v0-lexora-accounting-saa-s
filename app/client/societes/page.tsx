@@ -65,12 +65,12 @@ export default function SocietesPage() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#1E2A4A]">Mes Sociétés</h1>
+          <h1 className="text-2xl font-bold text-[#0B0F2E]">Mes Sociétés</h1>
           <p className="text-sm text-gray-500">{societes.length} société{societes.length!==1?'s':''}</p>
         </div>
         <Dialog open={open} onOpenChange={o=>{ setOpen(o); if(!o){setForm(EMPTY);setEditId(null)} }}>
           <DialogTrigger asChild>
-            <Button className="bg-[#1E2A4A]"><Plus className="w-4 h-4 mr-2"/>Nouvelle société</Button>
+            <Button className="bg-[#0B0F2E]"><Plus className="w-4 h-4 mr-2"/>Nouvelle société</Button>
           </DialogTrigger>
           <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle>{editId?'Modifier':'Créer'} une société</DialogTitle></DialogHeader>
@@ -102,7 +102,7 @@ export default function SocietesPage() {
                 <div><Label>Téléphone</Label><Input value={form.telephone} onChange={F('telephone')} placeholder="+230 xxx xxxx"/></div>
                 <div><Label>Email</Label><Input value={form.email} onChange={F('email')} placeholder="contact@société.mu"/></div>
               </div>
-              <Button onClick={save} disabled={saving||!form.nom} className="w-full bg-[#1E2A4A]">
+              <Button onClick={save} disabled={saving||!form.nom} className="w-full bg-[#0B0F2E]">
                 {saving?'Enregistrement...':editId?'Modifier':'Créer la société'}
               </Button>
             </div>
@@ -113,11 +113,11 @@ export default function SocietesPage() {
       {loading ? (
         <div className="text-center text-gray-400 py-12">Chargement...</div>
       ) : societes.length === 0 ? (
-        <Card className="border-2 border-dashed border-[#C9A84C]/40 bg-[#C9A84C]/5">
+        <Card className="border-2 border-dashed border-[#D4AF37]/40 bg-[#D4AF37]/5">
           <CardContent className="p-10 text-center space-y-4">
-            <Building2 className="w-12 h-12 mx-auto text-[#C9A84C]"/>
+            <Building2 className="w-12 h-12 mx-auto text-[#D4AF37]"/>
             <div>
-              <p className="text-lg font-bold text-[#1E2A4A]">Aucune société</p>
+              <p className="text-lg font-bold text-[#0B0F2E]">Aucune société</p>
               <p className="text-sm text-gray-500 mt-1">Créez votre première société pour commencer.</p>
             </div>
           </CardContent>
@@ -125,11 +125,11 @@ export default function SocietesPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {societes.map(s=>(
-            <Card key={s.id} className="border-l-4 border-l-[#1E2A4A] hover:shadow-md transition-shadow">
+            <Card key={s.id} className="border-l-4 border-l-[#0B0F2E] hover:shadow-md transition-shadow">
               <CardContent className="p-5 space-y-3">
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="font-bold text-[#1E2A4A]">{s.nom}</p>
+                    <p className="font-bold text-[#0B0F2E]">{s.nom}</p>
                     <div className="flex gap-2 mt-1 flex-wrap">
                       {s.brn && <span className="text-xs text-gray-400">BRN: {s.brn}</span>}
                       {s.ern && <span className="text-xs text-gray-400">ERN: {s.ern}</span>}

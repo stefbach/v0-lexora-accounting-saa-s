@@ -6,7 +6,7 @@ export default function JuridiquePage() {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-[#2D1E4A]">Module Juridique</h1>
+        <h1 className="text-2xl font-bold text-[#0B0F2E]">Module Juridique</h1>
         <p className="text-sm text-gray-500">Gestion des contrats, conformité et documents juridiques</p>
       </div>
       <div className="grid grid-cols-2 gap-4">
@@ -17,10 +17,10 @@ export default function JuridiquePage() {
           { href: '/rh/employes', icon: '👥', label: 'Employés', desc: 'Accès lecture — fiches employés' },
         ].map(item => (
           <Link key={item.href} href={item.href}>
-            <Card className="hover:shadow-md transition-shadow cursor-pointer border-l-4 border-l-[#2D1E4A]">
+            <Card className="hover:shadow-md transition-shadow cursor-pointer border-l-4 border-l-[#0B0F2E]">
               <CardContent className="p-5">
                 <p className="text-3xl mb-2">{item.icon}</p>
-                <p className="font-bold text-[#2D1E4A]">{item.label}</p>
+                <p className="font-bold text-[#0B0F2E]">{item.label}</p>
                 <p className="text-xs text-gray-500 mt-1">{item.desc}</p>
               </CardContent>
             </Card>

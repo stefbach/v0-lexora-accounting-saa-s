@@ -7,8 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Loader2, Shield, GraduationCap, PiggyBank, Receipt, Download } from "lucide-react"
 
-const NAVY = "#1E2A4A"
-const GOLD = "#C9A84C"
+const NAVY = "#0B0F2E"
+const GOLD = "#D4AF37"
 function fmt(n: number) { return n.toLocaleString("fr-FR", { maximumFractionDigits: 0 }) + " MUR" }
 
 export default function ChargesSocialesPage() {

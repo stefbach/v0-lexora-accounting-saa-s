@@ -142,13 +142,13 @@ export default function ClientRapprochementPage() {
   const matched = transactions.filter((t: any) => t.facture_id || t.ecriture_id)
   const unmatched = transactions.filter((t: any) => !t.facture_id && !t.ecriture_id)
 
-  if (loading) return <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-[#1E2A4A]" /></div>
+  if (loading) return <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-[#0B0F2E]" /></div>
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#1E2A4A]">Rapprochement bancaire</h1>
+          <h1 className="text-2xl font-bold text-[#0B0F2E]">Rapprochement bancaire</h1>
           <p className="text-sm text-gray-500">Rapprocher les transactions avec les factures et ecritures</p>
         </div>
         <div className="flex gap-2 items-center">
@@ -161,7 +161,7 @@ export default function ClientRapprochementPage() {
             </Select>
           )}
           <Button variant="outline" onClick={load}><RefreshCw className="w-4 h-4 mr-2" />Actualiser</Button>
-          <Button onClick={handleAutoMatch} disabled={autoMatching} className="bg-[#1E2A4A]">
+          <Button onClick={handleAutoMatch} disabled={autoMatching} className="bg-[#0B0F2E]">
             <Zap className={`w-4 h-4 mr-2 ${autoMatching ? "animate-spin" : ""}`} />
             {autoMatching ? "Analyse..." : "Rapprochement auto"}
           </Button>
@@ -170,7 +170,7 @@ export default function ClientRapprochementPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-4 gap-4">
-        <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Transactions</p><p className="text-2xl font-bold text-[#1E2A4A]">{transactions.length}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Transactions</p><p className="text-2xl font-bold text-[#0B0F2E]">{transactions.length}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Rapprochees</p><p className="text-2xl font-bold text-green-600">{matched.length}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Non rapprochees</p><p className="text-2xl font-bold text-red-600">{unmatched.length}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Factures en attente</p><p className="text-2xl font-bold text-orange-600">{factures.length}</p></CardContent></Card>
@@ -179,7 +179,7 @@ export default function ClientRapprochementPage() {
       {/* Rapprochees */}
       {matched.length > 0 && (
         <Card>
-          <CardHeader><CardTitle className="text-[#1E2A4A] flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-green-600" />Rapprochees ({matched.length})</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-green-600" />Rapprochees ({matched.length})</CardTitle></CardHeader>
           <CardContent className="p-0 overflow-x-auto">
             <Table>
               <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Libelle</TableHead><TableHead className="text-right">Montant</TableHead><TableHead>Tiers</TableHead><TableHead>Lettre</TableHead><TableHead>Action</TableHead></TableRow></TableHeader>
@@ -202,7 +202,7 @@ export default function ClientRapprochementPage() {
 
       {/* Non rapprochees */}
       <Card>
-        <CardHeader><CardTitle className="text-[#1E2A4A] flex items-center gap-2"><AlertCircle className="w-5 h-5 text-orange-500" />Non rapprochees ({unmatched.length})</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2"><AlertCircle className="w-5 h-5 text-orange-500" />Non rapprochees ({unmatched.length})</CardTitle></CardHeader>
         <CardContent className="p-0 overflow-x-auto">
           {unmatched.length === 0 ? (
             <div className="p-8 text-center text-gray-400">Toutes les transactions sont rapprochees</div>
@@ -230,7 +230,7 @@ export default function ClientRapprochementPage() {
       {/* Factures en attente */}
       {factures.length > 0 && (
         <Card>
-          <CardHeader><CardTitle className="text-[#1E2A4A] flex items-center gap-2"><ArrowRightLeft className="w-5 h-5" style={{ color: "#C9A84C" }} />Factures en attente ({factures.length})</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2"><ArrowRightLeft className="w-5 h-5" style={{ color: "#D4AF37" }} />Factures en attente ({factures.length})</CardTitle></CardHeader>
           <CardContent className="p-0 overflow-x-auto">
             <Table>
               <TableHeader><TableRow><TableHead>N°</TableHead><TableHead>Type</TableHead><TableHead>Tiers</TableHead><TableHead>Date</TableHead><TableHead className="text-right">Montant TTC</TableHead><TableHead>Statut</TableHead></TableRow></TableHeader>

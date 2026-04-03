@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { t, getLocale } from "@/lib/i18n"
 import { LanguageSwitcherLight } from "@/components/LanguageSwitcher"
+import { LexoraLogo } from "@/components/LexoraLogo"
 import {
   FileSearch,
   BookOpen,
@@ -133,31 +134,34 @@ export default function HomePage() {
   ]
 
   return (
-    <div className="flex min-h-screen flex-col bg-white">
-      {/* HEADER */}
-      <header className="sticky top-0 z-50 border-b bg-white/80 backdrop-blur-md">
+    <div className="flex min-h-screen flex-col" style={{ backgroundColor: "#0B0F2E" }}>
+      {/* NAVBAR */}
+      <header className="sticky top-0 z-50" style={{ backgroundColor: "#0B0F2E", borderBottom: "1px solid #1E2760" }}>
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
-          <Link href="/" className="text-2xl font-bold tracking-tight" style={{ color: "#1E2A4A" }}>
-            LEXORA
-          </Link>
+          <LexoraLogo href="/" size="sm" />
           <nav className="hidden gap-8 md:flex">
-            <a href="#features" className="text-sm font-medium text-gray-600 hover:text-gray-900">
+            <a href="#features" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif" }}>
               {t('home.modules', locale)}
             </a>
-            <a href="#ai" className="text-sm font-medium text-gray-600 hover:text-gray-900">
+            <a href="#ai" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif" }}>
               {t('home.ai_intelligence', locale)}
             </a>
-            <a href="#plans" className="text-sm font-medium text-gray-600 hover:text-gray-900">
+            <a href="#plans" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif" }}>
               {t('home.plans', locale)}
             </a>
-            <a href="#compliance" className="text-sm font-medium text-gray-600 hover:text-gray-900">
+            <a href="#compliance" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif" }}>
               {t('home.compliance', locale)}
             </a>
           </nav>
           <div className="flex items-center gap-3">
             <LanguageSwitcherLight />
             <Link href="/auth/login">
-              <Button variant="outline" size="sm">
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-[#4191FF] text-[#4191FF] hover:bg-[#4191FF]/10"
+                style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 500 }}
+              >
                 {t('home.login', locale)}
               </Button>
             </Link>
@@ -169,33 +173,46 @@ export default function HomePage() {
         {/* HERO */}
         <section
           className="relative overflow-hidden py-24 md:py-32"
-          style={{
-            background: "linear-gradient(135deg, #1E2A4A 0%, #2a3d6b 50%, #1E2A4A 100%)",
-          }}
+          style={{ backgroundColor: "#0B0F2E" }}
         >
-          <div className="absolute inset-0 opacity-10" style={{
-            backgroundImage: "radial-gradient(circle at 25% 25%, #C9A84C 1px, transparent 1px), radial-gradient(circle at 75% 75%, #C9A84C 1px, transparent 1px)",
+          <div className="absolute inset-0 opacity-5" style={{
+            backgroundImage: "radial-gradient(circle at 25% 25%, #D4AF37 1px, transparent 1px), radial-gradient(circle at 75% 75%, #D4AF37 1px, transparent 1px)",
             backgroundSize: "60px 60px",
           }} />
           <div className="relative mx-auto max-w-4xl px-6 text-center">
-            <Badge className="mb-6 border-0 px-4 py-1.5 text-sm font-medium" style={{ backgroundColor: "rgba(201,168,76,0.15)", color: "#C9A84C" }}>
+            <Badge
+              className="mb-6 border-0 px-4 py-1.5 text-sm font-medium"
+              style={{ backgroundColor: "rgba(212,175,55,0.12)", color: "#D4AF37", border: "1px solid rgba(212,175,55,0.25)", fontFamily: "'Poppins', sans-serif" }}
+            >
               <Sparkles className="mr-2 h-4 w-4" />
               {t('home.hero_badge', locale)}
             </Badge>
-            <h1 className="mb-6 text-4xl font-extrabold tracking-tight text-white md:text-6xl">
+            <h1
+              className="mb-6 text-4xl font-bold tracking-tight md:text-6xl"
+              style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif" }}
+            >
               {t('home.hero_title', locale)}
             </h1>
-            <p className="mx-auto mb-10 max-w-2xl text-lg text-gray-300">
+            <p className="mx-auto mb-10 max-w-2xl text-lg" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif", fontWeight: 300, lineHeight: 1.7 }}>
               {t('home.hero_subtitle', locale)}
             </p>
             <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
               <Link href="/auth/login">
-                <Button size="lg" className="px-8 text-base font-semibold" style={{ backgroundColor: "#C9A84C", color: "#1E2A4A" }}>
+                <Button
+                  size="lg"
+                  className="px-8 text-base font-semibold"
+                  style={{ backgroundColor: "#4191FF", color: "#E8EAFC", fontFamily: "'Poppins', sans-serif", fontWeight: 500, borderRadius: "6px" }}
+                >
                   {t('home.get_started', locale)}
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
               </Link>
-              <Button size="lg" variant="outline" className="border-2 border-white px-8 text-base font-semibold text-white hover:bg-white hover:text-[#1E2A4A]">
+              <Button
+                size="lg"
+                variant="outline"
+                className="px-8 text-base font-semibold"
+                style={{ border: "1px solid #4191FF", color: "#4191FF", backgroundColor: "transparent", fontFamily: "'Poppins', sans-serif", fontWeight: 500, borderRadius: "6px" }}
+              >
                 {t('home.watch_demo', locale)}
               </Button>
             </div>
@@ -203,13 +220,13 @@ export default function HomePage() {
         </section>
 
         {/* FEATURES */}
-        <section id="features" className="py-20 md:py-28">
+        <section id="features" className="py-20 md:py-28" style={{ backgroundColor: "#0E1338" }}>
           <div className="mx-auto max-w-7xl px-6">
             <div className="mb-16 text-center">
-              <h2 className="mb-4 text-3xl font-bold md:text-4xl" style={{ color: "#1E2A4A" }}>
+              <h2 className="mb-4 text-3xl font-bold md:text-4xl" style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif", fontWeight: 500 }}>
                 {t('home.smart_modules', locale)}
               </h2>
-              <p className="mx-auto max-w-2xl text-gray-500">
+              <p className="mx-auto max-w-2xl" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif", fontWeight: 300, lineHeight: 1.7 }}>
                 {t('home.smart_modules_desc', locale)}
               </p>
             </div>
@@ -217,24 +234,25 @@ export default function HomePage() {
               {features.map((feature) => (
                 <Card
                   key={feature.title}
-                  className="group border border-gray-100 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
+                  className="group transition-all duration-300 hover:-translate-y-1"
+                  style={{ backgroundColor: "#141C4A", border: "1px solid #1E2760", borderRadius: "12px" }}
                 >
                   <CardHeader className="pb-3">
                     <div
                       className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl"
-                      style={{ backgroundColor: "rgba(201,168,76,0.1)" }}
+                      style={{ backgroundColor: "rgba(65,145,255,0.12)" }}
                     >
-                      <feature.icon className="h-6 w-6" style={{ color: "#C9A84C" }} />
+                      <feature.icon className="h-6 w-6" style={{ color: "#4191FF" }} />
                     </div>
-                    <CardTitle className="text-lg" style={{ color: "#1E2A4A" }}>
+                    <CardTitle className="text-lg" style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif", fontWeight: 500 }}>
                       {feature.title}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <ul className="space-y-2">
                       {feature.items.map((item, i) => (
-                        <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
-                          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "#C9A84C" }} />
+                        <li key={i} className="flex items-start gap-2 text-sm" style={{ color: "#4A5490" }}>
+                          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "#D4AF37" }} />
                           <span>{item}</span>
                         </li>
                       ))}
@@ -247,13 +265,13 @@ export default function HomePage() {
         </section>
 
         {/* AI SECTION */}
-        <section id="ai" className="py-20 md:py-28" style={{ backgroundColor: "#f8f9fb" }}>
+        <section id="ai" className="py-20 md:py-28" style={{ backgroundColor: "#111840" }}>
           <div className="mx-auto max-w-7xl px-6">
             <div className="mb-16 text-center">
-              <h2 className="mb-4 text-3xl font-bold md:text-4xl" style={{ color: "#1E2A4A" }}>
+              <h2 className="mb-4 text-3xl font-bold md:text-4xl" style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif", fontWeight: 500 }}>
                 {t('home.ai_at_core', locale)}
               </h2>
-              <p className="mx-auto max-w-2xl text-gray-500">
+              <p className="mx-auto max-w-2xl" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif", fontWeight: 300, lineHeight: 1.7 }}>
                 {t('home.ai_at_core_desc', locale)}
               </p>
             </div>
@@ -261,15 +279,16 @@ export default function HomePage() {
               {aiCapabilities.map((cap, i) => (
                 <div
                   key={i}
-                  className="flex items-start gap-4 rounded-xl border border-gray-100 bg-white p-6 shadow-sm transition-all duration-300 hover:shadow-md"
+                  className="flex items-start gap-4 rounded-xl p-6 transition-all duration-300 hover:border-[#4191FF]"
+                  style={{ backgroundColor: "#141C4A", border: "1px solid #1E2760", borderRadius: "12px" }}
                 >
                   <div
                     className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
-                    style={{ backgroundColor: "#1E2A4A" }}
+                    style={{ backgroundColor: "rgba(65,145,255,0.12)" }}
                   >
-                    <cap.icon className="h-5 w-5 text-white" />
+                    <cap.icon className="h-5 w-5" style={{ color: "#4191FF" }} />
                   </div>
-                  <p className="text-sm leading-relaxed text-gray-700">{cap.text}</p>
+                  <p className="text-sm leading-relaxed" style={{ color: "#4A5490", fontWeight: 300, lineHeight: 1.7 }}>{cap.text}</p>
                 </div>
               ))}
             </div>
@@ -277,13 +296,13 @@ export default function HomePage() {
         </section>
 
         {/* PLANS */}
-        <section id="plans" className="py-20 md:py-28">
+        <section id="plans" className="py-20 md:py-28" style={{ backgroundColor: "#0E1338" }}>
           <div className="mx-auto max-w-5xl px-6">
             <div className="mb-16 text-center">
-              <h2 className="mb-4 text-3xl font-bold md:text-4xl" style={{ color: "#1E2A4A" }}>
+              <h2 className="mb-4 text-3xl font-bold md:text-4xl" style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif", fontWeight: 500 }}>
                 {t('home.adapted_plans', locale)}
               </h2>
-              <p className="mx-auto max-w-2xl text-gray-500">
+              <p className="mx-auto max-w-2xl" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif", fontWeight: 300, lineHeight: 1.7 }}>
                 {t('home.adapted_plans_desc', locale)}
               </p>
             </div>
@@ -291,39 +310,43 @@ export default function HomePage() {
               {plans.map((plan) => (
                 <Card
                   key={plan.name}
-                  className={`relative text-center transition-all duration-300 hover:-translate-y-1 hover:shadow-lg ${
-                    plan.highlight ? "border-2 shadow-md" : "border border-gray-100"
-                  }`}
-                  style={plan.highlight ? { borderColor: "#C9A84C" } : {}}
+                  className="relative text-center transition-all duration-300 hover:-translate-y-1"
+                  style={{
+                    backgroundColor: "#141C4A",
+                    border: plan.highlight ? "1px solid #D4AF37" : "1px solid #1E2760",
+                    borderRadius: "12px",
+                  }}
                 >
                   {plan.highlight && (
                     <div
-                      className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-0.5 text-xs font-semibold text-white"
-                      style={{ backgroundColor: "#C9A84C" }}
+                      className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-0.5 text-xs font-semibold"
+                      style={{ backgroundColor: "#D4AF37", color: "#0B0F2E", fontFamily: "'Poppins', sans-serif", fontWeight: 700 }}
                     >
                       {t('home.popular', locale)}
                     </div>
                   )}
                   <CardHeader className="pb-2 pt-8">
-                    <CardTitle className="text-xl" style={{ color: "#1E2A4A" }}>
+                    <CardTitle className="text-xl" style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif", fontWeight: 500 }}>
                       {plan.name}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="pb-8">
-                    <p className="mb-4 text-sm text-gray-500">{plan.description}</p>
+                    <p className="mb-4 text-sm" style={{ color: "#4A5490", fontWeight: 300 }}>{plan.description}</p>
                     <ul className="mb-6 space-y-2 text-left">
                       {plan.features.map((f: string, i: number) => (
-                        <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
-                          <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0" style={{ color: "#C9A84C" }} />
+                        <li key={i} className="flex items-start gap-2 text-sm" style={{ color: "#4A5490" }}>
+                          <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0" style={{ color: "#D4AF37" }} />
                           <span>{f}</span>
                         </li>
                       ))}
                     </ul>
                     <Link href="/auth/login">
                       <Button
-                        variant={plan.highlight ? "default" : "outline"}
                         className="w-full"
-                        style={plan.highlight ? { backgroundColor: "#C9A84C", color: "#1E2A4A" } : {}}
+                        style={plan.highlight
+                          ? { backgroundColor: "#D4AF37", color: "#0B0F2E", fontFamily: "'Poppins', sans-serif", fontWeight: 700, borderRadius: "6px" }
+                          : { backgroundColor: "transparent", border: "1px solid #4191FF", color: "#4191FF", fontFamily: "'Poppins', sans-serif", fontWeight: 500, borderRadius: "6px" }
+                        }
                       >
                         {t('home.choose', locale)}
                       </Button>
@@ -336,10 +359,10 @@ export default function HomePage() {
         </section>
 
         {/* COMPLIANCE */}
-        <section id="compliance" className="py-20 md:py-28" style={{ backgroundColor: "#f8f9fb" }}>
+        <section id="compliance" className="py-20 md:py-28" style={{ backgroundColor: "#111840" }}>
           <div className="mx-auto max-w-5xl px-6">
             <div className="mb-16 text-center">
-              <h2 className="mb-4 text-3xl font-bold md:text-4xl" style={{ color: "#1E2A4A" }}>
+              <h2 className="mb-4 text-3xl font-bold md:text-4xl" style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif", fontWeight: 500 }}>
                 {t('home.compliance_title', locale)}
               </h2>
             </div>
@@ -347,10 +370,11 @@ export default function HomePage() {
               {compliance.map((item, i) => (
                 <div
                   key={i}
-                  className="flex items-center gap-3 rounded-full border border-gray-200 bg-white px-6 py-3 shadow-sm"
+                  className="flex items-center gap-3 rounded-full px-6 py-3"
+                  style={{ backgroundColor: "#141C4A", border: "1px solid #1E2760" }}
                 >
-                  <item.icon className="h-5 w-5" style={{ color: "#C9A84C" }} />
-                  <span className="text-sm font-medium" style={{ color: "#1E2A4A" }}>
+                  <item.icon className="h-5 w-5" style={{ color: "#D4AF37" }} />
+                  <span className="text-sm font-medium" style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif" }}>
                     {item.label}
                   </span>
                 </div>
@@ -360,16 +384,20 @@ export default function HomePage() {
         </section>
 
         {/* CTA */}
-        <section className="py-20 md:py-28" style={{ backgroundColor: "#1E2A4A" }}>
+        <section className="py-20 md:py-28" style={{ backgroundColor: "#0B0F2E" }}>
           <div className="mx-auto max-w-3xl px-6 text-center">
-            <h2 className="mb-4 text-3xl font-bold text-white md:text-4xl">
+            <h2 className="mb-4 text-3xl font-bold md:text-4xl" style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif", fontWeight: 700 }}>
               {t('home.cta_title', locale)}
             </h2>
-            <p className="mb-10 text-gray-400">
+            <p className="mb-10" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif", fontWeight: 300, lineHeight: 1.7 }}>
               {t('home.cta_subtitle', locale)}
             </p>
             <Link href="/auth/login">
-              <Button size="lg" className="px-10 text-base font-semibold" style={{ backgroundColor: "#C9A84C", color: "#1E2A4A" }}>
+              <Button
+                size="lg"
+                className="px-10 text-base font-semibold"
+                style={{ backgroundColor: "#4191FF", color: "#E8EAFC", fontFamily: "'Poppins', sans-serif", fontWeight: 500, borderRadius: "6px" }}
+              >
                 {t('home.cta_button', locale)}
                 <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
@@ -379,30 +407,28 @@ export default function HomePage() {
       </main>
 
       {/* FOOTER */}
-      <footer className="border-t bg-white py-12">
+      <footer style={{ backgroundColor: "#0B0F2E", borderTop: "1px solid #1E2760" }} className="py-12">
         <div className="mx-auto max-w-7xl px-6">
           <div className="flex flex-col items-center justify-between gap-6 md:flex-row">
             <div className="flex items-center gap-3">
-              <Link href="/" className="text-xl font-bold tracking-tight" style={{ color: "#1E2A4A" }}>
-                LEXORA
-              </Link>
-              <span className="text-xs text-gray-400">|</span>
-              <span className="text-xs text-gray-400">Powered by <strong className="text-gray-600">Digital Data Solutions Ltd</strong></span>
+              <LexoraLogo href="/" size="sm" />
+              <span className="text-xs" style={{ color: "#1E2760" }}>|</span>
+              <span className="text-xs" style={{ color: "#4A5490" }}>Powered by <strong style={{ color: "#E8EAFC" }}>Digital Data Solutions Ltd</strong></span>
             </div>
             <div className="flex items-center gap-6">
-              <Link href="/auth/login" className="text-sm text-gray-600 hover:text-gray-900">
+              <Link href="/auth/login" className="text-sm transition-colors hover:text-[#E8EAFC]" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif" }}>
                 {t('home.login', locale)}
               </Link>
-              <a href="#" className="text-sm text-gray-600 hover:text-gray-900">
+              <a href="#" className="text-sm transition-colors hover:text-[#E8EAFC]" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif" }}>
                 {t('home.contact', locale)}
               </a>
             </div>
           </div>
-          <div className="mt-8 border-t pt-6 text-center">
-            <p className="text-sm text-gray-400">
+          <div className="mt-8 pt-6 text-center" style={{ borderTop: "1px solid #1E2760" }}>
+            <p className="text-sm" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif", fontWeight: 300 }}>
               {t('home.footer_tagline', locale)}
             </p>
-            <p className="mt-2 text-xs text-gray-300">
+            <p className="mt-2 text-xs" style={{ color: "#4A5490" }}>
               &copy; {new Date().getFullYear()} LEXORA — Digital Data Solutions Ltd. {locale === 'fr' ? 'Tous droits réservés.' : 'All rights reserved.'}
             </p>
           </div>

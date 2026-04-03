@@ -125,12 +125,12 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
   }
 
   if (loading && !employe) {
-    return <div className="flex items-center justify-center min-h-[60vh]"><Loader2 className="w-8 h-8 animate-spin text-[#1E2A4A]" /></div>
+    return <div className="flex items-center justify-center min-h-[60vh]"><Loader2 className="w-8 h-8 animate-spin text-[#0B0F2E]" /></div>
   }
   if (error && !employe) {
     return (
       <div className="p-6 space-y-4">
-        <Button variant="ghost" onClick={() => router.push("/rh/employes")} className="text-[#1E2A4A]">
+        <Button variant="ghost" onClick={() => router.push("/rh/employes")} className="text-[#0B0F2E]">
           <ArrowLeft className="w-4 h-4 mr-2" />Retour
         </Button>
         <Card><CardContent className="py-12 text-center">
@@ -142,7 +142,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
   }
   if (!form) return null
 
-  const triggerCls = "data-[state=active]:bg-[#1E2A4A] data-[state=active]:text-white text-xs"
+  const triggerCls = "data-[state=active]:bg-[#0B0F2E] data-[state=active]:text-white text-xs"
   const totalHeures = pointages.reduce((s: number, p: any) => s + (p.heures_travaillees || 0), 0)
   const totalOT = pointages.reduce((s: number, p: any) => s + (p.heures_supplementaires || 0), 0)
   const joursAbsence = pointages.filter((p: any) => p.statut === "absent").length
@@ -157,7 +157,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
     <div className="flex items-center gap-3 justify-end pt-2">
       {saved && <span className="text-green-600 text-sm flex items-center gap-1"><CheckCircle2 className="w-4 h-4" />Enregistre</span>}
       {error && <span className="text-red-600 text-sm">{error}</span>}
-      <Button onClick={handleSave} disabled={saving} className="bg-[#1E2A4A] hover:bg-[#1E2A4A]/90 text-white px-8">
+      <Button onClick={handleSave} disabled={saving} className="bg-[#0B0F2E] hover:bg-[#0B0F2E]/90 text-white px-8">
         {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}Sauvegarder
       </Button>
     </div>
@@ -184,16 +184,16 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.push("/rh/employes")} className="text-[#1E2A4A] hover:bg-[#1E2A4A]/10">
+          <Button variant="ghost" size="icon" onClick={() => router.push("/rh/employes")} className="text-[#0B0F2E] hover:bg-[#0B0F2E]/10">
             <ArrowLeft className="w-5 h-5" />
           </Button>
-          <div className="w-14 h-14 rounded-full bg-[#1E2A4A] flex items-center justify-center text-white text-xl font-bold shrink-0">
+          <div className="w-14 h-14 rounded-full bg-[#0B0F2E] flex items-center justify-center text-white text-xl font-bold shrink-0">
             {initials(employe.nom, employe.prenom)}
           </div>
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-[#1E2A4A]">{employe.prenom} {employe.nom}</h1>
-              <Badge className="bg-[#C9A84C]/20 text-[#C9A84C] border-0">{employe.role}</Badge>
+              <h1 className="text-2xl font-bold text-[#0B0F2E]">{employe.prenom} {employe.nom}</h1>
+              <Badge className="bg-[#D4AF37]/20 text-[#D4AF37] border-0">{employe.role}</Badge>
             </div>
             <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
               {employe.code && <span className="font-mono bg-gray-100 px-2 py-0.5 rounded text-xs">{employe.code}</span>}
@@ -222,10 +222,10 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
         <TabsContent value="personnel" className="space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2"><User className="w-4 h-4" />Identite</CardTitle></CardHeader>
+              <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><User className="w-4 h-4" />Identite</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex items-center gap-4 mb-2">
-                  <div className="w-16 h-16 rounded-full bg-[#1E2A4A] flex items-center justify-center text-white text-2xl font-bold">
+                  <div className="w-16 h-16 rounded-full bg-[#0B0F2E] flex items-center justify-center text-white text-2xl font-bold">
                     {initials(form.nom, form.prenom)}
                   </div>
                   <div className="flex-1 grid grid-cols-2 gap-3">
@@ -279,7 +279,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
             </Card>
 
             <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-[#1E2A4A] text-base">Contact</CardTitle></CardHeader>
+              <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base">Contact</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <Field label="Adresse" field="address" />
                 <Field label="Adresse 2" field="address_2" />
@@ -301,7 +301,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
         <TabsContent value="emploi" className="space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2"><Briefcase className="w-4 h-4" />Poste</CardTitle></CardHeader>
+              <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><Briefcase className="w-4 h-4" />Poste</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Date d'arrivee" field="date_arrivee" type="date" />
@@ -342,7 +342,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
             </Card>
 
             <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-[#1E2A4A] text-base">Depart / Suspension</CardTitle></CardHeader>
+              <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base">Depart / Suspension</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <Field label="Date de depart" field="date_depart" type="date" />
                 <Field label="Type de depart" field="departure_type" placeholder="Demission, Licenciement..." />
@@ -363,7 +363,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
         <TabsContent value="salaire" className="space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2"><CreditCard className="w-4 h-4" />Remuneration</CardTitle></CardHeader>
+              <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><CreditCard className="w-4 h-4" />Remuneration</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <Field label="Salaire de base (MUR)" field="salaire_base" type="number" />
                 <div className="grid grid-cols-2 gap-3">
@@ -397,7 +397,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
             </Card>
 
             <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-[#1E2A4A] text-base">Coordonnees bancaires</CardTitle></CardHeader>
+              <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base">Coordonnees bancaires</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex items-center gap-3 mb-2">
                   <Checkbox checked={form.paid_by_bank_transfer ?? true} onCheckedChange={v => u("paid_by_bank_transfer", v)} id="bank" />
@@ -425,7 +425,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
 
           {/* Régime fiscal & charges */}
           <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2"><Shield className="w-4 h-4" />Régime fiscal & charges</CardTitle></CardHeader>
+            <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><Shield className="w-4 h-4" />Régime fiscal & charges</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
@@ -503,7 +503,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
         {/* ===== TAB 4: Avantages ===== */}
         <TabsContent value="avantages" className="space-y-4">
           <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2"><Gift className="w-4 h-4" />Avantages en nature</CardTitle></CardHeader>
+            <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><Gift className="w-4 h-4" />Avantages en nature</CardTitle></CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Field label="Bus fare journalier (MUR)" field="daily_bus_fare" type="number" />
@@ -519,7 +519,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
         {/* ===== TAB 5: Conges ===== */}
         <TabsContent value="conges" className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-[#1E2A4A]">Conges</h2>
+            <h2 className="text-lg font-semibold text-[#0B0F2E]">Conges</h2>
             <Select value={yearFilter} onValueChange={setYearFilter}>
               <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
               <SelectContent>{years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent>
@@ -531,7 +531,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                 <Card key={s.id}>
                   <CardContent className="pt-4 text-center">
                     <p className="text-xs text-gray-500 mb-1">{s.type_conge || "Annuel"}</p>
-                    <p className="text-2xl font-bold text-[#1E2A4A]">{s.solde ?? s.jours_restants ?? "--"}</p>
+                    <p className="text-2xl font-bold text-[#0B0F2E]">{s.solde ?? s.jours_restants ?? "--"}</p>
                     <p className="text-xs text-gray-400">jours restants</p>
                     {(s.jours_acquis !== undefined || s.jours_utilises !== undefined) && (
                       <p className="text-xs text-gray-400 mt-1">
@@ -575,7 +575,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
         {/* ===== TAB 6: Bulletins ===== */}
         <TabsContent value="bulletins" className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-[#1E2A4A]">Bulletins de paie</h2>
+            <h2 className="text-lg font-semibold text-[#0B0F2E]">Bulletins de paie</h2>
             <Select value={yearFilter} onValueChange={setYearFilter}>
               <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
               <SelectContent>{years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent>
@@ -606,7 +606,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                         </TableCell>
                         <TableCell>
                           {b.pdf_url && (
-                            <Button variant="ghost" size="sm" onClick={() => window.open(b.pdf_url, "_blank")} className="text-[#C9A84C]">
+                            <Button variant="ghost" size="sm" onClick={() => window.open(b.pdf_url, "_blank")} className="text-[#D4AF37]">
                               <FileText className="w-4 h-4 mr-1" />PDF
                             </Button>
                           )}
@@ -623,13 +623,13 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
         {/* ===== TAB 7: Pointage ===== */}
         <TabsContent value="pointage" className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-[#1E2A4A]">Pointage</h2>
+            <h2 className="text-lg font-semibold text-[#0B0F2E]">Pointage</h2>
             <Input type="month" value={pointageMois} onChange={e => setPointageMois(e.target.value)} className="w-48" />
           </div>
           <div className="grid grid-cols-3 gap-4">
             <Card><CardContent className="pt-6 text-center">
-              <Clock className="w-6 h-6 mx-auto text-[#1E2A4A] mb-2" />
-              <p className="text-2xl font-bold text-[#1E2A4A]">{joursPresent}</p>
+              <Clock className="w-6 h-6 mx-auto text-[#0B0F2E] mb-2" />
+              <p className="text-2xl font-bold text-[#0B0F2E]">{joursPresent}</p>
               <p className="text-xs text-gray-500">Jours travailles</p>
             </CardContent></Card>
             <Card><CardContent className="pt-6 text-center">
@@ -638,8 +638,8 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
               <p className="text-xs text-gray-500">Jours absence</p>
             </CardContent></Card>
             <Card><CardContent className="pt-6 text-center">
-              <Clock className="w-6 h-6 mx-auto text-[#C9A84C] mb-2" />
-              <p className="text-2xl font-bold text-[#C9A84C]">{totalOT.toFixed(1)}h</p>
+              <Clock className="w-6 h-6 mx-auto text-[#D4AF37] mb-2" />
+              <p className="text-2xl font-bold text-[#D4AF37]">{totalOT.toFixed(1)}h</p>
               <p className="text-xs text-gray-500">Heures supplementaires</p>
             </CardContent></Card>
           </div>
@@ -680,12 +680,12 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
         {/* ===== TAB 8: Documents ===== */}
         <TabsContent value="documents" className="space-y-4">
           <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2"><FolderOpen className="w-4 h-4" />Documents employe</CardTitle></CardHeader>
+            <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><FolderOpen className="w-4 h-4" />Documents employe</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
                 <Upload className="w-8 h-8 mx-auto text-gray-400 mb-2" />
                 <p className="text-sm text-gray-500">Glisser un fichier ou cliquer pour telecharger</p>
-                <Button variant="outline" className="mt-3 text-[#1E2A4A] border-[#1E2A4A]">
+                <Button variant="outline" className="mt-3 text-[#0B0F2E] border-[#0B0F2E]">
                   <Upload className="w-4 h-4 mr-2" />Ajouter un document
                 </Button>
               </div>
@@ -707,7 +707,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                         <TableCell>{doc.description || doc.nom || "--"}</TableCell>
                         <TableCell>
                           {doc.url && (
-                            <Button variant="ghost" size="sm" onClick={() => window.open(doc.url, "_blank")} className="text-[#C9A84C]">
+                            <Button variant="ghost" size="sm" onClick={() => window.open(doc.url, "_blank")} className="text-[#D4AF37]">
                               <Download className="w-4 h-4 mr-1" />Telecharger
                             </Button>
                           )}
@@ -724,7 +724,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
         {/* ===== TAB 9: Historique ===== */}
         <TabsContent value="historique" className="space-y-4">
           <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2"><History className="w-4 h-4" />Dates cles</CardTitle></CardHeader>
+            <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><History className="w-4 h-4" />Dates cles</CardTitle></CardHeader>
             <CardContent>
               <div className="space-y-3">
                 <div className="flex justify-between border-b pb-2">
@@ -758,11 +758,11 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
           </Card>
 
           <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-[#1E2A4A] text-base">Historique salaire</CardTitle></CardHeader>
+            <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base">Historique salaire</CardTitle></CardHeader>
             <CardContent>
               <div className="flex justify-between border-b pb-2">
                 <span className="text-sm text-gray-500">Salaire actuel</span>
-                <span className="text-sm font-semibold text-[#1E2A4A]">{fmt(employe.salaire_base || 0)}</span>
+                <span className="text-sm font-semibold text-[#0B0F2E]">{fmt(employe.salaire_base || 0)}</span>
               </div>
               <p className="text-xs text-gray-400 mt-3">L&apos;historique complet des modifications salariales sera disponible prochainement.</p>
             </CardContent>

@@ -325,7 +325,7 @@ export function generateQRCode(data: string): string {
       }
 
       if (filled) {
-        cells += `<rect x="${padding + x * cellSize}" y="${padding + y * cellSize}" width="${cellSize}" height="${cellSize}" fill="#1E2A4A"/>`
+        cells += `<rect x="${padding + x * cellSize}" y="${padding + y * cellSize}" width="${cellSize}" height="${cellSize}" fill="#0B0F2E"/>`
       }
     }
   }

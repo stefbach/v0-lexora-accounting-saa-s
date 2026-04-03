@@ -195,13 +195,13 @@ export default function ExportVirementPage() {
   return (
     <div className="p-6 space-y-6 max-w-5xl">
       <div>
-        <h1 className="text-2xl font-bold text-[#1E2A4A]">Export Virements Salaires</h1>
+        <h1 className="text-2xl font-bold text-[#0B0F2E]">Export Virements Salaires</h1>
         <p className="text-sm text-gray-500">Le format du fichier est automatiquement adapté à la banque de l'entreprise</p>
       </div>
 
       {/* Paramètres */}
       <Card>
-        <CardHeader><CardTitle className="text-[#1E2A4A] flex items-center gap-2 text-base"><CreditCard className="w-4 h-4"/>Paramètres</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2 text-base"><CreditCard className="w-4 h-4"/>Paramètres</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -281,7 +281,7 @@ export default function ExportVirementPage() {
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2">
+              <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
                 <Users className="w-4 h-4"/>
                 Récapitulatif — {preview.nb_bulletins_total} bulletins validés
               </CardTitle>
@@ -293,7 +293,7 @@ export default function ExportVirementPage() {
                 <Button
                   onClick={telechargerTous}
                   disabled={loading || !compteEmetteur}
-                  className="bg-[#1E2A4A] text-white"
+                  className="bg-[#0B0F2E] text-white"
                 >
                   {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : <Download className="w-4 h-4 mr-2"/>}
                   Tout télécharger

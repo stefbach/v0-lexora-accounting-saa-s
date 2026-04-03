@@ -9,8 +9,8 @@ import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, Save, Building2, Phone, Banknote, Settings, MapPin, CheckCircle } from "lucide-react"
 
-const NAVY = "#1E2A4A"
-const GOLD = "#C9A84C"
+const NAVY = "#0B0F2E"
+const GOLD = "#D4AF37"
 
 type Tab = "details" | "contact" | "payroll" | "bank"
 

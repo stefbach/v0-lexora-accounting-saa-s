@@ -165,31 +165,31 @@ export async function POST(request: Request) {
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: Arial, sans-serif; font-size: 12px; color: #1a1a1a; padding: 20px; max-width: 800px; margin: 0 auto; }
-    .header { display: flex; justify-content: space-between; border-bottom: 3px solid #1E2A4A; padding-bottom: 12px; margin-bottom: 15px; }
-    .header-left h2 { font-size: 18px; color: #1E2A4A; font-weight: bold; }
-    .header-left .societe { font-size: 14px; font-weight: bold; color: #1E2A4A; margin-top: 4px; }
+    .header { display: flex; justify-content: space-between; border-bottom: 3px solid #0B0F2E; padding-bottom: 12px; margin-bottom: 15px; }
+    .header-left h2 { font-size: 18px; color: #0B0F2E; font-weight: bold; }
+    .header-left .societe { font-size: 14px; font-weight: bold; color: #0B0F2E; margin-top: 4px; }
     .header-left .adresse { color: #555; margin-top: 2px; }
     .header-right { text-align: right; }
-    .header-right .periode { font-size: 14px; font-weight: bold; color: #1E2A4A; }
+    .header-right .periode { font-size: 14px; font-weight: bold; color: #0B0F2E; }
     .employe-info { background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 6px; padding: 10px 14px; margin-bottom: 15px; }
     .employe-info .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
     .employe-info p { font-size: 12px; }
-    .employe-info strong { color: #1E2A4A; }
+    .employe-info strong { color: #0B0F2E; }
     .section { margin-bottom: 15px; }
-    .section h3 { font-size: 13px; font-weight: bold; color: white; background: #1E2A4A; padding: 5px 10px; border-radius: 4px; margin-bottom: 8px; }
+    .section h3 { font-size: 13px; font-weight: bold; color: white; background: #0B0F2E; padding: 5px 10px; border-radius: 4px; margin-bottom: 8px; }
     .row { display: flex; justify-content: space-between; padding: 3px 10px; border-bottom: 1px solid #f0f0f0; }
     .row:last-child { border-bottom: none; }
-    .row.total { font-weight: bold; background: #f0f0f0; border-top: 2px solid #1E2A4A; padding: 5px 10px; border-bottom: none; margin-top: 4px; }
+    .row.total { font-weight: bold; background: #f0f0f0; border-top: 2px solid #0B0F2E; padding: 5px 10px; border-bottom: none; margin-top: 4px; }
     .row.deduction { color: #c0392b; }
     .row.absence { color: #e74c3c; background: #fdf0f0; }
-    .net-box { border: 3px solid #1E2A4A; border-radius: 8px; padding: 14px 18px; margin: 18px 0; background: #1E2A4A08; }
-    .net-box .net-amount { font-size: 22px; font-weight: bold; color: #1E2A4A; }
-    .net-box .net-label { font-size: 13px; font-weight: bold; color: #1E2A4A; margin-bottom: 4px; }
+    .net-box { border: 3px solid #0B0F2E; border-radius: 8px; padding: 14px 18px; margin: 18px 0; background: #0B0F2E08; }
+    .net-box .net-amount { font-size: 22px; font-weight: bold; color: #0B0F2E; }
+    .net-box .net-label { font-size: 13px; font-weight: bold; color: #0B0F2E; margin-bottom: 4px; }
     .net-box .net-bank { font-size: 11px; color: #555; margin-top: 6px; }
     .patronal-section { background: #f9f9f9; border: 1px solid #ddd; border-radius: 6px; padding: 10px; margin-bottom: 15px; }
     .patronal-section h3 { font-size: 11px; font-weight: bold; color: #555; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
     .patronal-row { display: flex; justify-content: space-between; font-size: 11px; padding: 2px 0; color: #555; }
-    .patronal-row.total { font-weight: bold; color: #1E2A4A; border-top: 1px solid #ccc; margin-top: 3px; padding-top: 3px; }
+    .patronal-row.total { font-weight: bold; color: #0B0F2E; border-top: 1px solid #ccc; margin-top: 3px; padding-top: 3px; }
     .signatures { display: flex; justify-content: space-between; margin-top: 30px; padding-top: 15px; border-top: 1px solid #ddd; }
     .signature-box { width: 45%; }
     .signature-box .label { font-size: 11px; color: #555; margin-bottom: 30px; }
@@ -312,16 +312,16 @@ export async function POST(request: Request) {
 function generatePDFResponse(bulletin: any, emp: any, soc: any, moisLabel: string, annee: number) {
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Bulletin ${emp.prenom} ${emp.nom} — ${moisLabel} ${annee}</title>
 <style>body{font-family:Arial,sans-serif;max-width:800px;margin:0 auto;padding:20px;font-size:13px}
-h1{color:#1E2A4A;font-size:20px;border-bottom:2px solid #C9A84C;padding-bottom:8px}
+h1{color:#0B0F2E;font-size:20px;border-bottom:2px solid #D4AF37;padding-bottom:8px}
 .header{display:flex;justify-content:space-between;margin-bottom:20px}
 .box{border:1px solid #ddd;padding:12px;border-radius:4px;margin-bottom:15px}
 table{width:100%;border-collapse:collapse;margin:10px 0}
-th{background:#1E2A4A;color:white;padding:8px;text-align:left;font-size:12px}
+th{background:#0B0F2E;color:white;padding:8px;text-align:left;font-size:12px}
 td{padding:6px 8px;border-bottom:1px solid #eee;font-size:12px}
 .right{text-align:right}
 .bold{font-weight:bold}
 .net{background:#f0f7f0;font-size:16px;font-weight:bold;padding:12px;text-align:center;border:2px solid #059669;border-radius:4px;margin:15px 0}
-.section{font-weight:bold;color:#1E2A4A;margin-top:15px;padding:4px 0;border-bottom:1px solid #C9A84C}
+.section{font-weight:bold;color:#0B0F2E;margin-top:15px;padding:4px 0;border-bottom:1px solid #D4AF37}
 @media print{body{margin:0;padding:10px}}
 </style></head><body>
 <h1>${soc?.nom || 'LEXORA'}</h1>

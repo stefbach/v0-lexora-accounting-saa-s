@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Loader2, Save, Info } from "lucide-react"
 
-const NAVY = "#1E2A4A"
+const NAVY = "#0B0F2E"
 
 const JOURS_FERIES_MU_DEFAUT = [
   { date: "2025-01-01", label: "Jour de l'An" },

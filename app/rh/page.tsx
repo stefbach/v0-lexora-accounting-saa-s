@@ -10,8 +10,8 @@ import {
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
-const NAVY = "#1E2A4A"
-const GOLD = "#C9A84C"
+const NAVY = "#0B0F2E"
+const GOLD = "#D4AF37"
 
 function fmt(n: number) { return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "MUR", maximumFractionDigits: 0 }).format(n) }
 
@@ -134,7 +134,7 @@ export default function RHDashboard() {
               onClick={() => setTab(t.id)}
               className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
                 tab === t.id
-                  ? "border-[#1E2A4A] text-[#1E2A4A]"
+                  ? "border-[#0B0F2E] text-[#0B0F2E]"
                   : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
               }`}
             >
@@ -267,13 +267,13 @@ function DashboardTab({ stats, loading }: { stats: any; loading: boolean }) {
             { href: "/rh/paie/exports-mra", label: "Export virement", icon: Upload, color: "text-purple-600", bg: "bg-purple-50" },
           ].map(a => (
             <a key={a.href} href={a.href}>
-              <Card className="hover:shadow-md transition-all cursor-pointer group border border-gray-200 hover:border-[#C9A84C]">
+              <Card className="hover:shadow-md transition-all cursor-pointer group border border-gray-200 hover:border-[#D4AF37]">
                 <CardContent className="p-4 flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-lg ${a.bg} flex items-center justify-center flex-shrink-0`}>
                     <a.icon className={`w-5 h-5 ${a.color}`} />
                   </div>
                   <span className="text-sm font-medium" style={{ color: NAVY }}>{a.label}</span>
-                  <ArrowRight className="w-4 h-4 text-gray-300 ml-auto group-hover:text-[#C9A84C] transition-colors" />
+                  <ArrowRight className="w-4 h-4 text-gray-300 ml-auto group-hover:text-[#D4AF37] transition-colors" />
                 </CardContent>
               </Card>
             </a>
@@ -301,14 +301,14 @@ function DashboardTab({ stats, loading }: { stats: any; loading: boolean }) {
               { href: "/rh/chat", label: "Chat CLARA", icon: MessageSquare, desc: "Assistant RH IA" },
             ].map(a => (
               <a key={a.href} href={a.href} className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors group">
-                <div className="w-8 h-8 rounded-md bg-gray-100 flex items-center justify-center flex-shrink-0 group-hover:bg-[#1E2A4A]/10">
+                <div className="w-8 h-8 rounded-md bg-gray-100 flex items-center justify-center flex-shrink-0 group-hover:bg-[#0B0F2E]/10">
                   <a.icon className="w-4 h-4 text-gray-600" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium" style={{ color: NAVY }}>{a.label}</p>
                   <p className="text-xs text-gray-400">{a.desc}</p>
                 </div>
-                <ArrowRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-[#C9A84C] transition-colors" />
+                <ArrowRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-[#D4AF37] transition-colors" />
               </a>
             ))}
           </CardContent>
@@ -365,7 +365,7 @@ function PointagesTab() {
       <p className="text-gray-500 text-sm">Raccourcis vers la gestion des pointages :</p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <a href="/rh/pointage">
-          <Card className="hover:shadow-md transition-shadow cursor-pointer border-2 hover:border-[#1E2A4A]">
+          <Card className="hover:shadow-md transition-shadow cursor-pointer border-2 hover:border-[#0B0F2E]">
             <CardContent className="p-6 flex items-center gap-4">
               <div className="w-12 h-12 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
                 <Clock className="w-6 h-6 text-blue-600" />
@@ -378,7 +378,7 @@ function PointagesTab() {
           </Card>
         </a>
         <a href="/rh/pointage/mensuel">
-          <Card className="hover:shadow-md transition-shadow cursor-pointer border-2 hover:border-[#1E2A4A]">
+          <Card className="hover:shadow-md transition-shadow cursor-pointer border-2 hover:border-[#0B0F2E]">
             <CardContent className="p-6 flex items-center gap-4">
               <div className="w-12 h-12 rounded-lg bg-purple-50 flex items-center justify-center flex-shrink-0">
                 <CalendarDays className="w-6 h-6 text-purple-600" />
@@ -400,7 +400,7 @@ function AbsencesTab() {
     <div className="space-y-4">
       <p className="text-gray-500 text-sm">Gestion complete des absences et conges :</p>
       <a href="/rh/conges">
-        <Card className="hover:shadow-md transition-shadow cursor-pointer border-2 hover:border-[#1E2A4A]">
+        <Card className="hover:shadow-md transition-shadow cursor-pointer border-2 hover:border-[#0B0F2E]">
           <CardContent className="p-6 flex items-center gap-4">
             <div className="w-12 h-12 rounded-lg bg-orange-50 flex items-center justify-center flex-shrink-0">
               <Calendar className="w-6 h-6 text-orange-600" />
@@ -421,7 +421,7 @@ function PrimesTab() {
     <div className="space-y-4">
       <p className="text-gray-500 text-sm">Catalogue et saisie mensuelle des primes :</p>
       <a href="/rh/paie/primes">
-        <Card className="hover:shadow-md transition-shadow cursor-pointer border-2 hover:border-[#1E2A4A]">
+        <Card className="hover:shadow-md transition-shadow cursor-pointer border-2 hover:border-[#0B0F2E]">
           <CardContent className="p-6 flex items-center gap-4">
             <div className="w-12 h-12 rounded-lg bg-amber-50 flex items-center justify-center flex-shrink-0">
               <Target className="w-6 h-6 text-amber-600" />
@@ -449,7 +449,7 @@ function PaieTab() {
           { href: "/rh/paie/parametres", icon: Settings, label: "Parametres paie", desc: "Taux MRA, OT, jours feries", color: "text-gray-600", bg: "bg-gray-100" },
         ].map(a => (
           <a key={a.href} href={a.href}>
-            <Card className="hover:shadow-md transition-shadow cursor-pointer border-2 hover:border-[#1E2A4A]">
+            <Card className="hover:shadow-md transition-shadow cursor-pointer border-2 hover:border-[#0B0F2E]">
               <CardContent className="p-5 flex items-center gap-4">
                 <div className={`w-12 h-12 rounded-lg ${a.bg} flex items-center justify-center flex-shrink-0`}>
                   <a.icon className={`w-6 h-6 ${a.color}`} />
@@ -472,7 +472,7 @@ function ParametresTab() {
     <div className="space-y-4">
       <p className="text-gray-500 text-sm">Configuration de l'environnement RH :</p>
       <a href="/rh/paie/parametres">
-        <Card className="hover:shadow-md transition-shadow cursor-pointer border-2 hover:border-[#1E2A4A]">
+        <Card className="hover:shadow-md transition-shadow cursor-pointer border-2 hover:border-[#0B0F2E]">
           <CardContent className="p-6 flex items-center gap-4">
             <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
               <Settings className="w-6 h-6 text-gray-600" />

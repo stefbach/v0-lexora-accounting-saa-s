@@ -29,8 +29,8 @@ import { useProfile } from "@/hooks/use-profile"
 import Link from "next/link"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
-const NAVY = "#1E2A4A"
-const GOLD = "#C9A84C"
+const NAVY = "#0B0F2E"
+const GOLD = "#D4AF37"
 const TVA_RATE = 0.15
 
 function formatMUR(n: number) {

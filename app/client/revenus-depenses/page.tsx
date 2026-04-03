@@ -77,13 +77,13 @@ export default function RevenusDepensesPage() {
   if (profile?.role === "client_user") {
     return (
       <div className="p-6 flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-        <h1 className="text-xl font-bold" style={{ color: "#1E2A4A" }}>
+        <h1 className="text-xl font-bold" style={{ color: "#0B0F2E" }}>
           Accès non autorisé
         </h1>
         <p className="text-sm text-muted-foreground">
           Vous n&apos;avez pas la permission d&apos;accéder à cette page.
         </p>
-        <Link href="/client/upload" className="text-sm underline" style={{ color: "#C9A84C" }}>
+        <Link href="/client/upload" className="text-sm underline" style={{ color: "#D4AF37" }}>
           Retour à l&apos;envoi de documents
         </Link>
       </div>
@@ -136,7 +136,7 @@ export default function RevenusDepensesPage() {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
+        <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>
           Revenus &amp; Dépenses
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
@@ -150,7 +150,7 @@ export default function RevenusDepensesPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <TrendingUp className="h-5 w-5 text-green-500" />
-              <CardTitle style={{ color: "#1E2A4A" }}>Revenus</CardTitle>
+              <CardTitle style={{ color: "#0B0F2E" }}>Revenus</CardTitle>
             </div>
             <Dialog open={revDialogOpen} onOpenChange={setRevDialogOpen}>
               <DialogTrigger asChild>
@@ -161,7 +161,7 @@ export default function RevenusDepensesPage() {
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle style={{ color: "#1E2A4A" }}>Ajouter un revenu</DialogTitle>
+                  <DialogTitle style={{ color: "#0B0F2E" }}>Ajouter un revenu</DialogTitle>
                   <DialogDescription>
                     Enregistrez un paiement que vous avez reçu.
                   </DialogDescription>
@@ -257,7 +257,7 @@ export default function RevenusDepensesPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <TrendingDown className="h-5 w-5 text-red-500" />
-              <CardTitle style={{ color: "#1E2A4A" }}>Dépenses</CardTitle>
+              <CardTitle style={{ color: "#0B0F2E" }}>Dépenses</CardTitle>
             </div>
             <Dialog open={depDialogOpen} onOpenChange={setDepDialogOpen}>
               <DialogTrigger asChild>
@@ -268,7 +268,7 @@ export default function RevenusDepensesPage() {
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle style={{ color: "#1E2A4A" }}>Ajouter une dépense</DialogTitle>
+                  <DialogTitle style={{ color: "#0B0F2E" }}>Ajouter une dépense</DialogTitle>
                   <DialogDescription>
                     Enregistrez un achat ou un paiement que vous avez effectué.
                   </DialogDescription>
@@ -391,7 +391,7 @@ export default function RevenusDepensesPage() {
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Revenu net
             </CardTitle>
-            <DollarSign className="h-5 w-5" style={{ color: "#C9A84C" }} />
+            <DollarSign className="h-5 w-5" style={{ color: "#D4AF37" }} />
           </CardHeader>
           <CardContent>
             <div
@@ -410,10 +410,10 @@ export default function RevenusDepensesPage() {
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Impôt estimé (15%)
             </CardTitle>
-            <Calculator className="h-5 w-5" style={{ color: "#1E2A4A" }} />
+            <Calculator className="h-5 w-5" style={{ color: "#0B0F2E" }} />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
+            <div className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>
               {formatMUR(impotEstime)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">

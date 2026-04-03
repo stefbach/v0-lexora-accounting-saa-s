@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, Users } from "lucide-react"
 
-const NAVY = "#1E2A4A"
+const NAVY = "#0B0F2E"
 function fmt(n: number) { return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(n) }
 
 export default function SalairesComptaPage() {

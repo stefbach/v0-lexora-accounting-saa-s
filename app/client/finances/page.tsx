@@ -14,8 +14,8 @@ import {
 import { useProfile } from "@/hooks/use-profile"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
-const NAVY = "#1E2A4A"
-const GOLD = "#C9A84C"
+const NAVY = "#0B0F2E"
+const GOLD = "#D4AF37"
 
 function fmt(n: number) {
   return Math.round(n).toLocaleString("fr-FR") + " MUR"
@@ -329,7 +329,7 @@ export default function FinancesPage() {
                   href={link.href}
                   className="flex items-center gap-2 p-3 rounded-lg border hover:bg-muted/50 transition-colors group"
                 >
-                  <Icon className="h-4 w-4 text-muted-foreground group-hover:text-[#C9A84C]" />
+                  <Icon className="h-4 w-4 text-muted-foreground group-hover:text-[#D4AF37]" />
                   <span className="text-sm font-medium" style={{ color: NAVY }}>{link.label}</span>
                   <ArrowRight className="h-3 w-3 ml-auto text-muted-foreground" />
                 </Link>

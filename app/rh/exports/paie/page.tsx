@@ -9,8 +9,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Loader2, Download, Users, Banknote, FileText, Settings, CheckCircle, AlertTriangle, Save } from "lucide-react"
 
-const NAVY = "#1E2A4A"
-const GOLD = "#C9A84C"
+const NAVY = "#0B0F2E"
+const GOLD = "#D4AF37"
 
 function fmt(n: number) {
   return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 }).format(n)

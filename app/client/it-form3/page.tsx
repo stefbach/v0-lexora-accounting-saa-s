@@ -26,8 +26,8 @@ import {
 } from "@/components/ui/tabs"
 import { Calculator, FileText, Save, Printer, Loader2, Upload, CheckCircle, AlertCircle } from "lucide-react"
 
-const NAVY = "#1E2A4A"
-const GOLD = "#C9A84C"
+const NAVY = "#0B0F2E"
+const GOLD = "#D4AF37"
 
 function formatMUR(n: number) {
   return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " MUR"
@@ -496,7 +496,7 @@ export default function ITForm3Page() {
                         name={`q${i}`}
                         checked={q.value}
                         onChange={() => q.setter(true)}
-                        className="accent-[#C9A84C]"
+                        className="accent-[#D4AF37]"
                       />
                       <span className="text-sm font-medium">Oui</span>
                     </label>
@@ -506,7 +506,7 @@ export default function ITForm3Page() {
                         name={`q${i}`}
                         checked={!q.value}
                         onChange={() => q.setter(false)}
-                        className="accent-[#C9A84C]"
+                        className="accent-[#D4AF37]"
                       />
                       <span className="text-sm font-medium">Non</span>
                     </label>

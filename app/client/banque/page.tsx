@@ -124,7 +124,7 @@ export default function ClientBanquePage() {
         <Card>
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground">Vous n&apos;avez pas accès à cette section.</p>
-            <Link href="/client" className="text-sm underline mt-4 inline-block" style={{ color: "#C9A84C" }}>
+            <Link href="/client" className="text-sm underline mt-4 inline-block" style={{ color: "#D4AF37" }}>
               Retour au tableau de bord
             </Link>
           </CardContent>
@@ -136,7 +136,7 @@ export default function ClientBanquePage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#C9A84C" }} />
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#D4AF37" }} />
       </div>
     )
   }
@@ -231,7 +231,7 @@ export default function ClientBanquePage() {
     <div className="flex-1 overflow-auto p-6 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
+          <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>
             Vos comptes bancaires
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
@@ -264,11 +264,11 @@ export default function ClientBanquePage() {
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Solde total</CardTitle>
             <div className="rounded-lg p-2 bg-blue-50">
-              <Landmark className="h-5 w-5" style={{ color: "#1E2A4A" }} />
+              <Landmark className="h-5 w-5" style={{ color: "#0B0F2E" }} />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
+            <div className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>
               {bankAccounts.length > 0 ? formatMUR(totalBankMUR) : "—"}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
@@ -285,7 +285,7 @@ export default function ClientBanquePage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold" style={{ color: nonRaprochees > 0 ? "#DC2626" : "#1E2A4A" }}>
+            <div className="text-2xl font-bold" style={{ color: nonRaprochees > 0 ? "#DC2626" : "#0B0F2E" }}>
               {nonRaprochees}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
@@ -299,11 +299,11 @@ export default function ClientBanquePage() {
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Dernière MAJ</CardTitle>
             <div className="rounded-lg p-2 bg-amber-50">
-              <Clock className="h-5 w-5" style={{ color: "#C9A84C" }} />
+              <Clock className="h-5 w-5" style={{ color: "#D4AF37" }} />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-xl font-bold" style={{ color: "#1E2A4A" }}>
+            <div className="text-xl font-bold" style={{ color: "#0B0F2E" }}>
               {derniereMaj ? formatDate(derniereMaj) : "—"}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
@@ -317,8 +317,8 @@ export default function ClientBanquePage() {
       {bankAccounts.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2" style={{ color: "#1E2A4A" }}>
-              <Landmark className="h-5 w-5" style={{ color: "#C9A84C" }} />
+            <CardTitle className="flex items-center gap-2" style={{ color: "#0B0F2E" }}>
+              <Landmark className="h-5 w-5" style={{ color: "#D4AF37" }} />
               Comptes ({bankAccounts.length})
             </CardTitle>
           </CardHeader>
@@ -340,7 +340,7 @@ export default function ClientBanquePage() {
                   <TableRow key={acc.id || acc.nom_compte} className="cursor-pointer hover:bg-blue-50/50"
                     onClick={() => setSelectedCompte(selectedCompte === acc.id ? "all" : acc.id)}>
                     <TableCell>
-                      <Badge variant="outline" style={{ borderColor: "#C9A84C", color: "#C9A84C" }}>
+                      <Badge variant="outline" style={{ borderColor: "#D4AF37", color: "#D4AF37" }}>
                         {acc.banque}
                       </Badge>
                     </TableCell>
@@ -358,14 +358,14 @@ export default function ClientBanquePage() {
                         <span className="flex items-center gap-1 group">
                           {getDisplayName(acc)}
                           <button className="opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => { setEditingCompte(acc.id); setEditingNom(acc.nom_compte || "") }}>
-                            <Pencil className="h-3 w-3 text-muted-foreground hover:text-[#1E2A4A]" />
+                            <Pencil className="h-3 w-3 text-muted-foreground hover:text-[#0B0F2E]" />
                           </button>
                         </span>
                       )}
                     </TableCell>
                     <TableCell className="font-mono text-sm text-muted-foreground">{acc.numero_compte || "—"}</TableCell>
                     <TableCell>{acc.devise || "MUR"}</TableCell>
-                    <TableCell className="text-right font-bold" style={{ color: "#1E2A4A" }}>
+                    <TableCell className="text-right font-bold" style={{ color: "#0B0F2E" }}>
                       <div>{formatAmount(acc.solde_actuel ?? 0, acc.devise)}</div>
                       {acc.devise && acc.devise !== "MUR" && acc.solde_mur != null && (
                         <div className="text-xs text-muted-foreground font-normal">≈ {formatMUR(acc.solde_mur)}</div>
@@ -432,7 +432,7 @@ export default function ClientBanquePage() {
       {/* Transactions */}
       <Card>
         <CardHeader>
-          <CardTitle style={{ color: "#1E2A4A" }}>
+          <CardTitle style={{ color: "#0B0F2E" }}>
             Opérations bancaires ({filtered.length})
           </CardTitle>
         </CardHeader>
@@ -458,7 +458,7 @@ export default function ClientBanquePage() {
                 <TableRow key={row.id} className="cursor-pointer hover:bg-blue-50/50" onClick={() => setSelectedTx(row)}>
                   <TableCell className="whitespace-nowrap">{formatDate(row.date)}</TableCell>
                   <TableCell className="text-xs">
-                    <Badge variant="outline" className="text-xs" style={{ borderColor: "#C9A84C" }}>{row.banque}</Badge>
+                    <Badge variant="outline" className="text-xs" style={{ borderColor: "#D4AF37" }}>{row.banque}</Badge>
                     {row.devise !== "MUR" && <span className="ml-1 text-muted-foreground">{row.devise}</span>}
                   </TableCell>
                   <TableCell className="max-w-[220px] truncate">{row.libelle}</TableCell>
@@ -524,7 +524,7 @@ export default function ClientBanquePage() {
       <Sheet open={!!selectedTx} onOpenChange={(o) => { if (!o) setSelectedTx(null) }}>
         <SheetContent className="sm:max-w-md overflow-y-auto">
           <SheetHeader>
-            <SheetTitle className="text-[#1E2A4A]">Détail de l&apos;opération</SheetTitle>
+            <SheetTitle className="text-[#0B0F2E]">Détail de l&apos;opération</SheetTitle>
           </SheetHeader>
           {selectedTx && (
             <div className="space-y-4 mt-4">
@@ -539,7 +539,7 @@ export default function ClientBanquePage() {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground uppercase mb-1">Banque</p>
-                  <Badge variant="outline" style={{ borderColor: "#C9A84C" }}>{selectedTx.banque}</Badge>
+                  <Badge variant="outline" style={{ borderColor: "#D4AF37" }}>{selectedTx.banque}</Badge>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">

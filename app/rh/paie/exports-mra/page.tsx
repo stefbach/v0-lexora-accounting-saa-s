@@ -123,7 +123,7 @@ export default function ExportsMRAPage() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#1E2A4A]">Exports MRA & Virements</h1>
+          <h1 className="text-2xl font-bold text-[#0B0F2E]">Exports MRA & Virements</h1>
           <p className="text-sm text-gray-500">Déclarations MRA Maurice — CSG/NSF, PAYE, PRGF, Training Levy, Virements bancaires</p>
         </div>
       </div>
@@ -166,7 +166,7 @@ export default function ExportsMRAPage() {
         {/* VIREMENTS SALAIRES */}
         <Card className="border-l-4 border-l-green-500">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base text-[#1E2A4A] flex items-center gap-2">
+            <CardTitle className="text-base text-[#0B0F2E] flex items-center gap-2">
               <CreditCardIcon className="w-4 h-4" /> Virements Salaires
               <span className="text-xs font-normal text-gray-500">Échéance : fin du mois</span>
             </CardTitle>
@@ -202,7 +202,7 @@ export default function ExportsMRAPage() {
         {/* DÉCLARATIONS MRA */}
         <Card className="border-l-4 border-l-blue-500">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base text-[#1E2A4A] flex items-center gap-2">
+            <CardTitle className="text-base text-[#0B0F2E] flex items-center gap-2">
               <Building2 className="w-4 h-4" /> Declarations MRA
             </CardTitle>
           </CardHeader>
@@ -220,7 +220,7 @@ export default function ExportsMRAPage() {
                     </p>
                     <StatusBadge status={csgStatus} />
                   </div>
-                  <Button onClick={exportCSGNSF} disabled={csgStatus.loading || !societe || !bulletinsCount} size="sm" className="bg-[#1E2A4A] text-white">
+                  <Button onClick={exportCSGNSF} disabled={csgStatus.loading || !societe || !bulletinsCount} size="sm" className="bg-[#0B0F2E] text-white">
                     {csgStatus.loading ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Download className="w-3 h-3 mr-1" />}
                     Télécharger
                   </Button>
@@ -244,7 +244,7 @@ export default function ExportsMRAPage() {
                     </p>
                     <StatusBadge status={payeStatus} />
                   </div>
-                  <Button onClick={exportPAYE} disabled={payeStatus.loading || !societe || !bulletinsCount} size="sm" className="bg-[#1E2A4A] text-white">
+                  <Button onClick={exportPAYE} disabled={payeStatus.loading || !societe || !bulletinsCount} size="sm" className="bg-[#0B0F2E] text-white">
                     {payeStatus.loading ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Download className="w-3 h-3 mr-1" />}
                     Télécharger
                   </Button>
@@ -292,7 +292,7 @@ export default function ExportsMRAPage() {
         {/* BULLETINS PDF */}
         <Card className="border-l-4 border-l-purple-500">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base text-[#1E2A4A] flex items-center gap-2"><FileText className="w-4 h-4" /> Bulletins de Paie</CardTitle>
+            <CardTitle className="text-base text-[#0B0F2E] flex items-center gap-2"><FileText className="w-4 h-4" /> Bulletins de Paie</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex gap-4">

@@ -12,8 +12,8 @@ import {
   Loader2, Banknote, Receipt, UserCog, ChevronLeft, ChevronRight, Calendar,
 } from "lucide-react"
 
-const NAVY = "#1E2A4A"
-const GOLD = "#C9A84C"
+const NAVY = "#0B0F2E"
+const GOLD = "#D4AF37"
 
 interface Societe { id: string; nom: string; brn: string; statut: string }
 
@@ -120,7 +120,7 @@ export default function TableauDeBord() {
 
   if (profileLoading || profile?.role === "client_assistant") return (
     <div className="flex items-center justify-center h-screen">
-      <Loader2 className="w-8 h-8 animate-spin text-[#1E2A4A]" />
+      <Loader2 className="w-8 h-8 animate-spin text-[#0B0F2E]" />
     </div>
   )
 
@@ -156,7 +156,7 @@ export default function TableauDeBord() {
       {/* En-tête */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-[#1E2A4A]">
+          <h1 className="text-2xl font-bold text-[#0B0F2E]">
             Bonjour {profile?.full_name?.split(" ")[0] || ""}
           </h1>
           <p className="text-gray-500 text-sm mt-0.5 capitalize">{formatMoisLabel(mois)}</p>
@@ -176,7 +176,7 @@ export default function TableauDeBord() {
         )}
         {societes.length === 1 && (
           <div className="text-right">
-            <p className="font-semibold text-[#1E2A4A]">{societes[0].nom}</p>
+            <p className="font-semibold text-[#0B0F2E]">{societes[0].nom}</p>
             {societes[0].brn && <p className="text-xs text-gray-400">BRN : {societes[0].brn}</p>}
           </div>
         )}
@@ -184,15 +184,15 @@ export default function TableauDeBord() {
 
       {/* Pas de société → onboarding */}
       {societes.length === 0 && (
-        <Card className="border-2 border-dashed border-[#C9A84C]/40 bg-[#C9A84C]/5">
+        <Card className="border-2 border-dashed border-[#D4AF37]/40 bg-[#D4AF37]/5">
           <CardContent className="p-8 text-center space-y-4">
-            <Building2 className="w-12 h-12 mx-auto text-[#C9A84C]" />
+            <Building2 className="w-12 h-12 mx-auto text-[#D4AF37]" />
             <div>
-              <p className="text-lg font-bold text-[#1E2A4A]">Bienvenue sur LEXORA</p>
+              <p className="text-lg font-bold text-[#0B0F2E]">Bienvenue sur LEXORA</p>
               <p className="text-sm text-gray-500 mt-1">Commencez par créer votre société pour accéder à tous les modules.</p>
             </div>
             <Link href="/client/societes">
-              <Button className="bg-[#1E2A4A]">
+              <Button className="bg-[#0B0F2E]">
                 <Plus className="w-4 h-4 mr-2" /> Créer ma société
               </Button>
             </Link>
@@ -207,7 +207,7 @@ export default function TableauDeBord() {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <h2 className="text-sm font-semibold text-[#1E2A4A]">Ce mois</h2>
+                <h2 className="text-sm font-semibold text-[#0B0F2E]">Ce mois</h2>
                 <Badge variant="outline" className="text-xs capitalize">{formatMoisLabel(mois)}</Badge>
               </div>
               <div className="flex items-center gap-1">
@@ -238,7 +238,7 @@ export default function TableauDeBord() {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <h2 className="text-sm font-semibold text-[#1E2A4A]">Exercice fiscal</h2>
+                <h2 className="text-sm font-semibold text-[#0B0F2E]">Exercice fiscal</h2>
                 <Badge variant="outline" className="text-xs">Juil. {exercice.split("-")[0]} → Juin {exercice.split("-")[1]}</Badge>
               </div>
               <Select value={exercice} onValueChange={setExercice}>
@@ -330,14 +330,14 @@ export default function TableauDeBord() {
           {societes.length > 0 && (
             <div>
               <div className="flex items-center justify-between mb-3">
-                <h2 className="font-bold text-[#1E2A4A]">Mes Sociétés</h2>
+                <h2 className="font-bold text-[#0B0F2E]">Mes Sociétés</h2>
                 <Link href="/client/societes">
                   <Button variant="ghost" size="sm" className="text-xs">Gérer <ArrowRight className="w-3 h-3 ml-1" /></Button>
                 </Link>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {societes.map(s => (
-                  <Card key={s.id} className="border-l-4 border-l-[#1E2A4A]">
+                  <Card key={s.id} className="border-l-4 border-l-[#0B0F2E]">
                     <CardContent className="p-4 flex items-center justify-between">
                       <div>
                         <p className="font-semibold text-sm">{s.nom}</p>
@@ -356,8 +356,8 @@ export default function TableauDeBord() {
                   </Card>
                 ))}
                 <Link href="/client/societes">
-                  <Card className="border-dashed border-2 border-gray-200 hover:border-[#C9A84C] transition-colors cursor-pointer">
-                    <CardContent className="p-4 flex items-center gap-2 text-gray-400 hover:text-[#C9A84C]">
+                  <Card className="border-dashed border-2 border-gray-200 hover:border-[#D4AF37] transition-colors cursor-pointer">
+                    <CardContent className="p-4 flex items-center gap-2 text-gray-400 hover:text-[#D4AF37]">
                       <Plus className="w-4 h-4" />
                       <span className="text-sm">Ajouter une société</span>
                     </CardContent>

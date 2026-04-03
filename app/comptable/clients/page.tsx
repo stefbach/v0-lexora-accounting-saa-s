@@ -178,7 +178,7 @@ export default function ComptableClientsPage() {
     <div className="flex-1 overflow-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
+          <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>
             {isComptableAdmin ? "Mes Clients" : "Mes Clients Assignés"}
           </h1>
           <p className="text-muted-foreground">
@@ -188,7 +188,7 @@ export default function ComptableClientsPage() {
         {isComptableAdmin && (
           <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) resetForm() }}>
             <DialogTrigger asChild>
-              <Button style={{ backgroundColor: "#1E2A4A" }}><Plus className="mr-2 h-4 w-4" />Ajouter un client</Button>
+              <Button style={{ backgroundColor: "#0B0F2E" }}><Plus className="mr-2 h-4 w-4" />Ajouter un client</Button>
             </DialogTrigger>
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
               <DialogHeader><DialogTitle>Nouveau client</DialogTitle><DialogDescription>Créez un compte client et son dossier.</DialogDescription></DialogHeader>
@@ -232,7 +232,7 @@ export default function ComptableClientsPage() {
                 {/* Individual-specific fields */}
                 {formClientType === "individuel" && (
                   <div className="space-y-4 rounded-lg border p-4 bg-muted/20">
-                    <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>Détails du freelance / individuel</p>
+                    <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>Détails du freelance / individuel</p>
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2"><Label>BRN</Label><Input placeholder="Ex: C07012345" value={formBrn} onChange={(e) => setFormBrn(e.target.value)} /></div>
                       <div className="space-y-2"><Label>N° TVA MRA</Label><Input placeholder="Ex: VAT-20260001" value={formTva} onChange={(e) => setFormTva(e.target.value)} /></div>
@@ -249,7 +249,7 @@ export default function ComptableClientsPage() {
                 {/* Society-specific fields */}
                 {formClientType === "societe" && (
                   <div className="space-y-4 rounded-lg border p-4 bg-muted/20">
-                    <p className="text-sm font-medium" style={{ color: "#1E2A4A" }}>Détails de la société</p>
+                    <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>Détails de la société</p>
                     <div className="space-y-2"><Label>Nom de la société *</Label><Input placeholder="Ex: TIBOK Ltd" value={formSocNom} onChange={(e) => setFormSocNom(e.target.value)} /></div>
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2"><Label>BRN</Label><Input placeholder="Ex: C07012345" value={formSocBrn} onChange={(e) => setFormSocBrn(e.target.value)} /></div>
@@ -268,7 +268,7 @@ export default function ComptableClientsPage() {
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => { setDialogOpen(false); resetForm() }}>Annuler</Button>
-                <Button style={{ backgroundColor: "#C9A84C" }} onClick={handleCreate} disabled={creating}>
+                <Button style={{ backgroundColor: "#D4AF37" }} onClick={handleCreate} disabled={creating}>
                   {creating ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Création...</> : "Créer"}
                 </Button>
               </DialogFooter>
@@ -316,10 +316,10 @@ export default function ComptableClientsPage() {
                         {societeCount === 0 ? (
                           <Badge variant="outline" className="text-xs">Individuel</Badge>
                         ) : societeCount === 1 ? (
-                          <Badge variant="outline" style={{ borderColor: "#C9A84C", color: "#1E2A4A" }}>{clientSocietes[0].nom}</Badge>
+                          <Badge variant="outline" style={{ borderColor: "#D4AF37", color: "#0B0F2E" }}>{clientSocietes[0].nom}</Badge>
                         ) : (
                           <div className="flex items-center gap-1">
-                            <Badge variant="outline" style={{ borderColor: "#C9A84C", color: "#1E2A4A" }}>{clientSocietes[0].nom}</Badge>
+                            <Badge variant="outline" style={{ borderColor: "#D4AF37", color: "#0B0F2E" }}>{clientSocietes[0].nom}</Badge>
                             <Badge variant="outline" className="text-xs">+{societeCount - 1}</Badge>
                           </div>
                         )}

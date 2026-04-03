@@ -69,27 +69,27 @@ export default function AuthLoginPage() {
     <div className="flex min-h-screen flex-col items-center justify-center px-4" style={{ backgroundColor: "#f4f5f7" }}>
       {/* Top bar */}
       <div className="fixed top-0 left-0 right-0 flex items-center justify-between p-4 z-10">
-        <Link href="/" className="flex items-center gap-2 text-sm font-medium hover:underline" style={{ color: "#1E2A4A" }}>
+        <Link href="/" className="flex items-center gap-2 text-sm font-medium hover:underline" style={{ color: "#0B0F2E" }}>
           <ArrowLeft className="w-4 h-4" />
           {txt.back_home}
         </Link>
         <div className="flex gap-1 bg-white rounded-full border p-0.5 shadow-sm">
           <button onClick={() => switchLang("fr")} className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${locale === "fr" ? "text-white" : "text-gray-500"}`}
-            style={locale === "fr" ? { backgroundColor: "#C9A84C" } : {}}>FR</button>
+            style={locale === "fr" ? { backgroundColor: "#D4AF37" } : {}}>FR</button>
           <button onClick={() => switchLang("en")} className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${locale === "en" ? "text-white" : "text-gray-500"}`}
-            style={locale === "en" ? { backgroundColor: "#C9A84C" } : {}}>EN</button>
+            style={locale === "en" ? { backgroundColor: "#D4AF37" } : {}}>EN</button>
         </div>
       </div>
 
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="text-center">
           <Link href="/" className="mx-auto mb-4 flex items-center gap-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg" style={{ backgroundColor: "#1E2A4A" }}>
-              <span className="text-lg font-bold" style={{ color: "#C9A84C" }}>L</span>
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg" style={{ backgroundColor: "#0B0F2E" }}>
+              <span className="text-lg font-bold" style={{ color: "#D4AF37" }}>L</span>
             </div>
-            <span className="text-2xl font-semibold tracking-tight" style={{ color: "#1E2A4A" }}>LEXORA</span>
+            <span className="text-2xl font-semibold tracking-tight" style={{ color: "#0B0F2E" }}>LEXORA</span>
           </Link>
-          <CardTitle className="text-xl" style={{ color: "#1E2A4A" }}>{txt.title}</CardTitle>
+          <CardTitle className="text-xl" style={{ color: "#0B0F2E" }}>{txt.title}</CardTitle>
           <CardDescription>{txt.subtitle}</CardDescription>
         </CardHeader>
 
@@ -115,10 +115,10 @@ export default function AuthLoginPage() {
             )}
 
             <div className="mt-4 flex justify-end">
-              <Link href="#" className="text-sm hover:underline" style={{ color: "#1E2A4A" }}>{txt.forgot}</Link>
+              <Link href="#" className="text-sm hover:underline" style={{ color: "#0B0F2E" }}>{txt.forgot}</Link>
             </div>
 
-            <Button type="submit" className="mt-6 w-full" size="lg" disabled={loading} style={{ backgroundColor: "#1E2A4A", color: "#ffffff" }}>
+            <Button type="submit" className="mt-6 w-full" size="lg" disabled={loading} style={{ backgroundColor: "#0B0F2E", color: "#ffffff" }}>
               {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{txt.logging}</> : txt.login}
             </Button>
           </form>
@@ -127,7 +127,7 @@ export default function AuthLoginPage() {
         <CardFooter className="justify-center">
           <p className="text-sm text-muted-foreground">
             {txt.no_account}{" "}
-            <Link href="#" className="font-medium hover:underline" style={{ color: "#C9A84C" }}>{txt.contact_admin}</Link>
+            <Link href="#" className="font-medium hover:underline" style={{ color: "#D4AF37" }}>{txt.contact_admin}</Link>
           </p>
         </CardFooter>
       </Card>

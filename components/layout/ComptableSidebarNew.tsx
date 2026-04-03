@@ -43,8 +43,8 @@ import {
   ClipboardList,
 } from "lucide-react"
 
-const NAVY = "#1E2A4A"
-const GOLD = "#C9A84C"
+const NAVY = "#0B0F2E"
+const GOLD = "#D4AF37"
 
 interface NavItem {
   href: string
@@ -232,7 +232,7 @@ export function ComptableSidebarNew() {
       {/* Mobile hamburger */}
       <button
         onClick={() => setMobileOpen(true)}
-        className="fixed top-4 left-4 z-50 md:hidden bg-[#1E2A4A] text-white p-2 rounded-lg shadow-lg"
+        className="fixed top-4 left-4 z-50 md:hidden bg-[#0B0F2E] text-white p-2 rounded-lg shadow-lg"
       >
         <Menu className="w-5 h-5" />
       </button>
@@ -259,19 +259,20 @@ export function ComptableSidebarNew() {
         <div className="flex h-16 items-center justify-between border-b border-white/10 px-4 flex-shrink-0">
           {!collapsed ? (
             <Link href="/comptable" className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0" style={{ backgroundColor: GOLD }}>
-                <span className="text-sm font-bold" style={{ color: NAVY }}>L</span>
-              </div>
               <div className="flex flex-col min-w-0">
-                <span className="text-lg font-semibold leading-tight" style={{ color: GOLD }}>Lexora</span>
-                <span className="text-[10px] font-medium uppercase tracking-wider text-white/50 truncate">
+                <div className="flex items-baseline">
+                  <span className="text-base font-bold" style={{ color: "#E8EAFC", letterSpacing: "0.04em", fontFamily: "'Poppins', sans-serif" }}>LE</span>
+                  <span className="text-base font-bold" style={{ color: GOLD, letterSpacing: "0.04em", fontFamily: "'Poppins', sans-serif" }}>X</span>
+                  <span className="text-base font-bold" style={{ color: "#E8EAFC", letterSpacing: "0.04em", fontFamily: "'Poppins', sans-serif" }}>ORA</span>
+                </div>
+                <span className="text-[10px] font-light tracking-wider truncate" style={{ color: "#4A5490" }}>
                   {roleLabel}
                 </span>
               </div>
             </Link>
           ) : (
-            <div className="mx-auto flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: GOLD }}>
-              <span className="text-sm font-bold" style={{ color: NAVY }}>L</span>
+            <div className="mx-auto flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: "#141C4A", border: "1px solid #1E2760" }}>
+              <span className="text-sm font-bold" style={{ color: "#E8EAFC" }}>L<span style={{ color: GOLD }}>X</span></span>
             </div>
           )}
         </div>
@@ -311,7 +312,7 @@ export function ComptableSidebarNew() {
                     onClick={() => toggleSection(section.title)}
                     className={cn(
                       "w-full flex items-center justify-between px-2 py-1.5 text-xs font-semibold uppercase tracking-wider rounded transition-colors",
-                      hasActive ? "text-[#C9A84C]" : "text-white/40 hover:text-white/70"
+                      hasActive ? "text-[#D4AF37]" : "text-white/40 hover:text-white/70"
                     )}
                   >
                     <span className="truncate text-left">{section.title}</span>

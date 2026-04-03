@@ -25,24 +25,24 @@ export default function MesComptesPage() {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-[#1E2A4A]">Mes comptes bancaires</h1>
+        <h1 className="text-2xl font-bold text-[#0B0F2E]">Mes comptes bancaires</h1>
         <p className="text-sm text-gray-500">Trésorerie consolidée en temps réel</p>
       </div>
 
       {/* Total consolidé */}
-      <Card className="bg-[#1E2A4A] text-white">
+      <Card className="bg-[#0B0F2E] text-white">
         <CardContent className="p-6 flex items-center justify-between">
           <div>
             <p className="text-white/70 text-sm">Trésorerie totale</p>
             <p className="text-3xl font-bold">{loading ? "..." : fmt(totalMur)}</p>
           </div>
-          <CreditCard className="w-12 h-12 text-[#C9A84C]"/>
+          <CreditCard className="w-12 h-12 text-[#D4AF37]"/>
         </CardContent>
       </Card>
 
       {/* Comptes */}
       {loading ? (
-        <div className="flex justify-center p-8"><Loader2 className="w-8 h-8 animate-spin text-[#1E2A4A]"/></div>
+        <div className="flex justify-center p-8"><Loader2 className="w-8 h-8 animate-spin text-[#0B0F2E]"/></div>
       ) : comptes.length === 0 ? (
         <Card><CardContent className="p-8 text-center text-gray-400">Aucun compte bancaire configuré</CardContent></Card>
       ) : (
@@ -55,7 +55,7 @@ export default function MesComptesPage() {
                     <CreditCard className="w-5 h-5 text-blue-600"/>
                   </div>
                   <div>
-                    <p className="font-semibold text-[#1E2A4A]">{c.nom_compte || c.banque}</p>
+                    <p className="font-semibold text-[#0B0F2E]">{c.nom_compte || c.banque}</p>
                     <p className="text-xs text-gray-500">{c.iban || c.numero_compte || "—"} • {c.devise}</p>
                   </div>
                 </div>

@@ -86,10 +86,10 @@ export default function NotificationsPage() {
   if (profile?.role === "client_user") {
     return (
       <div className="p-6 flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-        <h1 className="text-xl font-bold" style={{ color: "#1E2A4A" }}>
+        <h1 className="text-xl font-bold" style={{ color: "#0B0F2E" }}>
           Vous n&apos;avez pas acc&egrave;s &agrave; cette section
         </h1>
-        <Link href="/client" className="text-sm underline" style={{ color: "#C9A84C" }}>
+        <Link href="/client" className="text-sm underline" style={{ color: "#D4AF37" }}>
           Retour au tableau de bord
         </Link>
       </div>
@@ -109,7 +109,7 @@ export default function NotificationsPage() {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
+        <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>
           Notifications
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
@@ -124,10 +124,10 @@ export default function NotificationsPage() {
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Total notifications
             </CardTitle>
-            <Bell className="h-5 w-5" style={{ color: "#1E2A4A" }} />
+            <Bell className="h-5 w-5" style={{ color: "#0B0F2E" }} />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
+            <div className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>
               {totalCount}
             </div>
           </CardContent>
@@ -140,7 +140,7 @@ export default function NotificationsPage() {
             <MessageSquare className="h-5 w-5 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
+            <div className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>
               {whatsappCount}
             </div>
           </CardContent>
@@ -153,7 +153,7 @@ export default function NotificationsPage() {
             <Mail className="h-5 w-5 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>
+            <div className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>
               {emailCount}
             </div>
           </CardContent>
@@ -163,10 +163,10 @@ export default function NotificationsPage() {
             <CardTitle className="text-sm font-medium text-muted-foreground">
               En attente
             </CardTitle>
-            <Clock className="h-5 w-5" style={{ color: "#C9A84C" }} />
+            <Clock className="h-5 w-5" style={{ color: "#D4AF37" }} />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold" style={{ color: "#C9A84C" }}>
+            <div className="text-2xl font-bold" style={{ color: "#D4AF37" }}>
               {pendingCount}
             </div>
           </CardContent>
@@ -178,7 +178,7 @@ export default function NotificationsPage() {
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <CardTitle style={{ color: "#1E2A4A" }}>Toutes les notifications</CardTitle>
+              <CardTitle style={{ color: "#0B0F2E" }}>Toutes les notifications</CardTitle>
               <CardDescription>Filtrez par type de notification</CardDescription>
             </div>
             <Tabs value={filter} onValueChange={setFilter}>

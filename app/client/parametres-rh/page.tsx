@@ -145,7 +145,7 @@ function InlineActions({ editing, onEdit, onSave, onCancel, onDelete }: {
   }
   return (
     <div className="flex gap-1">
-      <Button size="sm" variant="ghost" onClick={onEdit} className="text-[#1E2A4A] hover:text-[#C9A84C] h-8 w-8 p-0">
+      <Button size="sm" variant="ghost" onClick={onEdit} className="text-[#0B0F2E] hover:text-[#D4AF37] h-8 w-8 p-0">
         <Pencil className="w-4 h-4" />
       </Button>
       <Button size="sm" variant="ghost" onClick={onDelete} className="text-red-400 hover:text-red-600 h-8 w-8 p-0">
@@ -213,10 +213,10 @@ export default function ParametresRHPage() {
   const DepartmentsTab = () => (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2">
+        <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
           <Building2 className="w-5 h-5" /> Departements
         </CardTitle>
-        <Button size="sm" className="bg-[#1E2A4A] text-white hover:bg-[#2a3d6b]"
+        <Button size="sm" className="bg-[#0B0F2E] text-white hover:bg-[#2a3d6b]"
           onClick={() => {
             const d: Department = { id: uid(), code: "", name: "", manager: "" }
             saveDepts([...departments, d])
@@ -229,7 +229,7 @@ export default function ParametresRHPage() {
       <CardContent>
         <div className="border rounded-lg overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-[#1E2A4A] text-white">
+            <thead className="bg-[#0B0F2E] text-white">
               <tr>
                 <th className="px-4 py-2 text-left font-medium">Code</th>
                 <th className="px-4 py-2 text-left font-medium">Nom</th>
@@ -278,10 +278,10 @@ export default function ParametresRHPage() {
   const OfficesTab = () => (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2">
+        <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
           <MapPin className="w-5 h-5" /> Bureaux / Sites
         </CardTitle>
-        <Button size="sm" className="bg-[#1E2A4A] text-white hover:bg-[#2a3d6b]"
+        <Button size="sm" className="bg-[#0B0F2E] text-white hover:bg-[#2a3d6b]"
           onClick={() => {
             const o: Office = { id: uid(), code: "", name: "", address: "" }
             saveOffs([...offices, o])
@@ -294,7 +294,7 @@ export default function ParametresRHPage() {
       <CardContent>
         <div className="border rounded-lg overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-[#1E2A4A] text-white">
+            <thead className="bg-[#0B0F2E] text-white">
               <tr>
                 <th className="px-4 py-2 text-left font-medium">Code</th>
                 <th className="px-4 py-2 text-left font-medium">Nom</th>
@@ -343,10 +343,10 @@ export default function ParametresRHPage() {
   const LeaveTypesTab = () => (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2">
+        <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
           <Calendar className="w-5 h-5" /> Types de conges
         </CardTitle>
-        <Button size="sm" className="bg-[#1E2A4A] text-white hover:bg-[#2a3d6b]"
+        <Button size="sm" className="bg-[#0B0F2E] text-white hover:bg-[#2a3d6b]"
           onClick={() => {
             const lt: LeaveType = { id: uid(), code: "", name: "", daysPerYear: 0, requiresCertificate: false, paid: true }
             saveLts([...leaveTypes, lt])
@@ -359,7 +359,7 @@ export default function ParametresRHPage() {
       <CardContent>
         <div className="border rounded-lg overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-[#1E2A4A] text-white">
+            <thead className="bg-[#0B0F2E] text-white">
               <tr>
                 <th className="px-4 py-2 text-left font-medium">Code</th>
                 <th className="px-4 py-2 text-left font-medium">Nom</th>
@@ -375,7 +375,7 @@ export default function ParametresRHPage() {
                 return (
                   <tr key={lt.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                     <td className="px-4 py-2">
-                      {editing ? <Input value={draftLt.code || ""} onChange={e => setDraftLt(p => ({ ...p, code: e.target.value }))} className="h-8 w-20" /> : <span className="font-mono text-xs bg-[#1E2A4A]/10 px-2 py-0.5 rounded">{lt.code}</span>}
+                      {editing ? <Input value={draftLt.code || ""} onChange={e => setDraftLt(p => ({ ...p, code: e.target.value }))} className="h-8 w-20" /> : <span className="font-mono text-xs bg-[#0B0F2E]/10 px-2 py-0.5 rounded">{lt.code}</span>}
                     </td>
                     <td className="px-4 py-2">
                       {editing ? <Input value={draftLt.name || ""} onChange={e => setDraftLt(p => ({ ...p, name: e.target.value }))} className="h-8" /> : lt.name}
@@ -427,14 +427,14 @@ export default function ParametresRHPage() {
   const HolidaysTab = () => (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2">
+        <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
           <Calendar className="w-5 h-5" /> Jours feries Maurice
         </CardTitle>
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" onClick={() => setHolidayYear(y => y - 1)} className="h-8 w-8 p-0">
             <ChevronLeft className="w-4 h-4" />
           </Button>
-          <span className="font-bold text-[#1E2A4A] text-lg min-w-[4ch] text-center">{holidayYear}</span>
+          <span className="font-bold text-[#0B0F2E] text-lg min-w-[4ch] text-center">{holidayYear}</span>
           <Button size="sm" variant="outline" onClick={() => setHolidayYear(y => y + 1)} className="h-8 w-8 p-0">
             <ChevronRight className="w-4 h-4" />
           </Button>
@@ -445,7 +445,7 @@ export default function ParametresRHPage() {
           {currentHolidays.sort((a, b) => a.date.localeCompare(b.date)).map(h => (
             <div key={h.id} className="flex items-center justify-between p-3 bg-purple-50 rounded-lg border border-purple-100">
               <div>
-                <p className="text-sm font-medium text-[#1E2A4A]">{h.label}</p>
+                <p className="text-sm font-medium text-[#0B0F2E]">{h.label}</p>
                 <p className="text-xs text-gray-500">{new Date(h.date + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "long" })}</p>
               </div>
               <Button size="sm" variant="ghost" className="text-red-400 hover:text-red-600 h-8 w-8 p-0"
@@ -463,7 +463,7 @@ export default function ParametresRHPage() {
         </div>
 
         <div className="border-t pt-4">
-          <p className="text-sm font-medium text-[#1E2A4A] mb-2">Ajouter un jour ferie</p>
+          <p className="text-sm font-medium text-[#0B0F2E] mb-2">Ajouter un jour ferie</p>
           <div className="flex gap-2 items-end">
             <div className="flex-1">
               <Label className="text-xs">Date</Label>
@@ -473,7 +473,7 @@ export default function ParametresRHPage() {
               <Label className="text-xs">Libelle</Label>
               <Input value={newHoliday.label} onChange={e => setNewHoliday(p => ({ ...p, label: e.target.value }))} placeholder="Nom du jour ferie" className="h-9" />
             </div>
-            <Button size="sm" className="bg-[#C9A84C] text-[#1E2A4A] hover:bg-[#b89a42] h-9"
+            <Button size="sm" className="bg-[#D4AF37] text-[#0B0F2E] hover:bg-[#b89a42] h-9"
               disabled={!newHoliday.date || !newHoliday.label}
               onClick={() => {
                 const h: PublicHoliday = { id: uid(), date: newHoliday.date, label: newHoliday.label }
@@ -497,10 +497,10 @@ export default function ParametresRHPage() {
   const PayGroupsTab = () => (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2">
+        <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
           <Users className="w-5 h-5" /> Groupes de paie
         </CardTitle>
-        <Button size="sm" className="bg-[#1E2A4A] text-white hover:bg-[#2a3d6b]"
+        <Button size="sm" className="bg-[#0B0F2E] text-white hover:bg-[#2a3d6b]"
           onClick={() => {
             const pg: PayGroup = { id: uid(), code: "", name: "", employees: [] }
             savePgs([...payGroups, pg])
@@ -513,7 +513,7 @@ export default function ParametresRHPage() {
       <CardContent>
         <div className="border rounded-lg overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-[#1E2A4A] text-white">
+            <thead className="bg-[#0B0F2E] text-white">
               <tr>
                 <th className="px-4 py-2 text-left font-medium">Code</th>
                 <th className="px-4 py-2 text-left font-medium">Nom du groupe</th>
@@ -527,7 +527,7 @@ export default function ParametresRHPage() {
                 return (
                   <tr key={pg.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                     <td className="px-4 py-2">
-                      {editing ? <Input value={draftPg.code || ""} onChange={e => setDraftPg(p => ({ ...p, code: e.target.value }))} className="h-8 w-24" /> : <span className="font-mono text-xs bg-[#C9A84C]/20 text-[#1E2A4A] px-2 py-0.5 rounded font-semibold">{pg.code}</span>}
+                      {editing ? <Input value={draftPg.code || ""} onChange={e => setDraftPg(p => ({ ...p, code: e.target.value }))} className="h-8 w-24" /> : <span className="font-mono text-xs bg-[#D4AF37]/20 text-[#0B0F2E] px-2 py-0.5 rounded font-semibold">{pg.code}</span>}
                     </td>
                     <td className="px-4 py-2">
                       {editing ? <Input value={draftPg.name || ""} onChange={e => setDraftPg(p => ({ ...p, name: e.target.value }))} className="h-8" /> : pg.name}
@@ -563,10 +563,10 @@ export default function ParametresRHPage() {
   const CalendarsTab = () => (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-[#1E2A4A] text-base flex items-center gap-2">
+        <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
           <Clock className="w-5 h-5" /> Calendriers de travail
         </CardTitle>
-        <Button size="sm" className="bg-[#1E2A4A] text-white hover:bg-[#2a3d6b]"
+        <Button size="sm" className="bg-[#0B0F2E] text-white hover:bg-[#2a3d6b]"
           onClick={() => {
             const c: WorkCalendar = { id: uid(), name: "", days: ["Lun", "Mar", "Mer", "Jeu", "Ven"], hoursPerDay: 9 }
             saveCals([...calendars, c])
@@ -586,7 +586,7 @@ export default function ParametresRHPage() {
                   {editing ? (
                     <Input value={draftCal.name || ""} onChange={e => setDraftCal(p => ({ ...p, name: e.target.value }))} className="h-8 font-semibold" placeholder="Nom du calendrier" />
                   ) : (
-                    <p className="font-semibold text-[#1E2A4A]">{cal.name}</p>
+                    <p className="font-semibold text-[#0B0F2E]">{cal.name}</p>
                   )}
                 </div>
                 <InlineActions editing={editing}
@@ -613,7 +613,7 @@ export default function ParametresRHPage() {
                       }}
                       className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
                         active
-                          ? "bg-[#1E2A4A] text-white"
+                          ? "bg-[#0B0F2E] text-white"
                           : "bg-gray-100 text-gray-400"
                       } ${editing ? "cursor-pointer hover:opacity-80" : "cursor-default"}`}
                     >
@@ -625,7 +625,7 @@ export default function ParametresRHPage() {
                 {editing ? (
                   <Input type="number" value={draftCal.hoursPerDay ?? 9} onChange={e => setDraftCal(p => ({ ...p, hoursPerDay: Number(e.target.value) }))} className="h-8 w-16" />
                 ) : (
-                  <span className="text-sm font-semibold text-[#1E2A4A]">{cal.hoursPerDay}h</span>
+                  <span className="text-sm font-semibold text-[#0B0F2E]">{cal.hoursPerDay}h</span>
                 )}
               </div>
             </div>
@@ -645,28 +645,28 @@ export default function ParametresRHPage() {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-[#1E2A4A]">Parametres RH</h1>
+        <h1 className="text-2xl font-bold text-[#0B0F2E]">Parametres RH</h1>
         <p className="text-sm text-gray-500">Configuration des departements, conges, jours feries, groupes de paie et calendriers</p>
       </div>
 
       <Tabs defaultValue="departments">
-        <TabsList className="bg-[#1E2A4A]/5 border">
-          <TabsTrigger value="departments" className="data-[state=active]:bg-[#1E2A4A] data-[state=active]:text-white">
+        <TabsList className="bg-[#0B0F2E]/5 border">
+          <TabsTrigger value="departments" className="data-[state=active]:bg-[#0B0F2E] data-[state=active]:text-white">
             Departements
           </TabsTrigger>
-          <TabsTrigger value="offices" className="data-[state=active]:bg-[#1E2A4A] data-[state=active]:text-white">
+          <TabsTrigger value="offices" className="data-[state=active]:bg-[#0B0F2E] data-[state=active]:text-white">
             Bureaux/Sites
           </TabsTrigger>
-          <TabsTrigger value="leave-types" className="data-[state=active]:bg-[#1E2A4A] data-[state=active]:text-white">
+          <TabsTrigger value="leave-types" className="data-[state=active]:bg-[#0B0F2E] data-[state=active]:text-white">
             Types de conges
           </TabsTrigger>
-          <TabsTrigger value="holidays" className="data-[state=active]:bg-[#1E2A4A] data-[state=active]:text-white">
+          <TabsTrigger value="holidays" className="data-[state=active]:bg-[#0B0F2E] data-[state=active]:text-white">
             Jours feries
           </TabsTrigger>
-          <TabsTrigger value="pay-groups" className="data-[state=active]:bg-[#1E2A4A] data-[state=active]:text-white">
+          <TabsTrigger value="pay-groups" className="data-[state=active]:bg-[#0B0F2E] data-[state=active]:text-white">
             Groupes de paie
           </TabsTrigger>
-          <TabsTrigger value="calendars" className="data-[state=active]:bg-[#1E2A4A] data-[state=active]:text-white">
+          <TabsTrigger value="calendars" className="data-[state=active]:bg-[#0B0F2E] data-[state=active]:text-white">
             Calendriers
           </TabsTrigger>
         </TabsList>

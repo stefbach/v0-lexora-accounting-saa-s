@@ -22,7 +22,7 @@ export function LanguageSwitcher({ className = "" }: { className?: string }) {
         onClick={() => handleSwitch("fr")}
         className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
           locale === "fr"
-            ? "bg-[#C9A84C] text-[#1E2A4A]"
+            ? "bg-[#D4AF37] text-[#0B0F2E]"
             : "text-white/60 hover:text-white"
         }`}
       >
@@ -32,7 +32,7 @@ export function LanguageSwitcher({ className = "" }: { className?: string }) {
         onClick={() => handleSwitch("en")}
         className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
           locale === "en"
-            ? "bg-[#C9A84C] text-[#1E2A4A]"
+            ? "bg-[#D4AF37] text-[#0B0F2E]"
             : "text-white/60 hover:text-white"
         }`}
       >
@@ -62,7 +62,7 @@ export function LanguageSwitcherLight({ className = "" }: { className?: string }
         onClick={() => handleSwitch("fr")}
         className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
           locale === "fr"
-            ? "bg-[#C9A84C] text-white"
+            ? "bg-[#D4AF37] text-white"
             : "text-gray-500 hover:text-gray-900"
         }`}
       >
@@ -72,7 +72,7 @@ export function LanguageSwitcherLight({ className = "" }: { className?: string }
         onClick={() => handleSwitch("en")}
         className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
           locale === "en"
-            ? "bg-[#C9A84C] text-white"
+            ? "bg-[#D4AF37] text-white"
             : "text-gray-500 hover:text-gray-900"
         }`}
       >

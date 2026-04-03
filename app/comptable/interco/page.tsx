@@ -199,7 +199,7 @@ export default function IntercoPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: '#C9A84C' }} />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: '#D4AF37' }} />
       </div>
     )
   }
@@ -209,7 +209,7 @@ export default function IntercoPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: '#1E2A4A' }}>
+          <h1 className="text-2xl font-bold" style={{ color: '#0B0F2E' }}>
             INTERCO — Consolidation multi-sociétés
           </h1>
           <p className="text-muted-foreground mt-1">
@@ -223,7 +223,7 @@ export default function IntercoPage() {
           </Button>
           <Dialog open={showNewFlux} onOpenChange={setShowNewFlux}>
             <DialogTrigger asChild>
-              <Button size="sm" style={{ backgroundColor: '#C9A84C', color: 'white' }}>
+              <Button size="sm" style={{ backgroundColor: '#D4AF37', color: 'white' }}>
                 <Plus className="h-4 w-4 mr-2" />
                 Nouveau flux
               </Button>
@@ -315,7 +315,7 @@ export default function IntercoPage() {
                   onClick={handleCreateFlux}
                   disabled={creating}
                   className="w-full"
-                  style={{ backgroundColor: '#1E2A4A', color: 'white' }}
+                  style={{ backgroundColor: '#0B0F2E', color: 'white' }}
                 >
                   {creating ? 'Création...' : 'Créer le flux + Générer écritures'}
                 </Button>
@@ -397,7 +397,7 @@ export default function IntercoPage() {
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
-            <ArrowLeftRight className="h-5 w-5" style={{ color: '#C9A84C' }} />
+            <ArrowLeftRight className="h-5 w-5" style={{ color: '#D4AF37' }} />
             <CardTitle className="text-base">Réconciliation par paire de sociétés</CardTitle>
             {loadingRecon && <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />}
           </div>

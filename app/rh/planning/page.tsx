@@ -344,7 +344,7 @@ export default function PlanningPage() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#1E2A4A" }}>Planning</h1>
+          <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>Planning</h1>
           <p className="text-gray-500 text-sm">Créneaux personnalisables avec pauses</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -421,7 +421,7 @@ export default function PlanningPage() {
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-3">
               <Button variant="outline" size="icon" onClick={prevMonth}><ChevronLeft className="h-4 w-4" /></Button>
-              <CardTitle className="text-lg" style={{ color: "#1E2A4A" }}>
+              <CardTitle className="text-lg" style={{ color: "#0B0F2E" }}>
                 <Calendar className="inline h-5 w-5 mr-2" />{MONTH_NAMES[month]} {year}
               </CardTitle>
               <Button variant="outline" size="icon" onClick={nextMonth}><ChevronRight className="h-4 w-4" /></Button>
@@ -434,7 +434,7 @@ export default function PlanningPage() {
               <Button variant="outline" size="sm" onClick={() => savePlanning(false)} disabled={saving}>
                 {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Check className="h-4 w-4 mr-1" />} Sauver
               </Button>
-              <Button size="sm" onClick={() => savePlanning(true)} disabled={saving} style={{ backgroundColor: "#C9A84C" }} className="text-white hover:opacity-90">
+              <Button size="sm" onClick={() => savePlanning(true)} disabled={saving} style={{ backgroundColor: "#D4AF37" }} className="text-white hover:opacity-90">
                 <Send className="h-4 w-4 mr-1" /> Publier
               </Button>
             </div>
@@ -450,7 +450,7 @@ export default function PlanningPage() {
               <table className="w-full border-collapse text-xs">
                 <thead>
                   <tr>
-                    <th className="sticky left-0 bg-white z-10 border px-2 py-1 text-left min-w-[140px]" style={{ color: "#1E2A4A" }}>Employé</th>
+                    <th className="sticky left-0 bg-white z-10 border px-2 py-1 text-left min-w-[140px]" style={{ color: "#0B0F2E" }}>Employé</th>
                     {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => {
                       const dow = new Date(year, month, d).getDay()
                       return (
@@ -507,7 +507,7 @@ export default function PlanningPage() {
       <Dialog open={empFilterOpen} onOpenChange={setEmpFilterOpen}>
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle style={{ color: "#1E2A4A" }}>Collaborateurs dans le planning</DialogTitle>
+            <DialogTitle style={{ color: "#0B0F2E" }}>Collaborateurs dans le planning</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <Input placeholder="Rechercher un collaborateur..." value={empSearch} onChange={e => setEmpSearch(e.target.value)} />
@@ -552,7 +552,7 @@ export default function PlanningPage() {
                 ))}
             </div>
             <p className="text-xs text-gray-500">{includedEmpIds.size} collaborateur(s) sélectionné(s) sur {allEmployes.length}</p>
-            <Button className="w-full text-white" style={{ backgroundColor: "#1E2A4A" }} onClick={() => {
+            <Button className="w-full text-white" style={{ backgroundColor: "#0B0F2E" }} onClick={() => {
               setEmployes(allEmployes.filter(e => includedEmpIds.has(e.id)))
               // Rebuild planning grid for newly included employees
               setPlanning(prev => {
@@ -581,7 +581,7 @@ export default function PlanningPage() {
       <Dialog open={creneauConfigOpen} onOpenChange={setCreneauConfigOpen}>
         <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle style={{ color: "#1E2A4A" }}>Créneaux horaires</DialogTitle>
+            <DialogTitle style={{ color: "#0B0F2E" }}>Créneaux horaires</DialogTitle>
           </DialogHeader>
           {!editingCreneau ? (
             <div className="space-y-3">
@@ -606,7 +606,7 @@ export default function PlanningPage() {
       {/* ── Bulk dialog ── */}
       <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle style={{ color: "#1E2A4A" }}>Affectation en masse</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle style={{ color: "#0B0F2E" }}>Affectation en masse</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div>
               <Label>Employés</Label>
@@ -640,7 +640,7 @@ export default function PlanningPage() {
               <Switch checked={bulkWeekendOff} onCheckedChange={setBulkWeekendOff} />
               <Label className="text-sm">Week-end = Repos automatique</Label>
             </div>
-            <Button className="w-full text-white" style={{ backgroundColor: "#1E2A4A" }} onClick={applyBulk}>Appliquer</Button>
+            <Button className="w-full text-white" style={{ backgroundColor: "#0B0F2E" }} onClick={applyBulk}>Appliquer</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -695,14 +695,14 @@ function CreneauEditor({ creneau, onSave, onDelete, onCancel }: {
         <div className="flex gap-2 mt-1 flex-wrap">
           {COLORS.map(color => (
             <button key={color}
-              className={`w-8 h-8 rounded-lg ${color} ${c.couleur === color ? "ring-2 ring-offset-2 ring-[#1E2A4A]" : ""}`}
+              className={`w-8 h-8 rounded-lg ${color} ${c.couleur === color ? "ring-2 ring-offset-2 ring-[#0B0F2E]" : ""}`}
               onClick={() => setC(p => ({ ...p, couleur: color }))} />
           ))}
         </div>
       </div>
 
       <div className="flex gap-2">
-        <Button className="flex-1 text-white" style={{ backgroundColor: "#1E2A4A" }} onClick={() => onSave({ ...c, pause_minutes: pauseMin, heures_effectives: eff })}>
+        <Button className="flex-1 text-white" style={{ backgroundColor: "#0B0F2E" }} onClick={() => onSave({ ...c, pause_minutes: pauseMin, heures_effectives: eff })}>
           Enregistrer
         </Button>
         <Button variant="outline" onClick={onCancel}>Annuler</Button>

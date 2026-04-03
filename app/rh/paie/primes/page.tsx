@@ -153,7 +153,7 @@ export default function PrimesPage() {
     <div className="p-6 space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#1E2A4A]">Primes & Bonus</h1>
+          <h1 className="text-2xl font-bold text-[#0B0F2E]">Primes & Bonus</h1>
           <p className="text-sm text-gray-500">Catalogue + saisie mensuelle → intégration automatique dans la paie</p>
         </div>
         <div className="flex gap-3 items-center">
@@ -174,7 +174,7 @@ export default function PrimesPage() {
           { id: "saisie", label: "✏️ Saisie du mois" },
         ] as { id: "catalogue" | "saisie"; label: string }[]).map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === t.id ? "border-[#1E2A4A] text-[#1E2A4A]" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === t.id ? "border-[#0B0F2E] text-[#0B0F2E]" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
             {t.label}
           </button>
         ))}
@@ -185,8 +185,8 @@ export default function PrimesPage() {
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle className="text-[#1E2A4A]">Catalogue primes ({catalogue.filter(p => p.actif !== false).length} actives)</CardTitle>
-              <Button onClick={() => setCatDialog(true)} className="bg-[#1E2A4A] text-white">
+              <CardTitle className="text-[#0B0F2E]">Catalogue primes ({catalogue.filter(p => p.actif !== false).length} actives)</CardTitle>
+              <Button onClick={() => setCatDialog(true)} className="bg-[#0B0F2E] text-white">
                 <Plus className="w-4 h-4 mr-2" />Nouvelle prime
               </Button>
             </div>
@@ -246,7 +246,7 @@ export default function PrimesPage() {
                   Total approuvé : <strong className="text-green-700">{fmt(totalSaisies)}</strong>
                 </div>
               )}
-              <Button onClick={() => setSaisieDialog(true)} disabled={societe === "all"} className="bg-[#1E2A4A] text-white">
+              <Button onClick={() => setSaisieDialog(true)} disabled={societe === "all"} className="bg-[#0B0F2E] text-white">
                 <Plus className="w-4 h-4 mr-2" />Saisir une prime
               </Button>
             </div>
@@ -255,7 +255,7 @@ export default function PrimesPage() {
           {societe === "all" && <p className="text-sm text-gray-500">Sélectionnez une société pour saisir des primes</p>}
 
           <Card>
-            <CardHeader><CardTitle className="text-[#1E2A4A]">Primes de {periode} ({saisies.length})</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-[#0B0F2E]">Primes de {periode} ({saisies.length})</CardTitle></CardHeader>
             <CardContent className="p-0">
               {loading ? <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin" /></div>
                 : saisies.length === 0 ? <div className="text-center py-12 text-gray-500">Aucune prime saisie pour cette période</div>
@@ -279,7 +279,7 @@ export default function PrimesPage() {
                             </div>
                           </TableCell>
                           <TableCell className="text-sm">{s.quantite || "—"}</TableCell>
-                          <TableCell className="text-right font-semibold text-[#1E2A4A]">{fmt(s.montant || 0)}</TableCell>
+                          <TableCell className="text-right font-semibold text-[#0B0F2E]">{fmt(s.montant || 0)}</TableCell>
                           <TableCell className="text-sm text-gray-500 max-w-32 truncate">{s.notes || "—"}</TableCell>
                           <TableCell>
                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${s.integre_paie ? "bg-blue-100 text-blue-700" : s.approuve ? STATUT_COLORS.approuve : STATUT_COLORS.brouillon}`}>
@@ -350,7 +350,7 @@ export default function PrimesPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCatDialog(false)}>Annuler</Button>
-            <Button onClick={creerCatalogue} disabled={saving} className="bg-[#1E2A4A] text-white">
+            <Button onClick={creerCatalogue} disabled={saving} className="bg-[#0B0F2E] text-white">
               {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}Créer la prime
             </Button>
           </DialogFooter>
@@ -385,8 +385,8 @@ export default function PrimesPage() {
               </div>
             )}
             {saisieCalc !== null && (
-              <div className="bg-[#1E2A4A]/5 border border-[#1E2A4A]/20 p-3 rounded-lg">
-                <p className="text-sm font-medium text-[#1E2A4A]">Montant calculé : <strong>{fmt(saisieCalc)}</strong></p>
+              <div className="bg-[#0B0F2E]/5 border border-[#0B0F2E]/20 p-3 rounded-lg">
+                <p className="text-sm font-medium text-[#0B0F2E]">Montant calculé : <strong>{fmt(saisieCalc)}</strong></p>
                 {primeSelectionnee && <p className="text-xs text-gray-500 mt-1">{TYPE_PRIME_LABELS[primeSelectionnee.type_prime]}</p>}
               </div>
             )}
@@ -396,7 +396,7 @@ export default function PrimesPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setSaisieDialog(false)}>Annuler</Button>
-            <Button onClick={saisirPrime} disabled={saving} className="bg-[#1E2A4A] text-white">
+            <Button onClick={saisirPrime} disabled={saving} className="bg-[#0B0F2E] text-white">
               {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}Calculer et Sauvegarder
             </Button>
           </DialogFooter>

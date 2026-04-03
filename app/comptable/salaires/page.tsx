@@ -63,7 +63,7 @@ export default function SalairesPage() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#1E2A4A]">Salaires & Charges Sociales</h1>
+          <h1 className="text-2xl font-bold text-[#0B0F2E]">Salaires & Charges Sociales</h1>
           <p className="text-sm text-gray-500 mt-1">Masse salariale et charges patronales</p>
         </div>
         <Button variant="outline" className="gap-2"><Download className="w-4 h-4" /> Exporter</Button>
@@ -89,7 +89,7 @@ export default function SalairesPage() {
       {selectedSociete === "all" ? (
         <Card><CardContent className="text-center py-12 text-gray-500">Sélectionnez une société</CardContent></Card>
       ) : loading ? (
-        <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-[#1E2A4A]" /></div>
+        <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-[#0B0F2E]" /></div>
       ) : (
         <>
           {/* KPIs */}
@@ -102,14 +102,14 @@ export default function SalairesPage() {
             ].map(k => (
               <Card key={k.label}><CardContent className="p-4 flex items-center gap-3">
                 <k.icon className={`w-8 h-8 ${k.color}`} />
-                <div><p className="text-xs text-gray-500">{k.label}</p><p className="text-xl font-bold text-[#1E2A4A]">{k.value}</p></div>
+                <div><p className="text-xs text-gray-500">{k.label}</p><p className="text-xl font-bold text-[#0B0F2E]">{k.value}</p></div>
               </CardContent></Card>
             ))}
           </div>
 
           {/* Tableau charges sociales */}
           <Card>
-            <CardHeader><CardTitle className="text-[#1E2A4A]">Décomposition des charges — Taux légaux Maurice</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-[#0B0F2E]">Décomposition des charges — Taux légaux Maurice</CardTitle></CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
@@ -147,7 +147,7 @@ export default function SalairesPage() {
           {/* Comptes comptables */}
           {ecritures.length > 0 && (
             <Card>
-              <CardHeader><CardTitle className="text-[#1E2A4A]">Comptes de personnel (Classe 6)</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-[#0B0F2E]">Comptes de personnel (Classe 6)</CardTitle></CardHeader>
               <CardContent className="p-0">
                 <Table>
                   <TableHeader>

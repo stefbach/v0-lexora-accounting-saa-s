@@ -80,7 +80,7 @@ export async function POST(request: Request) {
 
       const { data, error } = await supabase.from('groupes_employes').insert({
         societe_id, nom, code: code || null, description: description || null,
-        couleur: couleur || '#1E2A4A',
+        couleur: couleur || '#0B0F2E',
         inclus_planning: inclus_planning !== false,
         inclus_pointage: inclus_pointage !== false,
       }).select().single()
