@@ -573,6 +573,9 @@ export default function PlanningPage() {
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-200 text-gray-600">
               <span className="font-bold">R</span> Repos
             </div>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-100 text-emerald-700">
+              <span className="font-bold">C</span> Congé
+            </div>
           </div>
         </CardContent>
       </Card>

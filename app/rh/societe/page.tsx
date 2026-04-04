@@ -983,6 +983,9 @@ export default function SocieteSettingsPage() {
             onSave={handleFiscalSave}
           />
         )}
+        {tab === "audit" && (
+          <AuditTab key={`audit-${societeId}`} societeId={societeId} />
+        )}
       </div>
     </div>
   )

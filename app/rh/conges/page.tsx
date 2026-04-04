@@ -1198,6 +1198,7 @@ export default function CongesPage() {
                         <TableHead>Dates</TableHead>
                         <TableHead>Nb jours</TableHead>
                         <TableHead>Statut</TableHead>
+                        <TableHead>Approbation</TableHead>
                         <TableHead>Motif</TableHead>
                         <TableHead>Commentaire</TableHead>
                       </TableRow>
@@ -1223,6 +1224,9 @@ export default function CongesPage() {
                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUT_COLORS[c.statut] || ""}`}>
                               {STATUT_LABELS[c.statut] || c.statut}
                             </span>
+                          </TableCell>
+                          <TableCell>
+                            <ApprovalSteps niveau={c.niveau_approbation ?? (c.statut === "approuve" ? 3 : c.statut === "refuse" ? 0 : 0)} approvals={c.approuve_par} />
                           </TableCell>
                           <TableCell className="text-sm text-gray-500 max-w-32 truncate">
                             {c.motif || "---"}
@@ -1319,6 +1323,40 @@ export default function CongesPage() {
               {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
               Soumettre la demande
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══ DIALOG: Certificat medical upload ═══ */}
+      <Dialog open={!!certDialog} onOpenChange={open => { if (!open) setCertDialog(null) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileWarning className="w-5 h-5 text-orange-500" />
+              Certificat medical - SL &gt; 3 jours
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            {certDialog && (
+              <div className="space-y-3">
+                <div className="bg-orange-50 border border-orange-200 rounded-md p-3">
+                  <p className="text-sm text-orange-800">
+                    <strong>{certDialog.employe?.prenom} {certDialog.employe?.nom}</strong> - {certDialog.nb_jours} jours de conge maladie
+                  </p>
+                  <p className="text-xs text-orange-600 mt-1">
+                    {formatDate(certDialog.date_debut)} &rarr; {formatDate(certDialog.date_fin)}
+                  </p>
+                </div>
+                <CertificatUploadZone
+                  congeId={certDialog.id}
+                  existingUrl={certDialog.certificat_url}
+                  onUploaded={() => { setCertDialog(null); loadDemandes() }}
+                />
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCertDialog(null)}>Fermer</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
