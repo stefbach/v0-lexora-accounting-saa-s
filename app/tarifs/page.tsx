@@ -801,19 +801,28 @@ export default function TarifsPage() {
     ))
   }
 
-  /* Calculator logic */
-  const calcPaiePrice = (): number => {
-    return 1500 + employees * 200
+  /* Calculator logic — aligned with tier card prices */
+  const calcPaieTier = (): { price: number; tier: string; range: string } => {
+    if (employees <= 5) return { price: 1700, tier: "Solo", range: "1–5" }
+    if (employees <= 25) return { price: 2700, tier: txt.tierNames[1], range: "6–25" }
+    if (employees <= 100) return { price: 6700, tier: "PME", range: "26–100" }
+    return { price: 14500, tier: txt.tierNames[3], range: "100+" }
   }
-  const calcComptaPrice = (): number => {
-    if (employees <= 5) return 1500
-    if (employees <= 25) return 3500
-    if (employees <= 100) return 6500
-    return 12000
+  const calcComptaTier = (): { price: number; tier: string } => {
+    if (employees <= 5) return { price: 1500, tier: "Solo" }
+    if (employees <= 25) return { price: 3500, tier: txt.tierNames[1] }
+    if (employees <= 100) return { price: 6500, tier: "PME" }
+    return { price: 12000, tier: txt.tierNames[3] }
   }
-  const calcBundlePrice = (): number => {
-    return Math.round((calcPaiePrice() + calcComptaPrice()) * 0.80)
+  const calcBundleTier = (): { price: number; saving: number } => {
+    if (employees <= 5) return { price: 2720, saving: 1700 + 1500 - 2720 }
+    if (employees <= 25) return { price: 4960, saving: 2700 + 3500 - 4960 }
+    if (employees <= 100) return { price: 10560, saving: 6700 + 6500 - 10560 }
+    return { price: 21200, saving: 14500 + 12000 - 21200 }
   }
+  const calcPaiePrice = (): number => calcPaieTier().price
+  const calcComptaPrice = (): number => calcComptaTier().price
+  const calcBundlePrice = (): number => calcBundleTier().price
   const getCalcPrice = (): number => {
     const mp = calcTab === "paie" ? calcPaiePrice() : calcTab === "compta" ? calcComptaPrice() : calcBundlePrice()
     return calcBilling === "annual" ? annualPrice(mp) : mp
@@ -1173,30 +1182,58 @@ export default function TarifsPage() {
               />
             </div>
 
+            {/* Tier indicator */}
+            <div style={{
+              marginBottom: "16px", padding: "10px 14px", borderRadius: "8px",
+              backgroundColor: `${C.gold}10`, border: `1px solid ${C.gold}25`,
+              display: "flex", justifyContent: "space-between", alignItems: "center",
+            }}>
+              <span style={{ color: C.gold, fontSize: "13px", fontWeight: 700 }}>
+                {calcTab === "paie" ? calcPaieTier().tier : calcTab === "compta" ? calcComptaTier().tier : "Pack ERP"}
+              </span>
+              <span style={{ color: C.muted, fontSize: "12px" }}>
+                {calcTab === "paie" ? `${calcPaieTier().range} ${locale === "fr" ? "salariés" : "employees"}` :
+                 calcTab === "compta" ? (employees <= 50 ? `≤ ${employees <= 5 ? 50 : employees <= 25 ? 200 : 500} txn/${locale === "fr" ? "mois" : "mo"}` : (locale === "fr" ? "Transactions illimitées" : "Unlimited transactions")) :
+                 (locale === "fr" ? "Compta + RH + TIBOK" : "Accounting + HR + TIBOK")}
+              </span>
+            </div>
+
             {/* Formula display */}
             {calcTab === "paie" && (
-              <div style={{ color: C.muted, fontSize: "13px", lineHeight: 1.8 }}>
-                <div>{txt.calcBase}: <span style={{ color: C.white, fontWeight: 600 }}>MRs 1,500</span></div>
-                <div>+ {employees} {txt.calcPerEmp} x <span style={{ color: C.white, fontWeight: 600 }}>MRs 200</span></div>
-                <div style={{ color: C.gold, fontWeight: 700, fontSize: "16px", marginTop: "8px" }}>
-                  = MRs {fmt(calcPaiePrice())} {txt.perMonth}
+              <div style={{ color: C.muted, fontSize: "13px", lineHeight: 2 }}>
+                <div>{locale === "fr" ? "Formule" : "Plan"} <span style={{ color: C.white, fontWeight: 600 }}>{calcPaieTier().tier}</span> ({calcPaieTier().range} {locale === "fr" ? "sal." : "emp."})</div>
+                <div style={{ color: C.gold, fontWeight: 700, fontSize: "18px", marginTop: "4px" }}>
+                  MRs {fmt(calcPaiePrice())} <span style={{ fontSize: "13px", fontWeight: 400, color: C.muted }}>{txt.perMonth}</span>
                 </div>
+                {employees > 5 && <div style={{ fontSize: "12px", color: C.muted, marginTop: "4px" }}>{locale === "fr" ? "Inclut TIBOK Corporate santé salariés" : "Includes TIBOK Corporate employee health"}</div>}
               </div>
             )}
             {calcTab === "compta" && (
-              <div style={{ color: C.muted, fontSize: "13px", lineHeight: 1.8 }}>
-                <div>{employees <= 5 ? "Solo (1-5)" : employees <= 25 ? "Petite (6-25)" : employees <= 100 ? "PME (26-100)" : "Grande (100+)"}</div>
-                <div style={{ color: C.gold, fontWeight: 700, fontSize: "16px", marginTop: "8px" }}>
-                  = MRs {fmt(calcComptaPrice())} {txt.perMonth}
+              <div style={{ color: C.muted, fontSize: "13px", lineHeight: 2 }}>
+                <div>{locale === "fr" ? "Formule" : "Plan"} <span style={{ color: C.white, fontWeight: 600 }}>{calcComptaTier().tier}</span></div>
+                <div style={{ color: C.gold, fontWeight: 700, fontSize: "18px", marginTop: "4px" }}>
+                  MRs {fmt(calcComptaPrice())} <span style={{ fontSize: "13px", fontWeight: 400, color: C.muted }}>{txt.perMonth}</span>
                 </div>
               </div>
             )}
             {calcTab === "bundle" && (
-              <div style={{ color: C.muted, fontSize: "13px", lineHeight: 1.8 }}>
-                <div>Paie: MRs {fmt(calcPaiePrice())} + Compta: MRs {fmt(calcComptaPrice())}</div>
-                <div style={{ color: C.green, fontWeight: 600 }}>{"\u00d7"} 0.80 (-20%)</div>
-                <div style={{ color: C.gold, fontWeight: 700, fontSize: "16px", marginTop: "8px" }}>
-                  = MRs {fmt(calcBundlePrice())} {txt.perMonth}
+              <div style={{ color: C.muted, fontSize: "13px", lineHeight: 2 }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span>RH & Paie + TIBOK</span>
+                  <span style={{ color: C.white, fontWeight: 600 }}>MRs {fmt(calcPaiePrice())}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span>{locale === "fr" ? "Comptabilité" : "Accounting"}</span>
+                  <span style={{ color: C.white, fontWeight: 600 }}>MRs {fmt(calcComptaPrice())}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", color: C.green, fontWeight: 600, marginTop: "4px" }}>
+                  <span>{locale === "fr" ? "Remise Pack −20%" : "Bundle discount −20%"}</span>
+                  <span>− MRs {fmt(calcPaiePrice() + calcComptaPrice() - calcBundlePrice())}</span>
+                </div>
+                <div style={{ height: "1px", backgroundColor: C.navyBorder, margin: "8px 0" }} />
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                  <span style={{ fontWeight: 600, color: C.white }}>Total</span>
+                  <span style={{ color: C.gold, fontWeight: 700, fontSize: "18px" }}>MRs {fmt(calcBundlePrice())} <span style={{ fontSize: "13px", fontWeight: 400, color: C.muted }}>{txt.perMonth}</span></span>
                 </div>
               </div>
             )}
