@@ -22,14 +22,86 @@ async function getUserSocieteIds(supabase: ReturnType<typeof getAdminClient>, us
   return [...new Set([...(dossiers || []).map((d: any) => d.societe_id), ...(owned || []).map((s: any) => s.id)])]
 }
 
-/** Count working days between two dates (exclude Sat/Sun) */
+/**
+ * Mauritius public holidays (jours fériés).
+ * Returns a Set of "YYYY-MM-DD" strings for a given year.
+ * Fixed-date holidays per Workers' Rights Act 2019 + Mauritius Public Holidays Act.
+ * Note: Some holidays (Eid, Divali, Chinese Spring Festival, etc.) have variable dates
+ * that shift yearly — we include the most common known dates. For production accuracy,
+ * these should come from a database or government gazette.
+ */
+function getMauritiusPublicHolidays(year: number): Set<string> {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const fmt = (m: number, d: number) => `${year}-${pad(m)}-${pad(d)}`
+
+  const fixed = [
+    fmt(1, 1),   // New Year's Day (1 Jan)
+    fmt(1, 2),   // New Year's Day (2 Jan)
+    fmt(2, 1),   // Abolition of Slavery (1 Feb)
+    fmt(3, 12),  // Independence & Republic Day (12 Mar)
+    fmt(5, 1),   // Labour Day (1 May)
+    fmt(11, 1),  // All Saints' Day (1 Nov — Toussaint)
+    fmt(11, 2),  // Arrival of Indentured Labourers (2 Nov)
+    fmt(12, 25), // Christmas Day (25 Dec)
+  ]
+
+  // Variable holidays — approximate common dates per year
+  // These are approximations; for exact dates, consult the Government Gazette
+  const variableByYear: Record<number, string[]> = {
+    2024: [
+      fmt(1, 25),  // Thaipoosam Cavadee
+      fmt(2, 10),  // Chinese Spring Festival
+      fmt(3, 8),   // Maha Shivaratree
+      fmt(3, 29),  // Ougadi
+      fmt(4, 10),  // Eid-Ul-Fitr
+      fmt(8, 15),  // Assumption of the Blessed Virgin Mary
+      fmt(9, 16),  // Ganesh Chaturthi
+      fmt(11, 1),  // Divali (overlaps with All Saints')
+    ],
+    2025: [
+      fmt(1, 14),  // Thaipoosam Cavadee
+      fmt(1, 29),  // Chinese Spring Festival
+      fmt(2, 26),  // Maha Shivaratree
+      fmt(3, 30),  // Eid-Ul-Fitr
+      fmt(3, 14),  // Ougadi
+      fmt(8, 15),  // Assumption of the Blessed Virgin Mary
+      fmt(9, 5),   // Ganesh Chaturthi
+      fmt(10, 20), // Divali
+    ],
+    2026: [
+      fmt(1, 2),   // Thaipoosam Cavadee (overlaps with New Year)
+      fmt(2, 17),  // Chinese Spring Festival
+      fmt(2, 15),  // Maha Shivaratree
+      fmt(3, 20),  // Eid-Ul-Fitr
+      fmt(4, 3),   // Ougadi
+      fmt(8, 15),  // Assumption of the Blessed Virgin Mary
+      fmt(8, 26),  // Ganesh Chaturthi
+      fmt(11, 8),  // Divali
+    ],
+  }
+
+  const all = [...fixed, ...(variableByYear[year] || [])]
+  return new Set(all)
+}
+
+/** Count working days between two dates (exclude Sat/Sun + Mauritius public holidays) */
 function countWorkingDays(dateDebut: string, dateFin: string): number {
   let count = 0
   const d = new Date(dateDebut + 'T12:00:00')
   const end = new Date(dateFin + 'T12:00:00')
+
+  // Collect public holidays for all years in the range
+  const startYear = d.getFullYear()
+  const endYear = end.getFullYear()
+  const holidays = new Set<string>()
+  for (let y = startYear; y <= endYear; y++) {
+    for (const h of getMauritiusPublicHolidays(y)) holidays.add(h)
+  }
+
   while (d <= end) {
     const day = d.getDay()
-    if (day !== 0 && day !== 6) count++
+    const iso = d.toISOString().split('T')[0]
+    if (day !== 0 && day !== 6 && !holidays.has(iso)) count++
     d.setDate(d.getDate() + 1)
   }
   return count

@@ -388,9 +388,15 @@ export default function PlanningPage() {
       for (const empId of Object.keys(next)) {
         const row = { ...next[empId] }
         for (let d = 1; d <= daysInMonth; d++) {
-          row[d] = isWeekend(year, month, d) ? null : {
-            creneau_id: c.id, heure_debut: c.heure_debut, heure_fin: c.heure_fin,
-            pause_debut: c.pause_debut, pause_fin: c.pause_fin, heures_prevues: c.heures_effectives,
+          // Respect approved congés: force "Congé" cell
+          const leaves = approvedLeaves[empId]
+          if (leaves && leaves.has(d)) {
+            row[d] = { creneau_id: "conge", heure_debut: "", heure_fin: "", pause_debut: "", pause_fin: "", heures_prevues: 0 }
+          } else {
+            row[d] = isWeekend(year, month, d) ? null : {
+              creneau_id: c.id, heure_debut: c.heure_debut, heure_fin: c.heure_fin,
+              pause_debut: c.pause_debut, pause_fin: c.pause_fin, heures_prevues: c.heures_effectives,
+            }
           }
         }
         next[empId] = row

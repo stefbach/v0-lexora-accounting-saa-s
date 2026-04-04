@@ -231,6 +231,25 @@ export async function POST(request: Request) {
     const today = bodyDate || new Date().toISOString().split('T')[0]
     const now = heure_forcee || new Date().toTimeString().split(' ')[0]
 
+    // Check if employee is on approved congé today — prevent pointage
+    const { data: activeConge } = await supabase
+      .from('demandes_conges')
+      .select('id, type_conge')
+      .eq('employe_id', employe_id)
+      .eq('statut', 'approuve')
+      .lte('date_debut', today)
+      .gte('date_fin', today)
+      .limit(1)
+
+    if (activeConge && activeConge.length > 0 && type_pointage !== 'absence_justifiee') {
+      return NextResponse.json({
+        error: 'Employe en conge',
+        message: `Cet employe est en conge approuve (${activeConge[0].type_conge}) aujourd'hui. Pointage non requis.`,
+        en_conge: true,
+        type_conge: activeConge[0].type_conge,
+      }, { status: 409 })
+    }
+
     // Bug 3: Look up planning assignment for this employee+date
     const planAssignment = await findPlanningAssignment(supabase, employe_id, today)
     const planningFields: Record<string, unknown> = {}

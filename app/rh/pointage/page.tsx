@@ -246,7 +246,7 @@ export default function PointagePage() {
   // ---------------------------------------------------------------------------
   // Pointage action
   // ---------------------------------------------------------------------------
-  const doPointage = async (type: "entree" | "sortie", overrideEmployeId?: string) => {
+  const doPointage = async (type: "entree" | "sortie" | "pause_debut" | "pause_fin", overrideEmployeId?: string) => {
     const eid = overrideEmployeId || employeId
     if (!eid || !societeId) return
     setDoingPointage(true)
@@ -305,6 +305,8 @@ export default function PointagePage() {
             date_pointage: returnedPointage.date_pointage || todayISO(),
             heure_entree: returnedPointage.heure_entree || (type === "entree" ? body.heure_forcee : null),
             heure_sortie: returnedPointage.heure_sortie || (type === "sortie" ? body.heure_forcee : null),
+            heure_pause_debut: returnedPointage.heure_pause_debut || null,
+            heure_pause_fin: returnedPointage.heure_pause_fin || null,
             duree_minutes: returnedPointage.duree_minutes || null,
             heures_travaillees: returnedPointage.heures_travaillees || null,
             heures_sup: returnedPointage.heures_sup || null,
@@ -329,6 +331,8 @@ export default function PointagePage() {
             employe_id: eid,
             heure_entree: type === "entree" ? body.heure_forcee : null,
             heure_sortie: type === "sortie" ? body.heure_forcee : null,
+            heure_pause_debut: null,
+            heure_pause_fin: null,
             duree_minutes: null,
             employe: emp ? { nom: emp.nom, prenom: emp.prenom, poste: emp.poste } : undefined,
           }
@@ -355,28 +359,6 @@ export default function PointagePage() {
       setDoingPointage(false)
     }
   }
-
-  // ---------------------------------------------------------------------------
-  // Today's status for selected employee
-  // ---------------------------------------------------------------------------
-  const selectedEmployeePointage = useMemo(() => {
-    if (!employeId) return null
-    // Check sortedPointages which has congé info merged in
-    return sortedPointages.find((p) => p.employe_id === employeId) || null
-  }, [employeId, sortedPointages])
-
-  // Determine button states for selected employee
-  const canClockIn = useMemo(() => {
-    if (!selectedEmployeePointage) return true
-    if (selectedEmployeePointage.en_conge) return false
-    return !selectedEmployeePointage.heure_entree
-  }, [selectedEmployeePointage])
-
-  const canClockOut = useMemo(() => {
-    if (!selectedEmployeePointage) return false
-    if (selectedEmployeePointage.en_conge) return false
-    return !!selectedEmployeePointage.heure_entree && !selectedEmployeePointage.heure_sortie
-  }, [selectedEmployeePointage])
 
   // ---------------------------------------------------------------------------
   // Merged view: all employees with their pointage (or placeholder if none)
@@ -453,6 +435,28 @@ export default function PointagePage() {
       return nameA.localeCompare(nameB)
     })
   }, [pointages, employes, congesToday])
+
+  // ---------------------------------------------------------------------------
+  // Today's status for selected employee
+  // ---------------------------------------------------------------------------
+  const selectedEmployeePointage = useMemo(() => {
+    if (!employeId) return null
+    // Check sortedPointages which has congé info merged in
+    return sortedPointages.find((p) => p.employe_id === employeId) || null
+  }, [employeId, sortedPointages])
+
+  // Determine button states for selected employee
+  const canClockIn = useMemo(() => {
+    if (!selectedEmployeePointage) return true
+    if (selectedEmployeePointage.en_conge) return false
+    return !selectedEmployeePointage.heure_entree
+  }, [selectedEmployeePointage])
+
+  const canClockOut = useMemo(() => {
+    if (!selectedEmployeePointage) return false
+    if (selectedEmployeePointage.en_conge) return false
+    return !!selectedEmployeePointage.heure_entree && !selectedEmployeePointage.heure_sortie
+  }, [selectedEmployeePointage])
 
   // ---------------------------------------------------------------------------
   // Calendar helpers
