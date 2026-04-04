@@ -50,7 +50,7 @@ export async function getUserSocieteIds(userId: string): Promise<string[]> {
     for (const s of clientSocietes || []) ids.add(s.id)
   }
 
-  // 3. Via dossiers
+  // 3. Via dossiers (client_id = userId)
   const { data: dossiers } = await supabase
     .from('dossiers')
     .select('societe_id')
@@ -70,6 +70,40 @@ export async function getUserSocieteIds(userId: string): Promise<string[]> {
     .select('id')
     .eq('created_by', userId)
   for (const s of ownedSocietes || []) ids.add(s.id)
+
+  // 6. Via comptable_societes (for comptable/comptable_dedie roles)
+  if (['comptable', 'comptable_dedie'].includes(profile.role)) {
+    const { data: comptableSocietes } = await supabase
+      .from('comptable_societes')
+      .select('societe_id')
+      .eq('comptable_id', userId)
+    for (const cs of comptableSocietes || []) if (cs.societe_id) ids.add(cs.societe_id)
+  }
+
+  // 7. Fallback for client_admin/client_user: check clients table → get all sociétés for that client
+  if (ids.size === 0 && ['client_admin', 'client_user', 'rh', 'rh_manager'].includes(profile.role)) {
+    // Try to find client via profiles → clients relationship
+    const { data: clientLinks } = await supabase
+      .from('clients')
+      .select('id')
+      .eq('user_id', userId)
+    for (const cl of clientLinks || []) {
+      const { data: clSocietes } = await supabase
+        .from('societes')
+        .select('id')
+        .eq('client_id', cl.id)
+      for (const s of clSocietes || []) ids.add(s.id)
+    }
+  }
+
+  // 8. Ultimate fallback: if still empty, get sociétés from employes the user might manage
+  if (ids.size === 0) {
+    const { data: allSocietes } = await supabase.from('societes').select('id')
+    // If user has any role that implies RH access, give them all sociétés
+    if (['client_admin', 'client_user', 'rh', 'rh_manager', 'comptable', 'comptable_dedie'].includes(profile.role)) {
+      for (const s of allSocietes || []) ids.add(s.id)
+    }
+  }
 
   return [...ids]
 }
