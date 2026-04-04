@@ -542,14 +542,18 @@ export default function CongesPage() {
   useEffect(() => { loadSocietes() }, [loadSocietes])
   useEffect(() => { loadEmployes() }, [loadEmployes])
 
+  // Always load balances for KPI display (needed across all tabs)
+  useEffect(() => {
+    loadBalances()
+  }, [loadBalances])
+
   // Load data per tab
   useEffect(() => {
-    if (tab === "dashboard") loadBalances()
-    else if (tab === "demandes") loadDemandes()
+    if (tab === "demandes") loadDemandes()
     else if (tab === "absents") loadAbsentsToday()
     else if (tab === "historique") loadHistorique()
     else if (tab === "calendrier") loadCalendarConges()
-  }, [tab, societe, loadBalances, loadDemandes, loadAbsentsToday, loadHistorique, loadCalendarConges])
+  }, [tab, societe, loadDemandes, loadAbsentsToday, loadHistorique, loadCalendarConges])
 
   // ─── Societe map ──────────────────────────────────────────────
   const societeMap = new Map(societes.map((s: any) => [s.id, s.nom]))

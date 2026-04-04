@@ -1,12 +1,13 @@
 "use client"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
   Users, CreditCard, Clock, Calendar, TrendingUp, AlertTriangle, Target, Settings,
-  Calculator, FileText, Banknote, CheckCircle, ArrowRight, BarChart3, Building2,
-  ClipboardList, MessageSquare, Upload, CalendarDays, UserPlus, Briefcase, Bell
+  Calculator, Banknote, CheckCircle, ArrowRight, BarChart3, Building2,
+  MessageSquare, Upload, CalendarDays, Briefcase, Bell,
+  AlertCircle, FileWarning, UserX, ChevronRight
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from "recharts"
@@ -14,6 +15,10 @@ import Link from "next/link"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
+const BLUE = "#4191FF"
+const SECONDARY = "#4A5490"
+const CARD_BORDER = "#E2E5F0"
+const PAGE_BG = "#F8F9FC"
 
 function fmt(n: number) { return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "MUR", maximumFractionDigits: 0 }).format(n) }
 
@@ -37,6 +42,77 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "parametres", label: "Parametres" },
 ]
 
+// Mock data for charts
+const MASSE_SALARIALE_DATA = [
+  { mois: "Avr 25", montant: 820000 },
+  { mois: "Mai 25", montant: 835000 },
+  { mois: "Jun 25", montant: 840000 },
+  { mois: "Jul 25", montant: 855000 },
+  { mois: "Aou 25", montant: 860000 },
+  { mois: "Sep 25", montant: 870000 },
+  { mois: "Oct 25", montant: 875000 },
+  { mois: "Nov 25", montant: 890000 },
+  { mois: "Dec 25", montant: 950000 },
+  { mois: "Jan 26", montant: 905000 },
+  { mois: "Fev 26", montant: 910000 },
+  { mois: "Mar 26", montant: 920000 },
+]
+
+const DEPT_DATA = [
+  { name: "Administration", value: 8, color: "#4191FF" },
+  { name: "Production", value: 22, color: "#D4AF37" },
+  { name: "Commercial", value: 12, color: "#10B981" },
+  { name: "Finance", value: 6, color: "#F59E0B" },
+  { name: "Logistique", value: 10, color: "#8B5CF6" },
+]
+
+const ABSENCES_TYPE_DATA = [
+  { type: "AL", count: 18, label: "Conge annuel" },
+  { type: "SL", count: 7, label: "Conge maladie" },
+  { type: "MAT", count: 2, label: "Maternite" },
+  { type: "PAT", count: 1, label: "Paternite" },
+]
+
+// Count-up animation hook
+function useCountUp(target: number, duration: number = 1200, enabled: boolean = true): number {
+  const [value, setValue] = useState(0)
+  const startTime = useRef<number | null>(null)
+  const rafId = useRef<number>(0)
+
+  useEffect(() => {
+    if (!enabled || target === 0) {
+      setValue(target)
+      return
+    }
+    setValue(0)
+    startTime.current = null
+
+    const animate = (timestamp: number) => {
+      if (startTime.current === null) startTime.current = timestamp
+      const elapsed = timestamp - startTime.current
+      const progress = Math.min(elapsed / duration, 1)
+      // ease-out cubic
+      const eased = 1 - Math.pow(1 - progress, 3)
+      setValue(Math.round(eased * target))
+      if (progress < 1) {
+        rafId.current = requestAnimationFrame(animate)
+      }
+    }
+    rafId.current = requestAnimationFrame(animate)
+    return () => cancelAnimationFrame(rafId.current)
+  }, [target, duration, enabled])
+
+  return value
+}
+
+function AnimatedKPIValue({ value, isCurrency, loading }: { value: number; isCurrency?: boolean; loading: boolean }) {
+  const animated = useCountUp(value, 1200, !loading && value > 0)
+  if (loading) return <span>...</span>
+  if (isCurrency) return <span>{fmt(animated)}</span>
+  return <span>{animated}</span>
+}
+
+
 export default function RHDashboard() {
   const [tab, setTab] = useState<Tab>("dashboard")
   const [societes, setSocietes] = useState<any[]>([])
@@ -44,9 +120,11 @@ export default function RHDashboard() {
   const [stats, setStats] = useState({ nb_employes: 0, masse_salariale: 0, charges_patronales: 0, conges_attente: 0, absences_today: 0, primes_mois: 0 })
   const [loading, setLoading] = useState(true)
   const [userRole, setUserRole] = useState("")
+  const [chartData, setChartData] = useState<any[]>([])
+  const [deptData, setDeptData] = useState<any[]>([])
   const periode = new Date().toISOString().slice(0, 7)
 
-  // Check if manager → redirect to manager dashboard
+  // Check if manager -> redirect to manager dashboard
   useEffect(() => {
     import("@/lib/supabase/client").then(({ createClient }) => {
       const supabase = createClient()
@@ -91,7 +169,7 @@ export default function RHDashboard() {
           // Fallback: estimate from employee base salaries
           const totalBase = employes.reduce((s: number, e: any) => s + (Number(e.salaire_base) || 0), 0)
           masseSalariale = totalBase
-          // Estimate charges: CSG 6% + NSF 2.5% + Training 1% + PRGF ~1.5% ≈ 11%
+          // Estimate charges: CSG 6% + NSF 2.5% + Training 1% + PRGF ~1.5% = 11%
           chargesPatronales = Math.round(totalBase * 0.11)
         }
 
@@ -110,52 +188,158 @@ export default function RHDashboard() {
   }, [societe, periode])
 
   return (
-    <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Gestion des Ressources Humaines</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
+    <div className="min-h-screen" style={{ backgroundColor: PAGE_BG }}>
+      <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold" style={{ color: NAVY, fontFamily: "Poppins, sans-serif" }}>Gestion des Ressources Humaines</h1>
+            <p className="text-sm mt-0.5" style={{ color: SECONDARY }}>{new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
+          </div>
+          <Select value={societe} onValueChange={setSociete}>
+            <SelectTrigger className="w-52" style={{ borderColor: CARD_BORDER, borderRadius: 12 }}><SelectValue placeholder="Toutes societes" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Toutes les societes</SelectItem>
+              {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </div>
-        <Select value={societe} onValueChange={setSociete}>
-          <SelectTrigger className="w-52"><SelectValue placeholder="Toutes societes" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Toutes les societes</SelectItem>
-            {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-200">
-        {TABS.map(t => {
-          const Icon = TAB_ICONS[t.id]
-          return (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-                tab === t.id
-                  ? "border-[#0B0F2E] text-[#0B0F2E]"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-              }`}
-            >
-              <Icon className="w-4 h-4" />{t.label}
-            </button>
-          )
-        })}
-      </div>
+        {/* Tabs */}
+        <div className="flex gap-1 overflow-x-auto" style={{ borderBottom: `1px solid ${CARD_BORDER}` }}>
+          {TABS.map(t => {
+            const Icon = TAB_ICONS[t.id]
+            return (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                  tab === t.id
+                    ? "border-[#0B0F2E] text-[#0B0F2E]"
+                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                }`}
+              >
+                <Icon className="w-4 h-4" />{t.label}
+              </button>
+            )
+          })}
+        </div>
 
-      {/* Tab Content */}
-      {tab === "dashboard" && <DashboardTab stats={stats} loading={loading} />}
-      {tab === "pointages" && <PointagesTab />}
-      {tab === "absences" && <AbsencesTab />}
-      {tab === "primes" && <PrimesTab />}
-      {tab === "paie" && <PaieTab />}
-      {tab === "parametres" && <ParametresTab />}
+        {/* Tab Content */}
+        {tab === "dashboard" && <DashboardTab stats={stats} loading={loading} />}
+        {tab === "pointages" && <PointagesTab />}
+        {tab === "absences" && <AbsencesTab />}
+        {tab === "primes" && <PrimesTab />}
+        {tab === "paie" && <PaieTab />}
+        {tab === "parametres" && <ParametresTab />}
+      </div>
     </div>
   )
 }
+
+
+// Smart Alerts Widget
+function SmartAlertsPanel({ stats }: { stats: any }) {
+  const today = new Date()
+  const jour15 = new Date(today.getFullYear(), today.getMonth() + 1, 15)
+  const joursAvant15 = Math.ceil((jour15.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+
+  const alerts: { icon: React.ComponentType<{ className?: string }>; title: string; desc: string; severity: "red" | "orange" | "blue" | "green"; href?: string; action?: string }[] = []
+
+  // MRA deadline J-7
+  if (joursAvant15 <= 7) {
+    alerts.push({
+      icon: FileWarning,
+      title: `Echeance MRA dans ${joursAvant15}J`,
+      desc: "CSG/NSF a soumettre avant le 15",
+      severity: "red",
+      href: "/rh/paie/exports-mra",
+      action: "Exporter",
+    })
+  } else {
+    alerts.push({
+      icon: FileWarning,
+      title: `Echeance MRA dans ${joursAvant15}J`,
+      desc: "CSG/NSF a soumettre avant le 15",
+      severity: "orange",
+      href: "/rh/paie/exports-mra",
+      action: "Exporter",
+    })
+  }
+
+  // CDD expiring in 30 days (mock)
+  alerts.push({
+    icon: AlertCircle,
+    title: "2 CDD expirent sous 30J",
+    desc: "Dupont M., Martin L. - renouvellement requis",
+    severity: "orange",
+    href: "/rh/employes",
+    action: "Voir",
+  })
+
+  // Pending leave requests
+  if (stats.conges_attente > 0) {
+    alerts.push({
+      icon: Calendar,
+      title: `${stats.conges_attente} conge(s) en attente`,
+      desc: "Demandes a valider par le responsable",
+      severity: "blue",
+      href: "/rh/conges",
+      action: "Traiter",
+    })
+  }
+
+  // Pointage anomalies (mock)
+  alerts.push({
+    icon: UserX,
+    title: "3 anomalies pointage",
+    desc: "Employes sans pointage aujourd'hui",
+    severity: "red",
+    href: "/rh/pointage",
+    action: "Verifier",
+  })
+
+  const severityStyles = {
+    red: { bg: "bg-red-50", border: "border-red-200", icon: "text-red-500", dot: "bg-red-500" },
+    orange: { bg: "bg-amber-50", border: "border-amber-200", icon: "text-amber-500", dot: "bg-amber-500" },
+    blue: { bg: "bg-blue-50", border: "border-blue-200", icon: "text-blue-500", dot: "bg-blue-500" },
+    green: { bg: "bg-green-50", border: "border-green-200", icon: "text-green-500", dot: "bg-green-500" },
+  }
+
+  return (
+    <Card style={{ border: `1px solid ${CARD_BORDER}`, borderRadius: 12, background: "#FFFFFF" }}>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base font-semibold flex items-center gap-2" style={{ color: NAVY, fontFamily: "Poppins, sans-serif" }}>
+          <AlertTriangle className="w-4 h-4" style={{ color: GOLD }} /> Alertes intelligentes
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {alerts.map((alert, i) => {
+          const s = severityStyles[alert.severity]
+          return (
+            <div key={i} className={`flex items-start gap-3 p-3 rounded-lg ${s.bg} border ${s.border}`}>
+              <div className="flex-shrink-0 mt-0.5">
+                <alert.icon className={`w-4 h-4 ${s.icon}`} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium" style={{ color: NAVY }}>{alert.title}</p>
+                <p className="text-xs mt-0.5" style={{ color: SECONDARY }}>{alert.desc}</p>
+              </div>
+              {alert.href && alert.action && (
+                <Link href={alert.href}>
+                  <Button size="sm" variant="ghost" className="text-xs h-7 px-2 flex-shrink-0" style={{ color: BLUE }}>
+                    {alert.action} <ChevronRight className="w-3 h-3 ml-1" />
+                  </Button>
+                </Link>
+              )}
+            </div>
+          )
+        })}
+      </CardContent>
+    </Card>
+  )
+}
+
 
 function ActualitesRHPanel({ stats }: { stats: any }) {
   const today = new Date()
@@ -207,9 +391,9 @@ function ActualitesRHPanel({ stats }: { stats: any }) {
   const dotColors = { green: "bg-green-500", orange: "bg-amber-500", red: "bg-red-500" }
 
   return (
-    <Card className="border border-gray-200 h-full">
+    <Card style={{ border: `1px solid ${CARD_BORDER}`, borderRadius: 12, background: "#FFFFFF" }} className="h-full">
       <CardHeader className="pb-3">
-        <CardTitle className="text-base font-semibold flex items-center gap-2" style={{ color: NAVY }}>
+        <CardTitle className="text-base font-semibold flex items-center gap-2" style={{ color: NAVY, fontFamily: "Poppins, sans-serif" }}>
           <Bell className="w-4 h-4" style={{ color: GOLD }} /> Actualites RH
         </CardTitle>
       </CardHeader>
@@ -220,9 +404,9 @@ function ActualitesRHPanel({ stats }: { stats: any }) {
               <div className={`w-2.5 h-2.5 rounded-full ${dotColors[item.dot]}`} />
             </div>
             <div className="min-w-0">
-              <p className="text-xs text-gray-400">{item.date}</p>
+              <p className="text-xs" style={{ color: SECONDARY }}>{item.date}</p>
               <p className="text-sm font-medium mt-0.5" style={{ color: NAVY }}>{item.title}</p>
-              <p className="text-xs text-gray-500 mt-0.5">{item.desc}</p>
+              <p className="text-xs mt-0.5" style={{ color: SECONDARY }}>{item.desc}</p>
             </div>
           </div>
         ))}
@@ -231,102 +415,117 @@ function ActualitesRHPanel({ stats }: { stats: any }) {
   )
 }
 
+
+// Custom tooltip for charts
+function ChartTooltip({ active, payload, label, isCurrency }: any) {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="bg-white p-3 rounded-lg shadow-lg" style={{ border: `1px solid ${CARD_BORDER}` }}>
+      <p className="text-xs font-medium" style={{ color: SECONDARY }}>{label}</p>
+      <p className="text-sm font-bold" style={{ color: NAVY }}>
+        {isCurrency ? fmt(payload[0].value) : payload[0].value}
+      </p>
+    </div>
+  )
+}
+
 function DashboardTab({ stats, loading }: { stats: any; loading: boolean }) {
+  const cardStyle = { border: `1px solid ${CARD_BORDER}`, borderRadius: 12, background: "#FFFFFF" }
+
+  const kpis = [
+    { label: "Employes actifs", value: stats.nb_employes, icon: Users, color: "#4191FF", bg: "#EBF3FF", href: "/rh/employes", isCurrency: false },
+    { label: "Masse salariale brute", value: stats.masse_salariale, icon: Banknote, color: "#10B981", bg: "#ECFDF5", href: "/rh/paie", isCurrency: true },
+    { label: "Charges patronales", value: stats.charges_patronales, icon: CreditCard, color: "#F59E0B", bg: "#FFF7ED", href: "/rh/paie", isCurrency: true },
+    { label: "Absences ce mois", value: stats.conges_attente, icon: Calendar, color: "#EF4444", bg: "#FEF2F2", href: "/rh/conges", isCurrency: false },
+  ]
+
   return (
     <div className="space-y-6">
-      {/* KPI Cards — clickable */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { label: "Employes actifs", value: String(stats.nb_employes), icon: Users, color: "text-blue-600", bg: "bg-blue-50", href: "/rh/employes" },
-          { label: "Masse salariale brute", value: fmt(stats.masse_salariale), icon: Banknote, color: "text-green-600", bg: "bg-green-50", href: "/rh/paie" },
-          { label: "Charges patronales", value: fmt(stats.charges_patronales), icon: CreditCard, color: "text-orange-600", bg: "bg-orange-50", href: "/rh/paie" },
-          { label: "Absences ce mois", value: String(stats.conges_attente), icon: Calendar, color: "text-red-500", bg: "bg-red-50", href: "/rh/conges" },
-        ].map(k => (
-          <Link key={k.label} href={k.href}>
-            <Card className="border border-gray-200 hover:border-[#D4AF37] hover:shadow-md transition-all cursor-pointer">
-              <CardContent className="p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <div className={`w-10 h-10 rounded-lg ${k.bg} flex items-center justify-center`}>
-                    <k.icon className={`w-5 h-5 ${k.color}`} />
+      {/* KPI Cards + Alerts row */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+        {/* KPI Cards */}
+        <div className="lg:col-span-3 grid grid-cols-2 md:grid-cols-4 gap-4">
+          {kpis.map(k => (
+            <Link key={k.label} href={k.href}>
+              <Card
+                className="hover:shadow-lg transition-all cursor-pointer group"
+                style={cardStyle}
+              >
+                <CardContent className="p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <div
+                      className="w-10 h-10 rounded-lg flex items-center justify-center"
+                      style={{ backgroundColor: k.bg }}
+                    >
+                      <k.icon className="w-5 h-5" style={{ color: k.color }} />
+                    </div>
+                    <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: GOLD }} />
                   </div>
-                  <ArrowRight className="w-4 h-4 text-gray-300" />
-                </div>
-                <p className="text-xs text-gray-500 uppercase tracking-wide">{k.label}</p>
-                <p className="text-xl font-bold mt-1" style={{ color: NAVY }}>
-                  {loading ? "..." : k.value}
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
+                  <p className="text-xs uppercase tracking-wide" style={{ color: SECONDARY }}>{k.label}</p>
+                  <p className="text-xl font-bold mt-1" style={{ color: NAVY, fontFamily: "Poppins, sans-serif" }}>
+                    <AnimatedKPIValue value={k.value} isCurrency={k.isCurrency} loading={loading} />
+                  </p>
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
+        </div>
+
+        {/* Alerts sidebar - visible on desktop, stacks below on mobile */}
+        <div className="lg:col-span-1">
+          <SmartAlertsPanel stats={stats} />
+        </div>
       </div>
 
-      {/* Charts Section */}
+      {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Masse salariale 12 mois */}
-        <Card className="border border-gray-200 lg:col-span-2">
+        {/* Line chart - Masse salariale evolution */}
+        <Card className="lg:col-span-2" style={cardStyle}>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base font-semibold flex items-center gap-2" style={{ color: NAVY }}>
-              <TrendingUp className="w-4 h-4" style={{ color: GOLD }} /> Evolution masse salariale
+            <CardTitle className="text-base font-semibold flex items-center gap-2" style={{ color: NAVY, fontFamily: "Poppins, sans-serif" }}>
+              <TrendingUp className="w-4 h-4" style={{ color: BLUE }} /> Evolution masse salariale (12 mois)
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={240}>
-              <LineChart data={(() => {
-                const months = ["Jan","Fev","Mar","Avr","Mai","Jun","Jul","Aou","Sep","Oct","Nov","Dec"]
-                const now = new Date()
-                return Array.from({ length: 12 }, (_, i) => {
-                  const m = (now.getMonth() - 11 + i + 12) % 12
-                  const base = stats.masse_salariale || 400000
-                  const variation = (Math.sin(i * 0.8) * 0.08 + 1) * base
-                  return { mois: months[m], brut: Math.round(variation), net: Math.round(variation * 0.85) }
-                })
-              })()}>
-                <XAxis dataKey="mois" tick={{ fontSize: 11, fill: "#999" }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: "#999" }} axisLine={false} tickLine={false} tickFormatter={v => `${Math.round(v/1000)}k`} />
-                <Tooltip formatter={(v: number) => fmt(v)} labelStyle={{ color: NAVY, fontWeight: 600 }} />
-                <Line type="monotone" dataKey="brut" stroke={GOLD} strokeWidth={2.5} dot={false} name="Brut" />
-                <Line type="monotone" dataKey="net" stroke="#4191FF" strokeWidth={2} dot={false} strokeDasharray="5 5" name="Net" />
-              </LineChart>
-            </ResponsiveContainer>
+            <div className="h-[280px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={MASSE_SALARIALE_DATA} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
+                  <XAxis dataKey="mois" tick={{ fontSize: 11, fill: SECONDARY }} axisLine={{ stroke: CARD_BORDER }} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: SECONDARY }} axisLine={false} tickLine={false} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                  <Tooltip content={<ChartTooltip isCurrency />} />
+                  <Line type="monotone" dataKey="montant" stroke={BLUE} strokeWidth={2.5} dot={{ r: 4, fill: BLUE, strokeWidth: 2, stroke: "#fff" }} activeDot={{ r: 6, fill: GOLD, stroke: "#fff", strokeWidth: 2 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           </CardContent>
         </Card>
 
-        {/* Repartition par departement */}
-        <Card className="border border-gray-200">
+        {/* Pie chart - Repartition par departement */}
+        <Card style={cardStyle}>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base font-semibold flex items-center gap-2" style={{ color: NAVY }}>
-              <Users className="w-4 h-4" style={{ color: GOLD }} /> Effectifs par departement
+            <CardTitle className="text-base font-semibold flex items-center gap-2" style={{ color: NAVY, fontFamily: "Poppins, sans-serif" }}>
+              <Users className="w-4 h-4" style={{ color: GOLD }} /> Repartition par departement
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie
-                  data={[
-                    { name: "Ventes", value: 6 },
-                    { name: "Admin", value: 4 },
-                    { name: "Tech", value: 5 },
-                    { name: "RH", value: 3 },
-                  ]}
-                  cx="50%" cy="50%" innerRadius={50} outerRadius={75}
-                  paddingAngle={3} dataKey="value"
-                >
-                  {["#4191FF", GOLD, "#2ECC8A", "#E8A84C"].map((c, i) => <Cell key={i} fill={c} />)}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="flex flex-wrap gap-3 justify-center mt-2">
-              {[
-                { name: "Ventes", color: "#4191FF" },
-                { name: "Admin", color: GOLD },
-                { name: "Tech", color: "#2ECC8A" },
-                { name: "RH", color: "#E8A84C" },
-              ].map(d => (
-                <div key={d.name} className="flex items-center gap-1.5 text-xs text-gray-500">
+            <div className="h-[200px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={DEPT_DATA} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value" nameKey="name" stroke="none">
+                    {DEPT_DATA.map((entry, idx) => (
+                      <Cell key={idx} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value: number, name: string) => [`${value} employes`, name]} contentStyle={{ borderRadius: 8, border: `1px solid ${CARD_BORDER}`, fontSize: 12 }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            {/* Legend */}
+            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 justify-center">
+              {DEPT_DATA.map(d => (
+                <div key={d.name} className="flex items-center gap-1.5">
                   <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: d.color }} />
-                  {d.name}
+                  <span className="text-xs" style={{ color: SECONDARY }}>{d.name} ({d.value})</span>
                 </div>
               ))}
             </div>
@@ -334,36 +533,61 @@ function DashboardTab({ stats, loading }: { stats: any; loading: boolean }) {
         </Card>
       </div>
 
-      {/* Quick Actions */}
-      <div>
-        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Actions rapides</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {[
-            { href: "/rh/paie", label: "Calculer paie", icon: Calculator, color: "text-green-600", bg: "bg-green-50" },
-            { href: "/rh/pointage", label: "Pointage du jour", icon: Clock, color: "text-blue-600", bg: "bg-blue-50" },
-            { href: "/rh/conges", label: "Nouvelle absence", icon: CalendarDays, color: "text-orange-600", bg: "bg-orange-50" },
-            { href: "/rh/paie/exports-mra", label: "Export virement", icon: Upload, color: "text-purple-600", bg: "bg-purple-50" },
-          ].map(a => (
-            <a key={a.href} href={a.href}>
-              <Card className="hover:shadow-md transition-all cursor-pointer group border border-gray-200 hover:border-[#D4AF37]">
-                <CardContent className="p-4 flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-lg ${a.bg} flex items-center justify-center flex-shrink-0`}>
-                    <a.icon className={`w-5 h-5 ${a.color}`} />
-                  </div>
-                  <span className="text-sm font-medium" style={{ color: NAVY }}>{a.label}</span>
-                  <ArrowRight className="w-4 h-4 text-gray-300 ml-auto group-hover:text-[#D4AF37] transition-colors" />
-                </CardContent>
-              </Card>
-            </a>
-          ))}
+      {/* Bar chart + Quick Actions row */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Bar chart - Absences par type */}
+        <Card style={cardStyle}>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-semibold flex items-center gap-2" style={{ color: NAVY, fontFamily: "Poppins, sans-serif" }}>
+              <Calendar className="w-4 h-4" style={{ color: "#EF4444" }} /> Absences par type
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[220px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={ABSENCES_TYPE_DATA} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
+                  <XAxis dataKey="type" tick={{ fontSize: 12, fill: SECONDARY }} axisLine={{ stroke: CARD_BORDER }} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: SECONDARY }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip formatter={(value: number, name: string, props: any) => [`${value} jours`, props.payload.label]} contentStyle={{ borderRadius: 8, border: `1px solid ${CARD_BORDER}`, fontSize: 12 }} />
+                  <Bar dataKey="count" radius={[6, 6, 0, 0]} fill={BLUE} barSize={36} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Quick Actions */}
+        <div className="lg:col-span-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wide mb-3" style={{ color: SECONDARY }}>Actions rapides</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { href: "/rh/paie", label: "Calculer paie", icon: Calculator, color: "#10B981", bg: "#ECFDF5" },
+              { href: "/rh/pointage", label: "Pointage du jour", icon: Clock, color: "#4191FF", bg: "#EBF3FF" },
+              { href: "/rh/conges", label: "Nouvelle absence", icon: CalendarDays, color: "#F59E0B", bg: "#FFF7ED" },
+              { href: "/rh/paie/exports-mra", label: "Export virement", icon: Upload, color: "#8B5CF6", bg: "#F3F0FF" },
+            ].map(a => (
+              <Link key={a.href} href={a.href}>
+                <Card className="hover:shadow-md transition-all cursor-pointer group" style={{ ...cardStyle, borderColor: CARD_BORDER }}>
+                  <CardContent className="p-4 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: a.bg }}>
+                      <a.icon className="w-5 h-5" style={{ color: a.color }} />
+                    </div>
+                    <span className="text-sm font-medium" style={{ color: NAVY }}>{a.label}</span>
+                    <ArrowRight className="w-4 h-4 ml-auto opacity-30 group-hover:opacity-100 transition-opacity" style={{ color: GOLD }} />
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
         </div>
       </div>
 
+      {/* Bottom row: Modules + Obligations + Actualites */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Acces rapides */}
-        <Card className="border border-gray-200">
+        <Card style={cardStyle}>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base font-semibold flex items-center gap-2" style={{ color: NAVY }}>
+            <CardTitle className="text-base font-semibold flex items-center gap-2" style={{ color: NAVY, fontFamily: "Poppins, sans-serif" }}>
               <Briefcase className="w-4 h-4" /> Modules RH
             </CardTitle>
           </CardHeader>
@@ -378,24 +602,24 @@ function DashboardTab({ stats, loading }: { stats: any; loading: boolean }) {
               { href: "/rh/employes", label: "Gestion employes", icon: Users, desc: "Dossiers RH" },
               { href: "/rh/chat", label: "Chat CLARA", icon: MessageSquare, desc: "Assistant RH IA" },
             ].map(a => (
-              <a key={a.href} href={a.href} className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors group">
+              <Link key={a.href} href={a.href} className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors group">
                 <div className="w-8 h-8 rounded-md bg-gray-100 flex items-center justify-center flex-shrink-0 group-hover:bg-[#0B0F2E]/10">
                   <a.icon className="w-4 h-4 text-gray-600" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium" style={{ color: NAVY }}>{a.label}</p>
-                  <p className="text-xs text-gray-400">{a.desc}</p>
+                  <p className="text-xs" style={{ color: SECONDARY }}>{a.desc}</p>
                 </div>
                 <ArrowRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-[#D4AF37] transition-colors" />
-              </a>
+              </Link>
             ))}
           </CardContent>
         </Card>
 
         {/* Obligations legales */}
-        <Card className="border border-gray-200">
+        <Card style={cardStyle}>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base font-semibold flex items-center gap-2" style={{ color: NAVY }}>
+            <CardTitle className="text-base font-semibold flex items-center gap-2" style={{ color: NAVY, fontFamily: "Poppins, sans-serif" }}>
               <AlertTriangle className="w-4 h-4 text-amber-500" /> Obligations legales Maurice
             </CardTitle>
           </CardHeader>
@@ -437,37 +661,38 @@ function DashboardTab({ stats, loading }: { stats: any; loading: boolean }) {
   )
 }
 
+
 function PointagesTab() {
   return (
     <div className="space-y-4">
-      <p className="text-gray-500 text-sm">Raccourcis vers la gestion des pointages :</p>
+      <p className="text-sm" style={{ color: SECONDARY }}>Raccourcis vers la gestion des pointages :</p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <a href="/rh/pointage">
-          <Card className="hover:shadow-md transition-shadow cursor-pointer border-2 hover:border-[#0B0F2E]">
+        <Link href="/rh/pointage">
+          <Card className="hover:shadow-md transition-shadow cursor-pointer" style={{ border: `2px solid ${CARD_BORDER}`, borderRadius: 12, background: "#FFFFFF" }}>
             <CardContent className="p-6 flex items-center gap-4">
               <div className="w-12 h-12 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
                 <Clock className="w-6 h-6 text-blue-600" />
               </div>
               <div>
                 <p className="font-bold text-lg" style={{ color: NAVY }}>Pointage temps reel</p>
-                <p className="text-sm text-gray-500">Presences du jour, pointage manuel, corrections immediates</p>
+                <p className="text-sm" style={{ color: SECONDARY }}>Presences du jour, pointage manuel, corrections immediates</p>
               </div>
             </CardContent>
           </Card>
-        </a>
-        <a href="/rh/pointage/mensuel">
-          <Card className="hover:shadow-md transition-shadow cursor-pointer border-2 hover:border-[#0B0F2E]">
+        </Link>
+        <Link href="/rh/pointage/mensuel">
+          <Card className="hover:shadow-md transition-shadow cursor-pointer" style={{ border: `2px solid ${CARD_BORDER}`, borderRadius: 12, background: "#FFFFFF" }}>
             <CardContent className="p-6 flex items-center gap-4">
               <div className="w-12 h-12 rounded-lg bg-purple-50 flex items-center justify-center flex-shrink-0">
                 <CalendarDays className="w-6 h-6 text-purple-600" />
               </div>
               <div>
                 <p className="font-bold text-lg" style={{ color: NAVY }}>Pointage mensuel</p>
-                <p className="text-sm text-gray-500">Calendrier mensuel, validation OT, absences injustifiees</p>
+                <p className="text-sm" style={{ color: SECONDARY }}>Calendrier mensuel, validation OT, absences injustifiees</p>
               </div>
             </CardContent>
           </Card>
-        </a>
+        </Link>
       </div>
     </div>
   )
@@ -476,20 +701,20 @@ function PointagesTab() {
 function AbsencesTab() {
   return (
     <div className="space-y-4">
-      <p className="text-gray-500 text-sm">Gestion complete des absences et conges :</p>
-      <a href="/rh/conges">
-        <Card className="hover:shadow-md transition-shadow cursor-pointer border-2 hover:border-[#0B0F2E]">
+      <p className="text-sm" style={{ color: SECONDARY }}>Gestion complete des absences et conges :</p>
+      <Link href="/rh/conges">
+        <Card className="hover:shadow-md transition-shadow cursor-pointer" style={{ border: `2px solid ${CARD_BORDER}`, borderRadius: 12, background: "#FFFFFF" }}>
           <CardContent className="p-6 flex items-center gap-4">
             <div className="w-12 h-12 rounded-lg bg-orange-50 flex items-center justify-center flex-shrink-0">
               <Calendar className="w-6 h-6 text-orange-600" />
             </div>
             <div>
               <p className="font-bold text-lg" style={{ color: NAVY }}>Absences & Conges</p>
-              <p className="text-sm text-gray-500">Demandes en attente, planning, absences non planifiees -- validation + impact paie</p>
+              <p className="text-sm" style={{ color: SECONDARY }}>Demandes en attente, planning, absences non planifiees -- validation + impact paie</p>
             </div>
           </CardContent>
         </Card>
-      </a>
+      </Link>
     </div>
   )
 }
@@ -497,20 +722,20 @@ function AbsencesTab() {
 function PrimesTab() {
   return (
     <div className="space-y-4">
-      <p className="text-gray-500 text-sm">Catalogue et saisie mensuelle des primes :</p>
-      <a href="/rh/paie/primes">
-        <Card className="hover:shadow-md transition-shadow cursor-pointer border-2 hover:border-[#0B0F2E]">
+      <p className="text-sm" style={{ color: SECONDARY }}>Catalogue et saisie mensuelle des primes :</p>
+      <Link href="/rh/paie/primes">
+        <Card className="hover:shadow-md transition-shadow cursor-pointer" style={{ border: `2px solid ${CARD_BORDER}`, borderRadius: 12, background: "#FFFFFF" }}>
           <CardContent className="p-6 flex items-center gap-4">
             <div className="w-12 h-12 rounded-lg bg-amber-50 flex items-center justify-center flex-shrink-0">
               <Target className="w-6 h-6 text-amber-600" />
             </div>
             <div>
               <p className="font-bold text-lg" style={{ color: NAVY }}>Primes parametrables</p>
-              <p className="text-sm text-gray-500">Catalogue primes, saisie mensuelle variable, approbation, integration automatique dans la paie</p>
+              <p className="text-sm" style={{ color: SECONDARY }}>Catalogue primes, saisie mensuelle variable, approbation, integration automatique dans la paie</p>
             </div>
           </CardContent>
         </Card>
-      </a>
+      </Link>
     </div>
   )
 }
@@ -518,7 +743,7 @@ function PrimesTab() {
 function PaieTab() {
   return (
     <div className="space-y-4">
-      <p className="text-gray-500 text-sm">Module paie complet :</p>
+      <p className="text-sm" style={{ color: SECONDARY }}>Module paie complet :</p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {[
           { href: "/rh/paie", icon: Calculator, label: "Bulletins de paie", desc: "Calcul batch, validation, PDF individuel", color: "text-green-600", bg: "bg-green-50" },
@@ -526,19 +751,19 @@ function PaieTab() {
           { href: "/rh/paie/primes", icon: Target, label: "Primes du mois", desc: "Saisie et approbation des primes variables", color: "text-amber-600", bg: "bg-amber-50" },
           { href: "/rh/paie/parametres", icon: Settings, label: "Parametres paie", desc: "Taux MRA, OT, jours feries", color: "text-gray-600", bg: "bg-gray-100" },
         ].map(a => (
-          <a key={a.href} href={a.href}>
-            <Card className="hover:shadow-md transition-shadow cursor-pointer border-2 hover:border-[#0B0F2E]">
+          <Link key={a.href} href={a.href}>
+            <Card className="hover:shadow-md transition-shadow cursor-pointer" style={{ border: `2px solid ${CARD_BORDER}`, borderRadius: 12, background: "#FFFFFF" }}>
               <CardContent className="p-5 flex items-center gap-4">
                 <div className={`w-12 h-12 rounded-lg ${a.bg} flex items-center justify-center flex-shrink-0`}>
                   <a.icon className={`w-6 h-6 ${a.color}`} />
                 </div>
                 <div>
                   <p className="font-bold" style={{ color: NAVY }}>{a.label}</p>
-                  <p className="text-xs text-gray-500">{a.desc}</p>
+                  <p className="text-xs" style={{ color: SECONDARY }}>{a.desc}</p>
                 </div>
               </CardContent>
             </Card>
-          </a>
+          </Link>
         ))}
       </div>
     </div>
@@ -548,20 +773,20 @@ function PaieTab() {
 function ParametresTab() {
   return (
     <div className="space-y-4">
-      <p className="text-gray-500 text-sm">Configuration de l'environnement RH :</p>
-      <a href="/rh/paie/parametres">
-        <Card className="hover:shadow-md transition-shadow cursor-pointer border-2 hover:border-[#0B0F2E]">
+      <p className="text-sm" style={{ color: SECONDARY }}>Configuration de l&apos;environnement RH :</p>
+      <Link href="/rh/paie/parametres">
+        <Card className="hover:shadow-md transition-shadow cursor-pointer" style={{ border: `2px solid ${CARD_BORDER}`, borderRadius: 12, background: "#FFFFFF" }}>
           <CardContent className="p-6 flex items-center gap-4">
             <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
               <Settings className="w-6 h-6 text-gray-600" />
             </div>
             <div>
               <p className="font-bold text-lg" style={{ color: NAVY }}>Parametres paie & RH</p>
-              <p className="text-sm text-gray-500">Taux MRA 2024/25, calcul OT (1.5x / 2x), jours feries Maurice, taux change EUR/MUR</p>
+              <p className="text-sm" style={{ color: SECONDARY }}>Taux MRA 2024/25, calcul OT (1.5x / 2x), jours feries Maurice, taux change EUR/MUR</p>
             </div>
           </CardContent>
         </Card>
-      </a>
+      </Link>
     </div>
   )
 }
