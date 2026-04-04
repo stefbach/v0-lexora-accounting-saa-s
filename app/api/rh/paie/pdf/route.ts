@@ -322,26 +322,52 @@ export async function POST(request: Request) {
 
 // Simple HTML bulletin for GET requests
 function generatePDFResponse(bulletin: any, emp: any, soc: any, moisLabel: string, annee: number) {
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Bulletin ${emp.prenom} ${emp.nom} — ${moisLabel} ${annee}</title>
-<style>body{font-family:Arial,sans-serif;max-width:800px;margin:0 auto;padding:20px;font-size:13px}
-h1{color:#0B0F2E;font-size:20px;border-bottom:2px solid #D4AF37;padding-bottom:8px}
-.header{display:flex;justify-content:space-between;margin-bottom:20px}
-.box{border:1px solid #ddd;padding:12px;border-radius:4px;margin-bottom:15px}
+  const periodeDate = new Date(`${annee}-${String(MOIS_FR.indexOf(moisLabel) + 1).padStart(2, '0')}-15`)
+
+  const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Bulletin ${emp.prenom} ${emp.nom} — ${moisLabel} ${annee}</title>
+<style>
+@page { size: A4; margin: 15mm; }
+body{font-family:'Inter',Arial,sans-serif;max-width:800px;margin:0 auto;padding:20px;font-size:11px;color:#1a1a1a}
+.header{display:flex;justify-content:space-between;border-bottom:3px solid #0B0F2E;padding-bottom:12px;margin-bottom:15px}
+.box{border:1px solid #ddd;padding:12px;border-radius:6px;margin-bottom:15px;background:#f8f9fa}
 table{width:100%;border-collapse:collapse;margin:10px 0}
-th{background:#0B0F2E;color:white;padding:8px;text-align:left;font-size:12px}
-td{padding:6px 8px;border-bottom:1px solid #eee;font-size:12px}
+th{background:#0B0F2E;color:white;padding:8px;text-align:left;font-size:11px;border-bottom:2px solid #D4AF37}
+td{padding:6px 8px;border-bottom:1px solid #eee;font-size:11px}
 .right{text-align:right}
 .bold{font-weight:bold}
-.net{background:#f0f7f0;font-size:16px;font-weight:bold;padding:12px;text-align:center;border:2px solid #059669;border-radius:4px;margin:15px 0}
-.section{font-weight:bold;color:#0B0F2E;margin-top:15px;padding:4px 0;border-bottom:1px solid #D4AF37}
+.section{font-weight:bold;color:#0B0F2E;margin-top:15px;padding:4px 0;border-bottom:2px solid #D4AF37}
 @media print{body{margin:0;padding:10px}}
 </style></head><body>
-<h1>${soc?.nom || 'LEXORA'}</h1>
-<div class="header"><div><strong>BRN:</strong> ${soc?.brn || '—'}<br><strong>Adresse:</strong> ${soc?.adresse || '—'}</div>
-<div style="text-align:right"><strong>BULLETIN DE PAIE</strong><br>${moisLabel} ${annee}</div></div>
-<div class="box"><strong>${emp.prenom} ${emp.nom}</strong> — ${emp.poste || '—'}<br>
-Code: ${emp.code || '—'} | NIC: ${emp.nic_number || emp.nic || '—'}<br>
-Banque: ${emp.bank_name || '—'} | Compte: ${emp.bank_account || '—'}</div>
+<div class="header">
+  <div>
+    <div style="width:60mm;max-height:20mm;margin-bottom:8px;">
+      <img src="${soc?.logo_url || ''}" style="max-width:100%;max-height:20mm;display:${soc?.logo_url ? 'block' : 'none'}" />
+      ${!soc?.logo_url ? `<div style="font-size:18px;font-weight:800;color:#0B0F2E;letter-spacing:0.04em;">LE<span style="color:#D4AF37">X</span>ORA</div>` : ''}
+    </div>
+    <p style="font-weight:700;color:#0B0F2E;font-size:14px;">${soc?.nom || 'N/A'}</p>
+    <p style="color:#555;font-size:11px;">${soc?.adresse || '—'}</p>
+    <p style="color:#555;font-size:11px;">BRN: ${soc?.brn || '—'}</p>
+  </div>
+  <div style="text-align:right">
+    <p style="font-size:16px;font-weight:800;color:#0B0F2E;">BULLETIN DE PAIE</p>
+    <p style="font-size:14px;font-weight:600;color:#D4AF37;">${moisLabel} ${annee}</p>
+    <p style="color:#555;font-size:11px;">Réf: BUL-${annee}-${String(MOIS_FR.indexOf(moisLabel) + 1).padStart(2,'0')}-${emp?.code || '000'}</p>
+    <p style="color:#555;font-size:11px;">Émis le: ${new Date().toLocaleDateString('fr-FR')}</p>
+  </div>
+</div>
+<div class="box">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:11px;">
+    <p><strong>Employé :</strong> ${emp.prenom} ${emp.nom}</p>
+    <p><strong>Code :</strong> ${emp.code || '—'}</p>
+    <p><strong>Poste :</strong> ${emp.poste || '—'}</p>
+    <p><strong>NIC :</strong> ${emp.nic_number || emp.nic || '—'}</p>
+    <p><strong>TAN :</strong> ${emp.tan || '—'}</p>
+    <p><strong>Date d'entrée :</strong> ${emp.date_entree ? new Date(emp.date_entree).toLocaleDateString('fr-FR') : '—'}</p>
+    <p><strong>Ancienneté :</strong> ${emp.date_entree ? (() => { const d = new Date(emp.date_entree); const now = periodeDate; let y = now.getFullYear() - d.getFullYear(); let m = now.getMonth() - d.getMonth(); if (m < 0) { y--; m += 12; } return y > 0 ? y + ' an(s) ' + m + ' mois' : m + ' mois'; })() : '—'}</p>
+    <p><strong>CSG Catégorie :</strong> ${Number(bulletin.salaire_brut) > 50000 ? 'Cat. B (3%)' : 'Cat. A (1.5%)'}</p>
+    ${emp.departement ? `<p><strong>Département :</strong> ${emp.departement}</p>` : ''}
+  </div>
+</div>
 <div class="section">REVENUS</div>
 <table><tr><th>Libellé</th><th class="right">Montant (MUR)</th></tr>
 <tr><td>Salaire de base</td><td class="right">${fmt(bulletin.salaire_base)}</td></tr>
@@ -357,7 +383,22 @@ ${bulletin.special_allowance_1 > 0 ? `<tr><td>Primes</td><td class="right">${fmt
 <tr><td>PAYE (Impôt sur le revenu)</td><td class="right">${fmt(bulletin.paye)}</td></tr>
 ${bulletin.montant_absence > 0 ? `<tr><td>Déduction absence</td><td class="right">${fmt(bulletin.montant_absence)}</td></tr>` : ''}
 <tr class="bold"><td>TOTAL DEDUCTIONS</td><td class="right">${fmt(bulletin.total_deductions)}</td></tr></table>
-<div class="net">NET A PAYER : ${fmt(bulletin.salaire_net)} MUR</div>
+
+<div style="border:3px solid #0B0F2E;border-radius:8px;padding:16px 20px;margin:20px 0;text-align:center;background:linear-gradient(135deg,#0B0F2E08,#D4AF3708);">
+  <p style="font-size:13px;font-weight:700;color:#0B0F2E;margin-bottom:4px;">NET À PAYER</p>
+  <p style="font-size:24px;font-weight:800;color:#0B0F2E;">${fmt(bulletin.salaire_net)} MUR</p>
+  <p style="font-size:11px;color:#555;margin-top:6px;">Virement ${emp.bank_name || emp.banque || ''} — ****${(emp.bank_account || emp.num_compte_banque || '').slice(-4)}</p>
+</div>
+
+<div style="margin:15px 0;padding:10px;border:1px solid #e0e0e0;border-radius:6px;">
+  <h3 style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;margin-bottom:8px;">Soldes Congés</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;font-size:11px;">
+    <div>AL (Congé annuel): --j</div>
+    <div>SL (Congé maladie): --j</div>
+    <div>MAT/PAT: --j</div>
+  </div>
+</div>
+
 <div class="section">CHARGES PATRONALES</div>
 <table><tr><th>Libellé</th><th class="right">Montant (MUR)</th></tr>
 <tr><td>CSG Patronal (6%)</td><td class="right">${fmt(bulletin.csg_patronal)}</td></tr>
@@ -365,7 +406,26 @@ ${bulletin.montant_absence > 0 ? `<tr><td>Déduction absence</td><td class="righ
 <tr><td>Training Levy HRDC (1%)</td><td class="right">${fmt(bulletin.training_levy)}</td></tr>
 <tr><td>PRGF</td><td class="right">${fmt(bulletin.prgf)}</td></tr>
 <tr class="bold"><td>TOTAL CHARGES PATRONALES</td><td class="right">${fmt(bulletin.total_charges_patronales)}</td></tr></table>
-<p style="text-align:center;font-size:10px;color:#999;margin-top:30px">Généré par LEXORA — Logiciel de paie Maurice</p>
+
+<div style="display:flex;justify-content:space-between;margin-top:30px;padding-top:15px;border-top:1px solid #ddd;">
+  <div style="width:65%;">
+    <p style="font-size:10px;color:#888;line-height:1.5;">
+      Ce bulletin doit être conservé sans limitation de durée.<br>
+      Généré par Lexora — Logiciel de paie Maurice<br>
+      Signé électroniquement le ${new Date().toLocaleDateString('fr-FR')} par RH Manager
+    </p>
+  </div>
+  <div style="width:30%;text-align:center;">
+    <div style="width:80px;height:80px;border:1px solid #ccc;border-radius:4px;display:flex;align-items:center;justify-content:center;margin:0 auto;font-size:9px;color:#999;">
+      QR Code<br>Vérification
+    </div>
+    <p style="font-size:9px;color:#999;margin-top:4px;">lexora.finance/verify</p>
+  </div>
+</div>
+
+<p style="font-size:9px;color:#bbb;text-align:center;margin-top:20px;">
+  LEXORA — Comptabilité intelligente pilotée par l'IA — lexora.finance
+</p>
 </body></html>`
 
   return new NextResponse(html, {
