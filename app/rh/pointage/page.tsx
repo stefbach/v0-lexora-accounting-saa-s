@@ -59,7 +59,8 @@ function dureeFmt(min: number | null): string {
   return `${hrs}h${String(mins).padStart(2, "0")}`
 }
 
-function statutLabel(p: Pointage): { text: string; variant: "present" | "sorti" | "absent" | "none" } {
+function statutLabel(p: Pointage): { text: string; variant: "present" | "sorti" | "absent" | "none" | "conge" } {
+  if (p.en_conge) return { text: `En congé${p.type_conge ? ` (${p.type_conge})` : ""}`, variant: "conge" }
   if (p.heure_entree && p.heure_sortie) return { text: "Termine", variant: "sorti" }
   if (p.heure_entree && !p.heure_sortie) return { text: "Present", variant: "present" }
   if (p.absent_justifie) return { text: "Absent", variant: "absent" }
@@ -71,6 +72,7 @@ const BADGE_CLASSES: Record<string, string> = {
   present: "bg-emerald-100 text-emerald-800 border-emerald-200",
   sorti: "bg-blue-100 text-blue-800 border-blue-200",
   absent: "bg-red-100 text-red-800 border-red-200",
+  conge: "bg-green-100 text-green-800 border-green-200",
   none: "bg-gray-100 text-gray-600 border-gray-200",
 }
 
@@ -110,6 +112,7 @@ export default function PointagePage() {
   const [societes, setSocietes] = useState<Societe[]>([])
   const [employes, setEmployes] = useState<Employe[]>([])
   const [pointages, setPointages] = useState<Pointage[]>([])
+  const [congesToday, setCongesToday] = useState<CongeToday[]>([])
   const [loading, setLoading] = useState(true)
   const [doingPointage, setDoingPointage] = useState(false)
 
@@ -183,9 +186,24 @@ export default function PointagePage() {
     try {
       const params = new URLSearchParams({ date: todayISO() })
       if (societeId) params.set("societe_id", societeId)
-      const res = await fetch(`/api/rh/pointage?${params}`)
-      const data = await res.json()
-      setPointages(data.pointages || [])
+
+      // Fetch pointages and today's approved congés in parallel
+      const congesParams = new URLSearchParams({ statut: "approuve" })
+      if (societeId) congesParams.set("societe_id", societeId)
+
+      const [pointageRes, congesRes] = await Promise.all([
+        fetch(`/api/rh/pointage?${params}`).then(r => r.json()).catch(() => ({ pointages: [] })),
+        fetch(`/api/rh/conges?${congesParams}`).then(r => r.json()).catch(() => ({ conges: [] })),
+      ])
+
+      setPointages(pointageRes.pointages || [])
+
+      // Filter congés that cover today
+      const today = todayISO()
+      const todayConges: CongeToday[] = ((congesRes.conges || []) as any[])
+        .filter((c: any) => c.date_debut <= today && c.date_fin >= today)
+        .map((c: any) => ({ employe_id: c.employe_id, type_conge: c.type_conge }))
+      setCongesToday(todayConges)
     } catch (e) {
       console.error(e)
     } finally {
@@ -361,6 +379,12 @@ export default function PointagePage() {
   // Merged view: all employees with their pointage (or placeholder if none)
   // ---------------------------------------------------------------------------
   const sortedPointages = useMemo(() => {
+    // Build a map of congés by employe_id for quick lookup
+    const congeMap = new Map<string, CongeToday>()
+    for (const c of congesToday) {
+      congeMap.set(c.employe_id, c)
+    }
+
     // Build a map of existing pointages by employe_id
     const pointageMap = new Map<string, Pointage>()
     for (const p of pointages) {
@@ -370,7 +394,32 @@ export default function PointagePage() {
     // For each employee, either use existing pointage or create a placeholder
     const merged: Pointage[] = employes.map((emp) => {
       const existing = pointageMap.get(emp.id)
-      if (existing) return existing
+      const conge = congeMap.get(emp.id)
+
+      if (existing) {
+        // Enrich with congé info if applicable
+        if (conge) return { ...existing, en_conge: true, type_conge: conge.type_conge }
+        return existing
+      }
+
+      // Employee on approved congé today — mark as "En congé"
+      if (conge) {
+        return {
+          id: `conge-${emp.id}`,
+          employe_id: emp.id,
+          heure_entree: null,
+          heure_sortie: null,
+          heure_pause_debut: null,
+          heure_pause_fin: null,
+          duree_minutes: null,
+          heures_travaillees: null,
+          heures_sup: null,
+          en_conge: true,
+          type_conge: conge.type_conge,
+          employe: { nom: emp.nom, prenom: emp.prenom, poste: emp.poste },
+        }
+      }
+
       // Placeholder for employees with no pointage today
       return {
         id: `placeholder-${emp.id}`,
@@ -389,7 +438,9 @@ export default function PointagePage() {
     // Also include pointages for employees not in the current employes list
     for (const p of pointages) {
       if (!employes.find((e) => e.id === p.employe_id)) {
-        merged.push(p)
+        const conge = congeMap.get(p.employe_id)
+        if (conge) merged.push({ ...p, en_conge: true, type_conge: conge.type_conge })
+        else merged.push(p)
       }
     }
 
@@ -398,7 +449,7 @@ export default function PointagePage() {
       const nameB = `${b.employe?.nom || ""} ${b.employe?.prenom || ""}`
       return nameA.localeCompare(nameB)
     })
-  }, [pointages, employes])
+  }, [pointages, employes, congesToday])
 
   // ---------------------------------------------------------------------------
   // Calendar helpers

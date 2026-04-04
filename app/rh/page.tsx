@@ -42,29 +42,6 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "parametres", label: "Parametres" },
 ]
 
-// Mock data for charts
-const MASSE_SALARIALE_DATA = [
-  { mois: "Avr 25", montant: 820000 },
-  { mois: "Mai 25", montant: 835000 },
-  { mois: "Jun 25", montant: 840000 },
-  { mois: "Jul 25", montant: 855000 },
-  { mois: "Aou 25", montant: 860000 },
-  { mois: "Sep 25", montant: 870000 },
-  { mois: "Oct 25", montant: 875000 },
-  { mois: "Nov 25", montant: 890000 },
-  { mois: "Dec 25", montant: 950000 },
-  { mois: "Jan 26", montant: 905000 },
-  { mois: "Fev 26", montant: 910000 },
-  { mois: "Mar 26", montant: 920000 },
-]
-
-const DEPT_DATA = [
-  { name: "Administration", value: 8, color: "#4191FF" },
-  { name: "Production", value: 22, color: "#D4AF37" },
-  { name: "Commercial", value: 12, color: "#10B981" },
-  { name: "Finance", value: 6, color: "#F59E0B" },
-  { name: "Logistique", value: 10, color: "#8B5CF6" },
-]
 
 const ABSENCES_TYPE_DATA = [
   { type: "AL", count: 18, label: "Conge annuel" },
@@ -539,11 +516,12 @@ function DashboardTab({ stats, loading, chartData, deptData }: { stats: any; loa
           <CardContent>
             <div className="h-[280px] w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={MASSE_SALARIALE_DATA} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
+                <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
                   <XAxis dataKey="mois" tick={{ fontSize: 11, fill: SECONDARY }} axisLine={{ stroke: CARD_BORDER }} tickLine={false} />
                   <YAxis tick={{ fontSize: 11, fill: SECONDARY }} axisLine={false} tickLine={false} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
                   <Tooltip content={<ChartTooltip isCurrency />} />
-                  <Line type="monotone" dataKey="montant" stroke={BLUE} strokeWidth={2.5} dot={{ r: 4, fill: BLUE, strokeWidth: 2, stroke: "#fff" }} activeDot={{ r: 6, fill: GOLD, stroke: "#fff", strokeWidth: 2 }} />
+                  <Line type="monotone" dataKey="brut" name="Brut" stroke={BLUE} strokeWidth={2.5} dot={{ r: 4, fill: BLUE, strokeWidth: 2, stroke: "#fff" }} activeDot={{ r: 6, fill: GOLD, stroke: "#fff", strokeWidth: 2 }} />
+                  <Line type="monotone" dataKey="net" name="Net" stroke={GOLD} strokeWidth={2} dot={{ r: 3, fill: GOLD, strokeWidth: 2, stroke: "#fff" }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -561,8 +539,8 @@ function DashboardTab({ stats, loading, chartData, deptData }: { stats: any; loa
             <div className="h-[200px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={DEPT_DATA} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value" nameKey="name" stroke="none">
-                    {DEPT_DATA.map((entry, idx) => (
+                  <Pie data={deptData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value" nameKey="name" stroke="none">
+                    {deptData.map((entry, idx) => (
                       <Cell key={idx} fill={entry.color} />
                     ))}
                   </Pie>
@@ -572,7 +550,7 @@ function DashboardTab({ stats, loading, chartData, deptData }: { stats: any; loa
             </div>
             {/* Legend */}
             <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 justify-center">
-              {DEPT_DATA.map(d => (
+              {deptData.map(d => (
                 <div key={d.name} className="flex items-center gap-1.5">
                   <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: d.color }} />
                   <span className="text-xs" style={{ color: SECONDARY }}>{d.name} ({d.value})</span>
