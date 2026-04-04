@@ -368,11 +368,13 @@ export default function PointagePage() {
   // Determine button states for selected employee
   const canClockIn = useMemo(() => {
     if (!selectedEmployeePointage) return true
+    if (selectedEmployeePointage.en_conge) return false
     return !selectedEmployeePointage.heure_entree
   }, [selectedEmployeePointage])
 
   const canClockOut = useMemo(() => {
     if (!selectedEmployeePointage) return false
+    if (selectedEmployeePointage.en_conge) return false
     return !!selectedEmployeePointage.heure_entree && !selectedEmployeePointage.heure_sortie
   }, [selectedEmployeePointage])
 
