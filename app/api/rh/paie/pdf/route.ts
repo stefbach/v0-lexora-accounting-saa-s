@@ -163,37 +163,27 @@ export async function POST(request: Request) {
   <meta charset="UTF-8">
   <title>Bulletin de paie — ${emp?.prenom} ${emp?.nom} — ${moisLabel}</title>
   <style>
+    @page { size: A4; margin: 15mm; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, sans-serif; font-size: 12px; color: #1a1a1a; padding: 20px; max-width: 800px; margin: 0 auto; }
+    body { font-family: 'Inter', Arial, sans-serif; font-size: 11px; color: #1a1a1a; padding: 20px; max-width: 800px; margin: 0 auto; }
     .header { display: flex; justify-content: space-between; border-bottom: 3px solid #0B0F2E; padding-bottom: 12px; margin-bottom: 15px; }
-    .header-left h2 { font-size: 18px; color: #0B0F2E; font-weight: bold; }
-    .header-left .societe { font-size: 14px; font-weight: bold; color: #0B0F2E; margin-top: 4px; }
-    .header-left .adresse { color: #555; margin-top: 2px; }
+    .header-left { }
     .header-right { text-align: right; }
-    .header-right .periode { font-size: 14px; font-weight: bold; color: #0B0F2E; }
     .employe-info { background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 6px; padding: 10px 14px; margin-bottom: 15px; }
     .employe-info .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
-    .employe-info p { font-size: 12px; }
+    .employe-info p { font-size: 11px; }
     .employe-info strong { color: #0B0F2E; }
     .section { margin-bottom: 15px; }
-    .section h3 { font-size: 13px; font-weight: bold; color: white; background: #0B0F2E; padding: 5px 10px; border-radius: 4px; margin-bottom: 8px; }
+    .section h3 { font-size: 12px; font-weight: bold; color: white; background: #0B0F2E; padding: 5px 10px; border-radius: 4px; margin-bottom: 8px; border-bottom: 2px solid #D4AF37; }
     .row { display: flex; justify-content: space-between; padding: 3px 10px; border-bottom: 1px solid #f0f0f0; }
     .row:last-child { border-bottom: none; }
     .row.total { font-weight: bold; background: #f0f0f0; border-top: 2px solid #0B0F2E; padding: 5px 10px; border-bottom: none; margin-top: 4px; }
     .row.deduction { color: #c0392b; }
     .row.absence { color: #e74c3c; background: #fdf0f0; }
-    .net-box { border: 3px solid #0B0F2E; border-radius: 8px; padding: 14px 18px; margin: 18px 0; background: #0B0F2E08; }
-    .net-box .net-amount { font-size: 22px; font-weight: bold; color: #0B0F2E; }
-    .net-box .net-label { font-size: 13px; font-weight: bold; color: #0B0F2E; margin-bottom: 4px; }
-    .net-box .net-bank { font-size: 11px; color: #555; margin-top: 6px; }
     .patronal-section { background: #f9f9f9; border: 1px solid #ddd; border-radius: 6px; padding: 10px; margin-bottom: 15px; }
     .patronal-section h3 { font-size: 11px; font-weight: bold; color: #555; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
     .patronal-row { display: flex; justify-content: space-between; font-size: 11px; padding: 2px 0; color: #555; }
     .patronal-row.total { font-weight: bold; color: #0B0F2E; border-top: 1px solid #ccc; margin-top: 3px; padding-top: 3px; }
-    .signatures { display: flex; justify-content: space-between; margin-top: 30px; padding-top: 15px; border-top: 1px solid #ddd; }
-    .signature-box { width: 45%; }
-    .signature-box .label { font-size: 11px; color: #555; margin-bottom: 30px; }
-    .signature-box .line { border-bottom: 1px solid #333; height: 1px; }
     .no-print { display: none; }
     @media print {
       body { padding: 10px; }
@@ -206,15 +196,19 @@ export async function POST(request: Request) {
 <body>
   <div class="header">
     <div class="header-left">
-      <h2>BULLETIN DE PAIE</h2>
-      <p class="societe">${soc?.nom || 'N/A'}</p>
-      ${soc?.brn ? `<p class="adresse">BRN: ${soc.brn}</p>` : ''}
-      ${soc?.adresse ? `<p class="adresse">${soc.adresse}</p>` : ''}
+      <div style="width:60mm;max-height:20mm;margin-bottom:8px;">
+        <img src="${soc?.logo_url || ''}" style="max-width:100%;max-height:20mm;display:${soc?.logo_url ? 'block' : 'none'}" />
+        ${!soc?.logo_url ? `<div style="font-size:18px;font-weight:800;color:#0B0F2E;letter-spacing:0.04em;">LE<span style="color:#D4AF37">X</span>ORA</div>` : ''}
+      </div>
+      <p style="font-weight:700;color:#0B0F2E;font-size:14px;">${soc?.nom || 'N/A'}</p>
+      <p style="color:#555;font-size:11px;">${soc?.adresse || ''}</p>
+      <p style="color:#555;font-size:11px;">BRN: ${soc?.brn || '—'}</p>
     </div>
     <div class="header-right">
-      <p class="periode">Période : ${moisLabel}</p>
-      <p style="color:#555; margin-top:4px;">Date d'émission : ${new Date().toLocaleDateString('fr-FR')}</p>
-      ${soc?.telephone ? `<p style="color:#555; font-size:11px;">Tél: ${soc.telephone}</p>` : ''}
+      <p style="font-size:16px;font-weight:800;color:#0B0F2E;">BULLETIN DE PAIE</p>
+      <p style="font-size:14px;font-weight:600;color:#D4AF37;">${moisLabel}</p>
+      <p style="color:#555;font-size:11px;">Réf: BUL-${periodeDate.getFullYear()}-${String(periodeDate.getMonth()+1).padStart(2,'0')}-${emp?.code || '000'}</p>
+      <p style="color:#555;font-size:11px;">Émis le: ${new Date().toLocaleDateString('fr-FR')}</p>
     </div>
   </div>
 
@@ -224,7 +218,11 @@ export async function POST(request: Request) {
       <p><strong>Code :</strong> ${emp?.code || '—'}</p>
       <p><strong>Poste :</strong> ${emp?.poste || '—'}</p>
       <p><strong>NIC :</strong> ${emp?.nic || '—'}</p>
+      <p><strong>TAN :</strong> ${emp?.tan || '—'}</p>
       <p><strong>Date d'entrée :</strong> ${emp?.date_entree ? new Date(emp.date_entree).toLocaleDateString('fr-FR') : '—'}</p>
+      <p><strong>Ancienneté :</strong> ${emp?.date_entree ? (() => { const d = new Date(emp.date_entree); const now = periodeDate; let y = now.getFullYear() - d.getFullYear(); let m = now.getMonth() - d.getMonth(); if (m < 0) { y--; m += 12; } return y > 0 ? y + ' an(s) ' + m + ' mois' : m + ' mois'; })() : '—'}</p>
+      <p><strong>CSG Catégorie :</strong> ${Number(bulletin.salaire_brut) > 50000 ? 'Cat. B (3%)' : 'Cat. A (1.5%)'}</p>
+      ${emp?.departement ? `<p><strong>Département :</strong> ${emp.departement}</p>` : ''}
       ${emp?.devise_salaire === 'EUR' ? `<p><strong>Devise :</strong> <span class="badge badge-blue">EUR</span> Taux: ${Number(emp.taux_change_eur) || 46.50} MUR</p>` : ''}
     </div>
   </div>
@@ -267,10 +265,19 @@ export async function POST(request: Request) {
     <div class="row total"><span>TOTAL DÉDUCTIONS</span><span>-${fmt(bulletin.total_deductions)} MUR</span></div>
   </div>
 
-  <div class="net-box">
-    <p class="net-label">NET À PAYER</p>
-    <p class="net-amount">${fmt(bulletin.salaire_net)} MUR</p>
-    ${emp?.banque || emp?.num_compte_banque ? `<p class="net-bank">Virement : ${emp.banque || ''}${emp.num_compte_banque ? ` — ${emp.num_compte_banque}` : ''}</p>` : ''}
+  <div style="border:3px solid #0B0F2E;border-radius:8px;padding:16px 20px;margin:20px 0;text-align:center;background:linear-gradient(135deg,#0B0F2E08,#D4AF3708);">
+    <p style="font-size:13px;font-weight:700;color:#0B0F2E;margin-bottom:4px;">NET À PAYER</p>
+    <p style="font-size:24px;font-weight:800;color:#0B0F2E;">${fmt(bulletin.salaire_net)} MUR</p>
+    <p style="font-size:11px;color:#555;margin-top:6px;">Virement ${emp?.banque || ''} — ****${(emp?.num_compte_banque || '').slice(-4)}</p>
+  </div>
+
+  <div style="margin:15px 0;padding:10px;border:1px solid #e0e0e0;border-radius:6px;">
+    <h3 style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;margin-bottom:8px;">Soldes Congés</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;font-size:11px;">
+      <div>AL (Congé annuel): --j</div>
+      <div>SL (Congé maladie): --j</div>
+      <div>MAT/PAT: --j</div>
+    </div>
   </div>
 
   <div class="patronal-section">
@@ -284,20 +291,25 @@ export async function POST(request: Request) {
     <div class="patronal-row total"><span>COÛT TOTAL EMPLOYEUR</span><span>${fmt(Number(bulletin.salaire_brut) + Number(bulletin.total_charges_patronales))} MUR</span></div>
   </div>
 
-  <div class="signatures">
-    <div class="signature-box">
-      <p class="label">Signature employeur :</p>
-      <div class="line"></div>
+  <div style="display:flex;justify-content:space-between;margin-top:30px;padding-top:15px;border-top:1px solid #ddd;">
+    <div style="width:65%;">
+      <p style="font-size:10px;color:#888;line-height:1.5;">
+        Ce bulletin doit être conservé sans limitation de durée.<br>
+        Généré par Lexora — Logiciel de paie Maurice<br>
+        Signé électroniquement le ${new Date().toLocaleDateString('fr-FR')} par RH Manager
+      </p>
     </div>
-    <div class="signature-box" style="text-align:right">
-      <p class="label">Date :</p>
-      <div class="line"></div>
+    <div style="width:30%;text-align:center;">
+      <div style="width:80px;height:80px;border:1px solid #ccc;border-radius:4px;display:flex;align-items:center;justify-content:center;margin:0 auto;font-size:9px;color:#999;">
+        QR Code<br>Vérification
+      </div>
+      <p style="font-size:9px;color:#999;margin-top:4px;">lexora.finance/verify</p>
     </div>
   </div>
 
-  <div class="no-print" style="display:none">
-    <p style="font-size:10px;color:#999;text-align:center;margin-top:15px;">Généré par LEXORA — Logiciel de paie Maurice</p>
-  </div>
+  <p style="font-size:9px;color:#bbb;text-align:center;margin-top:20px;">
+    LEXORA — Comptabilité intelligente pilotée par l'IA — lexora.finance
+  </p>
 </body>
 </html>`
 

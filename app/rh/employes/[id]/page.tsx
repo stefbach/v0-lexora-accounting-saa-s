@@ -578,6 +578,64 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
             </CardContent>
           </Card>
 
+          {/* Historique des augmentations */}
+          <Card>
+            <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><History className="w-4 h-4" />Historique des augmentations</CardTitle></CardHeader>
+            <CardContent>
+              <p className="text-sm text-gray-400 italic">(Historique disponible prochainement)</p>
+            </CardContent>
+          </Card>
+
+          {/* Simulateur Net */}
+          <Card className="border-[#D4AF37]/30">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
+                <CreditCard className="w-4 h-4 text-[#D4AF37]" />
+                <span>Simulateur Net</span>
+                <span className="ml-auto text-[10px] font-normal text-[#D4AF37] bg-[#D4AF37]/10 px-2 py-0.5 rounded-full">Estimation</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label className="text-xs text-gray-500">Salaire brut mensuel (MUR)</Label>
+                <Input
+                  type="number"
+                  placeholder="Ex: 45000"
+                  value={simulatorGross}
+                  onChange={e => setSimulatorGross(e.target.value)}
+                  className="border-[#D4AF37]/30 focus-visible:ring-[#D4AF37]/40"
+                />
+              </div>
+              {simulatorGross && parseFloat(simulatorGross) > 0 && (() => {
+                const gross = parseFloat(simulatorGross)
+                const csgRate = gross <= 50000 ? 0.015 : 0.03
+                const csg = gross * csgRate
+                const nsf = gross * 0.015
+                const net = gross - csg - nsf
+                return (
+                  <div className="bg-[#D4AF37]/5 border border-[#D4AF37]/20 rounded-lg p-4 space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Brut</span>
+                      <span className="font-medium">{fmt(gross)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">CSG salarié ({(csgRate * 100).toFixed(1)}%)</span>
+                      <span className="text-red-500">- {fmt(csg)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">NSF salarié (1.5%)</span>
+                      <span className="text-red-500">- {fmt(nsf)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm font-bold border-t border-[#D4AF37]/20 pt-2 mt-2">
+                      <span className="text-[#0B0F2E]">Net estimé</span>
+                      <span className="text-[#D4AF37]">{fmt(net)}</span>
+                    </div>
+                  </div>
+                )
+              })()}
+            </CardContent>
+          </Card>
+
           <SaveBtn />
         </TabsContent>
 
