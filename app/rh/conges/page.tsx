@@ -1316,6 +1316,26 @@ export default function CongesPage() {
                 placeholder="Raison du conge (optionnel)"
               />
             </div>
+            {form.type_conge === "SL" && form.date_debut && form.date_fin && (() => {
+              const start = new Date(form.date_debut)
+              const end = new Date(form.date_fin)
+              const diffDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+              if (diffDays > 3) {
+                return (
+                  <div className="bg-orange-50 border border-orange-200 rounded-md p-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <FileWarning className="w-4 h-4 text-orange-500" />
+                      <span className="text-sm font-medium text-orange-800">Certificat medical requis</span>
+                    </div>
+                    <p className="text-xs text-orange-600">
+                      Un conge maladie de plus de 3 jours ({diffDays}j) necessite un certificat medical.
+                      Vous pourrez le telecharger apres la creation de la demande.
+                    </p>
+                  </div>
+                )
+              }
+              return null
+            })()}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Annuler</Button>
