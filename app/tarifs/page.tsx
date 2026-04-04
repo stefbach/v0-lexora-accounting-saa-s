@@ -4,6 +4,11 @@ import { useState } from "react"
 import Link from "next/link"
 import { LexoraLogo } from "@/components/LexoraLogo"
 import { getLocale, setLocale, type Locale } from "@/lib/i18n"
+import {
+  FileSearch, BookOpen, FileText, Users, Landmark, BellRing,
+  HeartPulse, TrendingUp, Zap, ShieldCheck, Check, Minus,
+  Camera,
+} from "lucide-react"
 
 /* ------------------------------------------------------------------ */
 /*  Design tokens                                                      */
@@ -52,7 +57,7 @@ const frTexts = {
   modulesTitle: "7 modules int\u00e9gr\u00e9s",
   modulesSub: "Chaque module est inclus dans votre formule. Pas de surprises, pas d\u2019options cach\u00e9es.",
   mod1: "OCR & Documents IA",
-  mod1f: ["Upload PDF/Excel, l\u2019IA classe et g\u00e9n\u00e8re les \u00e9critures", "Reconnaissance factures & relev\u00e9s bancaires", "Extraction automatique des donn\u00e9es cl\u00e9s"],
+  mod1f: ["Upload ou photo de tout document (PDF, Excel, image, scan)", "L\u2019IA analyse, classe et g\u00e9n\u00e8re les \u00e9critures automatiquement", "Reconnaissance factures, relev\u00e9s bancaires, contrats, re\u00e7us"],
   mod2: "Comptabilit\u00e9 Automatis\u00e9e",
   mod2f: ["Grand Livre, Balance, Bilan & P&L", "Rapprochement bancaire automatique", "Multi-devises temps r\u00e9el (IAS 21)"],
   mod3: "Facturation MRA Agr\u00e9\u00e9e",
@@ -289,7 +294,7 @@ const enTexts = {
   modulesTitle: "7 integrated modules",
   modulesSub: "Every module is included in your plan. No surprises, no hidden add-ons.",
   mod1: "OCR & AI Documents",
-  mod1f: ["Upload PDF/Excel, AI classifies and generates entries", "Invoice & bank statement recognition", "Automatic key data extraction"],
+  mod1f: ["Upload or photograph any document (PDF, Excel, image, scan)", "AI analyses, classifies and generates entries automatically", "Invoices, bank statements, contracts, receipts recognition"],
   mod2: "Automated Accounting",
   mod2f: ["General Ledger, Trial Balance, Balance Sheet & P&L", "Automatic bank reconciliation", "Real-time multi-currency (IAS 21)"],
   mod3: "MRA-Approved Invoicing",
@@ -638,11 +643,11 @@ function TierCard({
             <span style={{
               width: "18px", height: "18px", borderRadius: "50%",
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: "11px", flexShrink: 0,
+              flexShrink: 0,
               backgroundColor: f.included ? `${C.green}20` : `${C.muted}15`,
               color: f.included ? C.green : C.muted,
             }}>
-              {f.included ? "\u2713" : "\u2014"}
+              {f.included ? <Check className="w-3 h-3" /> : <Minus className="w-3 h-3" />}
             </span>
             {f.label}
           </li>
@@ -661,7 +666,7 @@ function TierCard({
           </div>
           {tibokFeats.map((tf, i) => (
             <div key={i} style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px", fontSize: "12px", color: C.green }}>
-              <span>{"\u2713"}</span> {tf}
+              <Check className="w-4 h-4 inline-block" style={{ color: C.green }} /> {tf}
             </div>
           ))}
         </div>
@@ -720,7 +725,7 @@ function MatrixTable({ txt }: { txt: Txt }) {
                         color: v === true ? C.green : v === false ? C.muted : C.blue,
                         fontWeight: typeof v === "string" ? 600 : 400,
                       }}>
-                        {v === true ? "\u2713" : v === false ? "\u2014" : String(v)}
+                        {v === true ? <Check className="w-4 h-4 inline-block" /> : v === false ? <Minus className="w-4 h-4 inline-block" /> : String(v)}
                       </td>
                     ))}
                   </tr>
@@ -822,14 +827,14 @@ export default function TarifsPage() {
   /* Slider fill % */
   const sliderPercent = ((employees - 1) / 199) * 100
 
-  /* Modules data */
-  const modules = [
-    { name: txt.mod1, feats: txt.mod1f, icon: "\uD83D\uDCC4", color: C.blue },
-    { name: txt.mod2, feats: txt.mod2f, icon: "\uD83D\uDCCA", color: C.gold },
-    { name: txt.mod3, feats: txt.mod3f, icon: "\uD83E\uDDFE", color: C.orange },
-    { name: txt.mod4, feats: txt.mod4f, icon: "\uD83D\uDC65", color: C.blue },
-    { name: txt.mod5, feats: txt.mod5f, icon: "\uD83C\uDFDB\uFE0F", color: C.orange },
-    { name: txt.mod6, feats: txt.mod6f, icon: "\uD83D\uDD14", color: C.gold },
+  /* Modules data — Lucide icons */
+  const modules: { name: string; feats: string[]; icon: React.ReactNode; color: string }[] = [
+    { name: txt.mod1, feats: txt.mod1f, icon: <FileSearch className="w-6 h-6" />, color: C.blue },
+    { name: txt.mod2, feats: txt.mod2f, icon: <BookOpen className="w-6 h-6" />, color: C.gold },
+    { name: txt.mod3, feats: txt.mod3f, icon: <FileText className="w-6 h-6" />, color: C.orange },
+    { name: txt.mod4, feats: txt.mod4f, icon: <Users className="w-6 h-6" />, color: C.blue },
+    { name: txt.mod5, feats: txt.mod5f, icon: <Landmark className="w-6 h-6" />, color: C.orange },
+    { name: txt.mod6, feats: txt.mod6f, icon: <BellRing className="w-6 h-6" />, color: C.gold },
   ]
 
   return (
@@ -959,11 +964,15 @@ export default function TarifsPage() {
               backgroundColor: C.cardBg, border: `1px solid ${C.navyBorder}`,
               borderRadius: "12px", padding: "24px",
             }}>
-              <div style={{ fontSize: "28px", marginBottom: "12px" }}>{m.icon}</div>
+              <div style={{
+                width: "44px", height: "44px", borderRadius: "10px",
+                backgroundColor: `${m.color}15`, display: "flex", alignItems: "center", justifyContent: "center",
+                marginBottom: "16px", color: m.color,
+              }}>{m.icon}</div>
               <h3 style={{ color: C.white, fontSize: "16px", fontWeight: 700, margin: "0 0 12px", fontFamily: FONT }}>{m.name}</h3>
               {m.feats.map((f, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: "8px", marginBottom: "6px", fontSize: "13px", color: C.muted }}>
-                  <span style={{ color: m.color, flexShrink: 0 }}>{"\u2713"}</span>
+                  <Check className="w-4 h-4 flex-shrink-0" style={{ color: m.color, marginTop: "1px" }} />
                   <span>{f}</span>
                 </div>
               ))}
@@ -974,12 +983,16 @@ export default function TarifsPage() {
             backgroundColor: `${C.green}08`, border: `1px solid ${C.green}30`,
             borderRadius: "12px", padding: "24px",
           }}>
-            <div style={{ fontSize: "28px", marginBottom: "12px" }}>{"\uD83C\uDFE5"}</div>
+            <div style={{
+              width: "44px", height: "44px", borderRadius: "10px",
+              backgroundColor: `${C.green}15`, display: "flex", alignItems: "center", justifyContent: "center",
+              marginBottom: "16px", color: C.green,
+            }}><HeartPulse className="w-6 h-6" /></div>
             <h3 style={{ color: C.green, fontSize: "16px", fontWeight: 700, margin: "0 0 4px", fontFamily: FONT }}>{txt.mod7}</h3>
             <p style={{ color: C.green, fontSize: "12px", fontWeight: 500, margin: "0 0 12px", opacity: 0.8 }}>{txt.mod7sub}</p>
             {txt.mod7f.map((f, i) => (
               <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: "8px", marginBottom: "6px", fontSize: "13px", color: C.green }}>
-                <span style={{ flexShrink: 0 }}>{"\u2713"}</span>
+                <Check className="w-4 h-4 flex-shrink-0" style={{ marginTop: "1px" }} />
                 <span>{f}</span>
               </div>
             ))}
@@ -996,15 +1009,19 @@ export default function TarifsPage() {
         </h2>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "20px" }}>
           {[
-            { title: txt.arg1, desc: txt.arg1d, icon: "\uD83D\uDCC8", color: C.green },
-            { title: txt.arg2, desc: txt.arg2d, icon: "\u26A1", color: C.gold },
-            { title: txt.arg3, desc: txt.arg3d, icon: "\u2705", color: C.blue },
+            { title: txt.arg1, desc: txt.arg1d, icon: <TrendingUp className="w-6 h-6" />, color: C.green },
+            { title: txt.arg2, desc: txt.arg2d, icon: <Zap className="w-6 h-6" />, color: C.gold },
+            { title: txt.arg3, desc: txt.arg3d, icon: <ShieldCheck className="w-6 h-6" />, color: C.blue },
           ].map((a) => (
             <div key={a.title} style={{
               backgroundColor: C.cardBg, border: `1px solid ${C.navyBorder}`,
               borderRadius: "12px", padding: "24px",
             }}>
-              <div style={{ fontSize: "28px", marginBottom: "12px" }}>{a.icon}</div>
+              <div style={{
+                width: "48px", height: "48px", borderRadius: "50%",
+                backgroundColor: `${a.color}12`, display: "flex", alignItems: "center", justifyContent: "center",
+                marginBottom: "16px", color: a.color,
+              }}>{a.icon}</div>
               <h3 style={{ color: a.color, fontSize: "16px", fontWeight: 700, margin: "0 0 8px", fontFamily: FONT }}>{a.title}</h3>
               <p style={{ color: C.muted, fontSize: "13px", lineHeight: 1.6, margin: 0 }}>{a.desc}</p>
             </div>
@@ -1264,7 +1281,7 @@ export default function TarifsPage() {
               <div style={{ color: C.white, fontSize: "14px", fontWeight: 700, marginBottom: "12px" }}>{txt.calcFeatTitle}</div>
               {getCalcFeats().map((f, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px", fontSize: "13px", color: C.white }}>
-                  <span style={{ color: C.green }}>{"\u2713"}</span> {f}
+                  <Check className="w-4 h-4 inline-block" style={{ color: C.green }} /> {f}
                 </div>
               ))}
             </div>
@@ -1298,7 +1315,7 @@ export default function TarifsPage() {
         <div style={{ display: "flex", gap: "16px 32px", justifyContent: "center", flexWrap: "wrap" }}>
           {txt.ctaTrust.map((t, i) => (
             <span key={i} style={{ color: C.muted, fontSize: "13px", display: "flex", alignItems: "center", gap: "6px" }}>
-              <span style={{ color: C.green }}>{"\u2713"}</span> {t}
+              <Check className="w-4 h-4 inline-block" style={{ color: C.green }} /> {t}
             </span>
           ))}
         </div>
