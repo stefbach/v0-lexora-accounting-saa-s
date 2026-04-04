@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { getUserSocieteIds } from '@/lib/rh/access'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,15 +32,10 @@ export async function GET(request: Request) {
       // Filter by specific société
       query = query.eq('societe_id', societe_id)
     } else {
-      // Find user's sociétés
-      const { data: profile } = await supabase.from('profiles').select('role, societe_id').eq('id', user.id).maybeSingle()
-      if (profile?.societe_id) {
-        query = query.eq('societe_id', profile.societe_id)
-      } else {
-        const { data: dossiers } = await supabase.from('dossiers').select('societe_id').eq('client_id', user.id)
-        const { data: owned } = await supabase.from('societes').select('id').eq('created_by', user.id)
-        const sIds = [...new Set([...(dossiers || []).map(d => d.societe_id), ...(owned || []).map(s => s.id)])]
-        if (sIds.length > 0) query = query.in('societe_id', sIds)
+      // Use shared access control that handles all roles (admin, client_admin, comptable, rh, etc.)
+      const accessibleIds = await getUserSocieteIds(user.id)
+      if (accessibleIds.length > 0) {
+        query = query.in('societe_id', accessibleIds)
       }
     }
     // Filter by departure status
