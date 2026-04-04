@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,7 +12,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Textarea } from "@/components/ui/textarea"
 import {
   Loader2, Plus, CheckCircle, XCircle, AlertTriangle,
-  Calendar, Thermometer, Clock, ShieldAlert, Users, FileWarning
+  Calendar, Thermometer, Clock, ShieldAlert, Users, FileWarning,
+  Upload, ChevronLeft, ChevronRight, Eye
 } from "lucide-react"
 
 // ─── Constants ───────────────────────────────────────────────────
@@ -56,6 +57,30 @@ const STATUT_COLORS: Record<string, string> = {
   annule: "bg-gray-100 text-gray-600",
 }
 
+const CALENDAR_BAR_COLORS: Record<string, string> = {
+  AL: "bg-[#4191FF]",
+  SL: "bg-orange-400",
+  MAT: "bg-purple-500",
+  PAT: "bg-green-500",
+  UL: "bg-yellow-400",
+  CAR: "bg-purple-400",
+  ABS: "bg-red-400",
+  WI: "bg-gray-500",
+  COM: "bg-gray-400",
+  PH: "bg-emerald-500",
+}
+
+const APPROVAL_LEVELS = [
+  { label: "Soumis", shortLabel: "Soumis" },
+  { label: "Niveau 1: Manager", shortLabel: "Manager" },
+  { label: "Niveau 2: DRH", shortLabel: "DRH" },
+  { label: "Valide", shortLabel: "Valide" },
+]
+
+const JOURS_FERIES_MU = [
+  "01-01", "01-02", "02-01", "03-12", "05-01", "08-15", "09-09", "11-01", "11-02", "12-25",
+]
+
 // ─── Types ───────────────────────────────────────────────────────
 interface BalanceRow {
   employe_id: string
@@ -82,6 +107,13 @@ interface KPIs {
   alerts: number
 }
 
+interface ApprovalEntry {
+  niveau: number
+  par: string
+  date: string
+  role: string
+}
+
 interface CongeRecord {
   id: string
   employe_id: string
@@ -95,6 +127,9 @@ interface CongeRecord {
   commentaire_manager: string | null
   date_approbation: string | null
   created_at: string
+  niveau_approbation?: number
+  approuve_par?: ApprovalEntry[]
+  certificat_url?: string | null
   employe?: {
     nom: string
     prenom: string
@@ -114,6 +149,263 @@ function statusDot(color: string) {
     color === "orange" ? "bg-orange-400" :
     "bg-red-500"
   return <span className={`inline-block w-3 h-3 rounded-full ${cls}`} />
+}
+
+// ─── Approval Steps Component ───────────────────────────────────
+function ApprovalSteps({ niveau, approvals }: { niveau: number; approvals?: ApprovalEntry[] }) {
+  const steps = [1, 2, 3]
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-0">
+        {steps.map((step, i) => (
+          <div key={step} className="flex items-center">
+            <div className="flex flex-col items-center">
+              <div
+                className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border-2 transition-all ${
+                  niveau >= step
+                    ? "bg-[#D4AF37] border-[#D4AF37] text-white"
+                    : "bg-white border-gray-300 text-gray-400"
+                }`}
+              >
+                {niveau >= step ? "\u2713" : step}
+              </div>
+              <span className={`text-[9px] mt-0.5 whitespace-nowrap ${niveau >= step ? "text-[#0B0F2E] font-medium" : "text-gray-400"}`}>
+                {APPROVAL_LEVELS[step]?.shortLabel}
+              </span>
+            </div>
+            {i < steps.length - 1 && (
+              <div className={`w-6 h-0.5 mb-3 mx-0.5 ${niveau > step ? "bg-[#D4AF37]" : "bg-gray-200"}`} />
+            )}
+          </div>
+        ))}
+      </div>
+      {approvals && approvals.length > 0 && (
+        <div className="mt-1 space-y-0.5">
+          {approvals.map((a, i) => (
+            <p key={i} className="text-[10px] text-gray-500">
+              {APPROVAL_LEVELS[a.niveau]?.shortLabel}: <span className="font-medium text-[#0B0F2E]">{a.par}</span>{" "}
+              <span className="text-gray-400">({formatDate(a.date)})</span>
+            </p>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Medical Certificate Upload Zone ────────────────────────────
+function CertificatUploadZone({ congeId, existingUrl, onUploaded }: {
+  congeId: string
+  existingUrl?: string | null
+  onUploaded?: () => void
+}) {
+  const [uploading, setUploading] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
+
+  const handleFile = async (file: File) => {
+    if (!file) return
+    setUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      formData.append("conge_id", congeId)
+      await fetch("/api/rh/conges/upload-certificat", {
+        method: "POST",
+        body: formData,
+      })
+      onUploaded?.()
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  if (existingUrl) {
+    return (
+      <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded-md">
+        <CheckCircle className="w-4 h-4 text-green-600 shrink-0" />
+        <span className="text-xs text-green-700">Certificat televerse</span>
+        <a href={existingUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-[#4191FF] underline ml-auto flex items-center gap-1">
+          <Eye className="w-3 h-3" />Voir
+        </a>
+      </div>
+    )
+  }
+
+  return (
+    <div
+      className={`relative border-2 border-dashed rounded-lg p-3 text-center transition-colors cursor-pointer ${
+        dragOver ? "border-[#4191FF] bg-blue-50" : "border-gray-300 hover:border-[#D4AF37]"
+      }`}
+      onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFile(e.dataTransfer.files[0]) }}
+    >
+      <input
+        type="file"
+        accept=".pdf,.jpg,.jpeg,.png"
+        className="absolute inset-0 opacity-0 cursor-pointer"
+        onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+      />
+      {uploading ? (
+        <Loader2 className="w-5 h-5 animate-spin text-[#D4AF37] mx-auto" />
+      ) : (
+        <>
+          <Upload className="w-5 h-5 text-gray-400 mx-auto mb-1" />
+          <p className="text-xs text-gray-500">Certificat medical requis (SL &gt; 3j)</p>
+          <p className="text-[10px] text-gray-400">PDF, JPG ou PNG</p>
+        </>
+      )}
+    </div>
+  )
+}
+
+// ─── Team Calendar View Component ───────────────────────────────
+function TeamCalendarView({ conges, employes, societeFilter }: {
+  conges: CongeRecord[]
+  employes: { id: string; nom: string; prenom: string; societe_id?: string }[]
+  societeFilter: string
+}) {
+  const [calMonth, setCalMonth] = useState(() => {
+    const now = new Date()
+    return { year: now.getFullYear(), month: now.getMonth() }
+  })
+
+  const daysInMonth = new Date(calMonth.year, calMonth.month + 1, 0).getDate()
+  const monthName = new Date(calMonth.year, calMonth.month).toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
+
+  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1)
+
+  const filteredEmployes = useMemo(() => {
+    if (societeFilter === "all") return employes
+    return employes.filter(e => e.societe_id === societeFilter)
+  }, [employes, societeFilter])
+
+  const approvedConges = useMemo(() => {
+    return conges.filter(c => c.statut === "approuve")
+  }, [conges])
+
+  const isJourFerie = (day: number) => {
+    const mm = String(calMonth.month + 1).padStart(2, "0")
+    const dd = String(day).padStart(2, "0")
+    return JOURS_FERIES_MU.includes(`${mm}-${dd}`)
+  }
+
+  const isWeekend = (day: number) => {
+    const d = new Date(calMonth.year, calMonth.month, day)
+    return d.getDay() === 0 || d.getDay() === 6
+  }
+
+  const getCongeForDay = (empId: string, day: number) => {
+    const dateStr = `${calMonth.year}-${String(calMonth.month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+    return approvedConges.find(c => c.employe_id === empId && c.date_debut <= dateStr && c.date_fin >= dateStr)
+  }
+
+  const prevMonth = () => {
+    setCalMonth(p => p.month === 0 ? { year: p.year - 1, month: 11 } : { ...p, month: p.month - 1 })
+  }
+  const nextMonth = () => {
+    setCalMonth(p => p.month === 11 ? { year: p.year + 1, month: 0 } : { ...p, month: p.month + 1 })
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-[#0B0F2E] flex items-center gap-2">
+            <Calendar className="w-5 h-5 text-[#4191FF]" />
+            Vue calendrier equipe
+          </CardTitle>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={prevMonth}>
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <span className="text-sm font-medium text-[#0B0F2E] capitalize min-w-[140px] text-center">{monthName}</span>
+            <Button variant="outline" size="sm" onClick={nextMonth}>
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+        <div className="flex gap-3 mt-2 flex-wrap">
+          {[
+            { code: "AL", label: "Conge annuel", color: "bg-[#4191FF]" },
+            { code: "SL", label: "Maladie", color: "bg-orange-400" },
+            { code: "MAT", label: "Maternite", color: "bg-purple-500" },
+            { code: "PAT", label: "Paternite", color: "bg-green-500" },
+            { code: "FERIE", label: "Jour ferie", color: "bg-gray-400" },
+          ].map(item => (
+            <div key={item.code} className="flex items-center gap-1">
+              <div className={`w-3 h-3 rounded-sm ${item.color}`} />
+              <span className="text-[10px] text-gray-500">{item.label}</span>
+            </div>
+          ))}
+        </div>
+      </CardHeader>
+      <CardContent className="p-0">
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs border-collapse min-w-[900px]">
+            <thead>
+              <tr className="border-b">
+                <th className="sticky left-0 bg-white z-10 px-3 py-2 text-left font-medium text-[#0B0F2E] min-w-[140px] border-r">
+                  Employe
+                </th>
+                {days.map(day => {
+                  const ferie = isJourFerie(day)
+                  const weekend = isWeekend(day)
+                  const dayName = new Date(calMonth.year, calMonth.month, day).toLocaleDateString("fr-FR", { weekday: "narrow" })
+                  return (
+                    <th
+                      key={day}
+                      className={`px-0 py-1 text-center font-normal min-w-[28px] ${ferie ? "bg-gray-200" : weekend ? "bg-gray-50" : ""}`}
+                    >
+                      <div className="text-[9px] text-gray-400 uppercase">{dayName}</div>
+                      <div className={`text-[10px] ${ferie ? "text-gray-600 font-bold" : "text-gray-500"}`}>{day}</div>
+                    </th>
+                  )
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {filteredEmployes.length === 0 ? (
+                <tr>
+                  <td colSpan={daysInMonth + 1} className="text-center py-8 text-gray-500">
+                    Aucun employe a afficher
+                  </td>
+                </tr>
+              ) : (
+                filteredEmployes.map(emp => (
+                  <tr key={emp.id} className="border-b hover:bg-gray-50/50">
+                    <td className="sticky left-0 bg-white z-10 px-3 py-1.5 font-medium text-[#0B0F2E] border-r whitespace-nowrap">
+                      {emp.prenom} {emp.nom}
+                    </td>
+                    {days.map(day => {
+                      const ferie = isJourFerie(day)
+                      const weekend = isWeekend(day)
+                      const conge = getCongeForDay(emp.id, day)
+                      return (
+                        <td
+                          key={day}
+                          className={`px-0 py-1.5 text-center ${ferie ? "bg-gray-200" : weekend ? "bg-gray-50" : ""}`}
+                          title={conge ? `${TYPE_LABELS[conge.type_conge] || conge.type_conge}: ${formatDate(conge.date_debut)} - ${formatDate(conge.date_fin)}` : ferie ? "Jour ferie" : ""}
+                        >
+                          {conge ? (
+                            <div className={`mx-auto w-5 h-3 rounded-sm ${CALENDAR_BAR_COLORS[conge.type_conge] || "bg-gray-400"}`} />
+                          ) : ferie ? (
+                            <div className="mx-auto w-5 h-3 rounded-sm bg-gray-400 opacity-40" />
+                          ) : null}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  )
 }
 
 // ─── Page component ──────────────────────────────────────────────
@@ -153,6 +445,13 @@ export default function CongesPage() {
   const [refusDialog, setRefusDialog] = useState<string | null>(null)
   const [refusMotif, setRefusMotif] = useState("")
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+
+  // Calendar tab
+  const [calendarConges, setCalendarConges] = useState<CongeRecord[]>([])
+  const [loadingCalendar, setLoadingCalendar] = useState(true)
+
+  // Certificate upload dialog
+  const [certDialog, setCertDialog] = useState<CongeRecord | null>(null)
 
   // Search
   const [searchBal, setSearchBal] = useState("")
@@ -227,6 +526,18 @@ export default function CongesPage() {
     finally { setLoadingHisto(false) }
   }, [societe])
 
+  const loadCalendarConges = useCallback(async () => {
+    setLoadingCalendar(true)
+    try {
+      const params = new URLSearchParams({ statut: "approuve" })
+      if (societe !== "all") params.set("societe_id", societe)
+      const res = await fetch(`/api/rh/conges?${params}`)
+      const data = await res.json()
+      setCalendarConges(data.conges || [])
+    } catch (e) { console.error(e) }
+    finally { setLoadingCalendar(false) }
+  }, [societe])
+
   // Initial load
   useEffect(() => { loadSocietes() }, [loadSocietes])
   useEffect(() => { loadEmployes() }, [loadEmployes])
@@ -237,7 +548,8 @@ export default function CongesPage() {
     else if (tab === "demandes") loadDemandes()
     else if (tab === "absents") loadAbsentsToday()
     else if (tab === "historique") loadHistorique()
-  }, [tab, societe, loadBalances, loadDemandes, loadAbsentsToday, loadHistorique])
+    else if (tab === "calendrier") loadCalendarConges()
+  }, [tab, societe, loadBalances, loadDemandes, loadAbsentsToday, loadHistorique, loadCalendarConges])
 
   // ─── Societe map ──────────────────────────────────────────────
   const societeMap = new Map(societes.map((s: any) => [s.id, s.nom]))
@@ -363,6 +675,21 @@ export default function CongesPage() {
     return matchType && matchSearch
   })
 
+  // ─── Leave balance summary computations ────────────────────────
+  const totalAlRemaining = useMemo(() => balances.reduce((sum, b) => sum + b.al_solde, 0), [balances])
+  const upcomingLeavesThisWeek = useMemo(() => {
+    const now = new Date()
+    const startOfWeek = new Date(now)
+    startOfWeek.setDate(now.getDate() - now.getDay() + 1)
+    const endOfWeek = new Date(startOfWeek)
+    endOfWeek.setDate(startOfWeek.getDate() + 6)
+    const startStr = startOfWeek.toISOString().split("T")[0]
+    const endStr = endOfWeek.toISOString().split("T")[0]
+    return allConges.filter(c =>
+      c.statut === "approuve" && c.date_debut <= endStr && c.date_fin >= startStr
+    )
+  }, [allConges])
+
   // ─── Spinner component ────────────────────────────────────────
   const Spinner = () => (
     <div className="flex justify-center py-16">
@@ -399,65 +726,84 @@ export default function CongesPage() {
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">AL pris (total)</p>
-                <p className="text-2xl font-bold text-blue-700">{kpis.total_al_taken}<span className="text-sm font-normal text-gray-400"> jours</span></p>
-              </div>
+      {/* Leave Balance Summary */}
+      <Card className="border-l-4 border-l-[#D4AF37] bg-gradient-to-r from-[#0B0F2E]/[0.02] to-transparent">
+        <CardContent className="pt-5 pb-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div className="flex items-center gap-3">
               <div className="p-3 bg-blue-100 rounded-full">
-                <Calendar className="w-5 h-5 text-blue-600" />
+                <Calendar className="w-5 h-5 text-[#4191FF]" />
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">AL pris (total)</p>
+                <p className="text-xl font-bold text-[#4191FF]">{kpis.total_al_taken}<span className="text-sm font-normal text-gray-400"> jours</span></p>
               </div>
             </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">SL pris (total)</p>
-                <p className="text-2xl font-bold text-orange-600">{kpis.total_sl_taken}<span className="text-sm font-normal text-gray-400"> jours</span></p>
-              </div>
+            <div className="flex items-center gap-3">
               <div className="p-3 bg-orange-100 rounded-full">
                 <Thermometer className="w-5 h-5 text-orange-500" />
               </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">Demandes en attente</p>
-                <p className="text-2xl font-bold text-yellow-600">{kpis.pending_requests}</p>
+                <p className="text-xs text-gray-500">SL pris (total)</p>
+                <p className="text-xl font-bold text-orange-600">{kpis.total_sl_taken}<span className="text-sm font-normal text-gray-400"> jours</span></p>
               </div>
-              <div className="p-3 bg-yellow-100 rounded-full">
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-emerald-100 rounded-full">
+                <Users className="w-5 h-5 text-emerald-600" />
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">AL restants (global)</p>
+                <p className="text-xl font-bold text-emerald-600">{totalAlRemaining}<span className="text-sm font-normal text-gray-400"> jours</span></p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="relative p-3 bg-yellow-100 rounded-full">
                 <Clock className="w-5 h-5 text-yellow-600" />
+                {kpis.pending_requests > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                    {kpis.pending_requests}
+                  </span>
+                )}
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">En attente</p>
+                <p className="text-xl font-bold text-yellow-600">{kpis.pending_requests}<span className="text-sm font-normal text-gray-400"> demandes</span></p>
               </div>
             </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Alertes certificat</p>
-                <p className="text-2xl font-bold text-red-600">{kpis.alerts}</p>
-              </div>
+            <div className="flex items-center gap-3">
               <div className="p-3 bg-red-100 rounded-full">
                 <ShieldAlert className="w-5 h-5 text-red-500" />
               </div>
+              <div>
+                <p className="text-xs text-gray-500">Alertes certificat</p>
+                <p className="text-xl font-bold text-red-600">{kpis.alerts}</p>
+              </div>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+          {upcomingLeavesThisWeek.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-gray-100">
+              <p className="text-xs font-medium text-[#0B0F2E] mb-1.5">Conges cette semaine ({upcomingLeavesThisWeek.length})</p>
+              <div className="flex flex-wrap gap-2">
+                {upcomingLeavesThisWeek.slice(0, 8).map(c => (
+                  <div key={c.id} className="flex items-center gap-1.5 bg-white border rounded-md px-2 py-1">
+                    <span className={`w-2 h-2 rounded-full ${CALENDAR_BAR_COLORS[c.type_conge] || "bg-gray-400"}`} />
+                    <span className="text-[11px] font-medium text-[#0B0F2E]">{c.employe?.prenom} {c.employe?.nom}</span>
+                    <span className="text-[10px] text-gray-400">{formatDate(c.date_debut)} - {formatDate(c.date_fin)}</span>
+                  </div>
+                ))}
+                {upcomingLeavesThisWeek.length > 8 && (
+                  <span className="text-[10px] text-gray-400 self-center">+{upcomingLeavesThisWeek.length - 8} autres</span>
+                )}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Tabs */}
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="dashboard">Tableau de bord</TabsTrigger>
           <TabsTrigger value="demandes" className="relative">
             Demandes
@@ -466,6 +812,9 @@ export default function CongesPage() {
                 {kpis.pending_requests}
               </Badge>
             )}
+          </TabsTrigger>
+          <TabsTrigger value="calendrier">
+            <Calendar className="w-3.5 h-3.5 mr-1" />Vue calendrier
           </TabsTrigger>
           <TabsTrigger value="absents">Absences aujourd&apos;hui</TabsTrigger>
           <TabsTrigger value="historique">Historique</TabsTrigger>
@@ -582,66 +931,104 @@ export default function CongesPage() {
                       <TableHead>Type</TableHead>
                       <TableHead>Dates</TableHead>
                       <TableHead>Nb jours</TableHead>
+                      <TableHead>Approbation</TableHead>
                       <TableHead>Motif</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {conges.map(c => (
-                      <TableRow key={c.id}>
-                        <TableCell className="font-medium">
-                          {c.employe?.prenom} {c.employe?.nom}
-                        </TableCell>
-                        <TableCell className="text-sm text-gray-500">
-                          {c.employe?.societe_id ? societeMap.get(c.employe.societe_id) || "---" : "---"}
-                        </TableCell>
-                        <TableCell>
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${TYPE_COLORS[c.type_conge] || "bg-gray-100 text-gray-800"}`}>
-                            {TYPE_LABELS[c.type_conge] || c.type_conge}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {formatDate(c.date_debut)} &rarr; {formatDate(c.date_fin)}
-                        </TableCell>
-                        <TableCell>
-                          <span className="font-semibold">{c.nb_jours}j</span>
-                        </TableCell>
-                        <TableCell className="text-sm text-gray-500 max-w-40 truncate">
-                          {c.motif || "---"}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-1">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="text-green-600 h-8"
-                              disabled={actionLoading === c.id}
-                              onClick={() => approuver(c.id)}
-                            >
-                              {actionLoading === c.id ? (
-                                <Loader2 className="w-4 h-4 animate-spin mr-1" />
-                              ) : (
-                                <CheckCircle className="w-4 h-4 mr-1" />
-                              )}
-                              Approuver
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="text-red-600 h-8"
-                              onClick={() => { setRefusDialog(c.id); setRefusMotif("") }}
-                            >
-                              <XCircle className="w-4 h-4 mr-1" />Refuser
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {conges.map(c => {
+                      const niveau = c.niveau_approbation ?? 0
+                      const needsCert = c.type_conge === "SL" && c.nb_jours > 3
+                      return (
+                        <TableRow key={c.id}>
+                          <TableCell className="font-medium">
+                            {c.employe?.prenom} {c.employe?.nom}
+                          </TableCell>
+                          <TableCell className="text-sm text-gray-500">
+                            {c.employe?.societe_id ? societeMap.get(c.employe.societe_id) || "---" : "---"}
+                          </TableCell>
+                          <TableCell>
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${TYPE_COLORS[c.type_conge] || "bg-gray-100 text-gray-800"}`}>
+                              {TYPE_LABELS[c.type_conge] || c.type_conge}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {formatDate(c.date_debut)} &rarr; {formatDate(c.date_fin)}
+                          </TableCell>
+                          <TableCell>
+                            <span className="font-semibold">{c.nb_jours}j</span>
+                          </TableCell>
+                          <TableCell>
+                            <ApprovalSteps niveau={niveau} approvals={c.approuve_par} />
+                          </TableCell>
+                          <TableCell className="text-sm text-gray-500 max-w-40">
+                            <div className="truncate">{c.motif || "---"}</div>
+                            {needsCert && (
+                              <div className="mt-1.5">
+                                {c.certificat_url ? (
+                                  <div className="flex items-center gap-1 text-green-600">
+                                    <CheckCircle className="w-3 h-3" />
+                                    <a href={c.certificat_url} target="_blank" rel="noopener noreferrer" className="text-[10px] underline">Certificat joint</a>
+                                  </div>
+                                ) : (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-6 text-[10px] text-orange-600 border-orange-300"
+                                    onClick={() => setCertDialog(c)}
+                                  >
+                                    <Upload className="w-3 h-3 mr-1" />Certificat requis
+                                  </Button>
+                                )}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-1">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-green-600 h-8"
+                                disabled={actionLoading === c.id}
+                                onClick={() => approuver(c.id)}
+                              >
+                                {actionLoading === c.id ? (
+                                  <Loader2 className="w-4 h-4 animate-spin mr-1" />
+                                ) : (
+                                  <CheckCircle className="w-4 h-4 mr-1" />
+                                )}
+                                Approuver
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-red-600 h-8"
+                                onClick={() => { setRefusDialog(c.id); setRefusMotif("") }}
+                              >
+                                <XCircle className="w-4 h-4 mr-1" />Refuser
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
                   </TableBody>
                 </Table>
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* ═══ TAB: CALENDRIER EQUIPE ═══ */}
+        <TabsContent value="calendrier">
+          {loadingCalendar ? <Spinner /> : (
+            <TeamCalendarView
+              conges={calendarConges}
+              employes={employes.map((e: any) => ({ id: e.id, nom: e.nom, prenom: e.prenom, societe_id: e.societe_id }))}
+              societeFilter={societe}
+            />
+          )}
         </TabsContent>
 
         {/* ═══ TAB 3: ABSENCES AUJOURD'HUI ═══ */}

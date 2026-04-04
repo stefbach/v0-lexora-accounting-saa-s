@@ -8,9 +8,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import { toast } from "sonner"
 import {
   Loader2, Save, Building2, Phone, Banknote, Settings,
   MapPin, CheckCircle, AlertCircle, FileText, Scale,
+  Shield, Download, ChevronDown, ChevronUp, Eye,
 } from "lucide-react"
 
 const NAVY = "#0B0F2E"
@@ -52,7 +54,7 @@ function Field({
   )
 }
 
-type Tab = "details" | "contact" | "bank" | "rh" | "fiscal"
+type Tab = "details" | "contact" | "bank" | "rh" | "fiscal" | "audit"
 
 interface TabBtnProps { id: Tab; label: string; icon: React.ReactNode; active: boolean; onClick: () => void }
 function TabBtn({ id, label, icon, active, onClick }: TabBtnProps) {
@@ -542,6 +544,252 @@ function FiscalTab({
   )
 }
 
+// ── AUDIT TRAIL TAB ───────────────────────────────────────────────────────────
+const ACTION_COLORS: Record<string, { bg: string; text: string }> = {
+  CREATE: { bg: "bg-green-100", text: "text-green-700" },
+  UPDATE: { bg: "bg-blue-100", text: "text-blue-700" },
+  DELETE: { bg: "bg-red-100", text: "text-red-700" },
+  VIEW: { bg: "bg-gray-100", text: "text-gray-700" },
+  EXPORT: { bg: "bg-purple-100", text: "text-purple-700" },
+  SEND: { bg: "bg-orange-100", text: "text-orange-700" },
+}
+
+const ACTION_OPTIONS = ["CREATE", "UPDATE", "DELETE", "VIEW", "EXPORT", "SEND"]
+const ENTITE_OPTIONS = ["employe", "bulletin_paie", "conge", "document", "societe", "planning", "prime", "contrat"]
+
+function AuditTab({ societeId }: { societeId: string }) {
+  const [logs, setLogs] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [total, setTotal] = useState(0)
+  const [filterAction, setFilterAction] = useState("")
+  const [filterEntite, setFilterEntite] = useState("")
+  const [dateFrom, setDateFrom] = useState("")
+  const [dateTo, setDateTo] = useState("")
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+
+  const loadLogs = async () => {
+    setLoading(true)
+    try {
+      const params = new URLSearchParams({ societe_id: societeId, page: String(page) })
+      if (filterAction) params.set("action", filterAction)
+      if (filterEntite) params.set("entite", filterEntite)
+      if (dateFrom) params.set("date_from", dateFrom)
+      if (dateTo) params.set("date_to", dateTo)
+      const res = await fetch(`/api/rh/audit?${params}`)
+      const data = await res.json()
+      if (data.error) throw new Error(data.error)
+      setLogs(data.logs || [])
+      setTotalPages(data.totalPages || 1)
+      setTotal(data.total || 0)
+    } catch (e) {
+      console.error("[audit] fetch failed:", e)
+      setLogs([])
+    }
+    setLoading(false)
+  }
+
+  useEffect(() => { loadLogs() }, [societeId, page, filterAction, filterEntite, dateFrom, dateTo])
+
+  const handleExportCSV = () => {
+    toast.success("Export CSV en cours de développement", {
+      description: "Cette fonctionnalité sera disponible prochainement.",
+    })
+  }
+
+  const formatDate = (d: string) => {
+    try {
+      return new Date(d).toLocaleString("fr-FR", {
+        day: "2-digit", month: "2-digit", year: "numeric",
+        hour: "2-digit", minute: "2-digit",
+      })
+    } catch { return d }
+  }
+
+  const renderDiff = (avant: any, apres: any) => {
+    if (!avant && !apres) return <p className="text-gray-400 text-xs italic">Aucun détail disponible</p>
+    const allKeys = [...new Set([...Object.keys(avant || {}), ...Object.keys(apres || {})])]
+    const changedKeys = allKeys.filter(k => JSON.stringify(avant?.[k]) !== JSON.stringify(apres?.[k]))
+    if (changedKeys.length === 0 && avant && apres) {
+      return <p className="text-gray-400 text-xs italic">Aucune modification détectée</p>
+    }
+    return (
+      <div className="space-y-1.5 text-xs">
+        {avant && !apres && (
+          <div className="p-2 bg-red-50 rounded border border-red-100">
+            <p className="font-medium text-red-600 mb-1">Valeurs supprimées :</p>
+            <pre className="whitespace-pre-wrap text-red-700 font-mono text-[11px]">
+              {JSON.stringify(avant, null, 2)}
+            </pre>
+          </div>
+        )}
+        {!avant && apres && (
+          <div className="p-2 bg-green-50 rounded border border-green-100">
+            <p className="font-medium text-green-600 mb-1">Valeurs créées :</p>
+            <pre className="whitespace-pre-wrap text-green-700 font-mono text-[11px]">
+              {JSON.stringify(apres, null, 2)}
+            </pre>
+          </div>
+        )}
+        {avant && apres && changedKeys.map(k => (
+          <div key={k} className="flex items-start gap-2">
+            <span className="font-medium text-gray-600 min-w-[120px]">{k}</span>
+            <span className="text-red-500 line-through">{JSON.stringify(avant[k])}</span>
+            <span className="text-gray-400">→</span>
+            <span className="text-green-600">{JSON.stringify(apres[k])}</span>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Filters */}
+      <Card>
+        <CardContent className="pt-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            <div>
+              <Label className="text-xs text-gray-500 mb-1 block">Action</Label>
+              <Select value={filterAction} onValueChange={v => { setFilterAction(v === "all" ? "" : v); setPage(1) }}>
+                <SelectTrigger className="h-9"><SelectValue placeholder="Toutes" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toutes</SelectItem>
+                  {ACTION_OPTIONS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs text-gray-500 mb-1 block">Entité</Label>
+              <Select value={filterEntite} onValueChange={v => { setFilterEntite(v === "all" ? "" : v); setPage(1) }}>
+                <SelectTrigger className="h-9"><SelectValue placeholder="Toutes" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toutes</SelectItem>
+                  {ENTITE_OPTIONS.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs text-gray-500 mb-1 block">Du</Label>
+              <Input type="date" className="h-9 text-sm" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1) }} />
+            </div>
+            <div>
+              <Label className="text-xs text-gray-500 mb-1 block">Au</Label>
+              <Input type="date" className="h-9 text-sm" value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(1) }} />
+            </div>
+            <div className="flex items-end">
+              <Button variant="outline" className="h-9 text-sm w-full" onClick={handleExportCSV}>
+                <Download className="h-3.5 w-3.5 mr-1.5" /> Export CSV
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Results info */}
+      <div className="flex items-center justify-between text-sm text-gray-500">
+        <span>{total} entrée{total !== 1 ? "s" : ""} trouvée{total !== 1 ? "s" : ""}</span>
+        {totalPages > 1 && <span>Page {page} / {totalPages}</span>}
+      </div>
+
+      {/* Table */}
+      <Card>
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin" style={{ color: NAVY }} />
+              <span className="ml-2 text-gray-500 text-sm">Chargement…</span>
+            </div>
+          ) : logs.length === 0 ? (
+            <div className="text-center py-12 text-gray-400 text-sm">
+              Aucune entrée dans le journal d'audit
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left">
+                    <th className="px-4 py-3 font-medium text-gray-500 text-xs uppercase">Date</th>
+                    <th className="px-4 py-3 font-medium text-gray-500 text-xs uppercase">Utilisateur</th>
+                    <th className="px-4 py-3 font-medium text-gray-500 text-xs uppercase">Action</th>
+                    <th className="px-4 py-3 font-medium text-gray-500 text-xs uppercase">Entité</th>
+                    <th className="px-4 py-3 font-medium text-gray-500 text-xs uppercase">Détails</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {logs.map((log: any) => {
+                    const colors = ACTION_COLORS[log.action] || ACTION_COLORS.VIEW
+                    const isExpanded = expandedId === log.id
+                    return (
+                      <>
+                        <tr key={log.id} className="border-b hover:bg-gray-50 transition-colors">
+                          <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{formatDate(log.created_at)}</td>
+                          <td className="px-4 py-3 text-gray-700">{log.utilisateur_nom}</td>
+                          <td className="px-4 py-3">
+                            <Badge className={`${colors.bg} ${colors.text} border-0 font-medium text-xs`}>
+                              {log.action}
+                            </Badge>
+                          </td>
+                          <td className="px-4 py-3 text-gray-600">{log.entite}</td>
+                          <td className="px-4 py-3">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs gap-1"
+                              onClick={() => setExpandedId(isExpanded ? null : log.id)}
+                            >
+                              <Eye className="h-3 w-3" />
+                              Voir détails
+                              {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                            </Button>
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr key={`${log.id}-details`} className="border-b">
+                            <td colSpan={5} className="px-4 py-3 bg-gray-50">
+                              {renderDiff(log.valeur_avant, log.valeur_apres)}
+                            </td>
+                          </tr>
+                        )}
+                      </>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page <= 1}
+            onClick={() => setPage(p => p - 1)}
+          >
+            Précédent
+          </Button>
+          <span className="text-sm text-gray-500">
+            Page {page} sur {totalPages}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page >= totalPages}
+            onClick={() => setPage(p => p + 1)}
+          >
+            Suivant
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── MAIN PAGE ──────────────────────────────────────────────────────────────────
 export default function SocieteSettingsPage() {
   const [societes, setSocietes] = useState<any[]>([])
@@ -709,6 +957,7 @@ export default function SocieteSettingsPage() {
         <TabBtn id="bank" label="Banque" icon={<Banknote className="h-3.5 w-3.5" />} active={tab === "bank"} onClick={() => setTab("bank")} />
         <TabBtn id="rh" label="RH / Paie" icon={<Settings className="h-3.5 w-3.5" />} active={tab === "rh"} onClick={() => setTab("rh")} />
         <TabBtn id="fiscal" label="Fiscal" icon={<Scale className="h-3.5 w-3.5" />} active={tab === "fiscal"} onClick={() => setTab("fiscal")} />
+        <TabBtn id="audit" label="Journal d'audit" icon={<Shield className="h-3.5 w-3.5" />} active={tab === "audit"} onClick={() => setTab("audit")} />
       </div>
 
       {/* Tab content — key forces full re-mount when société changes */}

@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
-import { Loader2, Calendar, ChevronLeft, ChevronRight, Send, Wand2, Users, Check, Plus, Trash2, Clock, Coffee } from "lucide-react"
+import { Loader2, Calendar, ChevronLeft, ChevronRight, Send, Wand2, Users, Check, Plus, Trash2, Clock, Coffee, AlertTriangle, FileDown, Copy, Eye } from "lucide-react"
+import { toast } from "sonner"
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -75,6 +76,22 @@ const REPOS_CRENEAU: Creneau = {
   pause_minutes: 0, heures_effectives: 0, couleur: "bg-gray-200 text-gray-600",
 }
 
+const CONGE_CRENEAU: Creneau = {
+  id: "conge", nom: "Congé", code: "C",
+  heure_debut: "", heure_fin: "", pause_debut: "", pause_fin: "",
+  pause_minutes: 0, heures_effectives: 0, couleur: "bg-emerald-100 text-emerald-700",
+}
+
+interface Conflict {
+  type: "leave" | "hours"
+  empId: string
+  empName: string
+  detail: string
+}
+
+const WEEKLY_HOURS_LIMIT = 45
+const WEEK_DAY_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
+
 const DEFAULT_CRENEAUX: Creneau[] = [
   { id: "c1", nom: "Journée", code: "J", heure_debut: "08:00", heure_fin: "17:00", pause_debut: "12:00", pause_fin: "13:00", pause_minutes: 60, heures_effectives: 8, couleur: COLORS[0] },
   { id: "c2", nom: "Matin", code: "M", heure_debut: "06:00", heure_fin: "14:00", pause_debut: "10:00", pause_fin: "10:30", pause_minutes: 30, heures_effectives: 7.5, couleur: COLORS[2] },
@@ -109,6 +126,19 @@ export default function PlanningPage() {
   const [empFilterOpen, setEmpFilterOpen] = useState(false)
   const [empSearch, setEmpSearch] = useState("")
 
+  // View mode: monthly or weekly
+  const [viewMode, setViewMode] = useState<"monthly" | "weekly">("monthly")
+  const [weekOffset, setWeekOffset] = useState(0) // which week of the month (0-based)
+
+  // Conflict detail visibility
+  const [showConflicts, setShowConflicts] = useState(false)
+
+  // Confirm dialog for auto-generate
+  const [confirmGenOpen, setConfirmGenOpen] = useState(false)
+
+  // Simulated approved leave days (empId -> Set of day numbers in month)
+  const [approvedLeaves, setApprovedLeaves] = useState<Record<string, Set<number>>>({})
+
   // Cell edit
   const [editCell, setEditCell] = useState<{ empId: string; day: number } | null>(null)
 
@@ -124,7 +154,112 @@ export default function PlanningPage() {
   const periode = `${year}-${String(month + 1).padStart(2, "0")}`
 
   const getCreneauById = (id: string): Creneau => creneaux.find(c => c.id === id) || REPOS_CRENEAU
-  const allCreneaux = [...creneaux, REPOS_CRENEAU]
+  const allCreneaux = [...creneaux, REPOS_CRENEAU, CONGE_CRENEAU]
+
+  // ─── Conflict detection ─────────────────────────────────────────
+
+  const getWeeklyHours = useCallback((empId: string, weekStartDay: number, weekEndDay: number): number => {
+    let total = 0
+    for (let d = weekStartDay; d <= Math.min(weekEndDay, daysInMonth); d++) {
+      const cell = planning[empId]?.[d]
+      if (cell) total += (cell.heures_prevues || 0)
+    }
+    return Math.round(total * 10) / 10
+  }, [planning, daysInMonth])
+
+  const conflicts = useMemo<Conflict[]>(() => {
+    const result: Conflict[] = []
+    for (const emp of employes) {
+      // Check leave conflicts
+      const leaves = approvedLeaves[emp.id]
+      if (leaves) {
+        for (const day of Array.from(leaves)) {
+          const cell = planning[emp.id]?.[day]
+          if (cell && cell.creneau_id !== "repos" && cell.creneau_id !== "conge") {
+            result.push({
+              type: "leave",
+              empId: emp.id,
+              empName: `${emp.prenom} ${emp.nom}`,
+              detail: `Planifié le ${day}/${month + 1} alors qu'un congé est approuvé`,
+            })
+          }
+        }
+      }
+      // Check weekly hours > 45h
+      let d = 1
+      while (d <= daysInMonth) {
+        const weekEnd = Math.min(d + 6, daysInMonth)
+        const hours = getWeeklyHours(emp.id, d, weekEnd)
+        if (hours > WEEKLY_HOURS_LIMIT) {
+          result.push({
+            type: "hours",
+            empId: emp.id,
+            empName: `${emp.prenom} ${emp.nom}`,
+            detail: `Semaine du ${d}/${month + 1}: ${hours}h (limite ${WEEKLY_HOURS_LIMIT}h)`,
+          })
+        }
+        d += 7
+      }
+    }
+    return result
+  }, [employes, planning, approvedLeaves, month, daysInMonth, getWeeklyHours])
+
+  // Helper: check if a specific cell has a conflict
+  const cellHasConflict = useCallback((empId: string, day: number): boolean => {
+    const leaves = approvedLeaves[empId]
+    if (leaves && leaves.has(day)) {
+      const cell = planning[empId]?.[day]
+      if (cell && cell.creneau_id !== "repos" && cell.creneau_id !== "conge") return true
+    }
+    return false
+  }, [approvedLeaves, planning])
+
+  // ─── Weekly view helpers ────────────────────────────────────────
+
+  const getWeeksOfMonth = useCallback(() => {
+    const weeks: { start: number; end: number; label: string }[] = []
+    // Find the first Monday of or before the month
+    let d = 1
+    while (d <= daysInMonth) {
+      const end = Math.min(d + 6, daysInMonth)
+      weeks.push({ start: d, end, label: `${d}-${end} ${MONTH_NAMES[month].slice(0, 3)}` })
+      d += 7
+    }
+    return weeks
+  }, [daysInMonth, month])
+
+  const weeks = getWeeksOfMonth()
+  const currentWeek = weeks[Math.min(weekOffset, weeks.length - 1)] || weeks[0]
+
+  // ─── Auto-generate: copy current week to remaining weeks ────────
+
+  const generateFromCurrentWeek = () => {
+    if (!currentWeek) return
+    setPlanning(prev => {
+      const next = { ...prev }
+      for (const empId of Object.keys(next)) {
+        const row = { ...next[empId] }
+        // Read the pattern from currentWeek
+        const pattern: (CellData | null)[] = []
+        for (let d = currentWeek.start; d <= currentWeek.end; d++) {
+          pattern.push(row[d] || null)
+        }
+        // Apply to all OTHER weeks
+        for (const week of weeks) {
+          if (week.start === currentWeek.start) continue
+          for (let i = 0; i < 7; i++) {
+            const targetDay = week.start + i
+            if (targetDay > daysInMonth) break
+            row[targetDay] = pattern[i % pattern.length] ? { ...pattern[i % pattern.length]! } : null
+          }
+        }
+        next[empId] = row
+      }
+      return next
+    })
+    setConfirmGenOpen(false)
+    toast.success("Planning type appliqué aux semaines restantes du mois")
+  }
 
   // ─── Load data ──────────────────────────────────────────────────
 
@@ -145,11 +280,28 @@ export default function PlanningPage() {
     try {
       const params = new URLSearchParams({ periode })
       if (societe !== "all") params.set("societe_id", societe)
-      const [planRes, empRes, grpRes] = await Promise.all([
+      const [planRes, empRes, grpRes, leaveRes] = await Promise.all([
         fetch(`/api/rh/planning?${params}`).then(r => r.json()).catch(() => ({ planning: [] })),
         fetch(`/api/rh/employes?${societe !== "all" ? `societe_id=${societe}` : ""}`).then(r => r.json()).catch(() => ({ employes: [] })),
         fetch(`/api/rh/groupes?${societe !== "all" ? `societe_id=${societe}` : ""}`).then(r => r.json()).catch(() => ({ groupes: [] })),
+        fetch(`/api/rh/conges?${params}&statut=approuve`).then(r => r.json()).catch(() => ({ conges: [] })),
       ])
+      // Build approved leave map
+      const leaveMap: Record<string, Set<number>> = {}
+      for (const conge of (leaveRes.conges || [])) {
+        if (!leaveMap[conge.employe_id]) leaveMap[conge.employe_id] = new Set()
+        const start = conge.jour_debut || conge.date_debut ? new Date(conge.date_debut || `${year}-${String(month+1).padStart(2,"0")}-${conge.jour_debut}`) : null
+        const end = conge.jour_fin || conge.date_fin ? new Date(conge.date_fin || `${year}-${String(month+1).padStart(2,"0")}-${conge.jour_fin}`) : start
+        if (start && end) {
+          for (let d = 1; d <= daysInMonth; d++) {
+            const current = new Date(year, month, d)
+            if (current >= start && current <= end) leaveMap[conge.employe_id].add(d)
+          }
+        } else if (conge.jour) {
+          leaveMap[conge.employe_id].add(parseInt(conge.jour, 10))
+        }
+      }
+      setApprovedLeaves(leaveMap)
       setGroupes(grpRes.groupes || [])
       const emps = (empRes.employes || []).sort((a: any, b: any) => `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`))
       setAllEmployes(emps)
@@ -199,6 +351,16 @@ export default function PlanningPage() {
   const assignCreneau = (empId: string, day: number, creneauId: string) => {
     if (creneauId === "repos") {
       setPlanning(prev => ({ ...prev, [empId]: { ...prev[empId], [day]: null } }))
+    } else if (creneauId === "conge") {
+      setPlanning(prev => ({
+        ...prev,
+        [empId]: {
+          ...prev[empId],
+          [day]: { creneau_id: "conge", heure_debut: "", heure_fin: "", pause_debut: "", pause_fin: "", heures_prevues: 0 }
+        },
+      }))
+      setEditCell(null)
+      return
     } else {
       const c = getCreneauById(creneauId)
       setPlanning(prev => ({
@@ -415,6 +577,35 @@ export default function PlanningPage() {
         </CardContent>
       </Card>
 
+      {/* Conflict alert bar */}
+      {conflicts.length > 0 && (
+        <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg border border-yellow-300 bg-yellow-50">
+          <AlertTriangle className="h-5 w-5 text-yellow-600 shrink-0" />
+          <span className="text-sm font-medium text-yellow-800">
+            {conflicts.length} conflit{conflicts.length > 1 ? "s" : ""} détecté{conflicts.length > 1 ? "s" : ""}
+          </span>
+          <button
+            className="text-sm font-medium underline text-yellow-700 hover:text-yellow-900"
+            onClick={() => setShowConflicts(!showConflicts)}
+          >
+            {showConflicts ? "Masquer" : "Voir détails"}
+          </button>
+          {showConflicts && (
+            <div className="ml-auto flex flex-col gap-1 text-xs text-yellow-800 max-h-32 overflow-y-auto">
+              {conflicts.map((c, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <Badge className={c.type === "leave" ? "bg-red-100 text-red-700" : "bg-orange-100 text-orange-700"}>
+                    {c.type === "leave" ? "Congé" : "Heures"}
+                  </Badge>
+                  <span className="font-medium">{c.empName}</span>
+                  <span>{c.detail}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Calendar */}
       <Card>
         <CardHeader className="pb-3">
@@ -428,9 +619,32 @@ export default function PlanningPage() {
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               {published && <Badge className="bg-green-100 text-green-700">Publié</Badge>}
+              {/* View toggle */}
+              <div className="inline-flex rounded-lg border overflow-hidden">
+                <button
+                  className={`px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === "monthly" ? "text-white" : "text-gray-600 hover:bg-gray-50"}`}
+                  style={viewMode === "monthly" ? { backgroundColor: "#0B0F2E" } : {}}
+                  onClick={() => setViewMode("monthly")}
+                >
+                  <Calendar className="inline h-3.5 w-3.5 mr-1" />Mensuel
+                </button>
+                <button
+                  className={`px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === "weekly" ? "text-white" : "text-gray-600 hover:bg-gray-50"}`}
+                  style={viewMode === "weekly" ? { backgroundColor: "#0B0F2E" } : {}}
+                  onClick={() => { setViewMode("weekly"); setWeekOffset(0) }}
+                >
+                  <Eye className="inline h-3.5 w-3.5 mr-1" />Hebdomadaire
+                </button>
+              </div>
               <Button variant="outline" size="sm" onClick={generateStandard}><Wand2 className="h-4 w-4 mr-1" /> Standard</Button>
               <Button variant="outline" size="sm" onClick={generate3x8}>3×8</Button>
+              <Button variant="outline" size="sm" onClick={() => setConfirmGenOpen(true)} style={{ borderColor: "#D4AF37", color: "#D4AF37" }}>
+                <Copy className="h-4 w-4 mr-1" /> Générer planning type
+              </Button>
               <Button variant="outline" size="sm" onClick={() => setBulkOpen(true)}><Users className="h-4 w-4 mr-1" /> Masse</Button>
+              <Button variant="outline" size="sm" onClick={() => toast.info("Export PDF bientôt disponible")} style={{ borderColor: "#4191FF", color: "#4191FF" }}>
+                <FileDown className="h-4 w-4 mr-1" /> Exporter PDF
+              </Button>
               <Button variant="outline" size="sm" onClick={() => savePlanning(false)} disabled={saving}>
                 {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Check className="h-4 w-4 mr-1" />} Sauver
               </Button>
@@ -445,7 +659,8 @@ export default function PlanningPage() {
             <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-gray-400" /></div>
           ) : employes.length === 0 ? (
             <p className="text-center text-gray-400 py-12">Aucun employé. Sélectionnez une société.</p>
-          ) : (
+          ) : viewMode === "monthly" ? (
+            /* ── Monthly View ── */
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-xs">
                 <thead>
@@ -468,16 +683,18 @@ export default function PlanningPage() {
                       <td className="sticky left-0 bg-white z-10 border px-2 py-1 font-medium truncate max-w-[140px]">{emp.prenom} {emp.nom}</td>
                       {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => {
                         const cell = planning[emp.id]?.[d]
-                        const creneau = cell ? getCreneauById(cell.creneau_id) : REPOS_CRENEAU
+                        const creneau = cell ? (cell.creneau_id === "conge" ? CONGE_CRENEAU : getCreneauById(cell.creneau_id)) : REPOS_CRENEAU
                         const isEditing = editCell?.empId === emp.id && editCell?.day === d
+                        const hasConflict = cellHasConflict(emp.id, d)
                         return (
-                          <td key={d} className="border p-0 text-center cursor-pointer relative"
+                          <td key={d}
+                            className={`border p-0 text-center cursor-pointer relative ${hasConflict ? "ring-2 ring-inset ring-red-500" : ""}`}
                             onClick={() => setEditCell(isEditing ? null : { empId: emp.id, day: d })}
-                            title={cell ? `${creneau.nom}\n${cell.heure_debut}—${cell.heure_fin}\nPause: ${cell.pause_debut || "—"}—${cell.pause_fin || "—"}\n${cell.heures_prevues}h eff.` : "Repos"}
+                            title={hasConflict ? `CONFLIT: Congé approuvé ce jour\n${cell ? `${creneau.nom} ${cell.heure_debut}—${cell.heure_fin}` : "Repos"}` : cell ? `${creneau.nom}\n${cell.heure_debut}—${cell.heure_fin}\nPause: ${cell.pause_debut || "—"}—${cell.pause_fin || "—"}\n${cell.heures_prevues}h eff.` : "Repos"}
                           >
-                            <div className={`w-full py-0.5 leading-tight ${creneau.couleur}`}>
+                            <div className={`w-full py-0.5 leading-tight ${hasConflict ? "bg-red-100 text-red-700" : creneau.couleur}`}>
                               <div className="text-[10px] font-bold">{creneau.code}</div>
-                              {cell && <div className="text-[7px] opacity-80">{cell.heure_debut?.slice(0,5)}</div>}
+                              {cell && cell.heure_debut && <div className="text-[7px] opacity-80">{cell.heure_debut?.slice(0,5)}</div>}
                             </div>
                             {isEditing && (
                               <div className="absolute top-full left-0 z-30 bg-white border rounded-lg shadow-xl p-1 flex flex-col gap-0.5 min-w-[160px]" onClick={e => e.stopPropagation()}>
@@ -498,6 +715,123 @@ export default function PlanningPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          ) : (
+            /* ── Weekly View ── */
+            <div className="space-y-3">
+              {/* Week navigation */}
+              <div className="flex items-center justify-between">
+                <Button variant="outline" size="sm" disabled={weekOffset <= 0} onClick={() => setWeekOffset(w => w - 1)}>
+                  <ChevronLeft className="h-4 w-4 mr-1" /> Semaine préc.
+                </Button>
+                <span className="text-sm font-medium" style={{ color: "#0B0F2E" }}>
+                  Semaine du {currentWeek?.start} au {currentWeek?.end} {MONTH_NAMES[month]}
+                </span>
+                <Button variant="outline" size="sm" disabled={weekOffset >= weeks.length - 1} onClick={() => setWeekOffset(w => w + 1)}>
+                  Semaine suiv. <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+              {/* Weekly grid */}
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-sm">
+                  <thead>
+                    <tr>
+                      <th className="sticky left-0 bg-white z-10 border px-3 py-2 text-left min-w-[180px]" style={{ color: "#0B0F2E" }}>Employé</th>
+                      {Array.from({ length: 7 }, (_, i) => {
+                        const day = (currentWeek?.start || 1) + i
+                        const valid = day <= daysInMonth
+                        return (
+                          <th key={i} className="border px-2 py-2 text-center min-w-[120px]" style={{ backgroundColor: valid ? "#f8f9fa" : "#eee" }}>
+                            <div className="text-xs font-bold" style={{ color: "#0B0F2E" }}>{WEEK_DAY_LABELS[i]}</div>
+                            {valid && <div className="text-xs text-gray-500">{day}/{month + 1}</div>}
+                          </th>
+                        )
+                      })}
+                      <th className="border px-2 py-2 text-center min-w-[80px] bg-gray-50" style={{ color: "#0B0F2E" }}>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {employes.map(emp => {
+                      const weekHours = getWeeklyHours(emp.id, currentWeek?.start || 1, currentWeek?.end || 7)
+                      const hoursExceeded = weekHours > WEEKLY_HOURS_LIMIT
+                      return (
+                        <tr key={emp.id}>
+                          <td className="sticky left-0 bg-white z-10 border px-3 py-2 font-medium">{emp.prenom} {emp.nom}</td>
+                          {Array.from({ length: 7 }, (_, i) => {
+                            const day = (currentWeek?.start || 1) + i
+                            const valid = day <= daysInMonth
+                            if (!valid) return <td key={i} className="border p-2 bg-gray-50" />
+                            const cell = planning[emp.id]?.[day]
+                            const hasConflict = cellHasConflict(emp.id, day)
+                            const isLeaveDay = approvedLeaves[emp.id]?.has(day)
+                            const isEditing = editCell?.empId === emp.id && editCell?.day === day
+
+                            let bgColor = "bg-gray-100 text-gray-500" // Repos
+                            let label = "Repos"
+                            if (cell) {
+                              if (cell.creneau_id === "conge") {
+                                bgColor = "bg-emerald-100 text-emerald-700"
+                                label = "Congé"
+                              } else {
+                                bgColor = "bg-blue-50 text-blue-800"
+                                label = `${cell.heure_debut?.slice(0,5) || ""}—${cell.heure_fin?.slice(0,5) || ""}`
+                              }
+                            } else if (isLeaveDay) {
+                              bgColor = "bg-emerald-100 text-emerald-700"
+                              label = "Congé"
+                            }
+                            if (hasConflict) {
+                              bgColor = "bg-red-50 text-red-700"
+                            }
+
+                            return (
+                              <td key={i}
+                                className={`border p-0 text-center cursor-pointer relative ${hasConflict ? "ring-2 ring-inset ring-red-500" : ""}`}
+                                onClick={() => setEditCell(isEditing ? null : { empId: emp.id, day })}
+                                title={hasConflict ? "CONFLIT: Congé approuvé ce jour" : label}
+                              >
+                                <div className={`px-2 py-2.5 rounded-sm ${bgColor}`}>
+                                  <div className="text-xs font-semibold">{label}</div>
+                                  {cell && cell.creneau_id !== "conge" && (
+                                    <div className="text-[10px] opacity-70 mt-0.5">
+                                      {getCreneauById(cell.creneau_id).nom} ({cell.heures_prevues}h)
+                                    </div>
+                                  )}
+                                  {hasConflict && <AlertTriangle className="inline h-3 w-3 text-red-500 mt-0.5" />}
+                                </div>
+                                {isEditing && (
+                                  <div className="absolute top-full left-0 z-30 bg-white border rounded-lg shadow-xl p-1 flex flex-col gap-0.5 min-w-[160px]" onClick={e => e.stopPropagation()}>
+                                    {allCreneaux.map(c => (
+                                      <button key={c.id}
+                                        className={`text-left px-2 py-1.5 rounded text-xs hover:opacity-80 flex items-center justify-between gap-2 ${c.couleur}`}
+                                        onClick={() => assignCreneau(emp.id, day, c.id)}>
+                                        <span className="font-bold">{c.code} {c.nom}</span>
+                                        {c.heure_debut && <span className="text-[10px] opacity-75">{c.heure_debut}—{c.heure_fin}</span>}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </td>
+                            )
+                          })}
+                          <td className={`border px-2 py-2 text-center font-bold text-sm ${hoursExceeded ? "bg-red-50 text-red-700" : "bg-gray-50"}`}
+                            title={hoursExceeded ? `Dépassement: ${weekHours}h / ${WEEKLY_HOURS_LIMIT}h max` : `${weekHours}h cette semaine`}>
+                            {weekHours}h
+                            {hoursExceeded && <AlertTriangle className="inline h-3 w-3 text-red-500 ml-1" />}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {/* Color legend */}
+              <div className="flex items-center gap-4 text-xs text-gray-500 pt-1">
+                <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded" style={{ backgroundColor: "#4191FF" }} /> Travail</span>
+                <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-gray-300" /> Repos</span>
+                <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-emerald-400" /> Congé</span>
+                <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-red-400" /> Conflit</span>
+              </div>
             </div>
           )}
         </CardContent>
@@ -600,6 +934,32 @@ export default function PlanningPage() {
           ) : (
             <CreneauEditor creneau={editingCreneau} onSave={updateCreneau} onDelete={deleteCreneau} onCancel={() => setEditingCreneau(null)} />
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Confirm generate dialog ── */}
+      <Dialog open={confirmGenOpen} onOpenChange={setConfirmGenOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle style={{ color: "#0B0F2E" }}>Générer planning type</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              Cette action va copier le planning de la semaine actuelle
+              {currentWeek ? ` (jours ${currentWeek.start}–${currentWeek.end})` : ""} vers toutes les
+              semaines restantes du mois de {MONTH_NAMES[month]}.
+            </p>
+            <p className="text-sm text-yellow-700 bg-yellow-50 px-3 py-2 rounded-lg border border-yellow-200">
+              <AlertTriangle className="inline h-4 w-4 mr-1" />
+              Les données existantes des autres semaines seront écrasées.
+            </p>
+            <div className="flex gap-2">
+              <Button className="flex-1 text-white" style={{ backgroundColor: "#D4AF37" }} onClick={generateFromCurrentWeek}>
+                <Copy className="h-4 w-4 mr-1" /> Confirmer
+              </Button>
+              <Button variant="outline" className="flex-1" onClick={() => setConfirmGenOpen(false)}>Annuler</Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 

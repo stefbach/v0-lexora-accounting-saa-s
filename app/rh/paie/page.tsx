@@ -16,7 +16,7 @@ const STATUT_COLORS: Record<string, string> = {
   declare_mra: "bg-purple-100 text-purple-700"
 }
 
-type TabType = "bulletins" | "comptabilisation"
+type TabType = "bulletins" | "comptabilisation" | "simulation"
 
 export default function PaiePage() {
   const [societes, setSocietes] = useState<any[]>([])
@@ -119,6 +119,7 @@ export default function PaiePage() {
   const tabs: { id: TabType; label: string; icon?: string }[] = [
     { id: "bulletins", label: "Bulletins" },
     { id: "comptabilisation", label: "Comptabilisation" },
+    { id: "simulation", label: "Simulation" },
   ]
 
   return (
@@ -129,13 +130,38 @@ export default function PaiePage() {
             <h1 className="text-2xl font-bold text-[#0B0F2E]">Paie & Bulletins</h1>
             <p className="text-sm text-gray-500">Calcul MRA — CSG/NSF/PAYE + OT + Primes + Absences</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button onClick={calculerBatch} disabled={calculating} className="bg-[#0B0F2E] text-white">
               <Calculator className="w-4 h-4 mr-2" />{calculating ? "Calcul en cours..." : "Calculer la paie"}
             </Button>
             <Button onClick={exportVirements} variant="outline"><Download className="w-4 h-4 mr-2" />MCB Virement</Button>
+            <Button onClick={() => {
+              if (societe === "all") return alert("Sélectionnez une société")
+              fetch("/api/rh/exports/virement", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ societe_id: societe, periode, banque: "SBM" })
+              }).then(r => r.json()).then(data => {
+                if (data.content) {
+                  const blob = new Blob([data.content], { type: "text/csv" })
+                  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = data.filename || "export_sbm.csv"; a.click()
+                } else alert(data.error || "Export SBM non disponible")
+              })
+            }} variant="outline"><Download className="w-4 h-4 mr-2" />SBM Virement</Button>
+            {periode.endsWith("-12") && (
+              <Button onClick={() => {
+                if (societe === "all") return alert("Sélectionnez une société")
+                if (confirm("Calculer le 13ème mois (EOY Bonus) pour tous les employés ?\n\n75% le 25/12 + 25% le 31/12 selon le WRA.")) {
+                  fetch("/api/rh/paie", {
+                    method: "POST", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "calculer_batch", societe_id: societe, periode, include_eoy_bonus: true })
+                  }).then(() => load())
+                }
+              }} variant="outline" className="border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37]/10">
+                🎄 13ème mois
+              </Button>
+            )}
             <a href="/rh/paie/exports-mra">
-              <Button variant="outline">🏛️ Exports MRA</Button>
+              <Button variant="outline">Exports MRA</Button>
             </a>
           </div>
         </div>
@@ -375,6 +401,73 @@ export default function PaiePage() {
                   </Table>
                 </div>
               )}
+            </CardContent>
+          </Card>
+        )}
+        {/* Simulation Tab */}
+        {activeTab === "simulation" && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-semibold text-[#0B0F2E]">Simulation de paie</CardTitle>
+              <p className="text-sm text-gray-500">Estimez l&apos;impact d&apos;un changement de salaire avant de lancer le calcul officiel.</p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">Salaire brut mensuel (MUR)</label>
+                  <Input type="number" placeholder="25000" id="sim-brut" defaultValue="25000" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">Heures sup estimées</label>
+                  <Input type="number" placeholder="0" id="sim-ot" defaultValue="0" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">Primes (MUR)</label>
+                  <Input type="number" placeholder="0" id="sim-prime" defaultValue="0" />
+                </div>
+              </div>
+              <Button onClick={() => {
+                const brut = parseFloat((document.getElementById("sim-brut") as HTMLInputElement)?.value || "0")
+                const ot = parseFloat((document.getElementById("sim-ot") as HTMLInputElement)?.value || "0")
+                const prime = parseFloat((document.getElementById("sim-prime") as HTMLInputElement)?.value || "0")
+                const totalBrut = brut + ot + prime
+                const csgRate = totalBrut <= 50000 ? 0.015 : 0.03
+                const csg = Math.round(totalBrut * csgRate)
+                const nsf = Math.round(totalBrut * 0.015)
+                const paye = totalBrut > 25000 ? Math.round((totalBrut - 25000) * 0.10) : 0
+                const net = totalBrut - csg - nsf - paye
+                const csgP = Math.round(totalBrut * 0.06)
+                const nsfP = Math.round(totalBrut * 0.025)
+                const tl = Math.round(totalBrut * 0.01)
+                const prgf = Math.round(4.5 * 26)
+                const totalCharges = csgP + nsfP + tl + prgf
+                const el = document.getElementById("sim-result")
+                if (el) el.innerHTML = `
+                  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+                    <div class="p-4 bg-blue-50 rounded-lg text-center">
+                      <p class="text-xs text-gray-500">Brut total</p>
+                      <p class="text-lg font-bold text-[#0B0F2E]">${fmt(totalBrut)}</p>
+                    </div>
+                    <div class="p-4 bg-red-50 rounded-lg text-center">
+                      <p class="text-xs text-gray-500">Déductions</p>
+                      <p class="text-lg font-bold text-red-600">-${fmt(csg + nsf + paye)}</p>
+                      <p class="text-[10px] text-gray-400">CSG ${(csgRate * 100).toFixed(1)}% + NSF 1.5%${paye > 0 ? " + PAYE" : ""}</p>
+                    </div>
+                    <div class="p-4 rounded-lg text-center" style="background:rgba(212,175,55,0.1);border:2px solid #D4AF37;">
+                      <p class="text-xs text-gray-500">Net estimé</p>
+                      <p class="text-xl font-bold" style="color:#D4AF37;">${fmt(net)}</p>
+                    </div>
+                    <div class="p-4 bg-orange-50 rounded-lg text-center">
+                      <p class="text-xs text-gray-500">Coût employeur</p>
+                      <p class="text-lg font-bold text-orange-600">${fmt(totalBrut + totalCharges)}</p>
+                      <p class="text-[10px] text-gray-400">Charges: ${fmt(totalCharges)}</p>
+                    </div>
+                  </div>
+                `
+              }} className="bg-[#0B0F2E] text-white">
+                <Calculator className="w-4 h-4 mr-2" />Simuler
+              </Button>
+              <div id="sim-result" />
             </CardContent>
           </Card>
         )}
