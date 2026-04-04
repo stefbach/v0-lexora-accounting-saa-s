@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { use } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea"
 import {
   ArrowLeft, Save, Loader2, User, FileText, CalendarDays, Clock,
   Briefcase, CreditCard, Gift, FolderOpen, History, Shield,
-  CheckCircle2, XCircle, AlertCircle, Upload, Download
+  CheckCircle2, XCircle, AlertCircle, Upload, Download, Camera
 } from "lucide-react"
 import { BANQUES_MAURITIUS } from "@/lib/rh/banques-mauritius"
 
@@ -36,9 +36,10 @@ const ROLES = ["salarie", "manager", "rh", "admin", "direction"]
 const DEVISES = ["MUR", "EUR", "USD", "GBP"]
 const GENDERS = [{ v: "M", l: "Masculin" }, { v: "F", l: "Feminin" }]
 const CONTRACT_TYPES = [
-  { v: "fulltime", l: "Temps plein" }, { v: "parttime", l: "Temps partiel" },
-  { v: "casual", l: "Casual" }, { v: "fixed_term", l: "CDD" },
+  { v: "cdi", l: "CDI" }, { v: "cdd", l: "CDD" },
+  { v: "interim", l: "Intérim" }, { v: "consultant", l: "Consultant" },
 ]
+const LANGUES = [{ v: "FR", l: "Français" }, { v: "EN", l: "English" }]
 const MARITAL = ["Celibataire", "Marie(e)", "Divorce(e)", "Veuf/Veuve"]
 const EDUCATION = ["Primaire", "Secondaire", "HSC", "Diplome", "Licence", "Master", "Doctorat", "Autre"]
 const DAYS = [
@@ -65,6 +66,23 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
     `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`
   )
   const [documents, setDocuments] = useState<any[]>([])
+  const [simulatorGross, setSimulatorGross] = useState<string>("")
+  const photoInputRef = useRef<HTMLInputElement>(null)
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const fd = new FormData()
+    fd.append("photo", file)
+    try {
+      const res = await fetch(`/api/rh/employes/${id}/photo`, { method: "POST", body: fd })
+      if (res.ok) {
+        const data = await res.json()
+        setEmploye((prev: any) => ({ ...prev, photo_url: data.photo_url }))
+        setForm((prev: any) => ({ ...prev, photo_url: data.photo_url }))
+      }
+    } catch {}
+  }
 
   const load = useCallback(async (y?: string, pm?: string) => {
     setLoading(true)
@@ -187,13 +205,41 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
           <Button variant="ghost" size="icon" onClick={() => router.push("/rh/employes")} className="text-[#0B0F2E] hover:bg-[#0B0F2E]/10">
             <ArrowLeft className="w-5 h-5" />
           </Button>
-          <div className="w-14 h-14 rounded-full bg-[#0B0F2E] flex items-center justify-center text-white text-xl font-bold shrink-0">
-            {initials(employe.nom, employe.prenom)}
+          <div className="relative group shrink-0 cursor-pointer" onClick={() => photoInputRef.current?.click()}>
+            {employe.photo_url ? (
+              <img src={employe.photo_url} alt={`${employe.prenom} ${employe.nom}`} className="rounded-full object-cover w-14 h-14" />
+            ) : (
+              <div className="w-14 h-14 rounded-full bg-[#0B0F2E] flex items-center justify-center text-white text-xl font-bold">
+                {initials(employe.nom, employe.prenom)}
+              </div>
+            )}
+            <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <Camera className="w-5 h-5 text-white" />
+            </div>
+            <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
           </div>
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold text-[#0B0F2E]">{employe.prenom} {employe.nom}</h1>
-              <Badge className="bg-[#D4AF37]/20 text-[#D4AF37] border-0">{employe.role}</Badge>
+              {(() => {
+                const statut = employe.statut_enrichi || (employe.actif ? "actif" : "parti")
+                const statusMap: Record<string, { cls: string; label: string }> = {
+                  actif: { cls: "bg-green-100 text-green-800", label: "Actif" },
+                  suspendu: { cls: "bg-orange-100 text-orange-800", label: "Suspendu" },
+                  preavis: { cls: "bg-blue-100 text-blue-800", label: "En préavis" },
+                  parti: { cls: "bg-red-100 text-red-800", label: "Parti" },
+                  periode_essai: { cls: "bg-purple-100 text-purple-800", label: "Période d'essai" },
+                }
+                const s = statusMap[statut] || statusMap.actif
+                return (
+                  <Badge className={`${s.cls} border-0`}>
+                    {s.label}
+                    {statut === "periode_essai" && employe.date_fin_periode_essai && (
+                      <span className="ml-1 text-[10px] opacity-75">→ {fmtDate(employe.date_fin_periode_essai)}</span>
+                    )}
+                  </Badge>
+                )
+              })()}
             </div>
             <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
               {employe.code && <span className="font-mono bg-gray-100 px-2 py-0.5 rounded text-xs">{employe.code}</span>}
@@ -275,6 +321,25 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                   <Field label="Badge No" field="badge_number" />
                 </div>
                 <Field label="Email" field="email" type="email" />
+                <Field label="Email personnel" field="email_personnel" type="email" />
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="N° Passeport" field="passport_no" />
+                  <Field label="Nationalité" field="nationalite" placeholder="MU" />
+                </div>
+                <div>
+                  <Label className="text-xs text-gray-500">Langue préférée</Label>
+                  <Select value={form.langue_preferee || "FR"} onValueChange={v => u("langue_preferee", v)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{LANGUES.map(l => <SelectItem key={l.v} value={l.v}>{l.l}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="border-t pt-3 mt-1 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Checkbox checked={form.situation_handicap ?? false} onCheckedChange={v => u("situation_handicap", v)} id="handicap" />
+                    <Label htmlFor="handicap" className="text-sm">Situation de handicap</Label>
+                  </div>
+                  <Field label="Date dernier examen médecin du travail" field="medecin_travail_date" type="date" />
+                </div>
               </CardContent>
             </Card>
 
@@ -294,6 +359,18 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
               </CardContent>
             </Card>
           </div>
+
+          <Card>
+            <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><AlertCircle className="w-4 h-4" />Contact d&apos;urgence</CardTitle></CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Field label="Nom contact urgence" field="contact_urgence_nom" />
+                <Field label="Tél. urgence" field="contact_urgence_tel" />
+                <Field label="Relation" field="contact_urgence_relation" />
+              </div>
+            </CardContent>
+          </Card>
+
           <SaveBtn />
         </TabsContent>
 
@@ -324,6 +401,10 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                     </Select>
                   </div>
                 </div>
+                {form.type_contrat === "cdd" && (
+                  <Field label="Date fin de contrat" field="date_fin_contrat" type="date" />
+                )}
+                <Field label="Date fin période d'essai" field="date_fin_periode_essai" type="date" />
                 <Field label="Departement" field="departement" />
                 <Field label="Bureau / Site" field="office_site" />
                 <Field label="Superviseur (ID)" field="supervisor_id" placeholder="UUID du superviseur" />
