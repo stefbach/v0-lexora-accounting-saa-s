@@ -361,8 +361,9 @@ export default function PointagePage() {
   // ---------------------------------------------------------------------------
   const selectedEmployeePointage = useMemo(() => {
     if (!employeId) return null
-    return pointages.find((p) => p.employe_id === employeId) || null
-  }, [employeId, pointages])
+    // Check sortedPointages which has congé info merged in
+    return sortedPointages.find((p) => p.employe_id === employeId) || null
+  }, [employeId, sortedPointages])
 
   // Determine button states for selected employee
   const canClockIn = useMemo(() => {
@@ -726,13 +727,16 @@ export default function PointagePage() {
                 <TableBody>
                   {sortedPointages.map((p) => {
                     const s = statutLabel(p)
-                    const canIn = !p.heure_entree
-                    const canOut = !!p.heure_entree && !p.heure_sortie
+                    const isOnLeave = !!p.en_conge
+                    const canIn = !isOnLeave && !p.heure_entree
+                    const canOut = !isOnLeave && !!p.heure_entree && !p.heure_sortie
                     return (
                       <TableRow
                         key={p.id}
                         className={`${
-                          s.variant === "present"
+                          s.variant === "conge"
+                            ? "bg-green-50/40"
+                            : s.variant === "present"
                             ? "bg-emerald-50/30"
                             : s.variant === "sorti"
                             ? "bg-blue-50/30"
@@ -745,7 +749,9 @@ export default function PointagePage() {
                           {p.employe?.prenom} {p.employe?.nom}
                         </TableCell>
                         <TableCell className="text-center">
-                          {p.heure_entree ? (
+                          {isOnLeave ? (
+                            <span className="text-green-600 text-xs font-medium">--</span>
+                          ) : p.heure_entree ? (
                             <span className="font-mono text-emerald-700">{fmtHeure(p.heure_entree)}</span>
                           ) : (
                             <Button
