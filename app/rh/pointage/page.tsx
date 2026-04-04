@@ -22,7 +22,14 @@ interface Pointage {
   heures_travaillees?: number | null
   heures_sup?: number | null
   absent_justifie?: boolean
+  en_conge?: boolean
+  type_conge?: string
   employe?: { nom: string; prenom: string; poste?: string }
+}
+
+interface CongeToday {
+  employe_id: string
+  type_conge: string
 }
 
 interface Employe {

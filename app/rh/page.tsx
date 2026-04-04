@@ -148,23 +148,33 @@ export default function RHDashboard() {
     const load = async () => {
       setLoading(true)
       try {
+        const now = new Date()
         const params = societe !== "all" ? `?societe_id=${societe}&statut=presents` : "?statut=presents"
-        const [empRes, paieRes, congesRes] = await Promise.all([
+        const [empRes, congesRes] = await Promise.all([
           fetch(`/api/rh/employes${params}`),
-          fetch(`/api/rh/paie?periode=${periode}${societe !== "all" ? `&societe_id=${societe}` : ""}`),
           fetch(`/api/rh/conges?statut=en_attente${societe !== "all" ? `&societe_id=${societe}` : ""}`),
         ])
-        const [emp, paie, conges] = await Promise.all([empRes.json(), paieRes.json(), congesRes.json()])
+        const [emp, conges] = await Promise.all([empRes.json(), congesRes.json()])
         const employes = emp.employes || []
-        const nbBulletins = paie.nb || 0
+
+        // Try current month first, then fallback to previous month
+        let paieData = await fetch(`/api/rh/paie?periode=${periode}${societe !== "all" ? `&societe_id=${societe}` : ""}`).then(r => r.json())
+        if ((paieData.nb || 0) === 0) {
+          const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 7)
+          const prevParams = new URLSearchParams({ periode: prevMonth })
+          if (societe !== "all") prevParams.set("societe_id", societe)
+          paieData = await fetch(`/api/rh/paie?${prevParams}`).then(r => r.json())
+        }
+
+        const nbBulletins = paieData.nb || 0
 
         // If bulletins exist for this period, use them
         let masseSalariale = 0
         let chargesPatronales = 0
 
         if (nbBulletins > 0) {
-          masseSalariale = paie.totaux?.masse_salariale_brute || 0
-          chargesPatronales = paie.totaux?.total_charges_patronales || 0
+          masseSalariale = paieData.totaux?.masse_salariale_brute || 0
+          chargesPatronales = paieData.totaux?.total_charges_patronales || 0
         } else {
           // Fallback: estimate from employee base salaries
           const totalBase = employes.reduce((s: number, e: any) => s + (Number(e.salaire_base) || 0), 0)
@@ -181,6 +191,46 @@ export default function RHDashboard() {
           absences_today: 0,
           primes_mois: 0,
         })
+
+        // Build department donut from real employee data
+        const posteGroups: Record<string, number> = {}
+        employes.forEach((e: any) => {
+          const dept = e.departement || e.poste || "Autre"
+          posteGroups[dept] = (posteGroups[dept] || 0) + 1
+        })
+        const COLORS = ["#4191FF", "#D4AF37", "#2ECC8A", "#E8A84C", "#8B5CF6", "#EC4899"]
+        const deptChartData = Object.entries(posteGroups).slice(0, 6).map(([name, value], i) => ({
+          name, value, color: COLORS[i % COLORS.length]
+        }))
+        setDeptData(deptChartData)
+
+        // Fetch last 12 months of payroll for chart
+        const months12: string[] = []
+        for (let i = 11; i >= 0; i--) {
+          const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+          months12.push(d.toISOString().slice(0, 7))
+        }
+
+        const paieHistory = await Promise.all(
+          months12.map(m => {
+            const p = new URLSearchParams({ periode: m })
+            if (societe !== "all") p.set("societe_id", societe)
+            return fetch(`/api/rh/paie?${p}`).then(r => r.json()).catch(() => ({ totaux: {} }))
+          })
+        )
+
+        const MOIS = ["Jan","Fev","Mar","Avr","Mai","Jun","Jul","Aou","Sep","Oct","Nov","Dec"]
+        const realChartData = months12.map((m, i) => {
+          const monthIdx = parseInt(m.split("-")[1]) - 1
+          const t = paieHistory[i]?.totaux || {}
+          return {
+            mois: MOIS[monthIdx],
+            brut: Math.round(t.masse_salariale_brute || 0),
+            net: Math.round(t.masse_salariale_nette || (t.masse_salariale_brute || 0) * 0.85),
+          }
+        })
+        setChartData(realChartData)
+
       } catch (e) { console.error(e) }
       finally { setLoading(false) }
     }
@@ -226,7 +276,7 @@ export default function RHDashboard() {
         </div>
 
         {/* Tab Content */}
-        {tab === "dashboard" && <DashboardTab stats={stats} loading={loading} />}
+        {tab === "dashboard" && <DashboardTab stats={stats} loading={loading} chartData={chartData} deptData={deptData} />}
         {tab === "pointages" && <PointagesTab />}
         {tab === "absences" && <AbsencesTab />}
         {tab === "primes" && <PrimesTab />}
@@ -429,7 +479,7 @@ function ChartTooltip({ active, payload, label, isCurrency }: any) {
   )
 }
 
-function DashboardTab({ stats, loading }: { stats: any; loading: boolean }) {
+function DashboardTab({ stats, loading, chartData, deptData }: { stats: any; loading: boolean; chartData: any[]; deptData: any[] }) {
   const cardStyle = { border: `1px solid ${CARD_BORDER}`, borderRadius: 12, background: "#FFFFFF" }
 
   const kpis = [

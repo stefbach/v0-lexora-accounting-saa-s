@@ -1096,11 +1096,7 @@ export default function CongesPage() {
                 </p>
               </CardHeader>
               <CardContent className="p-0">
-                {loadingAbsents ? <Spinner /> : societe === "all" ? (
-                  <div className="text-center py-8 text-gray-500">
-                    Selectionnez une societe pour voir les absences du jour
-                  </div>
-                ) : employesSansConge.length === 0 ? (
+                {loadingAbsents ? <Spinner /> : employesSansConge.length === 0 ? (
                   <div className="text-center py-8 text-gray-500">
                     Tous les employes sont en conge approuve
                   </div>
