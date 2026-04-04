@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { getUserSocieteIds } from '@/lib/rh/access'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,15 +13,7 @@ function getAdminClient() {
   )
 }
 
-/** Get the societe IDs accessible by this user */
-async function getUserSocieteIds(supabase: ReturnType<typeof getAdminClient>, userId: string): Promise<string[]> {
-  const { data: profile } = await supabase.from('profiles').select('role, societe_id').eq('id', userId).maybeSingle()
-  if (profile?.societe_id) return [profile.societe_id]
-
-  const { data: dossiers } = await supabase.from('dossiers').select('societe_id').eq('client_id', userId)
-  const { data: owned } = await supabase.from('societes').select('id').eq('created_by', userId)
-  return [...new Set([...(dossiers || []).map((d: any) => d.societe_id), ...(owned || []).map((s: any) => s.id)])]
-}
+/* getUserSocieteIds imported from @/lib/rh/access — handles all roles including admin, client_admin, comptable, rh */
 
 /**
  * Mauritius public holidays (jours fériés).
@@ -169,13 +162,13 @@ export async function GET(request: Request) {
     // 1) Determine accessible societes
     let societeIds: string[]
     if (societe_id) {
-      const accessibleIds = await getUserSocieteIds(supabase, user.id)
+      const accessibleIds = await getUserSocieteIds(user.id)
       if (!accessibleIds.includes(societe_id)) {
         return NextResponse.json({ error: 'Acces non autorise a cette societe' }, { status: 403 })
       }
       societeIds = [societe_id]
     } else {
-      societeIds = await getUserSocieteIds(supabase, user.id)
+      societeIds = await getUserSocieteIds(user.id)
     }
 
     if (societeIds.length === 0) {
@@ -354,7 +347,7 @@ export async function POST(request: Request) {
       if (!body.employe_id || !body.type_conge || !body.date_debut || !body.date_fin)
         return NextResponse.json({ error: 'Champs requis manquants' }, { status: 400 })
 
-      const accessibleIds = await getUserSocieteIds(supabase, user.id)
+      const accessibleIds = await getUserSocieteIds(user.id)
       const { data: emp } = await supabase.from('employes').select('id, societe_id, sexe').eq('id', body.employe_id).maybeSingle()
       if (!emp || !accessibleIds.includes(emp.societe_id)) {
         return NextResponse.json({ error: 'Employe non trouve ou acces non autorise' }, { status: 403 })
@@ -435,7 +428,7 @@ export async function POST(request: Request) {
       const { data: conge } = await supabase.from('demandes_conges').select('*').eq('id', body.id).maybeSingle()
       if (!conge) return NextResponse.json({ error: 'Demande non trouvee' }, { status: 404 })
 
-      const accessibleIds = await getUserSocieteIds(supabase, user.id)
+      const accessibleIds = await getUserSocieteIds(user.id)
       const { data: emp } = await supabase.from('employes').select('id, societe_id').eq('id', conge.employe_id).maybeSingle()
       if (!emp || !accessibleIds.includes(emp.societe_id)) {
         return NextResponse.json({ error: 'Acces non autorise' }, { status: 403 })
@@ -462,7 +455,7 @@ export async function POST(request: Request) {
       const { data: conge } = await supabase.from('demandes_conges').select('*').eq('id', body.id).maybeSingle()
       if (!conge) return NextResponse.json({ error: 'Demande non trouvee' }, { status: 404 })
 
-      const accessibleIds = await getUserSocieteIds(supabase, user.id)
+      const accessibleIds = await getUserSocieteIds(user.id)
       const { data: emp } = await supabase.from('employes').select('id, societe_id').eq('id', conge.employe_id).maybeSingle()
       if (!emp || !accessibleIds.includes(emp.societe_id)) {
         return NextResponse.json({ error: 'Acces non autorise' }, { status: 403 })
@@ -487,7 +480,7 @@ export async function POST(request: Request) {
       if (!body.employe_id || !body.date_debut)
         return NextResponse.json({ error: 'employe_id et date_debut requis' }, { status: 400 })
 
-      const accessibleIds = await getUserSocieteIds(supabase, user.id)
+      const accessibleIds = await getUserSocieteIds(user.id)
       const { data: emp } = await supabase.from('employes').select('id, societe_id').eq('id', body.employe_id).maybeSingle()
       if (!emp || !accessibleIds.includes(emp.societe_id)) {
         return NextResponse.json({ error: 'Acces non autorise' }, { status: 403 })
@@ -515,7 +508,7 @@ export async function POST(request: Request) {
       if (!body.employe_id || !body.date_debut)
         return NextResponse.json({ error: 'employe_id et date_debut requis' }, { status: 400 })
 
-      const accessibleIds = await getUserSocieteIds(supabase, user.id)
+      const accessibleIds = await getUserSocieteIds(user.id)
       const { data: emp } = await supabase.from('employes').select('id, societe_id').eq('id', body.employe_id).maybeSingle()
       if (!emp || !accessibleIds.includes(emp.societe_id)) {
         return NextResponse.json({ error: 'Acces non autorise' }, { status: 403 })
