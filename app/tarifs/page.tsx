@@ -849,7 +849,7 @@ export default function TarifsPage() {
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: "32px" }}>
             <LexoraLogo href="/" size="md" />
-            <div style={{ display: "flex", gap: "4px" }}>
+            <div className="hidden md:flex" style={{ gap: "4px" }}>
               {navLinks.map((nl) => (
                 <Link key={nl.label} href={nl.href} style={{
                   padding: "8px 14px", fontSize: "13px", fontWeight: nl.active ? 700 : 500,
@@ -1089,7 +1089,7 @@ export default function TarifsPage() {
       }}>
         <div style={{
           maxWidth: "900px", margin: "0 auto",
-          display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "32px",
+          display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "24px",
           textAlign: "center",
         }}>
           {[
@@ -1134,7 +1134,7 @@ export default function TarifsPage() {
           ))}
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "32px", alignItems: "start" }}>
+        <div className="grid grid-cols-1 lg:grid-cols-2" style={{ gap: "24px", alignItems: "start" }}>
           {/* Left side: slider */}
           <div style={{
             backgroundColor: C.cardBg, border: `1px solid ${C.navyBorder}`,
@@ -1208,7 +1208,7 @@ export default function TarifsPage() {
               borderRadius: "16px", padding: "28px",
             }}>
               <div style={{ color: C.muted, fontSize: "13px", fontWeight: 500, marginBottom: "8px" }}>{txt.calcResult}</div>
-              <div style={{ color: C.gold, fontSize: "42px", fontWeight: 800, lineHeight: 1, fontFamily: FONT }}>
+              <div style={{ color: C.gold, fontSize: "clamp(28px, 5vw, 42px)", fontWeight: 800, lineHeight: 1.1, fontFamily: FONT, wordBreak: "break-word" }}>
                 MRs {fmt(getCalcPrice())}
               </div>
               <div style={{ color: C.muted, fontSize: "14px", marginTop: "4px" }}>
@@ -1225,7 +1225,7 @@ export default function TarifsPage() {
                 </div>
               )}
 
-              <div style={{ display: "flex", gap: "12px", marginTop: "20px" }}>
+              <div className="flex flex-col sm:flex-row" style={{ gap: "12px", marginTop: "20px" }}>
                 <Link href="/auth/login" style={{
                   flex: 1, display: "block", textAlign: "center",
                   padding: "12px", borderRadius: "10px", fontWeight: 700, fontSize: "13px",
@@ -1309,7 +1309,7 @@ export default function TarifsPage() {
       {/* ============================================================= */}
       <footer style={{ borderTop: `1px solid ${C.navyBorder}`, padding: "48px 24px 24px" }}>
         <div style={{ maxWidth: "1100px", margin: "0 auto" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: "40px", marginBottom: "40px" }}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4" style={{ gap: "32px", marginBottom: "40px" }}>
             {/* Logo + tagline */}
             <div>
               <LexoraLogo size="md" />
