@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient as createServerClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 import {
   genererVirementBanque,
   genererVirementMCB_BPV1,
@@ -10,6 +11,14 @@ import {
 
 export const dynamic = 'force-dynamic'
 
+function getAdminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+}
+
 /**
  * POST /api/rh/exports/virement
  * Génère les fichiers de virement salaires pour toutes les banques bénéficiaires
@@ -17,9 +26,11 @@ export const dynamic = 'force-dynamic'
  */
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const supabaseAuth = await createServerClient()
+    const { data: { user } } = await supabaseAuth.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+
+    const supabase = getAdminClient()
 
     const {
       societe_id,
@@ -78,15 +89,26 @@ export async function POST(request: Request) {
       .select('id, employe_id, salaire_net, statut, devise_salaire')
       .eq('societe_id', societe_id)
       .ilike('periode', `${periode}%`)
-      .eq('statut', 'valide')
+      .in('statut', ['valide', 'paye'])
 
     if (bullErr) throw bullErr
 
     if (!bulletins?.length) {
-      return NextResponse.json({
-        error: 'Aucun bulletin validé pour cette période. Calculez et validez les bulletins d\'abord.',
-        code: 'NO_VALIDATED_BULLETINS'
-      }, { status: 404 })
+      // Fallback: try any status (imported bulletins might have different statut)
+      const { data: allBulletins } = await supabase
+        .from('bulletins_paie')
+        .select('id, employe_id, salaire_net, statut, devise_salaire')
+        .eq('societe_id', societe_id)
+        .ilike('periode', `${periode}%`)
+
+      if (!allBulletins?.length) {
+        return NextResponse.json({
+          error: 'Aucun bulletin pour cette période. Importez ou calculez les bulletins d\'abord.',
+          code: 'NO_BULLETINS'
+        }, { status: 404 })
+      }
+      // Use all bulletins regardless of status
+      bulletins.push(...allBulletins)
     }
 
     // Récupérer les employés séparément (pas de FK join)

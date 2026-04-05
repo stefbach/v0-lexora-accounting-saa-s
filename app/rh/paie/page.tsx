@@ -94,16 +94,34 @@ export default function PaiePage() {
     } catch (e) { console.error(e) } finally { setCalculating(false) }
   }
 
-  const exportVirements = async () => {
+  const exportVirements = async (banqueFilter?: string) => {
     if (societe === "all") return alert("Sélectionnez une société")
-    const data = await fetch("/api/rh/exports/virement", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ societe_id: societe, periode, banque: "MCB" })
-    }).then(r => r.json())
-    if (data.content) {
-      const blob = new Blob([data.content], { type: "text/csv" })
-      const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = data.filename; a.click()
-    }
+    try {
+      const res = await fetch("/api/rh/exports/virement", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          societe_id: societe,
+          periode,
+          ...(banqueFilter ? { format: "single", banque_filter: banqueFilter } : { format: "json" }),
+        })
+      })
+      const data = await res.json()
+      if (!res.ok) { alert(data.error || "Erreur export"); return }
+
+      if (data.content) {
+        // Single file export
+        const blob = new Blob([data.content], { type: "text/csv" })
+        const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = data.filename || "export.csv"; a.click()
+      } else if (data.fichiers?.length > 0) {
+        // Multiple files — download each
+        for (const f of data.fichiers) {
+          const blob = new Blob([f.content], { type: "text/csv" })
+          const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = f.filename; a.click()
+        }
+      } else {
+        alert("Aucun fichier généré. Vérifiez que les bulletins sont calculés et les coordonnées bancaires renseignées.")
+      }
+    } catch (e: any) { alert("Erreur réseau: " + (e.message || "")) }
   }
 
   const ouvrirPDF = async (bulletinId: string) => {
@@ -158,19 +176,7 @@ export default function PaiePage() {
             <Button onClick={calculerBatch} disabled={calculating} className="bg-[#0B0F2E] text-white">
               <Calculator className="w-4 h-4 mr-2" />{calculating ? "Calcul en cours..." : "Calculer la paie"}
             </Button>
-            <Button onClick={exportVirements} variant="outline"><Download className="w-4 h-4 mr-2" />MCB Virement</Button>
-            <Button onClick={() => {
-              if (societe === "all") return alert("Sélectionnez une société")
-              fetch("/api/rh/exports/virement", {
-                method: "POST", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ societe_id: societe, periode, banque: "SBM" })
-              }).then(r => r.json()).then(data => {
-                if (data.content) {
-                  const blob = new Blob([data.content], { type: "text/csv" })
-                  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = data.filename || "export_sbm.csv"; a.click()
-                } else alert(data.error || "Export SBM non disponible")
-              })
-            }} variant="outline"><Download className="w-4 h-4 mr-2" />SBM Virement</Button>
+            <Button onClick={() => exportVirements()} variant="outline"><Download className="w-4 h-4 mr-2" />Export Virements</Button>
             {periode.endsWith("-12") && (
               <Button onClick={() => {
                 if (societe === "all") return alert("Sélectionnez une société")

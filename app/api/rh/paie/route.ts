@@ -422,8 +422,14 @@ export async function POST(request: Request) {
         // 5. Conversion EUR
         let salaire_base_mur = Number(emp.salaire_base)
         if (emp.devise_salaire === 'EUR') {
-          const taux = Number(emp.taux_change_eur) || params.taux_eur || 46.50
+          const taux = Number(emp.taux_change_eur) || 46.50
           salaire_base_mur = Math.round(salaire_base_mur * taux)
+        }
+
+        // EOY bonus: if include_eoy_bonus is set, compute 1/12 of annual basic
+        let eoy_bonus_montant = 0
+        if (body.include_eoy_bonus && periodeStr.endsWith("-12")) {
+          eoy_bonus_montant = Math.round(salaire_base_mur) // 1 month's basic salary as 13th month
         }
 
         const elements = {
@@ -432,6 +438,7 @@ export async function POST(request: Request) {
           petrol_allowance: Number(emp.petrol_allowance) || 0,
           heures_sup_montant: Math.round(total_ot_montant),
           special_allowance_1: Math.round(total_primes),
+          eoy_bonus: eoy_bonus_montant,
         }
 
         const jt = jours_travailles > 0 ? jours_travailles : 26
@@ -461,6 +468,7 @@ export async function POST(request: Request) {
           special_allowance_1: Math.round(total_primes),
           transport_allowance: Number(emp.transport_allowance) || 0,
           petrol_allowance: Number(emp.petrol_allowance) || 0,
+          eoy_bonus: eoy_bonus_montant,
           montant_absence: montant_absence_final,
           notes: notesResume,
           statut: 'brouillon',
@@ -482,7 +490,7 @@ export async function POST(request: Request) {
           erreurs.push(errMsg)
         }
         if (!error && saved) {
-          bulletinsSauvegardes.push({ ...saved, nom: emp.nom, prenom: emp.prenom, employe: { id: emp.id, code: emp.code, nom: emp.nom, prenom: emp.prenom, poste: emp.poste } })
+          bulletinsSauvegardes.push({ ...saved, nom: emp.nom, prenom: emp.prenom, employe: { id: emp.id, code: emp.code_employe, nom: emp.nom, prenom: emp.prenom, poste: emp.poste } })
           // Marquer primes intégrées (colonne integre_paie + date_integration ajoutées en migration 028)
           if (primesMois && primesMois.length > 0) {
             await supabase.from('primes_variables_mois')

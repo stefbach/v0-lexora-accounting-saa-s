@@ -49,7 +49,7 @@ export default function HistoriquePaiePage() {
     setExpanded(periode)
     // Load detail for this period
     const [detRes, ecrRes] = await Promise.all([
-      fetch(`/api/rh/import-paie?action=detail&periode=${periode}`).then(r => r.json()).catch(() => ({ bulletins: [] })),
+      fetch(`/api/rh/import-paie?action=detail&periode=${periode}&societe_id=${societe}`).then(r => r.json()).catch(() => ({ bulletins: [] })),
       fetch(`/api/rh/paie?action=list&societe_id=${societe}&periode=${periode.slice(0, 7)}`).then(r => r.json()).catch(() => ({ bulletins: [] })),
     ])
     setDetail(detRes.bulletins || [])

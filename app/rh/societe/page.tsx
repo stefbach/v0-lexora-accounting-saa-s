@@ -12,7 +12,7 @@ import { toast } from "sonner"
 import {
   Loader2, Save, Building2, Phone, Banknote, Settings,
   MapPin, CheckCircle, AlertCircle, FileText, Scale,
-  Shield, Download, ChevronDown, ChevronUp, Eye,
+  Shield, Download, ChevronDown, ChevronUp, Eye, Upload, ImageIcon,
 } from "lucide-react"
 
 const NAVY = "#0B0F2E"
@@ -48,7 +48,7 @@ function Field({
           const val = type === "number" ? (raw === "" ? "" : Number(raw)) : raw
           onChange(name, val as string | number)
         }}
-        className="h-9 text-sm"
+        className="h-11 text-sm"
       />
     </div>
   )
@@ -75,41 +75,124 @@ function DetailsTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
   const f = useRef({ ...data })
   const u = (k: string, v: any) => { f.current[k] = v }
   const [tva, setTva] = useState<boolean>(!!data.statut_tva)
+  const [logoPreview, setLogoPreview] = useState<string>(data.logo_url || "")
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="space-y-4">
-          <Field label="Nom de la société" name="nom" defaultValue={data.nom} required onChange={u} />
-          <Field label="Nom court" name="short_name" defaultValue={data.short_name} placeholder="Ex: DDS" onChange={u} />
-          <Field label="ERN (Employer Registration Number)" name="ern" defaultValue={data.ern} placeholder="Ex: 02276097" onChange={u} />
-          <Field label="NPF No." name="npf_number" defaultValue={data.npf_number} placeholder="Ex: 02276097" onChange={u} />
-          <Field label="Date d'incorporation" name="date_incorporation" type="date" defaultValue={data.date_incorporation} onChange={u} />
-        </div>
-        <div className="space-y-4">
-          <Field label="BRN (Business Registration Number)" name="brn" defaultValue={data.brn} placeholder="Ex: C20173522" onChange={u} />
-          <Field label="PAYE Number (MRA)" name="paye_number" defaultValue={data.paye_number} placeholder="Ex: P1234567" onChange={u} />
-          <Field label="CSG Number" name="csg_number" defaultValue={data.csg_number} placeholder="Ex: CSG123456" onChange={u} />
-          <Field label="NSF Number" name="nsf_number" defaultValue={data.nsf_number} placeholder="Ex: NSF789012" onChange={u} />
-          <Field label="Numéro TVA MRA" name="numero_tva_mra" defaultValue={data.numero_tva_mra} onChange={u} />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="space-y-4">
-          <Field label="Nature of Business" name="nature_business" defaultValue={data.nature_business} placeholder="Ex: BPO, Télémedecine" onChange={u} />
-          <Field label="Secteur d'activité" name="secteur_activite" defaultValue={data.secteur_activite} onChange={u} />
-        </div>
-        <div className="space-y-4">
-          <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border mt-5">
-            <Switch
-              checked={tva}
-              onCheckedChange={v => { setTva(v); u("statut_tva", v) }}
-            />
-            <Label className="cursor-pointer">Assujetti à la TVA</Label>
+      {/* Logo upload section */}
+      <Card className="rounded-2xl border-l-4" style={{ borderLeftColor: GOLD }}>
+        <CardContent className="p-5">
+          <div className="flex items-center gap-6">
+            <div className="shrink-0 w-24 h-24 rounded-2xl border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden bg-gray-50">
+              {logoPreview ? (
+                <img src={logoPreview} alt="Logo" className="w-full h-full object-contain p-1" />
+              ) : (
+                <ImageIcon className="h-8 w-8 text-gray-300" />
+              )}
+            </div>
+            <div className="space-y-2 flex-1">
+              <p className="text-sm font-medium" style={{ color: NAVY }}>Logo de la société</p>
+              <p className="text-xs text-gray-500">Apparaît sur les bulletins de paie et documents officiels</p>
+              <div className="flex items-center gap-3">
+                <Input
+                  type="url"
+                  placeholder="https://exemple.com/logo.png"
+                  defaultValue={data.logo_url || ""}
+                  className="h-11 text-sm flex-1"
+                  onBlur={e => {
+                    const val = e.target.value
+                    u("logo_url", val)
+                    setLogoPreview(val)
+                  }}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-11 shrink-0"
+                  onClick={() => {
+                    const input = document.createElement("input")
+                    input.type = "file"
+                    input.accept = "image/*"
+                    input.onchange = (e: any) => {
+                      const file = e.target.files?.[0]
+                      if (file) {
+                        const reader = new FileReader()
+                        reader.onload = (ev) => {
+                          const dataUrl = ev.target?.result as string
+                          setLogoPreview(dataUrl)
+                          u("logo_url", dataUrl)
+                        }
+                        reader.readAsDataURL(file)
+                      }
+                    }
+                    input.click()
+                  }}
+                >
+                  <Upload className="h-4 w-4 mr-1" /> Choisir
+                </Button>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
+
+      {/* Identification section */}
+      <Card className="rounded-2xl border-l-4" style={{ borderLeftColor: NAVY }}>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2" style={{ color: NAVY }}>
+            <Building2 className="h-4 w-4" /> Identification
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <Field label="Nom de la société" name="nom" defaultValue={data.nom} required onChange={u} />
+            <Field label="Nom court" name="short_name" defaultValue={data.short_name} placeholder="Ex: DDS" onChange={u} />
+            <Field label="ERN (Employer Registration Number)" name="ern" defaultValue={data.ern} placeholder="Ex: 02276097" onChange={u} />
+            <Field label="BRN (Business Registration Number)" name="brn" defaultValue={data.brn} placeholder="Ex: C20173522" onChange={u} />
+            <Field label="NPF No." name="npf_number" defaultValue={data.npf_number} placeholder="Ex: 02276097" onChange={u} />
+            <Field label="Date d'incorporation" name="date_incorporation" type="date" defaultValue={data.date_incorporation} onChange={u} />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Numéros fiscaux section */}
+      <Card className="rounded-2xl border-l-4 border-l-blue-500">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2 text-blue-700">
+            <FileText className="h-4 w-4" /> Numéros fiscaux
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <Field label="PAYE Number (MRA)" name="paye_number" defaultValue={data.paye_number} placeholder="Ex: P1234567" onChange={u} />
+            <Field label="CSG Number" name="csg_number" defaultValue={data.csg_number} placeholder="Ex: CSG123456" onChange={u} />
+            <Field label="NSF Number" name="nsf_number" defaultValue={data.nsf_number} placeholder="Ex: NSF789012" onChange={u} />
+            <Field label="Numéro TVA MRA" name="numero_tva_mra" defaultValue={data.numero_tva_mra} onChange={u} />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Activité section */}
+      <Card className="rounded-2xl border-l-4 border-l-emerald-500">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2 text-emerald-700">
+            <Settings className="h-4 w-4" /> Activité
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <Field label="Nature of Business" name="nature_business" defaultValue={data.nature_business} placeholder="Ex: BPO, Télémedecine" onChange={u} />
+            <Field label="Secteur d'activité" name="secteur_activite" defaultValue={data.secteur_activite} onChange={u} />
+            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border">
+              <Switch
+                checked={tva}
+                onCheckedChange={v => { setTva(v); u("statut_tva", v) }}
+              />
+              <Label className="cursor-pointer">Assujetti à la TVA</Label>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Button
         onClick={() => onSave({ ...f.current, statut_tva: tva })}
@@ -129,9 +212,9 @@ function ContactTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
 
   return (
     <div className="space-y-6">
-      <Card>
+      <Card className="rounded-2xl border-l-4" style={{ borderLeftColor: NAVY }}>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-gray-600">Personne de contact</CardTitle>
+          <CardTitle className="text-sm font-semibold" style={{ color: NAVY }}>Personne de contact</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="Nom" name="contact_name" defaultValue={data.contact_name} placeholder="Stephane Bach" onChange={u} />
@@ -139,9 +222,9 @@ function ContactTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="rounded-2xl border-l-4 border-l-blue-500">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-gray-600">Coordonnées</CardTitle>
+          <CardTitle className="text-sm font-semibold text-blue-700">Coordonnées</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="Adresse" name="adresse" defaultValue={data.adresse} placeholder="Bourdet Road" onChange={u} />
@@ -155,9 +238,9 @@ function ContactTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="rounded-2xl border-l-4 border-l-emerald-500">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
+          <CardTitle className="text-sm font-semibold text-emerald-700 flex items-center gap-2">
             <MapPin className="h-4 w-4" /> Localisation GPS (pour pointage)
           </CardTitle>
         </CardHeader>
@@ -326,7 +409,7 @@ function RhTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
             <div>
               <Label className="text-xs text-gray-600 mb-1 block">Jour de clôture du mois</Label>
               <Select defaultValue={String(data.period_closing_day ?? 24)} onValueChange={uSelect("period_closing_day")}>
-                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {Array.from({ length: 28 }, (_, i) => i + 1).map(d => (
                     <SelectItem key={d} value={String(d)}>{d}</SelectItem>
@@ -337,7 +420,7 @@ function RhTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
             <div>
               <Label className="text-xs text-gray-600 mb-1 block">Jour de paiement</Label>
               <Select defaultValue={String(data.pay_day ?? 28)} onValueChange={uSelect("pay_day")}>
-                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
                     <SelectItem key={d} value={String(d)}>{d}</SelectItem>
@@ -356,7 +439,7 @@ function RhTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
             <div>
               <Label className="text-xs text-gray-600 mb-1 block">Fréquence</Label>
               <Select defaultValue={data.salary_frequency ?? "monthly"} onValueChange={uSelect("salary_frequency")}>
-                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="monthly">Mensuel</SelectItem>
                   <SelectItem value="fortnightly">Bimensuel</SelectItem>
@@ -367,7 +450,7 @@ function RhTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
             <div>
               <Label className="text-xs text-gray-600 mb-1 block">EOY Bonus (13ème mois)</Label>
               <Select defaultValue={data.eoy_bonus_mode ?? "separated"} onValueChange={uSelect("eoy_bonus_mode")}>
-                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="separated">Bulletin séparé</SelectItem>
                   <SelectItem value="included">Inclus dans le bulletin</SelectItem>
@@ -385,7 +468,7 @@ function RhTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
             <div>
               <Label className="text-xs text-gray-600 mb-1 block">Template</Label>
               <Select defaultValue={data.payslip_template ?? "basic"} onValueChange={uSelect("payslip_template")}>
-                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="basic">Basic</SelectItem>
                   <SelectItem value="detailed">Détaillé</SelectItem>
@@ -395,7 +478,7 @@ function RhTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
             <div>
               <Label className="text-xs text-gray-600 mb-1 block">Langue d'impression</Label>
               <Select defaultValue={data.payslip_language ?? "fr"} onValueChange={uSelect("payslip_language")}>
-                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="fr">Français</SelectItem>
                   <SelectItem value="en">English</SelectItem>
@@ -405,7 +488,7 @@ function RhTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
             <div>
               <Label className="text-xs text-gray-600 mb-1 block">Déclaration MRA</Label>
               <Select defaultValue={data.declaration_type ?? "MRA_PACO"} onValueChange={uSelect("declaration_type")}>
-                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="MRA_PACO">MRA (PACO)</SelectItem>
                   <SelectItem value="MRA_DIRECT">MRA Direct</SelectItem>
@@ -653,7 +736,7 @@ function AuditTab({ societeId }: { societeId: string }) {
             <div>
               <Label className="text-xs text-gray-500 mb-1 block">Action</Label>
               <Select value={filterAction} onValueChange={v => { setFilterAction(v === "all" ? "" : v); setPage(1) }}>
-                <SelectTrigger className="h-9"><SelectValue placeholder="Toutes" /></SelectTrigger>
+                <SelectTrigger className="h-11"><SelectValue placeholder="Toutes" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Toutes</SelectItem>
                   {ACTION_OPTIONS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
@@ -663,7 +746,7 @@ function AuditTab({ societeId }: { societeId: string }) {
             <div>
               <Label className="text-xs text-gray-500 mb-1 block">Entité</Label>
               <Select value={filterEntite} onValueChange={v => { setFilterEntite(v === "all" ? "" : v); setPage(1) }}>
-                <SelectTrigger className="h-9"><SelectValue placeholder="Toutes" /></SelectTrigger>
+                <SelectTrigger className="h-11"><SelectValue placeholder="Toutes" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Toutes</SelectItem>
                   {ENTITE_OPTIONS.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
@@ -672,11 +755,11 @@ function AuditTab({ societeId }: { societeId: string }) {
             </div>
             <div>
               <Label className="text-xs text-gray-500 mb-1 block">Du</Label>
-              <Input type="date" className="h-9 text-sm" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1) }} />
+              <Input type="date" className="h-11 text-sm" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1) }} />
             </div>
             <div>
               <Label className="text-xs text-gray-500 mb-1 block">Au</Label>
-              <Input type="date" className="h-9 text-sm" value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(1) }} />
+              <Input type="date" className="h-11 text-sm" value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(1) }} />
             </div>
             <div className="flex items-end">
               <Button variant="outline" className="h-9 text-sm w-full" onClick={handleExportCSV}>
@@ -913,7 +996,7 @@ export default function SocieteSettingsPage() {
   }
 
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-5xl mx-auto">
+    <div className="p-4 md:p-6 space-y-6 max-w-6xl mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
