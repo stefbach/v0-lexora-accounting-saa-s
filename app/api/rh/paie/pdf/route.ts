@@ -431,7 +431,7 @@ td{padding:6px 8px;border-bottom:1px solid #eee;font-size:11px}
   <div>
     <div style="width:60mm;max-height:20mm;margin-bottom:8px;">
       <img src="${soc?.logo_url || ''}" style="max-width:100%;max-height:20mm;display:${soc?.logo_url ? 'block' : 'none'}" />
-      ${!soc?.logo_url ? `<div style="font-size:18px;font-weight:800;color:#0B0F2E;letter-spacing:0.04em;">LE<span style="color:#D4AF37">X</span>ORA</div>` : ''}
+      ${!soc?.logo_url ? `<div style="font-size:16px;font-weight:800;color:#0B0F2E;">${soc?.nom || 'Société'}</div>` : ''}
     </div>
     <p style="font-weight:700;color:#0B0F2E;font-size:14px;">${soc?.nom || 'N/A'}</p>
     <p style="color:#555;font-size:11px;">${soc?.adresse || '—'}</p>
