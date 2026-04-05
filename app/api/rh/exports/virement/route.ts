@@ -92,7 +92,8 @@ export async function POST(request: Request) {
         .from('bulletins_paie')
         .select('*')
         .eq('societe_id', societe_id)
-        .ilike('periode', `${periode}%`)
+        .gte('periode', `${periode}-01`)
+        .lte('periode', `${periode}-31`)
         .in('statut', ['valide', 'paye'])
 
       if (validated && validated.length > 0) {
@@ -103,7 +104,8 @@ export async function POST(request: Request) {
           .from('bulletins_paie')
           .select('*')
           .eq('societe_id', societe_id)
-          .ilike('periode', `${periode}%`)
+          .gte('periode', `${periode}-01`)
+          .lte('periode', `${periode}-31`)
         allBulletins = anyStatus || []
       }
     } catch (dbErr: any) {

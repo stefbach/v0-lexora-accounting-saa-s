@@ -30,7 +30,8 @@ export async function POST(request: Request) {
       .from('bulletins_paie')
       .select('*')
       .eq('societe_id', societe_id)
-      .ilike('periode', `${periode}%`)
+      .gte('periode', `${periode}-01`)
+      .lte('periode', `${periode}-31`)
 
     if (error) throw error
     if (!bulletins || bulletins.length === 0) return NextResponse.json({ error: 'Aucun bulletin pour cette période' }, { status: 404 })

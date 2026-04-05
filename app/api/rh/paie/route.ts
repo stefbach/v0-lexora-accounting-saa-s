@@ -551,7 +551,7 @@ export async function POST(request: Request) {
       } else {
         // Fallback: search by ilike
         const { data: fuzzy } = await supabase.from('bulletins_paie')
-          .select('id').eq('employe_id', employe_id).ilike('periode', `${periodeStr}%`).maybeSingle()
+          .select('id').eq('employe_id', employe_id).gte('periode', `${periodeStr}-01`).lte('periode', `${periodeStr}-31`).maybeSingle()
         if (fuzzy) {
           const { data, error } = await supabase.from('bulletins_paie')
             .update({ statut: 'valide' }).eq('id', fuzzy.id).select().single()

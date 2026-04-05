@@ -31,7 +31,8 @@ export async function POST(request: Request) {
       .from('bulletins_paie')
       .select('*')
       .eq('societe_id', societe_id)
-      .ilike('periode', `${periode}%`)
+      .gte('periode', `${periode}-01`)
+      .lte('periode', `${periode}-31`)
 
     if (error) {
       console.error('[csg-mra] DB error bulletins:', error.message, error.details)
