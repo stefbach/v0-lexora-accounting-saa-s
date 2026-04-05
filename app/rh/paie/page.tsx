@@ -84,11 +84,13 @@ export default function PaiePage() {
 
   const calculerBatch = async () => {
     if (societe === "all") return alert("Sélectionnez une société")
+    // Use current month if no period selected
+    const calcPeriode = periode || new Date().toISOString().slice(0, 7)
     setCalculating(true)
     try {
       const res = await fetch("/api/rh/paie", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "calculer_batch", societe_id: societe, periode })
+        body: JSON.stringify({ action: "calculer_batch", societe_id: societe, periode: calcPeriode })
       })
       const data = await res.json()
       if (!res.ok) {
@@ -96,8 +98,14 @@ export default function PaiePage() {
       } else {
         const nb = data.nb || data.bulletins?.length || 0
         const erreurs = data.erreurs || []
-        alert(`✅ ${nb} bulletin(s) calculé(s) pour ${periode}${erreurs.length > 0 ? `\n\n⚠️ ${erreurs.length} erreur(s):\n${erreurs.join("\n")}` : ""}`)
-        load()
+        alert(`✅ ${nb} bulletin(s) calculé(s) pour ${calcPeriode}${erreurs.length > 0 ? `\n\n⚠️ ${erreurs.length} erreur(s):\n${erreurs.join("\n")}` : ""}`)
+        // Update period selector to show the calculated month
+        if (!availablePeriodes.includes(calcPeriode)) {
+          setAvailablePeriodes(prev => [calcPeriode, ...prev].sort((a, b) => b.localeCompare(a)))
+        }
+        setPeriode(calcPeriode)
+        setPeriodeReady(true)
+        // Reload will trigger via useEffect on periode change
       }
     } catch (e: any) { alert("Erreur réseau: " + (e.message || "")) } finally { setCalculating(false) }
   }
@@ -253,7 +261,7 @@ export default function PaiePage() {
                 </SelectContent>
               </Select>
             ) : (
-              <Input type="month" value={periode} onChange={e => setPeriode(e.target.value)} className="w-40" />
+              <Input type="month" value={periode || new Date().toISOString().slice(0, 7)} onChange={e => { setPeriode(e.target.value); setPeriodeReady(true) }} className="w-40" />
             )}
           </CardContent>
         </Card>
