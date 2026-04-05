@@ -23,6 +23,7 @@ export default function PaiePage() {
   const [societe, setSociete] = useState("all")
   const [periode, setPeriode] = useState("")
   const [periodeReady, setPeriodeReady] = useState(false)
+  const [availablePeriodes, setAvailablePeriodes] = useState<string[]>([])
   const [bulletins, setBulletins] = useState<any[]>([])
   const [totaux, setTotaux] = useState<any>({})
   const [loading, setLoading] = useState(false)
@@ -51,14 +52,14 @@ export default function PaiePage() {
         if (firstSociete !== "all") params.set("societe_id", firstSociete)
         const data = await fetch(`/api/rh/paie?${params}`).then(r => r.json())
         const allBulletins = data.bulletins || []
-        if (allBulletins.length > 0) {
-          // bulletins are ordered by periode DESC, so first one is the latest
-          const latestPeriode = (allBulletins[0].periode || "").slice(0, 7)
-          if (latestPeriode) {
-            setPeriode(latestPeriode)
-            setPeriodeReady(true)
-            return
-          }
+        // Collect all unique periods
+        const periods = [...new Set(allBulletins.map((b: any) => (b.periode || "").slice(0, 7)).filter(Boolean))]
+        periods.sort((a: string, b: string) => b.localeCompare(a)) // DESC
+        setAvailablePeriodes(periods)
+        if (periods.length > 0) {
+          setPeriode(periods[0]) // latest period
+          setPeriodeReady(true)
+          return
         }
       } catch {}
       // Fallback to current month if no bulletins found
@@ -226,7 +227,20 @@ export default function PaiePage() {
                 {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Input type="month" value={periode} onChange={e => setPeriode(e.target.value)} className="w-40" />
+            {availablePeriodes.length > 0 ? (
+              <Select value={periode} onValueChange={setPeriode}>
+                <SelectTrigger className="w-52"><SelectValue placeholder="Période" /></SelectTrigger>
+                <SelectContent>
+                  {availablePeriodes.map(p => {
+                    const d = new Date(p + "-15")
+                    const label = d.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
+                    return <SelectItem key={p} value={p}>{label.charAt(0).toUpperCase() + label.slice(1)}</SelectItem>
+                  })}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Input type="month" value={periode} onChange={e => setPeriode(e.target.value)} className="w-40" />
+            )}
           </CardContent>
         </Card>
 
