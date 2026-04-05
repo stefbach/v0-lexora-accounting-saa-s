@@ -208,7 +208,7 @@ function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () => void
     return <Badge style={{ backgroundColor: "#f9731620", color: "#f97316" }}>En attente</Badge>
   }
 
-  const typeLabel: Record<string, string> = { AL: "Congé annuel", SL: "Congé maladie", MAT: "Congé maternité", PAT: "Congé paternité", SANS_SOLDE: "Sans solde" }
+  const typeLabel: Record<string, string> = { AL: "Local Leave", SL: "Sick Leave", MAT: "Maternity Leave", PAT: "Paternity Leave", SANS_SOLDE: "Leave Without Pay" }
   const typeColor: Record<string, string> = { AL: GREEN, SL: "#f97316", MAT: "#8b5cf6", PAT: BLUE, SANS_SOLDE: "#6b7280" }
 
   return (
@@ -220,7 +220,7 @@ function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () => void
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Calendar className="h-5 w-5" style={{ color: GREEN }} />
-                <p className="font-medium text-sm" style={{ color: NAVY }}>Congé annuel (AL)</p>
+                <p className="font-medium text-sm" style={{ color: NAVY }}>Local Leave (AL)</p>
               </div>
               <Badge className="text-xs" style={{ backgroundColor: `${GREEN}20`, color: GREEN }}>{alPct}%</Badge>
             </div>
@@ -233,7 +233,7 @@ function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () => void
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Calendar className="h-5 w-5 text-orange-500" />
-                <p className="font-medium text-sm" style={{ color: NAVY }}>Congé maladie (SL)</p>
+                <p className="font-medium text-sm" style={{ color: NAVY }}>Sick Leave (SL)</p>
               </div>
               <Badge className="text-xs" style={{ backgroundColor: "#f9731620", color: "#f97316" }}>{slPct}%</Badge>
             </div>
@@ -256,11 +256,11 @@ function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () => void
               <Select value={typeConge} onValueChange={setTypeConge}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="AL">Congé annuel</SelectItem>
-                  <SelectItem value="SL">Congé maladie</SelectItem>
-                  <SelectItem value="MAT">Congé maternité</SelectItem>
-                  <SelectItem value="PAT">Congé paternité</SelectItem>
-                  <SelectItem value="SANS_SOLDE">Sans solde</SelectItem>
+                  <SelectItem value="AL">Local Leave</SelectItem>
+                  <SelectItem value="SL">Sick Leave</SelectItem>
+                  <SelectItem value="MAT">Maternity Leave</SelectItem>
+                  <SelectItem value="PAT">Paternity Leave</SelectItem>
+                  <SelectItem value="SANS_SOLDE">Leave Without Pay</SelectItem>
                 </SelectContent>
               </Select>
             </div>

@@ -18,14 +18,14 @@ import {
 
 // ─── Constants ───────────────────────────────────────────────────
 const TYPE_LABELS: Record<string, string> = {
-  AL: "Congé annuel",
-  SL: "Congé maladie",
-  UL: "Sans solde",
-  MAT: "Maternité (14 sem.)",
-  PAT: "Paternité (5j)",
-  CAR: "Soins famille",
-  WI: "Accident travail",
-  COM: "Décès proche",
+  AL: "Local Leave",
+  SL: "Sick Leave",
+  UL: "Leave Without Pay",
+  MAT: "Maternity Leave (14 wks)",
+  PAT: "Paternity Leave (5d)",
+  CAR: "Family Care Leave",
+  WI: "Work Injury Leave",
+  COM: "Bereavement Leave",
   PH: "Jour férié travaillé",
   ABS: "Absence",
 }
