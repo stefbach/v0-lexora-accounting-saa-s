@@ -92,9 +92,9 @@ export async function POST(request: Request) {
       .select(`
         *,
         employe:employes(
-          code, nom, prenom, poste, nic, date_entree, email,
+          code, nom, prenom, poste, nic_number, date_arrivee, email,
           salaire_base, transport_allowance, petrol_allowance,
-          devise_salaire, taux_change_eur, num_compte_banque, banque,
+          devise_salaire, taux_change_eur, bank_account, bank_name,
           societe:societes(nom, brn, adresse, telephone)
         )
       `)
@@ -219,10 +219,10 @@ export async function POST(request: Request) {
       <p><strong>Employé :</strong> ${emp?.prenom || ''} ${emp?.nom || ''}</p>
       <p><strong>Code :</strong> ${emp?.code || '—'}</p>
       <p><strong>Poste :</strong> ${emp?.poste || '—'}</p>
-      <p><strong>NIC :</strong> ${emp?.nic || '—'}</p>
+      <p><strong>NIC :</strong> ${emp?.nic_number || '—'}</p>
       <p><strong>TAN :</strong> ${emp?.tan || '—'}</p>
-      <p><strong>Date d'entrée :</strong> ${emp?.date_entree ? new Date(emp.date_entree).toLocaleDateString('fr-FR') : '—'}</p>
-      <p><strong>Ancienneté :</strong> ${emp?.date_entree ? (() => { const d = new Date(emp.date_entree); const now = periodeDate; let y = now.getFullYear() - d.getFullYear(); let m = now.getMonth() - d.getMonth(); if (m < 0) { y--; m += 12; } return y > 0 ? y + ' an(s) ' + m + ' mois' : m + ' mois'; })() : '—'}</p>
+      <p><strong>Date d'entrée :</strong> ${emp?.date_arrivee ? new Date(emp.date_arrivee).toLocaleDateString('fr-FR') : '—'}</p>
+      <p><strong>Ancienneté :</strong> ${emp?.date_arrivee ? (() => { const d = new Date(emp.date_arrivee); const now = periodeDate; let y = now.getFullYear() - d.getFullYear(); let m = now.getMonth() - d.getMonth(); if (m < 0) { y--; m += 12; } return y > 0 ? y + ' an(s) ' + m + ' mois' : m + ' mois'; })() : '—'}</p>
       <p><strong>CSG Catégorie :</strong> ${Number(bulletin.salaire_brut) > 50000 ? 'Cat. B (3%)' : 'Cat. A (1.5%)'}</p>
       ${emp?.departement ? `<p><strong>Département :</strong> ${emp.departement}</p>` : ''}
       ${emp?.devise_salaire === 'EUR' ? `<p><strong>Devise :</strong> <span class="badge badge-blue">EUR</span> Taux: ${Number(emp.taux_change_eur) || 46.50} MUR</p>` : ''}
@@ -272,7 +272,7 @@ export async function POST(request: Request) {
   <div style="border:3px solid #0B0F2E;border-radius:8px;padding:16px 20px;margin:20px 0;text-align:center;background:linear-gradient(135deg,#0B0F2E08,#D4AF3708);">
     <p style="font-size:13px;font-weight:700;color:#0B0F2E;margin-bottom:4px;">NET À PAYER</p>
     <p style="font-size:24px;font-weight:800;color:#0B0F2E;">${fmt(bulletin.salaire_net)} MUR</p>
-    <p style="font-size:11px;color:#555;margin-top:6px;">Virement ${emp?.banque || ''} — ****${(emp?.num_compte_banque || '').slice(-4)}</p>
+    <p style="font-size:11px;color:#555;margin-top:6px;">Virement ${emp?.bank_name || ''} — ****${(emp?.bank_account || '').slice(-4)}</p>
   </div>
 
   <div style="margin:15px 0;padding:10px;border:1px solid #e0e0e0;border-radius:6px;">
@@ -364,10 +364,10 @@ td{padding:6px 8px;border-bottom:1px solid #eee;font-size:11px}
     <p><strong>Employé :</strong> ${emp.prenom} ${emp.nom}</p>
     <p><strong>Code :</strong> ${emp.code || '—'}</p>
     <p><strong>Poste :</strong> ${emp.poste || '—'}</p>
-    <p><strong>NIC :</strong> ${emp.nic_number || emp.nic || '—'}</p>
+    <p><strong>NIC :</strong> ${emp.nic_number || emp.nic_number || '—'}</p>
     <p><strong>TAN :</strong> ${emp.tan || '—'}</p>
-    <p><strong>Date d'entrée :</strong> ${emp.date_entree ? new Date(emp.date_entree).toLocaleDateString('fr-FR') : '—'}</p>
-    <p><strong>Ancienneté :</strong> ${emp.date_entree ? (() => { const d = new Date(emp.date_entree); const now = periodeDate; let y = now.getFullYear() - d.getFullYear(); let m = now.getMonth() - d.getMonth(); if (m < 0) { y--; m += 12; } return y > 0 ? y + ' an(s) ' + m + ' mois' : m + ' mois'; })() : '—'}</p>
+    <p><strong>Date d'entrée :</strong> ${emp.date_arrivee ? new Date(emp.date_arrivee).toLocaleDateString('fr-FR') : '—'}</p>
+    <p><strong>Ancienneté :</strong> ${emp.date_arrivee ? (() => { const d = new Date(emp.date_arrivee); const now = periodeDate; let y = now.getFullYear() - d.getFullYear(); let m = now.getMonth() - d.getMonth(); if (m < 0) { y--; m += 12; } return y > 0 ? y + ' an(s) ' + m + ' mois' : m + ' mois'; })() : '—'}</p>
     <p><strong>CSG Catégorie :</strong> ${Number(bulletin.salaire_brut) > 50000 ? 'Cat. B (3%)' : 'Cat. A (1.5%)'}</p>
     ${emp.departement ? `<p><strong>Département :</strong> ${emp.departement}</p>` : ''}
   </div>
@@ -391,7 +391,7 @@ ${bulletin.montant_absence > 0 ? `<tr><td>Déduction absence</td><td class="righ
 <div style="border:3px solid #0B0F2E;border-radius:8px;padding:16px 20px;margin:20px 0;text-align:center;background:linear-gradient(135deg,#0B0F2E08,#D4AF3708);">
   <p style="font-size:13px;font-weight:700;color:#0B0F2E;margin-bottom:4px;">NET À PAYER</p>
   <p style="font-size:24px;font-weight:800;color:#0B0F2E;">${fmt(bulletin.salaire_net)} MUR</p>
-  <p style="font-size:11px;color:#555;margin-top:6px;">Virement ${emp.bank_name || emp.banque || ''} — ****${(emp.bank_account || emp.num_compte_banque || '').slice(-4)}</p>
+  <p style="font-size:11px;color:#555;margin-top:6px;">Virement ${emp.bank_name || emp.bank_name || ''} — ****${(emp.bank_account || emp.bank_account || '').slice(-4)}</p>
 </div>
 
 <div style="margin:15px 0;padding:10px;border:1px solid #e0e0e0;border-radius:6px;">

@@ -95,20 +95,29 @@ export async function GET(request: Request) {
     }
 
     const enriched = (data || []).map(b => {
-      // Auto-calculate missing fields from available data
-      let salaire_brut = Number(b.salaire_brut) || 0
+      // Auto-calculate missing/incorrect fields from available data
       const salaire_net = Number(b.salaire_net) || 0
       const total_deductions = Number(b.total_deductions) || (Number(b.csg_salarie || 0) + Number(b.nsf_salarie || 0) + Number(b.paye || 0) + Number(b.montant_absence || 0))
+      const salaire_base = Number(b.salaire_base) || 0
+      const ot = Number(b.heures_sup_montant) || 0
 
-      // Brut = net + deductions (most reliable when brut is missing)
-      if (!salaire_brut && salaire_net > 0) {
+      // Brut = net + deductions (most reliable). Recalculate if:
+      // - brut is 0/null
+      // - brut < net (impossible, means brut was set to salaire_base only)
+      // - brut == salaire_base (means primes/OT were not added)
+      let salaire_brut = Number(b.salaire_brut) || 0
+      if (salaire_net > 0 && (salaire_brut === 0 || salaire_brut < salaire_net || salaire_brut === salaire_base)) {
         salaire_brut = salaire_net + total_deductions
       }
 
-      // Primes = brut - base - OT - transport - petrol
+      // Primes = brut - base - OT - transport - petrol (everything else is primes/allowances)
       let special_allowance_1 = Number(b.special_allowance_1) || 0
-      if (special_allowance_1 === 0 && salaire_brut > 0) {
-        special_allowance_1 = Math.max(salaire_brut - Number(b.salaire_base || 0) - Number(b.heures_sup_montant || 0) - Number(b.transport_allowance || 0) - Number(b.petrol_allowance || 0) - Number(b.increment_salaire || 0) - Number(b.eoy_bonus || 0), 0)
+      if (salaire_brut > 0) {
+        const computedPrimes = Math.max(salaire_brut - salaire_base - ot - Number(b.transport_allowance || 0) - Number(b.petrol_allowance || 0) - Number(b.increment_salaire || 0) - Number(b.eoy_bonus || 0), 0)
+        // Use computed primes if they're bigger than stored (stored may be partial)
+        if (computedPrimes > special_allowance_1) {
+          special_allowance_1 = computedPrimes
+        }
       }
 
       const total_charges = Number(b.total_charges_patronales) || (Number(b.csg_patronal || 0) + Number(b.nsf_patronal || 0) + Number(b.training_levy || 0) + Number(b.prgf || 0))
