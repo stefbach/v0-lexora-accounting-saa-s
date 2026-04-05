@@ -42,6 +42,8 @@ function MaFicheTab({ employe, onUpdated }: { employe: any; onUpdated: () => voi
   const [saved, setSaved] = useState(false)
   const u = (k: string, v: any) => setF((p: any) => ({ ...p, [k]: v }))
 
+  const initials = [employe.prenom, employe.nom].filter(Boolean).map((n: string) => n[0]).join("").toUpperCase() || "?"
+
   const handleSave = async () => {
     setSaving(true); setSaved(false)
     try {
@@ -56,80 +58,134 @@ function MaFicheTab({ employe, onUpdated }: { employe: any; onUpdated: () => voi
       })
       const data = await res.json()
       if (data.error) alert("Erreur: " + data.error)
-      else { setSaved(true); setTimeout(() => setSaved(false), 3000); onUpdated() }
+      else { setSaved(true); setTimeout(() => setSaved(false), 4000); onUpdated() }
     } catch { alert("Erreur réseau") }
     setSaving(false)
   }
 
+  const inputCls = "h-11 rounded-xl"
+
   return (
     <div className="space-y-6">
-      {saved && <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700"><CheckCircle className="h-4 w-4" /> Informations mises à jour</div>}
+      {/* Success banner */}
+      {saved && (
+        <div className="flex items-center gap-3 p-4 rounded-2xl text-sm font-medium text-white shadow-sm" style={{ backgroundColor: GREEN }}>
+          <CheckCircle className="h-5 w-5 shrink-0" />
+          Informations mises à jour avec succès
+        </div>
+      )}
 
-      {/* Infos modifiables */}
-      <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-base" style={{ color: NAVY }}>Mes coordonnées</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>Email</Label><Input type="email" value={f.email || ""} onChange={e => u("email", e.target.value)} /></div>
-          <div><Label>Mobile</Label><Input value={f.mobile || ""} onChange={e => u("mobile", e.target.value)} placeholder="+230 5XXX XXXX" /></div>
-          <div><Label>Téléphone</Label><Input value={f.telephone || ""} onChange={e => u("telephone", e.target.value)} /></div>
-          <div><Label>Adresse</Label><Input value={f.adresse || ""} onChange={e => u("adresse", e.target.value)} /></div>
-          <div><Label>Adresse 2</Label><Input value={f.adresse2 || ""} onChange={e => u("adresse2", e.target.value)} /></div>
-          <div><Label>Ville</Label><Input value={f.ville || ""} onChange={e => u("ville", e.target.value)} /></div>
-          <div><Label>Code postal</Label><Input value={f.code_postal || ""} onChange={e => u("code_postal", e.target.value)} /></div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-base" style={{ color: NAVY }}>Informations personnelles</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>Date de naissance</Label><Input type="date" value={f.date_naissance?.split("T")[0] || ""} onChange={e => u("date_naissance", e.target.value)} /></div>
-          <div><Label>Genre</Label>
-            <Select value={f.genre || ""} onValueChange={v => u("genre", v)}>
-              <SelectTrigger><SelectValue placeholder="Choisir" /></SelectTrigger>
-              <SelectContent><SelectItem value="M">Homme</SelectItem><SelectItem value="F">Femme</SelectItem></SelectContent>
-            </Select>
+      {/* Header card with avatar */}
+      <Card className="rounded-2xl shadow-sm overflow-hidden">
+        <CardContent className="flex flex-col items-center py-8 gap-3">
+          <div className="rounded-full p-1" style={{ background: `linear-gradient(135deg, ${GOLD}, ${GOLD}88)` }}>
+            <Avatar className="w-20 h-20 border-2 border-white">
+              {employe.photo_url && <AvatarImage src={employe.photo_url} alt={employe.prenom} />}
+              <AvatarFallback className="text-2xl font-bold text-white" style={{ backgroundColor: NAVY }}>{initials}</AvatarFallback>
+            </Avatar>
           </div>
-          <div><Label>Statut marital</Label>
-            <Select value={f.statut_marital || "single"} onValueChange={v => u("statut_marital", v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="single">Célibataire</SelectItem>
-                <SelectItem value="married">Marié(e)</SelectItem>
-                <SelectItem value="divorced">Divorcé(e)</SelectItem>
-                <SelectItem value="widowed">Veuf/Veuve</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="text-center space-y-1">
+            <h2 className="text-xl font-bold" style={{ color: NAVY }}>{[employe.prenom, employe.nom].filter(Boolean).join(" ") || "Mon profil"}</h2>
+            <p className="text-sm text-gray-500">{employe.poste || "Employé"}</p>
+            <Badge variant="outline" className="text-xs font-mono" style={{ borderColor: GOLD, color: GOLD }}>{employe.code_employe || employe.code || "—"}</Badge>
           </div>
-          <div><Label>Nationalité</Label><Input value={f.nationalite || ""} onChange={e => u("nationalite", e.target.value)} /></div>
+          <p className="text-xs text-gray-400 mt-1">Modifier mes infos</p>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-base" style={{ color: NAVY }}>Coordonnées bancaires</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>Banque</Label><Input value={f.bank_name || ""} onChange={e => u("bank_name", e.target.value)} /></div>
-          <div><Label>N° compte</Label><Input value={f.bank_account || ""} onChange={e => u("bank_account", e.target.value)} /></div>
-          <div className="md:col-span-2"><Label>IBAN</Label><Input value={f.iban || ""} onChange={e => u("iban", e.target.value)} /></div>
-        </CardContent>
+      {/* Section: Coordonnées */}
+      <Card className="rounded-2xl shadow-sm">
+        <div className="flex rounded-2xl overflow-hidden">
+          <div className="w-1.5 shrink-0" style={{ backgroundColor: BLUE }} />
+          <div className="flex-1 p-5 space-y-4">
+            <p className="text-sm font-semibold uppercase tracking-wide text-gray-400">Coordonnées</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5"><Label className="text-xs font-medium text-gray-500">Email</Label><Input type="email" className={inputCls} value={f.email || ""} onChange={e => u("email", e.target.value)} /></div>
+              <div className="space-y-1.5"><Label className="text-xs font-medium text-gray-500">Mobile</Label><Input className={inputCls} value={f.mobile || ""} onChange={e => u("mobile", e.target.value)} placeholder="+230 5XXX XXXX" /></div>
+              <div className="space-y-1.5"><Label className="text-xs font-medium text-gray-500">Téléphone</Label><Input className={inputCls} value={f.telephone || ""} onChange={e => u("telephone", e.target.value)} /></div>
+            </div>
+          </div>
+        </div>
       </Card>
 
-      <Button onClick={handleSave} disabled={saving} style={{ backgroundColor: NAVY }} className="text-white">
+      {/* Section: Adresse */}
+      <Card className="rounded-2xl shadow-sm">
+        <div className="flex rounded-2xl overflow-hidden">
+          <div className="w-1.5 shrink-0" style={{ backgroundColor: GREEN }} />
+          <div className="flex-1 p-5 space-y-4">
+            <p className="text-sm font-semibold uppercase tracking-wide text-gray-400">Adresse</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5"><Label className="text-xs font-medium text-gray-500">Adresse</Label><Input className={inputCls} value={f.adresse || ""} onChange={e => u("adresse", e.target.value)} /></div>
+              <div className="space-y-1.5"><Label className="text-xs font-medium text-gray-500">Adresse 2</Label><Input className={inputCls} value={f.adresse2 || ""} onChange={e => u("adresse2", e.target.value)} /></div>
+              <div className="space-y-1.5"><Label className="text-xs font-medium text-gray-500">Ville</Label><Input className={inputCls} value={f.ville || ""} onChange={e => u("ville", e.target.value)} /></div>
+              <div className="space-y-1.5"><Label className="text-xs font-medium text-gray-500">Code postal</Label><Input className={inputCls} value={f.code_postal || ""} onChange={e => u("code_postal", e.target.value)} /></div>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Section: Banque */}
+      <Card className="rounded-2xl shadow-sm">
+        <div className="flex rounded-2xl overflow-hidden">
+          <div className="w-1.5 shrink-0" style={{ backgroundColor: GOLD }} />
+          <div className="flex-1 p-5 space-y-4">
+            <p className="text-sm font-semibold uppercase tracking-wide text-gray-400">Banque</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5"><Label className="text-xs font-medium text-gray-500">Banque</Label><Input className={inputCls} value={f.bank_name || ""} onChange={e => u("bank_name", e.target.value)} /></div>
+              <div className="space-y-1.5"><Label className="text-xs font-medium text-gray-500">N° compte</Label><Input className={inputCls} value={f.bank_account || ""} onChange={e => u("bank_account", e.target.value)} /></div>
+              <div className="md:col-span-2 space-y-1.5"><Label className="text-xs font-medium text-gray-500">IBAN</Label><Input className={inputCls} value={f.iban || ""} onChange={e => u("iban", e.target.value)} /></div>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Section: Infos personnelles */}
+      <Card className="rounded-2xl shadow-sm">
+        <div className="flex rounded-2xl overflow-hidden">
+          <div className="w-1.5 shrink-0" style={{ backgroundColor: "#A855F7" }} />
+          <div className="flex-1 p-5 space-y-4">
+            <p className="text-sm font-semibold uppercase tracking-wide text-gray-400">Infos personnelles</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5"><Label className="text-xs font-medium text-gray-500">Date de naissance</Label><Input type="date" className={inputCls} value={f.date_naissance?.split("T")[0] || ""} onChange={e => u("date_naissance", e.target.value)} /></div>
+              <div className="space-y-1.5"><Label className="text-xs font-medium text-gray-500">Genre</Label>
+                <Select value={f.genre || ""} onValueChange={v => u("genre", v)}>
+                  <SelectTrigger className={inputCls}><SelectValue placeholder="Choisir" /></SelectTrigger>
+                  <SelectContent><SelectItem value="M">Homme</SelectItem><SelectItem value="F">Femme</SelectItem></SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5"><Label className="text-xs font-medium text-gray-500">Nationalité</Label><Input className={inputCls} value={f.nationalite || ""} onChange={e => u("nationalite", e.target.value)} /></div>
+              <div className="space-y-1.5"><Label className="text-xs font-medium text-gray-500">Statut marital</Label>
+                <Select value={f.statut_marital || "single"} onValueChange={v => u("statut_marital", v)}>
+                  <SelectTrigger className={inputCls}><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="single">Célibataire</SelectItem>
+                    <SelectItem value="married">Marié(e)</SelectItem>
+                    <SelectItem value="divorced">Divorcé(e)</SelectItem>
+                    <SelectItem value="widowed">Veuf/Veuve</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Save button */}
+      <Button onClick={handleSave} disabled={saving} className="w-full md:w-auto rounded-xl h-11 text-white font-semibold px-8" style={{ backgroundColor: GOLD }}>
         {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
         Enregistrer mes modifications
       </Button>
 
-      {/* Infos lecture seule */}
-      <Card className="opacity-75">
-        <CardHeader className="pb-2"><CardTitle className="text-base text-gray-500">Mon emploi (lecture seule)</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label className="text-gray-400">Code employé</Label><p className="text-sm font-mono bg-gray-50 p-2 rounded">{employe.code_employe || employe.code || "—"}</p></div>
-          <div><Label className="text-gray-400">Poste</Label><p className="text-sm bg-gray-50 p-2 rounded">{employe.poste || "—"}</p></div>
-          <div><Label className="text-gray-400">Département</Label><p className="text-sm bg-gray-50 p-2 rounded">{employe.departement || "—"}</p></div>
-          <div><Label className="text-gray-400">Type contrat</Label><p className="text-sm bg-gray-50 p-2 rounded">{employe.contrat_type || "Fulltime"}</p></div>
-          <div><Label className="text-gray-400">Date d'arrivée</Label><p className="text-sm bg-gray-50 p-2 rounded">{employe.date_arrivee ? new Date(employe.date_arrivee).toLocaleDateString("fr-FR") : "—"}</p></div>
-          <div><Label className="text-gray-400">NIC</Label><p className="text-sm font-mono bg-gray-50 p-2 rounded">{employe.nic_number || "—"}</p></div>
-          <div><Label className="text-gray-400">Salaire de base</Label><p className="text-sm font-mono bg-gray-50 p-2 rounded">{employe.salaire_base ? `${Number(employe.salaire_base).toLocaleString("fr-FR")} MUR` : "—"}</p></div>
-          <div><Label className="text-gray-400">Devise</Label><p className="text-sm bg-gray-50 p-2 rounded">{employe.devise_salaire || "MUR"}</p></div>
+      {/* Read-only info card */}
+      <Card className="rounded-2xl shadow-sm bg-gray-50/80 border-dashed">
+        <CardContent className="p-5 space-y-4">
+          <p className="text-sm font-semibold uppercase tracking-wide text-gray-400">Mon emploi (lecture seule)</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1"><Label className="text-xs text-gray-400">Code employé</Label><p className="text-sm font-mono bg-gray-100 text-gray-500 p-2.5 rounded-xl">{employe.code_employe || employe.code || "—"}</p></div>
+            <div className="space-y-1"><Label className="text-xs text-gray-400">Date d&apos;arrivée</Label><p className="text-sm bg-gray-100 text-gray-500 p-2.5 rounded-xl">{employe.date_arrivee ? new Date(employe.date_arrivee).toLocaleDateString("fr-FR") : "—"}</p></div>
+            <div className="space-y-1"><Label className="text-xs text-gray-400">Poste</Label><p className="text-sm bg-gray-100 text-gray-500 p-2.5 rounded-xl">{employe.poste || "—"}</p></div>
+            <div className="space-y-1"><Label className="text-xs text-gray-400">Département</Label><p className="text-sm bg-gray-100 text-gray-500 p-2.5 rounded-xl">{employe.departement || "—"}</p></div>
+          </div>
         </CardContent>
       </Card>
     </div>
@@ -491,6 +547,7 @@ export default function EspaceEmployePage() {
   const [primes, setPrimes] = useState<any[]>([])
   const [conges, setConges] = useState<any>({ al_solde: 20, sl_solde: 15 })
   const [planning, setPlanning] = useState<any[]>([])
+  const [annonces, setAnnonces] = useState<any[]>([])
   const [now, setNow] = useState(new Date())
   const [punching, setPunching] = useState(false)
   const [feedback, setFeedback] = useState("")
@@ -521,6 +578,9 @@ export default function EspaceEmployePage() {
         if (cgRes.balances?.[0]) setConges(cgRes.balances[0])
         // Filter planning to show only this employee's entries
         setPlanning((plRes.planning || []).filter((p: any) => p.employe_id === emp.id))
+
+        // Fetch announcements
+        fetch("/api/rh/annonces").then(r => r.json()).then(d => setAnnonces(d.annonces || [])).catch(() => {})
       }
     } catch {}
     setLoading(false)
@@ -729,6 +789,36 @@ export default function EspaceEmployePage() {
                   </CardContent>
                 </Card>
               </div>
+
+              {/* Annonces / Communications */}
+              {annonces.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 px-1">Communications</p>
+                  {annonces.slice(0, 3).map((a: any) => {
+                    const typeStyles: Record<string, { bg: string; border: string; icon: string; text: string }> = {
+                      urgent: { bg: "#dc262608", border: "#dc2626", icon: "🚨", text: "#dc2626" },
+                      rh: { bg: `${BLUE}08`, border: BLUE, icon: "📋", text: BLUE },
+                      celebration: { bg: `${GOLD}08`, border: GOLD, icon: "🎉", text: GOLD },
+                      rappel: { bg: "#ea580c08", border: "#ea580c", icon: "⏰", text: "#ea580c" },
+                      info: { bg: "#05966908", border: "#059669", icon: "ℹ️", text: "#059669" },
+                    }
+                    const s = typeStyles[a.type] || typeStyles.info
+                    return (
+                      <div key={a.id} className="p-4 rounded-2xl transition-all duration-200" style={{ backgroundColor: s.bg, borderLeft: `4px solid ${s.border}` }}>
+                        <div className="flex items-start gap-3">
+                          <span className="text-lg flex-shrink-0">{s.icon}</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold" style={{ color: s.text }}>{a.titre}</p>
+                            <p className="text-xs text-gray-500 mt-1 line-clamp-2">{a.contenu}</p>
+                            <p className="text-[10px] text-gray-400 mt-1.5">{new Date(a.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}</p>
+                          </div>
+                          {a.priorite >= 2 && <Badge className="bg-red-100 text-red-700 text-[10px] flex-shrink-0">Urgent</Badge>}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
 
               {/* Quick actions grid */}
               <div className="grid grid-cols-2 gap-3">

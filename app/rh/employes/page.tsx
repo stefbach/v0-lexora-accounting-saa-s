@@ -9,53 +9,177 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Search, Plus, Loader2, Users, Upload, Download, FileSpreadsheet, Pencil, ExternalLink, UserPlus, Key } from "lucide-react"
+import { Search, Plus, Loader2, Users, Upload, Download, FileSpreadsheet, Pencil, ExternalLink, UserPlus, Key, User, Briefcase, Banknote, Building2 } from "lucide-react"
 import { BANQUES_MAURITIUS } from "@/lib/rh/banques-mauritius"
 
-// ── Composant formulaire création (state isolé = pas de re-render parent) ──
+/* ── Section card for grouped form fields ── */
+function FormSection({ icon, title, color, children }: { icon: React.ReactNode; title: string; color: string; children: React.ReactNode }) {
+  return (
+    <Card className={`rounded-2xl shadow-sm border-l-4 overflow-hidden`} style={{ borderLeftColor: color }}>
+      <CardHeader className="pb-3 pt-4 px-4 sm:px-5">
+        <CardTitle className="text-sm font-semibold flex items-center gap-2 text-[#0B0F2E]" style={{ fontFamily: "Poppins, sans-serif" }}>
+          {icon}
+          {title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="px-4 sm:px-5 pb-4 pt-0">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {children}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+/* ── Styled form field ── */
+function FormField({ label, required, children, className }: { label: string; required?: boolean; children: React.ReactNode; className?: string }) {
+  return (
+    <div className={className}>
+      <Label className="text-xs font-medium text-gray-600 mb-1 block">
+        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+      </Label>
+      {children}
+    </div>
+  )
+}
+
+const inputClass = "h-11 rounded-xl"
+const selectTriggerClass = "h-11 rounded-xl"
+
+// ── Composant formulaire creation (state isole = pas de re-render parent) ──
 function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; onCreated: () => void; onClose: () => void }) {
-  const [form, setForm] = useState({ societe_id:"",nom:"",prenom:"",poste:"",email:"",telephone:"",salaire_base:"",transport_allowance:"0",petrol_allowance:"0",date_arrivee:"",role:"salarie",csg_categorie:"A",bank_account:"",bank_name:"",nic:"",tan:"",iban:"" })
+  const [form, setForm] = useState({ societe_id:"",nom:"",prenom:"",poste:"",email:"",telephone:"",salaire_base:"",transport_allowance:"0",petrol_allowance:"0",date_arrivee:"",role:"salarie",csg_categorie:"A",bank_account:"",bank_name:"",nic:"",tan:"",iban:"",genre:"",date_naissance:"",departement:"",type_contrat:"CDI",devise_salaire:"MUR" })
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string|null>(null)
+  const [errors, setErrors] = useState<Record<string, string>>({})
   const u = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
 
+  const validate = () => {
+    const errs: Record<string, string> = {}
+    if (!form.societe_id) errs.societe_id = "Societe requise"
+    if (!form.nom) errs.nom = "Nom requis"
+    if (!form.prenom) errs.prenom = "Prenom requis"
+    if (!form.salaire_base) errs.salaire_base = "Salaire requis"
+    if (!form.date_arrivee) errs.date_arrivee = "Date requise"
+    setErrors(errs)
+    return Object.keys(errs).length === 0
+  }
+
   const handleCreate = async () => {
-    if (!form.societe_id || !form.nom || !form.prenom || !form.salaire_base || !form.date_arrivee) { setError("Champs requis manquants"); return }
-    setSaving(true); setError(null)
+    if (!validate()) return
+    setSaving(true); setErrors({})
     try {
       const res = await fetch("/api/rh/employes", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ ...form, salaire_base: parseFloat(form.salaire_base), transport_allowance: parseFloat(form.transport_allowance)||0, petrol_allowance: parseFloat(form.petrol_allowance)||0 }) })
       if (!res.ok) { const d = await res.json(); throw new Error(d.error) }
       onClose(); onCreated()
-    } catch (e: unknown) { setError(e instanceof Error ? e.message : "Erreur") }
+    } catch (e: unknown) { setErrors({ _global: e instanceof Error ? e.message : "Erreur" }) }
     finally { setSaving(false) }
   }
 
+  const fieldErr = (k: string) => errors[k] ? <p className="text-xs text-red-500 mt-0.5">{errors[k]}</p> : null
+
   return (
-    <div className="space-y-3 py-2">
-      {error && <p className="text-sm text-red-600 bg-red-50 p-2 rounded">{error}</p>}
-      <div className="grid grid-cols-2 gap-3">
-        <div><Label>Société *</Label><Select value={form.societe_id} onValueChange={v=>u("societe_id",v)}><SelectTrigger><SelectValue placeholder="Choisir..."/></SelectTrigger><SelectContent>{societes.map(s=><SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent></Select></div>
-        <div><Label>Rôle</Label><Select value={form.role} onValueChange={v=>u("role",v)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{["salarie","manager","rh","admin","direction"].map(r=><SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent></Select></div>
-        <div><Label>Nom *</Label><Input value={form.nom} onChange={e=>u("nom",e.target.value)} placeholder="DUPONT"/></div>
-        <div><Label>Prénom *</Label><Input value={form.prenom} onChange={e=>u("prenom",e.target.value)} placeholder="Jean"/></div>
-        <div><Label>Poste</Label><Input value={form.poste} onChange={e=>u("poste",e.target.value)} placeholder="Comptable"/></div>
-        <div><Label>Email</Label><Input type="email" value={form.email} onChange={e=>u("email",e.target.value)} placeholder="jean@example.com"/></div>
-        <div><Label>Téléphone</Label><Input value={form.telephone} onChange={e=>u("telephone",e.target.value)} placeholder="+230 5123 4567"/></div>
-        <div><Label>Salaire base *</Label><Input type="number" value={form.salaire_base} onChange={e=>u("salaire_base",e.target.value)} placeholder="35000"/></div>
-        <div><Label>Transport</Label><Input type="number" value={form.transport_allowance} onChange={e=>u("transport_allowance",e.target.value)}/></div>
-        <div><Label>Petrol</Label><Input type="number" value={form.petrol_allowance} onChange={e=>u("petrol_allowance",e.target.value)}/></div>
-        <div><Label>Date arrivée *</Label><Input type="date" value={form.date_arrivee} onChange={e=>u("date_arrivee",e.target.value)}/></div>
-        <div><Label>Catégorie CSG</Label><Select value={form.csg_categorie} onValueChange={v=>u("csg_categorie",v)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="A">A</SelectItem><SelectItem value="B">B</SelectItem></SelectContent></Select></div>
-        <div><Label>NIC</Label><Input value={form.nic} onChange={e=>u("nic",e.target.value)} placeholder="A1234567890123"/></div>
-        <div><Label>TAN</Label><Input value={form.tan} onChange={e=>u("tan",e.target.value)} placeholder="A123456789"/></div>
-        <div><Label>Banque</Label><Select value={form.bank_name} onValueChange={v=>u("bank_name",v)}><SelectTrigger><SelectValue placeholder="Choisir..."/></SelectTrigger><SelectContent>{BANQUES_MAURITIUS.map(b=><SelectItem key={b.code} value={b.code}>{b.nom}</SelectItem>)}</SelectContent></Select></div>
-        <div><Label>N° compte</Label><Input value={form.bank_account} onChange={e=>u("bank_account",e.target.value)} placeholder="000012345678"/></div>
-        <div><Label>IBAN</Label><Input value={form.iban} onChange={e=>u("iban",e.target.value)} placeholder="MU17BOMM..."/></div>
+    <div className="space-y-4 py-2">
+      {errors._global && <div className="text-sm text-red-600 bg-red-50 border border-red-200 p-3 rounded-xl">{errors._global}</div>}
+
+      {/* Societe & Role */}
+      <FormSection icon={<Building2 className="w-4 h-4 text-[#4191FF]" />} title="Organisation" color="#4191FF">
+        <FormField label="Societe" required>
+          <Select value={form.societe_id} onValueChange={v=>u("societe_id",v)}><SelectTrigger className={selectTriggerClass}><SelectValue placeholder="Choisir la societe..."/></SelectTrigger><SelectContent>{societes.map(s=><SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent></Select>
+          {fieldErr("societe_id")}
+        </FormField>
+        <FormField label="Role">
+          <Select value={form.role} onValueChange={v=>u("role",v)}><SelectTrigger className={selectTriggerClass}><SelectValue/></SelectTrigger><SelectContent>{["salarie","manager","rh","admin","direction"].map(r=><SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent></Select>
+        </FormField>
+      </FormSection>
+
+      {/* Identite */}
+      <FormSection icon={<User className="w-4 h-4 text-[#4191FF]" />} title="Identite" color="#4191FF">
+        <FormField label="Nom" required>
+          <Input className={inputClass} value={form.nom} onChange={e=>u("nom",e.target.value)} placeholder="DUPONT"/>
+          {fieldErr("nom")}
+        </FormField>
+        <FormField label="Prenom" required>
+          <Input className={inputClass} value={form.prenom} onChange={e=>u("prenom",e.target.value)} placeholder="Jean"/>
+          {fieldErr("prenom")}
+        </FormField>
+        <FormField label="Email">
+          <Input className={inputClass} type="email" value={form.email} onChange={e=>u("email",e.target.value)} placeholder="jean@example.com"/>
+        </FormField>
+        <FormField label="Telephone">
+          <Input className={inputClass} value={form.telephone} onChange={e=>u("telephone",e.target.value)} placeholder="+230 5123 4567"/>
+        </FormField>
+        <FormField label="Genre">
+          <Select value={form.genre} onValueChange={v=>u("genre",v)}><SelectTrigger className={selectTriggerClass}><SelectValue placeholder="Choisir..."/></SelectTrigger><SelectContent><SelectItem value="M">Masculin</SelectItem><SelectItem value="F">Feminin</SelectItem></SelectContent></Select>
+        </FormField>
+        <FormField label="Date de naissance">
+          <Input className={inputClass} type="date" value={form.date_naissance} onChange={e=>u("date_naissance",e.target.value)}/>
+        </FormField>
+        <FormField label="NIC">
+          <Input className={inputClass} value={form.nic} onChange={e=>u("nic",e.target.value)} placeholder="A1234567890123"/>
+        </FormField>
+        <FormField label="TAN">
+          <Input className={inputClass} value={form.tan} onChange={e=>u("tan",e.target.value)} placeholder="A123456789"/>
+        </FormField>
+      </FormSection>
+
+      {/* Emploi */}
+      <FormSection icon={<Briefcase className="w-4 h-4 text-[#D4AF37]" />} title="Emploi" color="#D4AF37">
+        <FormField label="Poste">
+          <Input className={inputClass} value={form.poste} onChange={e=>u("poste",e.target.value)} placeholder="Comptable"/>
+        </FormField>
+        <FormField label="Departement">
+          <Input className={inputClass} value={form.departement} onChange={e=>u("departement",e.target.value)} placeholder="Finance"/>
+        </FormField>
+        <FormField label="Date d'arrivee" required>
+          <Input className={inputClass} type="date" value={form.date_arrivee} onChange={e=>u("date_arrivee",e.target.value)}/>
+          {fieldErr("date_arrivee")}
+        </FormField>
+        <FormField label="Type de contrat">
+          <Select value={form.type_contrat} onValueChange={v=>u("type_contrat",v)}><SelectTrigger className={selectTriggerClass}><SelectValue/></SelectTrigger><SelectContent><SelectItem value="CDI">CDI</SelectItem><SelectItem value="CDD">CDD</SelectItem><SelectItem value="Interim">Interim</SelectItem></SelectContent></Select>
+        </FormField>
+        <FormField label="Categorie CSG">
+          <Select value={form.csg_categorie} onValueChange={v=>u("csg_categorie",v)}><SelectTrigger className={selectTriggerClass}><SelectValue/></SelectTrigger><SelectContent><SelectItem value="A">A</SelectItem><SelectItem value="B">B</SelectItem></SelectContent></Select>
+        </FormField>
+      </FormSection>
+
+      {/* Salaire */}
+      <FormSection icon={<Banknote className="w-4 h-4 text-green-600" />} title="Salaire" color="#22c55e">
+        <FormField label="Salaire de base" required>
+          <Input className={inputClass} type="number" value={form.salaire_base} onChange={e=>u("salaire_base",e.target.value)} placeholder="35 000"/>
+          {fieldErr("salaire_base")}
+        </FormField>
+        <FormField label="Devise">
+          <Select value={form.devise_salaire} onValueChange={v=>u("devise_salaire",v)}><SelectTrigger className={selectTriggerClass}><SelectValue/></SelectTrigger><SelectContent>{["MUR","EUR","USD","GBP"].map(d=><SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select>
+        </FormField>
+        <FormField label="Transport">
+          <Input className={inputClass} type="number" value={form.transport_allowance} onChange={e=>u("transport_allowance",e.target.value)} placeholder="0"/>
+        </FormField>
+        <FormField label="Petrol">
+          <Input className={inputClass} type="number" value={form.petrol_allowance} onChange={e=>u("petrol_allowance",e.target.value)} placeholder="0"/>
+        </FormField>
+      </FormSection>
+
+      {/* Banque */}
+      <FormSection icon={<Building2 className="w-4 h-4 text-purple-600" />} title="Banque" color="#9333ea">
+        <FormField label="Banque">
+          <Select value={form.bank_name} onValueChange={v=>u("bank_name",v)}><SelectTrigger className={selectTriggerClass}><SelectValue placeholder="Choisir..."/></SelectTrigger><SelectContent>{BANQUES_MAURITIUS.map(b=><SelectItem key={b.code} value={b.code}>{b.nom}</SelectItem>)}</SelectContent></Select>
+        </FormField>
+        <FormField label="N. compte">
+          <Input className={inputClass} value={form.bank_account} onChange={e=>u("bank_account",e.target.value)} placeholder="000012345678"/>
+        </FormField>
+        <FormField label="IBAN" className="sm:col-span-2">
+          <Input className={inputClass} value={form.iban} onChange={e=>u("iban",e.target.value)} placeholder="MU17BOMM..."/>
+        </FormField>
+      </FormSection>
+
+      {/* Actions */}
+      <div className="flex flex-col sm:flex-row gap-2 pt-2">
+        <Button variant="outline" onClick={onClose} className="sm:flex-1 h-11 rounded-xl">Annuler</Button>
+        <Button onClick={handleCreate} disabled={saving} className="sm:flex-[2] h-11 rounded-xl bg-[#D4AF37] hover:bg-[#c9a432] text-white font-semibold shadow-md" style={{ fontFamily: "Poppins, sans-serif" }}>
+          {saving && <Loader2 className="w-4 h-4 animate-spin mr-2"/>}
+          Creer l'employe
+        </Button>
       </div>
-      <DialogFooter>
-        <Button variant="outline" onClick={onClose}>Annuler</Button>
-        <Button onClick={handleCreate} disabled={saving} className="bg-[#0B0F2E] text-white">{saving&&<Loader2 className="w-4 h-4 animate-spin mr-2"/>}Créer</Button>
-      </DialogFooter>
     </div>
   )
 }
@@ -222,15 +346,26 @@ export default function EmployesPage() {
     URL.revokeObjectURL(url)
   }
 
-  const filtered = employes.filter(e => !search || `${e.nom} ${e.prenom} ${e.poste||""}`.toLowerCase().includes(search.toLowerCase()))
+  const filtered = employes.filter(e => !search || `${e.nom} ${e.prenom} ${e.poste||""} ${e.departement||""}`.toLowerCase().includes(search.toLowerCase()))
+
+  const getInitials = (e: any) => `${(e.prenom||"")[0]||""}${(e.nom||"")[0]||""}`.toUpperCase()
+  const getStatusBadge = (e: any) => {
+    if (e.date_depart) return <Badge className="bg-red-100 text-red-700 border-red-200 text-xs font-medium">Sorti</Badge>
+    if (e.statut === "essai" || e.type_contrat === "CDD") return <Badge className="bg-purple-100 text-purple-700 border-purple-200 text-xs font-medium">Periode essai</Badge>
+    return <Badge className="bg-green-100 text-green-700 border-green-200 text-xs font-medium">Actif</Badge>
+  }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div><h1 className="text-2xl font-bold text-[#0B0F2E]">Employés</h1><p className="text-sm text-gray-500">{employes.length} employé(s) {filterStatut === "sortis" ? "sorti(s)" : filterStatut === "tous" ? "au total" : "actif(s)"}</p></div>
-        <div className="flex gap-2">
+    <div className="p-4 sm:p-6 space-y-5">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-[#0B0F2E]" style={{ fontFamily: "Poppins, sans-serif" }}>Employes</h1>
+          <p className="text-sm text-gray-500">{employes.length} employe(s) {filterStatut === "sortis" ? "sorti(s)" : filterStatut === "tous" ? "au total" : "actif(s)"}</p>
+        </div>
+        <div className="flex gap-2 flex-wrap">
         <Dialog open={importOpen} onOpenChange={(v) => { setImportOpen(v); if(!v){ setImportFile(null); setImportResult(null); setImportError(null) } }}>
-          <DialogTrigger asChild><Button variant="outline" className="border-[#0B0F2E] text-[#0B0F2E]"><Upload className="w-4 h-4 mr-2"/>Importer CSV</Button></DialogTrigger>
+          <DialogTrigger asChild><Button variant="outline" className="border-[#0B0F2E] text-[#0B0F2E] rounded-xl h-10"><Upload className="w-4 h-4 mr-2"/>Importer CSV</Button></DialogTrigger>
           <DialogContent className="max-w-lg">
             <DialogHeader><DialogTitle className="flex items-center gap-2"><FileSpreadsheet className="w-5 h-5"/>Importer des employés</DialogTitle></DialogHeader>
             <div className="space-y-4 py-2">
@@ -267,57 +402,125 @@ export default function EmployesPage() {
           </DialogContent>
         </Dialog>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild><Button className="bg-[#0B0F2E] text-white"><Plus className="w-4 h-4 mr-2"/>Nouvel employé</Button></DialogTrigger>
+          <DialogTrigger asChild><Button className="bg-[#D4AF37] hover:bg-[#c9a432] text-white rounded-xl h-10 shadow-sm font-semibold"><Plus className="w-4 h-4 mr-2"/>Nouvel employe</Button></DialogTrigger>
           <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" onOpenAutoFocus={e => e.preventDefault()}>
-            <DialogHeader><DialogTitle>Nouvel employé</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle className="text-[#0B0F2E] text-lg font-bold flex items-center gap-2" style={{ fontFamily: "Poppins, sans-serif" }}><UserPlus className="w-5 h-5"/>Nouvel employe</DialogTitle></DialogHeader>
             <CreateEmployeForm societes={societes} onCreated={load} onClose={() => setDialogOpen(false)} />
           </DialogContent>
         </Dialog>
         </div>
       </div>
 
-      <Card><CardContent className="p-4 flex gap-3">
-        <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"/><Input className="pl-9" placeholder="Rechercher..." value={search} onChange={e=>setSearch(e.target.value)}/></div>
-        <Select value={filterStatut} onValueChange={setFilterStatut}><SelectTrigger className="w-40"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="presents">Présents</SelectItem><SelectItem value="sortis">Sortis</SelectItem><SelectItem value="tous">Tous</SelectItem></SelectContent></Select>
-        <Select value={filterSociete} onValueChange={setFilterSociete}><SelectTrigger className="w-48"><SelectValue placeholder="Toutes sociétés"/></SelectTrigger><SelectContent><SelectItem value="all">Toutes</SelectItem>{societes.map(s=><SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent></Select>
+      {/* Search and filters */}
+      <Card className="rounded-2xl shadow-sm"><CardContent className="p-3 sm:p-4 flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"/>
+          <Input className="pl-9 h-11 rounded-xl" placeholder="Rechercher par nom, poste, departement..." value={search} onChange={e=>setSearch(e.target.value)}/>
+        </div>
+        <div className="flex gap-2">
+          <Select value={filterStatut} onValueChange={setFilterStatut}><SelectTrigger className="w-36 h-11 rounded-xl"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="presents">Presents</SelectItem><SelectItem value="sortis">Sortis</SelectItem><SelectItem value="tous">Tous</SelectItem></SelectContent></Select>
+          <Select value={filterSociete} onValueChange={setFilterSociete}><SelectTrigger className="w-44 h-11 rounded-xl"><SelectValue placeholder="Toutes societes"/></SelectTrigger><SelectContent><SelectItem value="all">Toutes</SelectItem>{societes.map(s=><SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent></Select>
+        </div>
       </CardContent></Card>
 
-      <Card>
-        <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2"><Users className="w-4 h-4"/>Employés ({filtered.length})</CardTitle></CardHeader>
-        <CardContent className="p-0 overflow-x-auto">
-          {loading ? <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-[#0B0F2E]"/></div> : filtered.length===0 ? <div className="text-center py-12 text-gray-500">Aucun employé</div> : (
-            <Table>
-              <TableHeader><TableRow><TableHead>Code</TableHead><TableHead>Nom</TableHead><TableHead>Statut</TableHead><TableHead>Poste</TableHead><TableHead>Email</TableHead><TableHead className="text-right">Salaire base</TableHead><TableHead>Banque</TableHead><TableHead>NIC</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
-              <TableBody>
-                {filtered.map(e=>(
-                  <TableRow key={e.id} className="hover:bg-gray-50 cursor-pointer" onClick={()=>router.push(`/rh/employes/${e.id}`)}>
-                    <TableCell className="font-mono text-xs">{e.code||"—"}</TableCell>
-                    <TableCell className="font-medium">{e.prenom} {e.nom}</TableCell>
-                    <TableCell>{e.date_depart ? <Badge className="bg-red-100 text-red-700 border-red-200 text-xs">Sorti le {new Date(e.date_depart.split("T")[0] + "T00:00:00").toLocaleDateString("fr-FR", {day:"2-digit",month:"2-digit",year:"numeric"})}</Badge> : <Badge className="bg-green-100 text-green-700 border-green-200 text-xs">Actif</Badge>}</TableCell>
-                    <TableCell className="text-sm text-gray-600">{e.poste||"—"}</TableCell>
-                    <TableCell className="text-sm text-gray-500">{e.email||"—"}</TableCell>
-                    <TableCell className="text-right">{fmt(e.salaire_base)}</TableCell>
-                    <TableCell className="text-sm text-gray-500">{e.bank_name||"—"}</TableCell>
-                    <TableCell className="text-xs text-gray-500">{e.nic_number||"—"}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="sm" onClick={(ev)=>{ev.stopPropagation();router.push(`/rh/employes/${e.id}`)}} title="Voir fiche"><ExternalLink className="w-4 h-4 text-[#0B0F2E]"/></Button>
-                        <Button variant="ghost" size="sm" onClick={(ev)=>{ev.stopPropagation();openEdit(e)}} title="Modifier"><Pencil className="w-4 h-4 text-[#D4AF37]"/></Button>
-                        <Button variant="ghost" size="sm" onClick={(ev)=>{ev.stopPropagation();openAccess(e)}} title="Créer accès utilisateur"><Key className="w-4 h-4 text-purple-600"/></Button>
+      {/* Employee list */}
+      <Card className="rounded-2xl shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-[#0B0F2E] flex items-center gap-2 text-base" style={{ fontFamily: "Poppins, sans-serif" }}>
+            <Users className="w-4 h-4"/>Employes ({filtered.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0 sm:p-0">
+          {loading ? (
+            <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-[#0B0F2E]"/></div>
+          ) : filtered.length === 0 ? (
+            <div className="text-center py-16 text-gray-400">
+              <Users className="w-10 h-10 mx-auto mb-2 opacity-40"/>
+              <p>Aucun employe trouve</p>
+            </div>
+          ) : (
+            <>
+              {/* Mobile: Card view */}
+              <div className="sm:hidden divide-y">
+                {filtered.map(e => (
+                  <div key={e.id} className="p-4 hover:bg-gray-50/50 active:bg-gray-100 cursor-pointer transition-colors" onClick={() => router.push(`/rh/employes/${e.id}`)}>
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-full bg-[#0B0F2E] text-white flex items-center justify-center text-sm font-semibold shrink-0">
+                        {getInitials(e)}
                       </div>
-                    </TableCell>
-                  </TableRow>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-semibold text-[#0B0F2E] truncate">{e.prenom} {e.nom}</p>
+                          {getStatusBadge(e)}
+                        </div>
+                        <p className="text-sm text-gray-500 truncate">{e.poste || "—"}{e.departement ? ` · ${e.departement}` : ""}</p>
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className="text-xs text-gray-400 font-mono">{e.code || "—"}</span>
+                          <span className="text-xs text-gray-300">|</span>
+                          <span className="text-sm font-medium text-[#0B0F2E]">{fmt(e.salaire_base)}</span>
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1 shrink-0">
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(ev)=>{ev.stopPropagation();openEdit(e)}} title="Modifier"><Pencil className="w-4 h-4 text-[#D4AF37]"/></Button>
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(ev)=>{ev.stopPropagation();openAccess(e)}} title="Creer acces"><Key className="w-4 h-4 text-purple-600"/></Button>
+                      </div>
+                    </div>
+                  </div>
                 ))}
-              </TableBody>
-            </Table>
+              </div>
+
+              {/* Desktop: Table view */}
+              <div className="hidden sm:block overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-gray-50/60">
+                      <TableHead className="pl-5 w-[280px]">Employe</TableHead>
+                      <TableHead>Statut</TableHead>
+                      <TableHead>Poste</TableHead>
+                      <TableHead>Departement</TableHead>
+                      <TableHead className="text-right">Salaire</TableHead>
+                      <TableHead className="text-right pr-5">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filtered.map(e=>(
+                      <TableRow key={e.id} className="hover:bg-gray-50/50 cursor-pointer group transition-colors" onClick={()=>router.push(`/rh/employes/${e.id}`)}>
+                        <TableCell className="pl-5 py-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-full bg-[#0B0F2E] text-white flex items-center justify-center text-xs font-semibold shrink-0">
+                              {getInitials(e)}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-semibold text-[#0B0F2E] text-sm truncate">{e.prenom} {e.nom}</p>
+                              <p className="text-xs text-gray-400">{e.email || "—"}</p>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>{getStatusBadge(e)}</TableCell>
+                        <TableCell className="text-sm text-gray-600">{e.poste||"—"}</TableCell>
+                        <TableCell className="text-sm text-gray-500">{e.departement||"—"}</TableCell>
+                        <TableCell className="text-right font-medium text-sm">{fmt(e.salaire_base)}</TableCell>
+                        <TableCell className="text-right pr-5">
+                          <div className="flex items-center justify-end gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(ev)=>{ev.stopPropagation();router.push(`/rh/employes/${e.id}`)}} title="Voir fiche"><ExternalLink className="w-4 h-4 text-[#0B0F2E]"/></Button>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(ev)=>{ev.stopPropagation();openEdit(e)}} title="Modifier"><Pencil className="w-4 h-4 text-[#D4AF37]"/></Button>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(ev)=>{ev.stopPropagation();openAccess(e)}} title="Creer acces utilisateur"><Key className="w-4 h-4 text-purple-600"/></Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
 
-      {/* Dialog édition employé */}
+      {/* Dialog edition employe */}
       <Dialog open={editOpen} onOpenChange={o => { setEditOpen(o); if (!o) setEditEmp(null) }}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" onOpenAutoFocus={e => e.preventDefault()}>
-          <DialogHeader><DialogTitle>Modifier — {editEmp?.prenom} {editEmp?.nom}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="text-[#0B0F2E] text-lg font-bold flex items-center gap-2" style={{ fontFamily: "Poppins, sans-serif" }}><Pencil className="w-5 h-5 text-[#D4AF37]"/>Modifier — {editEmp?.prenom} {editEmp?.nom}</DialogTitle></DialogHeader>
           {editEmp && <EditEmployeForm emp={editEmp} onSaved={load} onClose={() => { setEditOpen(false); setEditEmp(null) }} />}
         </DialogContent>
       </Dialog>

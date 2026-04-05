@@ -16,7 +16,8 @@ import { Textarea } from "@/components/ui/textarea"
 import {
   ArrowLeft, Save, Loader2, User, FileText, CalendarDays, Clock,
   Briefcase, CreditCard, Gift, FolderOpen, History, Shield,
-  CheckCircle2, XCircle, AlertCircle, Upload, Download, Camera
+  CheckCircle2, XCircle, AlertCircle, Upload, Download, Camera,
+  Phone, MapPin, Building2, Hash, CircleDot
 } from "lucide-react"
 import { BANQUES_MAURITIUS } from "@/lib/rh/banques-mauritius"
 
@@ -31,6 +32,18 @@ function initials(nom: string, prenom: string) {
   return `${(prenom?.[0] || "").toUpperCase()}${(nom?.[0] || "").toUpperCase()}`
 }
 function dateVal(d: string | null | undefined) { return d?.split("T")[0] || "" }
+function anciennete(dateArrivee: string | null | undefined) {
+  if (!dateArrivee) return null
+  const d = new Date(dateArrivee)
+  const now = new Date()
+  const years = now.getFullYear() - d.getFullYear()
+  const months = now.getMonth() - d.getMonth()
+  const totalMonths = years * 12 + months
+  if (totalMonths < 12) return `${totalMonths} mois`
+  const y = Math.floor(totalMonths / 12)
+  const m = totalMonths % 12
+  return m > 0 ? `${y} an${y > 1 ? "s" : ""} ${m} mois` : `${y} an${y > 1 ? "s" : ""}`
+}
 
 const ROLES = ["salarie", "manager", "rh", "admin", "direction"]
 const DEVISES = ["MUR", "EUR", "USD", "GBP"]
@@ -160,7 +173,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
   }
   if (!form) return null
 
-  const triggerCls = "data-[state=active]:bg-[#0B0F2E] data-[state=active]:text-white text-xs"
+  const triggerCls = "data-[state=active]:bg-[#0B0F2E] data-[state=active]:text-white data-[state=active]:shadow-md data-[state=inactive]:bg-white data-[state=inactive]:text-gray-500 data-[state=inactive]:hover:bg-[#4191FF]/10 data-[state=inactive]:hover:text-[#4191FF] rounded-full px-4 py-2 text-xs font-medium transition-all duration-200"
   const totalHeures = pointages.reduce((s: number, p: any) => s + (p.heures_travaillees || 0), 0)
   const totalOT = pointages.reduce((s: number, p: any) => s + (p.heures_supplementaires || 0), 0)
   const joursAbsence = pointages.filter((p: any) => p.statut === "absent").length
@@ -183,7 +196,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
 
   const Field = ({ label, field, type = "text", disabled = false, placeholder = "" }: any) => (
     <div>
-      <Label className="text-xs text-gray-500">{label}</Label>
+      <Label className="text-xs text-gray-500 mb-1">{label}</Label>
       <Input
         key={`${field}-${employe?.id}`}
         type={type}
@@ -191,7 +204,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
         onBlur={e => u(field, e.target.value)}
         onChange={type === "date" ? (e => u(field, e.target.value)) : undefined}
         disabled={disabled}
-        className={disabled ? "bg-gray-50" : ""}
+        className={`h-11 ${disabled ? "bg-gray-50" : ""}`}
         placeholder={placeholder}
       />
     </div>
@@ -200,39 +213,42 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
   return (
     <div className="p-6 space-y-6 max-w-6xl mx-auto">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.push("/rh/employes")} className="text-[#0B0F2E] hover:bg-[#0B0F2E]/10">
+      <div className="relative rounded-2xl overflow-hidden bg-gradient-to-r from-[#0B0F2E] via-[#0B0F2E]/95 to-[#4191FF]/80 p-6 shadow-sm">
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImciIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PGNpcmNsZSBjeD0iMzAiIGN5PSIzMCIgcj0iMSIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwwLjA1KSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjYwIiBoZWlnaHQ9IjYwIiBmaWxsPSJ1cmwoI2cpIi8+PC9zdmc+')] opacity-40" />
+        <div className="relative flex items-center gap-5">
+          <Button variant="ghost" size="icon" onClick={() => router.push("/rh/employes")} className="text-white/80 hover:bg-white/10 hover:text-white shrink-0">
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div className="relative group shrink-0 cursor-pointer" onClick={() => photoInputRef.current?.click()}>
             {employe.photo_url ? (
-              <img src={employe.photo_url} alt={`${employe.prenom} ${employe.nom}`} className="rounded-full object-cover w-14 h-14" />
+              <img src={employe.photo_url} alt={`${employe.prenom} ${employe.nom}`} className="rounded-full object-cover w-20 h-20 ring-4 ring-white/20 shadow-lg" />
             ) : (
-              <div className="w-14 h-14 rounded-full bg-[#0B0F2E] flex items-center justify-center text-white text-xl font-bold">
+              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#D4AF37] to-[#4191FF] flex items-center justify-center text-white text-2xl font-bold ring-4 ring-white/20 shadow-lg">
                 {initials(employe.nom, employe.prenom)}
               </div>
             )}
             <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-              <Camera className="w-5 h-5 text-white" />
+              <Camera className="w-6 h-6 text-white" />
             </div>
             <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
           </div>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-[#0B0F2E]">{employe.prenom} {employe.nom}</h1>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-2xl font-bold text-white" style={{ fontFamily: "'Poppins', sans-serif" }}>{employe.prenom} {employe.nom}</h1>
               {(() => {
                 const statut = employe.statut_enrichi || (employe.actif ? "actif" : "parti")
-                const statusMap: Record<string, { cls: string; label: string }> = {
-                  actif: { cls: "bg-green-100 text-green-800", label: "Actif" },
-                  suspendu: { cls: "bg-orange-100 text-orange-800", label: "Suspendu" },
-                  preavis: { cls: "bg-blue-100 text-blue-800", label: "En préavis" },
-                  parti: { cls: "bg-red-100 text-red-800", label: "Parti" },
-                  periode_essai: { cls: "bg-purple-100 text-purple-800", label: "Période d'essai" },
+                const statusMap: Record<string, { cls: string; label: string; icon: typeof CheckCircle2 }> = {
+                  actif: { cls: "bg-green-400/20 text-green-300 border-green-400/30", label: "Actif", icon: CheckCircle2 },
+                  suspendu: { cls: "bg-orange-400/20 text-orange-300 border-orange-400/30", label: "Suspendu", icon: AlertCircle },
+                  preavis: { cls: "bg-blue-400/20 text-blue-300 border-blue-400/30", label: "En préavis", icon: Clock },
+                  parti: { cls: "bg-red-400/20 text-red-300 border-red-400/30", label: "Parti", icon: XCircle },
+                  periode_essai: { cls: "bg-purple-400/20 text-purple-300 border-purple-400/30", label: "Période d'essai", icon: CircleDot },
                 }
                 const s = statusMap[statut] || statusMap.actif
+                const Icon = s.icon
                 return (
-                  <Badge className={`${s.cls} border-0`}>
+                  <Badge className={`${s.cls} border px-3 py-1 text-sm font-medium`}>
+                    <Icon className="w-3.5 h-3.5 mr-1.5" />
                     {s.label}
                     {statut === "periode_essai" && employe.date_fin_periode_essai && (
                       <span className="ml-1 text-[10px] opacity-75">→ {fmtDate(employe.date_fin_periode_essai)}</span>
@@ -241,38 +257,66 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                 )
               })()}
             </div>
-            <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
-              {employe.code && <span className="font-mono bg-gray-100 px-2 py-0.5 rounded text-xs">{employe.code}</span>}
-              {employe.poste && <span>{employe.poste}</span>}
-              {employe.departement && <><span className="text-gray-300">|</span><span>{employe.departement}</span></>}
+            <div className="flex items-center gap-2 mt-3 flex-wrap">
+              {employe.code && (
+                <span className="inline-flex items-center gap-1.5 font-mono bg-white/10 text-white/80 px-3 py-1 rounded-full text-xs border border-white/10">
+                  <Hash className="w-3 h-3" />{employe.code}
+                </span>
+              )}
+              {employe.poste && (
+                <span className="inline-flex items-center gap-1.5 bg-white/10 text-white/80 px-3 py-1 rounded-full text-xs border border-white/10">
+                  <Briefcase className="w-3 h-3" />{employe.poste}
+                </span>
+              )}
+              {employe.departement && (
+                <span className="inline-flex items-center gap-1.5 bg-white/10 text-white/80 px-3 py-1 rounded-full text-xs border border-white/10">
+                  <Building2 className="w-3 h-3" />{employe.departement}
+                </span>
+              )}
+              {employe.date_arrivee && (
+                <span className="inline-flex items-center gap-1.5 bg-[#D4AF37]/20 text-[#D4AF37] px-3 py-1 rounded-full text-xs border border-[#D4AF37]/20">
+                  <CalendarDays className="w-3 h-3" />{anciennete(employe.date_arrivee)}
+                </span>
+              )}
             </div>
           </div>
         </div>
       </div>
 
       {/* 9 Tabs */}
-      <Tabs defaultValue="personnel" className="space-y-4">
-        <TabsList className="bg-gray-100 flex-wrap h-auto gap-1 p-1">
-          <TabsTrigger value="personnel" className={triggerCls}><User className="w-3.5 h-3.5 mr-1" />Personnel</TabsTrigger>
-          <TabsTrigger value="emploi" className={triggerCls}><Briefcase className="w-3.5 h-3.5 mr-1" />Emploi</TabsTrigger>
-          <TabsTrigger value="salaire" className={triggerCls}><CreditCard className="w-3.5 h-3.5 mr-1" />Salaire</TabsTrigger>
-          <TabsTrigger value="avantages" className={triggerCls}><Gift className="w-3.5 h-3.5 mr-1" />Avantages</TabsTrigger>
-          <TabsTrigger value="conges" className={triggerCls}><CalendarDays className="w-3.5 h-3.5 mr-1" />Conges</TabsTrigger>
-          <TabsTrigger value="bulletins" className={triggerCls}><FileText className="w-3.5 h-3.5 mr-1" />Bulletins</TabsTrigger>
-          <TabsTrigger value="pointage" className={triggerCls}><Clock className="w-3.5 h-3.5 mr-1" />Pointage</TabsTrigger>
-          <TabsTrigger value="documents" className={triggerCls}><FolderOpen className="w-3.5 h-3.5 mr-1" />Documents</TabsTrigger>
-          <TabsTrigger value="historique" className={triggerCls}><History className="w-3.5 h-3.5 mr-1" />Historique</TabsTrigger>
-        </TabsList>
+      <Tabs defaultValue="personnel" className="space-y-6">
+        <div className="overflow-x-auto scrollbar-hide -mx-1 px-1">
+          <TabsList className="bg-gray-100/80 backdrop-blur-sm flex-nowrap h-auto gap-1.5 p-1.5 rounded-full border border-gray-200/50 w-max">
+            <TabsTrigger value="personnel" className={triggerCls}><User className="w-4 h-4 mr-1.5" />Personnel</TabsTrigger>
+            <TabsTrigger value="emploi" className={triggerCls}><Briefcase className="w-4 h-4 mr-1.5" />Emploi</TabsTrigger>
+            <TabsTrigger value="salaire" className={triggerCls}><CreditCard className="w-4 h-4 mr-1.5" />Salaire</TabsTrigger>
+            <TabsTrigger value="avantages" className={triggerCls}><Gift className="w-4 h-4 mr-1.5" />Avantages</TabsTrigger>
+            <TabsTrigger value="conges" className={triggerCls}><CalendarDays className="w-4 h-4 mr-1.5" />Conges</TabsTrigger>
+            <TabsTrigger value="bulletins" className={triggerCls}><FileText className="w-4 h-4 mr-1.5" />Bulletins</TabsTrigger>
+            <TabsTrigger value="pointage" className={triggerCls}><Clock className="w-4 h-4 mr-1.5" />Pointage</TabsTrigger>
+            <TabsTrigger value="documents" className={triggerCls}><FolderOpen className="w-4 h-4 mr-1.5" />Documents</TabsTrigger>
+            <TabsTrigger value="historique" className={triggerCls}><History className="w-4 h-4 mr-1.5" />Historique</TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* ===== TAB 1: Personnel ===== */}
-        <TabsContent value="personnel" className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><User className="w-4 h-4" />Identite</CardTitle></CardHeader>
+        <TabsContent value="personnel" className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card className="rounded-2xl shadow-sm border-l-4 border-l-[#4191FF] bg-[#f8f9fc]">
+              <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}><User className="w-4 h-4 text-[#4191FF]" />Identite</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex items-center gap-4 mb-2">
-                  <div className="w-16 h-16 rounded-full bg-[#0B0F2E] flex items-center justify-center text-white text-2xl font-bold">
-                    {initials(form.nom, form.prenom)}
+                  <div className="relative group shrink-0 cursor-pointer" onClick={() => photoInputRef.current?.click()}>
+                    {form.photo_url ? (
+                      <img src={form.photo_url} alt={`${form.prenom} ${form.nom}`} className="rounded-full object-cover w-20 h-20 ring-3 ring-[#4191FF]/20" />
+                    ) : (
+                      <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#4191FF] to-[#0B0F2E] flex items-center justify-center text-white text-2xl font-bold ring-3 ring-[#4191FF]/20">
+                        {initials(form.nom, form.prenom)}
+                      </div>
+                    )}
+                    <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Camera className="w-5 h-5 text-white" />
+                    </div>
                   </div>
                   <div className="flex-1 grid grid-cols-2 gap-3">
                     <Field label="Nom" field="nom" />
@@ -343,8 +387,8 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base">Contact</CardTitle></CardHeader>
+            <Card className="rounded-2xl shadow-sm border-l-4 border-l-green-500 bg-[#f8f9fc]">
+              <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}><MapPin className="w-4 h-4 text-green-500" />Contact</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <Field label="Adresse" field="address" />
                 <Field label="Adresse 2" field="address_2" />
@@ -360,8 +404,8 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
             </Card>
           </div>
 
-          <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><AlertCircle className="w-4 h-4" />Contact d&apos;urgence</CardTitle></CardHeader>
+          <Card className="rounded-2xl shadow-sm border-l-4 border-l-red-400 bg-[#f8f9fc]">
+            <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}><AlertCircle className="w-4 h-4 text-red-400" />Contact d&apos;urgence</CardTitle></CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Field label="Nom contact urgence" field="contact_urgence_nom" />
@@ -375,10 +419,10 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
         </TabsContent>
 
         {/* ===== TAB 2: Emploi ===== */}
-        <TabsContent value="emploi" className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><Briefcase className="w-4 h-4" />Poste</CardTitle></CardHeader>
+        <TabsContent value="emploi" className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card className="rounded-2xl shadow-sm border-l-4 border-l-[#4191FF] bg-[#f8f9fc]">
+              <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}><Briefcase className="w-4 h-4 text-[#4191FF]" />Poste</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Date d'arrivee" field="date_arrivee" type="date" />
@@ -422,8 +466,8 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base">Depart / Suspension</CardTitle></CardHeader>
+            <Card className="rounded-2xl shadow-sm border-l-4 border-l-orange-400 bg-[#f8f9fc]">
+              <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base" style={{ fontFamily: "'Poppins', sans-serif" }}>Depart / Suspension</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <Field label="Date de depart" field="date_depart" type="date" />
                 <Field label="Type de depart" field="departure_type" placeholder="Demission, Licenciement..." />
@@ -441,10 +485,10 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
         </TabsContent>
 
         {/* ===== TAB 3: Salaire ===== */}
-        <TabsContent value="salaire" className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><CreditCard className="w-4 h-4" />Remuneration</CardTitle></CardHeader>
+        <TabsContent value="salaire" className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card className="rounded-2xl shadow-sm border-l-4 border-l-[#D4AF37] bg-[#f8f9fc]">
+              <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}><CreditCard className="w-4 h-4 text-[#D4AF37]" />Remuneration</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <Field label="Salaire de base (MUR)" field="salaire_base" type="number" />
                 <div className="grid grid-cols-2 gap-3">
@@ -477,8 +521,8 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base">Coordonnees bancaires</CardTitle></CardHeader>
+            <Card className="rounded-2xl shadow-sm border-l-4 border-l-[#4191FF] bg-[#f8f9fc]">
+              <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base" style={{ fontFamily: "'Poppins', sans-serif" }}>Coordonnees bancaires</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex items-center gap-3 mb-2">
                   <Checkbox checked={form.paid_by_bank_transfer ?? true} onCheckedChange={v => u("paid_by_bank_transfer", v)} id="bank" />
@@ -505,8 +549,8 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
           </div>
 
           {/* Régime fiscal & charges */}
-          <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><Shield className="w-4 h-4" />Régime fiscal & charges</CardTitle></CardHeader>
+          <Card className="rounded-2xl shadow-sm bg-[#f8f9fc]">
+            <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}><Shield className="w-4 h-4 text-[#0B0F2E]" />Régime fiscal & charges</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
@@ -579,70 +623,76 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
           </Card>
 
           {/* Historique des augmentations */}
-          <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><History className="w-4 h-4" />Historique des augmentations</CardTitle></CardHeader>
+          <Card className="rounded-2xl shadow-sm bg-[#f8f9fc]">
+            <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}><History className="w-4 h-4" />Historique des augmentations</CardTitle></CardHeader>
             <CardContent>
               <p className="text-sm text-gray-400 italic">(Historique disponible prochainement)</p>
             </CardContent>
           </Card>
 
           {/* Simulateur Net */}
-          <Card className="border-[#D4AF37]/30">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
-                <CreditCard className="w-4 h-4 text-[#D4AF37]" />
-                <span>Simulateur Net</span>
-                <span className="ml-auto text-[10px] font-normal text-[#D4AF37] bg-[#D4AF37]/10 px-2 py-0.5 rounded-full">Estimation</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <Label className="text-xs text-gray-500">Salaire brut mensuel (MUR)</Label>
-                <Input
-                  type="number"
-                  placeholder="Ex: 45000"
-                  value={simulatorGross}
-                  onChange={e => setSimulatorGross(e.target.value)}
-                  className="border-[#D4AF37]/30 focus-visible:ring-[#D4AF37]/40"
-                />
-              </div>
-              {simulatorGross && parseFloat(simulatorGross) > 0 && (() => {
-                const gross = parseFloat(simulatorGross)
-                const csgRate = gross <= 50000 ? 0.015 : 0.03
-                const csg = gross * csgRate
-                const nsf = gross * 0.015
-                const net = gross - csg - nsf
-                return (
-                  <div className="bg-[#D4AF37]/5 border border-[#D4AF37]/20 rounded-lg p-4 space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Brut</span>
-                      <span className="font-medium">{fmt(gross)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">CSG salarié ({(csgRate * 100).toFixed(1)}%)</span>
-                      <span className="text-red-500">- {fmt(csg)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">NSF salarié (1.5%)</span>
-                      <span className="text-red-500">- {fmt(nsf)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm font-bold border-t border-[#D4AF37]/20 pt-2 mt-2">
-                      <span className="text-[#0B0F2E]">Net estimé</span>
-                      <span className="text-[#D4AF37]">{fmt(net)}</span>
-                    </div>
+          <Card className="rounded-2xl shadow-sm border-0 overflow-hidden">
+            <div className="bg-gradient-to-r from-[#D4AF37]/15 via-[#D4AF37]/10 to-[#D4AF37]/5">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}>
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#D4AF37] to-[#D4AF37]/70 flex items-center justify-center">
+                    <CreditCard className="w-4 h-4 text-white" />
                   </div>
-                )
-              })()}
-            </CardContent>
+                  <span>Simulateur Net</span>
+                  <span className="ml-auto text-[10px] font-normal text-[#D4AF37] bg-[#D4AF37]/15 px-2.5 py-1 rounded-full border border-[#D4AF37]/20">Estimation</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label className="text-xs text-gray-600 mb-1">Salaire brut mensuel (MUR)</Label>
+                  <Input
+                    type="number"
+                    placeholder="Ex: 45000"
+                    value={simulatorGross}
+                    onChange={e => setSimulatorGross(e.target.value)}
+                    className="h-11 border-[#D4AF37]/30 focus-visible:ring-[#D4AF37]/40 bg-white"
+                  />
+                </div>
+                {simulatorGross && parseFloat(simulatorGross) > 0 && (() => {
+                  const gross = parseFloat(simulatorGross)
+                  const csgRate = gross <= 50000 ? 0.015 : 0.03
+                  const csg = gross * csgRate
+                  const nsf = gross * 0.015
+                  const net = gross - csg - nsf
+                  return (
+                    <div className="bg-white/80 backdrop-blur-sm border border-[#D4AF37]/20 rounded-xl p-5 space-y-3">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Brut</span>
+                        <span className="font-medium">{fmt(gross)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">CSG salarié ({(csgRate * 100).toFixed(1)}%)</span>
+                        <span className="text-red-500">- {fmt(csg)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">NSF salarié (1.5%)</span>
+                        <span className="text-red-500">- {fmt(nsf)}</span>
+                      </div>
+                      <div className="border-t border-[#D4AF37]/20 pt-3 mt-3">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-bold text-[#0B0F2E]">Net estimé</span>
+                          <span className="text-2xl font-bold text-[#D4AF37]">{fmt(net)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })()}
+              </CardContent>
+            </div>
           </Card>
 
           <SaveBtn />
         </TabsContent>
 
         {/* ===== TAB 4: Avantages ===== */}
-        <TabsContent value="avantages" className="space-y-4">
-          <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><Gift className="w-4 h-4" />Avantages en nature</CardTitle></CardHeader>
+        <TabsContent value="avantages" className="space-y-6">
+          <Card className="rounded-2xl shadow-sm border-l-4 border-l-purple-400 bg-[#f8f9fc]">
+            <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}><Gift className="w-4 h-4 text-purple-400" />Avantages en nature</CardTitle></CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Field label="Bus fare journalier (MUR)" field="daily_bus_fare" type="number" />
@@ -656,7 +706,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
         </TabsContent>
 
         {/* ===== TAB 5: Conges ===== */}
-        <TabsContent value="conges" className="space-y-4">
+        <TabsContent value="conges" className="space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-[#0B0F2E]">Conges</h2>
             <Select value={yearFilter} onValueChange={setYearFilter}>
@@ -667,7 +717,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
           {soldes.length > 0 && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {soldes.map((s: any) => (
-                <Card key={s.id}>
+                <Card key={s.id} className="rounded-2xl shadow-sm">
                   <CardContent className="pt-4 text-center">
                     <p className="text-xs text-gray-500 mb-1">{s.type_conge || "Annuel"}</p>
                     <p className="text-2xl font-bold text-[#0B0F2E]">{s.solde ?? s.jours_restants ?? "--"}</p>
@@ -682,7 +732,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
               ))}
             </div>
           )}
-          <Card>
+          <Card className="rounded-2xl shadow-sm overflow-hidden">
             <CardContent className="p-0">
               {conges.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">Aucune demande de conge</div>
@@ -712,7 +762,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
         </TabsContent>
 
         {/* ===== TAB 6: Bulletins ===== */}
-        <TabsContent value="bulletins" className="space-y-4">
+        <TabsContent value="bulletins" className="space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-[#0B0F2E]">Bulletins de paie</h2>
             <Select value={yearFilter} onValueChange={setYearFilter}>
@@ -720,7 +770,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
               <SelectContent>{years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent>
             </Select>
           </div>
-          <Card>
+          <Card className="rounded-2xl shadow-sm overflow-hidden">
             <CardContent className="p-0">
               {bulletins.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">Aucun bulletin de paie</div>
@@ -760,29 +810,29 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
         </TabsContent>
 
         {/* ===== TAB 7: Pointage ===== */}
-        <TabsContent value="pointage" className="space-y-4">
+        <TabsContent value="pointage" className="space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-[#0B0F2E]">Pointage</h2>
             <Input type="month" value={pointageMois} onChange={e => setPointageMois(e.target.value)} className="w-48" />
           </div>
           <div className="grid grid-cols-3 gap-4">
-            <Card><CardContent className="pt-6 text-center">
+            <Card className="rounded-2xl shadow-sm"><CardContent className="pt-6 text-center">
               <Clock className="w-6 h-6 mx-auto text-[#0B0F2E] mb-2" />
               <p className="text-2xl font-bold text-[#0B0F2E]">{joursPresent}</p>
               <p className="text-xs text-gray-500">Jours travailles</p>
             </CardContent></Card>
-            <Card><CardContent className="pt-6 text-center">
+            <Card className="rounded-2xl shadow-sm"><CardContent className="pt-6 text-center">
               <AlertCircle className="w-6 h-6 mx-auto text-red-400 mb-2" />
               <p className="text-2xl font-bold text-red-500">{joursAbsence}</p>
               <p className="text-xs text-gray-500">Jours absence</p>
             </CardContent></Card>
-            <Card><CardContent className="pt-6 text-center">
+            <Card className="rounded-2xl shadow-sm"><CardContent className="pt-6 text-center">
               <Clock className="w-6 h-6 mx-auto text-[#D4AF37] mb-2" />
               <p className="text-2xl font-bold text-[#D4AF37]">{totalOT.toFixed(1)}h</p>
               <p className="text-xs text-gray-500">Heures supplementaires</p>
             </CardContent></Card>
           </div>
-          <Card>
+          <Card className="rounded-2xl shadow-sm overflow-hidden">
             <CardContent className="p-0">
               {pointages.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">Aucun pointage enregistre</div>
@@ -817,14 +867,17 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
         </TabsContent>
 
         {/* ===== TAB 8: Documents ===== */}
-        <TabsContent value="documents" className="space-y-4">
-          <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><FolderOpen className="w-4 h-4" />Documents employe</CardTitle></CardHeader>
+        <TabsContent value="documents" className="space-y-6">
+          <Card className="rounded-2xl shadow-sm bg-[#f8f9fc]">
+            <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}><FolderOpen className="w-4 h-4 text-[#4191FF]" />Documents employe</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-                <Upload className="w-8 h-8 mx-auto text-gray-400 mb-2" />
-                <p className="text-sm text-gray-500">Glisser un fichier ou cliquer pour telecharger</p>
-                <Button variant="outline" className="mt-3 text-[#0B0F2E] border-[#0B0F2E]">
+              <div className="border-2 border-dashed border-[#4191FF]/30 rounded-2xl p-10 text-center bg-[#4191FF]/5 hover:bg-[#4191FF]/10 hover:border-[#4191FF]/50 transition-colors cursor-pointer">
+                <div className="w-14 h-14 rounded-full bg-[#4191FF]/10 flex items-center justify-center mx-auto mb-3">
+                  <Upload className="w-7 h-7 text-[#4191FF]" />
+                </div>
+                <p className="text-sm font-medium text-gray-700">Glisser un fichier ou cliquer pour telecharger</p>
+                <p className="text-xs text-gray-400 mt-1">PDF, Word, Images (max 10MB)</p>
+                <Button variant="outline" className="mt-4 text-[#0B0F2E] border-[#0B0F2E] rounded-full px-6">
                   <Upload className="w-4 h-4 mr-2" />Ajouter un document
                 </Button>
               </div>
@@ -861,34 +914,41 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
         </TabsContent>
 
         {/* ===== TAB 9: Historique ===== */}
-        <TabsContent value="historique" className="space-y-4">
-          <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><History className="w-4 h-4" />Dates cles</CardTitle></CardHeader>
+        <TabsContent value="historique" className="space-y-6">
+          <Card className="rounded-2xl shadow-sm bg-[#f8f9fc]">
+            <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}><History className="w-4 h-4 text-[#4191FF]" />Dates cles</CardTitle></CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                <div className="flex justify-between border-b pb-2">
+              <div className="relative pl-6 space-y-4">
+                <div className="absolute left-2 top-2 bottom-2 w-px bg-[#4191FF]/20" />
+                <div className="relative flex justify-between items-center">
+                  <div className="absolute -left-[17px] w-3 h-3 rounded-full bg-[#4191FF] ring-4 ring-[#4191FF]/10" />
                   <span className="text-sm text-gray-500">Date d&apos;arrivee</span>
                   <span className="text-sm font-medium">{fmtDate(employe.date_arrivee)}</span>
                 </div>
-                <div className="flex justify-between border-b pb-2">
+                <div className="relative flex justify-between items-center">
+                  <div className="absolute -left-[17px] w-3 h-3 rounded-full bg-[#4191FF] ring-4 ring-[#4191FF]/10" />
                   <span className="text-sm text-gray-500">Poste actuel depuis</span>
                   <span className="text-sm font-medium">{fmtDate(employe.date_poste_actuel)}</span>
                 </div>
                 {employe.date_depart && (
-                  <div className="flex justify-between border-b pb-2">
+                  <div className="relative flex justify-between items-center">
+                    <div className="absolute -left-[17px] w-3 h-3 rounded-full bg-red-400 ring-4 ring-red-400/10" />
                     <span className="text-sm text-gray-500">Date de depart</span>
                     <span className="text-sm font-medium">{fmtDate(employe.date_depart)}</span>
                   </div>
                 )}
-                <div className="flex justify-between border-b pb-2">
+                <div className="relative flex justify-between items-center">
+                  <div className="absolute -left-[17px] w-3 h-3 rounded-full bg-[#D4AF37] ring-4 ring-[#D4AF37]/10" />
                   <span className="text-sm text-gray-500">Poste</span>
                   <span className="text-sm font-medium">{employe.poste || "--"}</span>
                 </div>
-                <div className="flex justify-between border-b pb-2">
+                <div className="relative flex justify-between items-center">
+                  <div className="absolute -left-[17px] w-3 h-3 rounded-full bg-green-400 ring-4 ring-green-400/10" />
                   <span className="text-sm text-gray-500">Departement</span>
                   <span className="text-sm font-medium">{employe.departement || "--"}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="relative flex justify-between items-center">
+                  <div className="absolute -left-[17px] w-3 h-3 rounded-full bg-purple-400 ring-4 ring-purple-400/10" />
                   <span className="text-sm text-gray-500">Role</span>
                   <span className="text-sm font-medium">{employe.role || "--"}</span>
                 </div>
@@ -896,12 +956,12 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base">Historique salaire</CardTitle></CardHeader>
+          <Card className="rounded-2xl shadow-sm border-l-4 border-l-[#D4AF37] bg-[#f8f9fc]">
+            <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base" style={{ fontFamily: "'Poppins', sans-serif" }}>Historique salaire</CardTitle></CardHeader>
             <CardContent>
-              <div className="flex justify-between border-b pb-2">
+              <div className="flex justify-between items-center border-b pb-3">
                 <span className="text-sm text-gray-500">Salaire actuel</span>
-                <span className="text-sm font-semibold text-[#0B0F2E]">{fmt(employe.salaire_base || 0)}</span>
+                <span className="text-xl font-bold text-[#0B0F2E]">{fmt(employe.salaire_base || 0)}</span>
               </div>
               <p className="text-xs text-gray-400 mt-3">L&apos;historique complet des modifications salariales sera disponible prochainement.</p>
             </CardContent>
