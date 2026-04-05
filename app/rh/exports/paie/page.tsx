@@ -167,9 +167,11 @@ export default function ExportPaiePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ societe_id: societe, periode }),
       })
-      const data = await res.json()
+      let data: any
+      const text = await res.text()
+      try { data = JSON.parse(text) } catch { throw new Error(`Reponse non-JSON (${res.status}): ${text.slice(0, 200)}`) }
       if (!res.ok || data.error) {
-        throw new Error(data.error || `Erreur ${res.status}`)
+        throw new Error(`[${res.status}] ${data.error || data.message || JSON.stringify(data).slice(0, 200)}`)
       }
       // Response can have fichiers array or single content
       if (data.fichiers && Array.isArray(data.fichiers)) {
@@ -250,8 +252,10 @@ export default function ExportPaiePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ societe_id: societe, periode }),
       })
-      const data = await res.json()
-      if (!res.ok || data.error) throw new Error(data.error || `Erreur ${res.status}`)
+      let data: any
+      const textCSG = await res.text()
+      try { data = JSON.parse(textCSG) } catch { throw new Error(`Reponse non-JSON CSG (${res.status}): ${textCSG.slice(0, 200)}`) }
+      if (!res.ok || data.error) throw new Error(`[CSG ${res.status}] ${data.error || JSON.stringify(data).slice(0, 200)}`)
 
       // Download recap + detail CSVs
       if (data.recap_csv) downloadFile(data.recap_csv, data.filename_recap || `CSG_NSF_Recap_${periode}.csv`)
@@ -275,8 +279,10 @@ export default function ExportPaiePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ societe_id: societe, periode }),
       })
-      const data = await res.json()
-      if (!res.ok || data.error) throw new Error(data.error || `Erreur ${res.status}`)
+      let data: any
+      const textPAYE = await res.text()
+      try { data = JSON.parse(textPAYE) } catch { throw new Error(`Reponse non-JSON PAYE (${res.status}): ${textPAYE.slice(0, 200)}`) }
+      if (!res.ok || data.error) throw new Error(`[PAYE ${res.status}] ${data.error || JSON.stringify(data).slice(0, 200)}`)
 
       if (data.recap_csv) downloadFile(data.recap_csv, data.filename_recap || `PAYE_Recap_${periode}.csv`)
       if (data.detail_csv) setTimeout(() => downloadFile(data.detail_csv, data.filename_detail || `PAYE_Detail_${periode}.csv`), 500)
@@ -312,6 +318,16 @@ export default function ExportPaiePage() {
           {alertMsg.type === "success" ? <CheckCircle className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
           {alertMsg.text}
           <button onClick={() => setAlertMsg(null)} className="ml-auto text-xs opacity-60 hover:opacity-100">Fermer</button>
+        </div>
+      )}
+      {/* Debug: show all export errors */}
+      {(virementStatus.error || csgStatus.error || payeStatus.error) && (
+        <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 text-xs font-mono text-orange-800 space-y-1">
+          <p className="font-bold text-sm">Debug erreurs exports :</p>
+          {virementStatus.error && <p>VIREMENT: {virementStatus.error}</p>}
+          {csgStatus.error && <p>CSG/NSF: {csgStatus.error}</p>}
+          {payeStatus.error && <p>PAYE: {payeStatus.error}</p>}
+          <p className="text-orange-500">Societe: {societe || 'non selectionnee'} | Periode: {periode}</p>
         </div>
       )}
 
