@@ -539,7 +539,7 @@ export default function EspaceEmployePage() {
 
       <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-6">
         {/* Tabs */}
-        <div className="flex gap-1 bg-white rounded-lg p-1 border">
+        <div className="flex gap-1 bg-white rounded-lg p-1 border overflow-x-auto">
           {([
             { id: "dashboard" as Tab, label: "Pointage", icon: Clock },
             { id: "profil" as Tab, label: "Ma fiche", icon: User },
@@ -727,14 +727,14 @@ export default function EspaceEmployePage() {
                         <div className="flex items-center gap-3 shrink-0">
                           <p className="text-lg font-mono font-bold" style={{ color: NAVY }}>{fmt(b.salaire_net || 0)} <span className="text-xs font-normal text-gray-400">MUR</span></p>
                           <div className="flex gap-1.5">
-                            <Button variant="outline" size="sm" className="h-8 px-2" onClick={() => {
-                              window.open(`/api/rh/paie/pdf?bulletin_id=${b.id}&view=1`, '_blank')
-                              if (!b.lu_le) { fetch(`/api/rh/paie?action=mark_read&bulletin_id=${b.id}`, { method: "POST" }).catch(() => {}) }
+                            <Button variant="outline" size="sm" className="h-8 px-2.5" title="Voir" onClick={() => {
+                              window.open(`/api/rh/paie/pdf?employe_id=${employe.id}&periode=${b.periode}&bulletin_id=${b.id}&view=1`, '_blank')
+                              if (!b.lu_le) { fetch(`/api/rh/paie?action=mark_read&bulletin_id=${b.id}`, { method: "POST" }).catch(() => {}); load() }
                             }}>
-                              <Eye className="h-3.5 w-3.5" />
+                              <Eye className="h-3.5 w-3.5 mr-1" /><span className="text-xs">Voir</span>
                             </Button>
-                            <Button variant="outline" size="sm" className="h-8 px-2" onClick={() => window.open(`/api/rh/paie/pdf?bulletin_id=${b.id}`, '_blank')}>
-                              <Download className="h-3.5 w-3.5" />
+                            <Button variant="outline" size="sm" className="h-8 px-2.5" title="Télécharger PDF" onClick={() => window.open(`/api/rh/paie/pdf?employe_id=${employe.id}&periode=${b.periode}&bulletin_id=${b.id}`, '_blank')}>
+                              <Download className="h-3.5 w-3.5 mr-1" /><span className="text-xs hidden md:inline">Télécharger PDF</span>
                             </Button>
                           </div>
                         </div>
