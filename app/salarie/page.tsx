@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Progress } from "@/components/ui/progress"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
-import { Loader2, Clock, Calendar, CreditCard, TrendingUp, LogIn, LogOut, Coffee, Download, User, Save, CheckCircle, FileText, CalendarPlus, UserCircle, FolderOpen, Bell, Eye } from "lucide-react"
+import { Loader2, Clock, Calendar, CreditCard, TrendingUp, LogIn, LogOut, Coffee, Download, User, Save, CheckCircle, FileText, CalendarPlus, UserCircle, FolderOpen, Bell, Eye, Upload, X } from "lucide-react"
+import { Textarea } from "@/components/ui/textarea"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -32,7 +33,7 @@ function fmt(n: number) { return new Intl.NumberFormat("fr-FR", { maximumFractio
 function timeMauritius(): string { return new Date().toLocaleTimeString("en-GB", { timeZone: MU_TZ, hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }) }
 function todayISO(): string { const d = new Date(new Date().toLocaleString("en-US", { timeZone: MU_TZ })); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}` }
 
-type Tab = "dashboard" | "profil" | "bulletins" | "planning" | "primes"
+type Tab = "dashboard" | "profil" | "bulletins" | "planning" | "primes" | "conges" | "documents"
 
 // ── Ma fiche — composant isolé (pas de re-render parent) ──
 function MaFicheTab({ employe, onUpdated }: { employe: any; onUpdated: () => void }) {
@@ -132,6 +133,315 @@ function MaFicheTab({ employe, onUpdated }: { employe: any; onUpdated: () => voi
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+// ── Congés tab ──
+function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () => void }) {
+  const [balances, setBalances] = useState<any>(null)
+  const [history, setHistory] = useState<any[]>([])
+  const [loadingH, setLoadingH] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [success, setSuccess] = useState("")
+  const [error, setError] = useState("")
+  const [typeConge, setTypeConge] = useState("AL")
+  const [dateDebut, setDateDebut] = useState("")
+  const [dateFin, setDateFin] = useState("")
+  const [motif, setMotif] = useState("")
+  const [file, setFile] = useState<File | null>(null)
+  const [dragOver, setDragOver] = useState(false)
+
+  const needsCertificat = typeConge === "SL" && dateDebut && dateFin && (() => {
+    const d1 = new Date(dateDebut), d2 = new Date(dateFin)
+    return (d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24) > 3
+  })()
+
+  useEffect(() => {
+    const load = async () => {
+      setLoadingH(true)
+      try {
+        const [balRes, histRes] = await Promise.all([
+          fetch(`/api/rh/conges?action=balances&employe_id=${employe.id}`).then(r => r.json()).catch(() => ({})),
+          fetch(`/api/rh/conges?employe_id=${employe.id}`).then(r => r.json()).catch(() => ({ conges: [] })),
+        ])
+        setBalances(balRes.balances?.[0] || null)
+        setHistory(histRes.conges || histRes.demandes || [])
+      } catch {}
+      setLoadingH(false)
+    }
+    load()
+  }, [employe.id])
+
+  const handleSubmit = async () => {
+    if (!dateDebut || !dateFin) { setError("Veuillez renseigner les dates"); return }
+    setSubmitting(true); setError(""); setSuccess("")
+    try {
+      const res = await fetch("/api/rh/conges", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "creer", employe_id: employe.id, type_conge: typeConge, date_debut: dateDebut, date_fin: dateFin, motif }),
+      })
+      const data = await res.json()
+      if (data.error) setError(data.error)
+      else {
+        setSuccess("Demande soumise avec succès")
+        setDateDebut(""); setDateFin(""); setMotif(""); setFile(null)
+        // Refresh history
+        const histRes = await fetch(`/api/rh/conges?employe_id=${employe.id}`).then(r => r.json()).catch(() => ({ conges: [] }))
+        setHistory(histRes.conges || histRes.demandes || [])
+        const balRes = await fetch(`/api/rh/conges?action=balances&employe_id=${employe.id}`).then(r => r.json()).catch(() => ({}))
+        setBalances(balRes.balances?.[0] || null)
+        onRefresh()
+        setTimeout(() => setSuccess(""), 4000)
+      }
+    } catch { setError("Erreur réseau") }
+    setSubmitting(false)
+  }
+
+  const alRemaining = balances?.al_solde ?? 20
+  const slRemaining = balances?.sl_solde ?? 15
+  const alPct = Math.round((alRemaining / 22) * 100)
+  const slPct = Math.round((slRemaining / 15) * 100)
+
+  const statutBadge = (s: string) => {
+    if (s === "approuve" || s === "approved") return <Badge style={{ backgroundColor: `${GREEN}20`, color: GREEN }}>Approuvé</Badge>
+    if (s === "refuse" || s === "rejected") return <Badge style={{ backgroundColor: "#ef444420", color: "#ef4444" }}>Refusé</Badge>
+    return <Badge style={{ backgroundColor: "#f9731620", color: "#f97316" }}>En attente</Badge>
+  }
+
+  const typeLabel: Record<string, string> = { AL: "Congé annuel", SL: "Congé maladie", MAT: "Congé maternité", PAT: "Congé paternité", SANS_SOLDE: "Sans solde" }
+  const typeColor: Record<string, string> = { AL: GREEN, SL: "#f97316", MAT: "#8b5cf6", PAT: BLUE, SANS_SOLDE: "#6b7280" }
+
+  return (
+    <div className="space-y-6">
+      {/* Balances */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card>
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-5 w-5" style={{ color: GREEN }} />
+                <p className="font-medium text-sm" style={{ color: NAVY }}>Congé annuel (AL)</p>
+              </div>
+              <Badge className="text-xs" style={{ backgroundColor: `${GREEN}20`, color: GREEN }}>{alPct}%</Badge>
+            </div>
+            <Progress value={alPct} className="h-3" style={{ backgroundColor: `${GREEN}20` }} />
+            <p className="text-sm text-gray-600">{alRemaining}j restants / 22j</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-orange-500" />
+                <p className="font-medium text-sm" style={{ color: NAVY }}>Congé maladie (SL)</p>
+              </div>
+              <Badge className="text-xs" style={{ backgroundColor: "#f9731620", color: "#f97316" }}>{slPct}%</Badge>
+            </div>
+            <Progress value={slPct} className="h-3" style={{ backgroundColor: "#f9731620" }} />
+            <p className="text-sm text-gray-600">{slRemaining}j restants / 15j</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Request form */}
+      <Card>
+        <CardHeader><CardTitle className="text-base" style={{ color: NAVY }}>Nouvelle demande de congé</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          {success && <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700"><CheckCircle className="h-4 w-4" />{success}</div>}
+          {error && <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{error}</div>}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label>Type de congé</Label>
+              <Select value={typeConge} onValueChange={setTypeConge}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="AL">Congé annuel</SelectItem>
+                  <SelectItem value="SL">Congé maladie</SelectItem>
+                  <SelectItem value="MAT">Congé maternité</SelectItem>
+                  <SelectItem value="PAT">Congé paternité</SelectItem>
+                  <SelectItem value="SANS_SOLDE">Sans solde</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div />
+            <div>
+              <Label>Date début</Label>
+              <Input type="date" value={dateDebut} onChange={e => setDateDebut(e.target.value)} />
+            </div>
+            <div>
+              <Label>Date fin</Label>
+              <Input type="date" value={dateFin} onChange={e => setDateFin(e.target.value)} />
+            </div>
+          </div>
+
+          <div>
+            <Label>Motif (optionnel)</Label>
+            <Textarea value={motif} onChange={e => setMotif(e.target.value)} placeholder="Raison de la demande..." rows={3} />
+          </div>
+
+          {needsCertificat && (
+            <div>
+              <Label>Certificat médical (PDF/image)</Label>
+              <div
+                className={`mt-1 border-2 border-dashed rounded-lg p-6 text-center transition-colors ${dragOver ? "border-blue-400 bg-blue-50" : "border-gray-300"}`}
+                onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={e => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files[0]; if (f) setFile(f) }}
+              >
+                {file ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <FileText className="h-5 w-5 text-gray-500" />
+                    <span className="text-sm">{file.name}</span>
+                    <button onClick={() => setFile(null)} className="text-red-400 hover:text-red-600"><X className="h-4 w-4" /></button>
+                  </div>
+                ) : (
+                  <div>
+                    <Upload className="h-8 w-8 mx-auto text-gray-400 mb-2" />
+                    <p className="text-sm text-gray-500">Glissez-déposez ou <label className="text-blue-600 cursor-pointer hover:underline">parcourir<input type="file" className="hidden" accept=".pdf,image/*" onChange={e => { if (e.target.files?.[0]) setFile(e.target.files[0]) }} /></label></p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <Button onClick={handleSubmit} disabled={submitting} style={{ backgroundColor: NAVY }} className="text-white">
+            {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CalendarPlus className="h-4 w-4 mr-2" />}
+            Soumettre la demande
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* History */}
+      <Card>
+        <CardHeader><CardTitle className="text-base" style={{ color: NAVY }}>Historique des congés</CardTitle></CardHeader>
+        <CardContent>
+          {loadingH ? (
+            <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div>
+          ) : history.length === 0 ? (
+            <p className="text-gray-400 text-center py-8">Aucune demande de congé</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-gray-500">
+                    <th className="pb-2 pr-3">Type</th>
+                    <th className="pb-2 pr-3">Dates</th>
+                    <th className="pb-2 pr-3">Jours</th>
+                    <th className="pb-2 pr-3">Statut</th>
+                    <th className="pb-2">Motif</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map((c: any, i: number) => {
+                    const t = c.type_conge || "AL"
+                    const d1 = c.date_debut ? new Date(c.date_debut).toLocaleDateString("fr-FR") : "—"
+                    const d2 = c.date_fin ? new Date(c.date_fin).toLocaleDateString("fr-FR") : "—"
+                    const days = c.nb_jours || (c.date_debut && c.date_fin ? Math.ceil((new Date(c.date_fin).getTime() - new Date(c.date_debut).getTime()) / (1000 * 60 * 60 * 24)) + 1 : "—")
+                    return (
+                      <tr key={c.id || i} className="border-b last:border-0">
+                        <td className="py-2.5 pr-3"><Badge style={{ backgroundColor: `${typeColor[t] || BLUE}20`, color: typeColor[t] || BLUE }}>{typeLabel[t] || t}</Badge></td>
+                        <td className="py-2.5 pr-3 whitespace-nowrap">{d1} — {d2}</td>
+                        <td className="py-2.5 pr-3 font-mono">{days}</td>
+                        <td className="py-2.5 pr-3">{statutBadge(c.statut || c.status || "en_attente")}</td>
+                        <td className="py-2.5 text-gray-500 truncate max-w-[200px]">{c.motif || "—"}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+// ── Documents tab ──
+function DocumentsTab({ employe }: { employe: any }) {
+  const [documents, setDocuments] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [uploading, setUploading] = useState(false)
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true)
+      try {
+        const res = await fetch(`/api/rh/employes/${employe.id}`).then(r => r.json()).catch(() => ({}))
+        setDocuments(res.documents || res.employe?.documents || [])
+      } catch {}
+      setLoading(false)
+    }
+    load()
+  }, [employe.id])
+
+  const handleUpload = async (file: File) => {
+    setUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      formData.append("employe_id", employe.id)
+      const res = await fetch("/api/rh/documents", { method: "POST", body: formData })
+      const data = await res.json()
+      if (!data.error) {
+        setDocuments(prev => [data.document || { nom: file.name, created_at: new Date().toISOString() }, ...prev])
+      }
+    } catch {}
+    setUploading(false)
+  }
+
+  const catColor: Record<string, string> = { identite: BLUE, contrat: NAVY, medical: "#f97316", formation: "#8b5cf6", autre: "#6b7280" }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="text-base" style={{ color: NAVY }}>Mes documents</CardTitle>
+        <label>
+          <Button variant="outline" size="sm" disabled={uploading} asChild>
+            <span className="cursor-pointer">
+              {uploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+              Ajouter un document
+            </span>
+          </Button>
+          <input type="file" className="hidden" onChange={e => { if (e.target.files?.[0]) handleUpload(e.target.files[0]) }} />
+        </label>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div>
+        ) : documents.length === 0 ? (
+          <p className="text-gray-400 text-center py-8">Aucun document</p>
+        ) : (
+          <div className="space-y-2">
+            {documents.map((doc: any, i: number) => {
+              const cat = doc.categorie || doc.category || "autre"
+              return (
+                <div key={doc.id || i} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="h-10 w-10 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: `${NAVY}10` }}>
+                      <FileText className="h-5 w-5" style={{ color: NAVY }} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm truncate" style={{ color: NAVY }}>{doc.nom || doc.name || "Document"}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <Badge className="text-[10px] px-1.5 py-0" style={{ backgroundColor: `${catColor[cat] || "#6b7280"}20`, color: catColor[cat] || "#6b7280" }}>{cat}</Badge>
+                        {doc.created_at && <span className="text-xs text-gray-400">{new Date(doc.created_at).toLocaleDateString("fr-FR")}</span>}
+                      </div>
+                    </div>
+                  </div>
+                  {(doc.url || doc.file_url) && (
+                    <Button variant="outline" size="sm" className="h-8 px-2 shrink-0" onClick={() => window.open(doc.url || doc.file_url, "_blank")}>
+                      <Download className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -236,6 +546,8 @@ export default function EspaceEmployePage() {
             { id: "bulletins" as Tab, label: "Bulletins", icon: CreditCard },
             { id: "planning" as Tab, label: "Planning", icon: Calendar },
             { id: "primes" as Tab, label: "Primes", icon: TrendingUp },
+            { id: "conges" as Tab, label: "Mes congés", icon: CalendarPlus },
+            { id: "documents" as Tab, label: "Documents", icon: FolderOpen },
           ]).map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm rounded-md transition-colors ${tab === t.id ? "text-white font-medium shadow" : "text-gray-500 hover:bg-gray-50"}`}
@@ -336,9 +648,9 @@ export default function EspaceEmployePage() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {([
                   { icon: FileText, label: "Mes bulletins", onClick: () => setTab("bulletins"), color: BLUE },
-                  { icon: CalendarPlus, label: "Demander un congé", onClick: () => window.open("/conges/demande", "_self"), color: GREEN },
-                  { icon: UserCircle, label: "Mon profil", onClick: () => setTab("profil"), color: GOLD },
-                  { icon: FolderOpen, label: "Mes documents", onClick: () => setTab("bulletins"), color: NAVY },
+                  { icon: CalendarPlus, label: "Demander un congé", onClick: () => setTab("conges"), color: GREEN },
+                  { icon: Calendar, label: "Mon planning", onClick: () => setTab("planning"), color: GOLD },
+                  { icon: FolderOpen, label: "Mes documents", onClick: () => setTab("documents"), color: NAVY },
                 ] as const).map((action, i) => (
                   <Card key={i}
                     className="cursor-pointer transition-all duration-200 hover:shadow-md hover:-translate-y-0.5"
@@ -480,6 +792,16 @@ export default function EspaceEmployePage() {
               )}
             </CardContent>
           </Card>
+        )}
+
+        {/* Congés */}
+        {tab === "conges" && employe && (
+          <CongesTab employe={employe} onRefresh={load} />
+        )}
+
+        {/* Documents */}
+        {tab === "documents" && employe && (
+          <DocumentsTab employe={employe} />
         )}
       </div>
     </div>

@@ -161,7 +161,17 @@ export async function GET(request: Request) {
 
     // 1) Determine accessible societes
     let societeIds: string[]
-    if (societe_id) {
+
+    // Self-service: if employe_id is passed and matches the logged-in user, allow direct access
+    if (employe_id) {
+      const { data: selfEmp } = await supabase.from('employes').select('id, societe_id, auth_user_id, email').eq('id', employe_id).maybeSingle()
+      const isSelf = selfEmp && (selfEmp.auth_user_id === user.id || selfEmp.email === user.email)
+      if (isSelf) {
+        societeIds = [selfEmp.societe_id]
+      } else {
+        societeIds = await getUserSocieteIds(user.id)
+      }
+    } else if (societe_id) {
       const accessibleIds = await getUserSocieteIds(user.id)
       if (!accessibleIds.includes(societe_id)) {
         return NextResponse.json({ error: 'Acces non autorise a cette societe' }, { status: 403 })
@@ -169,6 +179,17 @@ export async function GET(request: Request) {
       societeIds = [societe_id]
     } else {
       societeIds = await getUserSocieteIds(user.id)
+    }
+
+    // Fallback for employee role: find their own société
+    if (societeIds.length === 0) {
+      const { data: selfEmp } = await supabase.from('employes').select('societe_id, auth_user_id, email')
+        .or(`auth_user_id.eq.${user.id},email.eq.${user.email || 'NONE'}`)
+        .is('date_depart', null)
+        .maybeSingle()
+      if (selfEmp?.societe_id) {
+        societeIds = [selfEmp.societe_id]
+      }
     }
 
     if (societeIds.length === 0) {
@@ -347,10 +368,18 @@ export async function POST(request: Request) {
       if (!body.employe_id || !body.type_conge || !body.date_debut || !body.date_fin)
         return NextResponse.json({ error: 'Champs requis manquants' }, { status: 400 })
 
-      const accessibleIds = await getUserSocieteIds(user.id)
-      const { data: emp } = await supabase.from('employes').select('id, societe_id, gender').eq('id', body.employe_id).maybeSingle()
-      if (!emp || !accessibleIds.includes(emp.societe_id)) {
-        return NextResponse.json({ error: 'Employe non trouve ou acces non autorise' }, { status: 403 })
+      const { data: emp } = await supabase.from('employes').select('id, societe_id, gender, auth_user_id, email').eq('id', body.employe_id).maybeSingle()
+      if (!emp) {
+        return NextResponse.json({ error: 'Employe non trouve' }, { status: 404 })
+      }
+
+      // Access check: either user has société access OR user IS the employee (self-service)
+      const isSelf = emp.auth_user_id === user.id || emp.email === user.email
+      if (!isSelf) {
+        const accessibleIds = await getUserSocieteIds(user.id)
+        if (!accessibleIds.includes(emp.societe_id)) {
+          return NextResponse.json({ error: 'Acces non autorise' }, { status: 403 })
+        }
       }
 
       // Validate Mauritius WRA 2019 rules
