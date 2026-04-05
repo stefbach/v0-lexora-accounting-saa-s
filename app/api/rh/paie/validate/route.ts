@@ -42,7 +42,7 @@ export async function POST(request: Request) {
     // ── Fetch all active employees for the société ──────────────────────────
     const { data: employes, error: empErr } = await supabase
       .from('employes')
-      .select('id, nom, prenom, poste, salaire_base, nic_number, bank_account, date_embauche, date_depart')
+      .select('id, nom, prenom, poste, salaire_base, nic_number, bank_account, date_arrivee, date_depart')
       .eq('societe_id', societe_id)
       .is('date_depart', null)
       .order('nom')
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
     // ── Fetch pointages for the period ──────────────────────────────────────
     const { data: pointages } = await supabase
       .from('pointages')
-      .select('employe_id, date_pointage, heure_entree, heure_sortie, heures_ot_1_5x, heures_ot_2x')
+      .select('employe_id, date_pointage, heure_entree, heure_sortie, heures_supplementaires, duree_minutes')
       .in('employe_id', empIds)
       .gte('date_pointage', dateDebut)
       .lte('date_pointage', dateFin)
@@ -143,10 +143,10 @@ export async function POST(request: Request) {
         })
       }
 
-      // 5. OT hours reasonable (< 60h/month)
-      const totalOT = ptEmp.reduce((sum, p) => {
-        return sum + (Number(p.heures_ot_1_5x) || 0) + (Number(p.heures_ot_2x) || 0)
-      }, 0)
+      // 5. OT hours reasonable (< 60h/month) — estimate from total worked hours minus standard
+      const totalWorkedMinutes = ptEmp.reduce((sum, p) => sum + (Number(p.duree_minutes) || 0), 0)
+      const standardMinutes = ptEmp.length * 9 * 60 // 9h standard per day
+      const totalOT = Math.max(0, (totalWorkedMinutes - standardMinutes) / 60)
       if (totalOT >= 60) {
         anomalies.push({
           employe_id: emp.id,

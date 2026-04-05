@@ -539,10 +539,28 @@ export async function POST(request: Request) {
     }
 
     if (action === 'valider') {
-      const { data, error } = await supabase.from('bulletins_paie')
-        .update({ statut: 'valide' }).eq('employe_id', employe_id).eq('periode', periodeDate).select().single()
-      if (error) throw error
-      return NextResponse.json({ bulletin: data })
+      // Find bulletin — try exact match first, then ilike for period flexibility
+      let bulletin: any = null
+      const { data: exact } = await supabase.from('bulletins_paie')
+        .select('id').eq('employe_id', employe_id).eq('periode', periodeDate).maybeSingle()
+      if (exact) {
+        const { data, error } = await supabase.from('bulletins_paie')
+          .update({ statut: 'valide' }).eq('id', exact.id).select().single()
+        if (error) throw error
+        bulletin = data
+      } else {
+        // Fallback: search by ilike
+        const { data: fuzzy } = await supabase.from('bulletins_paie')
+          .select('id').eq('employe_id', employe_id).ilike('periode', `${periodeStr}%`).maybeSingle()
+        if (fuzzy) {
+          const { data, error } = await supabase.from('bulletins_paie')
+            .update({ statut: 'valide' }).eq('id', fuzzy.id).select().single()
+          if (error) throw error
+          bulletin = data
+        }
+      }
+      if (!bulletin) return NextResponse.json({ error: `Aucun bulletin trouvé pour ${employe_id} en ${periodeStr}` }, { status: 404 })
+      return NextResponse.json({ bulletin })
     }
 
     return NextResponse.json({ error: 'Action inconnue' }, { status: 400 })
