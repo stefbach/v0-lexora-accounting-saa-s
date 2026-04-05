@@ -33,8 +33,11 @@ export async function POST(request: Request) {
       .eq('societe_id', societe_id)
       .ilike('periode', `${periode}%`)
 
-    if (error) throw error
-    if (!bulletins || bulletins.length === 0) return NextResponse.json({ error: 'Aucun bulletin pour cette période' }, { status: 404 })
+    if (error) {
+      console.error('[csg-mra] DB error bulletins:', error.message, error.details)
+      return NextResponse.json({ error: `Erreur DB bulletins: ${error.message}`, debug_details: error.details }, { status: 500 })
+    }
+    if (!bulletins || bulletins.length === 0) return NextResponse.json({ error: `Aucun bulletin pour ${periode}. Importez ou calculez d'abord.` }, { status: 404 })
 
     // Fetch employee data separately
     const empIds = [...new Set(bulletins.map(b => b.employe_id).filter(Boolean))]

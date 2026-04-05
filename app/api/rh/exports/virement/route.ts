@@ -82,46 +82,58 @@ export async function POST(request: Request) {
       }
     }
 
-    // --- 2. Récupérer les bulletins validés de la période ---
+    // --- 2. Récupérer les bulletins de la période ---
     const periodeDate = `${periode}-01`
-    const { data: bulletins, error: bullErr } = await supabase
-      .from('bulletins_paie')
-      .select('id, employe_id, salaire_net, statut, devise_salaire')
-      .eq('societe_id', societe_id)
-      .ilike('periode', `${periode}%`)
-      .in('statut', ['valide', 'paye'])
+    let allBulletins: any[] = []
 
-    if (bullErr) throw bullErr
-
-    if (!bulletins?.length) {
-      // Fallback: try any status (imported bulletins might have different statut)
-      const { data: allBulletins } = await supabase
+    try {
+      // Try validated first
+      const { data: validated } = await supabase
         .from('bulletins_paie')
-        .select('id, employe_id, salaire_net, statut, devise_salaire')
+        .select('*')
         .eq('societe_id', societe_id)
         .ilike('periode', `${periode}%`)
+        .in('statut', ['valide', 'paye'])
 
-      if (!allBulletins?.length) {
-        return NextResponse.json({
-          error: 'Aucun bulletin pour cette période. Importez ou calculez les bulletins d\'abord.',
-          code: 'NO_BULLETINS'
-        }, { status: 404 })
+      if (validated && validated.length > 0) {
+        allBulletins = validated
+      } else {
+        // Fallback: any status
+        const { data: anyStatus } = await supabase
+          .from('bulletins_paie')
+          .select('*')
+          .eq('societe_id', societe_id)
+          .ilike('periode', `${periode}%`)
+        allBulletins = anyStatus || []
       }
-      // Use all bulletins regardless of status
-      bulletins.push(...allBulletins)
+    } catch (dbErr: any) {
+      return NextResponse.json({ error: `Erreur DB bulletins: ${dbErr.message}`, debug_stack: dbErr.stack?.split('\n').slice(0,3).join(' | ') }, { status: 500 })
     }
 
-    // Récupérer les employés séparément (pas de FK join)
-    const empIds = [...new Set(bulletins.map(b => b.employe_id).filter(Boolean))]
-    const { data: employes } = empIds.length > 0
-      ? await supabase.from('employes').select('*').in('id', empIds)
-      : { data: [] }
-    const empMap = new Map((employes || []).map(e => [e.id, e]))
+    if (allBulletins.length === 0) {
+      return NextResponse.json({
+        error: `Aucun bulletin pour ${periode}. Importez ou calculez les bulletins d'abord.`,
+        code: 'NO_BULLETINS'
+      }, { status: 404 })
+    }
+
+    // Récupérer les employés
+    const empIds = [...new Set(allBulletins.map((b: any) => b.employe_id).filter(Boolean))]
+    let employes: any[] = []
+    try {
+      if (empIds.length > 0) {
+        const { data } = await supabase.from('employes').select('*').in('id', empIds)
+        employes = data || []
+      }
+    } catch (empErr: any) {
+      return NextResponse.json({ error: `Erreur DB employes: ${empErr.message}` }, { status: 500 })
+    }
+    const empMap = new Map(employes.map((e: any) => [e.id, e]))
 
     const date = new Date().toISOString().split('T')[0]
 
     // --- 3. Construire les lignes de virement ---
-    const lignes: LigneBulletin[] = bulletins.map((b: any) => {
+    const lignes: LigneBulletin[] = allBulletins.map((b: any) => {
       const emp = empMap.get(b.employe_id)
       return {
         employe_code: emp?.code || '',
@@ -252,7 +264,7 @@ export async function POST(request: Request) {
     const recap = {
       periode,
       compte_emetteur: infoEmetteur,
-      nb_bulletins_total: bulletins.length,
+      nb_bulletins_total: allBulletins.length,
       montant_total_mur: lignesMUR.reduce((s, l) => s + l.salaire_net, 0),
       montant_total_eur: lignesEUR.reduce((s, l) => s + l.salaire_net, 0),
       nb_banques: fichiersGeneres.filter(f => f.banque !== 'SANS_BANQUE').length,
@@ -294,7 +306,7 @@ export async function POST(request: Request) {
         numero_compte_emetteur: infoEmetteur.numero_compte,
         iban_emetteur: infoEmetteur.iban,
         swift_emetteur: infoEmetteur.swift,
-        nb_beneficiaires: bulletins.length,
+        nb_beneficiaires: allBulletins.length,
         montant_total_mur: recap.montant_total_mur,
         montant_total_eur: recap.montant_total_eur,
         fichier_genere: `${fichiersGeneres.length} fichiers générés`,
