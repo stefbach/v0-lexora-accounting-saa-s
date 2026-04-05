@@ -38,6 +38,7 @@ export async function POST(request: Request) {
       compte_emetteur_id,    // UUID du compte bancaire employeur (optionnel)
       banque_emettrice,      // code banque émettrice (MCB, SBM...) si pas de compte_emetteur_id
       format = 'json',       // 'json' = retourner tous les fichiers | 'single' = un seul banque
+      exclude_employe_ids,   // Array of employee IDs to exclude (espèces, individuel)
       banque_filter,         // si format=single, quelle banque générer
     } = await request.json()
 
@@ -110,6 +111,12 @@ export async function POST(request: Request) {
       }
     } catch (dbErr: any) {
       return NextResponse.json({ error: `Erreur DB bulletins: ${dbErr.message}`, debug_stack: dbErr.stack?.split('\n').slice(0,3).join(' | ') }, { status: 500 })
+    }
+
+    // Filter out excluded employees (espèces, individuel)
+    if (exclude_employe_ids && Array.isArray(exclude_employe_ids) && exclude_employe_ids.length > 0) {
+      const excludeSet = new Set(exclude_employe_ids)
+      allBulletins = allBulletins.filter((b: any) => !excludeSet.has(b.employe_id))
     }
 
     if (allBulletins.length === 0) {

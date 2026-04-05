@@ -46,6 +46,8 @@ interface Employe {
   bank_name?: string
   bank_account?: string
   bank_code?: string
+  mode_paiement?: string
+  inclus_mra?: boolean
 }
 
 interface ExportStatus {
@@ -120,6 +122,9 @@ export default function ExportPaiePage() {
         bank_name: e.bank_name || "",
         bank_account: e.bank_account || e.iban || "",
         bank_code: e.bank_code || "",
+        mode_paiement: e.mode_paiement || "bulk",
+        inclus_mra: e.inclus_mra !== false,
+        bank_code: e.bank_code || "",
       }))
       setEmployes(emps.sort((a, b) => `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`)))
 
@@ -156,6 +161,24 @@ export default function ExportPaiePage() {
   const formatDeadline = (d: Date) =>
     `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`
 
+  // ========== Update employee mode ==========
+  const updateEmployeMode = async (empId: string, field: string, value: any) => {
+    try {
+      await fetch(`/api/rh/employes/${empId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [field]: value }),
+      })
+      setEmployes(prev => prev.map(e => e.id === empId ? { ...e, [field]: value } : e))
+    } catch {}
+  }
+
+  // Stats par mode
+  const empBulk = employes.filter(e => e.mode_paiement === "bulk" || !e.mode_paiement)
+  const empCash = employes.filter(e => e.mode_paiement === "especes")
+  const empIndiv = employes.filter(e => e.mode_paiement === "individuel")
+  const empMRA = employes.filter(e => e.inclus_mra !== false)
+
   // ========== Tab 1: Virements bancaires ==========
 
   const exportVirementMCB = async () => {
@@ -165,7 +188,12 @@ export default function ExportPaiePage() {
       const res = await fetch("/api/rh/exports/virement", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ societe_id: societe, periode }),
+        body: JSON.stringify({
+          societe_id: societe,
+          periode,
+          // Exclude employees not in bulk mode
+          exclude_employe_ids: employes.filter(e => e.mode_paiement === "especes" || e.mode_paiement === "individuel").map(e => e.id),
+        }),
       })
       let data: any
       const text = await res.text()
@@ -359,7 +387,7 @@ export default function ExportPaiePage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <Card className="rounded-2xl shadow-sm">
           <CardContent className="p-5 flex items-center gap-4">
             <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: BLUE + "18" }}>
@@ -395,6 +423,22 @@ export default function ExportPaiePage() {
               <p className="text-2xl font-bold" style={{ color: NAVY }}>{bulletinsValides.length}</p>
               <p className="text-xs text-gray-400">sur {bulletins.length} bulletin(s)</p>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-2xl shadow-sm">
+          <CardContent className="p-4">
+            <p className="text-xs text-gray-500 uppercase tracking-wide">Bulk MCB</p>
+            <p className="text-xl font-bold text-green-600">{empBulk.length}</p>
+            <p className="text-xs text-gray-400">virement bancaire</p>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-2xl shadow-sm">
+          <CardContent className="p-4">
+            <p className="text-xs text-gray-500 uppercase tracking-wide">Espèces / Indiv.</p>
+            <p className="text-xl font-bold text-red-600">{empCash.length + empIndiv.length}</p>
+            <p className="text-xs text-gray-400">{empCash.length} cash · {empIndiv.length} indiv.</p>
           </CardContent>
         </Card>
       </div>
@@ -511,8 +555,10 @@ export default function ExportPaiePage() {
                         <th className="px-4 py-3 text-left font-medium" style={{ color: NAVY }}>Nom</th>
                         <th className="px-4 py-3 text-left font-medium" style={{ color: NAVY }}>Banque</th>
                         <th className="px-4 py-3 text-left font-medium" style={{ color: NAVY }}>Compte</th>
+                        <th className="px-4 py-3 text-center font-medium" style={{ color: NAVY }}>Mode paiement</th>
+                        <th className="px-4 py-3 text-center font-medium" style={{ color: NAVY }}>MRA</th>
                         <th className="px-4 py-3 text-right font-medium" style={{ color: NAVY }}>Net a payer</th>
-                        <th className="px-4 py-3 text-center font-medium" style={{ color: NAVY }}>Statut bulletin</th>
+                        <th className="px-4 py-3 text-center font-medium" style={{ color: NAVY }}>Statut</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y">
@@ -528,6 +574,26 @@ export default function ExportPaiePage() {
                             </td>
                             <td className="px-4 py-3 text-gray-600 text-xs">{emp.bank_name || <span className="text-orange-500">Non renseigne</span>}</td>
                             <td className="px-4 py-3 font-mono text-xs text-gray-600">{emp.bank_account || <span className="text-orange-500">--</span>}</td>
+                            <td className="px-4 py-3 text-center">
+                              <select
+                                value={emp.mode_paiement || "bulk"}
+                                onChange={e => updateEmployeMode(emp.id, "mode_paiement", e.target.value)}
+                                className="text-xs border rounded px-2 py-1 bg-white"
+                                style={{ color: emp.mode_paiement === "especes" ? "#dc2626" : emp.mode_paiement === "individuel" ? "#ea580c" : "#059669" }}
+                              >
+                                <option value="bulk">Bulk MCB</option>
+                                <option value="individuel">Individuel</option>
+                                <option value="especes">Espèces</option>
+                              </select>
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <input
+                                type="checkbox"
+                                checked={emp.inclus_mra !== false}
+                                onChange={e => updateEmployeMode(emp.id, "inclus_mra", e.target.checked)}
+                                className="w-4 h-4 rounded"
+                              />
+                            </td>
                             <td className="px-4 py-3 text-right font-mono font-medium">{net > 0 ? `${fmt(net)} MUR` : "--"}</td>
                             <td className="px-4 py-3 text-center">
                               {!b ? (
