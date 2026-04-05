@@ -143,22 +143,8 @@ export default function PaiePage() {
   const ouvrirPDF = async (bulletinId: string) => {
     setPdfLoading(bulletinId)
     try {
-      const data = await fetch("/api/rh/paie/pdf", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bulletin_id: bulletinId })
-      }).then(r => r.json())
-      if (data.html) {
-        // Open in new window and auto-trigger print dialog for PDF save
-        const printWindow = window.open("", "_blank")
-        if (printWindow) {
-          printWindow.document.write(data.html)
-          printWindow.document.close()
-          // Auto-trigger print after content loads (user can "Save as PDF")
-          printWindow.onload = () => setTimeout(() => printWindow.print(), 500)
-          // Fallback if onload doesn't fire
-          setTimeout(() => { try { printWindow.print() } catch {} }, 1500)
-        }
-      } else alert(data.error || "Erreur génération PDF")
+      // Open the GET endpoint directly — it returns print-ready HTML
+      window.open(`/api/rh/paie/pdf?bulletin_id=${bulletinId}`, "_blank")
     } catch (e) { console.error(e) } finally { setPdfLoading(null) }
   }
 

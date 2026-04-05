@@ -538,10 +538,19 @@ ${Number(bulletin.csg_patronal_bonus) > 0 ? `<tr><td>CSG patronal sur bonus (6%)
   <button onclick="if(navigator.share)navigator.share({title:document.title,text:document.title});else{navigator.clipboard.writeText(window.location.href);alert('Lien copié')}" style="padding:10px 24px;background:#4191FF;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">📤 Partager</button>
 </div>
 
-<style>@media print{button,div[style*="justify-content:center"]{display:none!important}}</style>
+<style>@media print{button,div[style*="justify-content:center"]{display:none!important}.no-print{display:none!important}}</style>
+<script>
+  // Auto-trigger print dialog on load for PDF download
+  window.onload = function() {
+    setTimeout(function() { window.print(); }, 800);
+  };
+</script>
 </body></html>`
 
   return new NextResponse(html, {
-    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Content-Disposition': `inline; filename="bulletin_${emp?.nom || 'employe'}_${moisLabel.replace(/\s+/g, '_')}_${annee}.html"`,
+    },
   })
 }
