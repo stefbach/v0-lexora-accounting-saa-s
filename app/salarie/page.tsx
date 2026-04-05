@@ -820,6 +820,51 @@ export default function EspaceEmployePage() {
                 </div>
               )}
 
+              {/* Prochains jours fériés */}
+              {(() => {
+                const HOLIDAYS_2026 = [
+                  { date: "2026-01-01", name: "New Year", icon: "🎆" },
+                  { date: "2026-01-02", name: "New Year (2nd day)", icon: "🎆" },
+                  { date: "2026-01-02", name: "Thaipoosam Cavadee", icon: "🕉️" },
+                  { date: "2026-02-01", name: "Abolition of Slavery", icon: "✊" },
+                  { date: "2026-02-15", name: "Maha Shivaratree", icon: "🙏" },
+                  { date: "2026-02-17", name: "Chinese Spring Festival", icon: "🐉" },
+                  { date: "2026-03-12", name: "Independence & Republic Day", icon: "🇲🇺" },
+                  { date: "2026-03-20", name: "Eid-Ul-Fitr", icon: "☪️" },
+                  { date: "2026-04-03", name: "Ougadi", icon: "🪷" },
+                  { date: "2026-05-01", name: "Labour Day", icon: "⚒️" },
+                  { date: "2026-08-15", name: "Assumption", icon: "✝️" },
+                  { date: "2026-08-26", name: "Ganesh Chaturthi", icon: "🙏" },
+                  { date: "2026-11-02", name: "Arrival of Indentured Labourers", icon: "🚢" },
+                  { date: "2026-11-08", name: "Divali", icon: "🪔" },
+                  { date: "2026-12-25", name: "Christmas", icon: "🎄" },
+                ]
+                const today = new Date().toISOString().split("T")[0]
+                const upcoming = HOLIDAYS_2026.filter(h => h.date >= today).slice(0, 3)
+                if (upcoming.length === 0) return null
+                return (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 px-1">Prochains jours fériés</p>
+                    {upcoming.map((h, i) => {
+                      const d = new Date(h.date + "T12:00:00")
+                      const daysUntil = Math.ceil((d.getTime() - new Date().getTime()) / 86400000)
+                      return (
+                        <div key={i} className="flex items-center gap-3 p-3 rounded-2xl bg-gray-50">
+                          <span className="text-lg">{h.icon}</span>
+                          <div className="flex-1">
+                            <p className="text-sm font-medium" style={{ color: NAVY }}>{h.name}</p>
+                            <p className="text-xs text-gray-400">{d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}</p>
+                          </div>
+                          <Badge className="text-[10px] px-2 py-0.5" style={{ backgroundColor: daysUntil <= 7 ? `${GOLD}20` : "#f3f4f6", color: daysUntil <= 7 ? GOLD : "#9ca3af" }}>
+                            {daysUntil === 0 ? "Aujourd'hui" : daysUntil === 1 ? "Demain" : `J-${daysUntil}`}
+                          </Badge>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
+
               {/* Quick actions grid */}
               <div className="grid grid-cols-2 gap-3">
                 {([
