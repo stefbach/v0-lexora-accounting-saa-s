@@ -114,7 +114,7 @@ export async function POST(request: Request) {
 
     const { data: socData } = await supabase
       .from('societes')
-      .select('nom, brn, adresse, telephone, logo_url')
+      .select('nom, brn, ern, paye_number, csg_number, nsf_number, adresse, telephone, logo_url')
       .eq('id', bulletin.societe_id)
       .single()
 
@@ -241,7 +241,9 @@ export async function POST(request: Request) {
       </div>
       <p style="font-weight:700;color:#0B0F2E;font-size:14px;">${soc?.nom || 'N/A'}</p>
       <p style="color:#555;font-size:11px;">${soc?.adresse || ''}</p>
-      <p style="color:#555;font-size:11px;">BRN: ${soc?.brn || '—'}</p>
+      <p style="color:#555;font-size:11px;">BRN: ${soc?.brn || '—'}${soc?.ern ? ` | ERN: ${soc.ern}` : ''}</p>
+      ${soc?.paye_number ? `<p style="color:#555;font-size:10px;">PAYE: ${soc.paye_number}${soc?.csg_number ? ` | CSG: ${soc.csg_number}` : ''}${soc?.nsf_number ? ` | NSF: ${soc.nsf_number}` : ''}</p>` : ''}
+      ${soc?.telephone ? `<p style="color:#555;font-size:10px;">Tél: ${soc.telephone}</p>` : ''}
     </div>
     <div class="header-right">
       <p style="font-size:16px;font-weight:800;color:#0B0F2E;">BULLETIN DE PAIE</p>
@@ -401,7 +403,9 @@ td{padding:6px 8px;border-bottom:1px solid #eee;font-size:11px}
     </div>
     <p style="font-weight:700;color:#0B0F2E;font-size:14px;">${soc?.nom || 'N/A'}</p>
     <p style="color:#555;font-size:11px;">${soc?.adresse || '—'}</p>
-    <p style="color:#555;font-size:11px;">BRN: ${soc?.brn || '—'}</p>
+    <p style="color:#555;font-size:11px;">BRN: ${soc?.brn || '—'}${soc?.ern ? ` | ERN: ${soc.ern}` : ''}</p>
+    ${soc?.paye_number ? `<p style="color:#555;font-size:10px;">PAYE: ${soc.paye_number}${soc?.csg_number ? ` | CSG: ${soc.csg_number}` : ''}${soc?.nsf_number ? ` | NSF: ${soc.nsf_number}` : ''}</p>` : ''}
+    ${soc?.telephone ? `<p style="color:#555;font-size:10px;">Tél: ${soc.telephone}</p>` : ''}
   </div>
   <div style="text-align:right">
     <p style="font-size:16px;font-weight:800;color:#0B0F2E;">BULLETIN DE PAIE</p>
