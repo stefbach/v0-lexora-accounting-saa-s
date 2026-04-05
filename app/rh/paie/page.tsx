@@ -247,12 +247,13 @@ export default function PaiePage() {
                     <TableRow>
                       <TableHead>Employé</TableHead>
                       <TableHead>Poste</TableHead>
-                      <TableHead className="text-right">Brut</TableHead>
+                      <TableHead className="text-right">Base</TableHead>
                       <TableHead className="text-right">OT</TableHead>
-                      <TableHead className="text-right">Primes</TableHead>
-                      <TableHead className="text-right text-red-600">Absence</TableHead>
-                      <TableHead className="text-right">Déductions</TableHead>
-                      <TableHead className="text-right">Net à payer</TableHead>
+                      <TableHead className="text-right">Primes / Alloc.</TableHead>
+                      <TableHead className="text-right font-bold">Brut total</TableHead>
+                      <TableHead className="text-right text-red-600">Déductions</TableHead>
+                      <TableHead className="text-right font-bold text-green-700">Net à payer</TableHead>
+                      <TableHead className="text-right">Charges pat.</TableHead>
                       <TableHead className="text-right">Coût employeur</TableHead>
                       <TableHead>Statut</TableHead>
                       <TableHead>Actions</TableHead>
@@ -275,28 +276,18 @@ export default function PaiePage() {
                           )}
                         </TableCell>
                         <TableCell className="text-sm text-gray-500">{b.employe?.poste || "—"}</TableCell>
-                        <TableCell className="text-right">
-                          {b.employe?.devise_salaire === "EUR" ? (
-                            <div>
-                              <p className="font-medium">{fmt(b.salaire_brut)}</p>
-                              <p className="text-xs text-blue-600">EUR {new Intl.NumberFormat("fr-FR").format(Math.round(b.salaire_base / (b.employe?.taux_change_eur || 46.50)))}</p>
-                            </div>
-                          ) : fmt(b.salaire_brut)}
-                        </TableCell>
+                        <TableCell className="text-right text-sm">{fmt(b.salaire_base)}</TableCell>
                         <TableCell className="text-right text-orange-600 text-sm">
                           {Number(b.heures_sup_montant) > 0 ? fmt(b.heures_sup_montant) : "—"}
                         </TableCell>
                         <TableCell className="text-right text-purple-600 text-sm">
                           {Number(b.special_allowance_1) > 0 ? fmt(b.special_allowance_1) : "—"}
                         </TableCell>
-                        <TableCell className="text-right text-sm">
-                          {Number(b.montant_absence) > 0 ? (
-                            <span className="text-red-600 font-medium">-{fmt(b.montant_absence)}</span>
-                          ) : "—"}
-                        </TableCell>
-                        <TableCell className="text-right text-red-600">{fmt(b.total_deductions)}</TableCell>
-                        <TableCell className="text-right font-semibold text-green-700">{fmt(b.salaire_net)}</TableCell>
-                        <TableCell className="text-right text-orange-600">{fmt(b.cout_total_employeur)}</TableCell>
+                        <TableCell className="text-right font-semibold">{fmt(b.salaire_brut)}</TableCell>
+                        <TableCell className="text-right text-red-600 text-sm">{fmt(b.total_deductions)}</TableCell>
+                        <TableCell className="text-right font-bold text-green-700">{fmt(b.salaire_net)}</TableCell>
+                        <TableCell className="text-right text-orange-500 text-sm">{fmt(b.total_charges_patronales)}</TableCell>
+                        <TableCell className="text-right font-semibold" style={{ color: "#D4AF37" }}>{fmt(b.cout_total_employeur)}</TableCell>
                         <TableCell>
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUT_COLORS[b.statut] || ""}`}>{b.statut}</span>
                           {b.jours_absence > 0 && (
