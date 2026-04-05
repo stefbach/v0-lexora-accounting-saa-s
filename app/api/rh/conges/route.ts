@@ -457,23 +457,33 @@ export async function POST(request: Request) {
       const { data: conge } = await supabase.from('demandes_conges').select('*').eq('id', body.id).maybeSingle()
       if (!conge) return NextResponse.json({ error: 'Demande non trouvee' }, { status: 404 })
 
-      const accessibleIds = await getUserSocieteIds(user.id)
+      // Access: self-service (employee approving own? no) or manager/RH access
       const { data: emp } = await supabase.from('employes').select('id, societe_id').eq('id', conge.employe_id).maybeSingle()
-      if (!emp || !accessibleIds.includes(emp.societe_id)) {
+      if (!emp) return NextResponse.json({ error: 'Employe non trouve' }, { status: 404 })
+
+      const accessibleIds = await getUserSocieteIds(user.id)
+      if (!accessibleIds.includes(emp.societe_id)) {
         return NextResponse.json({ error: 'Acces non autorise' }, { status: 403 })
       }
+
+      // Find the approver's employe record (to store in approuve_par)
+      const { data: approverEmp } = await supabase.from('employes').select('id').eq('auth_user_id', user.id).maybeSingle()
 
       const { data, error } = await supabase
         .from('demandes_conges')
         .update({
           statut: 'approuve',
-          date_approbation: new Date().toISOString(),
-          commentaire_manager: body.commentaire || null,
+          date_decision: new Date().toISOString(),
+          approuve_par: approverEmp?.id || null,
+          notes_manager: body.commentaire || body.notes_manager || null,
         })
         .eq('id', body.id)
         .select()
         .single()
-      if (error) throw error
+      if (error) {
+        console.error('[conges] approuver error:', error.message)
+        return NextResponse.json({ error: 'Erreur approbation: ' + error.message }, { status: 500 })
+      }
       return NextResponse.json({ conge: data })
     }
 
@@ -484,23 +494,31 @@ export async function POST(request: Request) {
       const { data: conge } = await supabase.from('demandes_conges').select('*').eq('id', body.id).maybeSingle()
       if (!conge) return NextResponse.json({ error: 'Demande non trouvee' }, { status: 404 })
 
-      const accessibleIds = await getUserSocieteIds(user.id)
       const { data: emp } = await supabase.from('employes').select('id, societe_id').eq('id', conge.employe_id).maybeSingle()
-      if (!emp || !accessibleIds.includes(emp.societe_id)) {
+      if (!emp) return NextResponse.json({ error: 'Employe non trouve' }, { status: 404 })
+
+      const accessibleIds = await getUserSocieteIds(user.id)
+      if (!accessibleIds.includes(emp.societe_id)) {
         return NextResponse.json({ error: 'Acces non autorise' }, { status: 403 })
       }
+
+      const { data: refuserEmp } = await supabase.from('employes').select('id').eq('auth_user_id', user.id).maybeSingle()
 
       const { data, error } = await supabase
         .from('demandes_conges')
         .update({
           statut: 'refuse',
-          date_approbation: new Date().toISOString(),
-          commentaire_manager: body.motif_refus || body.commentaire || null,
+          date_decision: new Date().toISOString(),
+          approuve_par: refuserEmp?.id || null,
+          notes_manager: body.motif_refus || body.notes_manager || null,
         })
         .eq('id', body.id)
         .select()
         .single()
-      if (error) throw error
+      if (error) {
+        console.error('[conges] refuser error:', error.message)
+        return NextResponse.json({ error: 'Erreur refus: ' + error.message }, { status: 500 })
+      }
       return NextResponse.json({ conge: data })
     }
 
@@ -526,7 +544,7 @@ export async function POST(request: Request) {
         nb_jours,
         statut: 'approuve',
         motif: body.motif || 'Absence justifiee retroactivement (SL)',
-        date_approbation: new Date().toISOString(),
+        date_decision: new Date().toISOString(),
       }).select().single()
       if (error) throw error
       return NextResponse.json({ conge: data }, { status: 201 })
@@ -554,7 +572,7 @@ export async function POST(request: Request) {
         nb_jours,
         statut: 'approuve',
         motif: body.motif || 'Absence injustifiee - deduction salaire',
-        date_approbation: new Date().toISOString(),
+        date_decision: new Date().toISOString(),
       }).select().single()
       if (error) throw error
       return NextResponse.json({ conge: data }, { status: 201 })
