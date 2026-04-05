@@ -153,7 +153,10 @@ export default function PlanningPage() {
   const daysInMonth = getDaysInMonth(year, month)
   const periode = `${year}-${String(month + 1).padStart(2, "0")}`
 
-  const getCreneauById = (id: string): Creneau => creneaux.find(c => c.id === id) || REPOS_CRENEAU
+  const getCreneauById = (id: string): Creneau => {
+    // Match by id, nom, or code (API returns shift name, not creneau id)
+    return creneaux.find(c => c.id === id || c.nom === id || c.code === id) || REPOS_CRENEAU
+  }
   const allCreneaux = [...creneaux, REPOS_CRENEAU, CONGE_CRENEAU]
 
   // ─── Conflict detection ─────────────────────────────────────────
@@ -328,13 +331,20 @@ export default function PlanningPage() {
         if (grid[entry.employe_id]) {
           const day = parseInt(entry.jour || entry.day, 10)
           if (day >= 1 && day <= daysInMonth) {
-            grid[entry.employe_id][day] = {
-              creneau_id: entry.creneau_id || entry.shift || "repos",
-              heure_debut: entry.heure_debut || "",
-              heure_fin: entry.heure_fin || "",
-              pause_debut: entry.pause_debut || "",
-              pause_fin: entry.pause_fin || "",
-              heures_prevues: entry.heures_prevues || 0,
+            // Match shift_code to a creneau by name or code
+            const shiftName = entry.creneau_id || entry.shift || entry.type_shift || "repos"
+            const isRepos = shiftName === "repos" || shiftName === "Repos" || entry.est_repos
+            if (isRepos) {
+              grid[entry.employe_id][day] = null // repos = null cell
+            } else {
+              grid[entry.employe_id][day] = {
+                creneau_id: shiftName, // will be matched by getCreneauById via nom/code
+                heure_debut: entry.heure_debut || "",
+                heure_fin: entry.heure_fin || "",
+                pause_debut: entry.pause_debut || "",
+                pause_fin: entry.pause_fin || "",
+                heures_prevues: entry.heures_prevues || 0,
+              }
             }
           }
         }
