@@ -95,38 +95,55 @@ export async function GET(request: Request) {
     }
 
     const enriched = (data || []).map(b => {
-      // Auto-calculate missing/incorrect fields from available data
-      const salaire_net = Number(b.salaire_net) || 0
-      const total_deductions = Number(b.total_deductions) || (Number(b.csg_salarie || 0) + Number(b.nsf_salarie || 0) + Number(b.paye || 0) + Number(b.montant_absence || 0))
+      // Use stored values — only fix truly missing data
       const salaire_base = Number(b.salaire_base) || 0
+      const salaire_net = Number(b.salaire_net) || 0
       const ot = Number(b.heures_sup_montant) || 0
+      const primes = Number(b.special_allowance_1) || 0
+      const transport = Number(b.transport_allowance) || 0
+      const petrol = Number(b.petrol_allowance) || 0
+      const increment = Number(b.increment_salaire) || 0
+      const eoy = Number(b.eoy_bonus) || 0
+      const absence = Number(b.montant_absence) || 0
 
-      // Brut = net + deductions (most reliable). Recalculate if:
-      // - brut is 0/null
-      // - brut < net (impossible, means brut was set to salaire_base only)
-      // - brut == salaire_base (means primes/OT were not added)
+      // Déductions salarié : use stored total, or sum individual fields
+      const csg_s = Number(b.csg_salarie) || 0
+      const nsf_s = Number(b.nsf_salarie) || 0
+      const paye = Number(b.paye) || 0
+      const total_deductions = Number(b.total_deductions) || (csg_s + nsf_s + paye + absence)
+
+      // Brut : use stored, otherwise recalculate from net + deductions
       let salaire_brut = Number(b.salaire_brut) || 0
-      if (salaire_net > 0 && (salaire_brut === 0 || salaire_brut < salaire_net || salaire_brut === salaire_base)) {
-        salaire_brut = salaire_net + total_deductions
-      }
-
-      // Primes = brut - base - OT - transport - petrol (everything else is primes/allowances)
-      let special_allowance_1 = Number(b.special_allowance_1) || 0
-      if (salaire_brut > 0) {
-        const computedPrimes = Math.max(salaire_brut - salaire_base - ot - Number(b.transport_allowance || 0) - Number(b.petrol_allowance || 0) - Number(b.increment_salaire || 0) - Number(b.eoy_bonus || 0), 0)
-        // Use computed primes if they're bigger than stored (stored may be partial)
-        if (computedPrimes > special_allowance_1) {
-          special_allowance_1 = computedPrimes
+      if (salaire_brut === 0 || salaire_brut === salaire_base) {
+        // salaire_brut was never properly set — recalculate
+        if (salaire_net > 0 && total_deductions > 0) {
+          salaire_brut = salaire_net + total_deductions
+        } else {
+          salaire_brut = salaire_base + ot + primes + transport + petrol + increment + eoy
         }
       }
 
-      const total_charges = Number(b.total_charges_patronales) || (Number(b.csg_patronal || 0) + Number(b.nsf_patronal || 0) + Number(b.training_levy || 0) + Number(b.prgf || 0))
+      // Primes/allowances : if stored is 0, back-calculate from brut
+      let all_primes = primes
+      if (all_primes === 0 && salaire_brut > salaire_base + ot) {
+        all_primes = Math.round(salaire_brut - salaire_base - ot - transport - petrol - increment - eoy)
+        if (all_primes < 0) all_primes = 0
+      }
+
+      // Charges patronales
+      const csg_p = Number(b.csg_patronal) || 0
+      const nsf_p = Number(b.nsf_patronal) || 0
+      const levy = Number(b.training_levy) || 0
+      const prgf = Number(b.prgf) || 0
+      const total_charges = Number(b.total_charges_patronales) || (csg_p + nsf_p + levy + prgf)
+
+      // Coût total employeur
       const cout_total = Number(b.cout_total_employeur) || (salaire_brut + total_charges)
 
       return {
         ...b,
         salaire_brut,
-        special_allowance_1,
+        special_allowance_1: all_primes,
         total_deductions,
         total_charges_patronales: total_charges,
         cout_total_employeur: cout_total,
@@ -134,18 +151,11 @@ export async function GET(request: Request) {
       }
     })
 
-    // Calculate brut with fallback: salaire_brut → (net + deductions) → (base + OT + primes)
-    const getBrut = (b: any) => Number(b.salaire_brut) || (Number(b.salaire_net) + Number(b.total_deductions)) || (Number(b.salaire_base) + Number(b.heures_sup_montant || 0) + Number(b.special_allowance_1 || 0) + Number(b.transport_allowance || 0) + Number(b.petrol_allowance || 0))
-
     const totaux = {
-      masse_salariale_brute: enriched.reduce((s, b) => s + getBrut(b), 0),
+      masse_salariale_brute: enriched.reduce((s, b) => s + Number(b.salaire_brut), 0),
       masse_salariale_nette: enriched.reduce((s, b) => s + (Number(b.salaire_net) || 0), 0),
-      total_charges_patronales: enriched.reduce((s, b) => s + (Number(b.total_charges_patronales) || (Number(b.csg_patronal || 0) + Number(b.nsf_patronal || 0) + Number(b.training_levy || 0) + Number(b.prgf || 0))), 0),
-      cout_total_employeur: enriched.reduce((s, b) => {
-        const brut = getBrut(b)
-        const charges = Number(b.total_charges_patronales) || (Number(b.csg_patronal || 0) + Number(b.nsf_patronal || 0) + Number(b.training_levy || 0) + Number(b.prgf || 0))
-        return s + brut + charges
-      }, 0),
+      total_charges_patronales: enriched.reduce((s, b) => s + Number(b.total_charges_patronales), 0),
+      cout_total_employeur: enriched.reduce((s, b) => s + Number(b.cout_total_employeur), 0),
       total_refacture: enriched.reduce((s, b) => s + (Number(b.montant_refacture_mur) || 0), 0),
     }
 

@@ -207,18 +207,19 @@ export default function PaiePage() {
           </CardContent>
         </Card>
 
-        {(totaux.masse_salariale_brute > 0 || totaux.masse_salariale_nette > 0 || bulletins.length > 0) && (
-          <div className="grid grid-cols-4 gap-4">
+        {bulletins.length > 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             {[
-              { label: "Masse salariale brute", v: fmt(totaux.masse_salariale_brute || 0) },
-              { label: "Masse salariale nette", v: fmt(totaux.masse_salariale_nette || 0) },
-              { label: "Charges patronales", v: fmt(totaux.total_charges_patronales || 0) },
-              { label: "Coût total employeur", v: fmt(totaux.cout_total_employeur || 0) },
+              { label: "Masse salariale brute", v: fmt(totaux.masse_salariale_brute || 0), color: "text-[#0B0F2E]" },
+              { label: "Masse salariale nette", v: fmt(totaux.masse_salariale_nette || 0), color: "text-green-700" },
+              { label: "Total déductions", v: fmt((totaux.masse_salariale_brute || 0) - (totaux.masse_salariale_nette || 0)), color: "text-red-600" },
+              { label: "Charges patronales", v: fmt(totaux.total_charges_patronales || 0), color: "text-orange-600" },
+              { label: "Coût total employeur", v: fmt(totaux.cout_total_employeur || 0), color: "text-[#D4AF37]" },
             ].map(k => (
               <Card key={k.label}>
                 <CardContent className="p-4">
                   <p className="text-xs text-gray-500">{k.label}</p>
-                  <p className="text-lg font-bold text-[#0B0F2E]">{k.v}</p>
+                  <p className={`text-lg font-bold ${k.color}`}>{k.v}</p>
                 </CardContent>
               </Card>
             ))}
@@ -275,26 +276,18 @@ export default function PaiePage() {
                         </TableCell>
                         <TableCell className="text-sm text-gray-500">{b.employe?.poste || "—"}</TableCell>
                         <TableCell className="text-right">
-                          {(() => {
-                            const brut = Number(b.salaire_brut) || (Number(b.salaire_net) + Number(b.total_deductions)) || Number(b.salaire_base)
-                            return b.employe?.devise_salaire === "EUR" ? (
-                              <div>
-                                <p className="font-medium">{fmt(brut)}</p>
-                                <p className="text-xs text-blue-600">EUR {new Intl.NumberFormat("fr-FR").format(Math.round(b.salaire_base / (b.employe?.taux_change_eur || 46.50)))}</p>
-                              </div>
-                            ) : fmt(brut)
-                          })()}
+                          {b.employe?.devise_salaire === "EUR" ? (
+                            <div>
+                              <p className="font-medium">{fmt(b.salaire_brut)}</p>
+                              <p className="text-xs text-blue-600">EUR {new Intl.NumberFormat("fr-FR").format(Math.round(b.salaire_base / (b.employe?.taux_change_eur || 46.50)))}</p>
+                            </div>
+                          ) : fmt(b.salaire_brut)}
                         </TableCell>
                         <TableCell className="text-right text-orange-600 text-sm">
                           {Number(b.heures_sup_montant) > 0 ? fmt(b.heures_sup_montant) : "—"}
                         </TableCell>
                         <TableCell className="text-right text-purple-600 text-sm">
-                          {(() => {
-                            const primes = Number(b.special_allowance_1) || 0
-                            const brut = Number(b.salaire_brut) || (Number(b.salaire_net) + Number(b.total_deductions)) || 0
-                            const primesCalc = primes > 0 ? primes : Math.max(brut - Number(b.salaire_base) - Number(b.heures_sup_montant || 0), 0)
-                            return primesCalc > 0 ? fmt(primesCalc) : "—"
-                          })()}
+                          {Number(b.special_allowance_1) > 0 ? fmt(b.special_allowance_1) : "—"}
                         </TableCell>
                         <TableCell className="text-right text-sm">
                           {Number(b.montant_absence) > 0 ? (
@@ -303,7 +296,7 @@ export default function PaiePage() {
                         </TableCell>
                         <TableCell className="text-right text-red-600">{fmt(b.total_deductions)}</TableCell>
                         <TableCell className="text-right font-semibold text-green-700">{fmt(b.salaire_net)}</TableCell>
-                        <TableCell className="text-right text-orange-600">{fmt(Number(b.cout_total_employeur) || ((Number(b.salaire_brut) || Number(b.salaire_net) + Number(b.total_deductions)) + Number(b.total_charges_patronales)))}</TableCell>
+                        <TableCell className="text-right text-orange-600">{fmt(b.cout_total_employeur)}</TableCell>
                         <TableCell>
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUT_COLORS[b.statut] || ""}`}>{b.statut}</span>
                           {b.jours_absence > 0 && (
