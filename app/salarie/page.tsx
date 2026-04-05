@@ -543,7 +543,25 @@ export default function EspaceEmployePage() {
   }
 
   if (loading) return <div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin" /></div>
-  if (!employe) return <div className="flex flex-col items-center justify-center h-screen text-gray-500"><User className="h-12 w-12 mb-3 text-gray-300" /><p>Aucun profil employé associé à ce compte</p></div>
+  if (!employe) return (
+    <div className="flex flex-col items-center justify-center h-screen text-gray-500 p-6 text-center">
+      <User className="h-16 w-16 mb-4 text-gray-300" />
+      <h2 className="text-lg font-bold mb-2" style={{ color: NAVY }}>Profil employé non trouvé</h2>
+      <p className="text-sm text-gray-400 mb-4 max-w-sm">
+        Votre compte n&apos;est pas encore lié à une fiche employé.
+        Contactez votre responsable RH pour activer votre accès.
+      </p>
+      <p className="text-xs text-gray-300 mb-6">Email connecté : {employe === null ? "—" : "chargement..."}</p>
+      <Button onClick={async () => {
+        const { createClient } = await import("@/lib/supabase/client")
+        const supabase = createClient()
+        await supabase.auth.signOut()
+        window.location.href = "/auth/login"
+      }} variant="outline" className="text-red-600 border-red-200 hover:bg-red-50">
+        <LogOut className="h-4 w-4 mr-2" /> Se déconnecter
+      </Button>
+    </div>
+  )
 
   const hasEntry = !!pointageToday?.heure_entree
   const hasExit = !!pointageToday?.heure_sortie

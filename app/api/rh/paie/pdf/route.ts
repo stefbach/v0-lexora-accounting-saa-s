@@ -117,10 +117,9 @@ export async function POST(request: Request) {
     // Récupérer les primes individuelles de la période (intégrées dans ce bulletin)
     const { data: primesMois } = await supabase
       .from('primes_variables_mois')
-      .select('type_prime, montant, description')
+      .select('*, prime:catalogue_primes(libelle, type_prime)')
       .eq('employe_id', bulletin.employe_id)
       .eq('periode', bulletin.periode)
-      .eq('integre_paie', true)
 
     // Récupérer les détails OT depuis les pointages du mois
     const periodeStr = bulletin.periode.slice(0, 7)
@@ -248,13 +247,15 @@ export async function POST(request: Request) {
     ${totalH2 > 0 ? `<div class="row"><span>Heures sup (2×) — ${totalH2.toFixed(1)}h (férié/nuit)</span><span>${fmt(montant2)} MUR</span></div>` : ''}
     ${totalH15 === 0 && totalH2 === 0 && Number(bulletin.heures_sup_montant) > 0 ? `<div class="row"><span>Heures supplémentaires</span><span>${fmt(bulletin.heures_sup_montant)} MUR</span></div>` : ''}
     ${(primesMois && primesMois.length > 0)
-      ? primesMois.map((p: any) => `<div class="row" style="color:#7c3aed"><span>Prime — ${p.type_prime || p.description || 'Variable'}</span><span>${fmt(Number(p.montant))} MUR</span></div>`).join('')
+      ? primesMois.map((p: any) => `<div class="row" style="color:#7c3aed"><span>Prime — ${p.prime?.libelle || p.notes || 'Variable'}${p.quantite > 1 ? ` (×${p.quantite})` : ''}</span><span>${fmt(Number(p.montant))} MUR</span></div>`).join('')
       : conditionalRow(Number(bulletin.special_allowance_1) > 0, 'Primes du mois', bulletin.special_allowance_1)}
     ${conditionalRow(Number(bulletin.special_allowance_2) > 0, 'Allocation spéciale 2', bulletin.special_allowance_2)}
     ${conditionalRow(Number(bulletin.special_allowance_3) > 0, 'Allocation spéciale 3', bulletin.special_allowance_3)}
     ${conditionalRow(Number(bulletin.other_refund) > 0, 'Autres remboursements', bulletin.other_refund)}
     ${conditionalRow(Number(bulletin.eoy_bonus) > 0, '13ème mois (EOY Bonus)', bulletin.eoy_bonus)}
     ${conditionalRow(Number(bulletin.departure_notice) > 0, 'Préavis de départ', bulletin.departure_notice)}
+    ${(totalH15 > 0 || totalH2 > 0 || Number(bulletin.heures_sup_montant) > 0) ? `<div class="row" style="font-weight:600;color:#ea580c;background:#fff7ed;"><span>Sous-total heures supplémentaires</span><span>${fmt(totalH15 > 0 || totalH2 > 0 ? montant15 + montant2 : Number(bulletin.heures_sup_montant))} MUR</span></div>` : ''}
+    ${((primesMois && primesMois.length > 0) || Number(bulletin.special_allowance_1) > 0) ? `<div class="row" style="font-weight:600;color:#7c3aed;background:#faf5ff;"><span>Sous-total primes</span><span>${fmt(primesMois && primesMois.length > 0 ? primesMois.reduce((s: number, p: any) => s + Number(p.montant || 0), 0) : Number(bulletin.special_allowance_1))} MUR</span></div>` : ''}
     <div class="row total"><span>SALAIRE BRUT</span><span>${fmt(bulletin.salaire_brut)} MUR</span></div>
   </div>
 
