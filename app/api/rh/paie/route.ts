@@ -61,9 +61,9 @@ export async function GET(request: Request) {
       if (!hasAccess) return NextResponse.json({ error: 'Accès refusé à cet employé' }, { status: 403 })
     }
     // If neither societe_id nor employe_id, restrict to accessible societes
-    if (!societe_id && !employe_id) {
-      const accessibleIds = await getUserSocieteIds(user.id)
-      if (accessibleIds.length === 0) return NextResponse.json({ bulletins: [], totaux: {}, nb: 0 })
+    const accessibleIds = (!societe_id && !employe_id) ? await getUserSocieteIds(user.id) : []
+    if (!societe_id && !employe_id && accessibleIds.length === 0) {
+      return NextResponse.json({ bulletins: [], totaux: {}, nb: 0 })
     }
 
     // Query bulletins (NO FK join — avoids schema cache issues)
@@ -74,7 +74,11 @@ export async function GET(request: Request) {
 
     if (employe_id) query = query.eq('employe_id', employe_id)
     if (periode) query = query.gte('periode', `${periode}-01`).lte('periode', `${periode}-31`)
-    if (societe_id) query = query.eq('societe_id', societe_id)
+    if (societe_id) {
+      query = query.eq('societe_id', societe_id)
+    } else if (!employe_id && accessibleIds.length > 0) {
+      query = query.in('societe_id', accessibleIds)
+    }
 
     const { data, error } = await query
     if (error) {
@@ -92,13 +96,17 @@ export async function GET(request: Request) {
 
     const enriched = (data || []).map(b => ({ ...b, employe: empMap[b.employe_id] || null }))
 
+    // Calculate brut with fallback: salaire_brut → (net + deductions) → (base + OT + primes)
+    const getBrut = (b: any) => Number(b.salaire_brut) || (Number(b.salaire_net) + Number(b.total_deductions)) || (Number(b.salaire_base) + Number(b.heures_sup_montant || 0) + Number(b.special_allowance_1 || 0) + Number(b.transport_allowance || 0) + Number(b.petrol_allowance || 0))
+
     const totaux = {
-      masse_salariale_brute: enriched.reduce((s, b) => s + (Number(b.salaire_brut) || (Number(b.salaire_base) || 0) + (Number(b.heures_sup_montant) || 0) + (Number(b.special_allowance_1) || 0) + (Number(b.transport_allowance) || 0) + (Number(b.petrol_allowance) || 0)), 0),
+      masse_salariale_brute: enriched.reduce((s, b) => s + getBrut(b), 0),
       masse_salariale_nette: enriched.reduce((s, b) => s + (Number(b.salaire_net) || 0), 0),
-      total_charges_patronales: enriched.reduce((s, b) => s + (Number(b.total_charges_patronales) || 0), 0),
+      total_charges_patronales: enriched.reduce((s, b) => s + (Number(b.total_charges_patronales) || (Number(b.csg_patronal || 0) + Number(b.nsf_patronal || 0) + Number(b.training_levy || 0) + Number(b.prgf || 0))), 0),
       cout_total_employeur: enriched.reduce((s, b) => {
-        const brut = Number(b.salaire_brut) || (Number(b.salaire_base) || 0) + (Number(b.heures_sup_montant) || 0) + (Number(b.special_allowance_1) || 0)
-        return s + brut + (Number(b.total_charges_patronales) || 0)
+        const brut = getBrut(b)
+        const charges = Number(b.total_charges_patronales) || (Number(b.csg_patronal || 0) + Number(b.nsf_patronal || 0) + Number(b.training_levy || 0) + Number(b.prgf || 0))
+        return s + brut + charges
       }, 0),
       total_refacture: enriched.reduce((s, b) => s + (Number(b.montant_refacture_mur) || 0), 0),
     }
