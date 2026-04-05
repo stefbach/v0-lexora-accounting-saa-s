@@ -86,31 +86,37 @@ export async function POST(request: Request) {
     const { bulletin_id } = await request.json()
     if (!bulletin_id) return NextResponse.json({ error: 'bulletin_id requis' }, { status: 400 })
 
-    // Récupérer bulletin complet + employé + société
+    // Récupérer bulletin + employé + société (separate queries to avoid FK ambiguity)
     const { data: bulletin, error } = await supabase
       .from('bulletins_paie')
-      .select(`
-        *,
-        employe:employes(
-          code, nom, prenom, poste, nic_number, date_arrivee, email,
-          salaire_base, transport_allowance, petrol_allowance,
-          devise_salaire, taux_change_eur, bank_account, bank_name,
-          societe:societes(nom, brn, adresse, telephone)
-        )
-      `)
+      .select('*')
       .eq('id', bulletin_id)
       .single()
 
-    if (error || !bulletin) return NextResponse.json({ error: 'Bulletin non trouvé' }, { status: 404 })
+    if (error || !bulletin) return NextResponse.json({ error: 'Bulletin non trouvé: ' + (error?.message || 'introuvable') }, { status: 404 })
+
+    const { data: empData } = await supabase
+      .from('employes')
+      .select('code, nom, prenom, poste, nic_number, date_arrivee, email, salaire_base, transport_allowance, petrol_allowance, devise_salaire, taux_change_eur, bank_account, bank_name, societe_id, auth_user_id')
+      .eq('id', bulletin.employe_id)
+      .single()
+
+    const { data: socData } = await supabase
+      .from('societes')
+      .select('nom, brn, adresse, telephone, logo_url')
+      .eq('id', bulletin.societe_id)
+      .single()
+
+    // Attach for template compatibility
+    const emp = empData
+    const soc = socData
 
     // Multi-tenant OR self-service access check
-    const emp = bulletin.employe
     const isSelfPost = emp && (emp.auth_user_id === user.id || emp.email === user.email)
     if (!isSelfPost) {
       const hasAccessPost = await userHasAccessToEmploye(user.id, bulletin.employe_id)
       if (!hasAccessPost) return NextResponse.json({ error: 'Accès refusé à ce bulletin' }, { status: 403 })
     }
-    const soc = emp?.societe
     const periodeDate = new Date(bulletin.periode + 'T12:00:00')
     const moisLabel = `${MOIS_FR[periodeDate.getMonth()]} ${periodeDate.getFullYear()}`
 

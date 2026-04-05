@@ -101,22 +101,35 @@ export async function GET(request: Request) {
     const enriched = (data || []).map(b => {
       const salaire_brut = Number(b.salaire_brut) || 0
       const salaire_net = Number(b.salaire_net) || 0
+      const salaire_base = Number(b.salaire_base) || 0
+      const ot = Number(b.heures_sup_montant) || 0
       const csg_s = Number(b.csg_salarie) || 0
       const nsf_s = Number(b.nsf_salarie) || 0
       const paye_v = Number(b.paye) || 0
       const absence = Number(b.montant_absence) || 0
       const total_deductions = Number(b.total_deductions) || (csg_s + nsf_s + paye_v + absence)
 
+      // Recalculate primes if missing: primes = brut - base - OT - other components
+      let primes = Number(b.special_allowance_1) || 0
+      if (primes === 0 && salaire_brut > salaire_base + ot) {
+        primes = Math.round(salaire_brut - salaire_base - ot
+          - (Number(b.transport_allowance) || 0) - (Number(b.petrol_allowance) || 0)
+          - (Number(b.increment_salaire) || 0) - (Number(b.special_allowance_2) || 0)
+          - (Number(b.special_allowance_3) || 0) - (Number(b.other_refund) || 0)
+          - (Number(b.eoy_bonus) || 0) - (Number(b.departure_notice) || 0))
+        if (primes < 0) primes = 0
+      }
+
       const csg_p = Number(b.csg_patronal) || 0
       const nsf_p = Number(b.nsf_patronal) || 0
       const levy = Number(b.training_levy) || 0
       const prgf = Number(b.prgf) || 0
       const total_charges = Number(b.total_charges_patronales) || (csg_p + nsf_p + levy + prgf)
-      // cout_total_employeur doesn't exist in DB — calculate at runtime
       const cout_total = salaire_brut + total_charges
 
       return {
         ...b,
+        special_allowance_1: primes,
         total_deductions,
         total_charges_patronales: total_charges,
         cout_total_employeur: cout_total,
