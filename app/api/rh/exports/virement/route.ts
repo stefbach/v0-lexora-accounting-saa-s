@@ -114,7 +114,7 @@ export async function POST(request: Request) {
     // Récupérer les employés séparément (pas de FK join)
     const empIds = [...new Set(bulletins.map(b => b.employe_id).filter(Boolean))]
     const { data: employes } = empIds.length > 0
-      ? await supabase.from('employes').select('id, code, nom, prenom, poste, bank_account, bank_name, bank_code, bank_iban, bank_swift, bank_branch, bank_account_name, devise').in('id', empIds)
+      ? await supabase.from('employes').select('*').in('id', empIds)
       : { data: [] }
     const empMap = new Map((employes || []).map(e => [e.id, e]))
 
@@ -162,15 +162,15 @@ export async function POST(request: Request) {
 
     // Infos compte émetteur pour l'en-tête
     const infoEmetteur = {
-      banque: compteEmetteur?.bank_code || banque_emettrice || 'NON_DEFINI',
-      numero_compte: compteEmetteur?.numero_compte || '',
+      banque: compteEmetteur?.bank_code || compteEmetteur?.banque || banque_emettrice || 'MCB',
+      numero_compte: compteEmetteur?.numero_compte || compteEmetteur?.iban || '000000000000',
       iban: compteEmetteur?.iban || '',
       swift: compteEmetteur?.swift || '',
       nom_compte: compteEmetteur?.nom_compte || '',
     }
 
-    // MCB → utiliser le format officiel BP-V1
-    if (infoEmetteur.banque === 'MCB' && infoEmetteur.numero_compte) {
+    // MCB → utiliser le format officiel BP-V1 (default if no specific emitter configured)
+    if (infoEmetteur.banque === 'MCB' || !compteEmetteur) {
       // Générer UN SEUL fichier BP-V1 qui contient lignes 1 (MCB interne) + lignes 2 (inter-bancaire)
       const { content, extension, filename_suggestion } = genererVirementMCB_BPV1(
         lignesMUR,
@@ -322,14 +322,15 @@ export async function POST(request: Request) {
  */
 export async function GET(request: Request) {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const supabaseAuth = await createServerClient()
+    const { data: { user } } = await supabaseAuth.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
     const { searchParams } = new URL(request.url)
     const societe_id = searchParams.get('societe_id')
     const periode = searchParams.get('periode')
 
+    const supabase = getAdminClient()
     let query = supabase
       .from('virements_salaires')
       .select('*')

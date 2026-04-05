@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     const { societe_id, periode } = await request.json()
     if (!societe_id || !periode) return NextResponse.json({ error: 'societe_id et periode requis' }, { status: 400 })
 
-    const { data: societe } = await supabase.from('societes').select('nom, brn, ern, tan_societe').eq('id', societe_id).single()
+    const { data: societe } = await supabase.from('societes').select('*').eq('id', societe_id).single()
 
     // Fetch bulletins (no FK join — avoids schema cache issues)
     const { data: bulletins, error } = await supabase
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
     // Fetch employee data separately
     const empIds = [...new Set(bulletins.map(b => b.employe_id).filter(Boolean))]
     const { data: employes } = empIds.length > 0
-      ? await supabase.from('employes').select('id, code, nom, prenom, tan_number, nic_number').in('id', empIds)
+      ? await supabase.from('employes').select('*').in('id', empIds)
       : { data: [] }
     const empMap = new Map((employes || []).map((e: any) => [e.id, e]))
 
