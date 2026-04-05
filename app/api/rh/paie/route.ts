@@ -94,56 +94,28 @@ export async function GET(request: Request) {
       for (const e of emps || []) empMap[e.id] = { code: e.code_employe, nom: e.nom, prenom: e.prenom, poste: e.poste, devise_salaire: e.devise_salaire }
     }
 
+    // salaire_brut is a GENERATED column in PostgreSQL:
+    // = salaire_base + increment + OT + transport + petrol + special_1 + special_2 + special_3 + other + eoy + departure
+    // So it's ALWAYS correct as long as its components are correct.
+    // We just need to ensure display values make sense.
     const enriched = (data || []).map(b => {
-      // Use stored values — only fix truly missing data
-      const salaire_base = Number(b.salaire_base) || 0
+      const salaire_brut = Number(b.salaire_brut) || 0
       const salaire_net = Number(b.salaire_net) || 0
-      const ot = Number(b.heures_sup_montant) || 0
-      const primes = Number(b.special_allowance_1) || 0
-      const transport = Number(b.transport_allowance) || 0
-      const petrol = Number(b.petrol_allowance) || 0
-      const increment = Number(b.increment_salaire) || 0
-      const eoy = Number(b.eoy_bonus) || 0
-      const absence = Number(b.montant_absence) || 0
-
-      // Déductions salarié : use stored total, or sum individual fields
       const csg_s = Number(b.csg_salarie) || 0
       const nsf_s = Number(b.nsf_salarie) || 0
-      const paye = Number(b.paye) || 0
-      const total_deductions = Number(b.total_deductions) || (csg_s + nsf_s + paye + absence)
+      const paye_v = Number(b.paye) || 0
+      const absence = Number(b.montant_absence) || 0
+      const total_deductions = Number(b.total_deductions) || (csg_s + nsf_s + paye_v + absence)
 
-      // Brut : use stored, otherwise recalculate from net + deductions
-      let salaire_brut = Number(b.salaire_brut) || 0
-      if (salaire_brut === 0 || salaire_brut === salaire_base) {
-        // salaire_brut was never properly set — recalculate
-        if (salaire_net > 0 && total_deductions > 0) {
-          salaire_brut = salaire_net + total_deductions
-        } else {
-          salaire_brut = salaire_base + ot + primes + transport + petrol + increment + eoy
-        }
-      }
-
-      // Primes/allowances : if stored is 0, back-calculate from brut
-      let all_primes = primes
-      if (all_primes === 0 && salaire_brut > salaire_base + ot) {
-        all_primes = Math.round(salaire_brut - salaire_base - ot - transport - petrol - increment - eoy)
-        if (all_primes < 0) all_primes = 0
-      }
-
-      // Charges patronales
       const csg_p = Number(b.csg_patronal) || 0
       const nsf_p = Number(b.nsf_patronal) || 0
       const levy = Number(b.training_levy) || 0
       const prgf = Number(b.prgf) || 0
       const total_charges = Number(b.total_charges_patronales) || (csg_p + nsf_p + levy + prgf)
-
-      // Coût total employeur
       const cout_total = Number(b.cout_total_employeur) || (salaire_brut + total_charges)
 
       return {
         ...b,
-        salaire_brut,
-        special_allowance_1: all_primes,
         total_deductions,
         total_charges_patronales: total_charges,
         cout_total_employeur: cout_total,
