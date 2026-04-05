@@ -862,7 +862,7 @@ export default function TarifsPage() {
           height: "64px", display: "flex", alignItems: "center", justifyContent: "space-between",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: "32px" }}>
-            <LexoraLogo href="/" size="md" />
+            <LexoraLogo href="/" size="md" showBaseline />
             <div className="hidden md:flex" style={{ gap: "4px" }}>
               {navLinks.map((nl) => (
                 <Link key={nl.label} href={nl.href} style={{

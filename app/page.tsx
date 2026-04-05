@@ -110,8 +110,8 @@ export default function HomePage() {
     <div className="flex min-h-screen flex-col" style={{ backgroundColor: "#F8F9FC" }}>
       {/* NAVBAR — dark */}
       <header className="sticky top-0 z-50" style={{ backgroundColor: "#0B0F2E", borderBottom: "1px solid #1E2760" }}>
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
-          <LexoraLogo href="/" size="sm" />
+        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-6">
+          <LexoraLogo href="/" size="md" showBaseline />
           <nav className="hidden gap-8 md:flex">
             <a href="#features" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif" }}>
               {t('home.modules', locale)}
@@ -357,7 +357,7 @@ export default function HomePage() {
         <div className="mx-auto max-w-7xl px-6">
           <div className="flex flex-col items-center justify-between gap-6 md:flex-row">
             <div className="flex items-center gap-3">
-              <LexoraLogo href="/" size="sm" />
+              <LexoraLogo href="/" size="md" />
               <span className="text-xs" style={{ color: "#1E2760" }}>|</span>
               <span className="text-xs" style={{ color: "#4A5490" }}>Powered by <strong style={{ color: "#E8EAFC" }}>Digital Data Solutions Ltd</strong></span>
             </div>
@@ -375,7 +375,7 @@ export default function HomePage() {
               {t('home.footer_tagline', locale)}
             </p>
             <p className="mt-2 text-xs" style={{ color: "#4A5490" }}>
-              &copy; {new Date().getFullYear()} LEXORA — Digital Data Solutions Ltd. {locale === 'fr' ? 'Tous droits réservés.' : 'All rights reserved.'}
+              &copy; {new Date().getFullYear()} LE<span style={{ color: "#D4AF37" }}>X</span>ORA — Digital Data Solutions Ltd. {locale === 'fr' ? 'Tous droits réservés.' : 'All rights reserved.'}
             </p>
           </div>
         </div>

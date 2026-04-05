@@ -13,8 +13,8 @@ interface LexoraLogoProps {
  * Optional underline with gold accent under X.
  */
 export function LexoraLogo({ href, subtitle, size = "md", showBaseline = false }: LexoraLogoProps) {
-  const fontSize = size === "sm" ? "text-base" : size === "lg" ? "text-3xl" : "text-xl"
-  const baselineSize = size === "lg" ? "text-xs" : "text-[9px]"
+  const fontSize = size === "sm" ? "text-xl" : size === "lg" ? "text-4xl" : "text-2xl"
+  const baselineSize = size === "lg" ? "text-xs" : "text-[10px]"
 
   const logoContent = (
     <div className="flex flex-col">

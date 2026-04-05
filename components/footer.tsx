@@ -23,7 +23,7 @@ export function Footer() {
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
           <div>
-            <LexoraLogo href="/" size="sm" />
+            <LexoraLogo href="/" size="md" />
             <p className="mt-4 text-sm leading-relaxed" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif", fontWeight: 300, lineHeight: 1.7 }}>
               Logiciel de comptabilité moderne pour les entreprises, comptables et leurs clients à Maurice.
             </p>
@@ -83,7 +83,7 @@ export function Footer() {
 
         <div className="mt-12 pt-8" style={{ borderTop: "1px solid #1E2760" }}>
           <p className="text-center text-sm" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif", fontWeight: 300 }}>
-            &copy; {new Date().getFullYear()} Lexora. Tous droits réservés.
+            &copy; {new Date().getFullYear()} LE<span style={{ color: "#D4AF37" }}>X</span>ORA. Tous droits réservés.
           </p>
         </div>
       </div>
