@@ -14,14 +14,22 @@ export async function POST(request: Request) {
 
     const { data: societe } = await supabase.from('societes').select('nom, brn, ern, tan_societe').eq('id', societe_id).single()
 
+    // Fetch bulletins (no FK join — avoids schema cache issues)
     const { data: bulletins, error } = await supabase
       .from('bulletins_paie')
-      .select('*, employe:employes(code, nom, prenom, tan_number, nic_number)')
+      .select('*')
       .eq('societe_id', societe_id)
       .ilike('periode', `${periode}%`)
 
     if (error) throw error
     if (!bulletins || bulletins.length === 0) return NextResponse.json({ error: 'Aucun bulletin pour cette période' }, { status: 404 })
+
+    // Fetch employee data separately
+    const empIds = [...new Set(bulletins.map(b => b.employe_id).filter(Boolean))]
+    const { data: employes } = empIds.length > 0
+      ? await supabase.from('employes').select('id, code, nom, prenom, tan_number, nic_number').in('id', empIds)
+      : { data: [] }
+    const empMap = new Map((employes || []).map((e: any) => [e.id, e]))
 
     let total_salaires_bruts = 0
     let total_paye_retenu = 0
@@ -31,6 +39,7 @@ export async function POST(request: Request) {
     ]
 
     for (const b of bulletins) {
+      const emp = empMap.get(b.employe_id)
       const sb = Number(b.salaire_brut) || 0
       const paye = Number(b.paye) || 0
       const salaireAnnualise = sb * 12
@@ -39,13 +48,13 @@ export async function POST(request: Request) {
       total_paye_retenu += paye
 
       // TAN : fallback NIC → TAN_MANQUANT
-      const tanValue = b.employe?.tan_number || b.employe?.nic_number || 'TAN_MANQUANT'
+      const tanValue = emp?.tan_number || emp?.nic_number || 'TAN_MANQUANT'
 
       detailLines.push([
         tanValue,
-        b.employe?.nom || '',
-        b.employe?.prenom || '',
-        b.employe?.nic_number || '',
+        emp?.nom || '',
+        emp?.prenom || '',
+        emp?.nic_number || '',
         sb.toFixed(2),
         salaireAnnualise.toFixed(2),
         paye.toFixed(2),

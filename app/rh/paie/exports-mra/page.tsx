@@ -95,7 +95,19 @@ export default function ExportsMRAPage() {
         body: JSON.stringify({ societe_id: societe, periode, banque_emettrice: banque })
       }).then(r => r.json())
       if (data.error) throw new Error(data.error)
-      if (data.content) downloadCSV(data.content, data.filename)
+      // Handle single-file response
+      if (data.content) {
+        downloadCSV(data.content, data.filename)
+      }
+      // Handle multi-file response (default format='json')
+      if (data.fichiers && Array.isArray(data.fichiers)) {
+        for (let i = 0; i < data.fichiers.length; i++) {
+          const f = data.fichiers[i]
+          if (f.content && f.banque !== 'SANS_BANQUE') {
+            setTimeout(() => downloadCSV(f.content, f.filename), i * 500)
+          }
+        }
+      }
       setter({ done: true, loading: false, error: null })
     } catch (e: unknown) {
       setter({ done: false, loading: false, error: e instanceof Error ? e.message : "Erreur" })

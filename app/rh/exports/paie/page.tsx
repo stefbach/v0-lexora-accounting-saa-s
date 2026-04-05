@@ -65,8 +65,8 @@ export default function ExportPaiePage() {
         prenom: e.prenom,
         poste: e.poste,
         salaire_base: Number(e.salaire_base) || 0,
-        bank_name: e.bank_name || e.banque || "",
-        bank_account: e.bank_account || e.rib || e.iban || "",
+        bank_name: e.bank_name || "",
+        bank_account: e.bank_account || e.iban || "",
         mode_paiement: e.mode_paiement || "bulk",
         inclus_mra: e.inclus_mra !== false,
       }))
