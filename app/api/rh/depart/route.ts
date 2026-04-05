@@ -113,7 +113,13 @@ export async function GET(request: Request) {
         .order('date_depart', { ascending: false })
         .limit(20)
 
-      return NextResponse.json({ departs: departs || [] })
+      // Map date_depart_type → type_depart for frontend consistency
+      const mapped = (departs || []).map(d => ({
+        ...d,
+        type_depart: d.date_depart_type,
+      }))
+
+      return NextResponse.json({ departs: mapped })
     }
 
     if (!employe_id) return NextResponse.json({ error: 'employe_id requis' }, { status: 400 })
@@ -476,8 +482,14 @@ export async function POST(request: Request) {
       const { employe_id, date_depart, type_depart, raison_depart } = body
       if (!employe_id || !date_depart) return NextResponse.json({ error: 'employe_id et date_depart requis' }, { status: 400 })
 
-      const { data: emp } = await supabase.from('employes').select('id, nom, prenom').eq('id', employe_id).maybeSingle()
+      const { data: emp } = await supabase.from('employes').select('id, nom, prenom, societe_id').eq('id', employe_id).maybeSingle()
       if (!emp) return NextResponse.json({ error: 'Employé non trouvé' }, { status: 404 })
+
+      // Check access
+      const accessibleIds = await getUserSocieteIds(user.id)
+      if (!accessibleIds.includes(emp.societe_id)) {
+        return NextResponse.json({ error: 'Accès non autorisé' }, { status: 403 })
+      }
 
       const { error: updateErr } = await supabase.from('employes').update({
         date_depart,

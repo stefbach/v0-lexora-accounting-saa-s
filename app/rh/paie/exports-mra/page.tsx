@@ -92,7 +92,7 @@ export default function ExportsMRAPage() {
     try {
       const data = await fetch("/api/rh/exports/virement", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ societe_id: societe, periode, banque })
+        body: JSON.stringify({ societe_id: societe, periode, banque_emettrice: banque })
       }).then(r => r.json())
       if (data.error) throw new Error(data.error)
       if (data.content) downloadCSV(data.content, data.filename)
