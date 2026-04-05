@@ -137,26 +137,54 @@ export async function POST(request: Request) {
 
       const periodeDate = `${periode}-01`
 
-      // Upsert the planning record
-      const { data: planningRecord, error: planErr } = await supabase
-        .from('plannings')
-        .upsert({
-          societe_id,
-          periode: periodeDate,
-          nom: `Planning ${periode}`,
-          statut: publish ? 'publie' : 'brouillon',
-          created_by: user.id,
-          created_at: new Date().toISOString(),
-        }, { onConflict: 'societe_id,periode' })
-        .select()
-        .single()
+      // Find or create the planning record
+      let planningRecord: any = null
 
-      if (planErr) throw planErr
+      // First try to find existing planning
+      const { data: existing } = await supabase
+        .from('plannings')
+        .select('*')
+        .eq('societe_id', societe_id)
+        .eq('periode', periodeDate)
+        .maybeSingle()
+
+      if (existing) {
+        // Update existing planning
+        const { data: updated, error: upErr } = await supabase
+          .from('plannings')
+          .update({
+            statut: publish ? 'publie' : existing.statut,
+            nom: `Planning ${periode}`,
+          })
+          .eq('id', existing.id)
+          .select()
+          .single()
+        if (upErr) throw upErr
+        planningRecord = updated
+      } else {
+        // Create new planning
+        const { data: created, error: crErr } = await supabase
+          .from('plannings')
+          .insert({
+            societe_id,
+            periode: periodeDate,
+            nom: `Planning ${periode}`,
+            statut: publish ? 'publie' : 'brouillon',
+            created_by: user.id,
+          })
+          .select()
+          .single()
+        if (crErr) throw crErr
+        planningRecord = created
+      }
+
+      if (!planningRecord) throw new Error('Impossible de créer/trouver le planning')
 
       // Convert frontend entries to DB rows
-      // Frontend sends: { employe_id, jour (day number), shift (shift name like "Jour") }
-      const rows = entries.map((entry: { employe_id: string; jour: number; shift: string }) => {
+      // Frontend sends: { employe_id, jour, shift, creneau_id, heure_debut, heure_fin, heures_prevues }
+      const rows = entries.map((entry: any) => {
         const shiftName = entry.shift || 'Repos'
+        const isRepos = shiftName === 'Repos' || entry.creneau_id === 'repos'
         const shiftDef = SHIFT_HOURS[shiftName] || SHIFT_HOURS['Repos']
         const dateStr = `${periode}-${String(entry.jour).padStart(2, '0')}`
         return {
@@ -164,10 +192,10 @@ export async function POST(request: Request) {
           employe_id: entry.employe_id,
           date: dateStr,
           shift_code: shiftName,
-          heure_debut: shiftDef.heure_debut || null,
-          heure_fin: shiftDef.heure_fin || null,
-          heures_prevues: shiftDef.heures_prevues,
-          est_repos: shiftDef.est_repos,
+          heure_debut: entry.heure_debut || shiftDef.heure_debut || null,
+          heure_fin: entry.heure_fin || shiftDef.heure_fin || null,
+          heures_prevues: entry.heures_prevues || shiftDef.heures_prevues || 0,
+          est_repos: isRepos,
         }
       })
 

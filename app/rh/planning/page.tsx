@@ -464,13 +464,22 @@ export default function PlanningPage() {
           })
         }
       }
-      await fetch("/api/rh/planning", {
+      const res = await fetch("/api/rh/planning", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ periode, societe_id: societe, planning: entries, publish }),
       })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error("Erreur sauvegarde: " + (data.error || res.statusText))
+        return
+      }
       if (publish) setPublished(true)
-    } catch (e) { console.error(e) }
+      toast.success(publish ? "Planning publié !" : "Planning sauvegardé")
+    } catch (e: any) {
+      toast.error("Erreur réseau: " + (e.message || "Impossible de sauvegarder"))
+      console.error(e)
+    }
     finally { setSaving(false) }
   }
 
