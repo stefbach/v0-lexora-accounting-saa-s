@@ -483,10 +483,31 @@ export async function POST(request: Request) {
         for (const f of fieldsToRemove) delete (bulletin as any)[f]
         console.log(`[paie batch] ${emp.nom} ${emp.prenom}: base=${salaire_base_mur}, brut=${resultat.salaire_brut}, net=${salaire_net_final}`)
 
-        const { data: saved, error } = await supabase.from('bulletins_paie').upsert(bulletin, { onConflict: 'employe_id,periode' }).select().single()
+        // Try upsert first, fallback to select+update/insert if UNIQUE constraint is missing
+        let saved: any = null
+        let error: any = null
+
+        // Check if bulletin already exists for this employee+period
+        const { data: existing } = await supabase.from('bulletins_paie')
+          .select('id').eq('employe_id', emp.id).eq('periode', periodeDate).maybeSingle()
+
+        if (existing) {
+          // UPDATE existing bulletin
+          const { data: updated, error: upErr } = await supabase.from('bulletins_paie')
+            .update(bulletin).eq('id', existing.id).select().single()
+          saved = updated
+          error = upErr
+        } else {
+          // INSERT new bulletin
+          const { data: inserted, error: insErr } = await supabase.from('bulletins_paie')
+            .insert(bulletin).select().single()
+          saved = inserted
+          error = insErr
+        }
+
         if (error) {
           const errMsg = `${emp.nom} ${emp.prenom}: ${error.message}`
-          console.error(`[paie batch] UPSERT FAILED:`, errMsg, error.details, error.hint)
+          console.error(`[paie batch] SAVE FAILED:`, errMsg, error.details, error.hint)
           erreurs.push(errMsg)
         }
         if (!error && saved) {

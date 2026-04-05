@@ -86,12 +86,20 @@ export default function PaiePage() {
     if (societe === "all") return alert("Sélectionnez une société")
     setCalculating(true)
     try {
-      await fetch("/api/rh/paie", {
+      const res = await fetch("/api/rh/paie", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "calculer_batch", societe_id: societe, periode })
-      }).then(r => r.json())
-      load()
-    } catch (e) { console.error(e) } finally { setCalculating(false) }
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        alert("Erreur calcul: " + (data.error || res.statusText))
+      } else {
+        const nb = data.nb || data.bulletins?.length || 0
+        const erreurs = data.erreurs || []
+        alert(`✅ ${nb} bulletin(s) calculé(s) pour ${periode}${erreurs.length > 0 ? `\n\n⚠️ ${erreurs.length} erreur(s):\n${erreurs.join("\n")}` : ""}`)
+        load()
+      }
+    } catch (e: any) { alert("Erreur réseau: " + (e.message || "")) } finally { setCalculating(false) }
   }
 
   const exportVirements = async (banqueFilter?: string) => {
