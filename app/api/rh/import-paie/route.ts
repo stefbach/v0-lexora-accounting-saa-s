@@ -24,11 +24,12 @@ const COL_PATTERNS: Record<string, string[]> = {
   special_allowance: ['special allowance', 'special', '3010 special', '3010'],
   internet_allowance: ['internet allowance', 'internet', '3170 internet', '3170'],
   prime_production: ['prime production', 'prime', 'production', '3200 prime', '3200'],
-  on_call: ['on call', '3220'],
-  prime_tl: ['prime tl', '3230'],
+  on_call: ['on call', '3220', 'on-call', 'astreinte'],
+  prime_tl: ['prime tl', '3230', 'team leader', 'tl bonus'],
   electricity: ['electricity allowance', 'electricity', 'electricite', '3250 elec', '3250'],
   meal_allowance: ['meal allowance', 'meal', 'repas', '3510 meal', '3510'],
-  total_payments: ['total payments', 'total pay', 'gross', 'brut total'],
+  other_primes: ['primes', 'bonus', 'prime', 'other allowance', 'other'],
+  total_payments: ['total payments', 'total pay', 'gross', 'brut total', 'total earning', 'gross pay'],
   absence_deductions: ['absence deductions', 'absence', '3900 absence', '3900'],
   csg: ['4010 csg', 'csg', '4010'],
   nsf: ['4100 nsf', 'nsf', '4100'],
@@ -233,7 +234,7 @@ export async function POST(request: Request) {
           date_arrivee: getStr(r, 'date_arrivee'), date_depart: getStr(r, 'date_depart'),
           salaire_base: getVal(r, 'salaire_base'), overtime_1_5x: getVal(r, 'overtime_1_5x'), overtime_2x: getVal(r, 'overtime_2x'),
           special_allowance: getVal(r, 'special_allowance'), internet_allowance: getVal(r, 'internet_allowance'),
-          prime_production: getVal(r, 'prime_production'), electricity: getVal(r, 'electricity'), meal_allowance: getVal(r, 'meal_allowance'),
+          prime_production: getVal(r, 'prime_production'), electricity: getVal(r, 'electricity'), meal_allowance: getVal(r, 'meal_allowance'), other_primes: getVal(r, 'other_primes'),
           total_payments: getVal(r, 'total_payments'), absence_deductions: getVal(r, 'absence_deductions'),
           csg: getVal(r, 'csg'), nsf: getVal(r, 'nsf'), paye: getVal(r, 'paye'), total_deductions: getVal(r, 'total_deductions'),
           er_csg: getVal(r, 'er_csg'), er_nsf: getVal(r, 'er_nsf'), er_levy: getVal(r, 'er_levy'), er_prgf: getVal(r, 'er_prgf'),
@@ -325,11 +326,55 @@ export async function POST(request: Request) {
             if (n) { employeId = n.id; created++ }
           }
           if (!employeId) continue
-          const { error: bulErr } = await supabase.from('bulletins_paie').upsert({ employe_id: employeId, societe_id, periode: periodeDate, salaire_base: emp.salaire_base || 0, heures_sup_montant: (emp.overtime_1_5x || 0) + (emp.overtime_2x || 0), special_allowance_1: emp.special_allowance || 0, salaire_net: emp.net_pay || 0, csg_salarie: emp.csg || 0, csg_patronal: emp.er_csg || 0, nsf_salarie: emp.nsf || 0, nsf_patronal: emp.er_nsf || 0, paye: emp.paye || 0, training_levy: emp.er_levy || 0, prgf: emp.er_prgf || 0, total_deductions: emp.total_deductions || 0, total_charges_patronales: emp.total_er || 0, statut: 'valide', source: 'import_excel' }, { onConflict: 'employe_id,periode' })
+
+          // Calculate totals for this employee
+          const ot_total = (emp.overtime_1_5x || 0) + (emp.overtime_2x || 0)
+          const all_primes = (emp.special_allowance || 0) + (emp.internet_allowance || 0) +
+            (emp.prime_production || 0) + (emp.on_call || 0) + (emp.prime_tl || 0) +
+            (emp.electricity || 0) + (emp.meal_allowance || 0) + (emp.other_primes || 0)
+          const salaire_brut = emp.total_payments || (emp.salaire_base + ot_total + all_primes)
+          const total_ded = emp.total_deductions || ((emp.csg || 0) + (emp.nsf || 0) + (emp.paye || 0) + (emp.absence_deductions || 0))
+          const total_charges = emp.total_er || ((emp.er_csg || 0) + (emp.er_nsf || 0) + (emp.er_levy || 0) + (emp.er_prgf || 0))
+
+          const { error: bulErr } = await supabase.from('bulletins_paie').upsert({
+            employe_id: employeId,
+            societe_id,
+            periode: periodeDate,
+            salaire_base: emp.salaire_base || 0,
+            salaire_brut: salaire_brut,
+            heures_sup_montant: ot_total,
+            special_allowance_1: all_primes,
+            special_allowance_2: emp.internet_allowance || 0,
+            special_allowance_3: emp.meal_allowance || 0,
+            transport_allowance: emp.electricity || 0,
+            petrol_allowance: emp.prime_production || 0,
+            salaire_net: emp.net_pay || 0,
+            csg_salarie: emp.csg || 0,
+            csg_patronal: emp.er_csg || 0,
+            nsf_salarie: emp.nsf || 0,
+            nsf_patronal: emp.er_nsf || 0,
+            paye: emp.paye || 0,
+            training_levy: emp.er_levy || 0,
+            prgf: emp.er_prgf || 0,
+            montant_absence: emp.absence_deductions || 0,
+            total_deductions: total_ded,
+            total_charges_patronales: total_charges,
+            cout_total_employeur: salaire_brut + total_charges,
+            statut: 'valide',
+            source: 'import_excel',
+            notes: [
+              emp.internet_allowance ? `Internet: ${emp.internet_allowance}` : '',
+              emp.prime_production ? `Prime prod: ${emp.prime_production}` : '',
+              emp.on_call ? `On call: ${emp.on_call}` : '',
+              emp.prime_tl ? `Prime TL: ${emp.prime_tl}` : '',
+              emp.electricity ? `Electricity: ${emp.electricity}` : '',
+              emp.meal_allowance ? `Meal: ${emp.meal_allowance}` : '',
+            ].filter(Boolean).join(' | ') || null,
+          }, { onConflict: 'employe_id,periode' })
           if (bulErr) {
             console.warn(`[import-paie] bulletin upsert failed for ${nom}, trying insert:`, bulErr.message)
             // Fallback: try simple insert without upsert
-            const { error: insErr } = await supabase.from('bulletins_paie').insert({ employe_id: employeId, societe_id, periode: periodeDate, salaire_base: emp.salaire_base || 0, salaire_net: emp.net_pay || 0, csg_salarie: emp.csg || 0, paye: emp.paye || 0, statut: 'valide', source: 'import_excel' })
+            const { error: insErr } = await supabase.from('bulletins_paie').insert({ employe_id: employeId, societe_id, periode: periodeDate, salaire_base: emp.salaire_base || 0, salaire_brut: salaire_brut, heures_sup_montant: ot_total, special_allowance_1: all_primes, salaire_net: emp.net_pay || 0, csg_salarie: emp.csg || 0, csg_patronal: emp.er_csg || 0, nsf_salarie: emp.nsf || 0, nsf_patronal: emp.er_nsf || 0, paye: emp.paye || 0, training_levy: emp.er_levy || 0, prgf: emp.er_prgf || 0, total_deductions: total_ded, total_charges_patronales: total_charges, montant_absence: emp.absence_deductions || 0, statut: 'valide', source: 'import_excel' })
             if (insErr) {
               console.error(`[import-paie] bulletin insert also failed:`, insErr.message)
               errors.push(`${nom}: bulletin - ${insErr.message}`)
@@ -352,7 +397,7 @@ export async function POST(request: Request) {
         const t = employes.reduce((s: any, e: any) => ({
           basic: s.basic + (e.salaire_base || 0),
           ot: s.ot + (e.overtime_1_5x || 0) + (e.overtime_2x || 0),
-          allowances: s.allowances + (e.special_allowance || 0) + (e.internet_allowance || 0) + (e.prime_production || 0) + (e.electricity || 0) + (e.meal_allowance || 0),
+          allowances: s.allowances + (e.special_allowance || 0) + (e.internet_allowance || 0) + (e.prime_production || 0) + (e.electricity || 0) + (e.meal_allowance || 0) + (e.on_call || 0) + (e.prime_tl || 0) + (e.other_primes || 0),
           brut: s.brut + (e.total_payments || e.salaire_base || 0),
           net: s.net + (e.net_pay || 0),
           csg_sal: s.csg_sal + (e.csg || 0),
