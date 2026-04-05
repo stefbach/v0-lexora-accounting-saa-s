@@ -70,7 +70,18 @@ export async function GET(request: Request) {
     const moisLabel = MOIS_FR[periodeDate.getMonth()] || ''
     const annee = periodeDate.getFullYear()
 
-    return generatePDFResponse(bulletin, emp, soc, moisLabel, annee)
+    // Calculate leave balances for GET handler too
+    const { data: congesGet } = await supabase
+      .from('demandes_conges')
+      .select('type_conge, nb_jours')
+      .eq('employe_id', bulletin.employe_id)
+      .eq('statut', 'approuve')
+      .gte('date_debut', `${annee}-01-01`)
+      .lte('date_debut', `${annee}-12-31`)
+    const alPrisGet = (congesGet || []).filter((c: any) => c.type_conge === 'AL').reduce((s: number, c: any) => s + (Number(c.nb_jours) || 0), 0)
+    const slPrisGet = (congesGet || []).filter((c: any) => c.type_conge === 'SL').reduce((s: number, c: any) => s + (Number(c.nb_jours) || 0), 0)
+
+    return generatePDFResponse(bulletin, emp, soc, moisLabel, annee, { alPris: alPrisGet, slPris: slPrisGet })
   } catch (e: any) {
     return new NextResponse(`Erreur: ${e.message}`, { status: 500 })
   }
@@ -126,6 +137,24 @@ export async function POST(request: Request) {
       .select('*, prime:catalogue_primes(libelle, type_prime)')
       .eq('employe_id', bulletin.employe_id)
       .eq('periode', bulletin.periode)
+
+    // Récupérer les soldes congés pour cet employé
+    const currentYear = new Date(bulletin.periode).getFullYear()
+    const { data: congesApprouves } = await supabase
+      .from('demandes_conges')
+      .select('type_conge, nb_jours')
+      .eq('employe_id', bulletin.employe_id)
+      .eq('statut', 'approuve')
+      .gte('date_debut', `${currentYear}-01-01`)
+      .lte('date_debut', `${currentYear}-12-31`)
+
+    const alPris = (congesApprouves || []).filter((c: any) => c.type_conge === 'AL').reduce((s: number, c: any) => s + (Number(c.nb_jours) || 0), 0)
+    const slPris = (congesApprouves || []).filter((c: any) => c.type_conge === 'SL').reduce((s: number, c: any) => s + (Number(c.nb_jours) || 0), 0)
+    // AL entitlement: 22 days/year (WRA 2019 standard after 1 year)
+    const alDroit = 22
+    const slDroit = 15
+    const alRestant = alDroit - alPris
+    const slRestant = slDroit - slPris
 
     // Récupérer les détails OT depuis les pointages du mois
     const periodeStr = bulletin.periode.slice(0, 7)
@@ -281,12 +310,19 @@ export async function POST(request: Request) {
     <p style="font-size:11px;color:#555;margin-top:6px;">Virement ${emp?.bank_name || ''} — ****${(emp?.bank_account || '').slice(-4)}</p>
   </div>
 
-  <div style="margin:15px 0;padding:10px;border:1px solid #e0e0e0;border-radius:6px;">
-    <h3 style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;margin-bottom:8px;">Soldes Congés</h3>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;font-size:11px;">
-      <div>AL (Congé annuel): --j</div>
-      <div>SL (Congé maladie): --j</div>
-      <div>MAT/PAT: --j</div>
+  <div style="margin:15px 0;padding:12px 16px;border:1px solid #e0e0e0;border-radius:6px;background:#f8f9fa;">
+    <h3 style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;margin-bottom:10px;">Soldes Congés — ${currentYear}</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
+      <div style="padding:8px 12px;background:white;border-radius:4px;border:1px solid #e0e0e0;">
+        <span style="font-weight:600;color:#0B0F2E;">Local Leave (AL)</span><br/>
+        <span style="color:#059669;font-weight:700;font-size:14px;">${alRestant}j</span>
+        <span style="color:#888;font-size:10px;"> restants / ${alDroit}j (${alPris}j pris)</span>
+      </div>
+      <div style="padding:8px 12px;background:white;border-radius:4px;border:1px solid #e0e0e0;">
+        <span style="font-weight:600;color:#0B0F2E;">Sick Leave (SL)</span><br/>
+        <span style="color:#ea580c;font-weight:700;font-size:14px;">${slRestant}j</span>
+        <span style="color:#888;font-size:10px;"> restants / ${slDroit}j (${slPris}j pris)</span>
+      </div>
     </div>
   </div>
 
@@ -331,7 +367,10 @@ export async function POST(request: Request) {
 }
 
 // Simple HTML bulletin for GET requests
-function generatePDFResponse(bulletin: any, emp: any, soc: any, moisLabel: string, annee: number) {
+function generatePDFResponse(bulletin: any, emp: any, soc: any, moisLabel: string, annee: number, conges?: { alPris: number; slPris: number }) {
+  const alDroitGet = 22, slDroitGet = 15
+  const alRestantGet = alDroitGet - (conges?.alPris || 0)
+  const slRestantGet = slDroitGet - (conges?.slPris || 0)
   const periodeDate = new Date(`${annee}-${String(MOIS_FR.indexOf(moisLabel) + 1).padStart(2, '0')}-15`)
 
   const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Bulletin ${emp.prenom} ${emp.nom} — ${moisLabel} ${annee}</title>
@@ -409,12 +448,19 @@ ${bulletin.montant_absence > 0 ? `<tr><td>Déduction absence</td><td class="righ
   <p style="font-size:11px;color:#555;margin-top:6px;">Virement ${emp.bank_name || ''} — ****${(emp.bank_account || '').slice(-4)}</p>
 </div>
 
-<div style="margin:15px 0;padding:10px;border:1px solid #e0e0e0;border-radius:6px;">
-  <h3 style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;margin-bottom:8px;">Soldes Congés</h3>
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;font-size:11px;">
-    <div>AL (Congé annuel): --j</div>
-    <div>SL (Congé maladie): --j</div>
-    <div>MAT/PAT: --j</div>
+<div style="margin:15px 0;padding:12px 16px;border:1px solid #e0e0e0;border-radius:6px;background:#f8f9fa;">
+  <h3 style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;margin-bottom:10px;">Soldes Congés — ${annee}</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
+    <div style="padding:8px 12px;background:white;border-radius:4px;border:1px solid #e0e0e0;">
+      <strong>Local Leave (AL)</strong><br/>
+      <span style="color:#059669;font-weight:700;font-size:14px;">${alRestantGet}j</span>
+      <span style="color:#888;font-size:10px;"> restants / ${alDroitGet}j (${conges?.alPris || 0}j pris)</span>
+    </div>
+    <div style="padding:8px 12px;background:white;border-radius:4px;border:1px solid #e0e0e0;">
+      <strong>Sick Leave (SL)</strong><br/>
+      <span style="color:#ea580c;font-weight:700;font-size:14px;">${slRestantGet}j</span>
+      <span style="color:#888;font-size:10px;"> restants / ${slDroitGet}j (${conges?.slPris || 0}j pris)</span>
+    </div>
   </div>
 </div>
 
