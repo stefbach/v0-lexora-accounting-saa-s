@@ -237,7 +237,7 @@ export async function POST(request: Request) {
     <div class="header-left">
       <div style="width:60mm;max-height:20mm;margin-bottom:8px;">
         <img src="${soc?.logo_url || ''}" style="max-width:100%;max-height:20mm;display:${soc?.logo_url ? 'block' : 'none'}" />
-        ${!soc?.logo_url ? `<div style="font-size:18px;font-weight:800;color:#0B0F2E;letter-spacing:0.04em;">LE<span style="color:#D4AF37">X</span>ORA</div>` : ''}
+        ${!soc?.logo_url ? `<div style="font-size:16px;font-weight:800;color:#0B0F2E;">${soc?.nom || 'Société'}</div>` : ''}
       </div>
       <p style="font-weight:700;color:#0B0F2E;font-size:14px;">${soc?.nom || 'N/A'}</p>
       <p style="color:#555;font-size:11px;">${soc?.adresse || ''}</p>
@@ -353,13 +353,45 @@ export async function POST(request: Request) {
       <div style="width:80px;height:80px;border:1px solid #ccc;border-radius:4px;display:flex;align-items:center;justify-content:center;margin:0 auto;font-size:9px;color:#999;">
         QR Code<br>Vérification
       </div>
-      <p style="font-size:9px;color:#999;margin-top:4px;">lexora.finance/verify</p>
+      <p style="font-size:9px;color:#999;margin-top:4px;">Vérification authenticité</p>
     </div>
   </div>
 
   <p style="font-size:9px;color:#bbb;text-align:center;margin-top:20px;">
-    LEXORA — Comptabilité intelligente pilotée par l'IA — lexora.finance
+    Généré par le système de paie — ${soc?.nom || ''}
   </p>
+
+  <!-- Action buttons (hidden when printing) -->
+  <div class="no-print" style="display:flex;gap:12px;justify-content:center;margin-top:24px;padding:16px;background:#f8f9fc;border-radius:8px;">
+    <button onclick="window.print()" style="padding:10px 24px;background:#0B0F2E;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+      📄 Télécharger PDF
+    </button>
+    <button onclick="shareDoc()" style="padding:10px 24px;background:#4191FF;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+      📤 Partager
+    </button>
+    <button onclick="window.close()" style="padding:10px 24px;background:#e5e7eb;color:#374151;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+      Fermer
+    </button>
+  </div>
+
+  <script>
+    async function shareDoc() {
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: document.title,
+            text: 'Bulletin de paie — ${emp?.prenom} ${emp?.nom} — ${moisLabel}',
+            url: window.location.href
+          });
+        } catch(e) { /* user cancelled */ }
+      } else {
+        // Fallback: copy to clipboard
+        const url = window.location.href;
+        await navigator.clipboard.writeText(url);
+        alert('Lien copié dans le presse-papier');
+      }
+    }
+  </script>
 </body>
 </html>`
 
@@ -496,13 +528,20 @@ ${Number(bulletin.csg_patronal_bonus) > 0 ? `<tr><td>CSG patronal sur bonus (6%)
     <div style="width:80px;height:80px;border:1px solid #ccc;border-radius:4px;display:flex;align-items:center;justify-content:center;margin:0 auto;font-size:9px;color:#999;">
       QR Code<br>Vérification
     </div>
-    <p style="font-size:9px;color:#999;margin-top:4px;">lexora.finance/verify</p>
+    <p style="font-size:9px;color:#999;margin-top:4px;">Vérification authenticité</p>
   </div>
 </div>
 
 <p style="font-size:9px;color:#bbb;text-align:center;margin-top:20px;">
-  LEXORA — Comptabilité intelligente pilotée par l'IA — lexora.finance
+  Généré par le système de paie — ${soc?.nom || ''}
 </p>
+
+<div style="display:flex;gap:12px;justify-content:center;margin-top:24px;padding:16px;background:#f8f9fc;border-radius:8px;">
+  <button onclick="window.print()" style="padding:10px 24px;background:#0B0F2E;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">📄 Télécharger PDF</button>
+  <button onclick="if(navigator.share)navigator.share({title:document.title,text:document.title});else{navigator.clipboard.writeText(window.location.href);alert('Lien copié')}" style="padding:10px 24px;background:#4191FF;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">📤 Partager</button>
+</div>
+
+<style>@media print{button,div[style*="justify-content:center"]{display:none!important}}</style>
 </body></html>`
 
   return new NextResponse(html, {
