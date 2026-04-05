@@ -27,8 +27,10 @@ export async function GET() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
-    // ── Étape 1 : chercher par auth_user_id ──────────────────────────────────
-    const { data: byAuthId } = await supabase
+    const adminClient = getAdminClient()
+
+    // ── Étape 1 : chercher par auth_user_id (lien direct le plus fiable) ─────
+    const { data: byAuthId } = await adminClient
       .from('employes')
       .select('*')
       .eq('auth_user_id', user.id)
@@ -37,34 +39,44 @@ export async function GET() {
 
     if (byAuthId) return NextResponse.json({ employe: byAuthId })
 
-    // ── Étape 2 : chercher par email ─────────────────────────────────────────
-    if (user.email) {
-      const { data: byEmail } = await supabase
-        .from('employes')
-        .select('*')
-        .eq('email', user.email)
-        .is('date_depart', null)
-        .maybeSingle()
-
-      if (byEmail) return NextResponse.json({ employe: byEmail })
-    }
-
-    // ── Étape 3 : chercher via profiles.employe_id ───────────────────────────
-    const { data: profile } = await supabase
+    // ── Étape 2 : chercher via profiles.employe_id ──────────────────────────
+    const { data: profile } = await adminClient
       .from('profiles')
       .select('employe_id')
       .eq('id', user.id)
       .maybeSingle()
 
     if (profile?.employe_id) {
-      const { data: byProfile } = await supabase
+      const { data: byProfile } = await adminClient
         .from('employes')
         .select('*')
         .eq('id', profile.employe_id)
         .is('date_depart', null)
         .maybeSingle()
 
-      if (byProfile) return NextResponse.json({ employe: byProfile })
+      if (byProfile) {
+        // Auto-link auth_user_id for future lookups
+        if (!byProfile.auth_user_id) {
+          await adminClient.from('employes').update({ auth_user_id: user.id }).eq('id', byProfile.id)
+        }
+        return NextResponse.json({ employe: byProfile })
+      }
+    }
+
+    // ── Étape 3 : chercher par email (fallback, moins fiable) ────────────────
+    if (user.email) {
+      // Only match if there's exactly ONE employee with this email (avoid ambiguity)
+      const { data: byEmail, count } = await adminClient
+        .from('employes')
+        .select('*', { count: 'exact' })
+        .eq('email', user.email)
+        .is('date_depart', null)
+
+      if (count === 1 && byEmail?.[0]) {
+        // Auto-link auth_user_id for future lookups
+        await adminClient.from('employes').update({ auth_user_id: user.id }).eq('id', byEmail[0].id)
+        return NextResponse.json({ employe: byEmail[0] })
+      }
     }
 
     // ── Étape 4 : aucun lien trouvé ──────────────────────────────────────────

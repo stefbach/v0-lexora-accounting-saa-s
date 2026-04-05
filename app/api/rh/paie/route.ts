@@ -197,9 +197,9 @@ export async function POST(request: Request) {
         total_ot_montant += montant15 + montant2
       }
 
-      // 2. Récupérer primes approuvées de la période
+      // 2. Récupérer toutes les primes de la période (approuvées ou saisies par un RH/admin)
       const { data: primesMois } = await supabase.from('primes_variables_mois')
-        .select('*').eq('employe_id', employe_id).eq('periode', periodeDate).eq('approuve', true)
+        .select('*').eq('employe_id', employe_id).eq('periode', periodeDate)
 
       const total_primes = (primesMois || []).reduce((s, p) => s + Number(p.montant || 0), 0)
 
@@ -350,9 +350,9 @@ export async function POST(request: Request) {
           total_ot_montant += ot.ot15 * taux_horaire * 1.5 + ot.ot2 * taux_horaire * 2
         }
 
-        // 2. Primes approuvées
+        // 2. Toutes les primes de la période (approuvées ou saisies)
         const { data: primesMois } = await supabase.from('primes_variables_mois')
-          .select('*').eq('employe_id', emp.id).eq('periode', periodeDate).eq('approuve', true)
+          .select('*').eq('employe_id', emp.id).eq('periode', periodeDate)
         let total_primes = (primesMois || []).reduce((s, p) => s + Number(p.montant || 0), 0)
 
         // 3. Absences injustifiées

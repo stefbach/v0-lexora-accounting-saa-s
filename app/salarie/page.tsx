@@ -568,9 +568,19 @@ export default function EspaceEmployePage() {
               <p className="text-white/60 text-xs md:text-sm">{employe.entreprise_nom || employe.poste || "—"} &middot; {todayFR()}</p>
             </div>
           </div>
-          <div className="text-right hidden md:block">
-            <p className="text-3xl font-mono font-bold text-white">{now.toLocaleTimeString("fr-FR", { timeZone: MU_TZ, hour: "2-digit", minute: "2-digit" })}</p>
-            <p className="text-white/40 text-xs">Maurice (UTC+4)</p>
+          <div className="hidden md:flex items-center gap-4">
+            <div className="text-right">
+              <p className="text-3xl font-mono font-bold text-white">{now.toLocaleTimeString("fr-FR", { timeZone: MU_TZ, hour: "2-digit", minute: "2-digit" })}</p>
+              <p className="text-white/40 text-xs">Maurice (UTC+4)</p>
+            </div>
+            <button onClick={async () => {
+              const { createClient } = await import("@/lib/supabase/client")
+              const supabase = createClient()
+              await supabase.auth.signOut()
+              window.location.href = "/auth/login"
+            }} className="h-10 w-10 rounded-xl flex items-center justify-center bg-white/10 hover:bg-red-500/20 transition-colors" title="Déconnexion">
+              <LogOut className="h-4 w-4 text-white/60 hover:text-red-400" />
+            </button>
           </div>
           <div className="text-right md:hidden">
             <p className="text-2xl font-mono font-bold text-white">{now.toLocaleTimeString("fr-FR", { timeZone: MU_TZ, hour: "2-digit", minute: "2-digit" })}</p>
@@ -918,6 +928,20 @@ export default function EspaceEmployePage() {
                 <span className="font-medium text-sm">{t.label}</span>
               </button>
             ))}
+            <div className="border-t border-gray-200 mt-2 pt-2">
+              <button onClick={async () => {
+                const { createClient } = await import("@/lib/supabase/client")
+                const supabase = createClient()
+                await supabase.auth.signOut()
+                window.location.href = "/auth/login"
+              }}
+                className="w-full flex items-center gap-3 px-3 py-3.5 rounded-xl text-left text-red-600 transition-all duration-200 active:scale-[0.98]">
+                <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-red-50">
+                  <LogOut className="h-5 w-5 text-red-500" />
+                </div>
+                <span className="font-medium text-sm">Déconnexion</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
