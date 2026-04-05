@@ -26,8 +26,14 @@ export default function RedirectPage() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { window.location.href = '/auth/login'; return }
-      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+      const { data: profile } = await supabase.from('profiles').select('role, employe_id').eq('id', user.id).single()
       const role = profile?.role || 'client_user'
+
+      // Auto-link employe on login (fire and forget — don't block redirect)
+      if (['employe', 'salarie', 'rh', 'manager', 'rh_manager'].includes(role)) {
+        fetch('/api/rh/employes/me').catch(() => {})
+      }
+
       window.location.href = ROLE_DASHBOARD[role] || '/client/tableau-de-bord'
     }
     go()

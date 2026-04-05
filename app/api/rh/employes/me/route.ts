@@ -63,19 +63,26 @@ export async function GET() {
       }
     }
 
-    // ── Étape 3 : chercher par email (fallback, moins fiable) ────────────────
+    // ── Étape 3 : chercher par email (fallback, case-insensitive) ─────────────
     if (user.email) {
-      // Only match if there's exactly ONE employee with this email (avoid ambiguity)
-      const { data: byEmail, count } = await adminClient
+      const emailLower = user.email.toLowerCase().trim()
+      // Get all active employees and match case-insensitively
+      const { data: allActive } = await adminClient
         .from('employes')
-        .select('*', { count: 'exact' })
-        .eq('email', user.email)
+        .select('*')
         .is('date_depart', null)
+        .is('auth_user_id', null)  // only match unlinked employees
 
-      if (count === 1 && byEmail?.[0]) {
+      const matches = (allActive || []).filter((e: any) =>
+        e.email && e.email.toLowerCase().trim() === emailLower
+      )
+
+      if (matches.length === 1) {
         // Auto-link auth_user_id for future lookups
-        await adminClient.from('employes').update({ auth_user_id: user.id }).eq('id', byEmail[0].id)
-        return NextResponse.json({ employe: byEmail[0] })
+        await adminClient.from('employes').update({ auth_user_id: user.id }).eq('id', matches[0].id)
+        // Also link profiles.employe_id
+        await adminClient.from('profiles').update({ employe_id: matches[0].id }).eq('id', user.id)
+        return NextResponse.json({ employe: matches[0] })
       }
     }
 
