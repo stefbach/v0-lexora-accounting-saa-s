@@ -94,7 +94,36 @@ export async function GET(request: Request) {
       for (const e of emps || []) empMap[e.id] = { code: e.code_employe, nom: e.nom, prenom: e.prenom, poste: e.poste, devise_salaire: e.devise_salaire }
     }
 
-    const enriched = (data || []).map(b => ({ ...b, employe: empMap[b.employe_id] || null }))
+    const enriched = (data || []).map(b => {
+      // Auto-calculate missing fields from available data
+      let salaire_brut = Number(b.salaire_brut) || 0
+      const salaire_net = Number(b.salaire_net) || 0
+      const total_deductions = Number(b.total_deductions) || (Number(b.csg_salarie || 0) + Number(b.nsf_salarie || 0) + Number(b.paye || 0) + Number(b.montant_absence || 0))
+
+      // Brut = net + deductions (most reliable when brut is missing)
+      if (!salaire_brut && salaire_net > 0) {
+        salaire_brut = salaire_net + total_deductions
+      }
+
+      // Primes = brut - base - OT - transport - petrol
+      let special_allowance_1 = Number(b.special_allowance_1) || 0
+      if (special_allowance_1 === 0 && salaire_brut > 0) {
+        special_allowance_1 = Math.max(salaire_brut - Number(b.salaire_base || 0) - Number(b.heures_sup_montant || 0) - Number(b.transport_allowance || 0) - Number(b.petrol_allowance || 0) - Number(b.increment_salaire || 0) - Number(b.eoy_bonus || 0), 0)
+      }
+
+      const total_charges = Number(b.total_charges_patronales) || (Number(b.csg_patronal || 0) + Number(b.nsf_patronal || 0) + Number(b.training_levy || 0) + Number(b.prgf || 0))
+      const cout_total = Number(b.cout_total_employeur) || (salaire_brut + total_charges)
+
+      return {
+        ...b,
+        salaire_brut,
+        special_allowance_1,
+        total_deductions,
+        total_charges_patronales: total_charges,
+        cout_total_employeur: cout_total,
+        employe: empMap[b.employe_id] || null,
+      }
+    })
 
     // Calculate brut with fallback: salaire_brut → (net + deductions) → (base + OT + primes)
     const getBrut = (b: any) => Number(b.salaire_brut) || (Number(b.salaire_net) + Number(b.total_deductions)) || (Number(b.salaire_base) + Number(b.heures_sup_montant || 0) + Number(b.special_allowance_1 || 0) + Number(b.transport_allowance || 0) + Number(b.petrol_allowance || 0))

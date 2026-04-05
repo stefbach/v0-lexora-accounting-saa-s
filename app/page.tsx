@@ -167,7 +167,7 @@ export default function HomePage() {
               className="mb-6 text-4xl font-bold tracking-tight md:text-6xl"
               style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif" }}
             >
-              {t('home.hero_title', locale)}
+              <span style={{ letterSpacing: "0.04em" }}>LE<span style={{ color: "#D4AF37" }}>X</span>ORA</span> — {locale === "fr" ? "La comptabilité intelligente pour Maurice" : "Smart Accounting for Mauritius"}
             </h1>
             <p className="mx-auto mb-10 max-w-2xl text-lg" style={{ color: "#8B90B8", fontFamily: "'Poppins', sans-serif", fontWeight: 300, lineHeight: 1.7 }}>
               {t('home.hero_subtitle', locale)}

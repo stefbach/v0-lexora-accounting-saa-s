@@ -38,9 +38,9 @@ export function LexoraLogo({ href, subtitle, size = "md", showBaseline = false }
           ORA
         </span>
       </div>
-      {/* Underline: full #1E2760 line with gold accent under X */}
+      {/* Underline: full line with gold accent under X */}
       <div className="relative w-full" style={{ height: "3px" }}>
-        <div className="absolute inset-x-0 bottom-0" style={{ height: "2px", backgroundColor: "#1E2760" }} />
+        <div className="absolute inset-x-0 bottom-0" style={{ height: "2px", backgroundColor: "#4A5490" }} />
         <div
           className="absolute bottom-0"
           style={{
@@ -54,7 +54,7 @@ export function LexoraLogo({ href, subtitle, size = "md", showBaseline = false }
       {showBaseline && (
         <span
           className={`${baselineSize} font-light mt-1 tracking-wider`}
-          style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif" }}
+          style={{ color: "#8B90B8", fontFamily: "'Poppins', sans-serif" }}
         >
           INTELLIGENT ACCOUNTING &middot; POWERED BY AI
         </span>
