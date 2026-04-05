@@ -21,7 +21,8 @@ type TabType = "bulletins" | "comptabilisation" | "simulation"
 export default function PaiePage() {
   const [societes, setSocietes] = useState<any[]>([])
   const [societe, setSociete] = useState("all")
-  const [periode, setPeriode] = useState(new Date().toISOString().slice(0, 7))
+  const [periode, setPeriode] = useState("")
+  const [periodeReady, setPeriodeReady] = useState(false)
   const [bulletins, setBulletins] = useState<any[]>([])
   const [totaux, setTotaux] = useState<any>({})
   const [loading, setLoading] = useState(false)
@@ -37,15 +38,37 @@ export default function PaiePage() {
     Promise.all([
       fetch("/api/comptable/societes").then(r => r.json()).catch(() => ({ societes: [] })),
       fetch("/api/client/societes").then(r => r.json()).catch(() => ({ societes: [] })),
-    ]).then(([d1, d2]) => {
+    ]).then(async ([d1, d2]) => {
       const all = [...(d1.societes || []), ...(d2.societes || [])]
       const unique = Array.from(new Map(all.map((s: any) => [s.id, s])).values())
       setSocietes(unique)
-      if (unique.length >= 1) setSociete(unique[0].id)
+      const firstSociete = unique.length >= 1 ? unique[0].id : "all"
+      setSociete(firstSociete)
+
+      // Detect latest period that has bulletins instead of defaulting to current month
+      try {
+        const params = new URLSearchParams()
+        if (firstSociete !== "all") params.set("societe_id", firstSociete)
+        const data = await fetch(`/api/rh/paie?${params}`).then(r => r.json())
+        const allBulletins = data.bulletins || []
+        if (allBulletins.length > 0) {
+          // bulletins are ordered by periode DESC, so first one is the latest
+          const latestPeriode = (allBulletins[0].periode || "").slice(0, 7)
+          if (latestPeriode) {
+            setPeriode(latestPeriode)
+            setPeriodeReady(true)
+            return
+          }
+        }
+      } catch {}
+      // Fallback to current month if no bulletins found
+      setPeriode(new Date().toISOString().slice(0, 7))
+      setPeriodeReady(true)
     })
   }, [])
 
   const load = useCallback(async () => {
+    if (!periodeReady || !periode) return
     setLoading(true)
     try {
       const params = new URLSearchParams({ periode })
@@ -54,7 +77,7 @@ export default function PaiePage() {
       setBulletins(data.bulletins || [])
       setTotaux(data.totaux || {})
     } catch (e) { console.error(e) } finally { setLoading(false) }
-  }, [societe, periode])
+  }, [societe, periode, periodeReady])
 
   useEffect(() => { load() }, [load])
 

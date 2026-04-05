@@ -629,7 +629,9 @@ export default function EspaceEmployePage() {
         {/* Pointage / Dashboard */}
         {tab === "dashboard" && (() => {
           const lastBulletin = bulletins.length > 0 ? bulletins[0] : null
-          const estimatedNet = lastBulletin?.salaire_net || lastBulletin?.salaire_base || 0
+          const estimatedNet = lastBulletin?.salaire_net || 0
+          const estimatedBase = lastBulletin?.salaire_base || 0
+          const estimatedBrut = lastBulletin?.salaire_brut || 0
           const alTotal = 22
           const slTotal = 15
           const alRemaining = conges.al_solde ?? 20
@@ -659,6 +661,12 @@ export default function EspaceEmployePage() {
                       </div>
                     </div>
                     <p className="text-3xl md:text-2xl font-bold font-mono mb-1" style={{ color: NAVY }}>~MRs {fmt(estimatedNet)}</p>
+                    {estimatedBase > 0 && (
+                      <div className="flex flex-wrap gap-2 text-xs text-gray-500 mb-1">
+                        <span>Base: {fmt(estimatedBase)}</span>
+                        {estimatedBrut > estimatedBase && <span>| Brut: {fmt(estimatedBrut)}</span>}
+                      </div>
+                    )}
                     <p className="text-xs" style={{ color: GOLD }}>Versement le {lastDayOfMonth()}</p>
                   </CardContent>
                 </Card>
@@ -799,12 +807,14 @@ export default function EspaceEmployePage() {
                           </div>
                         </div>
                         {/* Net amount prominent */}
-                        <p className="text-2xl font-bold font-mono mb-2" style={{ color: NAVY }}>{fmt(b.salaire_net || 0)} <span className="text-sm font-normal text-gray-400">MUR net</span></p>
-                        {/* Details row */}
-                        <div className="flex flex-wrap gap-3 text-xs text-gray-500 mb-4">
-                          <span className="px-2 py-1 rounded-lg bg-gray-50">Brut: {fmt(b.salaire_brut || b.salaire_base || 0)}</span>
-                          {Number(b.special_allowance_1) > 0 && <span className="px-2 py-1 rounded-lg" style={{ backgroundColor: "#7c3aed10", color: "#7c3aed" }}>Primes: {fmt(b.special_allowance_1)}</span>}
+                        <p className="text-2xl font-bold font-mono mb-2" style={{ color: NAVY }}>{fmt(b.salaire_net || 0)} <span className="text-sm font-normal text-gray-400">MUR net à payer</span></p>
+                        {/* Payroll breakdown */}
+                        <div className="flex flex-wrap gap-2 text-xs mb-4">
+                          <span className="px-2 py-1 rounded-lg bg-gray-50 text-gray-600">Base: {fmt(b.salaire_base || 0)}</span>
                           {Number(b.heures_sup_montant) > 0 && <span className="px-2 py-1 rounded-lg" style={{ backgroundColor: "#ea580c10", color: "#ea580c" }}>OT: {fmt(b.heures_sup_montant)}</span>}
+                          {Number(b.special_allowance_1) > 0 && <span className="px-2 py-1 rounded-lg" style={{ backgroundColor: "#7c3aed10", color: "#7c3aed" }}>Primes: {fmt(b.special_allowance_1)}</span>}
+                          <span className="px-2 py-1 rounded-lg" style={{ backgroundColor: `${BLUE}10`, color: BLUE }}>Brut total: {fmt(b.salaire_brut || 0)}</span>
+                          {Number(b.total_deductions) > 0 && <span className="px-2 py-1 rounded-lg" style={{ backgroundColor: "#dc262610", color: "#dc2626" }}>Déductions: -{fmt(b.total_deductions)}</span>}
                         </div>
                         {/* Action buttons - stacked on mobile */}
                         <div className="flex flex-col md:flex-row gap-2">

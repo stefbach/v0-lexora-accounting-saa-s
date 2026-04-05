@@ -364,7 +364,7 @@ td{padding:6px 8px;border-bottom:1px solid #eee;font-size:11px}
     <p><strong>Employé :</strong> ${emp.prenom} ${emp.nom}</p>
     <p><strong>Code :</strong> ${emp.code || '—'}</p>
     <p><strong>Poste :</strong> ${emp.poste || '—'}</p>
-    <p><strong>NIC :</strong> ${emp.nic_number || emp.nic_number || '—'}</p>
+    <p><strong>NIC :</strong> ${emp.nic_number || '—'}</p>
     <p><strong>TAN :</strong> ${emp.tan || '—'}</p>
     <p><strong>Date d'entrée :</strong> ${emp.date_arrivee ? new Date(emp.date_arrivee).toLocaleDateString('fr-FR') : '—'}</p>
     <p><strong>Ancienneté :</strong> ${emp.date_arrivee ? (() => { const d = new Date(emp.date_arrivee); const now = periodeDate; let y = now.getFullYear() - d.getFullYear(); let m = now.getMonth() - d.getMonth(); if (m < 0) { y--; m += 12; } return y > 0 ? y + ' an(s) ' + m + ' mois' : m + ' mois'; })() : '—'}</p>
@@ -372,18 +372,27 @@ td{padding:6px 8px;border-bottom:1px solid #eee;font-size:11px}
     ${emp.departement ? `<p><strong>Département :</strong> ${emp.departement}</p>` : ''}
   </div>
 </div>
-<div class="section">REVENUS</div>
+<div class="section">ÉLÉMENTS DE RÉMUNÉRATION</div>
 <table><tr><th>Libellé</th><th class="right">Montant (MUR)</th></tr>
 <tr><td>Salaire de base</td><td class="right">${fmt(bulletin.salaire_base)}</td></tr>
-${bulletin.transport_allowance > 0 ? `<tr><td>Transport Allowance</td><td class="right">${fmt(bulletin.transport_allowance)}</td></tr>` : ''}
-${bulletin.petrol_allowance > 0 ? `<tr><td>Petrol Allowance</td><td class="right">${fmt(bulletin.petrol_allowance)}</td></tr>` : ''}
-${bulletin.heures_sup_montant > 0 ? `<tr><td>Heures supplémentaires</td><td class="right">${fmt(bulletin.heures_sup_montant)}</td></tr>` : ''}
-${bulletin.special_allowance_1 > 0 ? `<tr><td>Primes</td><td class="right">${fmt(bulletin.special_allowance_1)}</td></tr>` : ''}
-<tr class="bold"><td>TOTAL BRUT</td><td class="right">${fmt(bulletin.salaire_brut)}</td></tr></table>
-<div class="section">DEDUCTIONS SALARIE</div>
+${Number(bulletin.transport_allowance) > 0 ? `<tr><td>Transport Allowance</td><td class="right">${fmt(bulletin.transport_allowance)}</td></tr>` : ''}
+${Number(bulletin.petrol_allowance) > 0 ? `<tr><td>Petrol Allowance</td><td class="right">${fmt(bulletin.petrol_allowance)}</td></tr>` : ''}
+${Number(bulletin.increment_salaire) > 0 ? `<tr><td>Incrément de salaire</td><td class="right">${fmt(bulletin.increment_salaire)}</td></tr>` : ''}
+${Number(bulletin.heures_sup_montant) > 0 ? `<tr><td>Heures supplémentaires</td><td class="right">${fmt(bulletin.heures_sup_montant)}</td></tr>` : ''}
+${Number(bulletin.heures_sup_montant) > 0 ? `<tr style="font-weight:600;color:#ea580c;background:#fff7ed;"><td>Sous-total heures supplémentaires</td><td class="right">${fmt(bulletin.heures_sup_montant)}</td></tr>` : ''}
+${Number(bulletin.special_allowance_1) > 0 ? `<tr><td>Primes &amp; Allocations</td><td class="right">${fmt(bulletin.special_allowance_1)}</td></tr>` : ''}
+${Number(bulletin.special_allowance_2) > 0 ? `<tr><td>Allocation spéciale 2</td><td class="right">${fmt(bulletin.special_allowance_2)}</td></tr>` : ''}
+${Number(bulletin.special_allowance_3) > 0 ? `<tr><td>Allocation spéciale 3</td><td class="right">${fmt(bulletin.special_allowance_3)}</td></tr>` : ''}
+${Number(bulletin.special_allowance_1) > 0 ? `<tr style="font-weight:600;color:#7c3aed;background:#faf5ff;"><td>Sous-total primes</td><td class="right">${fmt(Number(bulletin.special_allowance_1) + Number(bulletin.special_allowance_2 || 0) + Number(bulletin.special_allowance_3 || 0))}</td></tr>` : ''}
+${Number(bulletin.other_refund) > 0 ? `<tr><td>Autres remboursements</td><td class="right">${fmt(bulletin.other_refund)}</td></tr>` : ''}
+${Number(bulletin.eoy_bonus) > 0 ? `<tr><td>13ème mois (EOY Bonus)</td><td class="right">${fmt(bulletin.eoy_bonus)}</td></tr>` : ''}
+${Number(bulletin.departure_notice) > 0 ? `<tr><td>Préavis de départ</td><td class="right">${fmt(bulletin.departure_notice)}</td></tr>` : ''}
+<tr class="bold"><td>SALAIRE BRUT</td><td class="right">${fmt(bulletin.salaire_brut)}</td></tr></table>
+<div class="section">DÉDUCTIONS SALARIÉ</div>
 <table><tr><th>Libellé</th><th class="right">Montant (MUR)</th></tr>
-<tr><td>CSG (${bulletin.salaire_brut > 50000 ? '3%' : '1.5%'})</td><td class="right">${fmt(bulletin.csg_salarie)}</td></tr>
-<tr><td>NSF (1.5%)</td><td class="right">${fmt(bulletin.nsf_salarie)}</td></tr>
+<tr><td>CSG salarié (${Number(bulletin.salaire_brut) > 50000 ? '3%' : '1.5%'})</td><td class="right">${fmt(bulletin.csg_salarie)}</td></tr>
+${Number(bulletin.csg_bonus) > 0 ? `<tr><td>CSG sur 13ème mois (3%)</td><td class="right">${fmt(bulletin.csg_bonus)}</td></tr>` : ''}
+<tr><td>NSF salarié (1.5%)</td><td class="right">${fmt(bulletin.nsf_salarie)}</td></tr>
 <tr><td>PAYE (Impôt sur le revenu)</td><td class="right">${fmt(bulletin.paye)}</td></tr>
 ${bulletin.montant_absence > 0 ? `<tr><td>Déduction absence</td><td class="right">${fmt(bulletin.montant_absence)}</td></tr>` : ''}
 <tr class="bold"><td>TOTAL DEDUCTIONS</td><td class="right">${fmt(bulletin.total_deductions)}</td></tr></table>
@@ -391,7 +400,7 @@ ${bulletin.montant_absence > 0 ? `<tr><td>Déduction absence</td><td class="righ
 <div style="border:3px solid #0B0F2E;border-radius:8px;padding:16px 20px;margin:20px 0;text-align:center;background:linear-gradient(135deg,#0B0F2E08,#D4AF3708);">
   <p style="font-size:13px;font-weight:700;color:#0B0F2E;margin-bottom:4px;">NET À PAYER</p>
   <p style="font-size:24px;font-weight:800;color:#0B0F2E;">${fmt(bulletin.salaire_net)} MUR</p>
-  <p style="font-size:11px;color:#555;margin-top:6px;">Virement ${emp.bank_name || emp.bank_name || ''} — ****${(emp.bank_account || emp.bank_account || '').slice(-4)}</p>
+  <p style="font-size:11px;color:#555;margin-top:6px;">Virement ${emp.bank_name || ''} — ****${(emp.bank_account || '').slice(-4)}</p>
 </div>
 
 <div style="margin:15px 0;padding:10px;border:1px solid #e0e0e0;border-radius:6px;">
@@ -406,10 +415,12 @@ ${bulletin.montant_absence > 0 ? `<tr><td>Déduction absence</td><td class="righ
 <div class="section">CHARGES PATRONALES</div>
 <table><tr><th>Libellé</th><th class="right">Montant (MUR)</th></tr>
 <tr><td>CSG Patronal (6%)</td><td class="right">${fmt(bulletin.csg_patronal)}</td></tr>
+${Number(bulletin.csg_patronal_bonus) > 0 ? `<tr><td>CSG patronal sur bonus (6%)</td><td class="right">${fmt(bulletin.csg_patronal_bonus)}</td></tr>` : ''}
 <tr><td>NSF Patronal (2.5%)</td><td class="right">${fmt(bulletin.nsf_patronal)}</td></tr>
 <tr><td>Training Levy HRDC (1%)</td><td class="right">${fmt(bulletin.training_levy)}</td></tr>
-<tr><td>PRGF</td><td class="right">${fmt(bulletin.prgf)}</td></tr>
-<tr class="bold"><td>TOTAL CHARGES PATRONALES</td><td class="right">${fmt(bulletin.total_charges_patronales)}</td></tr></table>
+<tr><td>PRGF (4.50 MUR × ${bulletin.jours_travailles || 26} jours)</td><td class="right">${fmt(bulletin.prgf)}</td></tr>
+<tr class="bold"><td>TOTAL CHARGES PATRONALES</td><td class="right">${fmt(bulletin.total_charges_patronales)}</td></tr>
+<tr class="bold"><td>COÛT TOTAL EMPLOYEUR</td><td class="right">${fmt(Number(bulletin.salaire_brut) + Number(bulletin.total_charges_patronales))}</td></tr></table>
 
 <div style="display:flex;justify-content:space-between;margin-top:30px;padding-top:15px;border-top:1px solid #ddd;">
   <div style="width:65%;">

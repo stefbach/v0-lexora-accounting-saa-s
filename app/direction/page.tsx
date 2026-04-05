@@ -26,10 +26,23 @@ export default function DirectionPage() {
       setSocietes(socs)
 
       // Charger les données consolidées pour toutes les sociétés
+      // First, detect the latest period that has bulletins (across all sociétés)
+      let latestPeriode = ""
+      try {
+        const allPaieRes = await fetch(`/api/rh/paie`).then(r => r.json())
+        const allBulletins = allPaieRes.bulletins || []
+        if (allBulletins.length > 0) {
+          latestPeriode = (allBulletins[0].periode || "").slice(0, 7)
+        }
+      } catch {}
+      if (!latestPeriode) {
+        latestPeriode = new Date().toISOString().slice(0, 7)
+      }
+
       const results = await Promise.all(
         socs.map(async (s: any) => {
           const [paieRes, empRes, facRes] = await Promise.all([
-            fetch(`/api/rh/paie?societe_id=${s.id}`).then(r => r.json()),
+            fetch(`/api/rh/paie?societe_id=${s.id}&periode=${latestPeriode}`).then(r => r.json()),
             fetch(`/api/rh/employes?societe_id=${s.id}`).then(r => r.json()),
             fetch(`/api/comptable/factures?societe_id=${s.id}&type=client`).then(r => r.json()),
           ])
