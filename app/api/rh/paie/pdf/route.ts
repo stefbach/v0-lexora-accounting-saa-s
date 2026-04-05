@@ -108,13 +108,13 @@ export async function POST(request: Request) {
 
     const { data: empData } = await supabase
       .from('employes')
-      .select('code, nom, prenom, poste, nic_number, date_arrivee, email, salaire_base, transport_allowance, petrol_allowance, devise_salaire, taux_change_eur, bank_account, bank_name, societe_id, auth_user_id')
+      .select('*')
       .eq('id', bulletin.employe_id)
       .single()
 
     const { data: socData } = await supabase
       .from('societes')
-      .select('nom, brn, ern, paye_number, csg_number, nsf_number, adresse, telephone, logo_url')
+      .select('*')
       .eq('id', bulletin.societe_id)
       .single()
 
