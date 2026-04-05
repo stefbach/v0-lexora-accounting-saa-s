@@ -319,7 +319,9 @@ export async function POST(request: Request) {
       }
 
       // 1. Update employee record with departure info
-      const { error: updateErr } = await supabase
+      // Try with all fields first, fallback to minimal if columns don't exist
+      let updateErr: any = null
+      const { error: err1 } = await supabase
         .from('employes')
         .update({
           date_depart,
@@ -327,6 +329,16 @@ export async function POST(request: Request) {
           raison_depart: raison_depart || null,
         })
         .eq('id', employe_id)
+
+      if (err1) {
+        console.warn('[depart] Full update failed, trying minimal:', err1.message)
+        // Fallback: only update date_depart (always exists)
+        const { error: err2 } = await supabase
+          .from('employes')
+          .update({ date_depart })
+          .eq('id', employe_id)
+        updateErr = err2
+      }
 
       if (updateErr) throw updateErr
 
@@ -350,32 +362,37 @@ export async function POST(request: Request) {
         : type_depart === 'retraite' ? 'Retraite'
         : 'Décès'
 
-      const { data: bulletin, error: bulletinErr } = await supabase
-        .from('bulletins_paie')
-        .upsert({
-          employe_id,
-          societe_id: emp.societe_id,
-          periode: periodeDate,
-          salaire_base: salaireBaseBulletin,
-          transport_allowance: transportBulletin,
-          // AL + SL payouts mapped to special_allowance_1
-          special_allowance_1: alPayout + slPayout,
-          // 13th month in special_allowance_2
-          special_allowance_2: treizBulletin,
-          // Notice + severance in departure_notice / special_allowance_3
-          departure_notice: preavisBulletin,
-          special_allowance_3: severanceBulletin,
-          salaire_net: totalBrut,
-          total_deductions: 0,
-          statut: 'valide',
-          notes: `Solde de tout compte — ${typeLabel}`,
-        }, { onConflict: 'employe_id,periode' })
-        .select()
-        .single()
+      // Create or update final settlement bulletin
+      const bulletinData = {
+        employe_id,
+        societe_id: emp.societe_id,
+        periode: periodeDate,
+        salaire_base: salaireBaseBulletin,
+        transport_allowance: transportBulletin,
+        special_allowance_1: alPayout + slPayout,
+        special_allowance_2: treizBulletin,
+        departure_notice: preavisBulletin,
+        special_allowance_3: severanceBulletin,
+        salaire_net: totalBrut,
+        total_deductions: 0,
+        statut: 'valide',
+        notes: `Solde de tout compte — ${typeLabel}`,
+      }
 
-      if (bulletinErr) {
-        console.error('Erreur création bulletin:', bulletinErr)
-        // Non-blocking: continue even if bulletin creation fails
+      let bulletin: any = null
+      const { data: existingBul } = await supabase.from('bulletins_paie')
+        .select('id').eq('employe_id', employe_id).eq('periode', periodeDate).maybeSingle()
+
+      if (existingBul) {
+        const { data: updated, error: upErr } = await supabase.from('bulletins_paie')
+          .update(bulletinData).eq('id', existingBul.id).select().single()
+        bulletin = updated
+        if (upErr) console.error('Erreur update bulletin départ:', upErr.message)
+      } else {
+        const { data: inserted, error: insErr } = await supabase.from('bulletins_paie')
+          .insert(bulletinData).select().single()
+        bulletin = inserted
+        if (insErr) console.error('Erreur insert bulletin départ:', insErr.message)
       }
 
       // 3. Create accounting entries (journal SAL)
