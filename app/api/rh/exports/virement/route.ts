@@ -310,8 +310,12 @@ export async function POST(request: Request) {
     })
 
   } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Erreur génération virement'
+    const stack = e instanceof Error ? e.stack?.split('\n').slice(0, 3).join(' | ') : ''
+    console.error('[virement] CRASH:', msg, stack)
     return NextResponse.json({
-      error: e instanceof Error ? e.message : 'Erreur génération virement'
+      error: msg,
+      debug_stack: stack,
     }, { status: 500 })
   }
 }

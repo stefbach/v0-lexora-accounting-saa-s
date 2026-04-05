@@ -138,6 +138,9 @@ export async function POST(request: Request) {
       filename_detail: `CSG_NSF_Detail_${societe?.nom?.replace(/\s+/g, '_')}_${periode}.csv`,
     })
   } catch (e: unknown) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
+    const msg = e instanceof Error ? e.message : 'Erreur CSG'
+    const stack = e instanceof Error ? e.stack?.split('\n').slice(0, 3).join(' | ') : ''
+    console.error('[csg-mra] CRASH:', msg, stack)
+    return NextResponse.json({ error: msg, debug_stack: stack }, { status: 500 })
   }
 }
