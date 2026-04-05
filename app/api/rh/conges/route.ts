@@ -178,7 +178,7 @@ export async function GET(request: Request) {
     // 2) Get employees for those societes
     const { data: emps } = await supabase
       .from('employes')
-      .select('id, nom, prenom, poste, societe_id, date_arrivee, sexe, statut')
+      .select('id, nom, prenom, poste, societe_id, date_arrivee, gender, actif')
       .in('societe_id', societeIds)
     const employees = emps || []
     const employeeIds = employees.map((e: any) => e.id)
@@ -230,7 +230,7 @@ export async function GET(request: Request) {
           prenom: emp.prenom,
           poste: emp.poste,
           societe_id: emp.societe_id,
-          sexe: emp.sexe,
+          gender: emp.gender,
           date_arrivee: emp.date_arrivee,
           al_droit: alEntitled,
           al_pris: alTaken,
@@ -348,7 +348,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Champs requis manquants' }, { status: 400 })
 
       const accessibleIds = await getUserSocieteIds(user.id)
-      const { data: emp } = await supabase.from('employes').select('id, societe_id, sexe').eq('id', body.employe_id).maybeSingle()
+      const { data: emp } = await supabase.from('employes').select('id, societe_id, gender').eq('id', body.employe_id).maybeSingle()
       if (!emp || !accessibleIds.includes(emp.societe_id)) {
         return NextResponse.json({ error: 'Employe non trouve ou acces non autorise' }, { status: 403 })
       }
@@ -356,10 +356,10 @@ export async function POST(request: Request) {
       // Validate Mauritius WRA 2019 rules
       const nb_jours = countWorkingDays(body.date_debut, body.date_fin)
 
-      if (body.type_conge === 'MAT' && emp.sexe === 'M') {
+      if (body.type_conge === 'MAT' && emp.gender === 'M') {
         return NextResponse.json({ error: 'Conge maternite reserve aux femmes (WRA 2019)' }, { status: 400 })
       }
-      if (body.type_conge === 'PAT' && emp.sexe === 'F') {
+      if (body.type_conge === 'PAT' && emp.gender === 'F') {
         return NextResponse.json({ error: 'Conge paternite reserve aux hommes (WRA 2019)' }, { status: 400 })
       }
       if (body.type_conge === 'MAT') {
