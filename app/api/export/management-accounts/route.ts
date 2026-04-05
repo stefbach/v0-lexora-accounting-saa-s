@@ -48,7 +48,7 @@ export async function GET(request: Request) {
       ['Société', soc?.nom || 'N/A'],
       ['Exercice', exercice],
       ['Période', `1 juillet ${anneeDebut} — 30 juin ${anneeDebut + 1}`],
-      ['Généré par', 'LEXORA — Genspark'],
+      ['Généré par', 'Système de gestion comptable'],
       ['Date génération', new Date().toLocaleDateString('fr-FR')],
       ['', ''],
       ['SOMMAIRE', ''],

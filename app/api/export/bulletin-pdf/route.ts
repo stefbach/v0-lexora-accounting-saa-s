@@ -49,7 +49,7 @@ export async function GET(request: Request) {
 <body>
   <div class="header">
     <div>
-      <div class="logo">LEXORA</div>
+      <div class="logo">${soc?.nom || 'Bulletin de Paie'}</div>
       <div><strong>${soc?.nom || 'Société'}</strong></div>
       <div>${soc?.adresse || 'Maurice'}</div>
       ${soc?.nic_number ? `<div>BRN: ${soc.nic_number}</div>` : ''}
@@ -104,7 +104,7 @@ export async function GET(request: Request) {
   </table>` : ''}
 
   <div class="footer">
-    Document généré par LEXORA • Conforme Workers' Rights Act 2019 & MRA Guidelines 2024<br>
+    Document généré par le système de paie • Conforme Workers' Rights Act 2019 & MRA Guidelines 2024<br>
     Ce bulletin est un document officiel — conserver pendant 5 ans
   </div>
 </body>

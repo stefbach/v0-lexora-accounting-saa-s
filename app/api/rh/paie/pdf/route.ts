@@ -345,7 +345,7 @@ export async function POST(request: Request) {
     <div style="width:65%;">
       <p style="font-size:10px;color:#888;line-height:1.5;">
         Ce bulletin doit être conservé sans limitation de durée.<br>
-        Généré par Lexora — Logiciel de paie Maurice<br>
+        Ce bulletin doit être conservé sans limitation de durée.<br>
         Signé électroniquement le ${new Date().toLocaleDateString('fr-FR')} par RH Manager
       </p>
     </div>
@@ -520,7 +520,6 @@ ${Number(bulletin.csg_patronal_bonus) > 0 ? `<tr><td>CSG patronal sur bonus (6%)
   <div style="width:65%;">
     <p style="font-size:10px;color:#888;line-height:1.5;">
       Ce bulletin doit être conservé sans limitation de durée.<br>
-      Généré par Lexora — Logiciel de paie Maurice<br>
       Signé électroniquement le ${new Date().toLocaleDateString('fr-FR')} par RH Manager
     </p>
   </div>
