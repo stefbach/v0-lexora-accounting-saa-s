@@ -112,7 +112,8 @@ export async function GET(request: Request) {
       const levy = Number(b.training_levy) || 0
       const prgf = Number(b.prgf) || 0
       const total_charges = Number(b.total_charges_patronales) || (csg_p + nsf_p + levy + prgf)
-      const cout_total = Number(b.cout_total_employeur) || (salaire_brut + total_charges)
+      // cout_total_employeur doesn't exist in DB — calculate at runtime
+      const cout_total = salaire_brut + total_charges
 
       return {
         ...b,

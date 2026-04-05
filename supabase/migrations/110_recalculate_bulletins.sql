@@ -56,13 +56,10 @@ SET total_charges_patronales = COALESCE(csg_patronal, 0) + COALESCE(nsf_patronal
 WHERE (total_charges_patronales IS NULL OR total_charges_patronales = 0)
   AND (COALESCE(csg_patronal, 0) + COALESCE(nsf_patronal, 0)) > 0;
 
--- STEP 4: Fix cout_total_employeur
-UPDATE public.bulletins_paie
-SET cout_total_employeur = salaire_brut + COALESCE(total_charges_patronales, 0)
-WHERE COALESCE(salaire_brut, 0) > 0
-  AND (cout_total_employeur IS NULL OR cout_total_employeur = 0 OR cout_total_employeur != salaire_brut + COALESCE(total_charges_patronales, 0));
+-- NOTE: cout_total_employeur does NOT exist as a column in bulletins_paie
+-- It is calculated at runtime in the API: salaire_brut + total_charges_patronales
 
--- STEP 5: Verify — count fixed bulletins
+-- STEP 4: Verify — count fixed bulletins
 DO $$
 DECLARE
   total_count INTEGER;
