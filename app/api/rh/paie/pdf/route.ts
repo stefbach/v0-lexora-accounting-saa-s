@@ -150,9 +150,11 @@ export async function POST(request: Request) {
 
     const alPris = (congesApprouves || []).filter((c: any) => c.type_conge === 'AL').reduce((s: number, c: any) => s + (Number(c.nb_jours) || 0), 0)
     const slPris = (congesApprouves || []).filter((c: any) => c.type_conge === 'SL').reduce((s: number, c: any) => s + (Number(c.nb_jours) || 0), 0)
-    // AL entitlement: 22 days/year (WRA 2019 standard after 1 year)
-    const alDroit = 22
-    const slDroit = 15
+    // WRA 2019 entitlement calculation based on months of service
+    const hireDate = emp?.date_arrivee ? new Date(emp.date_arrivee + 'T00:00:00') : null
+    const monthsOfService = hireDate ? (new Date().getFullYear() - hireDate.getFullYear()) * 12 + (new Date().getMonth() - hireDate.getMonth()) : 999
+    const alDroit = monthsOfService < 6 ? 0 : monthsOfService < 12 ? Math.min(monthsOfService - 6, 6) : 22
+    const slDroit = monthsOfService < 6 ? 0 : monthsOfService < 12 ? Math.min(monthsOfService - 6, 6) : 15
     const alRestant = alDroit - alPris
     const slRestant = slDroit - slPris
 
@@ -368,7 +370,11 @@ export async function POST(request: Request) {
 
 // Simple HTML bulletin for GET requests
 function generatePDFResponse(bulletin: any, emp: any, soc: any, moisLabel: string, annee: number, conges?: { alPris: number; slPris: number }) {
-  const alDroitGet = 22, slDroitGet = 15
+  // WRA 2019 entitlement based on months of service
+  const hireDateGet = emp?.date_arrivee ? new Date(emp.date_arrivee + 'T00:00:00') : null
+  const mosGet = hireDateGet ? (annee - hireDateGet.getFullYear()) * 12 + (new Date().getMonth() - hireDateGet.getMonth()) : 999
+  const alDroitGet = mosGet < 6 ? 0 : mosGet < 12 ? Math.min(mosGet - 6, 6) : 22
+  const slDroitGet = mosGet < 6 ? 0 : mosGet < 12 ? Math.min(mosGet - 6, 6) : 15
   const alRestantGet = alDroitGet - (conges?.alPris || 0)
   const slRestantGet = slDroitGet - (conges?.slPris || 0)
   const periodeDate = new Date(`${annee}-${String(MOIS_FR.indexOf(moisLabel) + 1).padStart(2, '0')}-15`)

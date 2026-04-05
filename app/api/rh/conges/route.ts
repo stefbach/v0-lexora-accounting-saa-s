@@ -101,15 +101,71 @@ function countWorkingDays(dateDebut: string, dateFin: string): number {
 }
 
 /** Calculate prorata AL entitlement based on hire date (Mauritius WRA 2019: 20 days/year) */
-function calculateALEntitlement(dateArrivee: string | null, year: number): number {
-  if (!dateArrivee) return 20
-  const hireDate = new Date(dateArrivee)
-  const hireYear = hireDate.getFullYear()
-  if (hireYear < year) return 20
-  if (hireYear > year) return 0
-  // Hired this year: prorata = 20 * months_worked / 12
-  const monthsWorked = 12 - hireDate.getMonth()
-  return Math.round((20 * monthsWorked) / 12)
+/**
+ * Calculate Annual Leave entitlement based on WRA 2019 rules:
+ * - Year 1 (first 12 months): 0 days for months 1-6, then 1 day/month from month 7 (max 6 days)
+ * - Year 2+: 22 days (20 + 2 additional) in full from the contract anniversary date
+ *
+ * @param dateArrivee - Employee hire date (ISO string)
+ * @param year - The year we're calculating for
+ * @param today - Reference date for "today" (defaults to now)
+ */
+function calculateALEntitlement(dateArrivee: string | null, year: number, today?: Date): number {
+  if (!dateArrivee) return 22 // No hire date = assume full entitlement
+
+  const hireDate = new Date(dateArrivee + 'T00:00:00')
+  const refDate = today || new Date()
+
+  // Calculate months of service
+  const monthsOfService = (refDate.getFullYear() - hireDate.getFullYear()) * 12 + (refDate.getMonth() - hireDate.getMonth())
+
+  // Before 6 months: 0 days (probation period)
+  if (monthsOfService < 6) return 0
+
+  // Between 6 and 12 months: 1 day per month from month 7
+  // Max 6 days in year 1
+  if (monthsOfService < 12) {
+    const eligibleMonths = monthsOfService - 6
+    return Math.min(eligibleMonths, 6)
+  }
+
+  // 12+ months: full entitlement = 22 days (20 + 2 additional guaranteed by WRA)
+  // If hired mid-year in a PREVIOUS year but this is the first full year,
+  // check if anniversary has passed in the current year
+  const anniversaryThisYear = new Date(year, hireDate.getMonth(), hireDate.getDate())
+
+  if (hireDate.getFullYear() === year) {
+    // Hired this year — use Year 1 rules
+    if (monthsOfService < 6) return 0
+    if (monthsOfService < 12) return Math.min(monthsOfService - 6, 6)
+  }
+
+  // Year 2+: 22 days available from anniversary date
+  return 22
+}
+
+/**
+ * Calculate Sick Leave entitlement based on WRA 2019 rules:
+ * - Year 1: same as AL — 0 days months 1-6, 1 day/month from month 7 (max 6 days)
+ * - Year 2+: 15 days in full, cumulative if not taken
+ */
+function calculateSLEntitlement(dateArrivee: string | null, year: number, today?: Date): number {
+  if (!dateArrivee) return 15
+
+  const hireDate = new Date(dateArrivee + 'T00:00:00')
+  const refDate = today || new Date()
+  const monthsOfService = (refDate.getFullYear() - hireDate.getFullYear()) * 12 + (refDate.getMonth() - hireDate.getMonth())
+
+  // Before 6 months: 0 days
+  if (monthsOfService < 6) return 0
+
+  // Between 6 and 12 months: 1 day per month from month 7 (max 6 days)
+  if (monthsOfService < 12) {
+    return Math.min(monthsOfService - 6, 6)
+  }
+
+  // 12+ months: 15 days per year (cumulative — accumulated balance handled separately)
+  return 15
 }
 
 /** Detect consecutive sick leave days > 3 for an employee */
@@ -232,7 +288,7 @@ export async function GET(request: Request) {
         const alTaken = empConges.filter((c: any) => c.type_conge === 'AL').reduce((sum: number, c: any) => sum + (c.nb_jours || 0), 0)
         const slTaken = empConges.filter((c: any) => c.type_conge === 'SL').reduce((sum: number, c: any) => sum + (c.nb_jours || 0), 0)
         const alEntitled = calculateALEntitlement(emp.date_arrivee, currentYear)
-        const slEntitled = 15
+        const slEntitled = calculateSLEntitlement(emp.date_arrivee, currentYear)
         const alBalance = alEntitled - alTaken
         const slBalance = slEntitled - slTaken
 
@@ -392,16 +448,22 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Conge paternite reserve aux hommes (WRA 2019)' }, { status: 400 })
       }
       if (body.type_conge === 'MAT') {
-        // Maternity = 14 weeks = 98 calendar days
+        // Maternity = 16 weeks = 112 calendar days (WRA 2019 Section 52)
         const startDate = new Date(body.date_debut + 'T12:00:00')
         const endDate = new Date(body.date_fin + 'T12:00:00')
         const calendarDays = Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
-        if (calendarDays > 98) {
-          return NextResponse.json({ error: 'Conge maternite: maximum 14 semaines (98 jours) selon WRA 2019' }, { status: 400 })
+        if (calendarDays > 112) {
+          return NextResponse.json({ error: 'Maternity Leave: maximum 16 weeks (112 calendar days) per WRA 2019 Section 52' }, { status: 400 })
         }
       }
-      if (body.type_conge === 'PAT' && nb_jours > 5) {
-        return NextResponse.json({ error: 'Conge paternite: maximum 5 jours ouvrables selon WRA 2019' }, { status: 400 })
+      if (body.type_conge === 'PAT') {
+        // Paternity = 4 weeks = 28 calendar days (WRA 2019 Section 53)
+        const startDate = new Date(body.date_debut + 'T12:00:00')
+        const endDate = new Date(body.date_fin + 'T12:00:00')
+        const calendarDays = Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
+        if (calendarDays > 28) {
+          return NextResponse.json({ error: 'Paternity Leave: maximum 4 weeks (28 calendar days) per WRA 2019 Section 53' }, { status: 400 })
+        }
       }
 
       // Check balance for AL and SL
@@ -417,22 +479,33 @@ export async function POST(request: Request) {
           .lte('date_debut', `${currentYear}-12-31`)
 
         const taken = (existingLeaves || []).reduce((sum: number, c: any) => sum + (c.nb_jours || 0), 0)
-        const entitled = body.type_conge === 'AL'
-          ? calculateALEntitlement(null, currentYear) // Will recalculate with actual date_arrivee below
-          : 15
 
-        if (body.type_conge === 'AL') {
-          const { data: empFull } = await supabase.from('employes').select('date_arrivee').eq('id', body.employe_id).maybeSingle()
-          const alEntitled = calculateALEntitlement(empFull?.date_arrivee, currentYear)
-          const remaining = alEntitled - taken
-          if (nb_jours > remaining) {
-            return NextResponse.json({ error: `Solde AL insuffisant: ${remaining} jour(s) restant(s)` }, { status: 400 })
+        // Get employee hire date for WRA Year 1 rules
+        const { data: empFull } = await supabase.from('employes').select('date_arrivee').eq('id', body.employe_id).maybeSingle()
+        const hireDate = empFull?.date_arrivee
+
+        // Calculate months of service for probation check
+        if (hireDate) {
+          const hire = new Date(hireDate + 'T00:00:00')
+          const now = new Date()
+          const monthsService = (now.getFullYear() - hire.getFullYear()) * 12 + (now.getMonth() - hire.getMonth())
+          if (monthsService < 6) {
+            return NextResponse.json({
+              error: `Pas de droit à congé pendant les 6 premiers mois (période de carence WRA 2019). Ancienneté: ${monthsService} mois.`,
+            }, { status: 400 })
           }
-        } else {
-          const remaining = entitled - taken
-          if (nb_jours > remaining) {
-            return NextResponse.json({ error: `Solde SL insuffisant: ${remaining} jour(s) restant(s)` }, { status: 400 })
-          }
+        }
+
+        const entitled = body.type_conge === 'AL'
+          ? calculateALEntitlement(hireDate, currentYear)
+          : calculateSLEntitlement(hireDate, currentYear)
+
+        const remaining = entitled - taken
+        if (nb_jours > remaining) {
+          const typeLabel = body.type_conge === 'AL' ? 'Local Leave' : 'Sick Leave'
+          return NextResponse.json({
+            error: `Solde ${typeLabel} insuffisant: ${remaining} jour(s) restant(s) sur ${entitled} jour(s) de droit`,
+          }, { status: 400 })
         }
       }
 
