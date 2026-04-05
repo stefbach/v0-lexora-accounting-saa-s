@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Progress } from "@/components/ui/progress"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
-import { Loader2, Clock, Calendar, CreditCard, TrendingUp, LogIn, LogOut, Coffee, Download, User, Save, CheckCircle, FileText, CalendarPlus, UserCircle, FolderOpen, Bell, Eye, Upload, X } from "lucide-react"
+import { Loader2, Clock, Calendar, CreditCard, TrendingUp, LogIn, LogOut, Coffee, Download, User, Save, CheckCircle, FileText, CalendarPlus, UserCircle, FolderOpen, Bell, Eye, Upload, X, LayoutDashboard, MoreHorizontal } from "lucide-react"
 import { Textarea } from "@/components/ui/textarea"
 
 const NAVY = "#0B0F2E"
@@ -214,70 +214,81 @@ function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () => void
   return (
     <div className="space-y-6">
       {/* Balances */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
+      <div className="grid grid-cols-2 gap-3 md:gap-4">
+        <Card className="rounded-xl shadow-sm">
           <CardContent className="p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
+              <div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${GREEN}15` }}>
                 <Calendar className="h-5 w-5" style={{ color: GREEN }} />
-                <p className="font-medium text-sm" style={{ color: NAVY }}>Local Leave (AL)</p>
               </div>
-              <Badge className="text-xs" style={{ backgroundColor: `${GREEN}20`, color: GREEN }}>{alPct}%</Badge>
             </div>
-            <Progress value={alPct} className="h-3" style={{ backgroundColor: `${GREEN}20` }} />
-            <p className="text-sm text-gray-600">{alRemaining}j restants / 22j</p>
+            <div>
+              <p className="text-2xl font-bold" style={{ color: NAVY }}>{alRemaining}<span className="text-sm font-normal text-gray-400">j</span></p>
+              <p className="text-xs text-gray-500 mt-0.5">Local Leave restants / 22j</p>
+            </div>
+            <Progress value={alPct} className="h-2 rounded-full" style={{ backgroundColor: `${GREEN}20` }} />
           </CardContent>
         </Card>
-        <Card>
+        <Card className="rounded-xl shadow-sm">
           <CardContent className="p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
+              <div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: "#f9731615" }}>
                 <Calendar className="h-5 w-5 text-orange-500" />
-                <p className="font-medium text-sm" style={{ color: NAVY }}>Sick Leave (SL)</p>
               </div>
-              <Badge className="text-xs" style={{ backgroundColor: "#f9731620", color: "#f97316" }}>{slPct}%</Badge>
             </div>
-            <Progress value={slPct} className="h-3" style={{ backgroundColor: "#f9731620" }} />
-            <p className="text-sm text-gray-600">{slRemaining}j restants / 15j</p>
+            <div>
+              <p className="text-2xl font-bold" style={{ color: NAVY }}>{slRemaining}<span className="text-sm font-normal text-gray-400">j</span></p>
+              <p className="text-xs text-gray-500 mt-0.5">Sick Leave restants / 15j</p>
+            </div>
+            <Progress value={slPct} className="h-2 rounded-full" style={{ backgroundColor: "#f9731620" }} />
           </CardContent>
         </Card>
       </div>
 
       {/* Request form */}
-      <Card>
-        <CardHeader><CardTitle className="text-base" style={{ color: NAVY }}>Nouvelle demande de congé</CardTitle></CardHeader>
+      <Card className="rounded-xl shadow-sm">
+        <CardHeader><CardTitle className="text-xl md:text-base" style={{ color: NAVY }}>Nouvelle demande</CardTitle></CardHeader>
         <CardContent className="space-y-4">
-          {success && <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700"><CheckCircle className="h-4 w-4" />{success}</div>}
-          {error && <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{error}</div>}
+          {success && <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700"><CheckCircle className="h-4 w-4" />{success}</div>}
+          {error && <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">{error}</div>}
+
+          {/* Leave type as pill selector on mobile */}
+          <div>
+            <Label className="text-sm font-medium mb-2 block">Type de conge</Label>
+            <div className="flex flex-wrap gap-2">
+              {([
+                { value: "AL", label: "Local Leave", color: GREEN },
+                { value: "SL", label: "Sick Leave", color: "#f97316" },
+                { value: "MAT", label: "Maternity", color: "#8b5cf6" },
+                { value: "PAT", label: "Paternity", color: BLUE },
+                { value: "SANS_SOLDE", label: "Sans solde", color: "#6b7280" },
+              ]).map(opt => (
+                <button key={opt.value} onClick={() => setTypeConge(opt.value)}
+                  className="px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 active:scale-[0.97]"
+                  style={typeConge === opt.value
+                    ? { backgroundColor: opt.color, color: "white" }
+                    : { backgroundColor: `${opt.color}10`, color: opt.color, border: `1px solid ${opt.color}30` }
+                  }>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label>Type de congé</Label>
-              <Select value={typeConge} onValueChange={setTypeConge}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="AL">Local Leave</SelectItem>
-                  <SelectItem value="SL">Sick Leave</SelectItem>
-                  <SelectItem value="MAT">Maternity Leave</SelectItem>
-                  <SelectItem value="PAT">Paternity Leave</SelectItem>
-                  <SelectItem value="SANS_SOLDE">Leave Without Pay</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div />
-            <div>
-              <Label>Date début</Label>
-              <Input type="date" value={dateDebut} onChange={e => setDateDebut(e.target.value)} />
+              <Label>Date debut</Label>
+              <Input type="date" value={dateDebut} onChange={e => setDateDebut(e.target.value)} className="h-12 md:h-10 rounded-xl" />
             </div>
             <div>
               <Label>Date fin</Label>
-              <Input type="date" value={dateFin} onChange={e => setDateFin(e.target.value)} />
+              <Input type="date" value={dateFin} onChange={e => setDateFin(e.target.value)} className="h-12 md:h-10 rounded-xl" />
             </div>
           </div>
 
           <div>
             <Label>Motif (optionnel)</Label>
-            <Textarea value={motif} onChange={e => setMotif(e.target.value)} placeholder="Raison de la demande..." rows={3} />
+            <Textarea value={motif} onChange={e => setMotif(e.target.value)} placeholder="Raison de la demande..." rows={3} className="rounded-xl" />
           </div>
 
           {needsCertificat && (
@@ -305,7 +316,7 @@ function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () => void
             </div>
           )}
 
-          <Button onClick={handleSubmit} disabled={submitting} style={{ backgroundColor: NAVY }} className="text-white">
+          <Button onClick={handleSubmit} disabled={submitting} style={{ backgroundColor: NAVY }} className="w-full md:w-auto h-12 md:h-10 rounded-xl text-white text-base md:text-sm transition-all duration-200 active:scale-[0.98]">
             {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CalendarPlus className="h-4 w-4 mr-2" />}
             Soumettre la demande
           </Button>
@@ -313,44 +324,70 @@ function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () => void
       </Card>
 
       {/* History */}
-      <Card>
-        <CardHeader><CardTitle className="text-base" style={{ color: NAVY }}>Historique des congés</CardTitle></CardHeader>
+      <Card className="rounded-xl shadow-sm">
+        <CardHeader><CardTitle className="text-xl md:text-base" style={{ color: NAVY }}>Historique</CardTitle></CardHeader>
         <CardContent>
           {loadingH ? (
             <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div>
           ) : history.length === 0 ? (
-            <p className="text-gray-400 text-center py-8">Aucune demande de congé</p>
+            <p className="text-gray-400 text-center py-8">Aucune demande de conge</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left text-gray-500">
-                    <th className="pb-2 pr-3">Type</th>
-                    <th className="pb-2 pr-3">Dates</th>
-                    <th className="pb-2 pr-3">Jours</th>
-                    <th className="pb-2 pr-3">Statut</th>
-                    <th className="pb-2">Motif</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {history.map((c: any, i: number) => {
-                    const t = c.type_conge || "AL"
-                    const d1 = c.date_debut ? new Date(c.date_debut).toLocaleDateString("fr-FR") : "—"
-                    const d2 = c.date_fin ? new Date(c.date_fin).toLocaleDateString("fr-FR") : "—"
-                    const days = c.nb_jours || (c.date_debut && c.date_fin ? Math.ceil((new Date(c.date_fin).getTime() - new Date(c.date_debut).getTime()) / (1000 * 60 * 60 * 24)) + 1 : "—")
-                    return (
-                      <tr key={c.id || i} className="border-b last:border-0">
-                        <td className="py-2.5 pr-3"><Badge style={{ backgroundColor: `${typeColor[t] || BLUE}20`, color: typeColor[t] || BLUE }}>{typeLabel[t] || t}</Badge></td>
-                        <td className="py-2.5 pr-3 whitespace-nowrap">{d1} — {d2}</td>
-                        <td className="py-2.5 pr-3 font-mono">{days}</td>
-                        <td className="py-2.5 pr-3">{statutBadge(c.statut || c.status || "en_attente")}</td>
-                        <td className="py-2.5 text-gray-500 truncate max-w-[200px]">{c.motif || "—"}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <>
+              {/* Desktop table */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-left text-gray-500">
+                      <th className="pb-2 pr-3">Type</th>
+                      <th className="pb-2 pr-3">Dates</th>
+                      <th className="pb-2 pr-3">Jours</th>
+                      <th className="pb-2 pr-3">Statut</th>
+                      <th className="pb-2">Motif</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {history.map((c: any, i: number) => {
+                      const t = c.type_conge || "AL"
+                      const d1 = c.date_debut ? new Date(c.date_debut).toLocaleDateString("fr-FR") : "—"
+                      const d2 = c.date_fin ? new Date(c.date_fin).toLocaleDateString("fr-FR") : "—"
+                      const days = c.nb_jours || (c.date_debut && c.date_fin ? Math.ceil((new Date(c.date_fin).getTime() - new Date(c.date_debut).getTime()) / (1000 * 60 * 60 * 24)) + 1 : "—")
+                      return (
+                        <tr key={c.id || i} className="border-b last:border-0">
+                          <td className="py-2.5 pr-3"><Badge style={{ backgroundColor: `${typeColor[t] || BLUE}20`, color: typeColor[t] || BLUE }}>{typeLabel[t] || t}</Badge></td>
+                          <td className="py-2.5 pr-3 whitespace-nowrap">{d1} — {d2}</td>
+                          <td className="py-2.5 pr-3 font-mono">{days}</td>
+                          <td className="py-2.5 pr-3">{statutBadge(c.statut || c.status || "en_attente")}</td>
+                          <td className="py-2.5 text-gray-500 truncate max-w-[200px]">{c.motif || "—"}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {/* Mobile cards */}
+              <div className="md:hidden space-y-3">
+                {history.map((c: any, i: number) => {
+                  const t = c.type_conge || "AL"
+                  const d1 = c.date_debut ? new Date(c.date_debut).toLocaleDateString("fr-FR") : "—"
+                  const d2 = c.date_fin ? new Date(c.date_fin).toLocaleDateString("fr-FR") : "—"
+                  const days = c.nb_jours || (c.date_debut && c.date_fin ? Math.ceil((new Date(c.date_fin).getTime() - new Date(c.date_debut).getTime()) / (1000 * 60 * 60 * 24)) + 1 : "—")
+                  return (
+                    <div key={c.id || i} className="p-4 border rounded-xl space-y-2 transition-all duration-200" style={{ borderLeft: `3px solid ${typeColor[t] || BLUE}` }}>
+                      <div className="flex items-center justify-between">
+                        <Badge className="text-xs" style={{ backgroundColor: `${typeColor[t] || BLUE}20`, color: typeColor[t] || BLUE }}>{typeLabel[t] || t}</Badge>
+                        {statutBadge(c.statut || c.status || "en_attente")}
+                      </div>
+                      <div className="flex items-center gap-2 text-sm">
+                        <Calendar className="h-4 w-4 text-gray-400" />
+                        <span style={{ color: NAVY }}>{d1} — {d2}</span>
+                        <span className="font-mono text-xs text-gray-400">({days}j)</span>
+                      </div>
+                      {c.motif && <p className="text-xs text-gray-500">{c.motif}</p>}
+                    </div>
+                  )
+                })}
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -457,6 +494,7 @@ export default function EspaceEmployePage() {
   const [now, setNow] = useState(new Date())
   const [punching, setPunching] = useState(false)
   const [feedback, setFeedback] = useState("")
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t) }, [])
   useEffect(() => { if (feedback) { const t = setTimeout(() => setFeedback(""), 4000); return () => clearTimeout(t) } }, [feedback])
@@ -516,41 +554,44 @@ export default function EspaceEmployePage() {
       {/* Header */}
       <div className="p-4 md:p-6" style={{ backgroundColor: NAVY }}>
         <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Avatar className="h-12 w-12 border-2" style={{ borderColor: GOLD }}>
+          <div className="flex items-center gap-3 md:gap-3">
+            <Avatar className="h-16 w-16 md:h-12 md:w-12 border-2 transition-all duration-200" style={{ borderColor: GOLD }}>
               {employe.photo_url ? (
                 <AvatarImage src={employe.photo_url} alt={employe.prenom} />
               ) : null}
-              <AvatarFallback className="text-sm font-bold" style={{ backgroundColor: GOLD, color: NAVY }}>
+              <AvatarFallback className="text-base md:text-sm font-bold" style={{ backgroundColor: GOLD, color: NAVY }}>
                 {(employe.prenom?.[0] || "").toUpperCase()}{(employe.nom?.[0] || "").toUpperCase()}
               </AvatarFallback>
             </Avatar>
             <div>
-              <h1 className="text-xl font-bold text-white">Bonjour, {employe.prenom} {"👋"}</h1>
-              <p className="text-white/60 text-sm">{employe.entreprise_nom || employe.poste || "—"} &middot; {todayFR()}</p>
+              <h1 className="text-xl md:text-xl font-bold text-white">Bonjour, {employe.prenom} {"👋"}</h1>
+              <p className="text-white/60 text-xs md:text-sm">{employe.entreprise_nom || employe.poste || "—"} &middot; {todayFR()}</p>
             </div>
           </div>
-          <div className="text-right">
+          <div className="text-right hidden md:block">
             <p className="text-3xl font-mono font-bold text-white">{now.toLocaleTimeString("fr-FR", { timeZone: MU_TZ, hour: "2-digit", minute: "2-digit" })}</p>
             <p className="text-white/40 text-xs">Maurice (UTC+4)</p>
+          </div>
+          <div className="text-right md:hidden">
+            <p className="text-2xl font-mono font-bold text-white">{now.toLocaleTimeString("fr-FR", { timeZone: MU_TZ, hour: "2-digit", minute: "2-digit" })}</p>
           </div>
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-6">
-        {/* Tabs */}
-        <div className="flex gap-1 bg-white rounded-lg p-1 border overflow-x-auto">
+      <div className="max-w-4xl mx-auto p-4 md:p-6 pb-24 md:pb-6 space-y-6">
+        {/* Desktop Tabs */}
+        <div className="hidden md:flex gap-1 bg-white rounded-xl p-1.5 border shadow-sm">
           {([
-            { id: "dashboard" as Tab, label: "Pointage", icon: Clock },
+            { id: "dashboard" as Tab, label: "Pointage", icon: LayoutDashboard },
             { id: "profil" as Tab, label: "Ma fiche", icon: User },
-            { id: "bulletins" as Tab, label: "Bulletins", icon: CreditCard },
-            { id: "planning" as Tab, label: "Planning", icon: Calendar },
+            { id: "bulletins" as Tab, label: "Bulletins", icon: FileText },
+            { id: "planning" as Tab, label: "Planning", icon: Clock },
             { id: "primes" as Tab, label: "Primes", icon: TrendingUp },
-            { id: "conges" as Tab, label: "Mes congés", icon: CalendarPlus },
+            { id: "conges" as Tab, label: "Mes congés", icon: Calendar },
             { id: "documents" as Tab, label: "Documents", icon: FolderOpen },
           ]).map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
-              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm rounded-md transition-colors ${tab === t.id ? "text-white font-medium shadow" : "text-gray-500 hover:bg-gray-50"}`}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm rounded-lg transition-all duration-200 ${tab === t.id ? "text-white font-medium shadow-md" : "text-gray-500 hover:bg-gray-50"}`}
               style={tab === t.id ? { backgroundColor: NAVY } : {}}>
               <t.icon className="h-4 w-4" />{t.label}
             </button>
@@ -581,92 +622,102 @@ export default function EspaceEmployePage() {
             <div className="space-y-4">
               {/* Next salary preview */}
               {estimatedNet > 0 && (
-                <Card className="overflow-hidden" style={{ borderLeft: `4px solid ${GOLD}` }}>
-                  <CardContent className="p-5 flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-gray-500 mb-1">Prochain salaire estimé</p>
-                      <p className="text-2xl font-bold font-mono" style={{ color: NAVY }}>~MRs {fmt(estimatedNet)}</p>
+                <Card className="overflow-hidden rounded-xl shadow-sm" style={{ border: `2px solid ${GOLD}30` }}>
+                  <CardContent className="p-4 md:p-5">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-sm text-gray-500">Prochain salaire estimé</p>
+                      <div className="h-8 w-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${GOLD}15` }}>
+                        <CreditCard className="h-4 w-4" style={{ color: GOLD }} />
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm text-gray-500">Versement prévu le</p>
-                      <p className="text-sm font-medium" style={{ color: GOLD }}>{lastDayOfMonth()}</p>
-                    </div>
+                    <p className="text-3xl md:text-2xl font-bold font-mono mb-1" style={{ color: NAVY }}>~MRs {fmt(estimatedNet)}</p>
+                    <p className="text-xs" style={{ color: GOLD }}>Versement le {lastDayOfMonth()}</p>
                   </CardContent>
                 </Card>
               )}
 
               {/* Pointage card */}
-              <Card>
+              <Card className="rounded-xl shadow-sm">
                 <CardContent className="p-4 space-y-4">
-                  <div className="grid grid-cols-4 gap-3 text-center">
-                    <div className="p-3 bg-emerald-50 rounded-lg"><p className="text-xs text-gray-500">Entrée</p><p className="font-mono text-lg text-emerald-700">{fmtH(pointageToday?.heure_entree)}</p></div>
-                    <div className="p-3 bg-amber-50 rounded-lg"><p className="text-xs text-gray-500">Pause</p><p className="font-mono text-lg text-amber-600">{pointageToday?.heure_pause_debut ? `${fmtH(pointageToday.heure_pause_debut)}${pointageToday.heure_pause_fin ? `—${fmtH(pointageToday.heure_pause_fin)}` : "..."}` : "—"}</p></div>
-                    <div className="p-3 bg-red-50 rounded-lg"><p className="text-xs text-gray-500">Sortie</p><p className="font-mono text-lg text-red-600">{fmtH(pointageToday?.heure_sortie)}</p></div>
-                    <div className="p-3 bg-blue-50 rounded-lg"><p className="text-xs text-gray-500">Durée</p><p className="font-mono text-lg" style={{ color: NAVY }}>{pointageToday?.duree_minutes ? `${(pointageToday.duree_minutes / 60).toFixed(1)}h` : "—"}</p></div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
+                    <div className="p-3 bg-emerald-50 rounded-xl"><p className="text-[10px] md:text-xs text-gray-500 uppercase tracking-wide">Entree</p><p className="font-mono text-lg text-emerald-700 mt-1">{fmtH(pointageToday?.heure_entree)}</p></div>
+                    <div className="p-3 bg-amber-50 rounded-xl"><p className="text-[10px] md:text-xs text-gray-500 uppercase tracking-wide">Pause</p><p className="font-mono text-lg text-amber-600 mt-1">{pointageToday?.heure_pause_debut ? `${fmtH(pointageToday.heure_pause_debut)}${pointageToday.heure_pause_fin ? `-${fmtH(pointageToday.heure_pause_fin)}` : "..."}` : "—"}</p></div>
+                    <div className="p-3 bg-red-50 rounded-xl"><p className="text-[10px] md:text-xs text-gray-500 uppercase tracking-wide">Sortie</p><p className="font-mono text-lg text-red-600 mt-1">{fmtH(pointageToday?.heure_sortie)}</p></div>
+                    <div className="p-3 bg-blue-50 rounded-xl"><p className="text-[10px] md:text-xs text-gray-500 uppercase tracking-wide">Duree</p><p className="font-mono text-lg mt-1" style={{ color: NAVY }}>{pointageToday?.duree_minutes ? `${(pointageToday.duree_minutes / 60).toFixed(1)}h` : "—"}</p></div>
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                    <Button onClick={() => doPunch("entree")} disabled={punching || hasEntry} className="h-14 bg-emerald-600 hover:bg-emerald-700 text-white text-base"><LogIn className="h-5 w-5 mr-2" /> Entrée</Button>
-                    <Button onClick={() => doPunch("pause_debut")} disabled={punching || !hasEntry || hasExit || onPause} className="h-14 bg-amber-500 hover:bg-amber-600 text-white text-base"><Coffee className="h-5 w-5 mr-2" /> Pause</Button>
-                    <Button onClick={() => doPunch("pause_fin")} disabled={punching || !onPause} className="h-14 bg-amber-600 hover:bg-amber-700 text-white text-base"><Coffee className="h-5 w-5 mr-2" /> Fin pause</Button>
-                    <Button onClick={() => doPunch("sortie")} disabled={punching || !hasEntry || hasExit} className="h-14 bg-red-600 hover:bg-red-700 text-white text-base"><LogOut className="h-5 w-5 mr-2" /> Sortie</Button>
+                    <Button onClick={() => doPunch("entree")} disabled={punching || hasEntry} className="h-12 md:h-14 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm md:text-base transition-all duration-200 active:scale-[0.97]"><LogIn className="h-5 w-5 mr-2" /> Entree</Button>
+                    <Button onClick={() => doPunch("pause_debut")} disabled={punching || !hasEntry || hasExit || onPause} className="h-12 md:h-14 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm md:text-base transition-all duration-200 active:scale-[0.97]"><Coffee className="h-5 w-5 mr-2" /> Pause</Button>
+                    <Button onClick={() => doPunch("pause_fin")} disabled={punching || !onPause} className="h-12 md:h-14 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-sm md:text-base transition-all duration-200 active:scale-[0.97]"><Coffee className="h-5 w-5 mr-2" /> Fin pause</Button>
+                    <Button onClick={() => doPunch("sortie")} disabled={punching || !hasEntry || hasExit} className="h-12 md:h-14 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm md:text-base transition-all duration-200 active:scale-[0.97]"><LogOut className="h-5 w-5 mr-2" /> Sortie</Button>
                   </div>
-                  {feedback && <p className="text-sm text-center p-2 rounded bg-blue-50 text-blue-700">{feedback}</p>}
+                  {feedback && <p className="text-sm text-center p-2.5 rounded-xl bg-blue-50 text-blue-700">{feedback}</p>}
                 </CardContent>
               </Card>
 
-              {/* Leave balances with progress bars */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Card>
-                  <CardContent className="p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-5 w-5" style={{ color: GREEN }} />
-                        <p className="font-medium text-sm" style={{ color: NAVY }}>Congés annuels</p>
+              {/* Leave balances with circular progress */}
+              <div className="grid grid-cols-2 gap-3 md:gap-4">
+                <Card className="rounded-xl shadow-sm">
+                  <CardContent className="p-4 flex flex-col items-center text-center">
+                    <div className="relative h-20 w-20 mb-3">
+                      <svg className="h-20 w-20 -rotate-90" viewBox="0 0 80 80">
+                        <circle cx="40" cy="40" r="34" fill="none" stroke={`${GREEN}20`} strokeWidth="8" />
+                        <circle cx="40" cy="40" r="34" fill="none" stroke={GREEN} strokeWidth="8" strokeLinecap="round"
+                          strokeDasharray={`${2 * Math.PI * 34}`} strokeDashoffset={`${2 * Math.PI * 34 * (1 - alPct / 100)}`}
+                          className="transition-all duration-700" />
+                      </svg>
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="text-lg font-bold" style={{ color: NAVY }}>{alRemaining}j</span>
                       </div>
-                      <Badge className="text-xs" style={{ backgroundColor: `${GREEN}20`, color: GREEN }}>{alPct}%</Badge>
                     </div>
-                    <Progress value={alPct} className="h-3" style={{ backgroundColor: `${GREEN}20` }} />
-                    <p className="text-sm text-gray-600">{alRemaining}j / {alTotal}j restants</p>
+                    <p className="font-medium text-sm" style={{ color: NAVY }}>Conges annuels</p>
+                    <p className="text-xs text-gray-400">sur {alTotal}j</p>
                   </CardContent>
                 </Card>
-                <Card>
-                  <CardContent className="p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-5 w-5 text-orange-500" />
-                        <p className="font-medium text-sm" style={{ color: NAVY }}>Sick Leave</p>
+                <Card className="rounded-xl shadow-sm">
+                  <CardContent className="p-4 flex flex-col items-center text-center">
+                    <div className="relative h-20 w-20 mb-3">
+                      <svg className="h-20 w-20 -rotate-90" viewBox="0 0 80 80">
+                        <circle cx="40" cy="40" r="34" fill="none" stroke="#f9731620" strokeWidth="8" />
+                        <circle cx="40" cy="40" r="34" fill="none" stroke="#f97316" strokeWidth="8" strokeLinecap="round"
+                          strokeDasharray={`${2 * Math.PI * 34}`} strokeDashoffset={`${2 * Math.PI * 34 * (1 - slPct / 100)}`}
+                          className="transition-all duration-700" />
+                      </svg>
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="text-lg font-bold" style={{ color: NAVY }}>{slRemaining}j</span>
                       </div>
-                      <Badge className="text-xs" style={{ backgroundColor: "#f97316" + "20", color: "#f97316" }}>{slPct}%</Badge>
                     </div>
-                    <Progress value={slPct} className="h-3" style={{ backgroundColor: "#f9731620" }} />
-                    <p className="text-sm text-gray-600">{slRemaining}j / {slTotal}j restants</p>
+                    <p className="font-medium text-sm" style={{ color: NAVY }}>Sick Leave</p>
+                    <p className="text-xs text-gray-400">sur {slTotal}j</p>
                   </CardContent>
                 </Card>
               </div>
 
               {/* Quick actions grid */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 {([
-                  { icon: FileText, label: "Mes bulletins", onClick: () => setTab("bulletins"), color: BLUE },
-                  { icon: CalendarPlus, label: "Demander un congé", onClick: () => setTab("conges"), color: GREEN },
-                  { icon: Calendar, label: "Mon planning", onClick: () => setTab("planning"), color: GOLD },
-                  { icon: FolderOpen, label: "Mes documents", onClick: () => setTab("documents"), color: NAVY },
+                  { icon: FileText, label: "Mes bulletins", onClick: () => setTab("bulletins"), color: BLUE, bg: `linear-gradient(135deg, ${BLUE}08, ${BLUE}15)` },
+                  { icon: CalendarPlus, label: "Demander un conge", onClick: () => setTab("conges"), color: GREEN, bg: `linear-gradient(135deg, ${GREEN}08, ${GREEN}15)` },
+                  { icon: Calendar, label: "Mon planning", onClick: () => setTab("planning"), color: GOLD, bg: `linear-gradient(135deg, ${GOLD}08, ${GOLD}15)` },
+                  { icon: FolderOpen, label: "Mes documents", onClick: () => setTab("documents"), color: NAVY, bg: `linear-gradient(135deg, ${NAVY}08, ${NAVY}15)` },
                 ] as const).map((action, i) => (
                   <Card key={i}
-                    className="cursor-pointer transition-all duration-200 hover:shadow-md hover:-translate-y-0.5"
+                    className="cursor-pointer rounded-xl shadow-sm transition-all duration-200 hover:shadow-md active:scale-[0.97] border-0"
                     onClick={action.onClick}
-                    style={{ borderTop: `3px solid ${action.color}` }}>
-                    <CardContent className="p-4 flex flex-col items-center gap-2 text-center">
-                      <action.icon className="h-6 w-6" style={{ color: action.color }} />
+                    style={{ background: action.bg }}>
+                    <CardContent className="p-4 md:p-5 flex flex-col items-center gap-2.5 text-center">
+                      <div className="h-12 w-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${action.color}15` }}>
+                        <action.icon className="h-6 w-6" style={{ color: action.color }} />
+                      </div>
                       <p className="text-sm font-medium" style={{ color: NAVY }}>{action.label}</p>
                     </CardContent>
                   </Card>
                 ))}
               </div>
 
-              {/* Recent notifications */}
+              {/* Recent notifications (desktop only) */}
               {notifications.length > 0 && (
-                <Card>
+                <Card className="hidden md:block rounded-xl shadow-sm">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm flex items-center gap-2" style={{ color: NAVY }}>
                       <Bell className="h-4 w-4" /> Notifications récentes
@@ -698,57 +749,54 @@ export default function EspaceEmployePage() {
 
         {/* Bulletins */}
         {tab === "bulletins" && (
-          <Card>
-            <CardHeader><CardTitle className="text-base" style={{ color: NAVY }}>Mes bulletins de salaire</CardTitle></CardHeader>
-            <CardContent>
-              {bulletins.length === 0 ? <p className="text-gray-400 text-center py-8">Aucun bulletin disponible</p> : (
-                <div className="space-y-3">
-                  {bulletins.map((b: any) => {
-                    const isRead = !!b.lu_le
-                    const periodeLabel = new Date((b.periode || "2025-01") + "T12:00:00").toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
-                    return (
-                      <div key={b.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors" style={{ borderLeft: `3px solid ${isRead ? GREEN : GOLD}` }}>
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="h-10 w-10 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: `${NAVY}10` }}>
-                            <FileText className="h-5 w-5" style={{ color: NAVY }} />
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p className="font-medium capitalize" style={{ color: NAVY }}>{periodeLabel}</p>
-                              {isRead ? (
-                                <Badge className="text-[10px] px-1.5 py-0" style={{ backgroundColor: `${GREEN}20`, color: GREEN }}>Lu</Badge>
-                              ) : (
-                                <Badge className="text-[10px] px-1.5 py-0 font-semibold" style={{ backgroundColor: `${GOLD}25`, color: GOLD }}>Nouveau</Badge>
-                              )}
-                            </div>
-                            <div className="flex gap-3 text-xs text-gray-500">
-                              <span>Brut: {fmt(b.salaire_brut || b.salaire_base || 0)} MUR</span>
-                              {Number(b.special_allowance_1) > 0 && <span style={{ color: "#7c3aed" }}>Primes: {fmt(b.special_allowance_1)} MUR</span>}
-                              {Number(b.heures_sup_montant) > 0 && <span style={{ color: "#ea580c" }}>OT: {fmt(b.heures_sup_montant)} MUR</span>}
-                            </div>
+          <div>
+            <h2 className="text-xl font-bold mb-4" style={{ color: NAVY }}>Mes bulletins de salaire</h2>
+            {bulletins.length === 0 ? <Card className="rounded-xl shadow-sm"><CardContent><p className="text-gray-400 text-center py-8">Aucun bulletin disponible</p></CardContent></Card> : (
+              <div className="space-y-3">
+                {bulletins.map((b: any) => {
+                  const isRead = !!b.lu_le
+                  const periodeLabel = new Date((b.periode || "2025-01") + "T12:00:00").toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
+                  return (
+                    <Card key={b.id} className="rounded-xl shadow-sm overflow-hidden transition-all duration-200 hover:shadow-md" style={{ borderLeft: `4px solid ${isRead ? GREEN : GOLD}` }}>
+                      <CardContent className="p-4">
+                        {/* Header: month + badge */}
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <p className="text-lg md:text-base font-bold capitalize" style={{ color: NAVY }}>{periodeLabel}</p>
+                            {isRead ? (
+                              <Badge className="text-[10px] px-1.5 py-0" style={{ backgroundColor: `${GREEN}20`, color: GREEN }}>Lu</Badge>
+                            ) : (
+                              <Badge className="text-[10px] px-1.5 py-0 font-semibold" style={{ backgroundColor: `${GOLD}25`, color: GOLD }}>Nouveau</Badge>
+                            )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-3 shrink-0">
-                          <p className="text-lg font-mono font-bold" style={{ color: NAVY }}>{fmt(b.salaire_net || 0)} <span className="text-xs font-normal text-gray-400">MUR</span></p>
-                          <div className="flex gap-1.5">
-                            <Button variant="outline" size="sm" className="h-8 px-2.5" title="Voir" onClick={() => {
-                              window.open(`/api/rh/paie/pdf?employe_id=${employe.id}&periode=${b.periode}&bulletin_id=${b.id}&view=1`, '_blank')
-                              if (!b.lu_le) { fetch(`/api/rh/paie?action=mark_read&bulletin_id=${b.id}`, { method: "POST" }).catch(() => {}); load() }
-                            }}>
-                              <Eye className="h-3.5 w-3.5 mr-1" /><span className="text-xs">Voir</span>
-                            </Button>
-                            <Button variant="outline" size="sm" className="h-8 px-2.5" title="Télécharger PDF" onClick={() => window.open(`/api/rh/paie/pdf?employe_id=${employe.id}&periode=${b.periode}&bulletin_id=${b.id}`, '_blank')}>
-                              <Download className="h-3.5 w-3.5 mr-1" /><span className="text-xs hidden md:inline">Télécharger PDF</span>
-                            </Button>
-                          </div>
+                        {/* Net amount prominent */}
+                        <p className="text-2xl font-bold font-mono mb-2" style={{ color: NAVY }}>{fmt(b.salaire_net || 0)} <span className="text-sm font-normal text-gray-400">MUR net</span></p>
+                        {/* Details row */}
+                        <div className="flex flex-wrap gap-3 text-xs text-gray-500 mb-4">
+                          <span className="px-2 py-1 rounded-lg bg-gray-50">Brut: {fmt(b.salaire_brut || b.salaire_base || 0)}</span>
+                          {Number(b.special_allowance_1) > 0 && <span className="px-2 py-1 rounded-lg" style={{ backgroundColor: "#7c3aed10", color: "#7c3aed" }}>Primes: {fmt(b.special_allowance_1)}</span>}
+                          {Number(b.heures_sup_montant) > 0 && <span className="px-2 py-1 rounded-lg" style={{ backgroundColor: "#ea580c10", color: "#ea580c" }}>OT: {fmt(b.heures_sup_montant)}</span>}
                         </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                        {/* Action buttons - stacked on mobile */}
+                        <div className="flex flex-col md:flex-row gap-2">
+                          <Button variant="outline" className="h-11 md:h-9 rounded-xl w-full md:w-auto transition-all duration-200" onClick={() => {
+                            window.open(`/api/rh/paie/pdf?employe_id=${employe.id}&periode=${b.periode}&bulletin_id=${b.id}&view=1`, '_blank')
+                            if (!b.lu_le) { fetch(`/api/rh/paie?action=mark_read&bulletin_id=${b.id}`, { method: "POST" }).catch(() => {}); load() }
+                          }}>
+                            <Eye className="h-4 w-4 mr-2" />Voir le bulletin
+                          </Button>
+                          <Button variant="outline" className="h-11 md:h-9 rounded-xl w-full md:w-auto transition-all duration-200" onClick={() => window.open(`/api/rh/paie/pdf?employe_id=${employe.id}&periode=${b.periode}&bulletin_id=${b.id}`, '_blank')}>
+                            <Download className="h-4 w-4 mr-2" />Telecharger PDF
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+              </div>
+            )}
+          </div>
         )}
 
         {/* Planning */}
@@ -849,6 +897,61 @@ export default function EspaceEmployePage() {
           <DocumentsTab employe={employe} />
         )}
       </div>
+
+      {/* Mobile "More" menu overlay */}
+      {mobileMenuOpen && (
+        <div className="md:hidden fixed inset-0 z-40" onClick={() => setMobileMenuOpen(false)}>
+          <div className="absolute inset-0 bg-black/30" />
+          <div className="absolute bottom-[72px] left-0 right-0 bg-white rounded-t-2xl shadow-xl p-4 space-y-1 animate-in slide-in-from-bottom" onClick={e => e.stopPropagation()}>
+            <p className="text-xs text-gray-400 uppercase tracking-wider px-3 pb-2">Plus</p>
+            {([
+              { id: "profil" as Tab, label: "Ma fiche", icon: User },
+              { id: "primes" as Tab, label: "Primes & OT", icon: TrendingUp },
+              { id: "documents" as Tab, label: "Documents", icon: FolderOpen },
+            ]).map(t => (
+              <button key={t.id} onClick={() => { setTab(t.id); setMobileMenuOpen(false) }}
+                className="w-full flex items-center gap-3 px-3 py-3.5 rounded-xl text-left transition-all duration-200 active:scale-[0.98]"
+                style={tab === t.id ? { backgroundColor: `${NAVY}08`, color: NAVY } : { color: "#6b7280" }}>
+                <div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: tab === t.id ? `${GOLD}15` : "#f3f4f6" }}>
+                  <t.icon className="h-5 w-5" style={{ color: tab === t.id ? GOLD : "#9ca3af" }} />
+                </div>
+                <span className="font-medium text-sm">{t.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Mobile Bottom Navigation */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t" style={{ borderColor: "#E2E5F0", paddingBottom: "env(safe-area-inset-bottom)" }}>
+        <div className="flex items-center justify-around px-2 h-[68px]">
+          {([
+            { id: "dashboard" as Tab, label: "Home", icon: LayoutDashboard },
+            { id: "bulletins" as Tab, label: "Bulletins", icon: FileText },
+            { id: "conges" as Tab, label: "Conges", icon: Calendar },
+            { id: "planning" as Tab, label: "Planning", icon: Clock },
+            { id: "more" as const, label: "Menu", icon: MoreHorizontal },
+          ]).map(t => {
+            const isMore = t.id === "more"
+            const isActive = isMore ? (mobileMenuOpen || ["profil", "primes", "documents"].includes(tab)) : tab === t.id
+            return (
+              <button key={t.id}
+                onClick={() => {
+                  if (isMore) { setMobileMenuOpen(v => !v) }
+                  else { setTab(t.id as Tab); setMobileMenuOpen(false) }
+                }}
+                className="flex flex-col items-center justify-center gap-1 min-w-[56px] py-1.5 transition-all duration-200 active:scale-95"
+              >
+                <div className="relative">
+                  {isActive && <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-5 h-[3px] rounded-full" style={{ backgroundColor: GOLD }} />}
+                  <t.icon className="h-6 w-6 transition-colors duration-200" style={{ color: isActive ? GOLD : "#9ca3af" }} />
+                </div>
+                <span className="text-[10px] font-medium transition-colors duration-200" style={{ color: isActive ? GOLD : "#9ca3af" }}>{t.label}</span>
+              </button>
+            )
+          })}
+        </div>
+      </nav>
     </div>
   )
 }
