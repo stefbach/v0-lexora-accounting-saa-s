@@ -823,21 +823,21 @@ export default function EspaceEmployePage() {
               {/* Prochains jours fériés */}
               {(() => {
                 const HOLIDAYS_2026 = [
-                  { date: "2026-01-01", name: "New Year", icon: "🎆" },
-                  { date: "2026-01-02", name: "New Year (2nd day)", icon: "🎆" },
-                  { date: "2026-01-02", name: "Thaipoosam Cavadee", icon: "🕉️" },
-                  { date: "2026-02-01", name: "Abolition of Slavery", icon: "✊" },
-                  { date: "2026-02-15", name: "Maha Shivaratree", icon: "🙏" },
-                  { date: "2026-02-17", name: "Chinese Spring Festival", icon: "🐉" },
-                  { date: "2026-03-12", name: "Independence & Republic Day", icon: "🇲🇺" },
-                  { date: "2026-03-20", name: "Eid-Ul-Fitr", icon: "☪️" },
-                  { date: "2026-04-03", name: "Ougadi", icon: "🪷" },
-                  { date: "2026-05-01", name: "Labour Day", icon: "⚒️" },
-                  { date: "2026-08-15", name: "Assumption", icon: "✝️" },
-                  { date: "2026-08-26", name: "Ganesh Chaturthi", icon: "🙏" },
-                  { date: "2026-11-02", name: "Arrival of Indentured Labourers", icon: "🚢" },
-                  { date: "2026-11-08", name: "Divali", icon: "🪔" },
-                  { date: "2026-12-25", name: "Christmas", icon: "🎄" },
+                  { date: "2026-01-01", name: "New Year" },
+                  { date: "2026-01-02", name: "New Year (2nd day)" },
+                  { date: "2026-01-02", name: "Thaipoosam Cavadee" },
+                  { date: "2026-02-01", name: "Abolition of Slavery" },
+                  { date: "2026-02-15", name: "Maha Shivaratree" },
+                  { date: "2026-02-17", name: "Chinese Spring Festival" },
+                  { date: "2026-03-12", name: "Independence & Republic Day" },
+                  { date: "2026-03-20", name: "Eid-Ul-Fitr" },
+                  { date: "2026-04-03", name: "Ougadi" },
+                  { date: "2026-05-01", name: "Labour Day" },
+                  { date: "2026-08-15", name: "Assumption" },
+                  { date: "2026-08-26", name: "Ganesh Chaturthi" },
+                  { date: "2026-11-02", name: "Arrival of Indentured Labourers" },
+                  { date: "2026-11-08", name: "Divali" },
+                  { date: "2026-12-25", name: "Christmas" },
                 ]
                 const today = new Date().toISOString().split("T")[0]
                 const upcoming = HOLIDAYS_2026.filter(h => h.date >= today).slice(0, 3)
@@ -848,16 +848,21 @@ export default function EspaceEmployePage() {
                     {upcoming.map((h, i) => {
                       const d = new Date(h.date + "T12:00:00")
                       const daysUntil = Math.ceil((d.getTime() - new Date().getTime()) / 86400000)
+                      const dayNum = d.getDate()
+                      const monthShort = d.toLocaleDateString("fr-FR", { month: "short" }).toUpperCase()
                       return (
-                        <div key={i} className="flex items-center gap-3 p-3 rounded-2xl bg-gray-50">
-                          <span className="text-lg">{h.icon}</span>
-                          <div className="flex-1">
-                            <p className="text-sm font-medium" style={{ color: NAVY }}>{h.name}</p>
+                        <div key={i} className="flex items-center gap-3 p-3 rounded-xl" style={{ backgroundColor: "#f8f9fc", border: "1px solid #e8eaef" }}>
+                          <div className="flex flex-col items-center justify-center w-11 h-11 rounded-lg flex-shrink-0" style={{ backgroundColor: daysUntil <= 7 ? `${GOLD}12` : "#eef0f4" }}>
+                            <span className="text-[10px] font-semibold leading-none" style={{ color: daysUntil <= 7 ? GOLD : "#9ca3af" }}>{monthShort}</span>
+                            <span className="text-base font-bold leading-none" style={{ color: daysUntil <= 7 ? NAVY : "#6b7280" }}>{dayNum}</span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate" style={{ color: NAVY }}>{h.name}</p>
                             <p className="text-xs text-gray-400">{d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}</p>
                           </div>
-                          <Badge className="text-[10px] px-2 py-0.5" style={{ backgroundColor: daysUntil <= 7 ? `${GOLD}20` : "#f3f4f6", color: daysUntil <= 7 ? GOLD : "#9ca3af" }}>
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md flex-shrink-0" style={{ backgroundColor: daysUntil <= 7 ? `${GOLD}15` : "#f3f4f6", color: daysUntil <= 7 ? GOLD : "#9ca3af" }}>
                             {daysUntil === 0 ? "Aujourd'hui" : daysUntil === 1 ? "Demain" : `J-${daysUntil}`}
-                          </Badge>
+                          </span>
                         </div>
                       )
                     })}
