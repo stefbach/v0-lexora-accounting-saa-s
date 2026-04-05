@@ -841,19 +841,38 @@ export default function EspaceEmployePage() {
         {/* Planning */}
         {tab === "planning" && (
           <Card>
-            <CardHeader><CardTitle className="text-base" style={{ color: NAVY }}>Mon planning</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base" style={{ color: NAVY }}>Mon planning — {new Date().toLocaleDateString("fr-FR", { month: "long", year: "numeric" })}</CardTitle></CardHeader>
             <CardContent>
-              {planning.length === 0 ? <p className="text-gray-400 text-center py-8">Aucun planning publié</p> : (
+              {planning.length === 0 ? (
+                <div className="text-center py-8">
+                  <Clock className="h-10 w-10 mx-auto text-gray-300 mb-3" />
+                  <p className="text-gray-400">Aucun planning publié pour ce mois</p>
+                  <p className="text-xs text-gray-300 mt-1">Le planning sera visible une fois publié par le RH</p>
+                </div>
+              ) : (
                 <div className="space-y-1">
-                  {planning.filter((p: any) => p.shift && p.shift !== 'Repos').map((p: any, i: number) => (
-                    <div key={i} className="flex items-center justify-between p-2 border rounded">
-                      <span className="text-sm font-medium">Jour {p.jour}</span>
-                      <div className="text-right">
-                        <Badge className="bg-blue-100 text-blue-800 text-xs">{p.shift || "Travail"}</Badge>
-                        {p.heure_debut && <span className="text-xs text-gray-500 ml-2">{p.heure_debut}—{p.heure_fin}</span>}
+                  {planning.sort((a: any, b: any) => (a.jour || 0) - (b.jour || 0)).map((p: any, i: number) => {
+                    const isRepos = p.est_repos || p.shift === 'Repos' || p.shift === 'R'
+                    const periodeMonth = new Date().toISOString().slice(0, 7)
+                    const dateStr = `${periodeMonth}-${String(p.jour).padStart(2, '0')}`
+                    const dayName = new Date(dateStr + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" })
+                    return (
+                      <div key={i} className="flex items-center justify-between p-3 rounded-xl transition-colors" style={{ backgroundColor: isRepos ? "#f3f4f6" : "#eff6ff" }}>
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-bold w-12" style={{ color: isRepos ? "#9ca3af" : NAVY }}>{dayName}</span>
+                          <Badge className={isRepos ? "bg-gray-200 text-gray-600" : "bg-blue-100 text-blue-800"} style={{ fontSize: "11px" }}>
+                            {isRepos ? "Repos" : (p.shift || "Travail")}
+                          </Badge>
+                        </div>
+                        {!isRepos && p.heure_debut && (
+                          <span className="text-sm font-mono" style={{ color: BLUE }}>{String(p.heure_debut).slice(0,5)} — {String(p.heure_fin).slice(0,5)}</span>
+                        )}
+                        {!isRepos && p.heures_prevues && (
+                          <span className="text-xs text-gray-400">{p.heures_prevues}h</span>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </CardContent>

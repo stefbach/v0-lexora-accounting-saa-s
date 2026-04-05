@@ -37,9 +37,21 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
     }
 
-    // Multi-tenant: verify user has access to this société
+    // Multi-tenant OR self-service: verify user has access
     const hasAccess = await userHasAccessToSociete(user.id, societe_id)
-    if (!hasAccess) return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
+    if (!hasAccess) {
+      // Self-service fallback: check if user is an employee of this société
+      const { data: selfEmp } = await supabase
+        .from('employes')
+        .select('id')
+        .eq('societe_id', societe_id)
+        .or(`auth_user_id.eq.${user.id},email.eq.${user.email || 'NONE'}`)
+        .is('date_depart', null)
+        .maybeSingle()
+      if (!selfEmp) {
+        return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
+      }
+    }
 
     // Find the planning for this societe + periode
     let planningQuery = supabase
@@ -49,7 +61,10 @@ export async function GET(request: Request) {
       .order('periode', { ascending: false })
 
     if (periode) {
-      planningQuery = planningQuery.eq('periode', `${periode}-01`)
+      // periode can be "2026-04" or "2026-04-01" — try both formats
+      const periodeWithDay = periode.length === 7 ? `${periode}-01` : periode
+      const periodeShort = periode.slice(0, 7)
+      planningQuery = planningQuery.or(`periode.eq.${periodeWithDay},periode.eq.${periodeShort}`)
     }
 
     const { data: plannings, error: planErr } = await planningQuery
