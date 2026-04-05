@@ -502,8 +502,8 @@ export default function EspaceEmployePage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const profileRes = await fetch("/api/rh/employes?me=1").then(r => r.json()).catch(() => ({}))
-      const emp = profileRes.employe || profileRes.employes?.[0] || null
+      const profileRes = await fetch("/api/rh/employes/me").then(r => r.json()).catch(() => ({}))
+      const emp = profileRes.employe || null
       setEmploye(emp)
       if (emp) {
         const today = todayISO()
