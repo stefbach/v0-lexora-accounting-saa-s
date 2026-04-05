@@ -513,13 +513,14 @@ export default function EspaceEmployePage() {
           fetch(`/api/rh/paie?action=list&employe_id=${emp.id}`).then(r => r.json()).catch(() => ({ bulletins: [] })),
           fetch(`/api/rh/primes?type=saisie&employe_id=${emp.id}`).then(r => r.json()).catch(() => ({ primes: [] })),
           fetch(`/api/rh/conges?action=balances&employe_id=${emp.id}`).then(r => r.json()).catch(() => ({ balances: [] })),
-          fetch(`/api/rh/planning?periode=${periode}&employe_id=${emp.id}`).then(r => r.json()).catch(() => ({ planning: [] })),
+          fetch(`/api/rh/planning?periode=${periode}&societe_id=${emp.societe_id}&employe_id=${emp.id}`).then(r => r.json()).catch(() => ({ planning: [] })),
         ])
         setPointageToday(ptRes.pointages?.[0] || null)
         setBulletins(bulRes.bulletins || [])
         setPrimes(prRes.primes || [])
         if (cgRes.balances?.[0]) setConges(cgRes.balances[0])
-        setPlanning(plRes.planning || [])
+        // Filter planning to show only this employee's entries
+        setPlanning((plRes.planning || []).filter((p: any) => p.employe_id === emp.id))
       }
     } catch {}
     setLoading(false)
@@ -885,11 +886,31 @@ export default function EspaceEmployePage() {
               </CardContent>
             </Card>
 
-            {/* Primes */}
+            {/* Primes par bulletin (depuis special_allowance_1) */}
             <Card>
-              <CardHeader className="pb-2"><CardTitle className="text-base" style={{ color: NAVY }}>Historique des primes</CardTitle></CardHeader>
+              <CardHeader className="pb-2"><CardTitle className="text-base" style={{ color: NAVY }}>Primes & allocations par mois</CardTitle></CardHeader>
               <CardContent>
-                {primes.length === 0 ? <p className="text-gray-400 text-center py-4 text-sm">Aucune prime enregistrée</p> : (
+                {bulletins.filter((b: any) => Number(b.special_allowance_1) > 0).length === 0 && primes.length === 0 ? <p className="text-gray-400 text-center py-4 text-sm">Aucune prime enregistrée</p> : (
+                  <div className="space-y-2">
+                    {bulletins.filter((b: any) => Number(b.special_allowance_1) > 0).map((b: any) => (
+                      <div key={b.id + "-primes"} className="p-3 border rounded-lg" style={{ borderLeft: `3px solid #7c3aed` }}>
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="font-medium text-sm capitalize">{new Date((b.periode || "2025-01") + "T12:00:00").toLocaleDateString("fr-FR", { month: "long", year: "numeric" })}</p>
+                          <p className="font-mono font-bold" style={{ color: "#7c3aed" }}>{fmt(b.special_allowance_1)} MUR</p>
+                        </div>
+                        {b.notes && <p className="text-xs text-gray-500">{b.notes}</p>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Primes détaillées (saisies individuellement) */}
+            {primes.length > 0 && <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-base" style={{ color: NAVY }}>Primes individuelles saisies</CardTitle></CardHeader>
+              <CardContent>
+                {primes.length === 0 ? <p className="text-gray-400 text-center py-4 text-sm">Aucune prime saisie</p> : (
                   <div className="space-y-2">
                     {primes.map((p: any) => (
                       <div key={p.id} className="flex items-center justify-between p-3 border rounded-lg">
@@ -909,7 +930,7 @@ export default function EspaceEmployePage() {
                   </div>
                 )}
               </CardContent>
-            </Card>
+            </Card>}
 
             {/* Total from bulletins */}
             {bulletins.length > 0 && (
