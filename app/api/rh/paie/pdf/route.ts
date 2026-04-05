@@ -360,37 +360,7 @@ export async function POST(request: Request) {
     Généré par le système de paie — ${soc?.nom || ''}
   </p>
 
-  <!-- Action buttons (hidden when printing) -->
-  <div class="no-print" style="display:flex;gap:12px;justify-content:center;margin-top:24px;padding:16px;background:#f8f9fc;border-radius:8px;">
-    <button onclick="window.print()" style="padding:10px 24px;background:#0B0F2E;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
-      📄 Télécharger PDF
-    </button>
-    <button onclick="shareDoc()" style="padding:10px 24px;background:#4191FF;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
-      📤 Partager
-    </button>
-    <button onclick="window.close()" style="padding:10px 24px;background:#e5e7eb;color:#374151;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
-      Fermer
-    </button>
-  </div>
 
-  <script>
-    async function shareDoc() {
-      if (navigator.share) {
-        try {
-          await navigator.share({
-            title: document.title,
-            text: 'Bulletin de paie — ${emp?.prenom} ${emp?.nom} — ${moisLabel}',
-            url: window.location.href
-          });
-        } catch(e) { /* user cancelled */ }
-      } else {
-        // Fallback: copy to clipboard
-        const url = window.location.href;
-        await navigator.clipboard.writeText(url);
-        alert('Lien copié dans le presse-papier');
-      }
-    }
-  </script>
 </body>
 </html>`
 
@@ -533,18 +503,7 @@ ${Number(bulletin.csg_patronal_bonus) > 0 ? `<tr><td>CSG patronal sur bonus (6%)
   Généré par le système de paie — ${soc?.nom || ''}
 </p>
 
-<div style="display:flex;gap:12px;justify-content:center;margin-top:24px;padding:16px;background:#f8f9fc;border-radius:8px;">
-  <button onclick="window.print()" style="padding:10px 24px;background:#0B0F2E;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">📄 Télécharger PDF</button>
-  <button onclick="if(navigator.share)navigator.share({title:document.title,text:document.title});else{navigator.clipboard.writeText(window.location.href);alert('Lien copié')}" style="padding:10px 24px;background:#4191FF;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">📤 Partager</button>
-</div>
 
-<style>@media print{button,div[style*="justify-content:center"]{display:none!important}.no-print{display:none!important}}</style>
-<script>
-  // Auto-trigger print dialog on load for PDF download
-  window.onload = function() {
-    setTimeout(function() { window.print(); }, 800);
-  };
-</script>
 </body></html>`
 
   return new NextResponse(html, {
