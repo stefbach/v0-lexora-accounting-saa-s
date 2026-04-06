@@ -733,8 +733,21 @@ export async function POST(request: Request) {
       // Planning published?
       const { data: plan } = await supabase.from('plannings')
         .select('id, published').eq('societe_id', sid).eq('periode', `${periodeStr}-01`).maybeSingle()
-      // Pointage count
-      const empIds = [...new Set((buls || []).map(b => (b as any).employe_id).filter(Boolean))]
+      // Pointage count for the month
+      const { count: pointageCount } = await supabase.from('pointages')
+        .select('id', { count: 'exact', head: true })
+        .gte('date_pointage', `${periodeStr}-01`).lte('date_pointage', `${periodeStr}-31`)
+      // OT: check if any bulletin has heures_sup_montant > 0 (OT computed)
+      const { data: bulsFull } = await supabase.from('bulletins_paie')
+        .select('id, heures_sup_montant, special_allowance_1')
+        .eq('societe_id', sid)
+        .gte('periode', `${periodeStr}-01`).lte('periode', `${periodeStr}-31`)
+      const hasOT = (bulsFull || []).some(b => Number(b.heures_sup_montant) > 0)
+      const hasPrimes = (bulsFull || []).some(b => Number(b.special_allowance_1) > 0)
+      // Primes count for the month
+      const { count: primesCount } = await supabase.from('primes_variables_mois')
+        .select('id', { count: 'exact', head: true })
+        .eq('periode', `${periodeStr}-01`)
       // Period lock record
       const { data: lockRecord } = await supabase.from('paie_periodes_lock')
         .select('*').eq('societe_id', sid).eq('periode', `${periodeStr}-01`).maybeSingle()
@@ -746,6 +759,12 @@ export async function POST(request: Request) {
       return NextResponse.json({
         workflow: {
           planning_publie: plan?.published || false,
+          pointage_valide: (pointageCount || 0) > 0,
+          pointage_count: pointageCount || 0,
+          ot_valide: hasOT || lockRecord?.ot_valide || total > 0,
+          ot_present: hasOT,
+          primes_validees: hasPrimes || (primesCount || 0) > 0 || lockRecord?.primes_validees || total > 0,
+          primes_count: primesCount || 0,
           bulletins_generes: total > 0,
           bulletins_total: total,
           bulletins_brouillon: brouillons,
