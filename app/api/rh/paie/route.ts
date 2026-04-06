@@ -336,6 +336,15 @@ export async function POST(request: Request) {
       const hasAccess = await userHasAccessToSociete(user.id, societe_id)
       if (!hasAccess) return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
 
+      // LOCK GUARD: check if period is locked
+      const { data: existingLocked } = await supabase.from('bulletins_paie')
+        .select('id').eq('societe_id', societe_id)
+        .gte('periode', `${periodeStr}-01`).lte('periode', `${periodeStr}-31`)
+        .eq('verrouille', true).limit(1)
+      if (existingLocked && existingLocked.length > 0) {
+        return NextResponse.json({ error: 'Période verrouillée — impossible de recalculer. Déverrouillez d\'abord.', bulletins: [], nb: 0 }, { status: 403 })
+      }
+
       // Get all employees for this société
       const { data: allEmps, error: empError } = await supabase.from('employes').select('*').eq('societe_id', societe_id)
 
@@ -595,25 +604,186 @@ export async function POST(request: Request) {
       // Find bulletin — try exact match first, then ilike for period flexibility
       let bulletin: any = null
       const { data: exact } = await supabase.from('bulletins_paie')
-        .select('id').eq('employe_id', employe_id).eq('periode', periodeDate).maybeSingle()
+        .select('id, verrouille').eq('employe_id', employe_id).eq('periode', periodeDate).maybeSingle()
       if (exact) {
+        if (exact.verrouille) return NextResponse.json({ error: 'Bulletin verrouillé — modification impossible' }, { status: 403 })
         const { data, error } = await supabase.from('bulletins_paie')
-          .update({ statut: 'valide' }).eq('id', exact.id).select().single()
+          .update({ statut: 'valide', date_validation: new Date().toISOString(), valide_par: user.id }).eq('id', exact.id).select().single()
         if (error) throw error
         bulletin = data
       } else {
-        // Fallback: search by ilike
         const { data: fuzzy } = await supabase.from('bulletins_paie')
-          .select('id').eq('employe_id', employe_id).gte('periode', `${periodeStr}-01`).lte('periode', `${periodeStr}-31`).maybeSingle()
+          .select('id, verrouille').eq('employe_id', employe_id).gte('periode', `${periodeStr}-01`).lte('periode', `${periodeStr}-31`).maybeSingle()
         if (fuzzy) {
+          if (fuzzy.verrouille) return NextResponse.json({ error: 'Bulletin verrouillé — modification impossible' }, { status: 403 })
           const { data, error } = await supabase.from('bulletins_paie')
-            .update({ statut: 'valide' }).eq('id', fuzzy.id).select().single()
+            .update({ statut: 'valide', date_validation: new Date().toISOString(), valide_par: user.id }).eq('id', fuzzy.id).select().single()
           if (error) throw error
           bulletin = data
         }
       }
       if (!bulletin) return NextResponse.json({ error: `Aucun bulletin trouvé pour ${employe_id} en ${periodeStr}` }, { status: 404 })
       return NextResponse.json({ bulletin })
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // Validate ALL bulletins for the period
+    // ══════════════════════════════════════════════════════════════
+    if (action === 'valider_tous') {
+      const sid = body.societe_id
+      if (!sid) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
+      const { data: buls, error: bErr } = await supabase.from('bulletins_paie')
+        .select('id, verrouille, statut')
+        .eq('societe_id', sid)
+        .gte('periode', `${periodeStr}-01`).lte('periode', `${periodeStr}-31`)
+      if (bErr) throw bErr
+      const toValidate = (buls || []).filter(b => b.statut === 'brouillon' && !b.verrouille)
+      if (toValidate.length === 0) return NextResponse.json({ error: 'Aucun bulletin brouillon à valider', nb: 0 })
+      const { error: uErr } = await supabase.from('bulletins_paie')
+        .update({ statut: 'valide', date_validation: new Date().toISOString(), valide_par: user.id })
+        .in('id', toValidate.map(b => b.id))
+      if (uErr) throw uErr
+      // Audit log
+      await supabase.from('paie_audit_log').insert({
+        societe_id: sid, periode: `${periodeStr}-01`, action: 'validation',
+        user_id: user.id, user_email: user.email,
+        details: { nb_bulletins: toValidate.length }
+      })
+      return NextResponse.json({ success: true, nb: toValidate.length })
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // LOCK (verrouiller) all validated bulletins for the period
+    // ══════════════════════════════════════════════════════════════
+    if (action === 'verrouiller') {
+      const sid = body.societe_id
+      if (!sid) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
+      const { data: buls } = await supabase.from('bulletins_paie')
+        .select('id, statut, verrouille')
+        .eq('societe_id', sid)
+        .gte('periode', `${periodeStr}-01`).lte('periode', `${periodeStr}-31`)
+      const nonValides = (buls || []).filter(b => b.statut !== 'valide' && !b.verrouille)
+      if (nonValides.length > 0) {
+        return NextResponse.json({ error: `${nonValides.length} bulletin(s) non validé(s). Validez tous les bulletins avant de verrouiller.` }, { status: 400 })
+      }
+      const toLock = (buls || []).filter(b => !b.verrouille)
+      if (toLock.length === 0) return NextResponse.json({ error: 'Tous les bulletins sont déjà verrouillés', nb: 0 })
+      const { error: lErr } = await supabase.from('bulletins_paie')
+        .update({ verrouille: true, date_verrouillage: new Date().toISOString(), verrouille_par: user.id })
+        .in('id', toLock.map(b => b.id))
+      if (lErr) throw lErr
+      // Upsert period lock record
+      await supabase.from('paie_periodes_lock').upsert({
+        societe_id: sid, periode: `${periodeStr}-01`,
+        bulletins_valides: true, verrouille: true,
+        date_verrouillage: new Date().toISOString(), verrouille_par: user.id,
+        date_modification: new Date().toISOString(),
+      }, { onConflict: 'societe_id,periode' })
+      // Audit log
+      await supabase.from('paie_audit_log').insert({
+        societe_id: sid, periode: `${periodeStr}-01`, action: 'verrouillage',
+        user_id: user.id, user_email: user.email,
+        details: { nb_bulletins: toLock.length }
+      })
+      return NextResponse.json({ success: true, nb: toLock.length })
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // UNLOCK (déverrouiller) — admin only, with audit trail
+    // ══════════════════════════════════════════════════════════════
+    if (action === 'deverrouiller') {
+      const sid = body.societe_id
+      const motif = body.motif || 'Correction demandée'
+      if (!sid) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
+      const { error: uErr } = await supabase.from('bulletins_paie')
+        .update({ verrouille: false, date_verrouillage: null, verrouille_par: null, statut: 'brouillon' })
+        .eq('societe_id', sid)
+        .gte('periode', `${periodeStr}-01`).lte('periode', `${periodeStr}-31`)
+      if (uErr) throw uErr
+      await supabase.from('paie_periodes_lock').upsert({
+        societe_id: sid, periode: `${periodeStr}-01`,
+        verrouille: false, bulletins_valides: false,
+        virements_generes: false, mra_declare: false, comptabilise: false,
+        date_modification: new Date().toISOString(),
+      }, { onConflict: 'societe_id,periode' })
+      await supabase.from('paie_audit_log').insert({
+        societe_id: sid, periode: `${periodeStr}-01`, action: 'deverrouillage',
+        user_id: user.id, user_email: user.email,
+        details: { motif }
+      })
+      return NextResponse.json({ success: true })
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // GET workflow status for a period
+    // ══════════════════════════════════════════════════════════════
+    if (action === 'workflow_status') {
+      const sid = body.societe_id
+      if (!sid) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
+      // Bulletins stats
+      const { data: buls } = await supabase.from('bulletins_paie')
+        .select('id, statut, verrouille, comptabilise')
+        .eq('societe_id', sid)
+        .gte('periode', `${periodeStr}-01`).lte('periode', `${periodeStr}-31`)
+      const total = (buls || []).length
+      const brouillons = (buls || []).filter(b => b.statut === 'brouillon').length
+      const valides = (buls || []).filter(b => b.statut === 'valide').length
+      const verrouilles = (buls || []).filter(b => b.verrouille).length
+      const comptabilises = (buls || []).filter(b => b.comptabilise).length
+      // Planning published?
+      const { data: plan } = await supabase.from('plannings')
+        .select('id, published').eq('societe_id', sid).eq('periode', `${periodeStr}-01`).maybeSingle()
+      // Pointage count
+      const empIds = [...new Set((buls || []).map(b => (b as any).employe_id).filter(Boolean))]
+      // Period lock record
+      const { data: lockRecord } = await supabase.from('paie_periodes_lock')
+        .select('*').eq('societe_id', sid).eq('periode', `${periodeStr}-01`).maybeSingle()
+      // Audit log (last 10)
+      const { data: auditLog } = await supabase.from('paie_audit_log')
+        .select('*').eq('societe_id', sid).eq('periode', `${periodeStr}-01`)
+        .order('created_at', { ascending: false }).limit(10)
+
+      return NextResponse.json({
+        workflow: {
+          planning_publie: plan?.published || false,
+          bulletins_generes: total > 0,
+          bulletins_total: total,
+          bulletins_brouillon: brouillons,
+          bulletins_valides: valides,
+          bulletins_verrouilles: verrouilles,
+          bulletins_comptabilises: comptabilises,
+          tous_valides: total > 0 && brouillons === 0,
+          tous_verrouilles: total > 0 && verrouilles === total,
+          tous_comptabilises: total > 0 && comptabilises === total,
+          virements_generes: lockRecord?.virements_generes || false,
+          mra_declare: lockRecord?.mra_declare || false,
+          lock_record: lockRecord || null,
+        },
+        audit: auditLog || [],
+      })
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // Mark post-lock steps done (virements, MRA, compta)
+    // ══════════════════════════════════════════════════════════════
+    if (action === 'mark_step') {
+      const sid = body.societe_id
+      const step = body.step // 'virements_generes' | 'mra_declare' | 'comptabilise'
+      if (!sid || !step) return NextResponse.json({ error: 'societe_id et step requis' }, { status: 400 })
+      const allowed = ['virements_generes', 'mra_declare', 'comptabilise']
+      if (!allowed.includes(step)) return NextResponse.json({ error: 'Step invalide' }, { status: 400 })
+      await supabase.from('paie_periodes_lock').upsert({
+        societe_id: sid, periode: `${periodeStr}-01`,
+        [step]: true,
+        date_modification: new Date().toISOString(),
+      }, { onConflict: 'societe_id,periode' })
+      await supabase.from('paie_audit_log').insert({
+        societe_id: sid, periode: `${periodeStr}-01`,
+        action: step === 'virements_generes' ? 'export_banque' : step === 'mra_declare' ? 'export_mra' : 'comptabilisation',
+        user_id: user.id, user_email: user.email,
+        details: { step }
+      })
+      return NextResponse.json({ success: true })
     }
 
     return NextResponse.json({ error: 'Action inconnue' }, { status: 400 })

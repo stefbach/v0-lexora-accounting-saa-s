@@ -46,6 +46,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'societe_id et periode requis' }, { status: 400 })
     }
 
+    // LOCK CHECK: only allow export if period is locked
+    const periodeStr = periode.length === 7 ? periode : periode.slice(0, 7)
+    const { data: unlockedBuls } = await supabase.from('bulletins_paie')
+      .select('id').eq('societe_id', societe_id)
+      .gte('periode', `${periodeStr}-01`).lte('periode', `${periodeStr}-31`)
+      .or('verrouille.is.null,verrouille.eq.false')
+      .limit(1)
+    if (unlockedBuls && unlockedBuls.length > 0) {
+      return NextResponse.json({ error: 'Periode non verrouillee. Verrouillez la paie avant de generer les virements.' }, { status: 403 })
+    }
+
     // --- 1. Récupérer le compte émetteur employeur ---
     let compteEmetteur: any = null
     if (compte_emetteur_id) {

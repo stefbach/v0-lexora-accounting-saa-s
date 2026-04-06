@@ -23,6 +23,16 @@ export async function POST(request: Request) {
     const { societe_id, periode } = await request.json()
     if (!societe_id || !periode) return NextResponse.json({ error: 'societe_id et periode requis' }, { status: 400 })
 
+    // LOCK CHECK
+    const { data: unlockedBuls } = await supabase.from('bulletins_paie')
+      .select('id').eq('societe_id', societe_id)
+      .gte('periode', `${periode}-01`).lte('periode', `${periode}-31`)
+      .or('verrouille.is.null,verrouille.eq.false')
+      .limit(1)
+    if (unlockedBuls && unlockedBuls.length > 0) {
+      return NextResponse.json({ error: 'Periode non verrouillee. Verrouillez la paie avant de declarer au MRA.' }, { status: 403 })
+    }
+
     // Récupérer la société (inclut ern et tan_societe)
     const { data: societe } = await supabase.from('societes').select('*').eq('id', societe_id).single()
 
