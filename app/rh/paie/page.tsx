@@ -105,7 +105,14 @@ export default function PaiePage() {
         }
         setPeriode(calcPeriode)
         setPeriodeReady(true)
-        // Reload will trigger via useEffect on periode change
+        // Force reload with the correct period (don't rely on stale closure)
+        try {
+          const params = new URLSearchParams({ periode: calcPeriode })
+          if (societe !== "all") params.set("societe_id", societe)
+          const reloadData = await fetch(`/api/rh/paie?${params}`).then(r => r.json())
+          setBulletins(reloadData.bulletins || [])
+          setTotaux(reloadData.totaux || {})
+        } catch {}
       }
     } catch (e: any) { alert("Erreur réseau: " + (e.message || "")) } finally { setCalculating(false) }
   }

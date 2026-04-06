@@ -524,7 +524,8 @@ export async function POST(request: Request) {
         const fieldsToRemove = [
           'salary_compensation_montant', 'total_emoluments', 'prgf_pct_emoluments',
           'prgf_par_jour', 'montant_refacture_mur', 'csg_taux', 'csg_bonus',
-          'salaire_brut_base', 'resultat_net'
+          'salaire_brut_base', 'resultat_net', 'salaire_brut', 'cout_total_employeur',
+          'jours_travailles', 'csg_patronal_bonus'
         ]
         for (const f of fieldsToRemove) delete (bulletin as any)[f]
         console.log(`[paie batch] ${emp.nom} ${emp.prenom}: base=${salaire_base_mur}, brut=${resultat.salaire_brut}, net=${salaire_net_final}`)
@@ -552,8 +553,8 @@ export async function POST(request: Request) {
         }
 
         if (error) {
-          const errMsg = `${emp.nom} ${emp.prenom}: ${error.message}`
-          console.error(`[paie batch] SAVE FAILED:`, errMsg, error.details, error.hint)
+          const errMsg = `${emp.nom} ${emp.prenom}: ${error.message}${error.details ? ' — ' + error.details : ''}${error.hint ? ' (hint: ' + error.hint + ')' : ''}`
+          console.error(`[paie batch] SAVE FAILED:`, errMsg)
           erreurs.push(errMsg)
         }
         if (!error && saved) {
