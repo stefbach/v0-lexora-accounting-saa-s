@@ -255,10 +255,12 @@ function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () => void
     setSubmitting(false)
   }
 
-  const alRemaining = balances?.al_solde ?? 20
-  const slRemaining = balances?.sl_solde ?? 15
-  const alPct = Math.round((alRemaining / 22) * 100)
-  const slPct = Math.round((slRemaining / 15) * 100)
+  const alDroit = Number(balances?.al_droit) || 22
+  const slDroit = Number(balances?.sl_droit) || 15
+  const alRemaining = Number(balances?.al_solde) || (alDroit - (Number(balances?.al_pris) || 0))
+  const slRemaining = Number(balances?.sl_solde) || (slDroit - (Number(balances?.sl_pris) || 0))
+  const alPct = alDroit > 0 ? Math.round((alRemaining / alDroit) * 100) : 0
+  const slPct = slDroit > 0 ? Math.round((slRemaining / slDroit) * 100) : 0
 
   const statutBadge = (s: string) => {
     if (s === "approuve" || s === "approved") return <Badge style={{ backgroundColor: `${GREEN}20`, color: GREEN }}>Approuvé</Badge>
@@ -282,7 +284,7 @@ function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () => void
             </div>
             <div>
               <p className="text-2xl font-bold" style={{ color: NAVY }}>{alRemaining}<span className="text-sm font-normal text-gray-400">j</span></p>
-              <p className="text-xs text-gray-500 mt-0.5">Local Leave restants / 22j</p>
+              <p className="text-xs text-gray-500 mt-0.5">Local Leave restants / {alDroit}j</p>
             </div>
             <Progress value={alPct} className="h-2 rounded-full" style={{ backgroundColor: `${GREEN}20` }} />
           </CardContent>
@@ -296,7 +298,7 @@ function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () => void
             </div>
             <div>
               <p className="text-2xl font-bold" style={{ color: NAVY }}>{slRemaining}<span className="text-sm font-normal text-gray-400">j</span></p>
-              <p className="text-xs text-gray-500 mt-0.5">Sick Leave restants / 15j</p>
+              <p className="text-xs text-gray-500 mt-0.5">Sick Leave restants / {slDroit}j</p>
             </div>
             <Progress value={slPct} className="h-2 rounded-full" style={{ backgroundColor: "#f9731620" }} />
           </CardContent>
@@ -887,12 +889,14 @@ export default function EspaceEmployePage() {
           const estimatedNet = lastBulletin?.salaire_net || 0
           const estimatedBase = lastBulletin?.salaire_base || 0
           const estimatedBrut = lastBulletin?.salaire_brut || 0
-          const alTotal = 22
-          const slTotal = 15
-          const alRemaining = conges.al_solde ?? 20
-          const slRemaining = conges.sl_solde ?? 15
-          const alPct = Math.round((alRemaining / alTotal) * 100)
-          const slPct = Math.round((slRemaining / slTotal) * 100)
+          const alTotal = Number(conges.al_droit) || 22
+          const slTotal = Number(conges.sl_droit) || 15
+          const alPris = Number(conges.al_pris) || 0
+          const slPris = Number(conges.sl_pris) || 0
+          const alRemaining = Number(conges.al_solde) || (alTotal - alPris)
+          const slRemaining = Number(conges.sl_solde) || (slTotal - slPris)
+          const alPct = alTotal > 0 ? Math.round((alRemaining / alTotal) * 100) : 0
+          const slPct = slTotal > 0 ? Math.round((slRemaining / slTotal) * 100) : 0
 
           // Recent notifications
           const notifications: { icon: typeof Bell; text: string; time: string }[] = []

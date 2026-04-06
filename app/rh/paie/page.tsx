@@ -108,14 +108,28 @@ export default function PaiePage() {
         }
         setPeriode(calcPeriode)
         setPeriodeReady(true)
-        // Force reload with the correct period (don't rely on stale closure)
+        // Force reload with the correct period
         try {
-          const params = new URLSearchParams({ periode: calcPeriode })
+          // Try with societe_id first
+          let params = new URLSearchParams({ periode: calcPeriode })
           if (societe !== "all") params.set("societe_id", societe)
-          const reloadData = await fetch(`/api/rh/paie?${params}`).then(r => r.json())
+          let reloadRes = await fetch(`/api/rh/paie?${params}`)
+          let reloadData = await reloadRes.json()
+
+          // If access denied or empty, try without societe_id
+          if (!reloadRes.ok || (reloadData.bulletins || []).length === 0) {
+            params = new URLSearchParams({ periode: calcPeriode })
+            reloadRes = await fetch(`/api/rh/paie?${params}`)
+            reloadData = await reloadRes.json()
+          }
+
           setBulletins(reloadData.bulletins || [])
           setTotaux(reloadData.totaux || {})
-        } catch {}
+
+          if ((reloadData.bulletins || []).length === 0) {
+            console.warn("[paie] Bulletins calculated but reload returned 0. API response:", reloadData)
+          }
+        } catch (reloadErr) { console.error("[paie] Reload failed:", reloadErr) }
       }
     } catch (e: any) { alert("Erreur réseau: " + (e.message || "")) } finally { setCalculating(false) }
   }
