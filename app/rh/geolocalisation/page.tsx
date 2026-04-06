@@ -99,12 +99,48 @@ export default function GeolocalisationPage() {
     return [...map.entries()].sort((a, b) => b[1].length - a[1].length)
   }, [positions])
 
-  // Ramassage suggestions: zones with 2+ working employees
-  const ramassageSuggestions = useMemo(() => {
-    return zones
-      .map(([zone, emps]) => ({ zone, emps: emps.filter(e => e.shift_today === "travail") }))
-      .filter(g => g.emps.length >= 2 && g.zone !== "Non renseignée")
-  }, [zones])
+  // Ramassage: group by shift start time, then by zone/proximity
+  const ramassageGroups = useMemo(() => {
+    const working = positions.filter(e => e.shift_today === "travail" && e.adresse && e.adresse !== "")
+
+    // Group by start time
+    const byTime = new Map<string, EmployeePosition[]>()
+    for (const e of working) {
+      const time = e.heure_debut ? String(e.heure_debut).slice(0, 5) : "non défini"
+      if (!byTime.has(time)) byTime.set(time, [])
+      byTime.get(time)!.push(e)
+    }
+
+    // For each time group, sub-group by zone
+    const groups: { time: string; zone: string; emps: EmployeePosition[] }[] = []
+    for (const [time, emps] of byTime.entries()) {
+      const byZone = new Map<string, EmployeePosition[]>()
+      for (const e of emps) {
+        const zone = extractZone(e.adresse)
+        if (!byZone.has(zone)) byZone.set(zone, [])
+        byZone.get(zone)!.push(e)
+      }
+      for (const [zone, zoneEmps] of byZone.entries()) {
+        if (zoneEmps.length >= 1 && zone !== "Non renseignée") {
+          groups.push({ time, zone, emps: zoneEmps })
+        }
+      }
+    }
+
+    // Sort by time then by number of employees
+    return groups.sort((a, b) => a.time.localeCompare(b.time) || b.emps.length - a.emps.length)
+  }, [positions])
+
+  // Unique shift times for filter
+  const shiftTimes = useMemo(() => {
+    const times = new Set<string>()
+    for (const p of positions.filter(e => e.shift_today === "travail")) {
+      times.add(p.heure_debut ? String(p.heure_debut).slice(0, 5) : "non défini")
+    }
+    return [...times].sort()
+  }, [positions])
+
+  const [filterTime, setFilterTime] = useState<string>("all")
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
@@ -213,23 +249,34 @@ export default function GeolocalisationPage() {
                 <CardTitle className="text-base flex items-center gap-2" style={{ color: NAVY }}>
                   <Truck className="w-5 h-5" style={{ color: GOLD }} /> Organiser ramassage
                 </CardTitle>
-                <p className="text-xs text-gray-500">Regroupements suggérés (2+ employés en service dans la même zone)</p>
+                <p className="text-xs text-gray-500">Groupé par heure de début puis par zone</p>
               </CardHeader>
-              <CardContent className="space-y-3">
-                {ramassageSuggestions.length === 0 ? (
-                  <p className="text-sm text-gray-400 text-center py-4">Aucun regroupement possible</p>
-                ) : ramassageSuggestions.map((g, i) => (
-                  <div key={i} className="p-3 rounded-xl" style={{ backgroundColor: `${BLUE}08`, border: `1px solid ${BLUE}15` }}>
+              <CardContent className="space-y-2">
+                {/* Filter by shift time */}
+                <div className="flex gap-1 flex-wrap mb-2">
+                  <button onClick={() => setFilterTime("all")} className={`px-2 py-1 rounded-md text-[10px] font-medium ${filterTime === "all" ? "bg-[#0B0F2E] text-white" : "bg-gray-100 text-gray-500"}`}>Tous</button>
+                  {shiftTimes.map(t => (
+                    <button key={t} onClick={() => setFilterTime(t)} className={`px-2 py-1 rounded-md text-[10px] font-medium ${filterTime === t ? "bg-[#0B0F2E] text-white" : "bg-gray-100 text-gray-500"}`}>{t}</button>
+                  ))}
+                </div>
+
+                {ramassageGroups.filter(g => filterTime === "all" || g.time === filterTime).length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-4">Aucun employé en service avec adresse</p>
+                ) : ramassageGroups.filter(g => filterTime === "all" || g.time === filterTime).map((g, i) => (
+                  <div key={i} className="p-3 rounded-xl" style={{ backgroundColor: `${BLUE}06`, border: `1px solid ${BLUE}12` }}>
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-semibold" style={{ color: NAVY }}>{g.zone}</span>
-                      <Badge style={{ backgroundColor: `${BLUE}20`, color: BLUE }} className="text-[10px]">{g.emps.length} pers.</Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge className="text-[10px] font-mono" style={{ backgroundColor: `${GOLD}20`, color: GOLD }}>{g.time}</Badge>
+                        <span className="text-xs font-semibold" style={{ color: NAVY }}>{g.zone}</span>
+                      </div>
+                      <Badge variant="outline" className="text-[10px]">{g.emps.length}</Badge>
                     </div>
                     <div className="space-y-1">
                       {g.emps.map(e => (
                         <div key={e.employe_id} className="flex items-center gap-2 text-xs">
                           <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: BLUE }} />
                           <span className="text-gray-700">{e.prenom} {e.nom}</span>
-                          {e.heure_debut && <span className="text-gray-400 ml-auto">({e.heure_debut})</span>}
+                          <span className="text-gray-300 ml-auto text-[10px] truncate max-w-[100px]">{e.adresse?.split(",")[0]}</span>
                         </div>
                       ))}
                     </div>
