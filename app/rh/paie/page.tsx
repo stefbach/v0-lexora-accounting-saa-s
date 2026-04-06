@@ -92,13 +92,16 @@ export default function PaiePage() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "calculer_batch", societe_id: societe, periode: calcPeriode })
       })
-      const data = await res.json()
+      let data: any
+      const text = await res.text()
+      try { data = JSON.parse(text) } catch { alert("Erreur serveur (non-JSON): " + text.slice(0, 300)); setCalculating(false); return }
       if (!res.ok) {
-        alert("Erreur calcul: " + (data.error || res.statusText))
+        alert("Erreur calcul [" + res.status + "]: " + (data.error || data.message || JSON.stringify(data).slice(0, 300)))
       } else {
         const nb = data.nb || data.bulletins?.length || 0
         const erreurs = data.erreurs || []
-        alert(`✅ ${nb} bulletin(s) calculé(s) pour ${calcPeriode}${erreurs.length > 0 ? `\n\n⚠️ ${erreurs.length} erreur(s):\n${erreurs.join("\n")}` : ""}`)
+        const debug = data.debug ? `\n\nDebug: ${JSON.stringify(data.debug)}` : ""
+        alert(`✅ ${nb} bulletin(s) calculé(s) pour ${calcPeriode}${erreurs.length > 0 ? `\n\n⚠️ ${erreurs.length} erreur(s):\n${erreurs.join("\n")}` : ""}${debug}`)
         // Update period selector to show the calculated month
         if (!availablePeriodes.includes(calcPeriode)) {
           setAvailablePeriodes(prev => [calcPeriode, ...prev].sort((a, b) => b.localeCompare(a)))
