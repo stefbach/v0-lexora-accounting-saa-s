@@ -390,11 +390,11 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
             <Card className="rounded-2xl shadow-sm border-l-4 border-l-green-500 bg-[#f8f9fc]">
               <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}><MapPin className="w-4 h-4 text-green-500" />Contact</CardTitle></CardHeader>
               <CardContent className="space-y-3">
-                <Field label="Adresse" field="address" />
-                <Field label="Adresse 2" field="address_2" />
+                <Field label="Adresse" field="adresse" />
+                <Field label="Adresse 2" field="adresse2" />
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Code postal" field="postcode" />
-                  <Field label="Ville" field="city" />
+                  <Field label="Code postal" field="code_postal" />
+                  <Field label="Ville" field="ville" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Mobile" field="mobile" />
