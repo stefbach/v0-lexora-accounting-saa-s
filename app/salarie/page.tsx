@@ -490,16 +490,24 @@ function TrajetsTab({ employe }: { employe: any }) {
   const demarrerTrajet = async () => {
     setGpsLoading(true)
     try {
-      const pos = await getPosition()
+      let pos: { lat: number; lng: number }
+      try {
+        pos = await getPosition()
+      } catch (gpsErr: any) {
+        alert("GPS: " + (gpsErr.message || "Géolocalisation refusée. Autorisez dans les paramètres navigateur."))
+        return
+      }
       const res = await fetch("/api/rh/trajets-km", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "demarrer", employe_id: employe.id, societe_id: employe.societe_id, latitude: pos.lat, longitude: pos.lng, motif, vehicule }),
+        body: JSON.stringify({ action: "demarrer", employe_id: employe.id, societe_id: employe.societe_id, latitude: pos.lat, longitude: pos.lng, motif: motif || "Déplacement", vehicule }),
       })
-      const data = await res.json()
-      if (!res.ok) { alert(data.error || "Erreur"); return }
+      const text = await res.text()
+      let data: any
+      try { data = JSON.parse(text) } catch { alert("Erreur serveur: " + text.slice(0, 200)); return }
+      if (!res.ok) { alert("[" + res.status + "] " + (data.error || data.message || JSON.stringify(data).slice(0, 200))); return }
       setTrajetEnCours(data.trajet)
       loadTrajets()
-    } catch (e: any) { alert("Erreur GPS: " + (e.message || "Activez la géolocalisation")) }
+    } catch (e: any) { alert("Erreur: " + (e.message || String(e))) }
     finally { setGpsLoading(false) }
   }
 

@@ -60,13 +60,13 @@ export async function GET(request: Request) {
 
     // Fetch trajets
     let query = supabase
-      .from('trajets_km')
+      .from('trajets_kilometriques')
       .select('*')
       .in('employe_id', empIds)
-      .order('date_depart', { ascending: false })
+      .order('date_trajet', { ascending: false })
 
-    if (date_debut) query = query.gte('date_depart', date_debut)
-    if (date_fin) query = query.lte('date_depart', date_fin + 'T23:59:59')
+    if (date_debut) query = query.gte('date_trajet', date_debut)
+    if (date_fin) query = query.lte('date_trajet', date_fin)
     if (statut) query = query.eq('statut', statut)
 
     const { data: trajets, error: trajErr } = await query
@@ -88,7 +88,7 @@ export async function GET(request: Request) {
         .from('trajet_steps')
         .select('*')
         .in('trajet_id', trajetIds)
-        .order('ordre', { ascending: true })
+        .order('step_order', { ascending: true })
       for (const s of steps || []) {
         if (!stepsMap[s.trajet_id]) stepsMap[s.trajet_id] = []
         stepsMap[s.trajet_id].push(s)
@@ -141,40 +141,53 @@ export async function POST(request: Request) {
 
     // ── Start a new trajet ──────────────────────────────────────────────
     if (action === 'demarrer') {
-      const { employe_id, latitude_depart, longitude_depart, adresse_depart, vehicule_type } = body
+      const { employe_id, societe_id: socId, latitude, longitude, motif, vehicule: veh } = body
       if (!employe_id) {
         return NextResponse.json({ error: 'employe_id requis' }, { status: 400 })
       }
 
+      // Get societe_id from employee if not provided
+      let finalSocieteId = socId
+      if (!finalSocieteId) {
+        const { data: emp } = await supabase.from('employes').select('societe_id').eq('id', employe_id).maybeSingle()
+        finalSocieteId = emp?.societe_id
+      }
+      if (!finalSocieteId) return NextResponse.json({ error: 'societe_id introuvable' }, { status: 400 })
+
       const { data, error } = await supabase
-        .from('trajets_km')
+        .from('trajets_kilometriques')
         .insert({
           employe_id,
-          date_depart: new Date().toISOString(),
-          latitude_depart: latitude_depart ? Number(latitude_depart) : null,
-          longitude_depart: longitude_depart ? Number(longitude_depart) : null,
-          adresse_depart: adresse_depart || null,
-          vehicule_type: vehicule_type || 'voiture',
+          societe_id: finalSocieteId,
+          date_trajet: new Date().toISOString().split('T')[0],
+          depart_lat: latitude ? Number(latitude) : null,
+          depart_lng: longitude ? Number(longitude) : null,
+          depart_heure: new Date().toISOString(),
+          vehicule: veh || 'voiture',
+          motif: motif || null,
           statut: 'en_cours',
-          distance_km: 0,
-          indemnite: 0,
-          created_by: user.id,
+          distance_totale_km: 0,
+          montant_indemnite: 0,
         })
         .select('*')
         .single()
 
-      if (error) throw error
+      if (error) {
+        console.error('[trajets-km] insert error:', error.message, error.details)
+        return NextResponse.json({ error: 'Erreur création trajet: ' + error.message }, { status: 500 })
+      }
 
       // Insert first step
-      await supabase.from('trajet_steps').insert({
-        trajet_id: data.id,
-        ordre: 1,
-        latitude: latitude_depart ? Number(latitude_depart) : null,
-        longitude: longitude_depart ? Number(longitude_depart) : null,
-        adresse: adresse_depart || null,
-        timestamp: new Date().toISOString(),
-        distance_depuis_precedent: 0,
-      })
+      if (latitude && longitude) {
+        await supabase.from('trajet_steps').insert({
+          trajet_id: data.id,
+          step_order: 1,
+          latitude: Number(latitude),
+          longitude: Number(longitude),
+          heure: new Date().toISOString(),
+          distance_depuis_precedent_km: 0,
+        })
+      }
 
       return NextResponse.json({ trajet: data, message: 'Trajet démarré' })
     }
@@ -191,7 +204,7 @@ export async function POST(request: Request) {
         .from('trajet_steps')
         .select('*')
         .eq('trajet_id', trajet_id)
-        .order('ordre', { ascending: false })
+        .order('step_order', { ascending: false })
         .limit(1)
 
       const lastStep = lastSteps && lastSteps.length > 0 ? lastSteps[0] : null
@@ -227,7 +240,7 @@ export async function POST(request: Request) {
       const totalDist = (allSteps || []).reduce((s: number, st: any) => s + (Number(st.distance_depuis_precedent) || 0), 0)
 
       await supabase
-        .from('trajets_km')
+        .from('trajets_kilometriques')
         .update({ distance_km: Math.round(totalDist * 100) / 100 })
         .eq('id', trajet_id)
 
@@ -246,7 +259,7 @@ export async function POST(request: Request) {
         .from('trajet_steps')
         .select('*')
         .eq('trajet_id', trajet_id)
-        .order('ordre', { ascending: false })
+        .order('step_order', { ascending: false })
         .limit(1)
 
       const lastStep = lastSteps && lastSteps.length > 0 ? lastSteps[0] : null
@@ -278,7 +291,7 @@ export async function POST(request: Request) {
 
       // Get trajet to find employe and société for indemnity calc
       const { data: trajet } = await supabase
-        .from('trajets_km')
+        .from('trajets_kilometriques')
         .select('*')
         .eq('id', trajet_id)
         .single()
@@ -330,7 +343,7 @@ export async function POST(request: Request) {
 
       // Update the trajet
       const { data: updated, error: updErr } = await supabase
-        .from('trajets_km')
+        .from('trajets_kilometriques')
         .update({
           date_arrivee: new Date().toISOString(),
           latitude_arrivee: latitude_arrivee ? Number(latitude_arrivee) : null,
@@ -366,7 +379,7 @@ export async function POST(request: Request) {
       const finalStatut = newStatut || 'valide'
 
       const { data, error } = await supabase
-        .from('trajets_km')
+        .from('trajets_kilometriques')
         .update({
           statut: finalStatut,
           valide_par: user.id,
