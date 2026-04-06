@@ -915,7 +915,7 @@ export default function EspaceEmployePage() {
             { id: "planning" as Tab, label: "Planning", icon: Clock },
             { id: "primes" as Tab, label: "Primes", icon: TrendingUp },
             { id: "conges" as Tab, label: "Mes congés", icon: Calendar },
-            { id: "sante" as Tab, label: "Sante TIBOK", icon: HeartPulse },
+            { id: "sante" as Tab, label: "Mon Espace Sante TIBOK", icon: HeartPulse },
             { id: "trajets" as Tab, label: "Trajets km", icon: Car },
             { id: "documents" as Tab, label: "Documents", icon: FolderOpen },
           ]).map(t => (
@@ -1117,7 +1117,7 @@ export default function EspaceEmployePage() {
                 {([
                   { icon: FileText, label: "Mes bulletins", onClick: () => setTab("bulletins"), color: BLUE, bg: `linear-gradient(135deg, ${BLUE}08, ${BLUE}15)` },
                   { icon: CalendarPlus, label: "Demander un conge", onClick: () => setTab("conges"), color: GREEN, bg: `linear-gradient(135deg, ${GREEN}08, ${GREEN}15)` },
-                  { icon: HeartPulse, label: "Sante TIBOK", onClick: () => setTab("sante"), color: "#7c3aed", bg: "linear-gradient(135deg, #7c3aed08, #7c3aed15)" },
+                  { icon: HeartPulse, label: "Mon Espace Sante", onClick: () => setTab("sante"), color: "#7c3aed", bg: "linear-gradient(135deg, #7c3aed08, #7c3aed15)" },
                   { icon: Calendar, label: "Mon planning", onClick: () => setTab("planning"), color: GOLD, bg: `linear-gradient(135deg, ${GOLD}08, ${GOLD}15)` },
                 ] as const).map((action, i) => (
                   <Card key={i}
@@ -1773,7 +1773,7 @@ export default function EspaceEmployePage() {
           {([
             { id: "dashboard" as Tab, label: "Home", icon: LayoutDashboard },
             { id: "bulletins" as Tab, label: "Bulletins", icon: FileText },
-            { id: "sante" as Tab, label: "Sante", icon: HeartPulse },
+            { id: "sante" as Tab, label: "Ma Sante", icon: HeartPulse },
             { id: "conges" as Tab, label: "Conges", icon: Calendar },
             { id: "more" as const, label: "Plus", icon: MoreHorizontal },
           ]).map(t => {
