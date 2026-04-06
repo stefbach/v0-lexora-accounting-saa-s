@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Progress } from "@/components/ui/progress"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
-import { Loader2, Clock, Calendar, CreditCard, TrendingUp, LogIn, LogOut, Coffee, Download, User, Save, CheckCircle, FileText, CalendarPlus, UserCircle, FolderOpen, Bell, Eye, Upload, X, LayoutDashboard, MoreHorizontal } from "lucide-react"
+import { Loader2, Clock, Calendar, CreditCard, TrendingUp, LogIn, LogOut, Coffee, Download, User, Save, CheckCircle, FileText, CalendarPlus, UserCircle, FolderOpen, Bell, Eye, Upload, X, LayoutDashboard, MoreHorizontal, Car, MapPin, Navigation, Play, Square } from "lucide-react"
 import { Textarea } from "@/components/ui/textarea"
 
 const NAVY = "#0B0F2E"
@@ -33,7 +33,7 @@ function fmt(n: number) { return new Intl.NumberFormat("fr-FR", { maximumFractio
 function timeMauritius(): string { return new Date().toLocaleTimeString("en-GB", { timeZone: MU_TZ, hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }) }
 function todayISO(): string { const d = new Date(new Date().toLocaleString("en-US", { timeZone: MU_TZ })); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}` }
 
-type Tab = "dashboard" | "profil" | "bulletins" | "planning" | "primes" | "conges" | "documents"
+type Tab = "dashboard" | "profil" | "bulletins" | "planning" | "primes" | "conges" | "documents" | "trajets"
 
 // ── Ma fiche — composant isolé (pas de re-render parent) ──
 function MaFicheTab({ employe, onUpdated }: { employe: any; onUpdated: () => void }) {
@@ -678,6 +678,7 @@ export default function EspaceEmployePage() {
             { id: "planning" as Tab, label: "Planning", icon: Clock },
             { id: "primes" as Tab, label: "Primes", icon: TrendingUp },
             { id: "conges" as Tab, label: "Mes congés", icon: Calendar },
+            { id: "trajets" as Tab, label: "Trajets km", icon: Car },
             { id: "documents" as Tab, label: "Documents", icon: FolderOpen },
           ]).map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
@@ -1199,6 +1200,191 @@ export default function EspaceEmployePage() {
           <CongesTab employe={employe} onRefresh={load} />
         )}
 
+        {/* Trajets kilométriques */}
+        {tab === "trajets" && employe && (() => {
+          const [trajets, setTrajets] = useState<any[]>([])
+          const [trajetEnCours, setTrajetEnCours] = useState<any>(null)
+          const [loadingT, setLoadingT] = useState(true)
+          const [gpsLoading, setGpsLoading] = useState(false)
+          const [motif, setMotif] = useState("")
+          const [vehicule, setVehicule] = useState("voiture")
+
+          useEffect(() => {
+            setLoadingT(true)
+            fetch(`/api/rh/trajets-km?employe_id=${employe.id}`)
+              .then(r => r.json())
+              .then(d => {
+                const all = d.trajets || []
+                setTrajets(all)
+                setTrajetEnCours(all.find((t: any) => t.statut === "en_cours") || null)
+              })
+              .catch(() => {})
+              .finally(() => setLoadingT(false))
+          }, [employe.id])
+
+          const getPosition = (): Promise<{ lat: number; lng: number }> => {
+            return new Promise((resolve, reject) => {
+              if (!navigator.geolocation) { reject(new Error("Géolocalisation non supportée")); return }
+              navigator.geolocation.getCurrentPosition(
+                pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+                err => reject(err),
+                { enableHighAccuracy: true, timeout: 15000 }
+              )
+            })
+          }
+
+          const demarrerTrajet = async () => {
+            setGpsLoading(true)
+            try {
+              const pos = await getPosition()
+              const res = await fetch("/api/rh/trajets-km", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "demarrer", employe_id: employe.id, societe_id: employe.societe_id, latitude: pos.lat, longitude: pos.lng, motif, vehicule }),
+              })
+              const data = await res.json()
+              if (!res.ok) { alert(data.error || "Erreur"); return }
+              setTrajetEnCours(data.trajet)
+              setTrajets(prev => [data.trajet, ...prev])
+            } catch (e: any) { alert("Erreur GPS: " + (e.message || "Activez la géolocalisation")) }
+            finally { setGpsLoading(false) }
+          }
+
+          const ajouterCheckpoint = async () => {
+            if (!trajetEnCours) return
+            setGpsLoading(true)
+            try {
+              const pos = await getPosition()
+              const res = await fetch("/api/rh/trajets-km", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "checkpoint", trajet_id: trajetEnCours.id, latitude: pos.lat, longitude: pos.lng }),
+              })
+              const data = await res.json()
+              if (!res.ok) { alert(data.error || "Erreur"); return }
+              setTrajetEnCours((prev: any) => ({ ...prev, distance_totale_km: data.trajet?.distance_totale_km || prev.distance_totale_km }))
+            } catch (e: any) { alert("Erreur GPS: " + e.message) }
+            finally { setGpsLoading(false) }
+          }
+
+          const terminerTrajet = async () => {
+            if (!trajetEnCours) return
+            setGpsLoading(true)
+            try {
+              const pos = await getPosition()
+              const res = await fetch("/api/rh/trajets-km", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "terminer", trajet_id: trajetEnCours.id, latitude: pos.lat, longitude: pos.lng }),
+              })
+              const data = await res.json()
+              if (!res.ok) { alert(data.error || "Erreur"); return }
+              setTrajetEnCours(null)
+              // Refresh list
+              fetch(`/api/rh/trajets-km?employe_id=${employe.id}`).then(r => r.json()).then(d => setTrajets(d.trajets || []))
+            } catch (e: any) { alert("Erreur GPS: " + e.message) }
+            finally { setGpsLoading(false) }
+          }
+
+          const totalKm = trajets.filter((t: any) => t.statut !== "rejete").reduce((s: number, t: any) => s + (Number(t.distance_totale_km) || 0), 0)
+          const totalIndemnite = trajets.filter((t: any) => t.statut === "valide").reduce((s: number, t: any) => s + (Number(t.montant_indemnite) || 0), 0)
+
+          return (
+            <div className="space-y-4">
+              {/* Trajet en cours */}
+              {trajetEnCours ? (
+                <Card className="rounded-2xl shadow-sm" style={{ borderLeft: `4px solid ${GOLD}` }}>
+                  <CardContent className="p-5">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse" />
+                      <p className="font-semibold" style={{ color: NAVY }}>Trajet en cours</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                      <div className="p-3 rounded-xl bg-gray-50 text-center">
+                        <p className="text-2xl font-bold" style={{ color: GOLD }}>{Number(trajetEnCours.distance_totale_km || 0).toFixed(1)}</p>
+                        <p className="text-xs text-gray-500">km parcourus</p>
+                      </div>
+                      <div className="p-3 rounded-xl bg-gray-50 text-center">
+                        <p className="text-2xl font-bold" style={{ color: BLUE }}>{trajetEnCours.vehicule || "voiture"}</p>
+                        <p className="text-xs text-gray-500">véhicule</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-3">
+                      <Button onClick={ajouterCheckpoint} disabled={gpsLoading} className="flex-1 h-12 rounded-xl" style={{ backgroundColor: BLUE, color: "white" }}>
+                        {gpsLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Navigation className="w-4 h-4 mr-2" />}
+                        Checkpoint GPS
+                      </Button>
+                      <Button onClick={terminerTrajet} disabled={gpsLoading} className="flex-1 h-12 rounded-xl bg-red-600 hover:bg-red-700 text-white">
+                        {gpsLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Square className="w-4 h-4 mr-2" />}
+                        Terminer
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card className="rounded-2xl shadow-sm">
+                  <CardContent className="p-5">
+                    <p className="font-semibold mb-3" style={{ color: NAVY }}>Nouveau trajet</p>
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                      <div>
+                        <label className="text-xs text-gray-500">Véhicule</label>
+                        <select value={vehicule} onChange={e => setVehicule(e.target.value)} className="w-full h-11 rounded-xl border px-3 text-sm">
+                          <option value="voiture">Voiture</option>
+                          <option value="moto">Moto</option>
+                          <option value="velo">Vélo</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500">Motif</label>
+                        <input value={motif} onChange={e => setMotif(e.target.value)} placeholder="Ex: visite client" className="w-full h-11 rounded-xl border px-3 text-sm" />
+                      </div>
+                    </div>
+                    <Button onClick={demarrerTrajet} disabled={gpsLoading} className="w-full h-12 rounded-xl" style={{ backgroundColor: GREEN, color: "white" }}>
+                      {gpsLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Play className="w-4 h-4 mr-2" />}
+                      Démarrer le trajet
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Stats */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-4 rounded-2xl text-center" style={{ backgroundColor: `${GOLD}10` }}>
+                  <p className="text-2xl font-bold" style={{ color: GOLD }}>{totalKm.toFixed(1)} km</p>
+                  <p className="text-xs text-gray-500">Total ce mois</p>
+                </div>
+                <div className="p-4 rounded-2xl text-center" style={{ backgroundColor: `${GREEN}10` }}>
+                  <p className="text-2xl font-bold" style={{ color: GREEN }}>{fmt(totalIndemnite)} MUR</p>
+                  <p className="text-xs text-gray-500">Indemnités validées</p>
+                </div>
+              </div>
+
+              {/* Historique */}
+              <Card className="rounded-2xl shadow-sm">
+                <CardHeader className="pb-2"><CardTitle className="text-base" style={{ color: NAVY }}>Historique des trajets</CardTitle></CardHeader>
+                <CardContent>
+                  {loadingT ? <div className="flex justify-center py-6"><Loader2 className="w-6 h-6 animate-spin" /></div> :
+                  trajets.length === 0 ? <p className="text-gray-400 text-center py-6 text-sm">Aucun trajet enregistré</p> : (
+                    <div className="space-y-2">
+                      {trajets.filter((t: any) => t.statut !== "en_cours").map((t: any) => (
+                        <div key={t.id} className="flex items-center justify-between p-3 rounded-xl border" style={{ borderLeft: `3px solid ${t.statut === "valide" ? GREEN : t.statut === "rejete" ? "#dc2626" : GOLD}` }}>
+                          <div>
+                            <p className="text-sm font-medium" style={{ color: NAVY }}>{new Date(t.date_trajet).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })} — {t.vehicule}</p>
+                            <p className="text-xs text-gray-400">{t.motif || "—"}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-mono font-bold text-sm">{Number(t.distance_totale_km || 0).toFixed(1)} km</p>
+                            <Badge className={`text-[10px] ${t.statut === "valide" ? "bg-green-100 text-green-700" : t.statut === "rejete" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"}`}>
+                              {t.statut === "valide" ? "Validé" : t.statut === "rejete" ? "Rejeté" : t.statut === "termine" ? "En attente validation" : t.statut}
+                            </Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )
+        })()}
+
         {/* Documents */}
         {tab === "documents" && employe && (
           <DocumentsTab employe={employe} />
@@ -1214,6 +1400,7 @@ export default function EspaceEmployePage() {
             {([
               { id: "profil" as Tab, label: "Ma fiche", icon: User },
               { id: "primes" as Tab, label: "Primes & OT", icon: TrendingUp },
+              { id: "trajets" as Tab, label: "Trajets km", icon: Car },
               { id: "documents" as Tab, label: "Documents", icon: FolderOpen },
             ]).map(t => (
               <button key={t.id} onClick={() => { setTab(t.id); setMobileMenuOpen(false) }}
