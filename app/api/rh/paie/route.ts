@@ -397,10 +397,56 @@ export async function POST(request: Request) {
           .select('*').eq('employe_id', emp.id).eq('periode', periodeDate)
         let total_primes = (primesMois || []).reduce((s, p) => s + Number(p.montant || 0), 0)
 
-        // 3. Absences injustifiées
+        // 3. Congés approuvés du mois — distinguer SL (réduit seuil OT) vs AL (ne réduit pas)
         const { data: congesApprouves } = await supabase.from('demandes_conges')
-          .select('date_debut,date_fin').eq('employe_id', emp.id).eq('statut', 'approuve')
+          .select('*').eq('employe_id', emp.id).eq('statut', 'approuve')
           .gte('date_debut', `${periodeStr}-01`).lte('date_fin', `${periodeStr}-31`)
+
+        // Count sick leave days (SL) — reduces the monthly OT threshold
+        let joursSickLeave = 0
+        let joursLocalLeave = 0
+        for (const c of congesApprouves || []) {
+          const start = new Date(c.date_debut + 'T12:00:00')
+          const end = new Date(c.date_fin + 'T12:00:00')
+          for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            if (d.getDay() !== 0 && d.getDay() !== 6) { // exclude weekends
+              if (c.type_conge === 'SL') joursSickLeave++
+              else if (c.type_conge === 'AL') joursLocalLeave++
+            }
+          }
+        }
+
+        // Monthly OT threshold: standard hours minus sick leave hours
+        // Sick Leave reduces the expected hours (employee was sick, can't make it up with OT)
+        // Local Leave does NOT reduce the threshold (employee chose to take leave)
+        const heuresParJour = 9 // standard daily hours
+        const joursTravailMois = 26 // standard working days per month
+        const seuilMensuelStandard = joursTravailMois * heuresParJour // 234h standard
+        const seuilAjuste = (joursTravailMois - joursSickLeave) * heuresParJour
+        // Note: joursLocalLeave do NOT reduce the threshold
+
+        // Calculate total hours worked from pointages
+        let totalHeuresTravaillees = 0
+        for (const pt of pointagesMois || []) {
+          if (!pt.heure_entree || !pt.heure_sortie) continue
+          const debut = new Date(`1970-01-01T${pt.heure_entree}`)
+          const fin = new Date(`1970-01-01T${pt.heure_sortie}`)
+          let h = (fin.getTime() - debut.getTime()) / 3600000 - 1 // minus 1h lunch
+          if (h < 0) h = 0
+          totalHeuresTravaillees += h
+        }
+
+        // OT is still calculated per-day for the rate breakdown (1.5x vs 2x)
+        // but the monthly total is capped by the adjusted threshold
+        // If total worked <= adjusted threshold, no OT even if some days were long
+        const otMensuelBrut = Math.max(0, totalHeuresTravaillees - seuilAjuste)
+
+        // Scale the daily OT proportionally if monthly OT is less than sum of daily OT
+        const dailyOtSum = total_ot_montant / taux_horaire // approximate hours from daily calc
+        const otScaleFactor = dailyOtSum > 0 && otMensuelBrut < dailyOtSum ? otMensuelBrut / dailyOtSum : 1
+        total_ot_montant = Math.round(total_ot_montant * otScaleFactor)
+
+        // 4. Absences injustifiées
 
         let jours_absence_injust = 0
         for (const pt of pointagesMois || []) {
