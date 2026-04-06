@@ -104,8 +104,8 @@ export async function GET(request: Request) {
         employe_prenom: emp.prenom || '',
         employe_poste: emp.poste || '',
         steps: stepsMap[t.id] || [],
-        distance_km: Number(t.distance_km) || 0,
-        indemnite: Number(t.indemnite) || 0,
+        distance_km: Number(t.distance_totale_km) || 0,
+        indemnite: Number(t.montant_indemnite) || 0,
       }
     })
 
@@ -208,7 +208,7 @@ export async function POST(request: Request) {
         .limit(1)
 
       const lastStep = lastSteps && lastSteps.length > 0 ? lastSteps[0] : null
-      const nextOrdre = lastStep ? (lastStep.ordre || 0) + 1 : 1
+      const nextOrder = lastStep ? (lastStep.step_order || 0) + 1 : 1
 
       let distFromPrev = 0
       if (lastStep && lastStep.latitude && lastStep.longitude && latitude && longitude) {
@@ -219,12 +219,12 @@ export async function POST(request: Request) {
         .from('trajet_steps')
         .insert({
           trajet_id,
-          ordre: nextOrdre,
+          step_order: nextOrder,
           latitude: latitude ? Number(latitude) : null,
           longitude: longitude ? Number(longitude) : null,
           adresse: adresse || null,
-          timestamp: new Date().toISOString(),
-          distance_depuis_precedent: distFromPrev,
+          heure: new Date().toISOString(),
+          distance_depuis_precedent_km: distFromPrev,
         })
         .select('*')
         .single()
@@ -237,11 +237,11 @@ export async function POST(request: Request) {
         .select('*')
         .eq('trajet_id', trajet_id)
 
-      const totalDist = (allSteps || []).reduce((s: number, st: any) => s + (Number(st.distance_depuis_precedent) || 0), 0)
+      const totalDist = (allSteps || []).reduce((s: number, st: any) => s + (Number(st.distance_depuis_precedent_km) || 0), 0)
 
       await supabase
         .from('trajets_kilometriques')
-        .update({ distance_km: Math.round(totalDist * 100) / 100 })
+        .update({ distance_totale_km: Math.round(totalDist * 100) / 100 })
         .eq('id', trajet_id)
 
       return NextResponse.json({ step, distance_ajoutee: distFromPrev, distance_totale: totalDist })
@@ -249,7 +249,7 @@ export async function POST(request: Request) {
 
     // ── End a trajet ────────────────────────────────────────────────────
     if (action === 'terminer') {
-      const { trajet_id, latitude_arrivee, longitude_arrivee, adresse_arrivee } = body
+      const { trajet_id, latitude, longitude } = body
       if (!trajet_id) {
         return NextResponse.json({ error: 'trajet_id requis' }, { status: 400 })
       }
@@ -263,21 +263,20 @@ export async function POST(request: Request) {
         .limit(1)
 
       const lastStep = lastSteps && lastSteps.length > 0 ? lastSteps[0] : null
-      const nextOrdre = lastStep ? (lastStep.ordre || 0) + 1 : 1
+      const nextOrder = lastStep ? (lastStep.step_order || 0) + 1 : 1
 
       let distFromPrev = 0
-      if (lastStep && lastStep.latitude && lastStep.longitude && latitude_arrivee && longitude_arrivee) {
-        distFromPrev = haversineKm(lastStep.latitude, lastStep.longitude, Number(latitude_arrivee), Number(longitude_arrivee))
+      if (lastStep && lastStep.latitude && lastStep.longitude && latitude && longitude) {
+        distFromPrev = haversineKm(lastStep.latitude, lastStep.longitude, Number(latitude), Number(longitude))
       }
 
       await supabase.from('trajet_steps').insert({
         trajet_id,
-        ordre: nextOrdre,
-        latitude: latitude_arrivee ? Number(latitude_arrivee) : null,
-        longitude: longitude_arrivee ? Number(longitude_arrivee) : null,
-        adresse: adresse_arrivee || null,
-        timestamp: new Date().toISOString(),
-        distance_depuis_precedent: distFromPrev,
+        step_order: nextOrder,
+        latitude: latitude ? Number(latitude) : null,
+        longitude: longitude ? Number(longitude) : null,
+        heure: new Date().toISOString(),
+        distance_depuis_precedent_km: distFromPrev,
       })
 
       // Calculate total distance
@@ -286,7 +285,7 @@ export async function POST(request: Request) {
         .select('*')
         .eq('trajet_id', trajet_id)
 
-      const totalDist = (allSteps || []).reduce((s: number, st: any) => s + (Number(st.distance_depuis_precedent) || 0), 0)
+      const totalDist = (allSteps || []).reduce((s: number, st: any) => s + (Number(st.distance_depuis_precedent_km) || 0), 0)
       const roundedDist = Math.round(totalDist * 100) / 100
 
       // Get trajet to find employe and société for indemnity calc
@@ -298,44 +297,26 @@ export async function POST(request: Request) {
 
       let tauxKm = 0.50 // default
       if (trajet) {
-        // Get employee's société
-        const { data: emp } = await supabase
-          .from('employes')
-          .select('*')
-          .eq('id', trajet.employe_id)
-          .single()
+        const societeId = trajet.societe_id
+        const vehiculeType = trajet.vehicule || 'voiture'
 
-        if (emp?.societe_id) {
-          // Look up parametres_km for this société + vehicle type
-          const vehiculeType = trajet.vehicule_type || 'voiture'
+        if (societeId) {
+          // Look up parametres_km for this société
           const { data: params } = await supabase
             .from('parametres_km')
             .select('*')
-            .eq('societe_id', emp.societe_id)
-            .eq('vehicule_type', vehiculeType)
-            .eq('actif', true)
-            .order('created_at', { ascending: false })
-            .limit(1)
+            .eq('societe_id', societeId)
             .maybeSingle()
 
-          if (params?.taux_km) {
-            tauxKm = Number(params.taux_km)
-          } else {
-            // Fallback: try frais_km_rules
-            const { data: rule } = await supabase
-              .from('frais_km_rules')
-              .select('*')
-              .eq('societe_id', emp.societe_id)
-              .eq('actif', true)
-              .order('date_effet', { ascending: false })
-              .limit(1)
-              .maybeSingle()
-            if (rule?.tarif_par_km) tauxKm = Number(rule.tarif_par_km)
+          if (params) {
+            if (vehiculeType === 'moto' && params.taux_moto) {
+              tauxKm = Number(params.taux_moto)
+            } else if (vehiculeType === 'velo' && params.taux_velo) {
+              tauxKm = Number(params.taux_velo)
+            } else if (params.taux_voiture) {
+              tauxKm = Number(params.taux_voiture)
+            }
           }
-
-          // Check monthly cap
-          let plafond: number | null = null
-          if (params?.plafond_mensuel) plafond = Number(params.plafond_mensuel)
         }
       }
 
@@ -345,13 +326,12 @@ export async function POST(request: Request) {
       const { data: updated, error: updErr } = await supabase
         .from('trajets_kilometriques')
         .update({
-          date_arrivee: new Date().toISOString(),
-          latitude_arrivee: latitude_arrivee ? Number(latitude_arrivee) : null,
-          longitude_arrivee: longitude_arrivee ? Number(longitude_arrivee) : null,
-          adresse_arrivee: adresse_arrivee || null,
-          distance_km: roundedDist,
-          taux_km: tauxKm,
-          indemnite,
+          arrivee_heure: new Date().toISOString(),
+          arrivee_lat: latitude ? Number(latitude) : null,
+          arrivee_lng: longitude ? Number(longitude) : null,
+          distance_totale_km: roundedDist,
+          taux_km_applique: tauxKm,
+          montant_indemnite: indemnite,
           statut: 'termine',
         })
         .eq('id', trajet_id)
@@ -382,8 +362,8 @@ export async function POST(request: Request) {
         .from('trajets_kilometriques')
         .update({
           statut: finalStatut,
-          valide_par: user.id,
-          valide_at: new Date().toISOString(),
+          approuve_par: user.id,
+          date_approbation: new Date().toISOString(),
         })
         .eq('id', trajet_id)
         .select('*')
@@ -395,50 +375,43 @@ export async function POST(request: Request) {
 
     // ── Parametres km (get/set rates) ───────────────────────────────────
     if (action === 'parametres') {
-      const { societe_id, vehicule_type, taux_km, plafond_mensuel, mode } = body
+      const { societe_id, taux_voiture, taux_moto, taux_velo, plafond_mensuel, mode } = body
 
       if (!societe_id) {
         return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
       }
 
       // GET mode: fetch current parameters
-      if (mode === 'get' || (!taux_km && !vehicule_type)) {
+      if (mode === 'get' || (!taux_voiture && !taux_moto && !taux_velo)) {
         const { data: params } = await supabase
           .from('parametres_km')
           .select('*')
           .eq('societe_id', societe_id)
-          .eq('actif', true)
-          .order('created_at', { ascending: false })
+          .maybeSingle()
 
-        return NextResponse.json({ parametres: params || [] })
+        return NextResponse.json({ parametres: params || null })
       }
 
-      // SET mode: upsert rate for a vehicle type
-      const vType = vehicule_type || 'voiture'
-
-      // Deactivate existing for this type
-      await supabase
-        .from('parametres_km')
-        .update({ actif: false })
-        .eq('societe_id', societe_id)
-        .eq('vehicule_type', vType)
+      // SET mode: upsert parameters for this société
+      const updateData: Record<string, any> = {
+        updated_at: new Date().toISOString(),
+      }
+      if (taux_voiture !== undefined) updateData.taux_voiture = Number(taux_voiture)
+      if (taux_moto !== undefined) updateData.taux_moto = Number(taux_moto)
+      if (taux_velo !== undefined) updateData.taux_velo = Number(taux_velo)
+      if (plafond_mensuel !== undefined) updateData.plafond_mensuel = Number(plafond_mensuel)
 
       const { data, error } = await supabase
         .from('parametres_km')
-        .insert({
+        .upsert({
           societe_id,
-          vehicule_type: vType,
-          taux_km: Number(taux_km),
-          plafond_mensuel: plafond_mensuel ? Number(plafond_mensuel) : null,
-          actif: true,
-          created_by: user.id,
-          created_at: new Date().toISOString(),
-        })
+          ...updateData,
+        }, { onConflict: 'societe_id' })
         .select('*')
         .single()
 
       if (error) throw error
-      return NextResponse.json({ parametre: data, message: `Taux ${vType} mis à jour` })
+      return NextResponse.json({ parametre: data, message: 'Paramètres km mis à jour' })
     }
 
     return NextResponse.json({ error: 'Action inconnue' }, { status: 400 })
