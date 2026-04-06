@@ -42,49 +42,253 @@ interface Groupe {
   couleur: string
 }
 
+// Office location: Grand Gaube
+const OFFICE_LAT = -20.0167
+const OFFICE_LON = 57.6667
+
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371
+  const toRad = (d: number) => (d * Math.PI) / 180
+  const dLat = toRad(lat2 - lat1)
+  const dLon = toRad(lon2 - lon1)
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2
+  return Math.round(2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * 100) / 100
+}
+
+interface RouteInfo {
+  employees: (EmployeePosition & { distToOffice: number })[]
+  stops: string[]
+  totalDist: number
+}
+
+function buildOptimizedRoutes(employees: EmployeePosition[], maxPerVehicle: number = 6): RouteInfo[] {
+  // Calculate distance to office for each employee with GPS
+  const empsWithDist = employees.map(e => ({
+    ...e,
+    distToOffice: (e.latitude && e.longitude)
+      ? haversineKm(e.latitude, e.longitude, OFFICE_LAT, OFFICE_LON)
+      : 0,
+  }))
+
+  // Cluster nearby zones using greedy approach with haversine
+  const unclustered = [...empsWithDist]
+  const routes: RouteInfo[] = []
+
+  while (unclustered.length > 0) {
+    // Start a new route with the furthest employee from office
+    unclustered.sort((a, b) => b.distToOffice - a.distToOffice)
+    const seed = unclustered.shift()!
+    const route: typeof unclustered = [seed]
+
+    // Greedily add nearby employees to this route (within 5km of any member in route)
+    let changed = true
+    while (changed && route.length < maxPerVehicle) {
+      changed = false
+      for (let i = unclustered.length - 1; i >= 0; i--) {
+        const candidate = unclustered[i]
+        // Check if candidate is within 5km of any employee already in route
+        const isNearby = route.some(r => {
+          if (r.latitude && r.longitude && candidate.latitude && candidate.longitude) {
+            return haversineKm(r.latitude, r.longitude, candidate.latitude, candidate.longitude) <= 5
+          }
+          // Fallback: same zone name
+          return extractZone(r.adresse) === extractZone(candidate.adresse)
+        })
+        if (isNearby) {
+          route.push(candidate)
+          unclustered.splice(i, 1)
+          changed = true
+          if (route.length >= maxPerVehicle) break
+        }
+      }
+    }
+
+    // If route is still under capacity and there are unclustered employees, fill up
+    // (for employees without GPS, group by zone similarity)
+    if (route.length < maxPerVehicle && unclustered.length > 0) {
+      // Add the nearest remaining employees until full
+      for (let i = unclustered.length - 1; i >= 0 && route.length < maxPerVehicle; i--) {
+        const candidate = unclustered[i]
+        if (!candidate.latitude || !candidate.longitude) {
+          // No GPS - check zone match
+          const routeZones = new Set(route.map(r => extractZone(r.adresse)))
+          if (routeZones.has(extractZone(candidate.adresse))) {
+            route.push(candidate)
+            unclustered.splice(i, 1)
+          }
+        }
+      }
+    }
+
+    // Order route: furthest from office first, working towards office
+    route.sort((a, b) => b.distToOffice - a.distToOffice)
+
+    // Build unique ordered stops
+    const seenZones = new Set<string>()
+    const stops: string[] = []
+    for (const emp of route) {
+      const zone = extractZone(emp.adresse)
+      if (zone !== "Non renseignee" && !seenZones.has(zone)) {
+        seenZones.add(zone)
+        stops.push(zone)
+      }
+    }
+    stops.push("Grand Gaube (Bureau)")
+
+    const totalDist = route.reduce((max, e) => Math.max(max, e.distToOffice), 0) * 2 // rough round-trip estimate
+    routes.push({ employees: route, stops, totalDist })
+  }
+
+  return routes
+}
+
 function generateAIResponse(query: string, positions: EmployeePosition[], ramassageGroups: { time: string; zone: string; emps: EmployeePosition[] }[]): string {
   const q = query.toLowerCase()
   const working = positions.filter(p => p.shift_today === "travail")
+  const workingWithAddr = working.filter(p => p.adresse && p.adresse !== "")
   const sansAdresse = positions.filter(p => !p.adresse || p.adresse === "")
+  const today = new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
 
-  if (q.includes("vehicule") || q.includes("véhicule") || q.includes("combien")) {
-    const groups = ramassageGroups.filter(g => g.emps.length > 0)
-    const nbVehicles = groups.reduce((s, g) => s + Math.ceil(g.emps.length / 4), 0)
-    return `Pour aujourd'hui, je recommande ${nbVehicles} vehicule(s) pour ${working.length} employes en service.\n\n${groups.map(g => `\u2022 ${g.time} -- ${g.zone}: ${g.emps.length} pers. -> ${Math.ceil(g.emps.length / 4)} vehicule(s)`).join('\n')}`
+  // Group working employees by shift start time
+  const byShift = new Map<string, EmployeePosition[]>()
+  for (const e of workingWithAddr) {
+    const time = e.heure_debut ? String(e.heure_debut).slice(0, 5) : "non defini"
+    if (!byShift.has(time)) byShift.set(time, [])
+    byShift.get(time)!.push(e)
+  }
+  const sortedShifts = Array.from(byShift.entries()).sort((a, b) => a[0].localeCompare(b[0]))
+
+  // Build optimized routes per shift
+  const shiftRoutes = new Map<string, RouteInfo[]>()
+  let totalVehicles = 0
+  let totalEmployeesRouted = 0
+  let totalDistAll = 0
+  for (const [time, emps] of sortedShifts) {
+    const routes = buildOptimizedRoutes(emps)
+    shiftRoutes.set(time, routes)
+    totalVehicles += routes.length
+    totalEmployeesRouted += emps.length
+    totalDistAll += routes.reduce((s, r) => s + r.totalDist, 0)
   }
 
-  if (q.includes("ramassage") || q.includes("organise")) {
-    if (ramassageGroups.length === 0) return "Aucun groupe de ramassage disponible. Verifiez que les employes ont des adresses et des shifts assignes."
+  function formatShiftRoutes(shiftTime: string, routes: RouteInfo[], detailed: boolean = false): string {
+    const totalEmps = routes.reduce((s, r) => s + r.employees.length, 0)
+    let out = `Shift ${shiftTime} -- ${totalEmps} employes --> ${routes.length} vehicule(s)\n`
+    for (let i = 0; i < routes.length; i++) {
+      const r = routes[i]
+      out += `  Route ${i + 1}: ${r.stops.join(" -> ")} (${r.employees.length} pers.)\n`
+      if (detailed) {
+        for (const emp of r.employees) {
+          const dist = emp.distToOffice > 0 ? `, ${emp.distToOffice} km` : ""
+          const addr = emp.adresse ? emp.adresse.split(",")[0].trim() : "adresse inconnue"
+          out += `    - ${emp.nom} ${emp.prenom} (${addr}${dist})\n`
+        }
+      } else {
+        for (const emp of r.employees) {
+          const dist = emp.distToOffice > 0 ? `, ${emp.distToOffice} km` : ""
+          out += `    - ${emp.nom} ${emp.prenom} (${extractZone(emp.adresse)}${dist})\n`
+        }
+      }
+    }
+    return out
+  }
+
+  if (q.includes("vehicule") || q.includes("vehicule") || q.includes("combien") || q.includes("optimise") || q.includes("trajet")) {
+    if (workingWithAddr.length === 0) return "Aucun employe en service avec adresse renseignee aujourd'hui."
+
+    let result = `\ud83d\udcca Optimisation transport -- ${today}\n`
+    result += `${"=".repeat(40)}\n\n`
+
+    for (const [time, routes] of Array.from(shiftRoutes.entries()).sort((a, b) => a[0].localeCompare(b[0]))) {
+      result += formatShiftRoutes(time, routes) + "\n"
+    }
+
+    result += `${"=".repeat(40)}\n`
+    result += `TOTAL: ${totalVehicles} vehicule(s) pour ${totalEmployeesRouted} employes\n`
+    result += `Economie vs individuel: ${totalEmployeesRouted - totalVehicles} trajets evites\n`
+    result += `Distance totale estimee: ~${Math.round(totalDistAll)} km`
+
+    if (sansAdresse.length > 0) {
+      result += `\n\n\u26a0\ufe0f ${sansAdresse.length} employe(s) sans adresse (non inclus dans le calcul)`
+    }
+
+    return result
+  }
+
+  if (q.includes("ramassage") || q.includes("organise") || q.includes("plan")) {
+    if (workingWithAddr.length === 0) return "Aucun employe en service avec adresse renseignee. Verifiez que les employes ont des adresses et des shifts assignes."
+
     const shiftMatch = q.match(/(\d{2}:\d{2})/)
-    const filtered = shiftMatch ? ramassageGroups.filter(g => g.time === shiftMatch[1]) : ramassageGroups
-    if (filtered.length === 0) return `Aucun groupe de ramassage trouve pour l'horaire specifie. Horaires disponibles: ${[...new Set(ramassageGroups.map(g => g.time))].join(', ')}`
-    const nbV = filtered.reduce((s, g) => s + Math.ceil(g.emps.length / 4), 0)
-    return `Plan de ramassage${shiftMatch ? ` pour le shift de ${shiftMatch[1]}` : ''}:\n${nbV} vehicule(s) necessaire(s)\n\n${filtered.map(g => `\u2022 ${g.time} -- ${g.zone} (${g.emps.length} pers.):\n  ${g.emps.map(e => `${e.prenom} ${e.nom}`).join(', ')}\n  -> ${Math.ceil(g.emps.length / 4)} vehicule(s)`).join('\n\n')}`
+    const filteredShifts = shiftMatch
+      ? Array.from(shiftRoutes.entries()).filter(([t]) => t === shiftMatch[1])
+      : Array.from(shiftRoutes.entries()).sort((a, b) => a[0].localeCompare(b[0]))
+
+    if (filteredShifts.length === 0) {
+      return `Aucun employe trouve pour le shift de ${shiftMatch?.[1]}. Horaires disponibles: ${Array.from(shiftRoutes.keys()).sort().join(", ")}`
+    }
+
+    let result = `\ud83d\ude90 Plan de ramassage${shiftMatch ? ` -- Shift ${shiftMatch[1]}` : ""} -- ${today}\n`
+    result += `${"=".repeat(40)}\n\n`
+
+    let filteredVehicles = 0
+    let filteredEmps = 0
+    let filteredDist = 0
+
+    for (const [time, routes] of filteredShifts) {
+      result += formatShiftRoutes(time, routes, true) + "\n"
+      filteredVehicles += routes.length
+      filteredEmps += routes.reduce((s, r) => s + r.employees.length, 0)
+      filteredDist += routes.reduce((s, r) => s + r.totalDist, 0)
+    }
+
+    result += `${"=".repeat(40)}\n`
+    result += `TOTAL: ${filteredVehicles} vehicule(s) pour ${filteredEmps} employes\n`
+    result += `Economie vs individuel: ${filteredEmps - filteredVehicles} trajets evites\n`
+    result += `Distance totale estimee: ~${Math.round(filteredDist)} km`
+
+    if (sansAdresse.length > 0) {
+      result += `\n\n\u26a0\ufe0f ${sansAdresse.length} employe(s) sans adresse non inclus`
+    }
+
+    return result
   }
 
-  if (q.includes("pres de") || q.includes("près de") || q.includes("habitent") || q.includes("zone")) {
-    const zoneMatch = q.match(/(?:pres de|près de|zone)\s+(.+)/i)
+  if (q.includes("pres de") || q.includes("pres de") || q.includes("habitent") || q.includes("zone")) {
+    const zoneMatch = q.match(/(?:pres de|pres de|zone)\s+(.+)/i)
     if (zoneMatch) {
       const searchZone = zoneMatch[1].trim().toLowerCase()
       const found = working.filter(p => p.adresse?.toLowerCase().includes(searchZone))
       if (found.length === 0) return `Aucun employe en service trouve pres de "${zoneMatch[1].trim()}".`
-      return `${found.length} employe(s) en service pres de "${zoneMatch[1].trim()}":\n\n${found.map(e => `\u2022 ${e.prenom} ${e.nom} - ${e.adresse || 'Pas d\'adresse'}`).join('\n')}`
+      return `${found.length} employe(s) en service pres de "${zoneMatch[1].trim()}":\n\n${found.map(e => `\u2022 ${e.prenom} ${e.nom} - ${e.adresse || "Pas d'adresse"}`).join("\n")}`
     }
   }
 
-  if (q.includes("sans adresse") || q.includes("adresse manquante") || q.includes("mettre a jour") || q.includes("mise à jour")) {
-    if (sansAdresse.length === 0) return "Tous les employes ont une adresse renseignee."
-    return `${sansAdresse.length} employe(s) sans adresse a mettre a jour:\n\n${sansAdresse.map(e => `\u2022 ${e.prenom} ${e.nom} (${e.poste || 'poste non defini'})`).join('\n')}`
+  if (q.includes("sans adresse") || q.includes("adresse manquante") || q.includes("mettre a jour") || q.includes("mise a jour")) {
+    if (sansAdresse.length === 0) return "Tous les employes ont une adresse renseignee. \u2705"
+    return `\u26a0\ufe0f ${sansAdresse.length} employe(s) sans adresse a mettre a jour:\n\n${sansAdresse.map(e => `\u2022 ${e.prenom} ${e.nom} (${e.poste || "poste non defini"})`).join("\n")}\n\nCes employes ne sont pas inclus dans l'optimisation de transport.`
   }
 
-  // Default: summary
+  // Default: summary with optimized vehicle count
   const zones = new Map<string, number>()
   for (const p of working) {
     const zone = extractZone(p.adresse)
     zones.set(zone, (zones.get(zone) || 0) + 1)
   }
   const topZones = [...zones.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5)
-  return `Resume du jour:\n\u2022 ${positions.length} employes au total\n\u2022 ${working.length} en service\n\u2022 ${sansAdresse.length} sans adresse\n\u2022 ${ramassageGroups.length} groupes de ramassage\n\nTop zones en service:\n${topZones.map(([z, n]) => `\u2022 ${z}: ${n} employe(s)`).join('\n')}\n\nEssayez:\n- "Combien de vehicules faut-il ?"\n- "Organise le ramassage pour le shift de 06:00"\n- "Quels employes habitent pres de Rose Hill ?"\n- "Employes sans adresse"`
+
+  let result = `\ud83d\udcca Resume du jour -- ${today}\n`
+  result += `${"=".repeat(40)}\n\n`
+  result += `\u2022 ${positions.length} employes au total\n`
+  result += `\u2022 ${working.length} en service\n`
+  result += `\u2022 ${sansAdresse.length} sans adresse\n\n`
+  result += `\ud83d\ude90 Transport optimise: ${totalVehicles} vehicule(s) pour ${totalEmployeesRouted} employes\n`
+  if (totalEmployeesRouted > 0) {
+    result += `   (ratio: 1 vehicule pour ${(totalEmployeesRouted / Math.max(totalVehicles, 1)).toFixed(1)} employes)\n`
+  }
+  result += `\nTop zones en service:\n`
+  result += topZones.map(([z, n]) => `\u2022 ${z}: ${n} employe(s)`).join("\n")
+  result += `\n\nShifts actifs: ${sortedShifts.map(([t, e]) => `${t} (${e.length} pers.)`).join(", ") || "aucun"}`
+  return result
 }
 
 function extractZone(adresse: string): string {
@@ -410,7 +614,7 @@ export default function GeolocalisationPage() {
             </Button>
           </form>
           <div className="flex gap-1 flex-wrap">
-            {["Combien de vehicules ?", "Organise le ramassage", "Employes sans adresse", "Resume du jour"].map(q => (
+            {["Optimiser les trajets", "Plan de ramassage 06:00", "Plan de ramassage 14:00", "Employes sans adresse"].map(q => (
               <button key={q} onClick={() => { setAiQuery(q); setAiResponse(generateAIResponse(q, filteredPositions, ramassageGroups)) }} className="px-2 py-1 rounded-md text-[10px] font-medium transition-colors" style={{ backgroundColor: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.6)" }}>
                 {q}
               </button>

@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2, Plus, Trash2, Users, UserPlus, X, Check, ChevronRight } from "lucide-react"
+import { Loader2, Plus, Trash2, Users, UserPlus, X, Check, ChevronRight, Pencil } from "lucide-react"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -26,6 +26,11 @@ export default function GroupesPage() {
 
   // Assign mode
   const [assignGroupId, setAssignGroupId] = useState<string | null>(null)
+
+  // Rename mode
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null)
+  const [editingGroupName, setEditingGroupName] = useState("")
+  const [renamingSaving, setRenamingSaving] = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -80,6 +85,21 @@ export default function GroupesPage() {
     if (data.error) setError(data.error)
     else { setNewGroupName(""); load() }
     setAddingGroup(false)
+  }
+
+  // Renommer un groupe
+  const renameGroup = async (id: string) => {
+    if (!editingGroupName.trim()) return
+    setRenamingSaving(true)
+    const res = await fetch("/api/rh/groupes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "modifier", id, nom: editingGroupName.trim() }),
+    })
+    const data = await res.json()
+    if (data.error) setError(data.error)
+    else { setEditingGroupId(null); setEditingGroupName(""); load() }
+    setRenamingSaving(false)
   }
 
   // Supprimer un groupe
@@ -176,7 +196,31 @@ export default function GroupesPage() {
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base flex items-center gap-2" style={{ color: NAVY }}>
                       <Users className="h-4 w-4" />
-                      {g.nom}
+                      {editingGroupId === g.id ? (
+                        <div className="flex items-center gap-1">
+                          <Input
+                            value={editingGroupName}
+                            onChange={e => setEditingGroupName(e.target.value)}
+                            onKeyDown={e => { if (e.key === "Enter") renameGroup(g.id); if (e.key === "Escape") { setEditingGroupId(null); setEditingGroupName("") } }}
+                            className="h-7 text-sm w-48"
+                            autoFocus
+                            disabled={renamingSaving}
+                          />
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-emerald-600 hover:text-emerald-800" onClick={() => renameGroup(g.id)} disabled={renamingSaving || !editingGroupName.trim()}>
+                            {renamingSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-gray-400 hover:text-gray-600" onClick={() => { setEditingGroupId(null); setEditingGroupName("") }}>
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <>
+                          {g.nom}
+                          <Button variant="ghost" size="icon" className="h-6 w-6 text-gray-400 hover:text-gray-600" onClick={() => { setEditingGroupId(g.id); setEditingGroupName(g.nom) }}>
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                        </>
+                      )}
                       <Badge variant="outline" className="text-xs">{membres.length} membre{membres.length !== 1 ? "s" : ""}</Badge>
                     </CardTitle>
                     <div className="flex gap-1">
