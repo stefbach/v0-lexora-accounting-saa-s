@@ -8,8 +8,9 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
-import { Loader2, Calendar, ChevronLeft, ChevronRight, Send, Wand2, Users, Check, Plus, Trash2, Clock, Coffee, AlertTriangle, FileDown, Copy, Eye } from "lucide-react"
+import { Loader2, Calendar, ChevronLeft, ChevronRight, Send, Wand2, Users, Check, Plus, Trash2, Clock, Coffee, AlertTriangle, FileDown, Copy, Eye, Shield, CheckCircle2, XCircle } from "lucide-react"
 import { toast } from "sonner"
+import Link from "next/link"
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -216,6 +217,168 @@ export default function PlanningPage() {
     }
     return false
   }, [approvedLeaves, planning])
+
+  // ─── WRA Compliance Validation ─────────────────────────────────
+
+  interface Violation {
+    severity: "red" | "orange"
+    empName: string
+    empId: string
+    rule: string
+    detail: string
+  }
+
+  const [validationResults, setValidationResults] = useState<Violation[] | null>(null)
+  const [showValidation, setShowValidation] = useState(false)
+
+  const loadRules = () => {
+    const stored = localStorage.getItem(`lexora_planning_rules_${societe}`)
+    if (stored) {
+      try { return JSON.parse(stored) } catch {}
+    }
+    // defaults
+    return [
+      { key: "max_heures_semaine", value: 45, enabled: true, category: "heures" },
+      { key: "max_heures_jour", value: 9, enabled: true, category: "heures" },
+      { key: "max_jours_consecutifs", value: 6, enabled: true, category: "repos" },
+      { key: "repos_minimum_semaine", value: 1, enabled: true, category: "repos" },
+      { key: "nuit_debut", value: "18:00", enabled: true, category: "repos" },
+      { key: "nuit_fin", value: "06:00", enabled: true, category: "repos" },
+      { key: "pause_minimum_minutes", value: 30, enabled: true, category: "heures" },
+      { key: "max_employes_absents_pct", value: 30, enabled: true, category: "equipe" },
+    ]
+  }
+
+  const getRuleValue = (rules: any[], key: string): any => {
+    const r = rules.find((r: any) => r.key === key)
+    return r?.enabled ? r.value : null
+  }
+
+  const runValidation = () => {
+    const rules = loadRules()
+    const violations: Violation[] = []
+    const maxWeeklyH = getRuleValue(rules, "max_heures_semaine")
+    const maxDailyH = getRuleValue(rules, "max_heures_jour")
+    const maxConsec = getRuleValue(rules, "max_jours_consecutifs")
+    const reposMin = getRuleValue(rules, "repos_minimum_semaine")
+    const nuitDebut = getRuleValue(rules, "nuit_debut")
+    const nuitFin = getRuleValue(rules, "nuit_fin")
+    const pauseMin = getRuleValue(rules, "pause_minimum_minutes")
+    const maxAbsentPct = getRuleValue(rules, "max_employes_absents_pct")
+
+    for (const emp of employes) {
+      const name = `${emp.prenom} ${emp.nom}`
+
+      // 1. Weekly hours check
+      if (maxWeeklyH !== null) {
+        let d = 1
+        while (d <= daysInMonth) {
+          const weekEnd = Math.min(d + 6, daysInMonth)
+          const hours = getWeeklyHours(emp.id, d, weekEnd)
+          if (hours > maxWeeklyH) {
+            violations.push({ severity: "red", empName: name, empId: emp.id, rule: "Heures semaine", detail: `Semaine du ${d}: ${hours}h / ${maxWeeklyH}h max (WRA Art.14)` })
+          }
+          d += 7
+        }
+      }
+
+      // 2. Daily hours check
+      if (maxDailyH !== null) {
+        for (let d = 1; d <= daysInMonth; d++) {
+          const cell = planning[emp.id]?.[d]
+          if (cell && cell.heures_prevues > maxDailyH) {
+            violations.push({ severity: "red", empName: name, empId: emp.id, rule: "Heures jour", detail: `Jour ${d}: ${cell.heures_prevues}h / ${maxDailyH}h max` })
+          }
+        }
+      }
+
+      // 3. Consecutive working days
+      if (maxConsec !== null) {
+        let consecutive = 0
+        for (let d = 1; d <= daysInMonth; d++) {
+          const cell = planning[emp.id]?.[d]
+          if (cell && cell.creneau_id !== "repos" && cell.creneau_id !== "conge") {
+            consecutive++
+            if (consecutive > maxConsec) {
+              violations.push({ severity: "red", empName: name, empId: emp.id, rule: "Jours consecutifs", detail: `${consecutive} jours consecutifs au jour ${d} (max ${maxConsec})` })
+              break
+            }
+          } else {
+            consecutive = 0
+          }
+        }
+      }
+
+      // 4. Mandatory rest day per week
+      if (reposMin !== null) {
+        let d = 1
+        while (d <= daysInMonth) {
+          const weekEnd = Math.min(d + 6, daysInMonth)
+          let restDays = 0
+          for (let wd = d; wd <= weekEnd; wd++) {
+            const cell = planning[emp.id]?.[wd]
+            if (!cell || cell.creneau_id === "repos" || cell.creneau_id === "conge") restDays++
+          }
+          if (restDays < reposMin && weekEnd - d >= 6) {
+            violations.push({ severity: "red", empName: name, empId: emp.id, rule: "Repos hebdomadaire", detail: `Semaine du ${d}: ${restDays} jour(s) de repos (min ${reposMin})` })
+          }
+          d += 7
+        }
+      }
+
+      // 5. Night shift check
+      if (nuitDebut !== null && nuitFin !== null) {
+        for (let d = 1; d <= daysInMonth; d++) {
+          const cell = planning[emp.id]?.[d]
+          if (cell && cell.heure_debut && cell.heure_fin) {
+            const [sh] = cell.heure_debut.split(":").map(Number)
+            const [ndh] = (nuitDebut as string).split(":").map(Number)
+            const [nfh] = (nuitFin as string).split(":").map(Number)
+            const isNight = sh >= ndh || sh < nfh
+            if (isNight) {
+              violations.push({ severity: "orange", empName: name, empId: emp.id, rule: "Travail de nuit", detail: `Jour ${d}: creneau ${cell.heure_debut}-${cell.heure_fin} (nuit ${nuitDebut}-${nuitFin})` })
+            }
+          }
+        }
+      }
+
+      // 6. Pause check
+      if (pauseMin !== null) {
+        for (let d = 1; d <= daysInMonth; d++) {
+          const cell = planning[emp.id]?.[d]
+          if (cell && cell.heures_prevues >= 6) {
+            const pauseDuration = cell.pause_debut && cell.pause_fin ? computeMinutes(cell.pause_debut, cell.pause_fin) : 0
+            if (pauseDuration < pauseMin) {
+              violations.push({ severity: "orange", empName: name, empId: emp.id, rule: "Pause minimum", detail: `Jour ${d}: pause ${pauseDuration}min (min ${pauseMin}min pour 6h+)` })
+            }
+          }
+        }
+      }
+    }
+
+    // 7. Team absence percentage per day
+    if (maxAbsentPct !== null && employes.length > 0) {
+      for (let d = 1; d <= daysInMonth; d++) {
+        let absent = 0
+        for (const emp of employes) {
+          const cell = planning[emp.id]?.[d]
+          if (!cell || cell.creneau_id === "repos" || cell.creneau_id === "conge") absent++
+        }
+        const pct = Math.round((absent / employes.length) * 100)
+        if (pct > maxAbsentPct) {
+          violations.push({ severity: "orange", empName: "Equipe", empId: "", rule: "Absences equipe", detail: `Jour ${d}: ${pct}% absents (max ${maxAbsentPct}%)` })
+        }
+      }
+    }
+
+    setValidationResults(violations)
+    setShowValidation(true)
+    if (violations.length === 0) {
+      toast.success("Planning conforme - aucune violation detectee")
+    } else {
+      toast.warning(`${violations.length} violation(s) detectee(s)`)
+    }
+  }
 
   // ─── Weekly view helpers ────────────────────────────────────────
 
@@ -634,6 +797,52 @@ export default function PlanningPage() {
         </div>
       )}
 
+      {/* WRA Validation Results */}
+      {showValidation && validationResults !== null && (
+        <Card className={`border ${validationResults.length === 0 ? "border-green-300 bg-green-50" : "border-red-300 bg-red-50"}`}>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm flex items-center gap-2">
+                {validationResults.length === 0 ? (
+                  <>
+                    <CheckCircle2 className="h-5 w-5 text-green-600" />
+                    <span className="text-green-800">Planning conforme WRA 2019</span>
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="h-5 w-5 text-red-600" />
+                    <span className="text-red-800">
+                      {validationResults.length} violation{validationResults.length > 1 ? "s" : ""} trouvee{validationResults.length > 1 ? "s" : ""} sur {new Set(validationResults.filter(v => v.empId).map(v => v.empId)).size} employe(s)
+                    </span>
+                  </>
+                )}
+              </CardTitle>
+              <Button variant="ghost" size="sm" onClick={() => setShowValidation(false)} className="text-xs">
+                Fermer
+              </Button>
+            </div>
+          </CardHeader>
+          {validationResults.length > 0 && (
+            <CardContent className="pt-0">
+              <div className="max-h-48 overflow-y-auto space-y-1.5">
+                {validationResults.map((v, i) => (
+                  <div key={i} className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs ${
+                    v.severity === "red" ? "bg-red-100 text-red-800 border border-red-200" : "bg-orange-100 text-orange-800 border border-orange-200"
+                  }`}>
+                    <Badge className={`text-[10px] shrink-0 ${v.severity === "red" ? "bg-red-600 text-white" : "bg-orange-500 text-white"}`}>
+                      {v.severity === "red" ? "WRA" : "Alerte"}
+                    </Badge>
+                    <span className="font-medium shrink-0">{v.empName}</span>
+                    <span className="font-medium shrink-0">[{v.rule}]</span>
+                    <span className="truncate">{v.detail}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          )}
+        </Card>
+      )}
+
       {/* Calendar */}
       <Card>
         <CardHeader className="pb-3">
@@ -673,6 +882,14 @@ export default function PlanningPage() {
               <Button variant="outline" size="sm" onClick={() => toast.info("Export PDF bientôt disponible")} style={{ borderColor: "#4191FF", color: "#4191FF" }}>
                 <FileDown className="h-4 w-4 mr-1" /> Exporter PDF
               </Button>
+              <Button variant="outline" size="sm" onClick={runValidation} style={{ borderColor: "#0B0F2E", color: "#0B0F2E" }}>
+                <Shield className="h-4 w-4 mr-1" /> Verifier conformite
+              </Button>
+              <Link href="/rh/planning/regles">
+                <Button variant="outline" size="sm" className="text-gray-600">
+                  <Shield className="h-4 w-4 mr-1" /> Regles
+                </Button>
+              </Link>
               <Button variant="outline" size="sm" onClick={() => savePlanning(false)} disabled={saving}>
                 {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Check className="h-4 w-4 mr-1" />} Sauver
               </Button>
