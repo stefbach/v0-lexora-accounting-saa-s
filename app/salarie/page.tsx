@@ -185,6 +185,7 @@ function MaFicheTab({ employe, onUpdated }: { employe: any; onUpdated: () => voi
             <div className="space-y-1"><Label className="text-xs text-gray-400">Date d&apos;arrivée</Label><p className="text-sm bg-gray-100 text-gray-500 p-2.5 rounded-xl">{employe.date_arrivee ? new Date(employe.date_arrivee).toLocaleDateString("fr-FR") : "—"}</p></div>
             <div className="space-y-1"><Label className="text-xs text-gray-400">Poste</Label><p className="text-sm bg-gray-100 text-gray-500 p-2.5 rounded-xl">{employe.poste || "—"}</p></div>
             <div className="space-y-1"><Label className="text-xs text-gray-400">Département</Label><p className="text-sm bg-gray-100 text-gray-500 p-2.5 rounded-xl">{employe.departement || "—"}</p></div>
+            <div className="space-y-1 md:col-span-2"><Label className="text-xs text-gray-400">Adresse</Label><p className="text-sm bg-gray-100 text-gray-500 p-2.5 rounded-xl">{[employe.adresse, employe.adresse2, employe.ville, employe.code_postal].filter(Boolean).join(', ') || "—"}</p></div>
           </div>
         </CardContent>
       </Card>

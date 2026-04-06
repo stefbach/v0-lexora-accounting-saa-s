@@ -109,7 +109,7 @@ export async function GET(request: Request) {
         poste: emp.poste || '',
         latitude: pos?.latitude ?? emp.latitude ?? null,
         longitude: pos?.longitude ?? emp.longitude ?? null,
-        adresse: pos?.adresse ?? emp.adresse_complete ?? emp.adresse ?? '',
+        adresse: pos?.adresse || emp.adresse_complete || [emp.adresse, emp.adresse2, emp.ville, emp.code_postal].filter(Boolean).join(', ') || '',
         shift_today,
         shift_label,
         heure_debut: assignment?.heure_debut || null,

@@ -258,6 +258,7 @@ export async function POST(request: Request) {
       <p><strong>Code :</strong> ${emp?.code || '—'}</p>
       <p><strong>Poste :</strong> ${emp?.poste || '—'}</p>
       <p><strong>NIC :</strong> ${emp?.nic_number || '—'}</p>
+      ${(emp?.adresse || emp?.ville) ? `<p><strong>Adresse :</strong> ${[emp.adresse, emp.adresse2, emp.ville, emp.code_postal].filter(Boolean).join(', ')}</p>` : ''}
       <p><strong>TAN :</strong> ${emp?.tan || '—'}</p>
       <p><strong>Date d'entrée :</strong> ${emp?.date_arrivee ? new Date(emp.date_arrivee).toLocaleDateString('fr-FR') : '—'}</p>
       <p><strong>Ancienneté :</strong> ${emp?.date_arrivee ? (() => { const d = new Date(emp.date_arrivee); const now = periodeDate; let y = now.getFullYear() - d.getFullYear(); let m = now.getMonth() - d.getMonth(); if (m < 0) { y--; m += 12; } return y > 0 ? y + ' an(s) ' + m + ' mois' : m + ' mois'; })() : '—'}</p>
@@ -420,6 +421,7 @@ td{padding:6px 8px;border-bottom:1px solid #eee;font-size:11px}
     <p><strong>Code :</strong> ${emp.code || '—'}</p>
     <p><strong>Poste :</strong> ${emp.poste || '—'}</p>
     <p><strong>NIC :</strong> ${emp.nic_number || '—'}</p>
+    ${(emp.adresse || emp.ville) ? `<p><strong>Adresse :</strong> ${[emp.adresse, emp.adresse2, emp.ville, emp.code_postal].filter(Boolean).join(', ')}</p>` : ''}
     <p><strong>TAN :</strong> ${emp.tan || '—'}</p>
     <p><strong>Date d'entrée :</strong> ${emp.date_arrivee ? new Date(emp.date_arrivee).toLocaleDateString('fr-FR') : '—'}</p>
     <p><strong>Ancienneté :</strong> ${emp.date_arrivee ? (() => { const d = new Date(emp.date_arrivee); const now = periodeDate; let y = now.getFullYear() - d.getFullYear(); let m = now.getMonth() - d.getMonth(); if (m < 0) { y--; m += 12; } return y > 0 ? y + ' an(s) ' + m + ' mois' : m + ' mois'; })() : '—'}</p>
