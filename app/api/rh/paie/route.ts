@@ -392,6 +392,12 @@ export async function POST(request: Request) {
         }
         return true
       })
+      // Optional: filter to specific employees (for single recalculation)
+      const employe_ids_filter = body.employe_ids as string[] | undefined
+      const finalEmployes = (employe_ids_filter && employe_ids_filter.length > 0)
+        ? employes.filter(e => employe_ids_filter.includes(e.id))
+        : employes
+
       // Log filtered-out employees for debugging
       const excluded = allEmps.filter(e => !employes.includes(e))
       for (const e of excluded) {
@@ -421,7 +427,7 @@ export async function POST(request: Request) {
         autoRegles = reglesData || []
       } catch {} // table may not exist
 
-      for (const emp of employes || []) {
+      for (const emp of finalEmployes || []) {
         // 1. OT depuis pointages
         const { data: pointagesMois } = await supabase.from('pointages')
           .select('*').eq('employe_id', emp.id)

@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Calculator, Download, FileText, BookOpen, AlertTriangle, CheckCircle, Lock, Unlock, ShieldCheck, ArrowRight, Clock, CreditCard, FileSpreadsheet, Receipt, Pencil, X, Save } from "lucide-react"
+import { Loader2, Calculator, Download, FileText, BookOpen, AlertTriangle, CheckCircle, Lock, Unlock, ShieldCheck, ArrowRight, Clock, CreditCard, FileSpreadsheet, Receipt, Pencil, X, Save, RefreshCw } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 function fmt(n: number) { return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "MUR", maximumFractionDigits: 0 }).format(n) }
@@ -347,6 +347,22 @@ export default function PaiePage() {
     finally { setSavingEdit(false) }
   }
 
+  const [recalcId, setRecalcId] = useState<string | null>(null)
+  const recalculerEmploye = async (employe_id: string) => {
+    if (societe === "all") return
+    setRecalcId(employe_id)
+    try {
+      const res = await fetch("/api/rh/paie", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "calculer_batch", societe_id: societe, periode, employe_ids: [employe_id] })
+      })
+      const data = await res.json()
+      if (!res.ok) alert(data.error || "Erreur")
+      load(); loadWorkflow()
+    } catch (e: any) { alert("Erreur: " + (e.message || "")) }
+    finally { setRecalcId(null) }
+  }
+
   return (
     <TooltipProvider>
       <div className="p-6 space-y-6">
@@ -633,14 +649,34 @@ export default function PaiePage() {
                       <TableCell>
                         <div className="flex gap-1 flex-wrap">
                           {!b.verrouille && b.statut === "brouillon" && (
-                            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => startEdit(b)}>
-                              <Pencil className="w-3 h-3" />
-                            </Button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => startEdit(b)}>
+                                  <Pencil className="w-3 h-3" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Modifier manuellement</TooltipContent>
+                            </Tooltip>
                           )}
-                          <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => ouvrirPDF(b.id)} disabled={pdfLoading === b.id}>
-                            {pdfLoading === b.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileText className="w-3 h-3" />}
-                            PDF
-                          </Button>
+                          {!b.verrouille && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => recalculerEmploye(b.employe_id)} disabled={recalcId === b.employe_id}>
+                                  {recalcId === b.employe_id ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Recalculer (OT + primes + tout)</TooltipContent>
+                            </Tooltip>
+                          )}
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => ouvrirPDF(b.id)} disabled={pdfLoading === b.id}>
+                                {pdfLoading === b.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileText className="w-3 h-3" />}
+                                PDF
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Telecharger le bulletin PDF</TooltipContent>
+                          </Tooltip>
                           {!b.verrouille && !b.employe?.exclure_mra && (
                             <Button size="sm" variant="ghost" className="h-7 text-[10px] text-amber-600 hover:bg-amber-50 px-1.5" onClick={async () => {
                               if (!confirm(`Marquer ${b.employe?.prenom} ${b.employe?.nom} comme HORS MRA ?\n\nPlus de CSG/NSF/PAYE pour cet employe.`)) return
@@ -651,7 +687,7 @@ export default function PaiePage() {
                           )}
                           {!b.verrouille && b.statut === "brouillon" && (
                             <Button size="sm" variant="ghost" className="h-7 text-[10px] text-red-500 hover:bg-red-50 px-1.5" onClick={async () => {
-                              if (!confirm(`Supprimer le bulletin de ${b.employe?.prenom} ${b.employe?.nom} ?\n\nPour un employe sorti des effectifs, son bulletin sera supprime.`)) return
+                              if (!confirm(`Supprimer le bulletin de ${b.employe?.prenom} ${b.employe?.nom} ?`)) return
                               await doAction("supprimer_bulletin", { bulletin_id: b.id })
                             }}>
                               <X className="w-3 h-3" />
