@@ -19,6 +19,7 @@ const TYPE_PRIME_LABELS: Record<string, string> = {
   meal_allowance: "Meal Allowance",
   call_allowance: "Call Allowance",
   astreinte: "Astreinte",
+  night_shift: "Night Shift Allowance (+15%)",
 }
 
 const STATUT_COLORS: Record<string, string> = {
@@ -403,10 +404,11 @@ export default function PrimesPage() {
                           <TableCell className="font-semibold">{fmt(r.montant || 0)}</TableCell>
                           <TableCell className="text-sm text-gray-600">
                             {r.type === "meal_allowance" && `Si OT >= ${r.conditions?.ot_min_heures || 1}h`}
+                            {r.type === "night_shift" && "Auto si heures de nuit (21h-6h), +15% base"}
                             {r.type === "call_allowance" && "Si affecte astreinte"}
                             {r.type === "astreinte" && "Si affecte astreinte"}
                             {r.type === "fixe" && "Automatique chaque mois"}
-                            {!["meal_allowance", "call_allowance", "astreinte", "fixe"].includes(r.type) && (r.description || "—")}
+                            {!["meal_allowance", "night_shift", "call_allowance", "astreinte", "fixe"].includes(r.type) && (r.description || "—")}
                           </TableCell>
                           <TableCell className="text-sm text-gray-500 capitalize">{r.scope === "tous" ? "Tous" : `${r.scope}: ${r.scope_value || ""}`}</TableCell>
                           <TableCell><Switch checked={r.actif !== false} onCheckedChange={v => toggleRegle(r.id, v)} /></TableCell>
@@ -439,6 +441,7 @@ export default function PrimesPage() {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="meal_allowance">Meal Allowance (auto si OT)</SelectItem>
+                  <SelectItem value="night_shift">Night Shift Allowance (+15% base, auto)</SelectItem>
                   <SelectItem value="call_allowance">Call Allowance (astreinte / disponibilite)</SelectItem>
                   <SelectItem value="astreinte">Prime d&apos;astreinte</SelectItem>
                   <SelectItem value="fixe">Prime fixe automatique</SelectItem>

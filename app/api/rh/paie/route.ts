@@ -19,24 +19,44 @@ const JOURS_FERIES_MU = ["01-01", "02-01", "12-03", "01-05", "09-05", "15-08", "
 function isFerie(dateStr: string): boolean { return JOURS_FERIES_MU.includes(dateStr.slice(5)) }
 function isWeekend(dateStr: string): boolean { const d = new Date(dateStr + "T12:00:00"); return d.getDay() === 0 || d.getDay() === 6 }
 
-// Bug 4 fix: OT threshold comes from planning (heures_prevues) instead of hardcoded 9.
-// planningHours = planned working hours for the day (e.g. 8 for 3x8, 9 for standard).
-// isPlannedWorkDay = true if there's a planning_assignment that is NOT repos for this day.
-// Weekend/unplanned work: if employee works on a day NOT in planning, all hours are OT at 1.5x.
-function calcOT(hEntree: string, hSortie: string, ferieDay: boolean, planningHours: number = 9, isPlannedWorkDay: boolean = true) {
-  if (!hEntree || !hSortie) return { normales: 0, ot15: 0, ot2: 0 }
+// ═══ OT Calculation — Workers' Rights Act 2019 ═══
+// Rates:
+//   - Weekday OT (>45h/week): 150% du taux horaire
+//   - Rest day / unplanned day: 200% for first 8h, 300% beyond
+//   - Public holiday: 200% for first 8h, 300% beyond 8h
+// Night shift: +15% of base for night hours (21h-6h) — separate from OT
+function calcOT(hEntree: string, hSortie: string, ferieDay: boolean, planningHours: number = 9, isPlannedWorkDay: boolean = true, isRestDay: boolean = false) {
+  if (!hEntree || !hSortie) return { normales: 0, ot15: 0, ot2: 0, ot3: 0, heuresNuit: 0 }
   const debut = new Date(`1970-01-01T${hEntree}`)
   const fin = new Date(`1970-01-01T${hSortie}`)
-  let totalH = (fin.getTime() - debut.getTime()) / 3600000 - 1
+  let totalH = (fin.getTime() - debut.getTime()) / 3600000 - 1 // minus 1h lunch
   if (totalH <= 0) totalH = 0
-  // Public holiday: all hours at 2x
-  if (ferieDay) return { normales: 0, ot15: 0, ot2: totalH }
-  // Unplanned work day (not in planning or planning says Repos): all hours at 1.5x
-  if (!isPlannedWorkDay) return { normales: 0, ot15: totalH, ot2: 0 }
-  // Normal planned work day: OT starts after planningHours
+
+  // Calculate night hours (21h-6h)
+  let heuresNuit = 0
+  const hDebut = debut.getHours() + debut.getMinutes() / 60
+  const hFin = fin.getHours() + fin.getMinutes() / 60
+  // Night window: 21:00 - 06:00
+  if (hDebut >= 21) heuresNuit += Math.min(hFin > hDebut ? hFin - hDebut : 24 - hDebut + hFin, totalH + 1)
+  else if (hFin <= 6) heuresNuit += Math.min(hFin, totalH + 1)
+  else if (hDebut < 6) heuresNuit += Math.min(6 - hDebut, totalH + 1)
+
+  // Public holiday: 200% first 8h, 300% beyond
+  if (ferieDay) {
+    const ot2 = Math.min(totalH, 8)
+    const ot3 = Math.max(totalH - 8, 0)
+    return { normales: 0, ot15: 0, ot2, ot3, heuresNuit }
+  }
+  // Rest day (day off / unplanned): 200% first 8h, 300% beyond
+  if (isRestDay || !isPlannedWorkDay) {
+    const ot2 = Math.min(totalH, 8)
+    const ot3 = Math.max(totalH - 8, 0)
+    return { normales: 0, ot15: 0, ot2, ot3, heuresNuit }
+  }
+  // Normal planned work day: OT at 150% after planningHours
   const normales = Math.min(totalH, planningHours)
-  const reste = Math.max(totalH - planningHours, 0)
-  return { normales, ot15: Math.min(reste, 2), ot2: Math.max(reste - 2, 0) }
+  const ot15 = Math.max(totalH - planningHours, 0)
+  return { normales, ot15, ot2: 0, ot3: 0, heuresNuit }
 }
 
 export async function GET(request: Request) {
@@ -419,6 +439,7 @@ export async function POST(request: Request) {
         }
 
         let total_ot_montant = 0
+        let total_heures_nuit = 0
         const taux_horaire = Number(emp.salaire_base) / (45 * 52 / 12)
         let jours_travailles = 0
 
@@ -426,12 +447,26 @@ export async function POST(request: Request) {
           if (!pt.heure_entree) continue
           jours_travailles++
           const ferie = isFerie(pt.date_pointage)
+          const weekend = isWeekend(pt.date_pointage)
           const plan = planMap[pt.date_pointage]
           const planningHours = plan ? plan.heures_prevues : 9
-          const isPlannedWorkDay = plan ? !plan.est_repos : !isWeekend(pt.date_pointage)
-          const ot = calcOT(pt.heure_entree, pt.heure_sortie || '', ferie, planningHours, isPlannedWorkDay)
-          total_ot_montant += ot.ot15 * taux_horaire * 1.5 + ot.ot2 * taux_horaire * 2
+          const isPlannedWorkDay = plan ? !plan.est_repos : !weekend
+          const isRestDay = plan ? plan.est_repos : weekend
+          const ot = calcOT(pt.heure_entree, pt.heure_sortie || '', ferie, planningHours, isPlannedWorkDay, isRestDay)
+          // WRA 2019 rates: 150% weekday OT, 200% rest/holiday, 300% holiday >8h
+          total_ot_montant += ot.ot15 * taux_horaire * 1.5
+            + ot.ot2 * taux_horaire * 2
+            + ot.ot3 * taux_horaire * 3
+          total_heures_nuit += ot.heuresNuit
         }
+
+        // Night Shift Allowance: 15% of base salary for night hours (21h-6h)
+        // Does NOT apply if employee's schedule is exclusively nocturnal
+        const shiftCode = (planAssignments || [])[0]?.shift_code || ''
+        const isExclusivelyNight = shiftCode.toLowerCase() === 'nuit' || shiftCode === 'N'
+        const nightShiftAllowance = (!isExclusivelyNight && total_heures_nuit > 0)
+          ? Math.round(Number(emp.salaire_base) * 0.15 * (total_heures_nuit / (45 * 52 / 12)))
+          : 0
 
         // 2. Toutes les primes de la période (approuvées ou saisies)
         const { data: primesMois } = await supabase.from('primes_variables_mois')
@@ -550,6 +585,9 @@ export async function POST(request: Request) {
           if (reqVar.heures_sup_150) total_ot_montant += (Number(reqVar.heures_sup_150) || 0) * (Number(emp.salaire_base) / (45 * 52 / 12)) * 1.5
           if (reqVar.heures_sup_200) total_ot_montant += (Number(reqVar.heures_sup_200) || 0) * (Number(emp.salaire_base) / (45 * 52 / 12)) * 2
         }
+        // Add night shift allowance to OT total
+        total_ot_montant += nightShiftAllowance
+
         const montant_absence_final = Math.round(jours_absence_injust * (Number(emp.salaire_base) / 26) * 100) / 100
 
         // 5. Conversion EUR
@@ -618,9 +656,10 @@ export async function POST(request: Request) {
         const mraTag = isHorsMRA ? ' [HORS MRA - Brut=Base]' : ''
         const primesFixesDetail = totalPrimesFixes > 0 ? `, Primes fixes: ${totalPrimesFixes}` : ''
         const autoRulesDetail = autoRulesApplied.length > 0 ? `, Auto: ${autoRulesApplied.join('; ')}` : ''
+        const nightDetail = nightShiftAllowance > 0 ? `, Night shift +15%: ${nightShiftAllowance} (${Math.round(total_heures_nuit)}h nuit)` : ''
         const notesResume = isHorsMRA
           ? `Base: ${salaire_base_mur} [HORS MRA - Brut=Net=Base]`
-          : `Base: ${salaire_base_mur}, Transport: ${transportAlloc}, Petrol: ${petrolAlloc}, OT: ${Math.round(total_ot_montant)}, Primes var: ${Math.round(total_primes - totalPrimesFixes - totalAutoRules)}${primesFixesDetail}${autoRulesDetail}, Absences: ${jours_absence_injust}j`
+          : `Base: ${salaire_base_mur}, Transport: ${transportAlloc}, Petrol: ${petrolAlloc}, OT: ${Math.round(total_ot_montant)}${nightDetail}, Primes var: ${Math.round(total_primes - totalPrimesFixes - totalAutoRules)}${primesFixesDetail}${autoRulesDetail}, Absences: ${jours_absence_injust}j`
         console.log(`[paie] ${emp.prenom} ${emp.nom}: base=${salaire_base_mur} transport=${transportAlloc} petrol=${petrolAlloc} OT=${Math.round(total_ot_montant)} primes=${Math.round(total_primes)} abs=${jours_absence_injust}${mraTag}`)
 
         const bulletin: Record<string, any> = {
