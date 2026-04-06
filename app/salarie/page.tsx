@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect, useCallback } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -1466,147 +1466,257 @@ export default function EspaceEmployePage() {
         )}
 
         {/* ═══════════════════════════════════════════════════════════════ */}
-        {/* SANTE TIBOK — Telemedecine & Bien-etre integre */}
+        {/* SANTE TIBOK — Telemedecine integree (style tibok.mu) */}
         {/* ═══════════════════════════════════════════════════════════════ */}
-        {tab === "sante" && (
-          <div className="space-y-5">
-            {/* Hero banner */}
-            <div className="relative overflow-hidden rounded-3xl p-6 md:p-8" style={{ background: `linear-gradient(135deg, ${NAVY} 0%, #1a1f4e 50%, #2d1b69 100%)` }}>
-              <div className="absolute top-0 right-0 w-40 h-40 rounded-full opacity-10" style={{ background: `radial-gradient(circle, ${GOLD}, transparent)`, transform: "translate(30%, -30%)" }} />
-              <div className="absolute bottom-0 left-0 w-32 h-32 rounded-full opacity-10" style={{ background: "radial-gradient(circle, #7c3aed, transparent)", transform: "translate(-30%, 30%)" }} />
-              <div className="relative">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="h-12 w-12 rounded-2xl flex items-center justify-center" style={{ backgroundColor: "rgba(212,175,55,0.2)" }}>
-                    <HeartPulse className="h-6 w-6" style={{ color: GOLD }} />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-bold text-white">TIBOK Sante</h2>
-                    <p className="text-white/50 text-xs">Votre espace sante et bien-etre integre</p>
-                  </div>
-                </div>
-                <p className="text-white/70 text-sm max-w-md">
-                  Telemedecine, suivi medical, ordonnances et services de sante — tout au meme endroit, sans changer d&apos;application.
-                </p>
-              </div>
-            </div>
+        {tab === "sante" && (() => {
+          const TEAL = "#2a9d8f"
+          const [santeTab, setSanteTab] = React.useState("dashboard")
+          const santeNav = [
+            { id: "dashboard", label: "Tableau de bord", icon: LayoutDashboard },
+            { id: "salle_attente", label: "Salle d'attente", icon: Clock },
+            { id: "rdv", label: "RDV a venir", icon: Calendar },
+            { id: "consultations", label: "Vos Consultations", icon: FileText },
+            { id: "pharmacie", label: "Pharmacie (Ordonnances)", icon: Pill },
+            { id: "analyses", label: "Analyses & Examens", icon: Activity },
+            { id: "famille", label: "Famille", icon: User },
+            { id: "second_avis", label: "Second Avis Medical", icon: Stethoscope },
+            { id: "suivi", label: "Suivi Chronique", icon: HeartPulse },
+          ]
 
-            {/* Quick Actions Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {[
-                { icon: Video, label: "Teleconsultation", desc: "Consulter un medecin", color: "#7c3aed", bg: "#7c3aed12", badge: "24/7" },
-                { icon: Stethoscope, label: "Mon medecin", desc: "Dr. referent", color: "#059669", bg: "#05966912" },
-                { icon: Pill, label: "Ordonnances", desc: "Mes prescriptions", color: "#ea580c", bg: "#ea580c12" },
-                { icon: Activity, label: "Bilan sante", desc: "Check-up annuel", color: "#2563eb", bg: "#2563eb12" },
-              ].map((item, i) => (
-                <button key={i} className="p-4 rounded-2xl text-left transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] border border-transparent hover:border-gray-200 hover:shadow-lg"
-                  style={{ backgroundColor: item.bg }}
-                  onClick={() => alert("TIBOK Sante : cette fonctionnalite sera bientot disponible.")}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="h-11 w-11 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${item.color}15` }}>
-                      <item.icon className="h-5 w-5" style={{ color: item.color }} />
+          const ProcessFlow = ({ title, icon: FlowIcon, steps }: { title: string; icon: any; steps: { icon: any; label: string; desc: string; color: string }[] }) => (
+            <Card className="rounded-2xl border shadow-sm mb-4">
+              <div className="p-5">
+                <div className="flex items-center gap-2 mb-5">
+                  <FlowIcon className="h-5 w-5" style={{ color: TEAL }} />
+                  <h3 className="text-base font-semibold" style={{ color: NAVY }}>{title}</h3>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+                  {steps.map((step, i) => (
+                    <div key={i} className="flex flex-col items-center text-center">
+                      <div className="h-14 w-14 rounded-full flex items-center justify-center mb-2" style={{ backgroundColor: `${step.color}12` }}>
+                        <step.icon className="h-6 w-6" style={{ color: step.color }} />
+                      </div>
+                      <p className="text-xs font-semibold" style={{ color: NAVY }}>{step.label}</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">{step.desc}</p>
                     </div>
-                    {item.badge && (
-                      <span className="px-2 py-0.5 rounded-full text-[9px] font-bold text-white" style={{ backgroundColor: item.color }}>{item.badge}</span>
-                    )}
-                  </div>
-                  <p className="text-sm font-bold" style={{ color: NAVY }}>{item.label}</p>
-                  <p className="text-[11px] text-gray-400 mt-0.5">{item.desc}</p>
-                </button>
-              ))}
-            </div>
-
-            {/* Services Hub */}
-            <Card className="rounded-3xl overflow-hidden border-0 shadow-lg">
-              <div className="p-5 md:p-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <ShieldCheck className="h-5 w-5" style={{ color: GOLD }} />
-                  <h3 className="text-base font-bold" style={{ color: NAVY }}>Services de sante</h3>
+                  ))}
                 </div>
-                <div className="space-y-3">
-                  {[
-                    { icon: Video, title: "Teleconsultation video", desc: "Consultez un medecin generaliste ou specialiste en visio, 7j/7. Ordonnance electronique immédiate.", status: "Disponible", statusColor: "#059669" },
-                    { icon: MessageCircle, title: "Chat medical", desc: "Posez vos questions a un professionnel de sante par messagerie securisee.", status: "Disponible", statusColor: "#059669" },
-                    { icon: Phone, title: "Ligne urgence sante", desc: "Assistance telephonique 24h/24 pour les urgences medicales.", status: "24/7", statusColor: "#dc2626" },
-                    { icon: Pill, title: "Pharmacie en ligne", desc: "Commandez vos medicaments et faites-vous livrer. Ordonnance requise.", status: "Bientot", statusColor: "#9ca3af" },
-                    { icon: Scan, title: "Imagerie & analyses", desc: "Prise de RDV en ligne pour radios, IRM, analyses de sang.", status: "Bientot", statusColor: "#9ca3af" },
-                    { icon: Printer, title: "Certificats & documents", desc: "Certificats medicaux, arrets maladie — generation et impression integree.", status: "Bientot", statusColor: "#9ca3af" },
-                  ].map((svc, i) => (
-                    <button key={i}
-                      className="w-full flex items-center gap-4 p-4 rounded-2xl transition-all duration-200 hover:bg-gray-50 active:scale-[0.99] text-left"
-                      onClick={() => alert("TIBOK Sante : cette fonctionnalite sera bientot disponible.")}
+              </div>
+            </Card>
+          )
+
+          return (
+            <div className="flex gap-0 -mx-4 md:-mx-6 min-h-[70vh]">
+              {/* Sidebar TIBOK — desktop only */}
+              <div className="hidden md:flex flex-col w-56 shrink-0 bg-white border-r pt-4">
+                <div className="px-4 mb-5">
+                  <span className="text-2xl font-black tracking-tight" style={{ color: TEAL }}>TIB</span>
+                  <span className="text-2xl font-black tracking-tight bg-clip-text" style={{ color: "#2563eb" }}>O</span>
+                  <span className="text-2xl font-black tracking-tight" style={{ color: TEAL }}>K</span>
+                </div>
+                <nav className="flex-1 px-2 space-y-0.5">
+                  {santeNav.map(item => (
+                    <button key={item.id} onClick={() => setSanteTab(item.id)}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left text-sm transition-all ${
+                        santeTab === item.id ? "text-white font-medium" : "text-gray-600 hover:bg-gray-50"
+                      }`}
+                      style={santeTab === item.id ? { backgroundColor: TEAL } : {}}
                     >
-                      <div className="h-12 w-12 rounded-2xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${svc.statusColor}10` }}>
-                        <svc.icon className="h-5 w-5" style={{ color: svc.statusColor }} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-semibold" style={{ color: NAVY }}>{svc.title}</p>
-                          <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold" style={{ backgroundColor: `${svc.statusColor}15`, color: svc.statusColor }}>
-                            {svc.status}
-                          </span>
-                        </div>
-                        <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{svc.desc}</p>
-                      </div>
-                      <div className="shrink-0">
-                        <div className="h-8 w-8 rounded-xl flex items-center justify-center bg-gray-100">
-                          <Play className="h-3 w-3 text-gray-400" style={{ marginLeft: 1 }} />
-                        </div>
-                      </div>
+                      <item.icon className="h-4 w-4 shrink-0" />
+                      <span className="truncate">{item.label}</span>
                     </button>
                   ))}
-                </div>
+                </nav>
               </div>
-            </Card>
 
-            {/* Health Dashboard Preview */}
-            <Card className="rounded-3xl border-0 shadow-lg overflow-hidden">
-              <div className="p-5 md:p-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <Activity className="h-5 w-5" style={{ color: "#7c3aed" }} />
-                  <h3 className="text-base font-bold" style={{ color: NAVY }}>Mon suivi sante</h3>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {[
-                    { label: "Consultations", value: "0", sub: "cette annee", color: "#7c3aed", icon: Stethoscope },
-                    { label: "Ordonnances", value: "0", sub: "en cours", color: "#ea580c", icon: Pill },
-                    { label: "Prochain RDV", value: "--", sub: "aucun planifie", color: "#2563eb", icon: Calendar },
-                    { label: "Check-up", value: "--", sub: "a planifier", color: "#059669", icon: ShieldCheck },
-                  ].map((stat, i) => (
-                    <div key={i} className="p-4 rounded-2xl" style={{ backgroundColor: `${stat.color}08` }}>
-                      <stat.icon className="h-5 w-5 mb-2" style={{ color: stat.color }} />
-                      <p className="text-2xl font-bold" style={{ color: stat.color }}>{stat.value}</p>
-                      <p className="text-[10px] text-gray-500">{stat.label}</p>
-                      <p className="text-[9px] text-gray-300">{stat.sub}</p>
+              {/* Mobile TIBOK tab bar */}
+              <div className="md:hidden flex overflow-x-auto gap-1 bg-white border-b px-2 py-2 -mt-2 mb-3 sticky top-0 z-10">
+                {santeNav.slice(0, 6).map(item => (
+                  <button key={item.id} onClick={() => setSanteTab(item.id)}
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-medium whitespace-nowrap shrink-0 transition-all ${
+                      santeTab === item.id ? "text-white" : "text-gray-500 bg-gray-100"
+                    }`}
+                    style={santeTab === item.id ? { backgroundColor: TEAL } : {}}
+                  >
+                    <item.icon className="h-3.5 w-3.5" />
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Main content */}
+              <div className="flex-1 p-4 md:p-6 overflow-y-auto">
+                {/* Dashboard */}
+                {santeTab === "dashboard" && (
+                  <div className="space-y-5">
+                    <div>
+                      <h2 className="text-xl md:text-2xl font-bold" style={{ color: NAVY }}>Bonjour {employe?.prenom}</h2>
+                      <p className="text-gray-400 text-sm">Votre sante au bout des doigts</p>
                     </div>
-                  ))}
-                </div>
-              </div>
-            </Card>
 
-            {/* Coverage Info */}
-            <div className="p-5 rounded-3xl border border-dashed border-gray-200 bg-white">
-              <div className="flex items-start gap-4">
-                <div className="h-12 w-12 rounded-2xl flex items-center justify-center shrink-0" style={{ background: `linear-gradient(135deg, ${GOLD}20, ${GOLD}05)` }}>
-                  <ShieldCheck className="h-6 w-6" style={{ color: GOLD }} />
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold" style={{ color: NAVY }}>Couverture sante employeur</h4>
-                  <p className="text-xs text-gray-400 mt-1 leading-relaxed">
-                    Votre employeur vous offre un acces a la plateforme TIBOK Sante.
-                    Teleconsultations illimitees, pharmacie en ligne et suivi medical integre.
-                    Vos donnees medicales sont strictement confidentielles et chiffrees.
-                  </p>
-                  <div className="flex gap-2 mt-3">
-                    <span className="px-2 py-1 rounded-lg text-[10px] font-medium bg-green-50 text-green-700">Teleconsultation incluse</span>
-                    <span className="px-2 py-1 rounded-lg text-[10px] font-medium bg-blue-50 text-blue-700">Chat medical inclus</span>
-                    <span className="px-2 py-1 rounded-lg text-[10px] font-medium bg-purple-50 text-purple-700">Urgences 24/7</span>
+                    {/* CTA Consultation */}
+                    <Card className="rounded-2xl border-0 shadow-md overflow-hidden">
+                      <div className="h-1.5 w-full" style={{ backgroundColor: TEAL }} />
+                      <div className="p-8 text-center">
+                        <div className="h-16 w-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: `${TEAL}10` }}>
+                          <Video className="h-7 w-7" style={{ color: TEAL }} />
+                        </div>
+                        <p className="text-lg font-semibold" style={{ color: TEAL }}>Consultation immediate ou sur Rendez-vous</p>
+                        <div className="flex items-center justify-center gap-3 mt-3">
+                          <span className="px-3 py-1 rounded-full text-xs border" style={{ borderColor: TEAL, color: TEAL }}>Securise</span>
+                          <span className="px-3 py-1 rounded-full text-xs border" style={{ borderColor: TEAL, color: TEAL }}>Certifie</span>
+                        </div>
+                        <button className="mt-5 w-full md:w-auto px-8 py-3.5 rounded-full text-white font-semibold text-sm flex items-center justify-center gap-2 mx-auto transition-all hover:opacity-90 active:scale-[0.98]"
+                          style={{ backgroundColor: TEAL }}
+                          onClick={() => window.open("https://tibok.mu", "_blank")}
+                        >
+                          Commencer <Play className="h-4 w-4" style={{ marginLeft: 2 }} />
+                        </button>
+                      </div>
+                    </Card>
+
+                    {/* Quick links */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {[
+                        { icon: FileText, label: "Vos Consultations", desc: "Rapports et ordonnances", tab: "consultations" },
+                        { icon: Pill, label: "Pharmacie (Ordonnances)", desc: "Gerer vos commandes", tab: "pharmacie" },
+                      ].map((item, i) => (
+                        <button key={i} onClick={() => setSanteTab(item.tab)}
+                          className="w-full text-left rounded-2xl border shadow-sm overflow-hidden hover:shadow-md transition-all active:scale-[0.99]">
+                          <div className="h-1" style={{ backgroundColor: TEAL }} />
+                          <div className="p-4 flex items-center gap-3">
+                            <div className="h-11 w-11 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${TEAL}10` }}>
+                              <item.icon className="h-5 w-5" style={{ color: TEAL }} />
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm font-semibold" style={{ color: NAVY }}>{item.label}</p>
+                              <p className="text-xs text-gray-400">{item.desc}</p>
+                            </div>
+                            <Play className="h-4 w-4 text-gray-300 shrink-0" />
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Suivi chronique */}
+                    <button onClick={() => setSanteTab("suivi")}
+                      className="w-full text-left rounded-2xl border shadow-sm overflow-hidden hover:shadow-md transition-all active:scale-[0.99]">
+                      <div className="h-1" style={{ backgroundColor: TEAL }} />
+                      <div className="p-4 flex items-center gap-3">
+                        <div className="h-11 w-11 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${TEAL}10` }}>
+                          <HeartPulse className="h-5 w-5" style={{ color: TEAL }} />
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm font-semibold" style={{ color: NAVY }}>Suivi Maladies Chroniques</p>
+                          <p className="text-xs text-gray-400">Tension, glycemie, poids</p>
+                        </div>
+                        <Play className="h-4 w-4 text-gray-300 shrink-0" />
+                      </div>
+                    </button>
+
+                    {/* Process: Pharmacie */}
+                    <ProcessFlow title="Comment ca marche - Pharmacie" icon={Pill} steps={[
+                      { icon: CreditCard, label: "Paiement", desc: "Paiement securise de Rs 800", color: TEAL },
+                      { icon: Clock, label: "File d'attente", desc: "Rejoignez la file virtuelle", color: "#f59e0b" },
+                      { icon: Video, label: "Consultation video", desc: "Consultez un medecin qualifie", color: TEAL },
+                      { icon: Stethoscope, label: "Diagnostic", desc: "Recevez votre diagnostic", color: "#059669" },
+                      { icon: FileText, label: "Ordonnance numerique", desc: "Generee automatiquement", color: "#2563eb" },
+                    ]} />
+
+                    {/* Process: Laboratoire */}
+                    <ProcessFlow title="Comment ca marche - Laboratoire" icon={Activity} steps={[
+                      { icon: CreditCard, label: "Paiement", desc: "Paiement securise de Rs 800", color: TEAL },
+                      { icon: Clock, label: "File d'attente", desc: "Rejoignez la file virtuelle", color: "#f59e0b" },
+                      { icon: Video, label: "Consultation video", desc: "Consultez un medecin qualifie", color: TEAL },
+                      { icon: Stethoscope, label: "Diagnostic", desc: "Recevez votre diagnostic", color: "#059669" },
+                      { icon: FileText, label: "Ordonnance numerique", desc: "Generee automatiquement", color: "#2563eb" },
+                    ]} />
+                    <div className="ml-0">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 px-5 pb-5">
+                        {[
+                          { icon: CheckCircle, label: "Validation analyses", desc: "Validez vos analyses prescrites", color: TEAL },
+                          { icon: Calendar, label: "Choix du laboratoire", desc: "Selectionnez le labo et le mode", color: "#f59e0b" },
+                          { icon: CreditCard, label: "Paiement analyses", desc: "Paiement securise", color: TEAL },
+                          { icon: Stethoscope, label: "Prelevement", desc: "A domicile ou au laboratoire", color: "#7c3aed" },
+                          { icon: FileText, label: "Resultats", desc: "Sur votre espace patient", color: "#2563eb" },
+                        ].map((step, i) => (
+                          <div key={i} className="flex flex-col items-center text-center">
+                            <div className="h-14 w-14 rounded-full flex items-center justify-center mb-2" style={{ backgroundColor: `${step.color}12` }}>
+                              <step.icon className="h-6 w-6" style={{ color: step.color }} />
+                            </div>
+                            <p className="text-xs font-semibold" style={{ color: NAVY }}>{step.label}</p>
+                            <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">{step.desc}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Process: Radiologie */}
+                    <ProcessFlow title="Comment ca marche - Radiologie" icon={Scan} steps={[
+                      { icon: CreditCard, label: "Paiement", desc: "Paiement securise de Rs 800", color: TEAL },
+                      { icon: Clock, label: "File d'attente", desc: "Rejoignez la file virtuelle", color: "#f59e0b" },
+                      { icon: Video, label: "Consultation video", desc: "Consultez un medecin qualifie", color: TEAL },
+                      { icon: Stethoscope, label: "Diagnostic", desc: "Recevez votre diagnostic", color: "#059669" },
+                      { icon: FileText, label: "Ordonnance numerique", desc: "Generee automatiquement", color: "#2563eb" },
+                    ]} />
+                    <div className="ml-0">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 px-5 pb-5">
+                        {[
+                          { icon: CheckCircle, label: "Validation examens", desc: "Validez vos examens prescrits", color: TEAL },
+                          { icon: Calendar, label: "Choix du centre", desc: "Selectionnez le centre de radiologie", color: "#f59e0b" },
+                          { icon: CreditCard, label: "Paiement examens", desc: "Paiement securise", color: TEAL },
+                          { icon: MapPin, label: "Rendez-vous", desc: "Presentez-vous au centre", color: "#7c3aed" },
+                          { icon: FileText, label: "Resultats", desc: "Resultats et images sur votre espace", color: "#2563eb" },
+                        ].map((step, i) => (
+                          <div key={i} className="flex flex-col items-center text-center">
+                            <div className="h-14 w-14 rounded-full flex items-center justify-center mb-2" style={{ backgroundColor: `${step.color}12` }}>
+                              <step.icon className="h-6 w-6" style={{ color: step.color }} />
+                            </div>
+                            <p className="text-xs font-semibold" style={{ color: NAVY }}>{step.label}</p>
+                            <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">{step.desc}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                </div>
+                )}
+
+                {/* Other tabs — placeholder */}
+                {santeTab !== "dashboard" && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <button onClick={() => setSanteTab("dashboard")} className="h-8 w-8 rounded-lg flex items-center justify-center bg-gray-100 hover:bg-gray-200 transition-colors">
+                        <X className="h-4 w-4 text-gray-500" />
+                      </button>
+                      <h2 className="text-lg font-bold" style={{ color: NAVY }}>
+                        {santeNav.find(n => n.id === santeTab)?.label}
+                      </h2>
+                    </div>
+                    <Card className="rounded-2xl">
+                      <div className="p-12 text-center">
+                        <div className="h-16 w-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: `${TEAL}10` }}>
+                          {(() => { const NavIcon = santeNav.find(n => n.id === santeTab)?.icon || HeartPulse; return <NavIcon className="h-7 w-7" style={{ color: TEAL }} /> })()}
+                        </div>
+                        <p className="text-sm font-semibold" style={{ color: NAVY }}>
+                          {santeNav.find(n => n.id === santeTab)?.label}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-2 max-w-sm mx-auto">
+                          Cette section sera connectee a votre espace TIBOK. Cliquez ci-dessous pour acceder a la plateforme complete.
+                        </p>
+                        <button className="mt-5 px-6 py-3 rounded-full text-white font-medium text-sm inline-flex items-center gap-2 transition-all hover:opacity-90 active:scale-[0.98]"
+                          style={{ backgroundColor: TEAL }}
+                          onClick={() => window.open("https://tibok.mu", "_blank")}
+                        >
+                          Ouvrir sur TIBOK <Play className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </Card>
+                  </div>
+                )}
               </div>
             </div>
-          </div>
-        )}
+          )
+        })()}
 
         {/* Documents */}
         {tab === "documents" && employe && (
