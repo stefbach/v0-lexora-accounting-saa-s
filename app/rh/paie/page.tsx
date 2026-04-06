@@ -211,74 +211,47 @@ export default function PaiePage() {
   const allValidated = workflow?.tous_valides || localAllValidated
 
   // ─── Workflow Stepper ──────────────────────────────────────────
-  // Steps 1-4 are informational checks (never block progression)
-  // Steps 5-7 are sequential (each requires the previous)
-  // Steps 8-10 require verrouillage
   const steps: {
     id: string; label: string; desc: string; done: boolean; icon: any;
     link?: string; action?: () => void; actionLabel?: string;
-    actionDisabled?: boolean; phase: "check" | "process" | "postlock";
+    actionDisabled?: boolean; phase: "process" | "postlock";
   }[] = [
     {
-      id: "planning", label: "1. Planning",
-      desc: workflow?.planning_publie ? "Planning publie" : "A verifier",
-      done: !!workflow?.planning_publie, icon: Clock, link: "/rh/planning",
-      phase: "check",
-    },
-    {
-      id: "pointage", label: "2. Pointage",
-      desc: workflow?.pointage_count ? `${workflow.pointage_count} pointage(s)` : "A verifier",
-      done: !!(workflow?.pointage_valide || workflow?.bulletins_generes), icon: Clock,
-      link: "/rh/pointage/mensuel", phase: "check",
-    },
-    {
-      id: "ot", label: "3. Heures Sup",
-      desc: workflow?.ot_present ? "OT detectes" : "Aucun OT",
-      done: !!(workflow?.ot_valide || workflow?.bulletins_generes), icon: AlertTriangle,
-      link: "/rh/pointage/mensuel", phase: "check",
-    },
-    {
-      id: "primes", label: "4. Primes",
-      desc: workflow?.primes_count ? `${workflow.primes_count} prime(s)` : "Aucune prime",
-      done: !!(workflow?.primes_validees || workflow?.bulletins_generes), icon: Receipt,
-      link: "/rh/paie/primes", phase: "check",
-    },
-    {
-      id: "calcul", label: "5. Calcul",
+      id: "calcul", label: "Calcul",
       desc: hasBulletins ? `${bulletins.length || workflow?.bulletins_total || 0} bulletin(s)` : "Lancer le calcul",
       done: hasBulletins, icon: Calculator,
       action: calculerBatch, actionLabel: "Calculer la paie",
       actionDisabled: calculating || isLocked, phase: "process",
     },
     {
-      id: "validation", label: "6. Validation",
+      id: "validation", label: "Validation",
       desc: hasBulletins ? `${bulletins.filter(b => b.statut === "valide" || b.verrouille).length}/${bulletins.length} valide(s)` : "Apres calcul",
       done: !!allValidated, icon: CheckCircle,
       action: validerTous, actionLabel: "Valider tous",
       actionDisabled: !hasBulletins || allValidated || isLocked, phase: "process",
     },
     {
-      id: "verrouillage", label: "7. Verrouillage",
+      id: "verrouillage", label: "Verrouillage",
       desc: isLocked ? "Verrouille" : allValidated ? "Pret a verrouiller" : "Apres validation",
       done: isLocked, icon: Lock,
       action: verrouiller, actionLabel: "Verrouiller",
       actionDisabled: !allValidated || isLocked, phase: "process",
     },
     {
-      id: "virements", label: "8. Virements",
+      id: "virements", label: "Virements",
       desc: workflow?.virements_generes ? "Exporte" : "Export banque",
       done: !!workflow?.virements_generes, icon: CreditCard,
       action: exportVirements, actionLabel: "Exporter",
       actionDisabled: !isLocked, phase: "postlock",
     },
     {
-      id: "mra", label: "9. MRA",
+      id: "mra", label: "MRA",
       desc: workflow?.mra_declare ? "Declare" : "CSG/NSF/PAYE",
       done: !!workflow?.mra_declare, icon: FileSpreadsheet,
       link: "/rh/exports/paie", phase: "postlock",
     },
     {
-      id: "compta", label: "10. Compta",
+      id: "compta", label: "Compta",
       desc: workflow?.tous_comptabilises ? "Ecritures faites" : bulletinsNonComptabilises.length > 0 ? `${bulletinsNonComptabilises.length} a faire` : "Apres verrouillage",
       done: !!workflow?.tous_comptabilises, icon: BookOpen,
       action: comptabiliserPaie, actionLabel: "Comptabiliser",
@@ -381,7 +354,7 @@ export default function PaiePage() {
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Processus de paie</h1>
-            <p className="text-sm text-gray-500">Workflow complet : controle, calcul, validation, verrouillage, exports</p>
+            <p className="text-sm text-gray-500">Calcul, validation, verrouillage et exports</p>
           </div>
         </div>
 
@@ -418,44 +391,12 @@ export default function PaiePage() {
         {/* ═══ WORKFLOW STEPPER ═══ */}
         {societe !== "all" && (
           <div className="space-y-4">
-            {/* Phase 1: Controles prealables (jamais bloquants) */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-semibold text-gray-600">
-                  Phase 1 — Controles prealables (informatif)
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pb-3">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {steps.filter(s => s.phase === "check").map(step => {
-                    const Icon = step.icon
-                    return (
-                      <div key={step.id} className={`flex items-center gap-3 p-3 rounded-lg border ${step.done ? "bg-green-50 border-green-200" : "bg-orange-50 border-orange-200"}`}>
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${step.done ? "bg-green-100 text-green-600" : "bg-orange-100 text-orange-600"}`}>
-                          {step.done ? <CheckCircle className="w-4 h-4" /> : <Icon className="w-4 h-4" />}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-gray-800">{step.label}</p>
-                          <p className="text-[10px] text-gray-500">{step.desc}</p>
-                        </div>
-                        {step.link && (
-                          <a href={step.link}>
-                            <Button size="sm" variant="ghost" className="h-7 text-xs px-2 shrink-0">Voir</Button>
-                          </a>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Phase 2: Processus principal */}
+            {/* Calcul, validation et verrouillage */}
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-semibold" style={{ color: NAVY }}>
                   <ShieldCheck className="w-4 h-4 inline mr-1" />
-                  Phase 2 — Calcul, validation et verrouillage
+                  Calcul, validation et verrouillage
                 </CardTitle>
               </CardHeader>
               <CardContent className="pb-3">
@@ -499,12 +440,12 @@ export default function PaiePage() {
               </CardContent>
             </Card>
 
-            {/* Phase 3: Post-verrouillage */}
+            {/* Post-verrouillage */}
             <Card className={!isLocked ? "opacity-50" : ""}>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-semibold" style={{ color: GOLD }}>
                   <Lock className="w-4 h-4 inline mr-1" />
-                  Phase 3 — Apres verrouillage (exports et comptabilite)
+                  Apres verrouillage — Exports et comptabilite
                   {!isLocked && <span className="text-xs text-gray-400 font-normal ml-2">— Disponible apres verrouillage</span>}
                 </CardTitle>
               </CardHeader>
