@@ -946,7 +946,18 @@ export default function PlanningPage() {
                       <td className="sticky left-0 bg-white z-10 border px-2 py-1 font-medium truncate max-w-[140px]">{emp.prenom} {emp.nom}</td>
                       {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => {
                         const cell = planning[emp.id]?.[d]
-                        const creneau = cell ? (cell.creneau_id === "conge" || cell.creneau_id?.startsWith("conge_") ? CONGE_CRENEAU : getCreneauById(cell.creneau_id)) : REPOS_CRENEAU
+                        const isCongeCell = cell && (cell.creneau_id === "conge" || cell.creneau_id?.startsWith("conge_"))
+                        const leaveType = cell?.creneau_id?.startsWith("conge_") ? cell.creneau_id.replace("conge_", "") : approvedLeaves[emp.id]?.get(d)
+                        const leaveMonthColors: Record<string, { couleur: string; code: string; nom: string }> = {
+                          AL: { couleur: "bg-blue-100 text-blue-700", code: "AL", nom: "Local Leave" },
+                          SL: { couleur: "bg-orange-100 text-orange-700", code: "SL", nom: "Sick Leave" },
+                          MAT: { couleur: "bg-purple-100 text-purple-700", code: "MAT", nom: "Maternité" },
+                          PAT: { couleur: "bg-indigo-100 text-indigo-700", code: "PAT", nom: "Paternité" },
+                          SANS_SOLDE: { couleur: "bg-gray-200 text-gray-600", code: "SS", nom: "Sans solde" },
+                        }
+                        const creneau = isCongeCell
+                          ? { ...CONGE_CRENEAU, ...(leaveMonthColors[leaveType || "AL"] || {}), couleur: leaveMonthColors[leaveType || "AL"]?.couleur || CONGE_CRENEAU.couleur, code: leaveMonthColors[leaveType || "AL"]?.code || "C", nom: leaveMonthColors[leaveType || "AL"]?.nom || "Congé" }
+                          : cell ? getCreneauById(cell.creneau_id) : REPOS_CRENEAU
                         const isEditing = editCell?.empId === emp.id && editCell?.day === d
                         const hasConflict = cellHasConflict(emp.id, d)
                         return (

@@ -791,22 +791,25 @@ export default function EspaceEmployePage() {
         const approvedLeaves = (histRes.conges || []).filter((c: any) => c.statut === "approuve" || c.statut === "approved")
         const leaveMonthStr = today.slice(0, 7) // "2026-04"
 
-        // Mark planning days that have approved leave
-        const leaveDays = new Set<number>()
+        // Mark planning days that have approved leave (with type)
+        const leaveDays = new Map<number, string>()
         for (const c of approvedLeaves) {
           const startStr = String(c.date_debut || "").slice(0, 10)
           const endStr = String(c.date_fin || c.date_debut || "").slice(0, 10)
+          const leaveType = c.type_conge || "AL"
           if (!startStr) continue
           for (let d = 1; d <= 31; d++) {
             const dayStr = `${leaveMonthStr}-${String(d).padStart(2, "0")}`
-            if (dayStr >= startStr && dayStr <= endStr) leaveDays.add(d)
+            if (dayStr >= startStr && dayStr <= endStr) leaveDays.set(d, leaveType)
           }
         }
 
-        // Override planning: mark leave days as Congé
+        // Override planning: mark leave days with their type
         const mergedPlanning = myPlanning.map((p: any) => {
-          if (leaveDays.has(p.jour || p.day)) {
-            return { ...p, shift: "Congé", est_repos: false, heure_debut: null, heure_fin: null, heures_prevues: 0 }
+          const lt = leaveDays.get(p.jour || p.day)
+          if (lt) {
+            const leaveLabels: Record<string, string> = { AL: "Local Leave", SL: "Sick Leave", MAT: "Maternité", PAT: "Paternité", SANS_SOLDE: "Sans solde" }
+            return { ...p, shift: leaveLabels[lt] || "Congé", leave_type: lt, est_repos: false, heure_debut: null, heure_fin: null, heures_prevues: 0 }
           }
           return p
         })
@@ -1220,8 +1223,9 @@ export default function EspaceEmployePage() {
           const periodeMonth = new Date().toISOString().slice(0, 7)
           const monthLabel = new Date().toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
           const sorted = [...planning].sort((a: any, b: any) => (a.jour || 0) - (b.jour || 0))
-          const workDays = sorted.filter((p: any) => !p.est_repos && p.shift !== 'Repos' && p.shift !== 'R')
-          const reposDays = sorted.filter((p: any) => p.est_repos || p.shift === 'Repos' || p.shift === 'R')
+          const workDays = sorted.filter((p: any) => !p.est_repos && p.shift !== 'Repos' && p.shift !== 'R' && !p.leave_type)
+          const leaveDaysCount = sorted.filter((p: any) => !!p.leave_type)
+          const reposDays = sorted.filter((p: any) => (p.est_repos || p.shift === 'Repos' || p.shift === 'R') && !p.leave_type)
           const totalHours = workDays.reduce((s: number, p: any) => s + (Number(p.heures_prevues) || 0), 0)
 
           const shiftColors: Record<string, { bg: string; text: string; icon: string }> = {
@@ -1235,7 +1239,17 @@ export default function EspaceEmployePage() {
             "Nuit": { bg: "#6366f115", text: "#6366f1", icon: "🌙" },
             "N": { bg: "#6366f115", text: "#6366f1", icon: "🌙" },
           }
-          const getShiftStyle = (shift: string) => shiftColors[shift] || { bg: "#4191FF15", text: "#4191FF", icon: "📋" }
+          const leaveTypeColors: Record<string, { bg: string; text: string; icon: string }> = {
+            "AL": { bg: "#3b82f615", text: "#2563eb", icon: "🏖️" },
+            "SL": { bg: "#f9731615", text: "#ea580c", icon: "🏥" },
+            "MAT": { bg: "#a855f715", text: "#9333ea", icon: "👶" },
+            "PAT": { bg: "#6366f115", text: "#4f46e5", icon: "👨‍👶" },
+            "SANS_SOLDE": { bg: "#6b728015", text: "#4b5563", icon: "📋" },
+          }
+          const getShiftStyle = (shift: string, leaveType?: string) => {
+            if (leaveType) return leaveTypeColors[leaveType] || { bg: "#10b98115", text: "#059669", icon: "📋" }
+            return shiftColors[shift] || { bg: "#4191FF15", text: "#4191FF", icon: "📋" }
+          }
 
           return (
             <div className="space-y-4">
@@ -1249,18 +1263,22 @@ export default function EspaceEmployePage() {
               </div>
 
               {/* Stats cards */}
-              <div className="grid grid-cols-3 gap-3">
-                <div className="rounded-2xl p-4 text-center" style={{ backgroundColor: `${BLUE}10` }}>
-                  <p className="text-2xl font-bold" style={{ color: BLUE }}>{workDays.length}</p>
-                  <p className="text-[11px] text-gray-500">Jours travaillés</p>
+              <div className="grid grid-cols-4 gap-2">
+                <div className="rounded-2xl p-3 text-center" style={{ backgroundColor: `${BLUE}10` }}>
+                  <p className="text-xl font-bold" style={{ color: BLUE }}>{workDays.length}</p>
+                  <p className="text-[10px] text-gray-500">Travail</p>
                 </div>
-                <div className="rounded-2xl p-4 text-center" style={{ backgroundColor: `${GOLD}10` }}>
-                  <p className="text-2xl font-bold" style={{ color: GOLD }}>{totalHours}h</p>
-                  <p className="text-[11px] text-gray-500">Heures prévues</p>
+                <div className="rounded-2xl p-3 text-center" style={{ backgroundColor: `${GOLD}10` }}>
+                  <p className="text-xl font-bold" style={{ color: GOLD }}>{totalHours}h</p>
+                  <p className="text-[10px] text-gray-500">Heures</p>
                 </div>
-                <div className="rounded-2xl p-4 text-center bg-gray-50">
-                  <p className="text-2xl font-bold text-gray-400">{reposDays.length}</p>
-                  <p className="text-[11px] text-gray-500">Repos</p>
+                <div className="rounded-2xl p-3 text-center" style={{ backgroundColor: "#3b82f610" }}>
+                  <p className="text-xl font-bold text-blue-600">{leaveDaysCount.length}</p>
+                  <p className="text-[10px] text-gray-500">Congés</p>
+                </div>
+                <div className="rounded-2xl p-3 text-center bg-gray-50">
+                  <p className="text-xl font-bold text-gray-400">{reposDays.length}</p>
+                  <p className="text-[10px] text-gray-500">Repos</p>
                 </div>
               </div>
 
@@ -1276,20 +1294,21 @@ export default function EspaceEmployePage() {
                 <div className="space-y-2">
                   {sorted.map((p: any, i: number) => {
                     const isRepos = p.est_repos || p.shift === 'Repos' || p.shift === 'R'
+                    const isLeave = !!p.leave_type
                     const dateStr = `${periodeMonth}-${String(p.jour).padStart(2, '0')}`
                     const dateObj = new Date(dateStr + "T12:00:00")
                     const dayNum = dateObj.getDate()
                     const dayName = dateObj.toLocaleDateString("fr-FR", { weekday: "short" })
                     const isToday = dateStr === new Date().toISOString().slice(0, 10)
                     const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6
-                    const style = isRepos ? null : getShiftStyle(p.shift || "Jour")
+                    const style = isRepos && !isLeave ? null : getShiftStyle(p.shift || "Jour", p.leave_type)
 
                     return (
                       <div
                         key={i}
                         className={`flex items-center gap-3 p-3 rounded-2xl transition-all duration-200 ${isToday ? "ring-2 ring-offset-2" : ""}`}
                         style={{
-                          backgroundColor: isRepos ? (isWeekend ? "#f9fafb" : "#f3f4f6") : style?.bg,
+                          backgroundColor: isRepos && !isLeave ? (isWeekend ? "#f9fafb" : "#f3f4f6") : style?.bg,
                           ...(isToday ? { ringColor: GOLD } : {}),
                         }}
                       >
@@ -1297,8 +1316,8 @@ export default function EspaceEmployePage() {
                         <div
                           className="flex flex-col items-center justify-center rounded-xl w-12 h-12 flex-shrink-0"
                           style={{
-                            backgroundColor: isToday ? GOLD : isRepos ? "#e5e7eb" : "white",
-                            color: isToday ? "white" : isRepos ? "#9ca3af" : NAVY,
+                            backgroundColor: isToday ? GOLD : isRepos && !isLeave ? "#e5e7eb" : "white",
+                            color: isToday ? "white" : isRepos && !isLeave ? "#9ca3af" : NAVY,
                           }}
                         >
                           <span className="text-[10px] font-medium uppercase leading-none">{dayName}</span>
@@ -1307,8 +1326,13 @@ export default function EspaceEmployePage() {
 
                         {/* Shift info */}
                         <div className="flex-1 min-w-0">
-                          {isRepos ? (
+                          {isRepos && !isLeave ? (
                             <p className="text-sm font-medium text-gray-400">Repos</p>
+                          ) : isLeave ? (
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm">{style?.icon}</span>
+                              <p className="text-sm font-semibold" style={{ color: style?.text }}>{p.shift}</p>
+                            </div>
                           ) : (
                             <>
                               <div className="flex items-center gap-2">
@@ -1325,7 +1349,7 @@ export default function EspaceEmployePage() {
                         </div>
 
                         {/* Hours badge */}
-                        {!isRepos && p.heures_prevues && (
+                        {!isRepos && !isLeave && p.heures_prevues && (
                           <div className="rounded-xl px-2.5 py-1 text-xs font-bold flex-shrink-0" style={{ backgroundColor: "white", color: style?.text }}>
                             {p.heures_prevues}h
                           </div>
