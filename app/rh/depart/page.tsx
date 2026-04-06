@@ -329,18 +329,39 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
 }
 
 // ── Sub-component: Recent Departures List ──
-function RecentDepartures({ refreshKey }: { refreshKey: number }) {
+function RecentDepartures({ refreshKey, onReintegrated }: { refreshKey: number; onReintegrated?: () => void }) {
   const [departs, setDeparts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [reintegratingId, setReintegratingId] = useState<string | null>(null)
 
-  useEffect(() => {
+  const load = () => {
     setLoading(true)
     fetch("/api/rh/depart?action=recent")
       .then(r => r.json())
       .then(d => setDeparts(d.departs || []))
       .catch(() => setDeparts([]))
       .finally(() => setLoading(false))
-  }, [refreshKey])
+  }
+
+  useEffect(() => { load() }, [refreshKey])
+
+  const reintegrer = async (empId: string, nom: string) => {
+    if (!confirm(`Réintégrer ${nom} ? Cette action annulera le départ et remettra l'employé en statut actif.`)) return
+    setReintegratingId(empId)
+    try {
+      const res = await fetch("/api/rh/depart", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reintegrer", employe_id: empId }),
+      })
+      const data = await res.json()
+      if (!res.ok) { alert(data.error || "Erreur réintégration"); return }
+      alert(data.message || "Employé réintégré")
+      load()
+      onReintegrated?.()
+    } catch { alert("Erreur réseau") }
+    finally { setReintegratingId(null) }
+  }
 
   return (
     <Card>
@@ -365,6 +386,7 @@ function RecentDepartures({ refreshKey }: { refreshKey: number }) {
                 <TableHead>Type</TableHead>
                 <TableHead>Ancienneté</TableHead>
                 <TableHead>Raison</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -398,6 +420,18 @@ function RecentDepartures({ refreshKey }: { refreshKey: number }) {
                     </TableCell>
                     <TableCell className="text-sm">{ancLabel}</TableCell>
                     <TableCell className="text-sm text-gray-500 max-w-[200px] truncate">{d.raison_depart || "—"}</TableCell>
+                    <TableCell>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs border-green-300 text-green-700 hover:bg-green-50"
+                        onClick={() => reintegrer(d.id, `${d.prenom} ${d.nom}`)}
+                        disabled={reintegratingId === d.id}
+                      >
+                        {reintegratingId === d.id ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
+                        Réintégrer
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 )
               })}

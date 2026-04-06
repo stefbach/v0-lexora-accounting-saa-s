@@ -522,7 +522,47 @@ export async function POST(request: Request) {
       })
     }
 
-    return NextResponse.json({ error: 'Action non reconnue. Utilisez calculer_solde, confirmer_depart ou sortie_manuelle.' }, { status: 400 })
+    // ═══════════════════════════════════════════════════════
+    // ACTION: reintegrer — Cancel departure, reinstate employee
+    // ═══════════════════════════════════════════════════════
+    if (action === 'reintegrer') {
+      const { employe_id } = body
+      if (!employe_id) return NextResponse.json({ error: 'employe_id requis' }, { status: 400 })
+
+      const { data: emp } = await supabase.from('employes').select('*').eq('id', employe_id).maybeSingle()
+      if (!emp) return NextResponse.json({ error: 'Employé non trouvé' }, { status: 404 })
+
+      // Check access
+      const accessibleIds = await getUserSocieteIds(user.id)
+      if (!accessibleIds.includes(emp.societe_id)) {
+        return NextResponse.json({ error: 'Accès non autorisé' }, { status: 403 })
+      }
+
+      if (!emp.date_depart) {
+        return NextResponse.json({ error: 'Cet employé n\'est pas en statut de départ' }, { status: 400 })
+      }
+
+      // Clear departure fields
+      const updateFields: Record<string, any> = { date_depart: null }
+      // Try to clear optional fields (may not exist)
+      try {
+        await supabase.from('employes').update({
+          date_depart: null,
+          date_depart_type: null,
+          raison_depart: null,
+        }).eq('id', employe_id)
+      } catch {
+        // Fallback if columns don't exist
+        await supabase.from('employes').update({ date_depart: null }).eq('id', employe_id)
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: `${emp.prenom} ${emp.nom} a été réintégré(e) avec succès`,
+      })
+    }
+
+    return NextResponse.json({ error: 'Action non reconnue. Utilisez calculer_solde, confirmer_depart, sortie_manuelle ou reintegrer.' }, { status: 400 })
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
