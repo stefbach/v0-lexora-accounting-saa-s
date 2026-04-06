@@ -740,7 +740,7 @@ export default function EspaceEmployePage() {
   const [pointageToday, setPointageToday] = useState<any>(null)
   const [bulletins, setBulletins] = useState<any[]>([])
   const [primes, setPrimes] = useState<any[]>([])
-  const [conges, setConges] = useState<any>({ al_solde: 20, sl_solde: 15 })
+  const [conges, setConges] = useState<any>({ al_droit: 22, al_pris: 0, al_solde: 22, sl_droit: 15, sl_pris: 0, sl_solde: 15 })
   const [planning, setPlanning] = useState<any[]>([])
   const [annonces, setAnnonces] = useState<any[]>([])
   const [now, setNow] = useState(new Date())
@@ -760,17 +760,31 @@ export default function EspaceEmployePage() {
       if (emp) {
         const today = todayISO()
         const periode = today.slice(0, 7)
-        const [ptRes, bulRes, prRes, cgRes, plRes] = await Promise.all([
+        const [ptRes, bulRes, prRes, cgRes, plRes, histRes] = await Promise.all([
           fetch(`/api/rh/pointage?date=${today}&employe_id=${emp.id}`).then(r => r.json()).catch(() => ({ pointages: [] })),
           fetch(`/api/rh/paie?action=list&employe_id=${emp.id}`).then(r => r.json()).catch(() => ({ bulletins: [] })),
           fetch(`/api/rh/primes?type=saisie&employe_id=${emp.id}`).then(r => r.json()).catch(() => ({ primes: [] })),
           fetch(`/api/rh/conges?action=balances&employe_id=${emp.id}`).then(r => r.json()).catch(() => ({ balances: [] })),
           fetch(`/api/rh/planning?periode=${periode}&societe_id=${emp.societe_id}&employe_id=${emp.id}`).then(r => r.json()).catch(() => ({ planning: [] })),
+          fetch(`/api/rh/conges?employe_id=${emp.id}`).then(r => r.json()).catch(() => ({ conges: [] })),
         ])
         setPointageToday(ptRes.pointages?.[0] || null)
         setBulletins(bulRes.bulletins || [])
         setPrimes(prRes.primes || [])
-        if (cgRes.balances?.[0]) setConges(cgRes.balances[0])
+        // Set leave balances from API
+        const bal = cgRes.balances?.find((b: any) => b.employe_id === emp.id) || cgRes.balances?.[0]
+        if (bal && bal.al_droit !== undefined) {
+          setConges(bal)
+        } else {
+          // Fallback: calculate from leave history
+          const histConges = (histRes.conges || histRes.demandes || []).filter((c: any) => c.statut === "approuve" || c.statut === "approved")
+          const alPris = histConges.filter((c: any) => c.type_conge === "AL").reduce((s: number, c: any) => s + (Number(c.nb_jours) || 0), 0)
+          const slPris = histConges.filter((c: any) => c.type_conge === "SL").reduce((s: number, c: any) => s + (Number(c.nb_jours) || 0), 0)
+          setConges({
+            al_droit: 22, al_pris: alPris, al_solde: 22 - alPris,
+            sl_droit: 15, sl_pris: slPris, sl_solde: 15 - slPris,
+          })
+        }
         // Filter planning to show only this employee's entries
         setPlanning((plRes.planning || []).filter((p: any) => p.employe_id === emp.id))
 
