@@ -40,6 +40,18 @@ export async function GET(request: Request) {
 
     const empIds = employes.map(e => e.id)
 
+    // 2a. Fetch employee groups
+    const { data: empGroupes } = await supabase.from('employe_groupes').select('*').in('employe_id', empIds)
+    const { data: groupes } = await supabase.from('groupes_employes').select('*').eq('societe_id', societe_id)
+
+    const groupeMap: Record<string, { groupe_id: string; groupe_nom: string }> = {}
+    for (const eg of empGroupes || []) {
+      const grp = (groupes || []).find((g: any) => g.id === eg.groupe_id)
+      if (grp) {
+        groupeMap[eg.employe_id] = { groupe_id: grp.id, groupe_nom: grp.nom }
+      }
+    }
+
     // 2. Fetch positions from employe_positions (type = 'domicile')
     const { data: positions } = await supabase
       .from('employe_positions')
@@ -98,13 +110,42 @@ export async function GET(request: Request) {
       "beau-bassin": [-20.2296, 57.4677], "grand gaube": [-20.0167, 57.6667],
       "grand river north west": [-20.1200, 57.5000], "thiais": [48.7647, 2.3960],
       "france": [48.8566, 2.3522],
+      "pailles": [-20.1833, 57.4833],
+      "saint pierre": [-20.2167, 57.5167],
+      "midlands": [-20.2500, 57.5000],
+      "reduit": [-20.2333, 57.4917],
+      "long mountain": [-20.1500, 57.5333],
+      "terre rouge": [-20.1500, 57.5167],
+      "riche terre": [-20.1333, 57.5167],
+      "arsenal": [-20.0833, 57.6333],
+      "triolet": [-20.0667, 57.5500],
+      "belle vue": [-20.2333, 57.4833],
+      "plaisance": [-20.4333, 57.6833],
+      "souillac": [-20.5167, 57.5167],
+      "chemin grenier": [-20.4833, 57.5000],
+      "bambous": [-20.2833, 57.4167],
+      "petite riviere": [-20.2000, 57.4667],
+      "coromandel": [-20.2167, 57.4500],
+      "la tour koenig": [-20.1833, 57.4833],
+      "castel": [-20.2333, 57.5000],
     }
 
     function geocodeFromAddress(adresse: string): [number, number] | null {
       if (!adresse) return null
       const lower = adresse.toLowerCase()
+      // Exact match
       for (const [city, coords] of Object.entries(MAURITIUS_GEOCODE)) {
         if (lower.includes(city)) return coords
+      }
+      // Fuzzy match: try each word of the address against each city name
+      const words = lower.split(/[\s,]+/).filter(w => w.length > 3)
+      for (const [city, coords] of Object.entries(MAURITIUS_GEOCODE)) {
+        const cityWords = city.split(/\s+/)
+        for (const word of words) {
+          if (cityWords.some(cw => cw.startsWith(word) || word.startsWith(cw))) {
+            return coords
+          }
+        }
       }
       return null
     }
@@ -133,6 +174,7 @@ export async function GET(request: Request) {
 
       const fullAdresse = pos?.adresse || emp.adresse_complete || [emp.adresse, emp.address, emp.adresse2, emp.address_2, emp.ville, emp.city, emp.code_postal].filter(Boolean).join(', ') || ''
 
+      const grpInfo = groupeMap[emp.id]
       return {
         employe_id: emp.id,
         nom: emp.nom || '',
@@ -145,10 +187,12 @@ export async function GET(request: Request) {
         shift_label,
         heure_debut: assignment?.heure_debut || null,
         heure_fin: assignment?.heure_fin || null,
+        groupe_id: grpInfo?.groupe_id || null,
+        groupe_nom: grpInfo?.groupe_nom || null,
       }
     })
 
-    return NextResponse.json({ positions: result, total: result.length })
+    return NextResponse.json({ positions: result, total: result.length, groupes: groupes || [] })
   } catch (e: unknown) {
     console.error('[geolocalisation GET]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })

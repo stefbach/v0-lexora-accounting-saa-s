@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Loader2, MapPin, Users, Navigation, Truck, RefreshCw, Clock, Coffee } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Loader2, MapPin, Users, Navigation, Truck, RefreshCw, Clock, Coffee, Send, Bot } from "lucide-react"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -29,6 +30,61 @@ interface EmployeePosition {
   shift_label: string
   heure_debut: string | null
   heure_fin: string | null
+  groupe_id: string | null
+  groupe_nom: string | null
+}
+
+interface Groupe {
+  id: string
+  societe_id: string
+  nom: string
+  code: string
+  couleur: string
+}
+
+function generateAIResponse(query: string, positions: EmployeePosition[], ramassageGroups: { time: string; zone: string; emps: EmployeePosition[] }[]): string {
+  const q = query.toLowerCase()
+  const working = positions.filter(p => p.shift_today === "travail")
+  const sansAdresse = positions.filter(p => !p.adresse || p.adresse === "")
+
+  if (q.includes("vehicule") || q.includes("véhicule") || q.includes("combien")) {
+    const groups = ramassageGroups.filter(g => g.emps.length > 0)
+    const nbVehicles = groups.reduce((s, g) => s + Math.ceil(g.emps.length / 4), 0)
+    return `Pour aujourd'hui, je recommande ${nbVehicles} vehicule(s) pour ${working.length} employes en service.\n\n${groups.map(g => `\u2022 ${g.time} -- ${g.zone}: ${g.emps.length} pers. -> ${Math.ceil(g.emps.length / 4)} vehicule(s)`).join('\n')}`
+  }
+
+  if (q.includes("ramassage") || q.includes("organise")) {
+    if (ramassageGroups.length === 0) return "Aucun groupe de ramassage disponible. Verifiez que les employes ont des adresses et des shifts assignes."
+    const shiftMatch = q.match(/(\d{2}:\d{2})/)
+    const filtered = shiftMatch ? ramassageGroups.filter(g => g.time === shiftMatch[1]) : ramassageGroups
+    if (filtered.length === 0) return `Aucun groupe de ramassage trouve pour l'horaire specifie. Horaires disponibles: ${[...new Set(ramassageGroups.map(g => g.time))].join(', ')}`
+    const nbV = filtered.reduce((s, g) => s + Math.ceil(g.emps.length / 4), 0)
+    return `Plan de ramassage${shiftMatch ? ` pour le shift de ${shiftMatch[1]}` : ''}:\n${nbV} vehicule(s) necessaire(s)\n\n${filtered.map(g => `\u2022 ${g.time} -- ${g.zone} (${g.emps.length} pers.):\n  ${g.emps.map(e => `${e.prenom} ${e.nom}`).join(', ')}\n  -> ${Math.ceil(g.emps.length / 4)} vehicule(s)`).join('\n\n')}`
+  }
+
+  if (q.includes("pres de") || q.includes("près de") || q.includes("habitent") || q.includes("zone")) {
+    const zoneMatch = q.match(/(?:pres de|près de|zone)\s+(.+)/i)
+    if (zoneMatch) {
+      const searchZone = zoneMatch[1].trim().toLowerCase()
+      const found = working.filter(p => p.adresse?.toLowerCase().includes(searchZone))
+      if (found.length === 0) return `Aucun employe en service trouve pres de "${zoneMatch[1].trim()}".`
+      return `${found.length} employe(s) en service pres de "${zoneMatch[1].trim()}":\n\n${found.map(e => `\u2022 ${e.prenom} ${e.nom} - ${e.adresse || 'Pas d\'adresse'}`).join('\n')}`
+    }
+  }
+
+  if (q.includes("sans adresse") || q.includes("adresse manquante") || q.includes("mettre a jour") || q.includes("mise à jour")) {
+    if (sansAdresse.length === 0) return "Tous les employes ont une adresse renseignee."
+    return `${sansAdresse.length} employe(s) sans adresse a mettre a jour:\n\n${sansAdresse.map(e => `\u2022 ${e.prenom} ${e.nom} (${e.poste || 'poste non defini'})`).join('\n')}`
+  }
+
+  // Default: summary
+  const zones = new Map<string, number>()
+  for (const p of working) {
+    const zone = extractZone(p.adresse)
+    zones.set(zone, (zones.get(zone) || 0) + 1)
+  }
+  const topZones = [...zones.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5)
+  return `Resume du jour:\n\u2022 ${positions.length} employes au total\n\u2022 ${working.length} en service\n\u2022 ${sansAdresse.length} sans adresse\n\u2022 ${ramassageGroups.length} groupes de ramassage\n\nTop zones en service:\n${topZones.map(([z, n]) => `\u2022 ${z}: ${n} employe(s)`).join('\n')}\n\nEssayez:\n- "Combien de vehicules faut-il ?"\n- "Organise le ramassage pour le shift de 06:00"\n- "Quels employes habitent pres de Rose Hill ?"\n- "Employes sans adresse"`
 }
 
 function extractZone(adresse: string): string {
@@ -51,8 +107,12 @@ export default function GeolocalisationPage() {
   const [societes, setSocietes] = useState<any[]>([])
   const [societe, setSociete] = useState("")
   const [positions, setPositions] = useState<EmployeePosition[]>([])
+  const [groupes, setGroupes] = useState<Groupe[]>([])
+  const [filterGroupe, setFilterGroupe] = useState<string>("all")
   const [loading, setLoading] = useState(false)
   const [view, setView] = useState<"carte" | "liste">("carte")
+  const [aiQuery, setAiQuery] = useState("")
+  const [aiResponse, setAiResponse] = useState<string | null>(null)
 
   useEffect(() => {
     Promise.all([
@@ -73,35 +133,42 @@ export default function GeolocalisationPage() {
       const res = await fetch(`/api/rh/geolocalisation?societe_id=${societe}`)
       const data = await res.json()
       setPositions(data.positions || [])
+      setGroupes(data.groupes || [])
     } catch {}
     setLoading(false)
   }, [societe])
 
   useEffect(() => { load() }, [load])
 
+  // Filter by group
+  const filteredPositions = useMemo(() => {
+    if (filterGroupe === "all") return positions
+    return positions.filter(p => p.groupe_id === filterGroupe)
+  }, [positions, filterGroupe])
+
   // Stats
-  const total = positions.length
-  const enService = positions.filter(p => p.shift_today === "travail").length
-  const repos = positions.filter(p => p.shift_today === "repos").length
-  const conge = positions.filter(p => p.shift_today === "conge").length
-  const avecAdresse = positions.filter(p => p.adresse && p.adresse !== "").length
+  const total = filteredPositions.length
+  const enService = filteredPositions.filter(p => p.shift_today === "travail").length
+  const repos = filteredPositions.filter(p => p.shift_today === "repos").length
+  const conge = filteredPositions.filter(p => p.shift_today === "conge").length
+  const avecAdresse = filteredPositions.filter(p => p.adresse && p.adresse !== "").length
   const sansAdresse = total - avecAdresse
-  const avecGPS = positions.filter(p => p.latitude && p.longitude).length
+  const avecGPS = filteredPositions.filter(p => p.latitude && p.longitude).length
 
   // Group by zone
   const zones = useMemo(() => {
     const map = new Map<string, EmployeePosition[]>()
-    for (const p of positions) {
+    for (const p of filteredPositions) {
       const zone = extractZone(p.adresse)
       if (!map.has(zone)) map.set(zone, [])
       map.get(zone)!.push(p)
     }
     return [...map.entries()].sort((a, b) => b[1].length - a[1].length)
-  }, [positions])
+  }, [filteredPositions])
 
   // Ramassage: group by shift start time, then by zone/proximity
   const ramassageGroups = useMemo(() => {
-    const working = positions.filter(e => e.shift_today === "travail" && e.adresse && e.adresse !== "")
+    const working = filteredPositions.filter(e => e.shift_today === "travail" && e.adresse && e.adresse !== "")
 
     // Group by start time
     const byTime = new Map<string, EmployeePosition[]>()
@@ -129,16 +196,16 @@ export default function GeolocalisationPage() {
 
     // Sort by time then by number of employees
     return groups.sort((a, b) => a.time.localeCompare(b.time) || b.emps.length - a.emps.length)
-  }, [positions])
+  }, [filteredPositions])
 
   // Unique shift times for filter
   const shiftTimes = useMemo(() => {
     const times = new Set<string>()
-    for (const p of positions.filter(e => e.shift_today === "travail")) {
+    for (const p of filteredPositions.filter(e => e.shift_today === "travail")) {
       times.add(p.heure_debut ? String(p.heure_debut).slice(0, 5) : "non défini")
     }
     return [...times].sort()
-  }, [positions])
+  }, [filteredPositions])
 
   const [filterTime, setFilterTime] = useState<string>("all")
 
@@ -160,6 +227,15 @@ export default function GeolocalisationPage() {
               {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
             </SelectContent>
           </Select>
+          {groupes.length > 0 && (
+            <Select value={filterGroupe} onValueChange={setFilterGroupe}>
+              <SelectTrigger className="w-44"><SelectValue placeholder="Groupe" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous les groupes</SelectItem>
+                {groupes.map(g => <SelectItem key={g.id} value={g.id}>{g.nom}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
           <div className="flex rounded-lg border overflow-hidden">
             <button onClick={() => setView("carte")} className={`px-3 py-2 text-xs font-medium ${view === "carte" ? "bg-[#0B0F2E] text-white" : "text-gray-500"}`}>Carte</button>
             <button onClick={() => setView("liste")} className={`px-3 py-2 text-xs font-medium ${view === "liste" ? "bg-[#0B0F2E] text-white" : "text-gray-500"}`}>Liste</button>
@@ -198,7 +274,7 @@ export default function GeolocalisationPage() {
             {view === "carte" && (
               <Card className="rounded-2xl shadow-sm overflow-hidden">
                 <CardContent className="p-0">
-                  <MapComponent positions={positions} />
+                  <MapComponent positions={filteredPositions} />
                 </CardContent>
               </Card>
             )}
@@ -225,7 +301,10 @@ export default function GeolocalisationPage() {
                     <TableBody>
                       {emps.map(p => (
                         <TableRow key={p.employe_id}>
-                          <TableCell className="py-2 text-sm font-medium">{p.prenom} {p.nom}</TableCell>
+                          <TableCell className="py-2 text-sm font-medium">
+                            {p.prenom} {p.nom}
+                            {p.groupe_nom && <Badge className="ml-2 text-[9px]" style={{ backgroundColor: `${GOLD}20`, color: GOLD }}>{p.groupe_nom}</Badge>}
+                          </TableCell>
                           <TableCell className="py-2 text-xs text-gray-500">{p.poste || "—"}</TableCell>
                           <TableCell className="py-2 text-xs text-gray-500 max-w-[200px] truncate">{p.adresse || "Non renseignée"}</TableCell>
                           <TableCell className="py-2">
@@ -276,6 +355,7 @@ export default function GeolocalisationPage() {
                         <div key={e.employe_id} className="flex items-center gap-2 text-xs">
                           <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: BLUE }} />
                           <span className="text-gray-700">{e.prenom} {e.nom}</span>
+                          {e.groupe_nom && <Badge className="text-[8px] px-1 py-0" style={{ backgroundColor: `${GOLD}15`, color: GOLD }}>{e.groupe_nom}</Badge>}
                           <span className="text-gray-300 ml-auto text-[10px] truncate max-w-[100px]">{e.adresse?.split(",")[0]}</span>
                         </div>
                       ))}
@@ -305,6 +385,44 @@ export default function GeolocalisationPage() {
           </div>
         </div>
       )}
+
+      {/* AI Planning Assistant */}
+      <Card className="rounded-2xl shadow-lg overflow-hidden" style={{ backgroundColor: NAVY, borderTop: `3px solid ${GOLD}` }}>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2 text-white">
+            <Bot className="w-5 h-5" style={{ color: GOLD }} />
+            <span>Assistant IA Planning</span>
+            <Badge className="text-[9px] ml-2" style={{ backgroundColor: `${GOLD}30`, color: GOLD }}>Beta</Badge>
+          </CardTitle>
+          <p className="text-xs" style={{ color: "rgba(255,255,255,0.5)" }}>Posez une question sur le planning, le ramassage ou les employes</p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <form onSubmit={(e) => { e.preventDefault(); if (aiQuery.trim()) { setAiResponse(generateAIResponse(aiQuery, filteredPositions, ramassageGroups)); } }} className="flex gap-2">
+            <Input
+              value={aiQuery}
+              onChange={e => setAiQuery(e.target.value)}
+              placeholder="Ex: Combien de vehicules faut-il pour demain ?"
+              className="flex-1 text-sm border-0 text-white placeholder:text-gray-500"
+              style={{ backgroundColor: "rgba(255,255,255,0.08)" }}
+            />
+            <Button type="submit" size="sm" className="shrink-0" style={{ backgroundColor: GOLD, color: NAVY }} disabled={!aiQuery.trim()}>
+              <Send className="w-4 h-4" />
+            </Button>
+          </form>
+          <div className="flex gap-1 flex-wrap">
+            {["Combien de vehicules ?", "Organise le ramassage", "Employes sans adresse", "Resume du jour"].map(q => (
+              <button key={q} onClick={() => { setAiQuery(q); setAiResponse(generateAIResponse(q, filteredPositions, ramassageGroups)) }} className="px-2 py-1 rounded-md text-[10px] font-medium transition-colors" style={{ backgroundColor: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.6)" }}>
+                {q}
+              </button>
+            ))}
+          </div>
+          {aiResponse && (
+            <div className="p-4 rounded-xl text-sm whitespace-pre-wrap leading-relaxed" style={{ backgroundColor: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.85)", borderLeft: `3px solid ${GOLD}` }}>
+              {aiResponse}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }
