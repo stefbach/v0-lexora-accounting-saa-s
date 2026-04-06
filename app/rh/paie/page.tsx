@@ -664,7 +664,7 @@ export default function PaiePage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="flex gap-1">
+                        <div className="flex gap-1 flex-wrap">
                           {!b.verrouille && b.statut === "brouillon" && (
                             <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => startEdit(b)}>
                               <Pencil className="w-3 h-3" />
@@ -674,6 +674,22 @@ export default function PaiePage() {
                             {pdfLoading === b.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileText className="w-3 h-3" />}
                             PDF
                           </Button>
+                          {!b.verrouille && !b.employe?.exclure_mra && (
+                            <Button size="sm" variant="ghost" className="h-7 text-[10px] text-amber-600 hover:bg-amber-50 px-1.5" onClick={async () => {
+                              if (!confirm(`Marquer ${b.employe?.prenom} ${b.employe?.nom} comme HORS MRA ?\n\nPlus de CSG/NSF/PAYE pour cet employe.`)) return
+                              await doAction("modifier_employe", { employe_id: b.employe_id, champs: { exclure_mra: true } })
+                            }}>
+                              Hors MRA
+                            </Button>
+                          )}
+                          {!b.verrouille && b.statut === "brouillon" && (
+                            <Button size="sm" variant="ghost" className="h-7 text-[10px] text-red-500 hover:bg-red-50 px-1.5" onClick={async () => {
+                              if (!confirm(`Supprimer le bulletin de ${b.employe?.prenom} ${b.employe?.nom} ?\n\nPour un employe sorti des effectifs, son bulletin sera supprime.`)) return
+                              await doAction("supprimer_bulletin", { bulletin_id: b.id })
+                            }}>
+                              <X className="w-3 h-3" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

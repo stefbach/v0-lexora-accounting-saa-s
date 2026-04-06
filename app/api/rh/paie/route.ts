@@ -372,6 +372,17 @@ export async function POST(request: Request) {
         }
         return true
       })
+      // Log filtered-out employees for debugging
+      const excluded = allEmps.filter(e => !employes.includes(e))
+      for (const e of excluded) {
+        console.log(`[paie batch] EXCLU: ${e.prenom} ${e.nom} — date_depart=${e.date_depart}, actif=${e.actif}`)
+      }
+      // Log all employees with their depart status for debugging
+      for (const e of allEmps) {
+        if (e.nom && (e.nom.toLowerCase().includes('godder') || e.nom.toLowerCase().includes('haggoo'))) {
+          console.log(`[paie batch] DEBUG ${e.prenom} ${e.nom}: date_depart=${JSON.stringify(e.date_depart)}, actif=${JSON.stringify(e.actif)}, exclure_mra=${JSON.stringify(e.exclure_mra)}, included=${employes.includes(e)}`)
+        }
+      }
       console.log(`[paie batch] ${employes.length} employes actifs sur ${allEmps.length} total pour societe=${societe_id}, periode=${periodeStr}`)
 
       // Get variables from request body if provided
@@ -626,6 +637,46 @@ export async function POST(request: Request) {
         erreurs: erreurs.length > 0 ? erreurs : undefined,
         debug: { societe_id, periode: periodeStr, nb_employes_total: allEmps.length, nb_actifs: employes.length, nb_bulletins: bulletinsSauvegardes.length, nb_erreurs: erreurs.length }
       })
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // Mark employee as hors MRA or set departure date
+    // ══════════════════════════════════════════════════════════════
+    if (action === 'modifier_employe') {
+      const { employe_id: eid, champs: empChamps } = body
+      if (!eid || !empChamps) return NextResponse.json({ error: 'employe_id et champs requis' }, { status: 400 })
+      const allowedEmp = ['exclure_mra', 'date_depart', 'actif']
+      const empUpdates: Record<string, any> = {}
+      for (const [k, v] of Object.entries(empChamps)) {
+        if (allowedEmp.includes(k)) empUpdates[k] = v
+      }
+      // Can't set actif directly (GENERATED), use date_depart instead
+      if ('actif' in empUpdates && empUpdates.actif === false && !empUpdates.date_depart) {
+        empUpdates.date_depart = new Date().toISOString().slice(0, 10)
+        delete empUpdates.actif
+      }
+      if ('actif' in empUpdates) delete empUpdates.actif // can't write GENERATED column
+      if (Object.keys(empUpdates).length === 0) return NextResponse.json({ error: 'Aucun champ modifiable' }, { status: 400 })
+      const { error: empErr } = await supabase.from('employes').update(empUpdates).eq('id', eid)
+      if (empErr) {
+        console.error('[modifier_employe] error:', empErr.message)
+        return NextResponse.json({ error: empErr.message }, { status: 500 })
+      }
+      return NextResponse.json({ success: true })
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // Delete a specific bulletin
+    // ══════════════════════════════════════════════════════════════
+    if (action === 'supprimer_bulletin') {
+      const { bulletin_id: bid } = body
+      if (!bid) return NextResponse.json({ error: 'bulletin_id requis' }, { status: 400 })
+      const { data: bul } = await supabase.from('bulletins_paie').select('id, verrouille').eq('id', bid).single()
+      if (!bul) return NextResponse.json({ error: 'Bulletin non trouve' }, { status: 404 })
+      if (bul.verrouille) return NextResponse.json({ error: 'Bulletin verrouille' }, { status: 403 })
+      const { error: dErr } = await supabase.from('bulletins_paie').delete().eq('id', bid)
+      if (dErr) return NextResponse.json({ error: dErr.message }, { status: 500 })
+      return NextResponse.json({ success: true })
     }
 
     // ══════════════════════════════════════════════════════════════
