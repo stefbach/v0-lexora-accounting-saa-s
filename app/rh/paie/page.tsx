@@ -1,12 +1,12 @@
 "use client"
-import { useState, useEffect, useCallback } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Calculator, Download, FileText, BookOpen, AlertTriangle, CheckCircle, Lock, Unlock, ShieldCheck, ArrowRight, Clock, CreditCard, FileSpreadsheet, Receipt } from "lucide-react"
+import { Loader2, Calculator, Download, FileText, BookOpen, AlertTriangle, CheckCircle, Lock, Unlock, ShieldCheck, ArrowRight, Clock, CreditCard, FileSpreadsheet, Receipt, Pencil, X, Save } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 function fmt(n: number) { return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "MUR", maximumFractionDigits: 0 }).format(n) }
@@ -89,6 +89,7 @@ export default function PaiePage() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "workflow_status", societe_id: societe, periode })
       })
+      if (!res.ok) { setWorkflow(null); return } // tables may not exist yet
       const data = await res.json()
       setWorkflow(data.workflow || null)
       setAudit(data.audit || [])
@@ -199,8 +200,15 @@ export default function PaiePage() {
   }
 
   const bulletinsNonComptabilises = bulletins.filter(b => b.statut === "valide" && !b.comptabilise)
-  const isLocked = workflow?.tous_verrouilles || false
-  const allValidated = workflow?.tous_valides || false
+
+  // Use local bulletins as fallback when workflow API fails (tables not created yet)
+  const hasBulletins = bulletins.length > 0 || !!workflow?.bulletins_generes
+  const allBrouillon = bulletins.length > 0 && bulletins.every(b => b.statut === "brouillon")
+  const localAllValidated = bulletins.length > 0 && bulletins.every(b => b.statut === "valide" || b.verrouille)
+  const localAllLocked = bulletins.length > 0 && bulletins.every(b => b.verrouille)
+
+  const isLocked = workflow?.tous_verrouilles || localAllLocked
+  const allValidated = workflow?.tous_valides || localAllValidated
 
   // ─── Workflow Stepper ──────────────────────────────────────────
   // Steps 1-4 are informational checks (never block progression)
@@ -237,17 +245,17 @@ export default function PaiePage() {
     },
     {
       id: "calcul", label: "5. Calcul",
-      desc: workflow?.bulletins_total ? `${workflow.bulletins_total} bulletin(s)` : "Lancer le calcul",
-      done: !!workflow?.bulletins_generes, icon: Calculator,
+      desc: hasBulletins ? `${bulletins.length || workflow?.bulletins_total || 0} bulletin(s)` : "Lancer le calcul",
+      done: hasBulletins, icon: Calculator,
       action: calculerBatch, actionLabel: "Calculer la paie",
       actionDisabled: calculating || isLocked, phase: "process",
     },
     {
       id: "validation", label: "6. Validation",
-      desc: workflow?.bulletins_generes ? `${workflow?.bulletins_valides || 0}/${workflow?.bulletins_total || 0}` : "Apres calcul",
+      desc: hasBulletins ? `${bulletins.filter(b => b.statut === "valide" || b.verrouille).length}/${bulletins.length} valide(s)` : "Apres calcul",
       done: !!allValidated, icon: CheckCircle,
       action: validerTous, actionLabel: "Valider tous",
-      actionDisabled: !workflow?.bulletins_generes || allValidated || isLocked, phase: "process",
+      actionDisabled: !hasBulletins || allValidated || isLocked, phase: "process",
     },
     {
       id: "verrouillage", label: "7. Verrouillage",
@@ -305,6 +313,39 @@ export default function PaiePage() {
       coutEmployeur: totalBrut + totalCharges,
       detailCSG: `CSG ${(csgRate * 100).toFixed(1)}% + NSF 1.5%${paye > 0 ? " + PAYE " + fmt(paye) : ""}`
     })
+  }
+
+  // ─── Inline editing ─────────────────────────────────────────────
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editFields, setEditFields] = useState<Record<string, number | string>>({})
+  const [savingEdit, setSavingEdit] = useState(false)
+
+  const startEdit = (b: any) => {
+    setEditingId(b.id)
+    setEditFields({
+      salaire_base: Number(b.salaire_base) || 0,
+      heures_sup_montant: Number(b.heures_sup_montant) || 0,
+      special_allowance_1: Number(b.special_allowance_1) || 0,
+      transport_allowance: Number(b.transport_allowance) || 0,
+      jours_absence: Number(b.jours_absence) || 0,
+      montant_absence: Number(b.montant_absence) || 0,
+    })
+  }
+
+  const saveEdit = async () => {
+    if (!editingId) return
+    setSavingEdit(true)
+    try {
+      const res = await fetch("/api/rh/paie", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "modifier_bulletin", bulletin_id: editingId, champs: editFields })
+      })
+      const data = await res.json()
+      if (!res.ok) { alert(data.error || "Erreur"); return }
+      setEditingId(null)
+      load(); loadWorkflow()
+    } catch (e: any) { alert("Erreur: " + (e.message || "")) }
+    finally { setSavingEdit(false) }
   }
 
   return (
@@ -570,7 +611,8 @@ export default function PaiePage() {
                 </TableHeader>
                 <TableBody>
                   {bulletins.map(b => (
-                    <TableRow key={b.id} className={b.verrouille ? "bg-gray-50" : ""}>
+                    <React.Fragment key={b.id}>
+                    <TableRow className={b.verrouille ? "bg-gray-50" : ""}>
                       <TableCell className="font-medium">
                         {b.employe?.prenom} {b.employe?.nom}
                         {b.employe?.devise_salaire === "EUR" && (
@@ -603,12 +645,61 @@ export default function PaiePage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => ouvrirPDF(b.id)} disabled={pdfLoading === b.id}>
-                          {pdfLoading === b.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileText className="w-3 h-3" />}
-                          PDF
-                        </Button>
+                        <div className="flex gap-1">
+                          {!b.verrouille && b.statut === "brouillon" && (
+                            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => startEdit(b)}>
+                              <Pencil className="w-3 h-3" />
+                            </Button>
+                          )}
+                          <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => ouvrirPDF(b.id)} disabled={pdfLoading === b.id}>
+                            {pdfLoading === b.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileText className="w-3 h-3" />}
+                            PDF
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
+                    {/* Inline edit row */}
+                    {editingId === b.id && (
+                      <TableRow className="bg-blue-50">
+                        <TableCell colSpan={11} className="p-4">
+                          <div className="flex items-center gap-2 mb-3">
+                            <Pencil className="w-4 h-4 text-blue-600" />
+                            <span className="text-sm font-bold text-blue-700">Modifier le bulletin de {b.employe?.prenom} {b.employe?.nom}</span>
+                            <Button size="sm" variant="ghost" className="ml-auto h-6 text-xs" onClick={() => setEditingId(null)}>
+                              <X className="w-3 h-3 mr-1" />Annuler
+                            </Button>
+                          </div>
+                          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                            {[
+                              { key: "salaire_base", label: "Salaire base" },
+                              { key: "heures_sup_montant", label: "Heures sup (MUR)" },
+                              { key: "special_allowance_1", label: "Primes" },
+                              { key: "transport_allowance", label: "Transport" },
+                              { key: "jours_absence", label: "Jours absence" },
+                              { key: "montant_absence", label: "Montant absence" },
+                            ].map(f => (
+                              <div key={f.key}>
+                                <label className="text-[10px] text-gray-500 block mb-0.5">{f.label}</label>
+                                <Input
+                                  type="number"
+                                  className="h-8 text-sm"
+                                  value={editFields[f.key] ?? 0}
+                                  onChange={e => setEditFields(prev => ({ ...prev, [f.key]: parseFloat(e.target.value) || 0 }))}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                          <div className="mt-3 flex gap-2">
+                            <Button size="sm" className="h-8 text-xs" style={{ backgroundColor: NAVY, color: "white" }} onClick={saveEdit} disabled={savingEdit}>
+                              {savingEdit ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Save className="w-3 h-3 mr-1" />}
+                              Enregistrer
+                            </Button>
+                            <p className="text-[10px] text-gray-400 self-center">Le bulletin repassera en brouillon apres modification.</p>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    </React.Fragment>
                   ))}
                 </TableBody>
               </Table>

@@ -600,6 +600,38 @@ export async function POST(request: Request) {
       })
     }
 
+    // ══════════════════════════════════════════════════════════════
+    // Manual edit of a single bulletin
+    // ══════════════════════════════════════════════════════════════
+    if (action === 'modifier_bulletin') {
+      const { bulletin_id, champs } = body
+      if (!bulletin_id || !champs) return NextResponse.json({ error: 'bulletin_id et champs requis' }, { status: 400 })
+
+      // Check lock
+      const { data: existing } = await supabase.from('bulletins_paie').select('id, verrouille, statut').eq('id', bulletin_id).single()
+      if (!existing) return NextResponse.json({ error: 'Bulletin non trouve' }, { status: 404 })
+      if (existing.verrouille) return NextResponse.json({ error: 'Bulletin verrouille — modification impossible' }, { status: 403 })
+
+      // Only allow these fields to be manually edited
+      const allowed = ['salaire_base', 'heures_sup_montant', 'special_allowance_1', 'special_allowance_2', 'special_allowance_3',
+        'transport_allowance', 'petrol_allowance', 'increment_salaire', 'other_refund', 'eoy_bonus', 'departure_notice',
+        'jours_absence', 'montant_absence', 'paye', 'notes']
+      const updates: Record<string, any> = {}
+      for (const [k, v] of Object.entries(champs)) {
+        if (allowed.includes(k)) updates[k] = v
+      }
+      if (Object.keys(updates).length === 0) return NextResponse.json({ error: 'Aucun champ modifiable' }, { status: 400 })
+
+      // Recalculate deductions if salary fields changed
+      const base = Number(updates.salaire_base ?? (await supabase.from('bulletins_paie').select('salaire_base').eq('id', bulletin_id).single()).data?.salaire_base ?? 0)
+      // Update
+      const { data: updated, error: uErr } = await supabase.from('bulletins_paie')
+        .update({ ...updates, statut: 'brouillon' }) // reset to brouillon on edit
+        .eq('id', bulletin_id).select().single()
+      if (uErr) throw uErr
+      return NextResponse.json({ bulletin: updated })
+    }
+
     if (action === 'valider') {
       // Find bulletin — try exact match first, then ilike for period flexibility
       let bulletin: any = null
@@ -748,13 +780,20 @@ export async function POST(request: Request) {
       const { count: primesCount } = await supabase.from('primes_variables_mois')
         .select('id', { count: 'exact', head: true })
         .eq('periode', `${periodeStr}-01`)
-      // Period lock record
-      const { data: lockRecord } = await supabase.from('paie_periodes_lock')
-        .select('*').eq('societe_id', sid).eq('periode', `${periodeStr}-01`).maybeSingle()
-      // Audit log (last 10)
-      const { data: auditLog } = await supabase.from('paie_audit_log')
-        .select('*').eq('societe_id', sid).eq('periode', `${periodeStr}-01`)
-        .order('created_at', { ascending: false }).limit(10)
+      // Period lock record (table may not exist yet — catch error)
+      let lockRecord: any = null
+      let auditLog: any[] = []
+      try {
+        const { data: lr } = await supabase.from('paie_periodes_lock')
+          .select('*').eq('societe_id', sid).eq('periode', `${periodeStr}-01`).maybeSingle()
+        lockRecord = lr
+      } catch {}
+      try {
+        const { data: al } = await supabase.from('paie_audit_log')
+          .select('*').eq('societe_id', sid).eq('periode', `${periodeStr}-01`)
+          .order('created_at', { ascending: false }).limit(10)
+        auditLog = al || []
+      } catch {}
 
       return NextResponse.json({
         workflow: {
