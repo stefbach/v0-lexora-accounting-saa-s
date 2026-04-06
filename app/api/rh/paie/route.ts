@@ -430,6 +430,13 @@ export async function POST(request: Request) {
           .select('*').eq('employe_id', emp.id).eq('periode', periodeDate)
         let total_primes = (primesMois || []).reduce((s, p) => s + Number(p.montant || 0), 0)
 
+        // 2b. Primes fixes de la fiche employé (récurrentes chaque mois)
+        const primeFixe1 = Number(emp.prime_fixe_1) || 0
+        const primeFixe2 = Number(emp.prime_fixe_2) || 0
+        const primeFixe3 = Number(emp.prime_fixe_3) || 0
+        const totalPrimesFixes = primeFixe1 + primeFixe2 + primeFixe3
+        total_primes += totalPrimesFixes
+
         // 3. Congés approuvés du mois — distinguer SL (réduit seuil OT) vs AL (ne réduit pas)
         const { data: congesApprouves } = await supabase.from('demandes_conges')
           .select('*').eq('employe_id', emp.id).eq('statut', 'approuve')
@@ -562,9 +569,10 @@ export async function POST(request: Request) {
         const transportAlloc = isHorsMRA ? 0 : (Number(emp.transport_allowance) || 0)
         const petrolAlloc = isHorsMRA ? 0 : (Number(emp.petrol_allowance) || 0)
         const mraTag = isHorsMRA ? ' [HORS MRA - Brut=Base]' : ''
+        const primesFixesDetail = totalPrimesFixes > 0 ? `, Primes fixes: ${totalPrimesFixes}` : ''
         const notesResume = isHorsMRA
           ? `Base: ${salaire_base_mur} [HORS MRA - Brut=Net=Base]`
-          : `Base: ${salaire_base_mur}, Transport: ${transportAlloc}, Petrol: ${petrolAlloc}, OT: ${Math.round(total_ot_montant)}, Primes: ${Math.round(total_primes)}, Absences: ${jours_absence_injust}j`
+          : `Base: ${salaire_base_mur}, Transport: ${transportAlloc}, Petrol: ${petrolAlloc}, OT: ${Math.round(total_ot_montant)}, Primes var: ${Math.round(total_primes - totalPrimesFixes)}${primesFixesDetail}, Absences: ${jours_absence_injust}j`
         console.log(`[paie] ${emp.prenom} ${emp.nom}: base=${salaire_base_mur} transport=${transportAlloc} petrol=${petrolAlloc} OT=${Math.round(total_ot_montant)} primes=${Math.round(total_primes)} abs=${jours_absence_injust}${mraTag}`)
 
         const bulletin: Record<string, any> = {

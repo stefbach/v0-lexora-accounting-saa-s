@@ -135,7 +135,8 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
       delete body.id; delete body.created_at; delete body.actif; delete body.code
       // Parse numerics
       for (const k of ["salaire_base", "transport_allowance", "petrol_allowance", "phone_allowance",
-        "edf_total_deduction", "daily_bus_fare", "prime_trimestrielle"]) {
+        "edf_total_deduction", "daily_bus_fare", "prime_trimestrielle",
+        "prime_fixe_1", "prime_fixe_2", "prime_fixe_3"]) {
         if (body[k] !== undefined) body[k] = parseFloat(body[k]) || 0
       }
       const res = await fetch(`/api/rh/employes/${id}`, {
@@ -496,6 +497,17 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                   <Field label="Petrol allowance" field="petrol_allowance" type="number" />
                 </div>
                 <Field label="Phone allowance" field="phone_allowance" type="number" />
+                <div className="border-t pt-3 mt-3">
+                  <p className="text-xs font-semibold text-gray-600 mb-2">Primes fixes mensuelles (incluses automatiquement chaque mois)</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Libelle prime fixe 1" field="prime_fixe_1_libelle" placeholder="Ex: Prime de fonction" />
+                    <Field label="Montant prime fixe 1 (MUR)" field="prime_fixe_1" type="number" />
+                    <Field label="Libelle prime fixe 2" field="prime_fixe_2_libelle" placeholder="Ex: Prime anciennete" />
+                    <Field label="Montant prime fixe 2 (MUR)" field="prime_fixe_2" type="number" />
+                    <Field label="Libelle prime fixe 3" field="prime_fixe_3_libelle" placeholder="Ex: Prime logement" />
+                    <Field label="Montant prime fixe 3 (MUR)" field="prime_fixe_3" type="number" />
+                  </div>
+                </div>
                 <div className="border-t pt-3 mt-3 space-y-3">
                   <div className="flex items-center gap-3">
                     <Checkbox checked={form.nsf_csg_enabled ?? true} onCheckedChange={v => u("nsf_csg_enabled", v)} id="nsf" />
