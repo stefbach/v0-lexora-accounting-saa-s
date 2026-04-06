@@ -615,10 +615,13 @@ export default function PaiePage() {
                     <TableRow className={b.verrouille ? "bg-gray-50" : ""}>
                       <TableCell className="font-medium">
                         {b.employe?.prenom} {b.employe?.nom}
+                        {b.employe?.exclure_mra && (
+                          <span className="ml-1.5 px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[10px] rounded font-bold">HORS MRA</span>
+                        )}
                         {b.employe?.devise_salaire === "EUR" && (
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <span className="ml-2 px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs rounded font-semibold cursor-help">EUR</span>
+                              <span className="ml-1.5 px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs rounded font-semibold cursor-help">EUR</span>
                             </TooltipTrigger>
                             <TooltipContent><p>Taux: {b.employe?.taux_change_eur || 46.50} MUR</p></TooltipContent>
                           </Tooltip>

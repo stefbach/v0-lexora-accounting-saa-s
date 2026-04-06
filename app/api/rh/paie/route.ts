@@ -510,14 +510,32 @@ export async function POST(request: Request) {
         }
 
         const jt = jours_travailles > 0 ? jours_travailles : 26
+        const isHorsMRA = emp.exclure_mra === true
         const resultat = calculerBulletin(elements, params, jt, Number(emp.pct_refacturation) || 0)
+
+        // Hors champs MRA : pas de CSG, NSF, PAYE, pas de charges patronales
+        if (isHorsMRA) {
+          resultat.csg_salarie = 0
+          resultat.csg_patronal = 0
+          resultat.csg_bonus = 0
+          resultat.csg_patronal_bonus = 0
+          resultat.nsf_salarie = 0
+          resultat.nsf_patronal = 0
+          resultat.paye = 0
+          resultat.training_levy = 0
+          resultat.prgf = 0
+          resultat.total_deductions = 0
+          resultat.total_charges_patronales = 0
+          resultat.salaire_net = resultat.salaire_brut
+        }
         const salaire_net_final = Math.round((resultat.salaire_net - montant_absence_final) * 100) / 100
 
         // Résumé notes pour le bulletin
         const transportAlloc = Number(emp.transport_allowance) || 0
         const petrolAlloc = Number(emp.petrol_allowance) || 0
-        const notesResume = `Base: ${salaire_base_mur}, Transport: ${transportAlloc}, Petrol: ${petrolAlloc}, OT: ${Math.round(total_ot_montant)}, Primes: ${Math.round(total_primes)}, Absences: ${jours_absence_injust}j`
-        console.log(`[paie] ${emp.prenom} ${emp.nom}: base=${salaire_base_mur} transport=${transportAlloc} petrol=${petrolAlloc} OT=${Math.round(total_ot_montant)} primes=${Math.round(total_primes)} abs=${jours_absence_injust}`)
+        const mraTag = isHorsMRA ? ' [HORS MRA]' : ''
+        const notesResume = `Base: ${salaire_base_mur}, Transport: ${transportAlloc}, Petrol: ${petrolAlloc}, OT: ${Math.round(total_ot_montant)}, Primes: ${Math.round(total_primes)}, Absences: ${jours_absence_injust}j${mraTag}`
+        console.log(`[paie] ${emp.prenom} ${emp.nom}: base=${salaire_base_mur} transport=${transportAlloc} petrol=${petrolAlloc} OT=${Math.round(total_ot_montant)} primes=${Math.round(total_primes)} abs=${jours_absence_injust}${mraTag}`)
 
         const bulletin: Record<string, any> = {
           employe_id: emp.id,

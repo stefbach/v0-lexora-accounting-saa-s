@@ -68,6 +68,8 @@ export async function POST(request: Request) {
 
     for (const b of bulletins) {
       const emp = empMap.get(b.employe_id)
+      // Skip employees excluded from MRA (hors champs)
+      if (emp?.exclure_mra) continue
       const sb = Number(b.salaire_brut) || 0
       const csg_sal = Number(b.csg_salarie) || 0
       const csg_bon = Number(b.csg_bonus) || 0

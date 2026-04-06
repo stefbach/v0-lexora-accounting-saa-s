@@ -62,6 +62,8 @@ export async function POST(request: Request) {
 
     for (const b of bulletins) {
       const emp = empMap.get(b.employe_id)
+      // Skip employees excluded from MRA (hors champs)
+      if (emp?.exclure_mra) continue
       const sb = Number(b.salaire_brut) || 0
       const paye = Number(b.paye) || 0
       const salaireAnnualise = sb * 12
