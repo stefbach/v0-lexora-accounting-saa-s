@@ -514,13 +514,20 @@ export async function POST(request: Request) {
         const isHorsMRA = emp.exclure_mra === true
 
         // Hors champs MRA : salaire brut = salaire de base uniquement
-        // Pas de transport, petrol, OT, primes MRA-specifiques
+        // Pas de transport, petrol, OT, primes, pas de salary compensation
         const elements = isHorsMRA ? {
           salaire_base: salaire_base_mur,
+          salary_compensation: 0,
           transport_allowance: 0,
           petrol_allowance: 0,
           heures_sup_montant: 0,
           special_allowance_1: 0,
+          special_allowance_2: 0,
+          special_allowance_3: 0,
+          increment_salaire: 0,
+          other_refund: 0,
+          departure_notice: 0,
+          commission: 0,
           eoy_bonus: 0,
         } : {
           salaire_base: salaire_base_mur,
