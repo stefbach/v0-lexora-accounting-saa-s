@@ -203,99 +203,109 @@ export default function PaiePage() {
   const allValidated = workflow?.tous_valides || false
 
   // ─── Workflow Stepper ──────────────────────────────────────────
-  const steps = [
+  // Steps 1-4 are informational checks (never block progression)
+  // Steps 5-7 are sequential (each requires the previous)
+  // Steps 8-10 require verrouillage
+  const steps: {
+    id: string; label: string; desc: string; done: boolean; icon: any;
+    link?: string; action?: () => void; actionLabel?: string;
+    actionDisabled?: boolean; phase: "check" | "process" | "postlock";
+  }[] = [
     {
-      id: "planning",
-      label: "Planning",
-      desc: "Planning publie et valide",
-      done: workflow?.planning_publie,
-      icon: Clock,
-      link: "/rh/planning",
+      id: "planning", label: "1. Planning",
+      desc: workflow?.planning_publie ? "Planning publie" : "A verifier",
+      done: !!workflow?.planning_publie, icon: Clock, link: "/rh/planning",
+      phase: "check",
     },
     {
-      id: "pointage",
-      label: "Pointage",
-      desc: workflow?.pointage_count ? `${workflow.pointage_count} pointage(s)` : "Heures et presences",
-      done: workflow?.pointage_valide || workflow?.bulletins_generes,
-      icon: Clock,
-      link: "/rh/pointage/mensuel",
+      id: "pointage", label: "2. Pointage",
+      desc: workflow?.pointage_count ? `${workflow.pointage_count} pointage(s)` : "A verifier",
+      done: !!(workflow?.pointage_valide || workflow?.bulletins_generes), icon: Clock,
+      link: "/rh/pointage/mensuel", phase: "check",
     },
     {
-      id: "ot",
-      label: "Heures Sup",
-      desc: workflow?.ot_present ? "OT detectes dans bulletins" : "Aucun OT ce mois",
-      done: workflow?.ot_valide || workflow?.bulletins_generes,
-      icon: AlertTriangle,
-      link: "/rh/pointage/mensuel",
+      id: "ot", label: "3. Heures Sup",
+      desc: workflow?.ot_present ? "OT detectes" : "Aucun OT",
+      done: !!(workflow?.ot_valide || workflow?.bulletins_generes), icon: AlertTriangle,
+      link: "/rh/pointage/mensuel", phase: "check",
     },
     {
-      id: "primes",
-      label: "Primes",
-      desc: workflow?.primes_count ? `${workflow.primes_count} prime(s) saisie(s)` : "Aucune prime ce mois",
-      done: workflow?.primes_validees || workflow?.bulletins_generes,
-      icon: Receipt,
-      link: "/rh/paie/primes",
+      id: "primes", label: "4. Primes",
+      desc: workflow?.primes_count ? `${workflow.primes_count} prime(s)` : "Aucune prime",
+      done: !!(workflow?.primes_validees || workflow?.bulletins_generes), icon: Receipt,
+      link: "/rh/paie/primes", phase: "check",
     },
     {
-      id: "calcul",
-      label: "Calcul paie",
-      desc: `${workflow?.bulletins_total || 0} bulletin(s)`,
-      done: workflow?.bulletins_generes,
-      icon: Calculator,
-      action: calculerBatch,
-      actionLabel: "Calculer",
-      actionDisabled: calculating || isLocked,
+      id: "calcul", label: "5. Calcul",
+      desc: workflow?.bulletins_total ? `${workflow.bulletins_total} bulletin(s)` : "Lancer le calcul",
+      done: !!workflow?.bulletins_generes, icon: Calculator,
+      action: calculerBatch, actionLabel: "Calculer la paie",
+      actionDisabled: calculating || isLocked, phase: "process",
     },
     {
-      id: "validation",
-      label: "Validation",
-      desc: `${workflow?.bulletins_valides || 0}/${workflow?.bulletins_total || 0} valide(s)`,
-      done: allValidated,
-      icon: CheckCircle,
-      action: validerTous,
-      actionLabel: "Valider tous",
-      actionDisabled: !workflow?.bulletins_generes || allValidated || isLocked,
+      id: "validation", label: "6. Validation",
+      desc: workflow?.bulletins_generes ? `${workflow?.bulletins_valides || 0}/${workflow?.bulletins_total || 0}` : "Apres calcul",
+      done: !!allValidated, icon: CheckCircle,
+      action: validerTous, actionLabel: "Valider tous",
+      actionDisabled: !workflow?.bulletins_generes || allValidated || isLocked, phase: "process",
     },
     {
-      id: "verrouillage",
-      label: "Verrouillage",
-      desc: isLocked ? "Periode verrouillee" : "Verrouiller pour finaliser",
-      done: isLocked,
-      icon: Lock,
-      action: verrouiller,
-      actionLabel: "Verrouiller",
-      actionDisabled: !allValidated || isLocked,
+      id: "verrouillage", label: "7. Verrouillage",
+      desc: isLocked ? "Verrouille" : allValidated ? "Pret a verrouiller" : "Apres validation",
+      done: isLocked, icon: Lock,
+      action: verrouiller, actionLabel: "Verrouiller",
+      actionDisabled: !allValidated || isLocked, phase: "process",
     },
     {
-      id: "virements",
-      label: "Virements",
+      id: "virements", label: "8. Virements",
       desc: workflow?.virements_generes ? "Exporte" : "Export banque",
-      done: workflow?.virements_generes,
-      icon: CreditCard,
-      action: exportVirements,
-      actionLabel: "Exporter",
-      actionDisabled: !isLocked,
+      done: !!workflow?.virements_generes, icon: CreditCard,
+      action: exportVirements, actionLabel: "Exporter",
+      actionDisabled: !isLocked, phase: "postlock",
     },
     {
-      id: "mra",
-      label: "MRA",
-      desc: workflow?.mra_declare ? "Declare" : "Declarations CSG/NSF/PAYE",
-      done: workflow?.mra_declare,
-      icon: FileSpreadsheet,
-      link: "/rh/exports/paie",
-      actionDisabled: !isLocked,
+      id: "mra", label: "9. MRA",
+      desc: workflow?.mra_declare ? "Declare" : "CSG/NSF/PAYE",
+      done: !!workflow?.mra_declare, icon: FileSpreadsheet,
+      link: "/rh/exports/paie", phase: "postlock",
     },
     {
-      id: "compta",
-      label: "Comptabilite",
-      desc: workflow?.tous_comptabilises ? "Ecritures generees" : `${bulletinsNonComptabilises.length} a comptabiliser`,
-      done: workflow?.tous_comptabilises,
-      icon: Receipt,
-      action: comptabiliserPaie,
-      actionLabel: "Comptabiliser",
+      id: "compta", label: "10. Compta",
+      desc: workflow?.tous_comptabilises ? "Ecritures faites" : bulletinsNonComptabilises.length > 0 ? `${bulletinsNonComptabilises.length} a faire` : "Apres verrouillage",
+      done: !!workflow?.tous_comptabilises, icon: BookOpen,
+      action: comptabiliserPaie, actionLabel: "Comptabiliser",
       actionDisabled: !isLocked || comptabilisationLoading || bulletinsNonComptabilises.length === 0,
+      phase: "postlock",
     },
   ]
+
+  // Simulation state
+  const [simResult, setSimResult] = useState<{ brut: number; deductions: number; net: number; coutEmployeur: number; detailCSG: string } | null>(null)
+
+  const runSimulation = () => {
+    const brut = parseFloat((document.getElementById("sim-brut") as HTMLInputElement)?.value || "0")
+    const ot = parseFloat((document.getElementById("sim-ot") as HTMLInputElement)?.value || "0")
+    const prime = parseFloat((document.getElementById("sim-prime") as HTMLInputElement)?.value || "0")
+    const totalBrut = brut + ot + prime
+    const csgRate = totalBrut <= 50000 ? 0.015 : 0.03
+    const csg = Math.round(totalBrut * csgRate)
+    const nsf = Math.round(totalBrut * 0.015)
+    const paye = totalBrut > 25000 ? Math.round((totalBrut - 25000) * 0.10) : 0
+    const deductions = csg + nsf + paye
+    const net = totalBrut - deductions
+    const csgP = Math.round(totalBrut * 0.06)
+    const nsfP = Math.round(totalBrut * 0.025)
+    const tl = Math.round(totalBrut * 0.01)
+    const prgf = Math.round(4.5 * 26)
+    const totalCharges = csgP + nsfP + tl + prgf
+    setSimResult({
+      brut: totalBrut,
+      deductions,
+      net,
+      coutEmployeur: totalBrut + totalCharges,
+      detailCSG: `CSG ${(csgRate * 100).toFixed(1)}% + NSF 1.5%${paye > 0 ? " + PAYE " + fmt(paye) : ""}`
+    })
+  }
 
   return (
     <TooltipProvider>
@@ -340,111 +350,154 @@ export default function PaiePage() {
 
         {/* ═══ WORKFLOW STEPPER ═══ */}
         {societe !== "all" && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base" style={{ color: NAVY }}>
-                <ShieldCheck className="w-5 h-5 inline mr-2" />
-                Processus de paie — {periode ? new Date(periode + "-15").toLocaleDateString("fr-FR", { month: "long", year: "numeric" }) : ""}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pb-4">
-              <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-10 gap-3">
-                {steps.map((step, i) => {
-                  const Icon = step.icon
-                  const prevDone = i === 0 || steps[i - 1].done
-                  const active = !step.done && prevDone
-                  const blocked = !step.done && !prevDone
-                  return (
-                    <div
-                      key={step.id}
-                      className={`relative flex flex-col items-center text-center rounded-xl p-3 border-2 transition-all ${
+          <div className="space-y-4">
+            {/* Phase 1: Controles prealables (jamais bloquants) */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold text-gray-600">
+                  Phase 1 — Controles prealables (informatif)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pb-3">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {steps.filter(s => s.phase === "check").map(step => {
+                    const Icon = step.icon
+                    return (
+                      <div key={step.id} className={`flex items-center gap-3 p-3 rounded-lg border ${step.done ? "bg-green-50 border-green-200" : "bg-orange-50 border-orange-200"}`}>
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${step.done ? "bg-green-100 text-green-600" : "bg-orange-100 text-orange-600"}`}>
+                          {step.done ? <CheckCircle className="w-4 h-4" /> : <Icon className="w-4 h-4" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-gray-800">{step.label}</p>
+                          <p className="text-[10px] text-gray-500">{step.desc}</p>
+                        </div>
+                        {step.link && (
+                          <a href={step.link}>
+                            <Button size="sm" variant="ghost" className="h-7 text-xs px-2 shrink-0">Voir</Button>
+                          </a>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Phase 2: Processus principal */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold" style={{ color: NAVY }}>
+                  <ShieldCheck className="w-4 h-4 inline mr-1" />
+                  Phase 2 — Calcul, validation et verrouillage
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pb-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {steps.filter(s => s.phase === "process").map(step => {
+                    const Icon = step.icon
+                    return (
+                      <div key={step.id} className={`p-4 rounded-xl border-2 text-center ${
                         step.done
                           ? "border-green-300 bg-green-50"
-                          : active
-                            ? "border-blue-400 bg-blue-50 ring-2 ring-blue-200"
-                            : "border-gray-200 bg-gray-50 opacity-50"
-                      }`}
-                    >
-                      {/* Step number */}
-                      <div className={`absolute -top-2 -left-1 w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center ${
-                        step.done ? "bg-green-500 text-white" : active ? "bg-blue-500 text-white" : "bg-gray-300 text-white"
+                          : step.actionDisabled
+                            ? "border-gray-200 bg-gray-50"
+                            : "border-blue-400 bg-blue-50 ring-2 ring-blue-200"
                       }`}>
-                        {step.done ? "\u2713" : i + 1}
-                      </div>
-
-                      {/* Icon */}
-                      <div className={`w-9 h-9 rounded-full flex items-center justify-center mb-1.5 ${
-                        step.done ? "bg-green-100 text-green-700" : active ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-400"
-                      }`}>
-                        {step.done ? <CheckCircle className="w-4 h-4" /> : <Icon className="w-4 h-4" />}
-                      </div>
-
-                      {/* Label */}
-                      <p className={`text-[11px] font-bold leading-tight ${
-                        step.done ? "text-green-700" : active ? "text-blue-700" : "text-gray-400"
-                      }`}>
-                        {step.label}
-                      </p>
-                      <p className="text-[9px] text-gray-500 mt-0.5 leading-tight min-h-[22px]">{step.desc}</p>
-
-                      {/* ACTION BUTTON — always visible when relevant */}
-                      {step.action && !step.done && !blocked && (
-                        <Button
-                          size="sm"
-                          className="mt-1.5 h-6 text-[10px] px-2 w-full"
-                          style={
-                            step.id === "verrouillage" ? { backgroundColor: "#dc2626", color: "white" }
-                            : step.id === "virements" || step.id === "compta" ? { backgroundColor: GOLD, color: "white" }
-                            : { backgroundColor: NAVY, color: "white" }
-                          }
-                          disabled={step.actionDisabled || !!actionLoading || calculating}
-                          onClick={step.action}
-                        >
-                          {(actionLoading === step.id || (step.id === "calcul" && calculating) || (step.id === "compta" && comptabilisationLoading)) && <Loader2 className="w-3 h-3 animate-spin mr-1" />}
-                          {step.actionLabel}
-                        </Button>
-                      )}
-                      {step.link && !step.done && !blocked && !step.action && (
-                        <a href={step.link} className="w-full">
-                          <Button size="sm" variant="outline" className="mt-1.5 h-6 text-[10px] px-2 w-full">
-                            {step.id === "mra" && isLocked ? "Declarer" : "Ouvrir"}
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-2 ${
+                          step.done ? "bg-green-100 text-green-700" : step.actionDisabled ? "bg-gray-100 text-gray-400" : "bg-blue-100 text-blue-700"
+                        }`}>
+                          {step.done ? <CheckCircle className="w-6 h-6" /> : <Icon className="w-6 h-6" />}
+                        </div>
+                        <p className={`text-sm font-bold ${step.done ? "text-green-700" : step.actionDisabled ? "text-gray-400" : "text-blue-700"}`}>
+                          {step.label}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">{step.desc}</p>
+                        {step.done ? (
+                          <span className="inline-block mt-2 text-xs text-green-600 font-semibold bg-green-100 px-2 py-0.5 rounded-full">Fait</span>
+                        ) : step.action ? (
+                          <Button
+                            className="mt-3 h-8 text-xs px-4"
+                            style={step.id === "verrouillage" ? { backgroundColor: "#dc2626", color: "white" } : { backgroundColor: NAVY, color: "white" }}
+                            disabled={step.actionDisabled || !!actionLoading || calculating}
+                            onClick={step.action}
+                          >
+                            {(actionLoading === step.id || (step.id === "calcul" && calculating)) && <Loader2 className="w-3 h-3 animate-spin mr-1" />}
+                            {step.actionLabel}
                           </Button>
-                        </a>
-                      )}
-                      {/* Link for MRA post-lock */}
-                      {step.link && isLocked && !step.done && step.id === "mra" && step.action === undefined && blocked && (
-                        <a href={step.link} className="w-full">
-                          <Button size="sm" className="mt-1.5 h-6 text-[10px] px-2 w-full" style={{ backgroundColor: GOLD, color: "white" }}>
-                            Declarer
-                          </Button>
-                        </a>
-                      )}
-                      {/* Done badge */}
-                      {step.done && (
-                        <span className="text-[9px] text-green-600 font-semibold mt-1">Fait</span>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-
-              {/* Unlock button if locked */}
-              {isLocked && (
-                <div className="mt-3 flex items-center gap-2 p-2 bg-red-50 rounded-lg border border-red-200">
-                  <Lock className="w-4 h-4 text-red-500" />
-                  <span className="text-xs text-red-700 font-medium flex-1">Periode verrouillee — les bulletins ne peuvent plus etre modifies.</span>
-                  <Button onClick={deverrouiller} variant="outline" size="sm" className="border-red-300 text-red-600 hover:bg-red-100 h-7 text-xs">
-                    <Unlock className="w-3 h-3 mr-1" />Deverrouiller
-                  </Button>
+                        ) : null}
+                      </div>
+                    )
+                  })}
                 </div>
-              )}
+              </CardContent>
+            </Card>
 
-              {/* Comptabilisation result */}
-              {comptabilisationResult && (
-                <p className="text-sm font-medium mt-2 p-2 bg-gray-50 rounded">{comptabilisationResult}</p>
-              )}
-            </CardContent>
-          </Card>
+            {/* Phase 3: Post-verrouillage */}
+            <Card className={!isLocked ? "opacity-50" : ""}>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold" style={{ color: GOLD }}>
+                  <Lock className="w-4 h-4 inline mr-1" />
+                  Phase 3 — Apres verrouillage (exports et comptabilite)
+                  {!isLocked && <span className="text-xs text-gray-400 font-normal ml-2">— Disponible apres verrouillage</span>}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pb-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {steps.filter(s => s.phase === "postlock").map(step => {
+                    const Icon = step.icon
+                    return (
+                      <div key={step.id} className={`p-4 rounded-xl border-2 text-center ${
+                        step.done ? "border-green-300 bg-green-50" : isLocked ? "border-amber-300 bg-amber-50" : "border-gray-200 bg-gray-50"
+                      }`}>
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-2 ${
+                          step.done ? "bg-green-100 text-green-700" : isLocked ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-400"
+                        }`}>
+                          {step.done ? <CheckCircle className="w-5 h-5" /> : <Icon className="w-5 h-5" />}
+                        </div>
+                        <p className={`text-sm font-bold ${step.done ? "text-green-700" : isLocked ? "text-amber-800" : "text-gray-400"}`}>
+                          {step.label}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">{step.desc}</p>
+                        {step.done ? (
+                          <span className="inline-block mt-2 text-xs text-green-600 font-semibold bg-green-100 px-2 py-0.5 rounded-full">Fait</span>
+                        ) : step.action && isLocked ? (
+                          <Button
+                            className="mt-3 h-8 text-xs px-4"
+                            style={{ backgroundColor: GOLD, color: "white" }}
+                            disabled={step.actionDisabled || !!actionLoading}
+                            onClick={step.action}
+                          >
+                            {(step.id === "compta" && comptabilisationLoading) && <Loader2 className="w-3 h-3 animate-spin mr-1" />}
+                            {step.actionLabel}
+                          </Button>
+                        ) : step.link && isLocked ? (
+                          <a href={step.link}>
+                            <Button className="mt-3 h-8 text-xs px-4" style={{ backgroundColor: GOLD, color: "white" }}>
+                              Declarer MRA
+                            </Button>
+                          </a>
+                        ) : null}
+                      </div>
+                    )
+                  })}
+                </div>
+                {comptabilisationResult && (
+                  <p className="text-sm font-medium mt-3 p-2 bg-gray-50 rounded border">{comptabilisationResult}</p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Lock bar */}
+            {isLocked && (
+              <div className="flex items-center gap-2 p-3 bg-red-50 rounded-lg border border-red-200">
+                <Lock className="w-4 h-4 text-red-500 shrink-0" />
+                <span className="text-xs text-red-700 font-medium flex-1">Periode verrouillee — aucune modification possible sur les bulletins.</span>
+                <Button onClick={deverrouiller} variant="outline" size="sm" className="border-red-300 text-red-600 hover:bg-red-100 h-7 text-xs shrink-0">
+                  <Unlock className="w-3 h-3 mr-1" />Deverrouiller
+                </Button>
+              </div>
+            )}
+          </div>
         )}
 
         {/* Summary cards */}
@@ -608,7 +661,7 @@ export default function PaiePage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base font-semibold" style={{ color: NAVY }}>Simulation de paie</CardTitle>
-            <p className="text-sm text-gray-500">Estimez l&apos;impact d&apos;un changement de salaire.</p>
+            <p className="text-sm text-gray-500">Estimez l&apos;impact d&apos;un changement de salaire avant de lancer le calcul officiel.</p>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -617,7 +670,7 @@ export default function PaiePage() {
                 <Input type="number" placeholder="25000" id="sim-brut" defaultValue="25000" />
               </div>
               <div>
-                <label className="text-xs text-gray-500 block mb-1">Heures sup estimees</label>
+                <label className="text-xs text-gray-500 block mb-1">Heures sup estimees (MUR)</label>
                 <Input type="number" placeholder="0" id="sim-ot" defaultValue="0" />
               </div>
               <div>
@@ -625,46 +678,30 @@ export default function PaiePage() {
                 <Input type="number" placeholder="0" id="sim-prime" defaultValue="0" />
               </div>
             </div>
-            <Button onClick={() => {
-              const brut = parseFloat((document.getElementById("sim-brut") as HTMLInputElement)?.value || "0")
-              const ot = parseFloat((document.getElementById("sim-ot") as HTMLInputElement)?.value || "0")
-              const prime = parseFloat((document.getElementById("sim-prime") as HTMLInputElement)?.value || "0")
-              const totalBrut = brut + ot + prime
-              const csgRate = totalBrut <= 50000 ? 0.015 : 0.03
-              const csg = Math.round(totalBrut * csgRate)
-              const nsf = Math.round(totalBrut * 0.015)
-              const paye = totalBrut > 25000 ? Math.round((totalBrut - 25000) * 0.10) : 0
-              const net = totalBrut - csg - nsf - paye
-              const csgP = Math.round(totalBrut * 0.06)
-              const nsfP = Math.round(totalBrut * 0.025)
-              const tl = Math.round(totalBrut * 0.01)
-              const prgf = Math.round(4.5 * 26)
-              const totalCharges = csgP + nsfP + tl + prgf
-              const el = document.getElementById("sim-result")
-              if (el) el.innerHTML = `
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
-                  <div class="p-4 bg-blue-50 rounded-lg text-center">
-                    <p class="text-xs text-gray-500">Brut total</p>
-                    <p class="text-lg font-bold" style="color:${NAVY}">${fmt(totalBrut)}</p>
-                  </div>
-                  <div class="p-4 bg-red-50 rounded-lg text-center">
-                    <p class="text-xs text-gray-500">Deductions</p>
-                    <p class="text-lg font-bold text-red-600">-${fmt(csg + nsf + paye)}</p>
-                  </div>
-                  <div class="p-4 rounded-lg text-center" style="background:rgba(212,175,55,0.1);border:2px solid ${GOLD};">
-                    <p class="text-xs text-gray-500">Net estime</p>
-                    <p class="text-xl font-bold" style="color:${GOLD};">${fmt(net)}</p>
-                  </div>
-                  <div class="p-4 bg-orange-50 rounded-lg text-center">
-                    <p class="text-xs text-gray-500">Cout employeur</p>
-                    <p class="text-lg font-bold text-orange-600">${fmt(totalBrut + totalCharges)}</p>
-                  </div>
-                </div>
-              `
-            }} style={{ backgroundColor: NAVY }} className="text-white">
+            <Button onClick={runSimulation} style={{ backgroundColor: NAVY }} className="text-white">
               <Calculator className="w-4 h-4 mr-2" />Simuler
             </Button>
-            <div id="sim-result" />
+            {simResult && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-2">
+                <div className="p-4 bg-blue-50 rounded-lg text-center">
+                  <p className="text-xs text-gray-500">Brut total</p>
+                  <p className="text-lg font-bold" style={{ color: NAVY }}>{fmt(simResult.brut)}</p>
+                </div>
+                <div className="p-4 bg-red-50 rounded-lg text-center">
+                  <p className="text-xs text-gray-500">Deductions</p>
+                  <p className="text-lg font-bold text-red-600">-{fmt(simResult.deductions)}</p>
+                  <p className="text-[10px] text-gray-400 mt-1">{simResult.detailCSG}</p>
+                </div>
+                <div className="p-4 rounded-lg text-center" style={{ background: "rgba(212,175,55,0.1)", border: `2px solid ${GOLD}` }}>
+                  <p className="text-xs text-gray-500">Net estime</p>
+                  <p className="text-xl font-bold" style={{ color: GOLD }}>{fmt(simResult.net)}</p>
+                </div>
+                <div className="p-4 bg-orange-50 rounded-lg text-center">
+                  <p className="text-xs text-gray-500">Cout employeur</p>
+                  <p className="text-lg font-bold text-orange-600">{fmt(simResult.coutEmployeur)}</p>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
