@@ -11,11 +11,14 @@ import { Loader2, Plus, CheckCircle, Pencil, Trash2 } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
 
 const TYPE_PRIME_LABELS: Record<string, string> = {
-  fixe: "💰 Fixe",
-  variable_unitaire: "📊 Variable par unité",
-  bonus_objectif: "🎯 Bonus objectif",
-  pourcentage: "📈 % Salaire",
-  commission: "🤝 Commission",
+  fixe: "Fixe",
+  variable_unitaire: "Variable par unite",
+  bonus_objectif: "Bonus objectif",
+  pourcentage: "% Salaire",
+  commission: "Commission",
+  meal_allowance: "Meal Allowance",
+  call_allowance: "Call Allowance",
+  astreinte: "Astreinte",
 }
 
 const STATUT_COLORS: Record<string, string> = {
@@ -27,7 +30,11 @@ const STATUT_COLORS: Record<string, string> = {
 function fmt(n: number) { return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(n) + " MUR" }
 
 export default function PrimesPage() {
-  const [tab, setTab] = useState<"catalogue" | "saisie">("catalogue")
+  const [tab, setTab] = useState<"catalogue" | "saisie" | "regles">("catalogue")
+  const [regles, setRegles] = useState<any[]>([])
+  const [regleDialog, setRegleDialog] = useState(false)
+  const [regleForm, setRegleForm] = useState({ nom: "", type: "meal_allowance", montant: "", conditions_ot_min: "1", scope: "tous", scope_value: "", actif: true })
+  const [regleError, setRegleError] = useState<string | null>(null)
   const [societes, setSocietes] = useState<any[]>([])
   const [employes, setEmployes] = useState<any[]>([])
   const [societe, setSociete] = useState("all")
@@ -77,10 +84,47 @@ export default function PrimesPage() {
     } catch (e) { console.error(e) } finally { setLoading(false) }
   }, [societe, periode])
 
+  const loadRegles = useCallback(async () => {
+    if (societe === "all") return
+    setLoading(true)
+    try {
+      const data = await fetch(`/api/rh/primes/regles?societe_id=${societe}`).then(r => r.json())
+      setRegles(data.regles || [])
+    } catch {} finally { setLoading(false) }
+  }, [societe])
+
   useEffect(() => {
     if (tab === "catalogue") loadCatalogue()
-    else loadSaisies()
-  }, [tab, loadCatalogue, loadSaisies])
+    else if (tab === "saisie") loadSaisies()
+    else if (tab === "regles") loadRegles()
+  }, [tab, loadCatalogue, loadSaisies, loadRegles])
+
+  const creerRegle = async () => {
+    if (!regleForm.nom || societe === "all") { setRegleError("Nom et societe requis"); return }
+    setSaving(true); setRegleError(null)
+    try {
+      const res = await fetch("/api/rh/primes/regles", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "creer_regle", societe_id: societe, nom: regleForm.nom, type: regleForm.type, montant: Number(regleForm.montant) || 0, scope: regleForm.scope, scope_value: regleForm.scope_value || null, conditions: { ot_min_heures: Number(regleForm.conditions_ot_min) || 0 } })
+      })
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error) }
+      setRegleDialog(false)
+      setRegleForm({ nom: "", type: "meal_allowance", montant: "", conditions_ot_min: "1", scope: "tous", scope_value: "", actif: true })
+      loadRegles()
+    } catch (e: any) { setRegleError(e.message) }
+    finally { setSaving(false) }
+  }
+
+  const toggleRegle = async (id: string, actif: boolean) => {
+    await fetch("/api/rh/primes/regles", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "modifier_regle", id, actif }) })
+    loadRegles()
+  }
+
+  const deleteRegle = async (id: string) => {
+    if (!confirm("Supprimer cette regle ?")) return
+    await fetch("/api/rh/primes/regles", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "supprimer_regle", id }) })
+    loadRegles()
+  }
 
   const creerCatalogue = async () => {
     if (!catForm.libelle || !catForm.type_prime) { setCatError("Libellé et type requis"); return }
@@ -170,9 +214,10 @@ export default function PrimesPage() {
       {/* Onglets */}
       <div className="flex gap-1 border-b border-gray-200">
         {([
-          { id: "catalogue", label: "📋 Catalogue des primes" },
-          { id: "saisie", label: "✏️ Saisie du mois" },
-        ] as { id: "catalogue" | "saisie"; label: string }[]).map(t => (
+          { id: "catalogue", label: "Catalogue des primes" },
+          { id: "regles", label: "Regles automatiques" },
+          { id: "saisie", label: "Saisie du mois" },
+        ] as { id: "catalogue" | "saisie" | "regles"; label: string }[]).map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === t.id ? "border-[#0B0F2E] text-[#0B0F2E]" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
             {t.label}
@@ -302,6 +347,142 @@ export default function PrimesPage() {
           </Card>
         </div>
       )}
+
+      {/* REGLES AUTOMATIQUES */}
+      {tab === "regles" && (
+        <div className="space-y-4">
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+            <p className="text-sm text-amber-800 font-medium">Les regles automatiques generent des primes lors du calcul de paie selon les conditions definies.</p>
+            <p className="text-xs text-amber-600 mt-1">Exemple : Meal Allowance = 200 MUR automatique si l&apos;employe a fait des heures supplementaires.</p>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-[#0B0F2E]">Regles ({regles.filter(r => r.actif !== false).length} actives)</CardTitle>
+                <Button onClick={() => setRegleDialog(true)} disabled={societe === "all"} className="bg-[#0B0F2E] text-white">
+                  <Plus className="w-4 h-4 mr-2" />Nouvelle regle
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {societe === "all" ? <p className="text-center text-gray-500 py-8">Selectionnez une societe</p>
+                : loading ? <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin" /></div>
+                : regles.length === 0 ? (
+                  <div className="text-center py-12 text-gray-500">
+                    <p>Aucune regle definie</p>
+                    <p className="text-xs mt-2">Creez des regles pour appliquer automatiquement des primes</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Nom</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Montant</TableHead>
+                        <TableHead>Condition</TableHead>
+                        <TableHead>Scope</TableHead>
+                        <TableHead>Actif</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {regles.map(r => (
+                        <TableRow key={r.id} className={r.actif === false ? "opacity-50" : ""}>
+                          <TableCell className="font-medium">{r.nom}</TableCell>
+                          <TableCell>
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              r.type === "meal_allowance" ? "bg-orange-100 text-orange-700" :
+                              r.type === "call_allowance" ? "bg-blue-100 text-blue-700" :
+                              r.type === "astreinte" ? "bg-purple-100 text-purple-700" :
+                              "bg-gray-100 text-gray-700"
+                            }`}>
+                              {TYPE_PRIME_LABELS[r.type] || r.type}
+                            </span>
+                          </TableCell>
+                          <TableCell className="font-semibold">{fmt(r.montant || 0)}</TableCell>
+                          <TableCell className="text-sm text-gray-600">
+                            {r.type === "meal_allowance" && `Si OT >= ${r.conditions?.ot_min_heures || 1}h`}
+                            {r.type === "call_allowance" && "Si affecte astreinte"}
+                            {r.type === "astreinte" && "Si affecte astreinte"}
+                            {r.type === "fixe" && "Automatique chaque mois"}
+                            {!["meal_allowance", "call_allowance", "astreinte", "fixe"].includes(r.type) && (r.description || "—")}
+                          </TableCell>
+                          <TableCell className="text-sm text-gray-500 capitalize">{r.scope === "tous" ? "Tous" : `${r.scope}: ${r.scope_value || ""}`}</TableCell>
+                          <TableCell><Switch checked={r.actif !== false} onCheckedChange={v => toggleRegle(r.id, v)} /></TableCell>
+                          <TableCell>
+                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500" onClick={() => deleteRegle(r.id)}>
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Dialog nouvelle regle */}
+      <Dialog open={regleDialog} onOpenChange={open => !open && setRegleDialog(false)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Nouvelle regle automatique</DialogTitle></DialogHeader>
+          <div className="grid gap-3 py-2">
+            {regleError && <p className="text-sm text-red-600">{regleError}</p>}
+            <div><Label>Nom de la regle *</Label>
+              <Input value={regleForm.nom} onChange={e => setRegleForm(f => ({ ...f, nom: e.target.value }))} placeholder="Ex: Meal Allowance OT" />
+            </div>
+            <div><Label>Type *</Label>
+              <Select value={regleForm.type} onValueChange={v => setRegleForm(f => ({ ...f, type: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="meal_allowance">Meal Allowance (auto si OT)</SelectItem>
+                  <SelectItem value="call_allowance">Call Allowance (astreinte / disponibilite)</SelectItem>
+                  <SelectItem value="astreinte">Prime d&apos;astreinte</SelectItem>
+                  <SelectItem value="fixe">Prime fixe automatique</SelectItem>
+                  <SelectItem value="par_heure">Prime par heure OT</SelectItem>
+                  <SelectItem value="par_jour">Prime par jour travaille</SelectItem>
+                  <SelectItem value="pourcentage">% du salaire de base</SelectItem>
+                  <SelectItem value="par_anciennete">Prime d&apos;anciennete</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div><Label>Montant (MUR) *</Label>
+              <Input type="number" value={regleForm.montant} onChange={e => setRegleForm(f => ({ ...f, montant: e.target.value }))} placeholder="Ex: 200" />
+            </div>
+            {(regleForm.type === "meal_allowance" || regleForm.type === "par_heure") && (
+              <div><Label>Heures OT minimum pour declencher</Label>
+                <Input type="number" value={regleForm.conditions_ot_min} onChange={e => setRegleForm(f => ({ ...f, conditions_ot_min: e.target.value }))} placeholder="1" />
+                <p className="text-[10px] text-gray-400 mt-1">La prime sera appliquee automatiquement si l&apos;employe a fait au moins ce nombre d&apos;heures sup dans le mois.</p>
+              </div>
+            )}
+            <div><Label>Scope (qui recoit)</Label>
+              <Select value={regleForm.scope} onValueChange={v => setRegleForm(f => ({ ...f, scope: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="tous">Tous les employes</SelectItem>
+                  <SelectItem value="groupe">Par groupe</SelectItem>
+                  <SelectItem value="departement">Par departement</SelectItem>
+                  <SelectItem value="individuel">Individuel</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {regleForm.scope !== "tous" && (
+              <div><Label>Valeur du scope ({regleForm.scope})</Label>
+                <Input value={regleForm.scope_value} onChange={e => setRegleForm(f => ({ ...f, scope_value: e.target.value }))} placeholder={regleForm.scope === "individuel" ? "Nom de l'employe" : "Nom du groupe/departement"} />
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRegleDialog(false)}>Annuler</Button>
+            <Button onClick={creerRegle} disabled={saving} className="bg-[#0B0F2E] text-white">
+              {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}Creer la regle
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog nouvelle prime catalogue */}
       <Dialog open={catDialog} onOpenChange={open => !open && setCatDialog(false)}>

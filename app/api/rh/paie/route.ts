@@ -393,6 +393,14 @@ export async function POST(request: Request) {
       const bulletinsSauvegardes = []
       const erreurs: string[] = []
 
+      // Fetch auto-prime rules for this société (once for all employees)
+      let autoRegles: any[] = []
+      try {
+        const { data: reglesData } = await supabase.from('regles_primes')
+          .select('*').eq('societe_id', societe_id).eq('actif', true)
+        autoRegles = reglesData || []
+      } catch {} // table may not exist
+
       for (const emp of employes || []) {
         // 1. OT depuis pointages
         const { data: pointagesMois } = await supabase.from('pointages')
@@ -436,6 +444,45 @@ export async function POST(request: Request) {
         const primeFixe3 = Number(emp.prime_fixe_3) || 0
         const totalPrimesFixes = primeFixe1 + primeFixe2 + primeFixe3
         total_primes += totalPrimesFixes
+
+        // 2c. Auto-rules (meal allowance, call allowance, etc.)
+        let totalAutoRules = 0
+        const autoRulesApplied: string[] = []
+        for (const regle of autoRegles) {
+          // Check scope
+          if (regle.scope === 'groupe' && regle.scope_value && (emp.groupe || '').toLowerCase() !== regle.scope_value.toLowerCase()) continue
+          if (regle.scope === 'departement' && regle.scope_value && (emp.departement || '').toLowerCase() !== regle.scope_value.toLowerCase()) continue
+          if (regle.scope === 'individuel' && regle.scope_value && emp.id !== regle.scope_value) continue
+
+          const montantRegle = Number(regle.montant) || 0
+          const conditions = regle.conditions || {}
+
+          if (regle.type === 'meal_allowance') {
+            // Auto if employee has OT >= ot_min_heures
+            const otMinH = Number(conditions.ot_min_heures) || 1
+            if (total_ot_montant > 0 && totalHeuresTravaillees > seuilAjuste + otMinH) {
+              totalAutoRules += montantRegle
+              autoRulesApplied.push(`${regle.nom}: ${montantRegle}`)
+            }
+          } else if (regle.type === 'call_allowance' || regle.type === 'astreinte') {
+            // Applied if rule is active and scope matches — manual assignment via rule activation
+            totalAutoRules += montantRegle
+            autoRulesApplied.push(`${regle.nom}: ${montantRegle}`)
+          } else if (regle.type === 'fixe') {
+            totalAutoRules += montantRegle
+            autoRulesApplied.push(`${regle.nom}: ${montantRegle}`)
+          } else if (regle.type === 'par_jour') {
+            const jt2 = jours_travailles > 0 ? jours_travailles : 26
+            totalAutoRules += montantRegle * jt2
+            autoRulesApplied.push(`${regle.nom}: ${montantRegle} x ${jt2}j = ${montantRegle * jt2}`)
+          } else if (regle.type === 'pourcentage') {
+            const pct = Number(regle.taux) || Number(regle.montant) || 0
+            const montPct = Math.round(Number(emp.salaire_base) * pct / 100)
+            totalAutoRules += montPct
+            autoRulesApplied.push(`${regle.nom}: ${pct}% = ${montPct}`)
+          }
+        }
+        total_primes += totalAutoRules
 
         // 3. Congés approuvés du mois — distinguer SL (réduit seuil OT) vs AL (ne réduit pas)
         const { data: congesApprouves } = await supabase.from('demandes_conges')
@@ -570,9 +617,10 @@ export async function POST(request: Request) {
         const petrolAlloc = isHorsMRA ? 0 : (Number(emp.petrol_allowance) || 0)
         const mraTag = isHorsMRA ? ' [HORS MRA - Brut=Base]' : ''
         const primesFixesDetail = totalPrimesFixes > 0 ? `, Primes fixes: ${totalPrimesFixes}` : ''
+        const autoRulesDetail = autoRulesApplied.length > 0 ? `, Auto: ${autoRulesApplied.join('; ')}` : ''
         const notesResume = isHorsMRA
           ? `Base: ${salaire_base_mur} [HORS MRA - Brut=Net=Base]`
-          : `Base: ${salaire_base_mur}, Transport: ${transportAlloc}, Petrol: ${petrolAlloc}, OT: ${Math.round(total_ot_montant)}, Primes var: ${Math.round(total_primes - totalPrimesFixes)}${primesFixesDetail}, Absences: ${jours_absence_injust}j`
+          : `Base: ${salaire_base_mur}, Transport: ${transportAlloc}, Petrol: ${petrolAlloc}, OT: ${Math.round(total_ot_montant)}, Primes var: ${Math.round(total_primes - totalPrimesFixes - totalAutoRules)}${primesFixesDetail}${autoRulesDetail}, Absences: ${jours_absence_injust}j`
         console.log(`[paie] ${emp.prenom} ${emp.nom}: base=${salaire_base_mur} transport=${transportAlloc} petrol=${petrolAlloc} OT=${Math.round(total_ot_montant)} primes=${Math.round(total_primes)} abs=${jours_absence_injust}${mraTag}`)
 
         const bulletin: Record<string, any> = {
