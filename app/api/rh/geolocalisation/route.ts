@@ -79,7 +79,36 @@ export async function GET(request: Request) {
       }
     }
 
-    // 4. Build response
+    // 4. Build response — geocode from known Mauritius locations if no GPS
+    const MAURITIUS_GEOCODE: Record<string, [number, number]> = {
+      "port-louis": [-20.1609, 57.5012], "port louis": [-20.1609, 57.5012],
+      "curepipe": [-20.3162, 57.5166], "rose hill": [-20.2338, 57.4755],
+      "beau bassin": [-20.2296, 57.4677], "quatre bornes": [-20.2633, 57.4789],
+      "vacoas": [-20.2983, 57.4784], "phoenix": [-20.2778, 57.4961],
+      "floreal": [-20.3089, 57.4961], "moka": [-20.2196, 57.5002],
+      "ebene": [-20.2449, 57.4885], "trianon": [-20.2577, 57.4955],
+      "grand baie": [-20.0174, 57.5802], "grand bay": [-20.0174, 57.5802],
+      "pereybere": [-20.0043, 57.5872], "trou aux biches": [-20.0333, 57.5500],
+      "flic en flac": [-20.2783, 57.3636], "tamarin": [-20.3253, 57.3675],
+      "mahebourg": [-20.4083, 57.7000], "centre de flacq": [-20.1917, 57.7131],
+      "flacq": [-20.1917, 57.7131], "goodlands": [-20.0358, 57.6494],
+      "riviere du rempart": [-20.1000, 57.6833], "pamplemousses": [-20.1036, 57.5747],
+      "forest side": [-20.3167, 57.5000], "glen park": [-20.3330, 57.5090],
+      "plaine wilhems": [-20.3000, 57.4900], "rose-hill": [-20.2338, 57.4755],
+      "beau-bassin": [-20.2296, 57.4677], "grand gaube": [-20.0167, 57.6667],
+      "grand river north west": [-20.1200, 57.5000], "thiais": [48.7647, 2.3960],
+      "france": [48.8566, 2.3522],
+    }
+
+    function geocodeFromAddress(adresse: string): [number, number] | null {
+      if (!adresse) return null
+      const lower = adresse.toLowerCase()
+      for (const [city, coords] of Object.entries(MAURITIUS_GEOCODE)) {
+        if (lower.includes(city)) return coords
+      }
+      return null
+    }
+
     const result = employes.map(emp => {
       const pos = posMap[emp.id]
       const assignment = assignmentMap[emp.id]
@@ -102,14 +131,16 @@ export async function GET(request: Request) {
         }
       }
 
+      const fullAdresse = pos?.adresse || emp.adresse_complete || [emp.adresse, emp.address, emp.adresse2, emp.address_2, emp.ville, emp.city, emp.code_postal].filter(Boolean).join(', ') || ''
+
       return {
         employe_id: emp.id,
         nom: emp.nom || '',
         prenom: emp.prenom || '',
         poste: emp.poste || '',
-        latitude: pos?.latitude ?? emp.latitude ?? null,
-        longitude: pos?.longitude ?? emp.longitude ?? null,
-        adresse: pos?.adresse || emp.adresse_complete || [emp.adresse, emp.adresse2, emp.ville, emp.code_postal].filter(Boolean).join(', ') || '',
+        latitude: pos?.latitude ?? emp.latitude ?? (() => { const gc = geocodeFromAddress(fullAdresse); return gc ? gc[0] : null })(),
+        longitude: pos?.longitude ?? emp.longitude ?? (() => { const gc = geocodeFromAddress(fullAdresse); return gc ? gc[1] : null })(),
+        adresse: fullAdresse,
         shift_today,
         shift_label,
         heure_debut: assignment?.heure_debut || null,
