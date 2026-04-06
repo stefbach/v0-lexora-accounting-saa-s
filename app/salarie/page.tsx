@@ -230,6 +230,7 @@ function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () => void
 
   const handleSubmit = async () => {
     if (!dateDebut || !dateFin) { setError("Veuillez renseigner les dates"); return }
+    if (dateFin < dateDebut) { setError("La date de fin doit être après la date de début"); return }
     setSubmitting(true); setError(""); setSuccess("")
     try {
       const res = await fetch("/api/rh/conges", {
@@ -406,7 +407,7 @@ function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () => void
                       const t = c.type_conge || "AL"
                       const d1 = c.date_debut ? new Date(c.date_debut).toLocaleDateString("fr-FR") : "—"
                       const d2 = c.date_fin ? new Date(c.date_fin).toLocaleDateString("fr-FR") : "—"
-                      const days = c.nb_jours || (c.date_debut && c.date_fin ? Math.ceil((new Date(c.date_fin).getTime() - new Date(c.date_debut).getTime()) / (1000 * 60 * 60 * 24)) + 1 : "—")
+                      const days = Number(c.nb_jours) || "—"
                       return (
                         <tr key={c.id || i} className="border-b last:border-0">
                           <td className="py-2.5 pr-3"><Badge style={{ backgroundColor: `${typeColor[t] || BLUE}20`, color: typeColor[t] || BLUE }}>{typeLabel[t] || t}</Badge></td>
