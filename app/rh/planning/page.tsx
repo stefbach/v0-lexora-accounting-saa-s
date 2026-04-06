@@ -137,8 +137,8 @@ export default function PlanningPage() {
   // Confirm dialog for auto-generate
   const [confirmGenOpen, setConfirmGenOpen] = useState(false)
 
-  // Simulated approved leave days (empId -> Set of day numbers in month)
-  const [approvedLeaves, setApprovedLeaves] = useState<Record<string, Set<number>>>({})
+  // Approved leave days: empId -> Map(day -> leave type)
+  const [approvedLeaves, setApprovedLeaves] = useState<Record<string, Map<number, string>>>({})
 
   // Cell edit
   const [editCell, setEditCell] = useState<{ empId: string; day: number } | null>(null)
@@ -177,9 +177,9 @@ export default function PlanningPage() {
       // Check leave conflicts
       const leaves = approvedLeaves[emp.id]
       if (leaves) {
-        for (const day of Array.from(leaves)) {
+        for (const day of Array.from(leaves.keys())) {
           const cell = planning[emp.id]?.[day]
-          if (cell && cell.creneau_id !== "repos" && cell.creneau_id !== "conge") {
+          if (cell && cell.creneau_id !== "repos" && cell.creneau_id !== "conge" && !cell.creneau_id?.startsWith("conge_")) {
             result.push({
               type: "leave",
               empId: emp.id,
@@ -213,7 +213,7 @@ export default function PlanningPage() {
     const leaves = approvedLeaves[empId]
     if (leaves && leaves.has(day)) {
       const cell = planning[empId]?.[day]
-      if (cell && cell.creneau_id !== "repos" && cell.creneau_id !== "conge") return true
+      if (cell && cell.creneau_id !== "repos" && cell.creneau_id !== "conge" && !cell.creneau_id?.startsWith("conge_")) return true
     }
     return false
   }, [approvedLeaves, planning])
@@ -297,7 +297,7 @@ export default function PlanningPage() {
         let consecutive = 0
         for (let d = 1; d <= daysInMonth; d++) {
           const cell = planning[emp.id]?.[d]
-          if (cell && cell.creneau_id !== "repos" && cell.creneau_id !== "conge") {
+          if (cell && cell.creneau_id !== "repos" && cell.creneau_id !== "conge" && !cell.creneau_id?.startsWith("conge_")) {
             consecutive++
             if (consecutive > maxConsec) {
               violations.push({ severity: "red", empName: name, empId: emp.id, rule: "Jours consecutifs", detail: `${consecutive} jours consecutifs au jour ${d} (max ${maxConsec})` })
@@ -317,7 +317,7 @@ export default function PlanningPage() {
           let restDays = 0
           for (let wd = d; wd <= weekEnd; wd++) {
             const cell = planning[emp.id]?.[wd]
-            if (!cell || cell.creneau_id === "repos" || cell.creneau_id === "conge") restDays++
+            if (!cell || cell.creneau_id === "repos" || cell.creneau_id === "conge" || cell.creneau_id?.startsWith("conge_")) restDays++
           }
           if (restDays < reposMin && weekEnd - d >= 6) {
             violations.push({ severity: "red", empName: name, empId: emp.id, rule: "Repos hebdomadaire", detail: `Semaine du ${d}: ${restDays} jour(s) de repos (min ${reposMin})` })
@@ -362,7 +362,7 @@ export default function PlanningPage() {
         let absent = 0
         for (const emp of employes) {
           const cell = planning[emp.id]?.[d]
-          if (!cell || cell.creneau_id === "repos" || cell.creneau_id === "conge") absent++
+          if (!cell || cell.creneau_id === "repos" || cell.creneau_id === "conge" || cell.creneau_id?.startsWith("conge_")) absent++
         }
         const pct = Math.round((absent / employes.length) * 100)
         if (pct > maxAbsentPct) {
@@ -452,19 +452,19 @@ export default function PlanningPage() {
         fetch(`/api/rh/groupes?${societe !== "all" ? `societe_id=${societe}` : ""}`).then(r => r.json()).catch(() => ({ groupes: [] })),
         fetch(`/api/rh/conges?${params}&statut=approuve`).then(r => r.json()).catch(() => ({ conges: [] })),
       ])
-      // Build approved leave map — mark days with approved congés
-      const leaveMap: Record<string, Set<number>> = {}
+      // Build approved leave map — mark days with type (AL, SL, MAT, PAT...)
+      const leaveMap: Record<string, Map<number, string>> = {}
       for (const conge of (leaveRes.conges || [])) {
-        if (!leaveMap[conge.employe_id]) leaveMap[conge.employe_id] = new Set()
+        if (!leaveMap[conge.employe_id]) leaveMap[conge.employe_id] = new Map()
         const startStr = String(conge.date_debut || "").slice(0, 10)
         const endStr = String(conge.date_fin || conge.date_debut || "").slice(0, 10)
+        const leaveType = conge.type_conge || "AL"
         if (!startStr) continue
 
-        // Iterate through each day of the month and check if it falls within the leave period
         for (let d = 1; d <= daysInMonth; d++) {
           const dayStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`
           if (dayStr >= startStr && dayStr <= endStr) {
-            leaveMap[conge.employe_id].add(d)
+            leaveMap[conge.employe_id].set(d, leaveType)
           }
         }
       }
@@ -514,12 +514,12 @@ export default function PlanningPage() {
         }
       }
       // Override with approved leave days — congé takes priority over planned shift
-      for (const [empId, days] of Object.entries(leaveMap)) {
+      for (const [empId, dayMap] of Object.entries(leaveMap)) {
         if (grid[empId]) {
-          for (const day of days) {
+          for (const [day, leaveType] of dayMap.entries()) {
             if (day >= 1 && day <= daysInMonth) {
               grid[empId][day] = {
-                creneau_id: "conge",
+                creneau_id: `conge_${leaveType}`,
                 heure_debut: "", heure_fin: "",
                 pause_debut: "", pause_fin: "",
                 heures_prevues: 0,
@@ -578,10 +578,11 @@ export default function PlanningPage() {
       for (const empId of Object.keys(next)) {
         const row = { ...next[empId] }
         for (let d = 1; d <= daysInMonth; d++) {
-          // Respect approved congés: force "Congé" cell
+          // Respect approved congés: force "Congé" cell with leave type
           const leaves = approvedLeaves[empId]
           if (leaves && leaves.has(d)) {
-            row[d] = { creneau_id: "conge", heure_debut: "", heure_fin: "", pause_debut: "", pause_fin: "", heures_prevues: 0 }
+            const lt = leaves.get(d) || "AL"
+            row[d] = { creneau_id: `conge_${lt}`, heure_debut: "", heure_fin: "", pause_debut: "", pause_fin: "", heures_prevues: 0 }
           } else {
             row[d] = isWeekend(year, month, d) ? null : {
               creneau_id: c.id, heure_debut: c.heure_debut, heure_fin: c.heure_fin,
@@ -945,7 +946,7 @@ export default function PlanningPage() {
                       <td className="sticky left-0 bg-white z-10 border px-2 py-1 font-medium truncate max-w-[140px]">{emp.prenom} {emp.nom}</td>
                       {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => {
                         const cell = planning[emp.id]?.[d]
-                        const creneau = cell ? (cell.creneau_id === "conge" ? CONGE_CRENEAU : getCreneauById(cell.creneau_id)) : REPOS_CRENEAU
+                        const creneau = cell ? (cell.creneau_id === "conge" || cell.creneau_id?.startsWith("conge_") ? CONGE_CRENEAU : getCreneauById(cell.creneau_id)) : REPOS_CRENEAU
                         const isEditing = editCell?.empId === emp.id && editCell?.day === d
                         const hasConflict = cellHasConflict(emp.id, d)
                         return (
@@ -1025,22 +1026,37 @@ export default function PlanningPage() {
                             if (!valid) return <td key={i} className="border p-2 bg-gray-50" />
                             const cell = planning[emp.id]?.[day]
                             const hasConflict = cellHasConflict(emp.id, day)
-                            const isLeaveDay = approvedLeaves[emp.id]?.has(day)
+                            const leaveType = approvedLeaves[emp.id]?.get(day)
+                            const isLeaveDay = !!leaveType
                             const isEditing = editCell?.empId === emp.id && editCell?.day === day
+
+                            // Leave type colors
+                            const leaveColors: Record<string, { bg: string; label: string }> = {
+                              AL: { bg: "bg-blue-100 text-blue-700", label: "Local Leave" },
+                              SL: { bg: "bg-orange-100 text-orange-700", label: "Sick Leave" },
+                              MAT: { bg: "bg-purple-100 text-purple-700", label: "Maternité" },
+                              PAT: { bg: "bg-indigo-100 text-indigo-700", label: "Paternité" },
+                              SANS_SOLDE: { bg: "bg-gray-200 text-gray-600", label: "Sans solde" },
+                            }
 
                             let bgColor = "bg-gray-100 text-gray-500" // Repos
                             let label = "Repos"
                             if (cell) {
-                              if (cell.creneau_id === "conge") {
-                                bgColor = "bg-emerald-100 text-emerald-700"
-                                label = "Congé"
+                              const isCongeCell = cell.creneau_id === "conge" || cell.creneau_id?.startsWith("conge_")
+                              if (isCongeCell || isLeaveDay) {
+                                // Extract type from cell creneau_id (conge_AL, conge_SL...) or from approvedLeaves map
+                                const cellType = cell.creneau_id?.startsWith("conge_") ? cell.creneau_id.replace("conge_", "") : leaveType
+                                const lc = leaveColors[cellType || "AL"] || { bg: "bg-emerald-100 text-emerald-700", label: "Congé" }
+                                bgColor = lc.bg
+                                label = lc.label
                               } else {
                                 bgColor = "bg-blue-50 text-blue-800"
                                 label = `${cell.heure_debut?.slice(0,5) || ""}—${cell.heure_fin?.slice(0,5) || ""}`
                               }
                             } else if (isLeaveDay) {
-                              bgColor = "bg-emerald-100 text-emerald-700"
-                              label = "Congé"
+                              const lc = leaveColors[leaveType] || { bg: "bg-emerald-100 text-emerald-700", label: "Congé" }
+                              bgColor = lc.bg
+                              label = lc.label
                             }
                             if (hasConflict) {
                               bgColor = "bg-red-50 text-red-700"
@@ -1054,7 +1070,7 @@ export default function PlanningPage() {
                               >
                                 <div className={`px-2 py-2.5 rounded-sm ${bgColor}`}>
                                   <div className="text-xs font-semibold">{label}</div>
-                                  {cell && cell.creneau_id !== "conge" && (
+                                  {cell && cell.creneau_id !== "conge" && !cell.creneau_id?.startsWith("conge_") && (
                                     <div className="text-[10px] opacity-70 mt-0.5">
                                       {getCreneauById(cell.creneau_id).nom} ({cell.heures_prevues}h)
                                     </div>
