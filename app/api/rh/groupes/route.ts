@@ -28,6 +28,14 @@ export async function GET(request: Request) {
     const { data: groupes, error } = await query
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
+    // Fetch manager names for groups that have a manager_id
+    const managerIds = [...new Set((groupes || []).map(g => g.manager_id).filter(Boolean))]
+    let managerMap: Record<string, { nom: string; prenom: string }> = {}
+    if (managerIds.length > 0) {
+      const { data: managers } = await supabase.from('employes').select('id, nom, prenom').in('id', managerIds)
+      for (const m of managers || []) managerMap[m.id] = { nom: m.nom, prenom: m.prenom }
+    }
+
     // Enrich with member count and member list
     const groupeIds = (groupes || []).map(g => g.id)
     let membresMap: Record<string, any[]> = {}
@@ -55,6 +63,9 @@ export async function GET(request: Request) {
       ...g,
       membres: membresMap[g.id] || [],
       nb_membres: (membresMap[g.id] || []).length,
+      manager_nom: g.manager_id && managerMap[g.manager_id]
+        ? `${managerMap[g.manager_id].prenom} ${managerMap[g.manager_id].nom}`
+        : null,
     }))
 
     return NextResponse.json({ groupes: enriched })
@@ -90,7 +101,7 @@ export async function POST(request: Request) {
 
     // Modifier un groupe
     if (action === 'modifier') {
-      const { id, nom, code, description, couleur, inclus_planning, inclus_pointage, actif } = body
+      const { id, nom, code, description, couleur, inclus_planning, inclus_pointage, actif, manager_id } = body
       if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
       const updates: Record<string, unknown> = {}
       if (nom !== undefined) updates.nom = nom
@@ -100,6 +111,7 @@ export async function POST(request: Request) {
       if (inclus_planning !== undefined) updates.inclus_planning = inclus_planning
       if (inclus_pointage !== undefined) updates.inclus_pointage = inclus_pointage
       if (actif !== undefined) updates.actif = actif
+      if (manager_id !== undefined) updates.manager_id = manager_id
 
       const { data, error } = await supabase.from('groupes_employes').update(updates).eq('id', id).select().single()
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })

@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2, Plus, Trash2, Users, UserPlus, X, Check, ChevronRight, Pencil } from "lucide-react"
+import { Loader2, Plus, Trash2, Users, UserPlus, X, Check, ChevronRight, Pencil, Crown } from "lucide-react"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -111,6 +111,20 @@ export default function GroupesPage() {
       body: JSON.stringify({ action: "supprimer", id }),
     })
     load()
+  }
+
+  // Assigner un manager à un groupe
+  const assignManager = async (groupeId: string, managerId: string) => {
+    setSaving(true)
+    const res = await fetch("/api/rh/groupes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "modifier", id: groupeId, manager_id: managerId || null }),
+    })
+    const data = await res.json()
+    if (data.error) setError(data.error)
+    else await load()
+    setSaving(false)
   }
 
   // Affecter/retirer un employé
@@ -222,6 +236,12 @@ export default function GroupesPage() {
                         </>
                       )}
                       <Badge variant="outline" className="text-xs">{membres.length} membre{membres.length !== 1 ? "s" : ""}</Badge>
+                      {g.manager_nom && (
+                        <Badge className="text-xs bg-amber-100 text-amber-800 border-amber-300">
+                          <Crown className="h-3 w-3 mr-1" />
+                          {g.manager_nom}
+                        </Badge>
+                      )}
                     </CardTitle>
                     <div className="flex gap-1">
                       <Button variant="outline" size="sm" onClick={() => setAssignGroupId(isAssigning ? null : g.id)}>
@@ -235,6 +255,29 @@ export default function GroupesPage() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
+                  {/* Manager du groupe */}
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs text-gray-500 whitespace-nowrap flex items-center gap-1">
+                      <Crown className="h-3 w-3" /> Manager :
+                    </Label>
+                    <Select
+                      value={g.manager_id || "none"}
+                      onValueChange={(val) => assignManager(g.id, val === "none" ? "" : val)}
+                    >
+                      <SelectTrigger className="h-8 text-xs w-[220px]">
+                        <SelectValue placeholder="Aucun manager" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Aucun manager</SelectItem>
+                        {allEmployes.map(emp => (
+                          <SelectItem key={emp.id} value={emp.id}>
+                            {emp.prenom} {emp.nom}{emp.poste ? ` (${emp.poste})` : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
                   {/* Membres actuels */}
                   {membres.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
