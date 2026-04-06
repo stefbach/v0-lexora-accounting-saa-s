@@ -511,7 +511,18 @@ export async function POST(request: Request) {
           eoy_bonus_montant = Math.round(salaire_base_mur) // 1 month's basic salary as 13th month
         }
 
-        const elements = {
+        const isHorsMRA = emp.exclure_mra === true
+
+        // Hors champs MRA : salaire brut = salaire de base uniquement
+        // Pas de transport, petrol, OT, primes MRA-specifiques
+        const elements = isHorsMRA ? {
+          salaire_base: salaire_base_mur,
+          transport_allowance: 0,
+          petrol_allowance: 0,
+          heures_sup_montant: 0,
+          special_allowance_1: 0,
+          eoy_bonus: 0,
+        } : {
           salaire_base: salaire_base_mur,
           transport_allowance: Number(emp.transport_allowance) || 0,
           petrol_allowance: Number(emp.petrol_allowance) || 0,
@@ -521,7 +532,6 @@ export async function POST(request: Request) {
         }
 
         const jt = jours_travailles > 0 ? jours_travailles : 26
-        const isHorsMRA = emp.exclure_mra === true
         const resultat = calculerBulletin(elements, params, jt, Number(emp.pct_refacturation) || 0)
 
         // Hors champs MRA : pas de CSG, NSF, PAYE, pas de charges patronales
@@ -537,15 +547,17 @@ export async function POST(request: Request) {
           resultat.prgf = 0
           resultat.total_deductions = 0
           resultat.total_charges_patronales = 0
-          resultat.salaire_net = resultat.salaire_brut
+          resultat.salaire_net = salaire_base_mur // net = base pour hors MRA
         }
-        const salaire_net_final = Math.round((resultat.salaire_net - montant_absence_final) * 100) / 100
+        const salaire_net_final = isHorsMRA ? salaire_base_mur : Math.round((resultat.salaire_net - montant_absence_final) * 100) / 100
 
         // Résumé notes pour le bulletin
-        const transportAlloc = Number(emp.transport_allowance) || 0
-        const petrolAlloc = Number(emp.petrol_allowance) || 0
-        const mraTag = isHorsMRA ? ' [HORS MRA]' : ''
-        const notesResume = `Base: ${salaire_base_mur}, Transport: ${transportAlloc}, Petrol: ${petrolAlloc}, OT: ${Math.round(total_ot_montant)}, Primes: ${Math.round(total_primes)}, Absences: ${jours_absence_injust}j${mraTag}`
+        const transportAlloc = isHorsMRA ? 0 : (Number(emp.transport_allowance) || 0)
+        const petrolAlloc = isHorsMRA ? 0 : (Number(emp.petrol_allowance) || 0)
+        const mraTag = isHorsMRA ? ' [HORS MRA - Brut=Base]' : ''
+        const notesResume = isHorsMRA
+          ? `Base: ${salaire_base_mur} [HORS MRA - Brut=Net=Base]`
+          : `Base: ${salaire_base_mur}, Transport: ${transportAlloc}, Petrol: ${petrolAlloc}, OT: ${Math.round(total_ot_montant)}, Primes: ${Math.round(total_primes)}, Absences: ${jours_absence_injust}j`
         console.log(`[paie] ${emp.prenom} ${emp.nom}: base=${salaire_base_mur} transport=${transportAlloc} petrol=${petrolAlloc} OT=${Math.round(total_ot_montant)} primes=${Math.round(total_primes)} abs=${jours_absence_injust}${mraTag}`)
 
         const bulletin: Record<string, any> = {
@@ -564,12 +576,14 @@ export async function POST(request: Request) {
           prgf: resultat.prgf,
           total_deductions: Math.round((resultat.total_deductions + montant_absence_final) * 100) / 100,
           total_charges_patronales: resultat.total_charges_patronales,
-          heures_sup_montant: Math.round(total_ot_montant),
-          special_allowance_1: Math.round(total_primes),
-          transport_allowance: Number(emp.transport_allowance) || 0,
-          petrol_allowance: Number(emp.petrol_allowance) || 0,
-          eoy_bonus: eoy_bonus_montant,
-          montant_absence: montant_absence_final,
+          heures_sup_montant: isHorsMRA ? 0 : Math.round(total_ot_montant),
+          special_allowance_1: isHorsMRA ? 0 : Math.round(total_primes),
+          transport_allowance: isHorsMRA ? 0 : (Number(emp.transport_allowance) || 0),
+          petrol_allowance: isHorsMRA ? 0 : (Number(emp.petrol_allowance) || 0),
+          increment_salaire: isHorsMRA ? 0 : (Number(emp.increment_salaire) || 0),
+          other_refund: isHorsMRA ? 0 : (Number(emp.other_refund) || 0),
+          eoy_bonus: isHorsMRA ? 0 : eoy_bonus_montant,
+          montant_absence: isHorsMRA ? 0 : montant_absence_final,
           notes: notesResume,
           statut: 'brouillon',
         }
