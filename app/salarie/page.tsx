@@ -1473,14 +1473,17 @@ export default function EspaceEmployePage() {
           const TEAL = "#2a9d8f"
           const santeNav = [
             { id: "dashboard", label: "Tableau de bord", icon: LayoutDashboard },
-            { id: "salle_attente", label: "Salle d'attente", icon: Clock },
+            { id: "salle_attente", label: "Salle d'attente", icon: Video },
             { id: "rdv", label: "RDV a venir", icon: Calendar },
             { id: "consultations", label: "Vos Consultations", icon: FileText },
             { id: "pharmacie", label: "Pharmacie (Ordonnances)", icon: Pill },
             { id: "analyses", label: "Analyses & Examens", icon: Activity },
+            { id: "abonnement", label: "Abonnement", icon: CreditCard },
             { id: "famille", label: "Famille", icon: User },
             { id: "second_avis", label: "Second Avis Medical", icon: Stethoscope },
+            { id: "assurance", label: "Validation Assurance", icon: ShieldCheck },
             { id: "suivi", label: "Suivi Chronique", icon: HeartPulse },
+            { id: "silentcheck", label: "SilentCheck", icon: Scan },
           ]
 
           const ProcessFlow = ({ title, icon: FlowIcon, steps }: { title: string; icon: any; steps: { icon: any; label: string; desc: string; color: string }[] }) => (
