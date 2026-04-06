@@ -632,7 +632,23 @@ export default function PaiePage() {
                       <TableCell className="text-right text-purple-600 text-sm">
                         {Number(b.special_allowance_1) > 0 ? fmt(b.special_allowance_1) : "—"}
                       </TableCell>
-                      <TableCell className="text-right font-semibold">{fmt(b.salaire_brut)}</TableCell>
+                      <TableCell className="text-right font-semibold">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="cursor-help underline decoration-dotted">{fmt(b.salaire_brut)}</span>
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-xs text-xs">
+                            <p className="font-bold mb-1">Detail brut :</p>
+                            <p>Base: {fmt(b.salaire_base)}</p>
+                            {Number(b.transport_allowance) > 0 && <p>Transport: {fmt(b.transport_allowance)}</p>}
+                            {Number(b.petrol_allowance) > 0 && <p>Petrol: {fmt(b.petrol_allowance)}</p>}
+                            {Number(b.heures_sup_montant) > 0 && <p>OT: {fmt(b.heures_sup_montant)}</p>}
+                            {Number(b.special_allowance_1) > 0 && <p>Primes: {fmt(b.special_allowance_1)}</p>}
+                            {Number(b.eoy_bonus) > 0 && <p>13eme mois: {fmt(b.eoy_bonus)}</p>}
+                            {b.notes && <p className="mt-1 text-gray-400">{b.notes}</p>}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TableCell>
                       <TableCell className="text-right text-red-600 text-sm">{fmt(b.total_deductions)}</TableCell>
                       <TableCell className="text-right font-bold text-green-700">{fmt(b.salaire_net)}</TableCell>
                       <TableCell className="text-right text-orange-500 text-sm">{fmt(b.total_charges_patronales)}</TableCell>

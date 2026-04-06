@@ -358,12 +358,19 @@ export async function POST(request: Request) {
       }
 
       // Filter out departed employees — only include if still active during this period
+      // Use both `actif` field (GENERATED from date_depart IS NULL) and date_depart comparison
       const employes = allEmps.filter(e => {
-        if (!e.date_depart) return true // still active
-        // Compare departure date with the period start
-        const depart = String(e.date_depart).slice(0, 10) // "YYYY-MM-DD"
-        const periodeDebut = `${periodeStr}-01`
-        return depart >= periodeDebut // only include if departed ON or AFTER the period start
+        // If no date_depart set → active
+        if (!e.date_depart && e.actif !== false) return true
+        // If explicitly inactive with no date
+        if (e.actif === false && !e.date_depart) return false
+        // If date_depart exists, include only if they departed during or after this period
+        if (e.date_depart) {
+          const depart = String(e.date_depart).slice(0, 10)
+          const periodeDebut = `${periodeStr}-01`
+          return depart >= periodeDebut
+        }
+        return true
       })
       console.log(`[paie batch] ${employes.length} employes actifs sur ${allEmps.length} total pour societe=${societe_id}, periode=${periodeStr}`)
 
@@ -507,7 +514,10 @@ export async function POST(request: Request) {
         const salaire_net_final = Math.round((resultat.salaire_net - montant_absence_final) * 100) / 100
 
         // Résumé notes pour le bulletin
-        const notesResume = `OT: ${Math.round(total_ot_montant)} MUR, Primes: ${Math.round(total_primes)} MUR, Absences: ${jours_absence_injust} jours`
+        const transportAlloc = Number(emp.transport_allowance) || 0
+        const petrolAlloc = Number(emp.petrol_allowance) || 0
+        const notesResume = `Base: ${salaire_base_mur}, Transport: ${transportAlloc}, Petrol: ${petrolAlloc}, OT: ${Math.round(total_ot_montant)}, Primes: ${Math.round(total_primes)}, Absences: ${jours_absence_injust}j`
+        console.log(`[paie] ${emp.prenom} ${emp.nom}: base=${salaire_base_mur} transport=${transportAlloc} petrol=${petrolAlloc} OT=${Math.round(total_ot_montant)} primes=${Math.round(total_primes)} abs=${jours_absence_injust}`)
 
         const bulletin: Record<string, any> = {
           employe_id: emp.id,
