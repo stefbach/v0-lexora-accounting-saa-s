@@ -674,7 +674,9 @@ export async function POST(request: Request) {
     if (action === 'modifier_employe') {
       const { employe_id: eid, champs: empChamps } = body
       if (!eid || !empChamps) return NextResponse.json({ error: 'employe_id et champs requis' }, { status: 400 })
-      const allowedEmp = ['exclure_mra', 'date_depart', 'actif']
+      const allowedEmp = ['exclure_mra', 'date_depart', 'actif',
+        'prime_fixe_1', 'prime_fixe_1_libelle', 'prime_fixe_2', 'prime_fixe_2_libelle',
+        'prime_fixe_3', 'prime_fixe_3_libelle', 'transport_allowance', 'petrol_allowance']
       const empUpdates: Record<string, any> = {}
       for (const [k, v] of Object.entries(empChamps)) {
         if (allowedEmp.includes(k)) empUpdates[k] = v

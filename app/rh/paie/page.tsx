@@ -326,9 +326,15 @@ export default function PaiePage() {
       salaire_base: Number(b.salaire_base) || 0,
       heures_sup_montant: Number(b.heures_sup_montant) || 0,
       special_allowance_1: Number(b.special_allowance_1) || 0,
+      special_allowance_2: Number(b.special_allowance_2) || 0,
+      special_allowance_3: Number(b.special_allowance_3) || 0,
       transport_allowance: Number(b.transport_allowance) || 0,
+      petrol_allowance: Number(b.petrol_allowance) || 0,
       jours_absence: Number(b.jours_absence) || 0,
       montant_absence: Number(b.montant_absence) || 0,
+      prime_label_1: b.employe?.prime_fixe_1_libelle || "",
+      prime_label_2: b.employe?.prime_fixe_2_libelle || "",
+      prime_label_3: b.employe?.prime_fixe_3_libelle || "",
     })
   }
 
@@ -336,12 +342,32 @@ export default function PaiePage() {
     if (!editingId) return
     setSavingEdit(true)
     try {
+      // Save bulletin fields (strip prime_label_ fields which go to employee)
+      const bulletinChamps: Record<string, any> = {}
+      const empChamps: Record<string, any> = {}
+      for (const [k, v] of Object.entries(editFields)) {
+        if (k.startsWith("prime_label_")) {
+          const n = k.replace("prime_label_", "")
+          empChamps[`prime_fixe_${n}_libelle`] = v
+        } else {
+          bulletinChamps[k] = v
+        }
+      }
+      // Save bulletin
       const res = await fetch("/api/rh/paie", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "modifier_bulletin", bulletin_id: editingId, champs: editFields })
+        body: JSON.stringify({ action: "modifier_bulletin", bulletin_id: editingId, champs: bulletinChamps })
       })
       const data = await res.json()
       if (!res.ok) { alert(data.error || "Erreur"); return }
+      // Save prime labels on employee if changed
+      const b = bulletins.find(x => x.id === editingId)
+      if (b && Object.keys(empChamps).length > 0) {
+        await fetch("/api/rh/paie", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "modifier_employe", employe_id: b.employe_id, champs: empChamps })
+        })
+      }
       setEditingId(null)
       load(); loadWorkflow()
     } catch (e: any) { alert("Erreur: " + (e.message || "")) }
@@ -704,26 +730,68 @@ export default function PaiePage() {
                               <X className="w-3 h-3 mr-1" />Annuler
                             </Button>
                           </div>
-                          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+
+                          {/* Salaire et allocations */}
+                          <p className="text-[10px] font-bold text-gray-500 mb-1">Salaire et allocations</p>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
                             {[
                               { key: "salaire_base", label: "Salaire base" },
-                              { key: "heures_sup_montant", label: "Heures sup (MUR)" },
-                              { key: "special_allowance_1", label: "Primes" },
                               { key: "transport_allowance", label: "Transport" },
-                              { key: "jours_absence", label: "Jours absence" },
-                              { key: "montant_absence", label: "Montant absence" },
+                              { key: "petrol_allowance", label: "Petrol" },
+                              { key: "heures_sup_montant", label: "Heures sup (MUR)" },
                             ].map(f => (
                               <div key={f.key}>
                                 <label className="text-[10px] text-gray-500 block mb-0.5">{f.label}</label>
-                                <Input
-                                  type="number"
-                                  className="h-8 text-sm"
+                                <Input type="number" className="h-8 text-sm"
                                   value={editFields[f.key] ?? 0}
                                   onChange={e => setEditFields(prev => ({ ...prev, [f.key]: parseFloat(e.target.value) || 0 }))}
                                 />
                               </div>
                             ))}
                           </div>
+
+                          {/* Primes — libellé libre + montant */}
+                          <p className="text-[10px] font-bold text-purple-600 mb-1">Primes (libelle libre)</p>
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+                            {[1, 2, 3].map(n => (
+                              <div key={n} className="flex gap-2">
+                                <div className="flex-1">
+                                  <label className="text-[10px] text-gray-500 block mb-0.5">Libelle prime {n}</label>
+                                  <Input className="h-8 text-sm" placeholder={`Ex: ${n === 1 ? "Prime fonction" : n === 2 ? "Prime anciennete" : "Autre prime"}`}
+                                    value={editFields[`prime_label_${n}`] ?? (b.employe?.[`prime_fixe_${n}_libelle`] || "")}
+                                    onChange={e => setEditFields(prev => ({ ...prev, [`prime_label_${n}`]: e.target.value }))}
+                                  />
+                                </div>
+                                <div className="w-28">
+                                  <label className="text-[10px] text-gray-500 block mb-0.5">Montant</label>
+                                  <Input type="number" className="h-8 text-sm"
+                                    value={editFields[`special_allowance_${n}`] ?? 0}
+                                    onChange={e => setEditFields(prev => ({ ...prev, [`special_allowance_${n}`]: parseFloat(e.target.value) || 0 }))}
+                                  />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Absences */}
+                          <p className="text-[10px] font-bold text-red-500 mb-1">Absences</p>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div>
+                              <label className="text-[10px] text-gray-500 block mb-0.5">Jours absence</label>
+                              <Input type="number" className="h-8 text-sm"
+                                value={editFields.jours_absence ?? 0}
+                                onChange={e => setEditFields(prev => ({ ...prev, jours_absence: parseFloat(e.target.value) || 0 }))}
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-gray-500 block mb-0.5">Montant absence</label>
+                              <Input type="number" className="h-8 text-sm"
+                                value={editFields.montant_absence ?? 0}
+                                onChange={e => setEditFields(prev => ({ ...prev, montant_absence: parseFloat(e.target.value) || 0 }))}
+                              />
+                            </div>
+                          </div>
+
                           <div className="mt-3 flex gap-2">
                             <Button size="sm" className="h-8 text-xs" style={{ backgroundColor: NAVY, color: "white" }} onClick={saveEdit} disabled={savingEdit}>
                               {savingEdit ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Save className="w-3 h-3 mr-1" />}
