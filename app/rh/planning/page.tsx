@@ -452,19 +452,20 @@ export default function PlanningPage() {
         fetch(`/api/rh/groupes?${societe !== "all" ? `societe_id=${societe}` : ""}`).then(r => r.json()).catch(() => ({ groupes: [] })),
         fetch(`/api/rh/conges?${params}&statut=approuve`).then(r => r.json()).catch(() => ({ conges: [] })),
       ])
-      // Build approved leave map
+      // Build approved leave map — mark days with approved congés
       const leaveMap: Record<string, Set<number>> = {}
       for (const conge of (leaveRes.conges || [])) {
         if (!leaveMap[conge.employe_id]) leaveMap[conge.employe_id] = new Set()
-        const start = conge.jour_debut || conge.date_debut ? new Date(conge.date_debut || `${year}-${String(month+1).padStart(2,"0")}-${conge.jour_debut}`) : null
-        const end = conge.jour_fin || conge.date_fin ? new Date(conge.date_fin || `${year}-${String(month+1).padStart(2,"0")}-${conge.jour_fin}`) : start
-        if (start && end) {
-          for (let d = 1; d <= daysInMonth; d++) {
-            const current = new Date(year, month, d)
-            if (current >= start && current <= end) leaveMap[conge.employe_id].add(d)
+        const startStr = String(conge.date_debut || "").slice(0, 10)
+        const endStr = String(conge.date_fin || conge.date_debut || "").slice(0, 10)
+        if (!startStr) continue
+
+        // Iterate through each day of the month and check if it falls within the leave period
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dayStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`
+          if (dayStr >= startStr && dayStr <= endStr) {
+            leaveMap[conge.employe_id].add(d)
           }
-        } else if (conge.jour) {
-          leaveMap[conge.employe_id].add(parseInt(conge.jour, 10))
         }
       }
       setApprovedLeaves(leaveMap)
@@ -512,6 +513,22 @@ export default function PlanningPage() {
           }
         }
       }
+      // Override with approved leave days — congé takes priority over planned shift
+      for (const [empId, days] of Object.entries(leaveMap)) {
+        if (grid[empId]) {
+          for (const day of days) {
+            if (day >= 1 && day <= daysInMonth) {
+              grid[empId][day] = {
+                creneau_id: "conge",
+                heure_debut: "", heure_fin: "",
+                pause_debut: "", pause_fin: "",
+                heures_prevues: 0,
+              }
+            }
+          }
+        }
+      }
+
       setPlanning(grid)
     } catch (e) { console.error(e) }
     finally { setLoading(false) }
