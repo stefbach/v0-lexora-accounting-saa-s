@@ -745,6 +745,7 @@ export default function EspaceEmployePage() {
   const [annonces, setAnnonces] = useState<any[]>([])
   const [now, setNow] = useState(new Date())
   const [punching, setPunching] = useState(false)
+  const [santeTab, setSanteTab] = useState("dashboard")
   const [feedback, setFeedback] = useState("")
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
@@ -1470,7 +1471,6 @@ export default function EspaceEmployePage() {
         {/* ═══════════════════════════════════════════════════════════════ */}
         {tab === "sante" && (() => {
           const TEAL = "#2a9d8f"
-          const [santeTab, setSanteTab] = React.useState("dashboard")
           const santeNav = [
             { id: "dashboard", label: "Tableau de bord", icon: LayoutDashboard },
             { id: "salle_attente", label: "Salle d'attente", icon: Clock },
