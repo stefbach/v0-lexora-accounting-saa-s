@@ -438,8 +438,17 @@ export async function POST(request: Request) {
         }
       }
 
+      // Validate dates
+      if (body.date_fin < body.date_debut) {
+        return NextResponse.json({ error: 'La date de fin doit être après la date de début' }, { status: 400 })
+      }
+
       // Validate Mauritius WRA 2019 rules
       const nb_jours = countWorkingDays(body.date_debut, body.date_fin)
+
+      if (nb_jours <= 0) {
+        return NextResponse.json({ error: 'La période sélectionnée ne contient aucun jour ouvrable' }, { status: 400 })
+      }
 
       if (body.type_conge === 'MAT' && emp.gender === 'M') {
         return NextResponse.json({ error: 'Conge maternite reserve aux femmes (WRA 2019)' }, { status: 400 })
