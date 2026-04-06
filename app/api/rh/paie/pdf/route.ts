@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { userHasAccessToEmploye } from '@/lib/rh/access'
+import React from 'react'
+import { renderToBuffer, Document, Page, View, Text, StyleSheet, Font } from '@react-pdf/renderer'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,16 +18,310 @@ function getAdminClient() {
 const MOIS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"]
 
 function fmt(n: number | null | undefined): string {
-  if (!n) return "0"
+  if (!n && n !== 0) return "0"
   return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(n)
 }
 
-// GET handler — for window.open() calls
+// ─── Shared data fetcher ──────────────────────────────────────────
+async function fetchBulletinData(supabase: any, bulletin: any) {
+  const { data: emp } = await supabase.from('employes').select('*').eq('id', bulletin.employe_id).single()
+  const { data: soc } = await supabase.from('societes').select('*').eq('id', bulletin.societe_id).single()
+
+  const periodeDate = new Date(bulletin.periode + 'T12:00:00')
+  const moisLabel = MOIS_FR[periodeDate.getMonth()] || ''
+  const annee = periodeDate.getFullYear()
+
+  // Leave balances
+  const { data: congesApprouves } = await supabase
+    .from('demandes_conges').select('type_conge, nb_jours')
+    .eq('employe_id', bulletin.employe_id).eq('statut', 'approuve')
+    .gte('date_debut', `${annee}-01-01`).lte('date_debut', `${annee}-12-31`)
+  const alPris = (congesApprouves || []).filter((c: any) => c.type_conge === 'AL').reduce((s: number, c: any) => s + (Number(c.nb_jours) || 0), 0)
+  const slPris = (congesApprouves || []).filter((c: any) => c.type_conge === 'SL').reduce((s: number, c: any) => s + (Number(c.nb_jours) || 0), 0)
+
+  const hireDate = emp?.date_arrivee ? new Date(emp.date_arrivee + 'T00:00:00') : null
+  const mos = hireDate ? (annee - hireDate.getFullYear()) * 12 + (new Date().getMonth() - hireDate.getMonth()) : 999
+  const alDroit = mos < 6 ? 0 : mos < 12 ? Math.min(mos - 6, 6) : 22
+  const slDroit = mos < 6 ? 0 : mos < 12 ? Math.min(mos - 6, 6) : 15
+
+  // Primes
+  const { data: primesMois } = await supabase
+    .from('primes_variables_mois').select('*, prime:catalogue_primes(libelle, type_prime)')
+    .eq('employe_id', bulletin.employe_id).eq('periode', bulletin.periode)
+
+  // Seniority
+  let anciennete = '—'
+  if (emp?.date_arrivee) {
+    const d = new Date(emp.date_arrivee)
+    let y = periodeDate.getFullYear() - d.getFullYear()
+    let m = periodeDate.getMonth() - d.getMonth()
+    if (m < 0) { y--; m += 12 }
+    anciennete = y > 0 ? `${y} an(s) ${m} mois` : `${m} mois`
+  }
+
+  return { emp, soc, moisLabel, annee, periodeDate, alPris, slPris, alDroit, slDroit, primesMois: primesMois || [], anciennete }
+}
+
+// ─── PDF Document Component ──────────────────────────────────────
+
+const s = StyleSheet.create({
+  page: { padding: 30, fontFamily: 'Helvetica', fontSize: 9, color: '#1a1a1a' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', borderBottomWidth: 3, borderBottomColor: '#0B0F2E', paddingBottom: 10, marginBottom: 12 },
+  headerLeft: { width: '55%' },
+  headerRight: { width: '40%', alignItems: 'flex-end' },
+  companyName: { fontSize: 13, fontWeight: 'bold', color: '#0B0F2E', fontFamily: 'Helvetica-Bold' },
+  title: { fontSize: 15, fontWeight: 'bold', color: '#0B0F2E', fontFamily: 'Helvetica-Bold' },
+  subtitle: { fontSize: 13, fontWeight: 'bold', color: '#D4AF37', fontFamily: 'Helvetica-Bold', marginTop: 2 },
+  smallGray: { fontSize: 8.5, color: '#555', marginTop: 1 },
+  // Employee info box
+  infoBox: { backgroundColor: '#f8f9fa', borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 4, padding: 10, marginBottom: 12 },
+  infoGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  infoItem: { width: '50%', fontSize: 8.5, marginBottom: 3 },
+  infoLabel: { fontFamily: 'Helvetica-Bold', color: '#0B0F2E' },
+  // Section
+  sectionHeader: { backgroundColor: '#0B0F2E', padding: '4 8', borderRadius: 3, marginBottom: 6, marginTop: 10, borderBottomWidth: 2, borderBottomColor: '#D4AF37' },
+  sectionTitle: { fontSize: 10, fontWeight: 'bold', color: 'white', fontFamily: 'Helvetica-Bold' },
+  // Rows
+  row: { flexDirection: 'row', justifyContent: 'space-between', padding: '3 8', borderBottomWidth: 0.5, borderBottomColor: '#f0f0f0' },
+  rowLabel: { fontSize: 9, flex: 1 },
+  rowValue: { fontSize: 9, textAlign: 'right', width: 90 },
+  totalRow: { flexDirection: 'row', justifyContent: 'space-between', padding: '5 8', backgroundColor: '#f0f0f0', borderTopWidth: 2, borderTopColor: '#0B0F2E', marginTop: 4 },
+  totalLabel: { fontSize: 9.5, fontFamily: 'Helvetica-Bold', flex: 1 },
+  totalValue: { fontSize: 9.5, fontFamily: 'Helvetica-Bold', textAlign: 'right', width: 90 },
+  deduction: { color: '#c0392b' },
+  // Net box
+  netBox: { borderWidth: 3, borderColor: '#0B0F2E', borderRadius: 6, padding: 14, marginVertical: 14, alignItems: 'center' },
+  netLabel: { fontSize: 11, fontFamily: 'Helvetica-Bold', color: '#0B0F2E', marginBottom: 3 },
+  netAmount: { fontSize: 22, fontFamily: 'Helvetica-Bold', color: '#0B0F2E' },
+  netBank: { fontSize: 9, color: '#555', marginTop: 4 },
+  // Leave box
+  leaveBox: { borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 4, padding: 10, marginBottom: 12, backgroundColor: '#f8f9fa' },
+  leaveTitle: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#555', textTransform: 'uppercase', marginBottom: 6 },
+  leaveGrid: { flexDirection: 'row', gap: 8 },
+  leaveCard: { flex: 1, backgroundColor: 'white', borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 3, padding: 6 },
+  leaveCardLabel: { fontSize: 8.5, fontFamily: 'Helvetica-Bold', color: '#0B0F2E', marginBottom: 2 },
+  leaveCardValue: { fontSize: 12, fontFamily: 'Helvetica-Bold' },
+  leaveCardSub: { fontSize: 7.5, color: '#888' },
+  // Patronal
+  patronalBox: { backgroundColor: '#f9f9f9', borderWidth: 1, borderColor: '#ddd', borderRadius: 4, padding: 8, marginBottom: 12 },
+  patronalTitle: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#555', textTransform: 'uppercase', marginBottom: 4 },
+  patronalRow: { flexDirection: 'row', justifyContent: 'space-between', padding: '2 0' },
+  patronalLabel: { fontSize: 8.5, color: '#555' },
+  patronalValue: { fontSize: 8.5, color: '#555', width: 80, textAlign: 'right' },
+  patronalTotal: { fontFamily: 'Helvetica-Bold', color: '#0B0F2E', borderTopWidth: 1, borderTopColor: '#ccc', marginTop: 3, paddingTop: 3 },
+  // Footer
+  footer: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#ddd' },
+  footerText: { fontSize: 7.5, color: '#888', lineHeight: 1.5, width: '65%' },
+  footerCenter: { fontSize: 7, color: '#bbb', textAlign: 'center', marginTop: 15 },
+  primeRow: { flexDirection: 'row', justifyContent: 'space-between', padding: '3 8', borderBottomWidth: 0.5, borderBottomColor: '#f0f0f0' },
+  primeLabel: { fontSize: 9, color: '#7c3aed', flex: 1 },
+  primeValue: { fontSize: 9, color: '#7c3aed', textAlign: 'right', width: 90 },
+  subTotalRow: { flexDirection: 'row', justifyContent: 'space-between', padding: '3 8', backgroundColor: '#faf5ff' },
+  subTotalLabel: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#7c3aed', flex: 1 },
+  subTotalValue: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#7c3aed', textAlign: 'right', width: 90 },
+  otSubRow: { flexDirection: 'row', justifyContent: 'space-between', padding: '3 8', backgroundColor: '#fff7ed' },
+  otSubLabel: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#ea580c', flex: 1 },
+  otSubValue: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#ea580c', textAlign: 'right', width: 90 },
+})
+
+function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris, slPris, alDroit, slDroit, primesMois, anciennete }: any) {
+  const csgPct = Number(bulletin.salaire_brut) > 50000 ? '3%' : '1.5%'
+  const hasPrimes = primesMois.length > 0 || Number(bulletin.special_allowance_1) > 0
+  const totalPrimes = primesMois.length > 0
+    ? primesMois.reduce((s: number, p: any) => s + Number(p.montant || 0), 0)
+    : Number(bulletin.special_allowance_1 || 0) + Number(bulletin.special_allowance_2 || 0) + Number(bulletin.special_allowance_3 || 0)
+  const hasOT = Number(bulletin.heures_sup_montant) > 0
+
+  const Row = ({ label, value, style: rowStyle }: { label: string; value: string; style?: any }) =>
+    React.createElement(View, { style: s.row },
+      React.createElement(Text, { style: [s.rowLabel, rowStyle] }, label),
+      React.createElement(Text, { style: [s.rowValue, rowStyle] }, value)
+    )
+
+  const DeductionRow = ({ label, value }: { label: string; value: string }) =>
+    React.createElement(View, { style: s.row },
+      React.createElement(Text, { style: [s.rowLabel, s.deduction] }, label),
+      React.createElement(Text, { style: [s.rowValue, s.deduction] }, value)
+    )
+
+  return React.createElement(Document, {},
+    React.createElement(Page, { size: 'A4', style: s.page },
+      // ─── Header ────────────────────────────────
+      React.createElement(View, { style: s.header },
+        React.createElement(View, { style: s.headerLeft },
+          React.createElement(Text, { style: s.companyName }, soc?.nom || 'N/A'),
+          React.createElement(Text, { style: s.smallGray }, soc?.adresse || ''),
+          React.createElement(Text, { style: s.smallGray }, `BRN: ${soc?.brn || '—'}${soc?.ern ? ` | ERN: ${soc.ern}` : ''}`),
+          soc?.paye_number ? React.createElement(Text, { style: s.smallGray }, `PAYE: ${soc.paye_number}${soc?.csg_number ? ` | CSG: ${soc.csg_number}` : ''}${soc?.nsf_number ? ` | NSF: ${soc.nsf_number}` : ''}`) : null,
+          soc?.telephone ? React.createElement(Text, { style: s.smallGray }, `Tel: ${soc.telephone}`) : null,
+        ),
+        React.createElement(View, { style: s.headerRight },
+          React.createElement(Text, { style: s.title }, 'BULLETIN DE PAIE'),
+          React.createElement(Text, { style: s.subtitle }, `${moisLabel} ${annee}`),
+          React.createElement(Text, { style: s.smallGray }, `Ref: BUL-${annee}-${String(periodeDate.getMonth() + 1).padStart(2, '0')}-${emp?.code || '000'}`),
+          React.createElement(Text, { style: s.smallGray }, `Emis le: ${new Date().toLocaleDateString('fr-FR')}`),
+        )
+      ),
+
+      // ─── Employee Info ─────────────────────────
+      React.createElement(View, { style: s.infoBox },
+        React.createElement(View, { style: s.infoGrid },
+          ...[
+            ['Employe', `${emp?.prenom || ''} ${emp?.nom || ''}`],
+            ['Code', emp?.code || '—'],
+            ['Poste', emp?.poste || '—'],
+            ['NIC', emp?.nic_number || '—'],
+            ['TAN', emp?.tan || '—'],
+            ["Date d'entree", emp?.date_arrivee ? new Date(emp.date_arrivee).toLocaleDateString('fr-FR') : '—'],
+            ['Anciennete', anciennete],
+            ['CSG Categorie', Number(bulletin.salaire_brut) > 50000 ? 'Cat. B (3%)' : 'Cat. A (1.5%)'],
+            ...(emp?.adresse || emp?.ville ? [['Adresse', [emp.adresse, emp.adresse2, emp.ville, emp.code_postal].filter(Boolean).join(', ')]] : []),
+            ...(emp?.departement ? [['Departement', emp.departement]] : []),
+          ].map(([label, val], i) =>
+            React.createElement(View, { style: s.infoItem, key: i },
+              React.createElement(Text, null,
+                React.createElement(Text, { style: s.infoLabel }, `${label} : `),
+                String(val)
+              )
+            )
+          )
+        )
+      ),
+
+      // ─── Remuneration ─────────────────────────
+      React.createElement(View, { style: s.sectionHeader },
+        React.createElement(Text, { style: s.sectionTitle }, 'ELEMENTS DE REMUNERATION')
+      ),
+      React.createElement(Row, { label: 'Salaire de base', value: `${fmt(bulletin.salaire_base)} MUR` }),
+      Number(bulletin.transport_allowance) > 0 ? React.createElement(Row, { label: 'Transport Allowance', value: `${fmt(bulletin.transport_allowance)} MUR` }) : null,
+      Number(bulletin.petrol_allowance) > 0 ? React.createElement(Row, { label: 'Petrol Allowance', value: `${fmt(bulletin.petrol_allowance)} MUR` }) : null,
+      Number(bulletin.increment_salaire) > 0 ? React.createElement(Row, { label: 'Increment de salaire', value: `${fmt(bulletin.increment_salaire)} MUR` }) : null,
+      hasOT ? React.createElement(Row, { label: 'Heures supplementaires', value: `${fmt(bulletin.heures_sup_montant)} MUR` }) : null,
+      hasOT ? React.createElement(View, { style: s.otSubRow },
+        React.createElement(Text, { style: s.otSubLabel }, 'Sous-total heures supplementaires'),
+        React.createElement(Text, { style: s.otSubValue }, `${fmt(bulletin.heures_sup_montant)} MUR`)
+      ) : null,
+      // Primes
+      ...(primesMois.length > 0
+        ? primesMois.map((p: any, i: number) =>
+            React.createElement(View, { style: s.primeRow, key: `p${i}` },
+              React.createElement(Text, { style: s.primeLabel }, `Prime — ${p.prime?.libelle || p.notes || 'Variable'}${p.quantite > 1 ? ` (x${p.quantite})` : ''}`),
+              React.createElement(Text, { style: s.primeValue }, `${fmt(Number(p.montant))} MUR`)
+            )
+          )
+        : Number(bulletin.special_allowance_1) > 0 ? [React.createElement(Row, { label: 'Primes du mois', value: `${fmt(bulletin.special_allowance_1)} MUR`, key: 'sa1' })] : []
+      ),
+      Number(bulletin.special_allowance_2) > 0 ? React.createElement(Row, { label: 'Allocation speciale 2', value: `${fmt(bulletin.special_allowance_2)} MUR` }) : null,
+      Number(bulletin.special_allowance_3) > 0 ? React.createElement(Row, { label: 'Allocation speciale 3', value: `${fmt(bulletin.special_allowance_3)} MUR` }) : null,
+      hasPrimes ? React.createElement(View, { style: s.subTotalRow },
+        React.createElement(Text, { style: s.subTotalLabel }, 'Sous-total primes'),
+        React.createElement(Text, { style: s.subTotalValue }, `${fmt(totalPrimes)} MUR`)
+      ) : null,
+      Number(bulletin.other_refund) > 0 ? React.createElement(Row, { label: 'Autres remboursements', value: `${fmt(bulletin.other_refund)} MUR` }) : null,
+      Number(bulletin.eoy_bonus) > 0 ? React.createElement(Row, { label: '13eme mois (EOY Bonus)', value: `${fmt(bulletin.eoy_bonus)} MUR` }) : null,
+      Number(bulletin.departure_notice) > 0 ? React.createElement(Row, { label: 'Preavis de depart', value: `${fmt(bulletin.departure_notice)} MUR` }) : null,
+      // BRUT total
+      React.createElement(View, { style: s.totalRow },
+        React.createElement(Text, { style: s.totalLabel }, 'SALAIRE BRUT'),
+        React.createElement(Text, { style: s.totalValue }, `${fmt(bulletin.salaire_brut)} MUR`)
+      ),
+
+      // ─── Deductions ────────────────────────────
+      React.createElement(View, { style: [s.sectionHeader, { marginTop: 12 }] },
+        React.createElement(Text, { style: s.sectionTitle }, 'DEDUCTIONS SALARIE')
+      ),
+      React.createElement(DeductionRow, { label: `CSG salarie (${csgPct})`, value: `-${fmt(bulletin.csg_salarie)} MUR` }),
+      Number(bulletin.csg_bonus) > 0 ? React.createElement(DeductionRow, { label: 'CSG sur 13eme mois (3%)', value: `-${fmt(bulletin.csg_bonus)} MUR` }) : null,
+      React.createElement(DeductionRow, { label: 'NSF salarie (1.5%)', value: `-${fmt(bulletin.nsf_salarie)} MUR` }),
+      Number(bulletin.paye) > 0
+        ? React.createElement(DeductionRow, { label: 'PAYE', value: `-${fmt(bulletin.paye)} MUR` })
+        : React.createElement(View, { style: s.row },
+            React.createElement(Text, { style: [s.rowLabel, { color: '#27ae60' }] }, 'PAYE'),
+            React.createElement(Text, { style: [s.rowValue, { color: '#27ae60' }] }, 'Exonere')
+          ),
+      Number(bulletin.montant_absence) > 0 ? React.createElement(View, { style: [s.row, { backgroundColor: '#fdf0f0' }] },
+        React.createElement(Text, { style: [s.rowLabel, { color: '#e74c3c' }] }, `Absence injustifiee (${bulletin.jours_absence} jour(s))`),
+        React.createElement(Text, { style: [s.rowValue, { color: '#e74c3c' }] }, `-${fmt(bulletin.montant_absence)} MUR`)
+      ) : null,
+      React.createElement(View, { style: s.totalRow },
+        React.createElement(Text, { style: s.totalLabel }, 'TOTAL DEDUCTIONS'),
+        React.createElement(Text, { style: s.totalValue }, `-${fmt(bulletin.total_deductions)} MUR`)
+      ),
+
+      // ─── Net Box ───────────────────────────────
+      React.createElement(View, { style: s.netBox },
+        React.createElement(Text, { style: s.netLabel }, 'NET A PAYER'),
+        React.createElement(Text, { style: s.netAmount }, `${fmt(bulletin.salaire_net)} MUR`),
+        React.createElement(Text, { style: s.netBank }, `Virement ${emp?.bank_name || ''} — ****${(emp?.bank_account || '').slice(-4)}`)
+      ),
+
+      // ─── Leave Balances ─────────────────────────
+      React.createElement(View, { style: s.leaveBox },
+        React.createElement(Text, { style: s.leaveTitle }, `Soldes Conges — ${annee}`),
+        React.createElement(View, { style: s.leaveGrid },
+          React.createElement(View, { style: s.leaveCard },
+            React.createElement(Text, { style: s.leaveCardLabel }, 'Local Leave (AL)'),
+            React.createElement(Text, { style: [s.leaveCardValue, { color: '#059669' }] }, `${alDroit - alPris}j`),
+            React.createElement(Text, { style: s.leaveCardSub }, `restants / ${alDroit}j (${alPris}j pris)`)
+          ),
+          React.createElement(View, { style: s.leaveCard },
+            React.createElement(Text, { style: s.leaveCardLabel }, 'Sick Leave (SL)'),
+            React.createElement(Text, { style: [s.leaveCardValue, { color: '#ea580c' }] }, `${slDroit - slPris}j`),
+            React.createElement(Text, { style: s.leaveCardSub }, `restants / ${slDroit}j (${slPris}j pris)`)
+          )
+        )
+      ),
+
+      // ─── Charges Patronales ─────────────────────
+      React.createElement(View, { style: s.patronalBox },
+        React.createElement(Text, { style: s.patronalTitle }, 'Charges patronales (information)'),
+        React.createElement(View, { style: s.patronalRow },
+          React.createElement(Text, { style: s.patronalLabel }, 'CSG Patronal (6%)'),
+          React.createElement(Text, { style: s.patronalValue }, `${fmt(bulletin.csg_patronal)} MUR`)
+        ),
+        Number(bulletin.csg_patronal_bonus) > 0 ? React.createElement(View, { style: s.patronalRow },
+          React.createElement(Text, { style: s.patronalLabel }, 'CSG patronal sur bonus (6%)'),
+          React.createElement(Text, { style: s.patronalValue }, `${fmt(bulletin.csg_patronal_bonus)} MUR`)
+        ) : null,
+        React.createElement(View, { style: s.patronalRow },
+          React.createElement(Text, { style: s.patronalLabel }, 'NSF Patronal (2.5%)'),
+          React.createElement(Text, { style: s.patronalValue }, `${fmt(bulletin.nsf_patronal)} MUR`)
+        ),
+        React.createElement(View, { style: s.patronalRow },
+          React.createElement(Text, { style: s.patronalLabel }, 'Training Levy HRDC (1%)'),
+          React.createElement(Text, { style: s.patronalValue }, `${fmt(bulletin.training_levy)} MUR`)
+        ),
+        React.createElement(View, { style: s.patronalRow },
+          React.createElement(Text, { style: s.patronalLabel }, `PRGF (4.50 MUR x ${bulletin.jours_travailles || 26} jours)`),
+          React.createElement(Text, { style: s.patronalValue }, `${fmt(bulletin.prgf)} MUR`)
+        ),
+        React.createElement(View, { style: [s.patronalRow, s.patronalTotal] },
+          React.createElement(Text, { style: [s.patronalLabel, { fontFamily: 'Helvetica-Bold', color: '#0B0F2E' }] }, 'Total charges patronales'),
+          React.createElement(Text, { style: [s.patronalValue, { fontFamily: 'Helvetica-Bold', color: '#0B0F2E' }] }, `${fmt(bulletin.total_charges_patronales)} MUR`)
+        ),
+        React.createElement(View, { style: [s.patronalRow, s.patronalTotal] },
+          React.createElement(Text, { style: [s.patronalLabel, { fontFamily: 'Helvetica-Bold', color: '#0B0F2E' }] }, 'COUT TOTAL EMPLOYEUR'),
+          React.createElement(Text, { style: [s.patronalValue, { fontFamily: 'Helvetica-Bold', color: '#0B0F2E' }] }, `${fmt(Number(bulletin.salaire_brut) + Number(bulletin.total_charges_patronales))} MUR`)
+        )
+      ),
+
+      // ─── Footer ─────────────────────────────────
+      React.createElement(View, { style: s.footer },
+        React.createElement(Text, { style: s.footerText },
+          `Ce bulletin doit etre conserve sans limitation de duree.\nSigne electroniquement le ${new Date().toLocaleDateString('fr-FR')} par RH Manager`
+        )
+      ),
+      React.createElement(Text, { style: s.footerCenter }, `Genere par le systeme de paie — ${soc?.nom || ''}`)
+    )
+  )
+}
+
+// ─── GET handler (window.open) ────────────────────────────────────
 export async function GET(request: Request) {
   try {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return new NextResponse('Non autorisé', { status: 401 })
+    if (!user) return new NextResponse('Non autorise', { status: 401 })
 
     const supabase = getAdminClient()
     const { searchParams } = new URL(request.url)
@@ -34,484 +330,77 @@ export async function GET(request: Request) {
     const periode = searchParams.get('periode')
 
     let bulletin: any = null
-
     if (bulletin_id) {
       const { data } = await supabase.from('bulletins_paie').select('*').eq('id', bulletin_id).single()
       bulletin = data
     } else if (employe_id && periode) {
-      // periode can be YYYY-MM or YYYY-MM-DD — search for the month
-      const periodeMonth = periode.substring(0, 7) // YYYY-MM
-      const startDate = `${periodeMonth}-01`
-      const endDate = `${periodeMonth}-31`
+      const periodeMonth = periode.substring(0, 7)
       const { data } = await supabase.from('bulletins_paie').select('*')
         .eq('employe_id', employe_id)
-        .gte('periode', startDate)
-        .lte('periode', endDate)
-        .order('periode', { ascending: false })
-        .limit(1)
-        .maybeSingle()
+        .gte('periode', `${periodeMonth}-01`).lte('periode', `${periodeMonth}-31`)
+        .order('periode', { ascending: false }).limit(1).maybeSingle()
       bulletin = data
     }
+    if (!bulletin) return new NextResponse('Bulletin non trouve', { status: 404 })
 
-    if (!bulletin) return new NextResponse('Bulletin non trouvé', { status: 404 })
-
-    // Get employee + check access (multi-tenant OR self-service)
-    const { data: emp } = await supabase.from('employes').select('*').eq('id', bulletin.employe_id).single()
-    const isSelf = emp && (emp.auth_user_id === user.id || emp.email === user.email)
+    const { data: empCheck } = await supabase.from('employes').select('auth_user_id, email').eq('id', bulletin.employe_id).single()
+    const isSelf = empCheck && (empCheck.auth_user_id === user.id || empCheck.email === user.email)
     if (!isSelf) {
       const hasAccess = await userHasAccessToEmploye(user.id, bulletin.employe_id)
-      if (!hasAccess) return new NextResponse('Accès refusé à ce bulletin', { status: 403 })
+      if (!hasAccess) return new NextResponse('Acces refuse', { status: 403 })
     }
-    const { data: soc } = await supabase.from('societes').select('*').eq('id', bulletin.societe_id).single()
 
-    if (!emp) return new NextResponse('Employé non trouvé', { status: 404 })
+    const data = await fetchBulletinData(supabase, bulletin)
+    const doc = React.createElement(BulletinPDF, { bulletin, ...data })
+    const pdfBuffer = await renderToBuffer(doc as any)
+    const filename = `bulletin_${data.emp?.code || data.emp?.nom || 'employe'}_${data.annee}-${String(data.periodeDate.getMonth() + 1).padStart(2, '0')}.pdf`
 
-    const periodeDate = new Date(bulletin.periode)
-    const moisLabel = MOIS_FR[periodeDate.getMonth()] || ''
-    const annee = periodeDate.getFullYear()
-
-    // Calculate leave balances for GET handler too
-    const { data: congesGet } = await supabase
-      .from('demandes_conges')
-      .select('type_conge, nb_jours')
-      .eq('employe_id', bulletin.employe_id)
-      .eq('statut', 'approuve')
-      .gte('date_debut', `${annee}-01-01`)
-      .lte('date_debut', `${annee}-12-31`)
-    const alPrisGet = (congesGet || []).filter((c: any) => c.type_conge === 'AL').reduce((s: number, c: any) => s + (Number(c.nb_jours) || 0), 0)
-    const slPrisGet = (congesGet || []).filter((c: any) => c.type_conge === 'SL').reduce((s: number, c: any) => s + (Number(c.nb_jours) || 0), 0)
-
-    return generatePDFResponse(bulletin, emp, soc, moisLabel, annee, { alPris: alPrisGet, slPris: slPrisGet })
+    return new NextResponse(pdfBuffer, {
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `inline; filename="${filename}"`,
+      },
+    })
   } catch (e: any) {
+    console.error('[pdf/GET]', e)
     return new NextResponse(`Erreur: ${e.message}`, { status: 500 })
   }
 }
 
+// ─── POST handler ─────────────────────────────────────────────────
 export async function POST(request: Request) {
   try {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return NextResponse.json({ error: 'Non autorise' }, { status: 401 })
 
     const supabase = getAdminClient()
     const { bulletin_id } = await request.json()
     if (!bulletin_id) return NextResponse.json({ error: 'bulletin_id requis' }, { status: 400 })
 
-    // Récupérer bulletin + employé + société (separate queries to avoid FK ambiguity)
-    const { data: bulletin, error } = await supabase
-      .from('bulletins_paie')
-      .select('*')
-      .eq('id', bulletin_id)
-      .single()
+    const { data: bulletin, error } = await supabase.from('bulletins_paie').select('*').eq('id', bulletin_id).single()
+    if (error || !bulletin) return NextResponse.json({ error: 'Bulletin non trouve' }, { status: 404 })
 
-    if (error || !bulletin) return NextResponse.json({ error: 'Bulletin non trouvé: ' + (error?.message || 'introuvable') }, { status: 404 })
-
-    const { data: empData } = await supabase
-      .from('employes')
-      .select('*')
-      .eq('id', bulletin.employe_id)
-      .single()
-
-    const { data: socData } = await supabase
-      .from('societes')
-      .select('*')
-      .eq('id', bulletin.societe_id)
-      .single()
-
-    // Attach for template compatibility
-    const emp = empData
-    const soc = socData
-
-    // Multi-tenant OR self-service access check
-    const isSelfPost = emp && (emp.auth_user_id === user.id || emp.email === user.email)
-    if (!isSelfPost) {
-      const hasAccessPost = await userHasAccessToEmploye(user.id, bulletin.employe_id)
-      if (!hasAccessPost) return NextResponse.json({ error: 'Accès refusé à ce bulletin' }, { status: 403 })
-    }
-    const periodeDate = new Date(bulletin.periode + 'T12:00:00')
-    const moisLabel = `${MOIS_FR[periodeDate.getMonth()]} ${periodeDate.getFullYear()}`
-
-    // Récupérer les primes individuelles de la période (intégrées dans ce bulletin)
-    const { data: primesMois } = await supabase
-      .from('primes_variables_mois')
-      .select('*, prime:catalogue_primes(libelle, type_prime)')
-      .eq('employe_id', bulletin.employe_id)
-      .eq('periode', bulletin.periode)
-
-    // Récupérer les soldes congés pour cet employé
-    const currentYear = new Date(bulletin.periode).getFullYear()
-    const { data: congesApprouves } = await supabase
-      .from('demandes_conges')
-      .select('type_conge, nb_jours')
-      .eq('employe_id', bulletin.employe_id)
-      .eq('statut', 'approuve')
-      .gte('date_debut', `${currentYear}-01-01`)
-      .lte('date_debut', `${currentYear}-12-31`)
-
-    const alPris = (congesApprouves || []).filter((c: any) => c.type_conge === 'AL').reduce((s: number, c: any) => s + (Number(c.nb_jours) || 0), 0)
-    const slPris = (congesApprouves || []).filter((c: any) => c.type_conge === 'SL').reduce((s: number, c: any) => s + (Number(c.nb_jours) || 0), 0)
-    // WRA 2019 entitlement calculation based on months of service
-    const hireDate = emp?.date_arrivee ? new Date(emp.date_arrivee + 'T00:00:00') : null
-    const monthsOfService = hireDate ? (new Date().getFullYear() - hireDate.getFullYear()) * 12 + (new Date().getMonth() - hireDate.getMonth()) : 999
-    const alDroit = monthsOfService < 6 ? 0 : monthsOfService < 12 ? Math.min(monthsOfService - 6, 6) : 22
-    const slDroit = monthsOfService < 6 ? 0 : monthsOfService < 12 ? Math.min(monthsOfService - 6, 6) : 15
-    const alRestant = alDroit - alPris
-    const slRestant = slDroit - slPris
-
-    // Récupérer les détails OT depuis les pointages du mois
-    const periodeStr = bulletin.periode.slice(0, 7)
-    const { data: pointagesMois } = await supabase
-      .from('pointages')
-      .select('heure_entree, heure_sortie, date_pointage')
-      .eq('employe_id', bulletin.employe_id)
-      .gte('date_pointage', `${periodeStr}-01`)
-      .lte('date_pointage', `${periodeStr}-31`)
-
-    const JOURS_FERIES_MU = ["01-01","02-01","12-03","01-05","09-05","15-08","02-11","25-12"]
-    function isFeriePdf(dateStr: string): boolean { return JOURS_FERIES_MU.includes(dateStr.slice(5)) }
-    function calcOTPdf(hEntree: string, hSortie: string, ferieDay: boolean) {
-      if (!hEntree || !hSortie) return { ot15: 0, ot2: 0 }
-      const debut = new Date(`1970-01-01T${hEntree}`)
-      const fin = new Date(`1970-01-01T${hSortie}`)
-      let totalH = (fin.getTime() - debut.getTime()) / 3600000 - 1
-      if (totalH <= 0) totalH = 0
-      if (ferieDay) return { ot15: 0, ot2: totalH }
-      const reste = Math.max(totalH - 9, 0)
-      return { ot15: Math.min(reste, 2), ot2: Math.max(reste - 2, 0) }
+    const { data: empCheck } = await supabase.from('employes').select('auth_user_id, email').eq('id', bulletin.employe_id).single()
+    const isSelf = empCheck && (empCheck.auth_user_id === user.id || empCheck.email === user.email)
+    if (!isSelf) {
+      const hasAccess = await userHasAccessToEmploye(user.id, bulletin.employe_id)
+      if (!hasAccess) return NextResponse.json({ error: 'Acces refuse' }, { status: 403 })
     }
 
-    let totalH15 = 0, totalH2 = 0
-    const taux_horaire = Number(emp?.salaire_base || 0) / (45 * 52 / 12)
-    for (const pt of pointagesMois || []) {
-      if (!pt.heure_entree) continue
-      const ot = calcOTPdf(pt.heure_entree, pt.heure_sortie || '', isFeriePdf(pt.date_pointage))
-      totalH15 += ot.ot15
-      totalH2 += ot.ot2
-    }
-    const montant15 = Math.round(totalH15 * taux_horaire * 1.5)
-    const montant2 = Math.round(totalH2 * taux_horaire * 2)
+    const data = await fetchBulletinData(supabase, bulletin)
+    const doc = React.createElement(BulletinPDF, { bulletin, ...data })
+    const pdfBuffer = await renderToBuffer(doc as any)
+    const filename = `bulletin_${data.emp?.code || data.emp?.nom || 'employe'}_${data.annee}-${String(data.periodeDate.getMonth() + 1).padStart(2, '0')}.pdf`
 
-    const csg_taux_pct = ((Number(bulletin.csg_taux) || 0) * 100).toFixed(1)
-
-    const conditionalRow = (condition: boolean, label: string, value: number) =>
-      condition ? `<div class="row"><span>${label}</span><span>${fmt(value)} MUR</span></div>` : ''
-
-    const html = `<!DOCTYPE html>
-<html lang="fr">
-<head>
-  <meta charset="UTF-8">
-  <title>Bulletin de paie — ${emp?.prenom} ${emp?.nom} — ${moisLabel}</title>
-  <style>
-    @page { size: A4; margin: 15mm; }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Inter', Arial, sans-serif; font-size: 11px; color: #1a1a1a; padding: 20px; max-width: 800px; margin: 0 auto; }
-    .header { display: flex; justify-content: space-between; border-bottom: 3px solid #0B0F2E; padding-bottom: 12px; margin-bottom: 15px; }
-    .header-left { }
-    .header-right { text-align: right; }
-    .employe-info { background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 6px; padding: 10px 14px; margin-bottom: 15px; }
-    .employe-info .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
-    .employe-info p { font-size: 11px; }
-    .employe-info strong { color: #0B0F2E; }
-    .section { margin-bottom: 15px; }
-    .section h3 { font-size: 12px; font-weight: bold; color: white; background: #0B0F2E; padding: 5px 10px; border-radius: 4px; margin-bottom: 8px; border-bottom: 2px solid #D4AF37; }
-    .row { display: flex; justify-content: space-between; padding: 3px 10px; border-bottom: 1px solid #f0f0f0; }
-    .row:last-child { border-bottom: none; }
-    .row.total { font-weight: bold; background: #f0f0f0; border-top: 2px solid #0B0F2E; padding: 5px 10px; border-bottom: none; margin-top: 4px; }
-    .row.deduction { color: #c0392b; }
-    .row.absence { color: #e74c3c; background: #fdf0f0; }
-    .patronal-section { background: #f9f9f9; border: 1px solid #ddd; border-radius: 6px; padding: 10px; margin-bottom: 15px; }
-    .patronal-section h3 { font-size: 11px; font-weight: bold; color: #555; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
-    .patronal-row { display: flex; justify-content: space-between; font-size: 11px; padding: 2px 0; color: #555; }
-    .patronal-row.total { font-weight: bold; color: #0B0F2E; border-top: 1px solid #ccc; margin-top: 3px; padding-top: 3px; }
-    .no-print { display: none; }
-    @media print {
-      body { padding: 10px; }
-      .no-print { display: none !important; }
-    }
-    .badge { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: bold; }
-    .badge-blue { background: #dbeafe; color: #1d4ed8; }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div class="header-left">
-      <div style="width:60mm;max-height:20mm;margin-bottom:8px;">
-        ${soc?.logo_url ? `<img src="${soc.logo_url}" style="max-width:100%;max-height:20mm;" />` : ''}
-      </div>
-      <p style="font-weight:700;color:#0B0F2E;font-size:14px;">${soc?.nom || 'N/A'}</p>
-      <p style="color:#555;font-size:11px;">${soc?.adresse || ''}</p>
-      <p style="color:#555;font-size:11px;">BRN: ${soc?.brn || '—'}${soc?.ern ? ` | ERN: ${soc.ern}` : ''}</p>
-      ${soc?.paye_number ? `<p style="color:#555;font-size:10px;">PAYE: ${soc.paye_number}${soc?.csg_number ? ` | CSG: ${soc.csg_number}` : ''}${soc?.nsf_number ? ` | NSF: ${soc.nsf_number}` : ''}</p>` : ''}
-      ${soc?.telephone ? `<p style="color:#555;font-size:10px;">Tél: ${soc.telephone}</p>` : ''}
-    </div>
-    <div class="header-right">
-      <p style="font-size:16px;font-weight:800;color:#0B0F2E;">BULLETIN DE PAIE</p>
-      <p style="font-size:14px;font-weight:600;color:#D4AF37;">${moisLabel}</p>
-      <p style="color:#555;font-size:11px;">Réf: BUL-${periodeDate.getFullYear()}-${String(periodeDate.getMonth()+1).padStart(2,'0')}-${emp?.code || '000'}</p>
-      <p style="color:#555;font-size:11px;">Émis le: ${new Date().toLocaleDateString('fr-FR')}</p>
-    </div>
-  </div>
-
-  <div class="employe-info">
-    <div class="grid">
-      <p><strong>Employé :</strong> ${emp?.prenom || ''} ${emp?.nom || ''}</p>
-      <p><strong>Code :</strong> ${emp?.code || '—'}</p>
-      <p><strong>Poste :</strong> ${emp?.poste || '—'}</p>
-      <p><strong>NIC :</strong> ${emp?.nic_number || '—'}</p>
-      ${(emp?.adresse || emp?.ville) ? `<p><strong>Adresse :</strong> ${[emp.adresse, emp.adresse2, emp.ville, emp.code_postal].filter(Boolean).join(', ')}</p>` : ''}
-      <p><strong>TAN :</strong> ${emp?.tan || '—'}</p>
-      <p><strong>Date d'entrée :</strong> ${emp?.date_arrivee ? new Date(emp.date_arrivee).toLocaleDateString('fr-FR') : '—'}</p>
-      <p><strong>Ancienneté :</strong> ${emp?.date_arrivee ? (() => { const d = new Date(emp.date_arrivee); const now = periodeDate; let y = now.getFullYear() - d.getFullYear(); let m = now.getMonth() - d.getMonth(); if (m < 0) { y--; m += 12; } return y > 0 ? y + ' an(s) ' + m + ' mois' : m + ' mois'; })() : '—'}</p>
-      <p><strong>CSG Catégorie :</strong> ${Number(bulletin.salaire_brut) > 50000 ? 'Cat. B (3%)' : 'Cat. A (1.5%)'}</p>
-      ${emp?.departement ? `<p><strong>Département :</strong> ${emp.departement}</p>` : ''}
-      ${emp?.devise_salaire === 'EUR' ? `<p><strong>Devise :</strong> <span class="badge badge-blue">EUR</span> Taux: ${Number(emp.taux_change_eur) || 46.50} MUR</p>` : ''}
-    </div>
-  </div>
-
-  <div class="section">
-    <h3>ÉLÉMENTS DE RÉMUNÉRATION</h3>
-    ${emp?.devise_salaire === 'EUR' ? `
-    <div class="row" style="background:#eff6ff; border-left:3px solid #3b82f6; padding-left:12px;">
-      <span>Salaire EUR → MUR</span>
-      <span style="color:#1d4ed8; font-size:11px;">
-        EUR ${new Intl.NumberFormat('fr-FR').format(Math.round(Number(emp?.salaire_base || 0)))} × ${Number(emp?.taux_change_eur) || 46.50} = ${fmt(bulletin.salaire_base)} MUR
-      </span>
-    </div>
-    ` : ''}
-    <div class="row"><span>Salaire de base</span><span>${fmt(bulletin.salaire_base)} MUR</span></div>
-    ${conditionalRow(Number(bulletin.transport_allowance) > 0, 'Transport Allowance', bulletin.transport_allowance)}
-    ${conditionalRow(Number(bulletin.petrol_allowance) > 0, 'Petrol Allowance', bulletin.petrol_allowance)}
-    ${conditionalRow(Number(bulletin.increment_salaire) > 0, 'Incrément de salaire', bulletin.increment_salaire)}
-    ${totalH15 > 0 ? `<div class="row"><span>Heures sup (1.5×) — ${totalH15.toFixed(1)}h</span><span>${fmt(montant15)} MUR</span></div>` : ''}
-    ${totalH2 > 0 ? `<div class="row"><span>Heures sup (2×) — ${totalH2.toFixed(1)}h (férié/nuit)</span><span>${fmt(montant2)} MUR</span></div>` : ''}
-    ${totalH15 === 0 && totalH2 === 0 && Number(bulletin.heures_sup_montant) > 0 ? `<div class="row"><span>Heures supplémentaires</span><span>${fmt(bulletin.heures_sup_montant)} MUR</span></div>` : ''}
-    ${(primesMois && primesMois.length > 0)
-      ? primesMois.map((p: any) => `<div class="row" style="color:#7c3aed"><span>Prime — ${p.prime?.libelle || p.notes || 'Variable'}${p.quantite > 1 ? ` (×${p.quantite})` : ''}</span><span>${fmt(Number(p.montant))} MUR</span></div>`).join('')
-      : conditionalRow(Number(bulletin.special_allowance_1) > 0, 'Primes du mois', bulletin.special_allowance_1)}
-    ${conditionalRow(Number(bulletin.special_allowance_2) > 0, 'Allocation spéciale 2', bulletin.special_allowance_2)}
-    ${conditionalRow(Number(bulletin.special_allowance_3) > 0, 'Allocation spéciale 3', bulletin.special_allowance_3)}
-    ${conditionalRow(Number(bulletin.other_refund) > 0, 'Autres remboursements', bulletin.other_refund)}
-    ${conditionalRow(Number(bulletin.eoy_bonus) > 0, '13ème mois (EOY Bonus)', bulletin.eoy_bonus)}
-    ${conditionalRow(Number(bulletin.departure_notice) > 0, 'Préavis de départ', bulletin.departure_notice)}
-    ${(totalH15 > 0 || totalH2 > 0 || Number(bulletin.heures_sup_montant) > 0) ? `<div class="row" style="font-weight:600;color:#ea580c;background:#fff7ed;"><span>Sous-total heures supplémentaires</span><span>${fmt(totalH15 > 0 || totalH2 > 0 ? montant15 + montant2 : Number(bulletin.heures_sup_montant))} MUR</span></div>` : ''}
-    ${((primesMois && primesMois.length > 0) || Number(bulletin.special_allowance_1) > 0) ? `<div class="row" style="font-weight:600;color:#7c3aed;background:#faf5ff;"><span>Sous-total primes</span><span>${fmt(primesMois && primesMois.length > 0 ? primesMois.reduce((s: number, p: any) => s + Number(p.montant || 0), 0) : Number(bulletin.special_allowance_1))} MUR</span></div>` : ''}
-    <div class="row total"><span>SALAIRE BRUT</span><span>${fmt(bulletin.salaire_brut)} MUR</span></div>
-  </div>
-
-  <div class="section">
-    <h3>DÉDUCTIONS SALARIÉ</h3>
-    <div class="row deduction"><span>CSG salarié (${csg_taux_pct}% × ${fmt(bulletin.salaire_base)})</span><span>-${fmt(bulletin.csg_salarie)} MUR</span></div>
-    ${Number(bulletin.csg_bonus) > 0 ? `<div class="row deduction"><span>CSG sur 13ème mois (3%)</span><span>-${fmt(bulletin.csg_bonus)} MUR</span></div>` : ''}
-    <div class="row deduction"><span>NSF salarié (1.5%)</span><span>-${fmt(bulletin.nsf_salarie)} MUR</span></div>
-    ${Number(bulletin.paye) > 0 ? `<div class="row deduction"><span>PAYE</span><span>-${fmt(bulletin.paye)} MUR</span></div>` : '<div class="row" style="color:#27ae60"><span>PAYE</span><span>Exonéré</span></div>'}
-    ${Number(bulletin.montant_absence) > 0 ? `<div class="row absence"><span>Absence injustifiée (${bulletin.jours_absence} jour(s))</span><span>-${fmt(bulletin.montant_absence)} MUR</span></div>` : ''}
-    <div class="row total"><span>TOTAL DÉDUCTIONS</span><span>-${fmt(bulletin.total_deductions)} MUR</span></div>
-  </div>
-
-  <div style="border:3px solid #0B0F2E;border-radius:8px;padding:16px 20px;margin:20px 0;text-align:center;background:linear-gradient(135deg,#0B0F2E08,#D4AF3708);">
-    <p style="font-size:13px;font-weight:700;color:#0B0F2E;margin-bottom:4px;">NET À PAYER</p>
-    <p style="font-size:24px;font-weight:800;color:#0B0F2E;">${fmt(bulletin.salaire_net)} MUR</p>
-    <p style="font-size:11px;color:#555;margin-top:6px;">Virement ${emp?.bank_name || ''} — ****${(emp?.bank_account || '').slice(-4)}</p>
-  </div>
-
-  <div style="margin:15px 0;padding:12px 16px;border:1px solid #e0e0e0;border-radius:6px;background:#f8f9fa;">
-    <h3 style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;margin-bottom:10px;">Soldes Congés — ${currentYear}</h3>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
-      <div style="padding:8px 12px;background:white;border-radius:4px;border:1px solid #e0e0e0;">
-        <span style="font-weight:600;color:#0B0F2E;">Local Leave (AL)</span><br/>
-        <span style="color:#059669;font-weight:700;font-size:14px;">${alRestant}j</span>
-        <span style="color:#888;font-size:10px;"> restants / ${alDroit}j (${alPris}j pris)</span>
-      </div>
-      <div style="padding:8px 12px;background:white;border-radius:4px;border:1px solid #e0e0e0;">
-        <span style="font-weight:600;color:#0B0F2E;">Sick Leave (SL)</span><br/>
-        <span style="color:#ea580c;font-weight:700;font-size:14px;">${slRestant}j</span>
-        <span style="color:#888;font-size:10px;"> restants / ${slDroit}j (${slPris}j pris)</span>
-      </div>
-    </div>
-  </div>
-
-  <div class="patronal-section">
-    <h3>Charges patronales (information)</h3>
-    <div class="patronal-row"><span>CSG patronal (6%)</span><span>${fmt(bulletin.csg_patronal)} MUR</span></div>
-    ${Number(bulletin.csg_patronal_bonus) > 0 ? `<div class="patronal-row"><span>CSG patronal sur bonus (6%)</span><span>${fmt(bulletin.csg_patronal_bonus)} MUR</span></div>` : ''}
-    <div class="patronal-row"><span>NSF patronal (2.5%)</span><span>${fmt(bulletin.nsf_patronal)} MUR</span></div>
-    <div class="patronal-row"><span>Training Levy (1%)</span><span>${fmt(bulletin.training_levy)} MUR</span></div>
-    <div class="patronal-row"><span>PRGF (4.50 MUR × ${bulletin.jours_travailles || 26} jours)</span><span>${fmt(bulletin.prgf)} MUR</span></div>
-    <div class="patronal-row total"><span>Total charges patronales</span><span>${fmt(bulletin.total_charges_patronales)} MUR</span></div>
-    <div class="patronal-row total"><span>COÛT TOTAL EMPLOYEUR</span><span>${fmt(Number(bulletin.salaire_brut) + Number(bulletin.total_charges_patronales))} MUR</span></div>
-  </div>
-
-  <div style="display:flex;justify-content:space-between;margin-top:30px;padding-top:15px;border-top:1px solid #ddd;">
-    <div style="width:65%;">
-      <p style="font-size:10px;color:#888;line-height:1.5;">
-        Ce bulletin doit être conservé sans limitation de durée.<br>
-        Ce bulletin doit être conservé sans limitation de durée.<br>
-        Signé électroniquement le ${new Date().toLocaleDateString('fr-FR')} par RH Manager
-      </p>
-    </div>
-    <div style="width:30%;text-align:center;">
-      <div style="width:80px;height:80px;border:1px solid #ccc;border-radius:4px;display:flex;align-items:center;justify-content:center;margin:0 auto;font-size:9px;color:#999;">
-        QR Code<br>Vérification
-      </div>
-      <p style="font-size:9px;color:#999;margin-top:4px;">Vérification authenticité</p>
-    </div>
-  </div>
-
-  <p style="font-size:9px;color:#bbb;text-align:center;margin-top:20px;">
-    Généré par le système de paie — ${soc?.nom || ''}
-  </p>
-
-
-</body>
-</html>`
-
-    const filename = `bulletin_${emp?.code || emp?.nom}_${periodeDate.getFullYear()}-${String(periodeDate.getMonth() + 1).padStart(2, '0')}.html`
-    return NextResponse.json({ html, filename, mois: moisLabel })
-  } catch (e: unknown) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
+    return new NextResponse(pdfBuffer, {
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+      },
+    })
+  } catch (e: any) {
+    console.error('[pdf/POST]', e)
+    return NextResponse.json({ error: e.message }, { status: 500 })
   }
-}
-
-// Simple HTML bulletin for GET requests
-function generatePDFResponse(bulletin: any, emp: any, soc: any, moisLabel: string, annee: number, conges?: { alPris: number; slPris: number }) {
-  // WRA 2019 entitlement based on months of service
-  const hireDateGet = emp?.date_arrivee ? new Date(emp.date_arrivee + 'T00:00:00') : null
-  const mosGet = hireDateGet ? (annee - hireDateGet.getFullYear()) * 12 + (new Date().getMonth() - hireDateGet.getMonth()) : 999
-  const alDroitGet = mosGet < 6 ? 0 : mosGet < 12 ? Math.min(mosGet - 6, 6) : 22
-  const slDroitGet = mosGet < 6 ? 0 : mosGet < 12 ? Math.min(mosGet - 6, 6) : 15
-  const alRestantGet = alDroitGet - (conges?.alPris || 0)
-  const slRestantGet = slDroitGet - (conges?.slPris || 0)
-  const periodeDate = new Date(`${annee}-${String(MOIS_FR.indexOf(moisLabel) + 1).padStart(2, '0')}-15`)
-
-  const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Bulletin ${emp.prenom} ${emp.nom} — ${moisLabel} ${annee}</title>
-<style>
-@page { size: A4; margin: 15mm; }
-body{font-family:'Inter',Arial,sans-serif;max-width:800px;margin:0 auto;padding:20px;font-size:11px;color:#1a1a1a}
-.header{display:flex;justify-content:space-between;border-bottom:3px solid #0B0F2E;padding-bottom:12px;margin-bottom:15px}
-.box{border:1px solid #ddd;padding:12px;border-radius:6px;margin-bottom:15px;background:#f8f9fa}
-table{width:100%;border-collapse:collapse;margin:10px 0}
-th{background:#0B0F2E;color:white;padding:8px;text-align:left;font-size:11px;border-bottom:2px solid #D4AF37}
-td{padding:6px 8px;border-bottom:1px solid #eee;font-size:11px}
-.right{text-align:right}
-.bold{font-weight:bold}
-.section{font-weight:bold;color:#0B0F2E;margin-top:15px;padding:4px 0;border-bottom:2px solid #D4AF37}
-@media print{body{margin:0;padding:10px}}
-</style></head><body>
-<div class="header">
-  <div>
-    <div style="width:60mm;max-height:20mm;margin-bottom:8px;">
-      ${soc?.logo_url ? `<img src="${soc.logo_url}" style="max-width:100%;max-height:20mm;" />` : ''}
-    </div>
-    <p style="font-weight:700;color:#0B0F2E;font-size:14px;">${soc?.nom || 'N/A'}</p>
-    <p style="color:#555;font-size:11px;">${soc?.adresse || '—'}</p>
-    <p style="color:#555;font-size:11px;">BRN: ${soc?.brn || '—'}${soc?.ern ? ` | ERN: ${soc.ern}` : ''}</p>
-    ${soc?.paye_number ? `<p style="color:#555;font-size:10px;">PAYE: ${soc.paye_number}${soc?.csg_number ? ` | CSG: ${soc.csg_number}` : ''}${soc?.nsf_number ? ` | NSF: ${soc.nsf_number}` : ''}</p>` : ''}
-    ${soc?.telephone ? `<p style="color:#555;font-size:10px;">Tél: ${soc.telephone}</p>` : ''}
-  </div>
-  <div style="text-align:right">
-    <p style="font-size:16px;font-weight:800;color:#0B0F2E;">BULLETIN DE PAIE</p>
-    <p style="font-size:14px;font-weight:600;color:#D4AF37;">${moisLabel} ${annee}</p>
-    <p style="color:#555;font-size:11px;">Réf: BUL-${annee}-${String(MOIS_FR.indexOf(moisLabel) + 1).padStart(2,'0')}-${emp?.code || '000'}</p>
-    <p style="color:#555;font-size:11px;">Émis le: ${new Date().toLocaleDateString('fr-FR')}</p>
-  </div>
-</div>
-<div class="box">
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:11px;">
-    <p><strong>Employé :</strong> ${emp.prenom} ${emp.nom}</p>
-    <p><strong>Code :</strong> ${emp.code || '—'}</p>
-    <p><strong>Poste :</strong> ${emp.poste || '—'}</p>
-    <p><strong>NIC :</strong> ${emp.nic_number || '—'}</p>
-    ${(emp.adresse || emp.ville) ? `<p><strong>Adresse :</strong> ${[emp.adresse, emp.adresse2, emp.ville, emp.code_postal].filter(Boolean).join(', ')}</p>` : ''}
-    <p><strong>TAN :</strong> ${emp.tan || '—'}</p>
-    <p><strong>Date d'entrée :</strong> ${emp.date_arrivee ? new Date(emp.date_arrivee).toLocaleDateString('fr-FR') : '—'}</p>
-    <p><strong>Ancienneté :</strong> ${emp.date_arrivee ? (() => { const d = new Date(emp.date_arrivee); const now = periodeDate; let y = now.getFullYear() - d.getFullYear(); let m = now.getMonth() - d.getMonth(); if (m < 0) { y--; m += 12; } return y > 0 ? y + ' an(s) ' + m + ' mois' : m + ' mois'; })() : '—'}</p>
-    <p><strong>CSG Catégorie :</strong> ${Number(bulletin.salaire_brut) > 50000 ? 'Cat. B (3%)' : 'Cat. A (1.5%)'}</p>
-    ${emp.departement ? `<p><strong>Département :</strong> ${emp.departement}</p>` : ''}
-  </div>
-</div>
-<div class="section">ÉLÉMENTS DE RÉMUNÉRATION</div>
-<table><tr><th>Libellé</th><th class="right">Montant (MUR)</th></tr>
-<tr><td>Salaire de base</td><td class="right">${fmt(bulletin.salaire_base)}</td></tr>
-${Number(bulletin.transport_allowance) > 0 ? `<tr><td>Transport Allowance</td><td class="right">${fmt(bulletin.transport_allowance)}</td></tr>` : ''}
-${Number(bulletin.petrol_allowance) > 0 ? `<tr><td>Petrol Allowance</td><td class="right">${fmt(bulletin.petrol_allowance)}</td></tr>` : ''}
-${Number(bulletin.increment_salaire) > 0 ? `<tr><td>Incrément de salaire</td><td class="right">${fmt(bulletin.increment_salaire)}</td></tr>` : ''}
-${Number(bulletin.heures_sup_montant) > 0 ? `<tr><td>Heures supplémentaires</td><td class="right">${fmt(bulletin.heures_sup_montant)}</td></tr>` : ''}
-${Number(bulletin.heures_sup_montant) > 0 ? `<tr style="font-weight:600;color:#ea580c;background:#fff7ed;"><td>Sous-total heures supplémentaires</td><td class="right">${fmt(bulletin.heures_sup_montant)}</td></tr>` : ''}
-${Number(bulletin.special_allowance_1) > 0 ? `<tr><td>Primes &amp; Allocations</td><td class="right">${fmt(bulletin.special_allowance_1)}</td></tr>` : ''}
-${Number(bulletin.special_allowance_2) > 0 ? `<tr><td>Allocation spéciale 2</td><td class="right">${fmt(bulletin.special_allowance_2)}</td></tr>` : ''}
-${Number(bulletin.special_allowance_3) > 0 ? `<tr><td>Allocation spéciale 3</td><td class="right">${fmt(bulletin.special_allowance_3)}</td></tr>` : ''}
-${Number(bulletin.special_allowance_1) > 0 ? `<tr style="font-weight:600;color:#7c3aed;background:#faf5ff;"><td>Sous-total primes</td><td class="right">${fmt(Number(bulletin.special_allowance_1) + Number(bulletin.special_allowance_2 || 0) + Number(bulletin.special_allowance_3 || 0))}</td></tr>` : ''}
-${Number(bulletin.other_refund) > 0 ? `<tr><td>Autres remboursements</td><td class="right">${fmt(bulletin.other_refund)}</td></tr>` : ''}
-${Number(bulletin.eoy_bonus) > 0 ? `<tr><td>13ème mois (EOY Bonus)</td><td class="right">${fmt(bulletin.eoy_bonus)}</td></tr>` : ''}
-${Number(bulletin.departure_notice) > 0 ? `<tr><td>Préavis de départ</td><td class="right">${fmt(bulletin.departure_notice)}</td></tr>` : ''}
-<tr class="bold"><td>SALAIRE BRUT</td><td class="right">${fmt(bulletin.salaire_brut)}</td></tr></table>
-<div class="section">DÉDUCTIONS SALARIÉ</div>
-<table><tr><th>Libellé</th><th class="right">Montant (MUR)</th></tr>
-<tr><td>CSG salarié (${Number(bulletin.salaire_brut) > 50000 ? '3%' : '1.5%'})</td><td class="right">${fmt(bulletin.csg_salarie)}</td></tr>
-${Number(bulletin.csg_bonus) > 0 ? `<tr><td>CSG sur 13ème mois (3%)</td><td class="right">${fmt(bulletin.csg_bonus)}</td></tr>` : ''}
-<tr><td>NSF salarié (1.5%)</td><td class="right">${fmt(bulletin.nsf_salarie)}</td></tr>
-<tr><td>PAYE (Impôt sur le revenu)</td><td class="right">${fmt(bulletin.paye)}</td></tr>
-${bulletin.montant_absence > 0 ? `<tr><td>Déduction absence</td><td class="right">${fmt(bulletin.montant_absence)}</td></tr>` : ''}
-<tr class="bold"><td>TOTAL DEDUCTIONS</td><td class="right">${fmt(bulletin.total_deductions)}</td></tr></table>
-
-<div style="border:3px solid #0B0F2E;border-radius:8px;padding:16px 20px;margin:20px 0;text-align:center;background:linear-gradient(135deg,#0B0F2E08,#D4AF3708);">
-  <p style="font-size:13px;font-weight:700;color:#0B0F2E;margin-bottom:4px;">NET À PAYER</p>
-  <p style="font-size:24px;font-weight:800;color:#0B0F2E;">${fmt(bulletin.salaire_net)} MUR</p>
-  <p style="font-size:11px;color:#555;margin-top:6px;">Virement ${emp.bank_name || ''} — ****${(emp.bank_account || '').slice(-4)}</p>
-</div>
-
-<div style="margin:15px 0;padding:12px 16px;border:1px solid #e0e0e0;border-radius:6px;background:#f8f9fa;">
-  <h3 style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;margin-bottom:10px;">Soldes Congés — ${annee}</h3>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
-    <div style="padding:8px 12px;background:white;border-radius:4px;border:1px solid #e0e0e0;">
-      <strong>Local Leave (AL)</strong><br/>
-      <span style="color:#059669;font-weight:700;font-size:14px;">${alRestantGet}j</span>
-      <span style="color:#888;font-size:10px;"> restants / ${alDroitGet}j (${conges?.alPris || 0}j pris)</span>
-    </div>
-    <div style="padding:8px 12px;background:white;border-radius:4px;border:1px solid #e0e0e0;">
-      <strong>Sick Leave (SL)</strong><br/>
-      <span style="color:#ea580c;font-weight:700;font-size:14px;">${slRestantGet}j</span>
-      <span style="color:#888;font-size:10px;"> restants / ${slDroitGet}j (${conges?.slPris || 0}j pris)</span>
-    </div>
-  </div>
-</div>
-
-<div class="section">CHARGES PATRONALES</div>
-<table><tr><th>Libellé</th><th class="right">Montant (MUR)</th></tr>
-<tr><td>CSG Patronal (6%)</td><td class="right">${fmt(bulletin.csg_patronal)}</td></tr>
-${Number(bulletin.csg_patronal_bonus) > 0 ? `<tr><td>CSG patronal sur bonus (6%)</td><td class="right">${fmt(bulletin.csg_patronal_bonus)}</td></tr>` : ''}
-<tr><td>NSF Patronal (2.5%)</td><td class="right">${fmt(bulletin.nsf_patronal)}</td></tr>
-<tr><td>Training Levy HRDC (1%)</td><td class="right">${fmt(bulletin.training_levy)}</td></tr>
-<tr><td>PRGF (4.50 MUR × ${bulletin.jours_travailles || 26} jours)</td><td class="right">${fmt(bulletin.prgf)}</td></tr>
-<tr class="bold"><td>TOTAL CHARGES PATRONALES</td><td class="right">${fmt(bulletin.total_charges_patronales)}</td></tr>
-<tr class="bold"><td>COÛT TOTAL EMPLOYEUR</td><td class="right">${fmt(Number(bulletin.salaire_brut) + Number(bulletin.total_charges_patronales))}</td></tr></table>
-
-<div style="display:flex;justify-content:space-between;margin-top:30px;padding-top:15px;border-top:1px solid #ddd;">
-  <div style="width:65%;">
-    <p style="font-size:10px;color:#888;line-height:1.5;">
-      Ce bulletin doit être conservé sans limitation de durée.<br>
-      Signé électroniquement le ${new Date().toLocaleDateString('fr-FR')} par RH Manager
-    </p>
-  </div>
-  <div style="width:30%;text-align:center;">
-    <div style="width:80px;height:80px;border:1px solid #ccc;border-radius:4px;display:flex;align-items:center;justify-content:center;margin:0 auto;font-size:9px;color:#999;">
-      QR Code<br>Vérification
-    </div>
-    <p style="font-size:9px;color:#999;margin-top:4px;">Vérification authenticité</p>
-  </div>
-</div>
-
-<p style="font-size:9px;color:#bbb;text-align:center;margin-top:20px;">
-  Généré par le système de paie — ${soc?.nom || ''}
-</p>
-
-
-</body></html>`
-
-  return new NextResponse(html, {
-    headers: {
-      'Content-Type': 'text/html; charset=utf-8',
-      'Content-Disposition': `inline; filename="bulletin_${emp?.nom || 'employe'}_${moisLabel.replace(/\s+/g, '_')}_${annee}.html"`,
-    },
-  })
 }
