@@ -348,8 +348,14 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: `Aucun employe trouve pour societe_id=${societe_id}`, bulletins: [], nb: 0, debug: { societe_id, periode: periodeStr } }, { status: 400 })
       }
 
-      // Filter out departed employees
-      const employes = allEmps.filter(e => !e.date_depart || e.date_depart > periodeStr)
+      // Filter out departed employees — only include if still active during this period
+      const employes = allEmps.filter(e => {
+        if (!e.date_depart) return true // still active
+        // Compare departure date with the period start
+        const depart = String(e.date_depart).slice(0, 10) // "YYYY-MM-DD"
+        const periodeDebut = `${periodeStr}-01`
+        return depart >= periodeDebut // only include if departed ON or AFTER the period start
+      })
       console.log(`[paie batch] ${employes.length} employes actifs sur ${allEmps.length} total pour societe=${societe_id}, periode=${periodeStr}`)
 
       // Get variables from request body if provided
