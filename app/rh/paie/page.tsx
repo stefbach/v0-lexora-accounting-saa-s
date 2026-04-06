@@ -306,11 +306,6 @@ export default function PaiePage() {
             <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Processus de paie</h1>
             <p className="text-sm text-gray-500">Workflow complet : controle, calcul, validation, verrouillage, exports</p>
           </div>
-          {isLocked && (
-            <Button onClick={deverrouiller} variant="outline" className="border-red-300 text-red-600 hover:bg-red-50" size="sm">
-              <Unlock className="w-4 h-4 mr-2" />Deverrouiller
-            </Button>
-          )}
         </div>
 
         {/* Period selector */}
@@ -353,66 +348,101 @@ export default function PaiePage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="pb-4">
-              <div className="flex items-start gap-0 overflow-x-auto pb-2">
+              <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-10 gap-3">
                 {steps.map((step, i) => {
                   const Icon = step.icon
-                  const active = !step.done && (i === 0 || steps[i - 1].done)
+                  const prevDone = i === 0 || steps[i - 1].done
+                  const active = !step.done && prevDone
+                  const blocked = !step.done && !prevDone
                   return (
-                    <div key={step.id} className="flex items-start">
-                      <div className={`flex flex-col items-center min-w-[100px] px-2 ${active ? "opacity-100" : step.done ? "opacity-100" : "opacity-40"}`}>
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                          step.done ? "bg-green-100 text-green-700" : active ? "bg-blue-100 text-blue-700 ring-2 ring-blue-400" : "bg-gray-100 text-gray-400"
-                        }`}>
-                          {step.done ? <CheckCircle className="w-5 h-5" /> : <Icon className="w-5 h-5" />}
-                        </div>
-                        <p className={`text-xs font-semibold mt-1.5 text-center ${step.done ? "text-green-700" : active ? "text-blue-700" : "text-gray-400"}`}>
-                          {step.label}
-                        </p>
-                        <p className="text-[10px] text-gray-500 text-center mt-0.5 leading-tight max-w-[100px]">{step.desc}</p>
-                        {step.action && (active || (step.id === "verrouillage" && allValidated && !isLocked)) && (
-                          <Button
-                            size="sm"
-                            className="mt-2 h-7 text-xs"
-                            style={step.id === "verrouillage" ? { backgroundColor: "#dc2626" } : { backgroundColor: NAVY }}
-                            disabled={step.actionDisabled || !!actionLoading}
-                            onClick={step.action}
-                          >
-                            {actionLoading === step.id ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
-                            {step.actionLabel}
-                          </Button>
-                        )}
-                        {step.link && (active || step.done) && !step.action && (
-                          <a href={step.link}>
-                            <Button size="sm" variant="outline" className="mt-2 h-7 text-xs">Voir</Button>
-                          </a>
-                        )}
-                        {/* Post-lock buttons */}
-                        {isLocked && step.action && !step.done && (step.id === "virements" || step.id === "compta") && (
-                          <Button
-                            size="sm"
-                            className="mt-2 h-7 text-xs"
-                            style={{ backgroundColor: GOLD }}
-                            disabled={step.actionDisabled || !!actionLoading}
-                            onClick={step.action}
-                          >
-                            {step.actionLabel}
-                          </Button>
-                        )}
-                        {isLocked && step.link && !step.done && step.id === "mra" && (
-                          <a href={step.link}>
-                            <Button size="sm" className="mt-2 h-7 text-xs" style={{ backgroundColor: GOLD }}>Declarer</Button>
-                          </a>
-                        )}
+                    <div
+                      key={step.id}
+                      className={`relative flex flex-col items-center text-center rounded-xl p-3 border-2 transition-all ${
+                        step.done
+                          ? "border-green-300 bg-green-50"
+                          : active
+                            ? "border-blue-400 bg-blue-50 ring-2 ring-blue-200"
+                            : "border-gray-200 bg-gray-50 opacity-50"
+                      }`}
+                    >
+                      {/* Step number */}
+                      <div className={`absolute -top-2 -left-1 w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center ${
+                        step.done ? "bg-green-500 text-white" : active ? "bg-blue-500 text-white" : "bg-gray-300 text-white"
+                      }`}>
+                        {step.done ? "\u2713" : i + 1}
                       </div>
-                      {i < steps.length - 1 && (
-                        <div className="flex items-center pt-4 px-0">
-                          <ArrowRight className={`w-4 h-4 ${step.done ? "text-green-400" : "text-gray-200"}`} />
-                        </div>
+
+                      {/* Icon */}
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center mb-1.5 ${
+                        step.done ? "bg-green-100 text-green-700" : active ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-400"
+                      }`}>
+                        {step.done ? <CheckCircle className="w-4 h-4" /> : <Icon className="w-4 h-4" />}
+                      </div>
+
+                      {/* Label */}
+                      <p className={`text-[11px] font-bold leading-tight ${
+                        step.done ? "text-green-700" : active ? "text-blue-700" : "text-gray-400"
+                      }`}>
+                        {step.label}
+                      </p>
+                      <p className="text-[9px] text-gray-500 mt-0.5 leading-tight min-h-[22px]">{step.desc}</p>
+
+                      {/* ACTION BUTTON — always visible when relevant */}
+                      {step.action && !step.done && !blocked && (
+                        <Button
+                          size="sm"
+                          className="mt-1.5 h-6 text-[10px] px-2 w-full"
+                          style={
+                            step.id === "verrouillage" ? { backgroundColor: "#dc2626", color: "white" }
+                            : step.id === "virements" || step.id === "compta" ? { backgroundColor: GOLD, color: "white" }
+                            : { backgroundColor: NAVY, color: "white" }
+                          }
+                          disabled={step.actionDisabled || !!actionLoading || calculating}
+                          onClick={step.action}
+                        >
+                          {(actionLoading === step.id || (step.id === "calcul" && calculating) || (step.id === "compta" && comptabilisationLoading)) && <Loader2 className="w-3 h-3 animate-spin mr-1" />}
+                          {step.actionLabel}
+                        </Button>
+                      )}
+                      {step.link && !step.done && !blocked && !step.action && (
+                        <a href={step.link} className="w-full">
+                          <Button size="sm" variant="outline" className="mt-1.5 h-6 text-[10px] px-2 w-full">
+                            {step.id === "mra" && isLocked ? "Declarer" : "Ouvrir"}
+                          </Button>
+                        </a>
+                      )}
+                      {/* Link for MRA post-lock */}
+                      {step.link && isLocked && !step.done && step.id === "mra" && step.action === undefined && blocked && (
+                        <a href={step.link} className="w-full">
+                          <Button size="sm" className="mt-1.5 h-6 text-[10px] px-2 w-full" style={{ backgroundColor: GOLD, color: "white" }}>
+                            Declarer
+                          </Button>
+                        </a>
+                      )}
+                      {/* Done badge */}
+                      {step.done && (
+                        <span className="text-[9px] text-green-600 font-semibold mt-1">Fait</span>
                       )}
                     </div>
                   )
                 })}
               </div>
+
+              {/* Unlock button if locked */}
+              {isLocked && (
+                <div className="mt-3 flex items-center gap-2 p-2 bg-red-50 rounded-lg border border-red-200">
+                  <Lock className="w-4 h-4 text-red-500" />
+                  <span className="text-xs text-red-700 font-medium flex-1">Periode verrouillee — les bulletins ne peuvent plus etre modifies.</span>
+                  <Button onClick={deverrouiller} variant="outline" size="sm" className="border-red-300 text-red-600 hover:bg-red-100 h-7 text-xs">
+                    <Unlock className="w-3 h-3 mr-1" />Deverrouiller
+                  </Button>
+                </div>
+              )}
+
+              {/* Comptabilisation result */}
+              {comptabilisationResult && (
+                <p className="text-sm font-medium mt-2 p-2 bg-gray-50 rounded">{comptabilisationResult}</p>
+              )}
             </CardContent>
           </Card>
         )}
