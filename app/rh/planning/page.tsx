@@ -643,6 +643,9 @@ export default function PlanningPage() {
       for (const empId of Object.keys(planning)) {
         for (let d = 1; d <= daysInMonth; d++) {
           const cell = planning[empId][d]
+          // Skip leave days — congés are managed separately via demandes_conges
+          if (cell && (cell.creneau_id === "conge" || cell.creneau_id?.startsWith("conge_"))) continue
+          if (approvedLeaves[empId]?.has(d)) continue
           entries.push({
             employe_id: empId, jour: d,
             shift: cell ? (getCreneauById(cell.creneau_id)?.nom || cell.creneau_id) : "Repos",
@@ -924,6 +927,7 @@ export default function PlanningPage() {
             <p className="text-center text-gray-400 py-12">Aucun employé. Sélectionnez une société.</p>
           ) : viewMode === "monthly" ? (
             /* ── Monthly View ── */
+            <>
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-xs">
                 <thead>
@@ -946,17 +950,19 @@ export default function PlanningPage() {
                       <td className="sticky left-0 bg-white z-10 border px-2 py-1 font-medium truncate max-w-[140px]">{emp.prenom} {emp.nom}</td>
                       {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => {
                         const cell = planning[emp.id]?.[d]
-                        const isCongeCell = cell && (cell.creneau_id === "conge" || cell.creneau_id?.startsWith("conge_"))
-                        const leaveType = cell?.creneau_id?.startsWith("conge_") ? cell.creneau_id.replace("conge_", "") : approvedLeaves[emp.id]?.get(d)
+                        // Always check approvedLeaves first (source of truth for leave type)
+                        const leaveType = approvedLeaves[emp.id]?.get(d) || (cell?.creneau_id?.startsWith("conge_") ? cell.creneau_id.replace("conge_", "") : null)
+                        const isLeave = !!leaveType || (cell && (cell.creneau_id === "conge" || cell.creneau_id?.startsWith("conge_")))
                         const leaveMonthColors: Record<string, { couleur: string; code: string; nom: string }> = {
-                          AL: { couleur: "bg-blue-100 text-blue-700", code: "AL", nom: "Local Leave" },
-                          SL: { couleur: "bg-orange-100 text-orange-700", code: "SL", nom: "Sick Leave" },
-                          MAT: { couleur: "bg-purple-100 text-purple-700", code: "MAT", nom: "Maternité" },
-                          PAT: { couleur: "bg-indigo-100 text-indigo-700", code: "PAT", nom: "Paternité" },
-                          SANS_SOLDE: { couleur: "bg-gray-200 text-gray-600", code: "SS", nom: "Sans solde" },
+                          AL: { couleur: "bg-blue-200 text-blue-800", code: "AL", nom: "Local Leave" },
+                          SL: { couleur: "bg-orange-200 text-orange-800", code: "SL", nom: "Sick Leave" },
+                          MAT: { couleur: "bg-purple-200 text-purple-800", code: "MAT", nom: "Maternité" },
+                          PAT: { couleur: "bg-indigo-200 text-indigo-800", code: "PAT", nom: "Paternité" },
+                          SANS_SOLDE: { couleur: "bg-gray-300 text-gray-700", code: "SS", nom: "Sans solde" },
                         }
-                        const creneau = isCongeCell
-                          ? { ...CONGE_CRENEAU, ...(leaveMonthColors[leaveType || "AL"] || {}), couleur: leaveMonthColors[leaveType || "AL"]?.couleur || CONGE_CRENEAU.couleur, code: leaveMonthColors[leaveType || "AL"]?.code || "C", nom: leaveMonthColors[leaveType || "AL"]?.nom || "Congé" }
+                        const lt = leaveType || "AL"
+                        const creneau = isLeave
+                          ? { ...CONGE_CRENEAU, couleur: leaveMonthColors[lt]?.couleur || CONGE_CRENEAU.couleur, code: leaveMonthColors[lt]?.code || "C", nom: leaveMonthColors[lt]?.nom || "Congé" }
                           : cell ? getCreneauById(cell.creneau_id) : REPOS_CRENEAU
                         const isEditing = editCell?.empId === emp.id && editCell?.day === d
                         const hasConflict = cellHasConflict(emp.id, d)
@@ -990,6 +996,15 @@ export default function PlanningPage() {
                 </tbody>
               </table>
             </div>
+            {/* Legend */}
+            <div className="flex flex-wrap gap-3 mt-3 px-2">
+              <div className="flex items-center gap-1.5"><div className="w-4 h-4 rounded bg-blue-200 border border-blue-300" /><span className="text-xs text-gray-600 font-medium">AL - Local Leave</span></div>
+              <div className="flex items-center gap-1.5"><div className="w-4 h-4 rounded bg-orange-200 border border-orange-300" /><span className="text-xs text-gray-600 font-medium">SL - Sick Leave</span></div>
+              <div className="flex items-center gap-1.5"><div className="w-4 h-4 rounded bg-purple-200 border border-purple-300" /><span className="text-xs text-gray-600 font-medium">MAT - Maternité</span></div>
+              <div className="flex items-center gap-1.5"><div className="w-4 h-4 rounded bg-indigo-200 border border-indigo-300" /><span className="text-xs text-gray-600 font-medium">PAT - Paternité</span></div>
+              <div className="flex items-center gap-1.5"><div className="w-4 h-4 rounded bg-gray-200 border border-gray-300" /><span className="text-xs text-gray-600 font-medium">R - Repos</span></div>
+            </div>
+            </>
           ) : (
             /* ── Weekly View ── */
             <div className="space-y-3">
@@ -1041,33 +1056,33 @@ export default function PlanningPage() {
                             const isLeaveDay = !!leaveType
                             const isEditing = editCell?.empId === emp.id && editCell?.day === day
 
-                            // Leave type colors
+                            // Leave type colors — distinct and visible
                             const leaveColors: Record<string, { bg: string; label: string }> = {
-                              AL: { bg: "bg-blue-100 text-blue-700", label: "Local Leave" },
-                              SL: { bg: "bg-orange-100 text-orange-700", label: "Sick Leave" },
-                              MAT: { bg: "bg-purple-100 text-purple-700", label: "Maternité" },
-                              PAT: { bg: "bg-indigo-100 text-indigo-700", label: "Paternité" },
-                              SANS_SOLDE: { bg: "bg-gray-200 text-gray-600", label: "Sans solde" },
+                              AL: { bg: "bg-blue-200 text-blue-800 font-bold", label: "Local Leave" },
+                              SL: { bg: "bg-orange-200 text-orange-800 font-bold", label: "Sick Leave" },
+                              MAT: { bg: "bg-purple-200 text-purple-800 font-bold", label: "Maternité" },
+                              PAT: { bg: "bg-indigo-200 text-indigo-800 font-bold", label: "Paternité" },
+                              SANS_SOLDE: { bg: "bg-gray-300 text-gray-700 font-bold", label: "Sans solde" },
                             }
 
                             let bgColor = "bg-gray-100 text-gray-500" // Repos
                             let label = "Repos"
-                            if (cell) {
+                            // Always check approvedLeaves first (source of truth)
+                            if (isLeaveDay) {
+                              const lc = leaveColors[leaveType] || { bg: "bg-emerald-200 text-emerald-800 font-bold", label: "Congé" }
+                              bgColor = lc.bg
+                              label = lc.label
+                            } else if (cell) {
                               const isCongeCell = cell.creneau_id === "conge" || cell.creneau_id?.startsWith("conge_")
-                              if (isCongeCell || isLeaveDay) {
-                                // Extract type from cell creneau_id (conge_AL, conge_SL...) or from approvedLeaves map
-                                const cellType = cell.creneau_id?.startsWith("conge_") ? cell.creneau_id.replace("conge_", "") : leaveType
-                                const lc = leaveColors[cellType || "AL"] || { bg: "bg-emerald-100 text-emerald-700", label: "Congé" }
+                              if (isCongeCell) {
+                                const cellType = cell.creneau_id?.startsWith("conge_") ? cell.creneau_id.replace("conge_", "") : "AL"
+                                const lc = leaveColors[cellType] || { bg: "bg-emerald-200 text-emerald-800 font-bold", label: "Congé" }
                                 bgColor = lc.bg
                                 label = lc.label
                               } else {
                                 bgColor = "bg-blue-50 text-blue-800"
                                 label = `${cell.heure_debut?.slice(0,5) || ""}—${cell.heure_fin?.slice(0,5) || ""}`
                               }
-                            } else if (isLeaveDay) {
-                              const lc = leaveColors[leaveType] || { bg: "bg-emerald-100 text-emerald-700", label: "Congé" }
-                              bgColor = lc.bg
-                              label = lc.label
                             }
                             if (hasConflict) {
                               bgColor = "bg-red-50 text-red-700"
