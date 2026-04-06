@@ -509,6 +509,8 @@ export async function POST(request: Request) {
         }
       }
 
+      console.log(`[conges] Creating: type=${body.type_conge}, debut=${body.date_debut}, fin=${body.date_fin}, nb_jours=${nb_jours}`)
+
       const { data, error } = await supabase.from('demandes_conges').insert({
         employe_id: body.employe_id,
         type_conge: body.type_conge,
@@ -557,6 +559,55 @@ export async function POST(request: Request) {
         console.error('[conges] approuver error:', error.message)
         return NextResponse.json({ error: 'Erreur approbation: ' + error.message }, { status: 500 })
       }
+
+      // Update soldes_conges table if it exists
+      if (data && (conge.type_conge === 'AL' || conge.type_conge === 'SL')) {
+        try {
+          const currentYear = new Date().getFullYear()
+          const nbJours = Number(conge.nb_jours) || 0
+
+          // Recalculate total taken for this employee this year
+          const { data: allApproved } = await supabase
+            .from('demandes_conges')
+            .select('nb_jours')
+            .eq('employe_id', conge.employe_id)
+            .eq('type_conge', conge.type_conge)
+            .eq('statut', 'approuve')
+            .gte('date_debut', `${currentYear}-01-01`)
+            .lte('date_debut', `${currentYear}-12-31`)
+
+          const totalPris = (allApproved || []).reduce((s: number, c: any) => s + (Number(c.nb_jours) || 0), 0)
+
+          // Upsert soldes_conges
+          const field_pris = conge.type_conge === 'AL' ? 'al_pris' : 'sl_pris'
+          const { data: existingSolde } = await supabase
+            .from('soldes_conges')
+            .select('id')
+            .eq('employe_id', conge.employe_id)
+            .eq('annee', currentYear)
+            .maybeSingle()
+
+          if (existingSolde) {
+            await supabase.from('soldes_conges')
+              .update({ [field_pris]: totalPris })
+              .eq('id', existingSolde.id)
+          } else {
+            await supabase.from('soldes_conges').insert({
+              employe_id: conge.employe_id,
+              annee: currentYear,
+              al_droit: 22,
+              al_pris: conge.type_conge === 'AL' ? totalPris : 0,
+              sl_droit: 15,
+              sl_pris: conge.type_conge === 'SL' ? totalPris : 0,
+            }).select().maybeSingle()
+          }
+
+          console.log(`[conges] Solde mis à jour: ${conge.type_conge} pris=${totalPris} pour employe=${conge.employe_id}`)
+        } catch (soldeErr: any) {
+          console.warn('[conges] Erreur mise à jour soldes (non bloquant):', soldeErr.message)
+        }
+      }
+
       return NextResponse.json({ conge: data })
     }
 
