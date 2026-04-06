@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Progress } from "@/components/ui/progress"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
-import { Loader2, Clock, Calendar, CreditCard, TrendingUp, LogIn, LogOut, Coffee, Download, User, Save, CheckCircle, FileText, CalendarPlus, UserCircle, FolderOpen, Bell, Eye, Upload, X, LayoutDashboard, MoreHorizontal, Car, MapPin, Navigation, Play, Square } from "lucide-react"
+import { Loader2, Clock, Calendar, CreditCard, TrendingUp, LogIn, LogOut, Coffee, Download, User, Save, CheckCircle, FileText, CalendarPlus, UserCircle, FolderOpen, Bell, Eye, Upload, X, LayoutDashboard, MoreHorizontal, Car, MapPin, Navigation, Play, Square, HeartPulse, Video, Stethoscope, Pill, ShieldCheck, Phone, MessageCircle, Activity, Scan, Printer } from "lucide-react"
 import { Textarea } from "@/components/ui/textarea"
 
 const NAVY = "#0B0F2E"
@@ -33,7 +33,7 @@ function fmt(n: number) { return new Intl.NumberFormat("fr-FR", { maximumFractio
 function timeMauritius(): string { return new Date().toLocaleTimeString("en-GB", { timeZone: MU_TZ, hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }) }
 function todayISO(): string { const d = new Date(new Date().toLocaleString("en-US", { timeZone: MU_TZ })); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}` }
 
-type Tab = "dashboard" | "profil" | "bulletins" | "planning" | "primes" | "conges" | "documents" | "trajets"
+type Tab = "dashboard" | "profil" | "bulletins" | "planning" | "primes" | "conges" | "documents" | "trajets" | "sante"
 
 // ── Ma fiche — composant isolé (pas de re-render parent) ──
 function MaFicheTab({ employe, onUpdated }: { employe: any; onUpdated: () => void }) {
@@ -914,6 +914,7 @@ export default function EspaceEmployePage() {
             { id: "planning" as Tab, label: "Planning", icon: Clock },
             { id: "primes" as Tab, label: "Primes", icon: TrendingUp },
             { id: "conges" as Tab, label: "Mes congés", icon: Calendar },
+            { id: "sante" as Tab, label: "Sante TIBOK", icon: HeartPulse },
             { id: "trajets" as Tab, label: "Trajets km", icon: Car },
             { id: "documents" as Tab, label: "Documents", icon: FolderOpen },
           ]).map(t => (
@@ -1115,8 +1116,8 @@ export default function EspaceEmployePage() {
                 {([
                   { icon: FileText, label: "Mes bulletins", onClick: () => setTab("bulletins"), color: BLUE, bg: `linear-gradient(135deg, ${BLUE}08, ${BLUE}15)` },
                   { icon: CalendarPlus, label: "Demander un conge", onClick: () => setTab("conges"), color: GREEN, bg: `linear-gradient(135deg, ${GREEN}08, ${GREEN}15)` },
+                  { icon: HeartPulse, label: "Sante TIBOK", onClick: () => setTab("sante"), color: "#7c3aed", bg: "linear-gradient(135deg, #7c3aed08, #7c3aed15)" },
                   { icon: Calendar, label: "Mon planning", onClick: () => setTab("planning"), color: GOLD, bg: `linear-gradient(135deg, ${GOLD}08, ${GOLD}15)` },
-                  { icon: FolderOpen, label: "Mes documents", onClick: () => setTab("documents"), color: NAVY, bg: `linear-gradient(135deg, ${NAVY}08, ${NAVY}15)` },
                 ] as const).map((action, i) => (
                   <Card key={i}
                     className="cursor-pointer rounded-xl shadow-sm transition-all duration-200 hover:shadow-md active:scale-[0.97] border-0"
@@ -1464,6 +1465,148 @@ export default function EspaceEmployePage() {
           <TrajetsTab employe={employe} />
         )}
 
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* SANTE TIBOK — Telemedecine & Bien-etre integre */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {tab === "sante" && (
+          <div className="space-y-5">
+            {/* Hero banner */}
+            <div className="relative overflow-hidden rounded-3xl p-6 md:p-8" style={{ background: `linear-gradient(135deg, ${NAVY} 0%, #1a1f4e 50%, #2d1b69 100%)` }}>
+              <div className="absolute top-0 right-0 w-40 h-40 rounded-full opacity-10" style={{ background: `radial-gradient(circle, ${GOLD}, transparent)`, transform: "translate(30%, -30%)" }} />
+              <div className="absolute bottom-0 left-0 w-32 h-32 rounded-full opacity-10" style={{ background: "radial-gradient(circle, #7c3aed, transparent)", transform: "translate(-30%, 30%)" }} />
+              <div className="relative">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="h-12 w-12 rounded-2xl flex items-center justify-center" style={{ backgroundColor: "rgba(212,175,55,0.2)" }}>
+                    <HeartPulse className="h-6 w-6" style={{ color: GOLD }} />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-white">TIBOK Sante</h2>
+                    <p className="text-white/50 text-xs">Votre espace sante et bien-etre integre</p>
+                  </div>
+                </div>
+                <p className="text-white/70 text-sm max-w-md">
+                  Telemedecine, suivi medical, ordonnances et services de sante — tout au meme endroit, sans changer d&apos;application.
+                </p>
+              </div>
+            </div>
+
+            {/* Quick Actions Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[
+                { icon: Video, label: "Teleconsultation", desc: "Consulter un medecin", color: "#7c3aed", bg: "#7c3aed12", badge: "24/7" },
+                { icon: Stethoscope, label: "Mon medecin", desc: "Dr. referent", color: "#059669", bg: "#05966912" },
+                { icon: Pill, label: "Ordonnances", desc: "Mes prescriptions", color: "#ea580c", bg: "#ea580c12" },
+                { icon: Activity, label: "Bilan sante", desc: "Check-up annuel", color: "#2563eb", bg: "#2563eb12" },
+              ].map((item, i) => (
+                <button key={i} className="p-4 rounded-2xl text-left transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] border border-transparent hover:border-gray-200 hover:shadow-lg"
+                  style={{ backgroundColor: item.bg }}
+                  onClick={() => alert("TIBOK Sante : cette fonctionnalite sera bientot disponible.")}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="h-11 w-11 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${item.color}15` }}>
+                      <item.icon className="h-5 w-5" style={{ color: item.color }} />
+                    </div>
+                    {item.badge && (
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-bold text-white" style={{ backgroundColor: item.color }}>{item.badge}</span>
+                    )}
+                  </div>
+                  <p className="text-sm font-bold" style={{ color: NAVY }}>{item.label}</p>
+                  <p className="text-[11px] text-gray-400 mt-0.5">{item.desc}</p>
+                </button>
+              ))}
+            </div>
+
+            {/* Services Hub */}
+            <Card className="rounded-3xl overflow-hidden border-0 shadow-lg">
+              <div className="p-5 md:p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <ShieldCheck className="h-5 w-5" style={{ color: GOLD }} />
+                  <h3 className="text-base font-bold" style={{ color: NAVY }}>Services de sante</h3>
+                </div>
+                <div className="space-y-3">
+                  {[
+                    { icon: Video, title: "Teleconsultation video", desc: "Consultez un medecin generaliste ou specialiste en visio, 7j/7. Ordonnance electronique immédiate.", status: "Disponible", statusColor: "#059669" },
+                    { icon: MessageCircle, title: "Chat medical", desc: "Posez vos questions a un professionnel de sante par messagerie securisee.", status: "Disponible", statusColor: "#059669" },
+                    { icon: Phone, title: "Ligne urgence sante", desc: "Assistance telephonique 24h/24 pour les urgences medicales.", status: "24/7", statusColor: "#dc2626" },
+                    { icon: Pill, title: "Pharmacie en ligne", desc: "Commandez vos medicaments et faites-vous livrer. Ordonnance requise.", status: "Bientot", statusColor: "#9ca3af" },
+                    { icon: Scan, title: "Imagerie & analyses", desc: "Prise de RDV en ligne pour radios, IRM, analyses de sang.", status: "Bientot", statusColor: "#9ca3af" },
+                    { icon: Printer, title: "Certificats & documents", desc: "Certificats medicaux, arrets maladie — generation et impression integree.", status: "Bientot", statusColor: "#9ca3af" },
+                  ].map((svc, i) => (
+                    <button key={i}
+                      className="w-full flex items-center gap-4 p-4 rounded-2xl transition-all duration-200 hover:bg-gray-50 active:scale-[0.99] text-left"
+                      onClick={() => alert("TIBOK Sante : cette fonctionnalite sera bientot disponible.")}
+                    >
+                      <div className="h-12 w-12 rounded-2xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${svc.statusColor}10` }}>
+                        <svc.icon className="h-5 w-5" style={{ color: svc.statusColor }} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-semibold" style={{ color: NAVY }}>{svc.title}</p>
+                          <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold" style={{ backgroundColor: `${svc.statusColor}15`, color: svc.statusColor }}>
+                            {svc.status}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{svc.desc}</p>
+                      </div>
+                      <div className="shrink-0">
+                        <div className="h-8 w-8 rounded-xl flex items-center justify-center bg-gray-100">
+                          <Play className="h-3 w-3 text-gray-400" style={{ marginLeft: 1 }} />
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </Card>
+
+            {/* Health Dashboard Preview */}
+            <Card className="rounded-3xl border-0 shadow-lg overflow-hidden">
+              <div className="p-5 md:p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <Activity className="h-5 w-5" style={{ color: "#7c3aed" }} />
+                  <h3 className="text-base font-bold" style={{ color: NAVY }}>Mon suivi sante</h3>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {[
+                    { label: "Consultations", value: "0", sub: "cette annee", color: "#7c3aed", icon: Stethoscope },
+                    { label: "Ordonnances", value: "0", sub: "en cours", color: "#ea580c", icon: Pill },
+                    { label: "Prochain RDV", value: "--", sub: "aucun planifie", color: "#2563eb", icon: Calendar },
+                    { label: "Check-up", value: "--", sub: "a planifier", color: "#059669", icon: ShieldCheck },
+                  ].map((stat, i) => (
+                    <div key={i} className="p-4 rounded-2xl" style={{ backgroundColor: `${stat.color}08` }}>
+                      <stat.icon className="h-5 w-5 mb-2" style={{ color: stat.color }} />
+                      <p className="text-2xl font-bold" style={{ color: stat.color }}>{stat.value}</p>
+                      <p className="text-[10px] text-gray-500">{stat.label}</p>
+                      <p className="text-[9px] text-gray-300">{stat.sub}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Card>
+
+            {/* Coverage Info */}
+            <div className="p-5 rounded-3xl border border-dashed border-gray-200 bg-white">
+              <div className="flex items-start gap-4">
+                <div className="h-12 w-12 rounded-2xl flex items-center justify-center shrink-0" style={{ background: `linear-gradient(135deg, ${GOLD}20, ${GOLD}05)` }}>
+                  <ShieldCheck className="h-6 w-6" style={{ color: GOLD }} />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold" style={{ color: NAVY }}>Couverture sante employeur</h4>
+                  <p className="text-xs text-gray-400 mt-1 leading-relaxed">
+                    Votre employeur vous offre un acces a la plateforme TIBOK Sante.
+                    Teleconsultations illimitees, pharmacie en ligne et suivi medical integre.
+                    Vos donnees medicales sont strictement confidentielles et chiffrees.
+                  </p>
+                  <div className="flex gap-2 mt-3">
+                    <span className="px-2 py-1 rounded-lg text-[10px] font-medium bg-green-50 text-green-700">Teleconsultation incluse</span>
+                    <span className="px-2 py-1 rounded-lg text-[10px] font-medium bg-blue-50 text-blue-700">Chat medical inclus</span>
+                    <span className="px-2 py-1 rounded-lg text-[10px] font-medium bg-purple-50 text-purple-700">Urgences 24/7</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Documents */}
         {tab === "documents" && employe && (
@@ -1479,6 +1622,7 @@ export default function EspaceEmployePage() {
             <p className="text-xs text-gray-400 uppercase tracking-wider px-3 pb-2">Plus</p>
             {([
               { id: "profil" as Tab, label: "Ma fiche", icon: User },
+              { id: "planning" as Tab, label: "Planning", icon: Clock },
               { id: "primes" as Tab, label: "Primes & OT", icon: TrendingUp },
               { id: "trajets" as Tab, label: "Trajets km", icon: Car },
               { id: "documents" as Tab, label: "Documents", icon: FolderOpen },
@@ -1516,9 +1660,9 @@ export default function EspaceEmployePage() {
           {([
             { id: "dashboard" as Tab, label: "Home", icon: LayoutDashboard },
             { id: "bulletins" as Tab, label: "Bulletins", icon: FileText },
+            { id: "sante" as Tab, label: "Sante", icon: HeartPulse },
             { id: "conges" as Tab, label: "Conges", icon: Calendar },
-            { id: "planning" as Tab, label: "Planning", icon: Clock },
-            { id: "more" as const, label: "Menu", icon: MoreHorizontal },
+            { id: "more" as const, label: "Plus", icon: MoreHorizontal },
           ]).map(t => {
             const isMore = t.id === "more"
             const isActive = isMore ? (mobileMenuOpen || ["profil", "primes", "documents"].includes(tab)) : tab === t.id
