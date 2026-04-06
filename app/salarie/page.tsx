@@ -786,7 +786,32 @@ export default function EspaceEmployePage() {
           })
         }
         // Filter planning to show only this employee's entries
-        setPlanning((plRes.planning || []).filter((p: any) => p.employe_id === emp.id))
+        // Merge planning with approved leaves — congé overrides shift
+        const myPlanning = (plRes.planning || []).filter((p: any) => p.employe_id === emp.id)
+        const approvedLeaves = (histRes.conges || []).filter((c: any) => c.statut === "approuve" || c.statut === "approved")
+        const leaveMonthStr = today.slice(0, 7) // "2026-04"
+
+        // Mark planning days that have approved leave
+        const leaveDays = new Set<number>()
+        for (const c of approvedLeaves) {
+          const startStr = String(c.date_debut || "").slice(0, 10)
+          const endStr = String(c.date_fin || c.date_debut || "").slice(0, 10)
+          if (!startStr) continue
+          for (let d = 1; d <= 31; d++) {
+            const dayStr = `${leaveMonthStr}-${String(d).padStart(2, "0")}`
+            if (dayStr >= startStr && dayStr <= endStr) leaveDays.add(d)
+          }
+        }
+
+        // Override planning: mark leave days as Congé
+        const mergedPlanning = myPlanning.map((p: any) => {
+          if (leaveDays.has(p.jour || p.day)) {
+            return { ...p, shift: "Congé", est_repos: false, heure_debut: null, heure_fin: null, heures_prevues: 0 }
+          }
+          return p
+        })
+
+        setPlanning(mergedPlanning)
 
         // Fetch announcements
         fetch("/api/rh/annonces").then(r => r.json()).then(d => setAnnonces(d.annonces || [])).catch(() => {})
