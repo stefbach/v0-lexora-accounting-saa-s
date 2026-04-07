@@ -74,7 +74,7 @@ export default function PrevisionnelPage() {
   const [credits, setCredits] = useState<Credit[]>([])
 
   // Period filter state
-  type PeriodMode = "mensuel" | "trimestriel"
+  type PeriodMode = "mensuel" | "trimestriel" | "annuel"
   const now = new Date()
   const [periodMode, setPeriodMode] = useState<PeriodMode>("mensuel")
   const [selectedMonth, setSelectedMonth] = useState<string>(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`)
@@ -90,12 +90,15 @@ export default function PrevisionnelPage() {
       const lastDay = new Date(y, m, 0).getDate()
       return { debut: `${y}-${String(m).padStart(2, "0")}-01`, fin: `${y}-${String(m).padStart(2, "0")}-${lastDay}` }
     }
-    // trimestriel
-    const q = parseInt(selectedTrimestre.replace("T", ""))
-    const startMonth = (q - 1) * 3 + 1
-    const endMonth = q * 3
-    const lastDay = new Date(selectedYear, endMonth, 0).getDate()
-    return { debut: `${selectedYear}-${String(startMonth).padStart(2, "0")}-01`, fin: `${selectedYear}-${String(endMonth).padStart(2, "0")}-${lastDay}` }
+    if (periodMode === "trimestriel") {
+      const q = parseInt(selectedTrimestre.replace("T", ""))
+      const startMonth = (q - 1) * 3 + 1
+      const endMonth = q * 3
+      const lastDay = new Date(selectedYear, endMonth, 0).getDate()
+      return { debut: `${selectedYear}-${String(startMonth).padStart(2, "0")}-01`, fin: `${selectedYear}-${String(endMonth).padStart(2, "0")}-${lastDay}` }
+    }
+    // annuel
+    return { debut: `${selectedYear}-01-01`, fin: `${selectedYear}-12-31` }
   }
 
   // Load budgets from localStorage (lightweight, OK for budgets)
@@ -104,6 +107,19 @@ export default function PrevisionnelPage() {
       const b = localStorage.getItem("lexora_budgets")
       if (b) setBudgets(JSON.parse(b))
     } catch { /* ignore */ }
+  }, [])
+
+  // Fetch ALL sociétés the user has access to (same pattern as banque page)
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/client/societes").then(r => r.json()).catch(() => ({ societes: [] })),
+      fetch("/api/comptable/societes").then(r => r.json()).catch(() => ({ societes: [] })),
+    ]).then(([d1, d2]) => {
+      const all = [...(d1.societes || []), ...(d2.societes || [])]
+      const unique = Array.from(new Map(all.map((s: any) => [s.id, s])).values()) as { id: string; nom: string }[]
+      setSocietes(unique)
+      if (unique.length > 0 && !selectedSociete) setSelectedSociete(unique[0].id)
+    })
   }, [])
 
   const saveBudgets = useCallback((b: Record<string, number>) => {
@@ -130,31 +146,49 @@ export default function PrevisionnelPage() {
   useEffect(() => { fetchInvestissements() }, [fetchInvestissements])
 
   const saveInvestment = async (inv: Investment) => {
-    if (!selectedSociete || selectedSociete === "all") return
-    await fetch("/api/client/investissements", {
+    if (!selectedSociete || selectedSociete === "all" || !inv.description) return
+    const isNew = inv.id?.startsWith?.("new-")
+    const res = await fetch("/api/client/investissements", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: inv.id?.startsWith?.("new-") ? undefined : inv.id, societe_id: selectedSociete, type: "investissement", libelle: inv.description, montant: inv.amount, date_debut: inv.date || null }),
+      body: JSON.stringify({ id: isNew ? undefined : inv.id, societe_id: selectedSociete, type: "investissement", libelle: inv.description, montant: inv.amount, date_debut: inv.date || null }),
     })
-    fetchInvestissements()
+    // If new item, update local state with real DB id
+    if (isNew) {
+      const json = await res.json()
+      if (json.item?.id) {
+        setInvestments(prev => prev.map(i => i.id === inv.id ? { ...i, id: json.item.id } : i))
+      }
+    }
+    // Do NOT refetch — local state is already correct
   }
 
   const deleteInvestment = async (id: string) => {
-    await fetch(`/api/client/investissements?id=${id}`, { method: "DELETE" })
-    fetchInvestissements()
+    if (!id.startsWith("new-")) {
+      await fetch(`/api/client/investissements?id=${id}`, { method: "DELETE" })
+    }
+    setInvestments(prev => prev.filter(i => i.id !== id))
   }
 
   const saveCredit = async (cr: Credit) => {
-    if (!selectedSociete || selectedSociete === "all") return
-    await fetch("/api/client/investissements", {
+    if (!selectedSociete || selectedSociete === "all" || (!cr.bank && cr.amount === 0)) return
+    const isNew = cr.id?.startsWith?.("new-")
+    const res = await fetch("/api/client/investissements", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: cr.id?.startsWith?.("new-") ? undefined : cr.id, societe_id: selectedSociete, type: "credit", libelle: cr.bank || "Crédit", montant: cr.amount, taux_interet: cr.rate, mensualite: cr.monthly, capital_restant: cr.remaining, banque: cr.bank }),
+      body: JSON.stringify({ id: isNew ? undefined : cr.id, societe_id: selectedSociete, type: "credit", libelle: cr.bank || "Crédit", montant: cr.amount, taux_interet: cr.rate, mensualite: cr.monthly, capital_restant: cr.remaining, banque: cr.bank }),
     })
-    fetchInvestissements()
+    if (isNew) {
+      const json = await res.json()
+      if (json.item?.id) {
+        setCredits(prev => prev.map(c => c.id === cr.id ? { ...c, id: json.item.id } : c))
+      }
+    }
   }
 
   const deleteCredit = async (id: string) => {
-    await fetch(`/api/client/investissements?id=${id}`, { method: "DELETE" })
-    fetchInvestissements()
+    if (!id.startsWith("new-")) {
+      await fetch(`/api/client/investissements?id=${id}`, { method: "DELETE" })
+    }
+    setCredits(prev => prev.filter(c => c.id !== id))
   }
 
   const fetchData = useCallback(async () => {
@@ -168,12 +202,6 @@ export default function PrevisionnelPage() {
       const res = await fetch(url)
       const json = await res.json()
       setData(json.financial)
-      if (json.financial?.availableSocietes) {
-        setSocietes(json.financial.availableSocietes)
-        if (!selectedSociete || selectedSociete === "" || selectedSociete === "all") {
-          setSelectedSociete(json.financial.availableSocietes[0]?.id || "all")
-        }
-      }
     } catch { setData(null) }
     finally { setFetching(false) }
   }, [selectedSociete, periodMode, selectedMonth, selectedTrimestre, selectedYear])
@@ -216,41 +244,81 @@ export default function PrevisionnelPage() {
   }, [data])
 
   // Cash flow data: selected month + 2 before + 3 projections after
+  // Uses BOTH factures (statut=paye) AND écritures comptables (journal VTE/ACH)
   const cashFlowData = useMemo(() => {
     if (!data) return []
     const factures = data.factures || []
+    const ecritures = data.ecritures || []
     const [sy, sm] = selectedMonth.split("-").map(Number)
+
+    // Determine how many real months to show based on period mode
+    const nbRealMonths = periodMode === "annuel" ? 12 : 3
+    const startOffset = periodMode === "annuel" ? (sm - 1) : 2
     const months: { label: string; enc: number; dec: number; projection: boolean }[] = []
 
-    // Show 2 months before selected + selected month = 3 real months
-    for (let i = 2; i >= 0; i--) {
-      const d = new Date(sy, sm - 1 - i, 1)
+    for (let i = startOffset; i >= 0; i--) {
+      const baseMonth = periodMode === "annuel" ? 0 : sm - 1
+      const d = new Date(sy, baseMonth - i + (periodMode === "annuel" ? (nbRealMonths - 1 - startOffset + i) : 0), 1)
+      if (periodMode === "annuel") {
+        d.setFullYear(selectedYear)
+        d.setMonth(i)
+      }
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
       const label = d.toLocaleDateString("fr-FR", { month: "short", year: "2-digit" })
 
-      const enc = factures
+      // Encaissements from factures clients payées
+      let enc = factures
         .filter((f: any) => f.type_facture === "client" && f.statut === "paye" && (f.date_paiement || f.date_facture || "").startsWith(key))
         .reduce((s: number, f: any) => s + (Number(f.montant_mur) || Number(f.montant_ttc) || 0), 0)
+      // Fallback: écritures journal VTE (credit side = revenue)
+      if (enc === 0) {
+        enc = ecritures
+          .filter((e: any) => e.journal === "VTE" && e.date_ecriture?.startsWith(key))
+          .reduce((s: number, e: any) => s + (Number(e.credit) || 0), 0)
+      }
 
-      const decFrn = factures
+      // Décaissements from factures fournisseurs payées
+      let dec = factures
         .filter((f: any) => f.type_facture === "fournisseur" && f.statut === "paye" && (f.date_paiement || f.date_facture || "").startsWith(key))
         .reduce((s: number, f: any) => s + (Number(f.montant_mur) || Number(f.montant_ttc) || 0), 0)
+      // Fallback: écritures journal ACH (debit side = expense)
+      if (dec === 0) {
+        dec = ecritures
+          .filter((e: any) => e.journal === "ACH" && e.date_ecriture?.startsWith(key))
+          .reduce((s: number, e: any) => s + (Number(e.debit) || 0), 0)
+      }
 
-      months.push({ label, enc, dec: decFrn, projection: false })
+      months.push({ label, enc, dec, projection: false })
     }
 
-    // 3 projection months after selected
-    const realMonths = months.filter(m => !m.projection)
-    const avgEnc = realMonths.length > 0 ? realMonths.reduce((s, m) => s + m.enc, 0) / realMonths.length : 0
-    const avgDec = realMonths.length > 0 ? realMonths.reduce((s, m) => s + m.dec, 0) / realMonths.length : 0
+    // Fix annuel: rebuild from Jan to Dec
+    if (periodMode === "annuel") {
+      months.length = 0
+      for (let m = 0; m < 12; m++) {
+        const d = new Date(selectedYear, m, 1)
+        const key = `${selectedYear}-${String(m + 1).padStart(2, "0")}`
+        const label = d.toLocaleDateString("fr-FR", { month: "short" })
+        let enc = factures.filter((f: any) => f.type_facture === "client" && f.statut === "paye" && (f.date_paiement || f.date_facture || "").startsWith(key)).reduce((s: number, f: any) => s + (Number(f.montant_mur) || Number(f.montant_ttc) || 0), 0)
+        if (enc === 0) enc = ecritures.filter((e: any) => e.journal === "VTE" && e.date_ecriture?.startsWith(key)).reduce((s: number, e: any) => s + (Number(e.credit) || 0), 0)
+        let dec = factures.filter((f: any) => f.type_facture === "fournisseur" && f.statut === "paye" && (f.date_paiement || f.date_facture || "").startsWith(key)).reduce((s: number, f: any) => s + (Number(f.montant_mur) || Number(f.montant_ttc) || 0), 0)
+        if (dec === 0) dec = ecritures.filter((e: any) => e.journal === "ACH" && e.date_ecriture?.startsWith(key)).reduce((s: number, e: any) => s + (Number(e.debit) || 0), 0)
+        months.push({ label, enc, dec, projection: false })
+      }
+    }
 
-    for (let i = 1; i <= 3; i++) {
-      const d = new Date(sy, sm - 1 + i, 1)
-      const label = d.toLocaleDateString("fr-FR", { month: "short", year: "2-digit" }) + " *"
-      months.push({ label, enc: avgEnc, dec: avgDec, projection: true })
+    // 3 projection months after (not for annuel)
+    if (periodMode !== "annuel") {
+      const realMonths = months.filter(m => !m.projection)
+      const avgEnc = realMonths.length > 0 ? realMonths.reduce((s, m) => s + m.enc, 0) / realMonths.length : 0
+      const avgDec = realMonths.length > 0 ? realMonths.reduce((s, m) => s + m.dec, 0) / realMonths.length : 0
+      for (let i = 1; i <= 3; i++) {
+        const d = new Date(sy, sm - 1 + i, 1)
+        const label = d.toLocaleDateString("fr-FR", { month: "short", year: "2-digit" }) + " *"
+        months.push({ label, enc: avgEnc, dec: avgDec, projection: true })
+      }
     }
     return months
-  }, [data, selectedMonth])
+  }, [data, selectedMonth, periodMode, selectedYear])
 
   // BFR
   const bfrData = useMemo(() => {
@@ -338,15 +406,21 @@ export default function PrevisionnelPage() {
             <CardContent className="p-3">
               <div className="flex flex-col sm:flex-row items-center gap-3">
                 <div className="flex rounded-lg border overflow-hidden">
-                  {(["mensuel", "trimestriel"] as PeriodMode[]).map(mode => (
+                  {(["mensuel", "trimestriel", "annuel"] as PeriodMode[]).map(mode => (
                     <button key={mode} onClick={() => setPeriodMode(mode)}
                       className={`px-4 py-1.5 text-xs font-medium transition-colors ${periodMode === mode ? "bg-[#0B0F2E] text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>
-                      {mode === "mensuel" ? "Mensuel" : "Trimestriel"}
+                      {mode === "mensuel" ? "Mensuel" : mode === "trimestriel" ? "Trimestriel" : "Annuel"}
                     </button>
                   ))}
                 </div>
                 {periodMode === "mensuel" && (
                   <MonthPicker value={selectedMonth} onChange={v => { if (v) setSelectedMonth(v) }} showTout={false} />
+                )}
+                {periodMode === "annuel" && (
+                  <Select value={String(selectedYear)} onValueChange={v => setSelectedYear(Number(v))}>
+                    <SelectTrigger className="w-[100px] h-8"><SelectValue /></SelectTrigger>
+                    <SelectContent>{[now.getFullYear() - 2, now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1].map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent>
+                  </Select>
                 )}
                 {periodMode === "trimestriel" && (
                   <div className="flex items-center gap-2">
@@ -481,7 +555,7 @@ export default function PrevisionnelPage() {
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm text-muted-foreground">Encaissements (mois en cours)</CardTitle>
+                <CardTitle className="text-sm text-muted-foreground">Argent reçu (clients)</CardTitle>
                 <ArrowUpRight className="h-5 w-5 text-green-600" />
               </CardHeader>
               <CardContent>
@@ -492,7 +566,7 @@ export default function PrevisionnelPage() {
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm text-muted-foreground">Decaissements (mois en cours)</CardTitle>
+                <CardTitle className="text-sm text-muted-foreground">Argent payé (fournisseurs)</CardTitle>
                 <ArrowDownRight className="h-5 w-5 text-red-500" />
               </CardHeader>
               <CardContent>
@@ -505,16 +579,17 @@ export default function PrevisionnelPage() {
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-lg" style={{ color: NAVY }}>Flux de tresorerie - 6 mois + 3 mois projection</CardTitle>
+              <CardTitle className="text-lg" style={{ color: NAVY }}>Flux de trésorerie</CardTitle>
+              <p className="text-xs text-muted-foreground mt-1">Suivi des encaissements (argent reçu) et décaissements (argent payé) mois par mois, avec projection sur 3 mois.</p>
             </CardHeader>
             <CardContent className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Mois</TableHead>
-                    <TableHead className="text-right">Encaissements</TableHead>
-                    <TableHead className="text-right">Decaissements</TableHead>
-                    <TableHead className="text-right">Solde net</TableHead>
+                    <TableHead className="text-right">Argent reçu (clients)</TableHead>
+                    <TableHead className="text-right">Argent payé (fournisseurs)</TableHead>
+                    <TableHead className="text-right">Différence</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -710,7 +785,7 @@ export default function PrevisionnelPage() {
                           />
                         </TableCell>
                         <TableCell>
-                          <Button variant="ghost" size="sm" onClick={() => { deleteInvestment(inv.id); setInvestments(investments.filter((_, i) => i !== idx)) }}>
+                          <Button variant="ghost" size="sm" onClick={() => deleteInvestment(inv.id)}>
                             <Trash2 className="h-4 w-4 text-red-500" />
                           </Button>
                         </TableCell>
@@ -781,7 +856,7 @@ export default function PrevisionnelPage() {
                             onChange={e => { const c = [...credits]; c[idx] = { ...c[idx], remaining: parseFloat(e.target.value) || 0 }; setCredits(c) }} />
                         </TableCell>
                         <TableCell>
-                          <Button variant="ghost" size="sm" onClick={() => { deleteCredit(cr.id); setCredits(credits.filter((_, i) => i !== idx)) }}>
+                          <Button variant="ghost" size="sm" onClick={() => deleteCredit(cr.id)}>
                             <Trash2 className="h-4 w-4 text-red-500" />
                           </Button>
                         </TableCell>
