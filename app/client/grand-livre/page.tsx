@@ -17,7 +17,7 @@ interface Societe { id: string; nom: string }
 
 export default function ClientGrandLivrePage() {
   const [societes, setSocietes] = useState<Societe[]>([])
-  const [selectedSociete, setSelectedSociete] = useState("all")
+  const [selectedSociete, setSelectedSociete] = useState("")
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [page, setPage] = useState(1)
@@ -41,12 +41,12 @@ export default function ClientGrandLivrePage() {
     fetch("/api/comptable/societes").then(r => r.json()).then(d => {
       const s = d.societes || []
       setSocietes(s)
-      if (s.length === 1) setSelectedSociete(s[0].id)
+      if (s.length > 0 && !selectedSociete) setSelectedSociete(s[0].id)
     })
   }, [])
 
   const load = useCallback(async () => {
-    if (selectedSociete === "all") { setData(null); return }
+    if (!selectedSociete) { setData(null); return }
     setLoading(true)
     try {
       const params = new URLSearchParams({ societe_id: selectedSociete, page: String(page), limit: "50" })
@@ -105,8 +105,8 @@ export default function ClientGrandLivrePage() {
             <Select value={selectedSociete} onValueChange={v => { setSelectedSociete(v); setPage(1) }}>
               <SelectTrigger className="h-9"><SelectValue placeholder="Choisir..." /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">-- Choisir --</SelectItem>
                 {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
+                <SelectItem value="all">Toutes</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -141,7 +141,7 @@ export default function ClientGrandLivrePage() {
         </CardContent>
       </Card>
 
-      {selectedSociete === "all" ? (
+      {!selectedSociete ? (
         <Card><CardContent className="py-16 text-center text-gray-400">Selectionnez une societe</CardContent></Card>
       ) : loading ? (
         <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-[#0B0F2E]" /></div>

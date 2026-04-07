@@ -295,7 +295,7 @@ export default function BilanPage() {
   const [data, setData] = useState<any>(null)
   const [prevData, setPrevData] = useState<any>(null)
   const [fetching, setFetching] = useState(true)
-  const [selectedSociete, setSelectedSociete] = useState<string>("all")
+  const [selectedSociete, setSelectedSociete] = useState<string>("")
   const [societes, setSocietes] = useState<{ id: string; nom: string }[]>([])
   const [exercice, setExercice] = useState<string>("")
   const [prevExercice, setPrevExercice] = useState<string>("")
@@ -324,7 +324,7 @@ export default function BilanPage() {
     try {
       const formData = new FormData()
       formData.append("file", file)
-      if (selectedSociete !== "all") formData.append("societe_id", selectedSociete)
+      if (selectedSociete && selectedSociete !== "all") formData.append("societe_id", selectedSociete)
       formData.append("hint", "Bilan comptable - Balance Sheet - Profit & Loss - Financial Statements Mauritius")
       const res = await fetch("/api/documents/upload", { method: "POST", body: formData })
       if (!res.ok) {
@@ -367,7 +367,7 @@ export default function BilanPage() {
   useEffect(() => {
     setFetching(true)
     const params = new URLSearchParams()
-    if (selectedSociete !== "all") params.set("societe_id", selectedSociete)
+    if (selectedSociete && selectedSociete !== "all") params.set("societe_id", selectedSociete)
     if (exercice) params.set("exercice", exercice)
     const url = `/api/client/financial${params.toString() ? "?" + params.toString() : ""}`
 
@@ -375,7 +375,10 @@ export default function BilanPage() {
       .then((res) => res.json())
       .then((json) => {
         setData(json.financial)
-        if (json.financial?.availableSocietes) setSocietes(json.financial.availableSocietes)
+        if (json.financial?.availableSocietes) {
+          setSocietes(json.financial.availableSocietes)
+          if (json.financial.availableSocietes.length > 0 && !selectedSociete) setSelectedSociete(json.financial.availableSocietes[0].id)
+        }
         const currentEx = json.financial?.exercice_actuel || ""
         const prevEx = json.financial?.exercice_precedent || ""
         if (!exercice && currentEx) setExercice(currentEx)
@@ -385,7 +388,7 @@ export default function BilanPage() {
         // Fetch previous year data
         if (prevEx) {
           const prevParams = new URLSearchParams()
-          if (selectedSociete !== "all") prevParams.set("societe_id", selectedSociete)
+          if (selectedSociete && selectedSociete !== "all") prevParams.set("societe_id", selectedSociete)
           prevParams.set("exercice", prevEx)
           fetch(`/api/client/financial?${prevParams.toString()}`)
             .then(r => r.json())
@@ -428,7 +431,7 @@ export default function BilanPage() {
   const totalLiabilitiesAndEquity = (data?.capitauxPropres ?? 0) + (totalRevenue - totalExpenses) + (data?.dettesFournisseurs ?? 0) + (data?.dettesFiscales ?? 0) + (data?.dettesSociales ?? 0)
   const hasData = totalRevenue !== 0 || totalExpenses !== 0 || totalAssets !== 0 || totalLiabilitiesAndEquity !== 0
 
-  const selectedSocieteName = selectedSociete !== "all"
+  const selectedSocieteName = selectedSociete && selectedSociete !== "all"
     ? societes.find(s => s.id === selectedSociete)?.nom ?? "Societe"
     : societes.length === 1
       ? societes[0].nom
@@ -439,7 +442,7 @@ export default function BilanPage() {
       {/* Top bar: filter + print */}
       <div className="flex items-center justify-between flex-wrap gap-4 print:hidden">
         <div className="flex items-center gap-3">
-          {societes.length > 1 && (
+          {societes.length > 0 && (
             <div className="flex items-center gap-2">
               <Building2 className="h-4 w-4 text-muted-foreground" />
               <Select value={selectedSociete} onValueChange={setSelectedSociete}>
@@ -447,8 +450,8 @@ export default function BilanPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Toutes les societes</SelectItem>
                   {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
+                  {societes.length > 1 && <SelectItem value="all">Toutes les societes</SelectItem>}
                 </SelectContent>
               </Select>
             </div>

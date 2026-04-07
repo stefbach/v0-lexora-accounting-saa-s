@@ -88,7 +88,6 @@ const MENU: MenuSection[] = [
     items: [
       { href: "/client/tableau-de-bord", label: "Tableau de bord", labelKey: "nav.dashboard", icon: LayoutDashboard },
       { href: "/client/societes", label: "Mes Sociétés", labelKey: "nav.companies", icon: Building2 },
-      { href: "/client/societe", label: "Fiche Société", icon: Settings },
       { href: "/client/documents", label: "Documents & OCR", labelKey: "nav.documents", icon: FileText },
       { href: "/client/utilisateurs", label: "Mon Équipe", labelKey: "nav.team", icon: Users },
       { href: "/client/alertes", label: "Alertes", labelKey: "nav.alerts", icon: Bell },
@@ -111,12 +110,10 @@ const MENU: MenuSection[] = [
     items: [
       { href: "/client/banque", label: "Banque", labelKey: "acc.bank", icon: Banknote },
       { href: "/client/rapprochement", label: "Rapprochement & Lettrage", labelKey: "acc.reconciliation", icon: CreditCard },
-      { href: "/client/tresorerie", label: "Trésorerie", labelKey: "acc.treasury", icon: Banknote },
       { href: "/client/fournisseurs", label: "Fournisseurs", labelKey: "acc.suppliers", icon: FileSpreadsheet },
       { href: "/client/affectations", label: "Affectations comptables", icon: Settings },
       { href: "/client/salaires-compta", label: "Salaires", icon: CreditCard },
       { href: "/client/compte-courant", label: "Comptes Courants Associés", labelKey: "acc.current_accounts", icon: Users },
-      { href: "/client/finances", label: "Mes Chiffres", labelKey: "acc.my_figures", icon: BarChart3 },
     ]
   },
   {
@@ -125,7 +122,6 @@ const MENU: MenuSection[] = [
     items: [
       { href: "/client/bilan", label: "Bilan & P&L", labelKey: "fin.balance_sheet", icon: BookOpen },
       { href: "/client/grand-livre", label: "Grand Livre", labelKey: "fin.general_ledger", icon: BookOpen },
-      { href: "/client/exercices", label: "Exercices", labelKey: "fin.fiscal_years", icon: Calendar },
       { href: "/client/previsionnel", label: "Prévisionnel", labelKey: "fin.forecast", icon: TrendingUp },
       { href: "/client/echeances", label: "Échéances", labelKey: "fin.deadlines", icon: CalendarDays },
     ]
@@ -135,7 +131,6 @@ const MENU: MenuSection[] = [
     requiredModule: "fiscal",
     items: [
       { href: "/client/tva", label: "TVA MRA", labelKey: "tax.vat", icon: Receipt },
-      { href: "/client/charges-sociales", label: "CSG / NSF / PAYE", labelKey: "tax.social_charges", icon: Calculator },
       { href: "/client/annual-return", label: "Annual Return (ROC)", labelKey: "tax.annual_return", icon: ClipboardList },
       { href: "/client/it-form3", label: "IT Form 3 (MRA)", labelKey: "tax.it_form3", icon: FileText },
     ]
@@ -163,7 +158,6 @@ const MENU: MenuSection[] = [
   {
     section: "Mon Compte", sectionKey: "account.my_account",
     items: [
-      { href: "/client/societe", label: "Paramètres société", icon: Settings },
       { href: "/client/profil", label: "Mon Profil", labelKey: "account.my_profile", icon: Settings },
     ]
   },

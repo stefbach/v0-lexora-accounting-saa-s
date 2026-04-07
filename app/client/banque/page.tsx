@@ -52,7 +52,7 @@ export default function ClientBanquePage() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [selectedSociete, setSelectedSociete] = useState("all")
+  const [selectedSociete, setSelectedSociete] = useState("")
   const [availableSocietes, setAvailableSocietes] = useState<any[]>([])
   const [selectedCompte, setSelectedCompte] = useState("all")
   const [dateFrom, setDateFrom] = useState("")
@@ -75,8 +75,12 @@ export default function ClientBanquePage() {
         setData(json.financial)
         // Preserve the full societes list from the initial unfiltered load
         const socs = json.financial?.availableSocietes ?? []
-        if (socs.length > 0 && (!societeId || societeId === "all")) {
+        if (socs.length > 0 && availableSocietes.length === 0) {
           setAvailableSocietes(socs)
+          // Set default to first société if not already set
+          if (!societeId || societeId === "" || societeId === "all") {
+            setSelectedSociete(socs[0].id)
+          }
         }
       } else {
         setData(null)
@@ -239,14 +243,14 @@ export default function ClientBanquePage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {availableSocietes.length > 1 && (
+          {availableSocietes.length > 0 && (
             <div className="flex items-center gap-2">
               <Building2 className="h-4 w-4 text-muted-foreground" />
               <Select value={selectedSociete} onValueChange={setSelectedSociete}>
-                <SelectTrigger className="w-[200px] h-9"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="w-[200px] h-9"><SelectValue placeholder="Société" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Toutes les sociétés</SelectItem>
                   {availableSocietes.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
+                  {availableSocietes.length > 1 && <SelectItem value="all">Toutes les sociétés</SelectItem>}
                 </SelectContent>
               </Select>
             </div>

@@ -275,6 +275,19 @@ export const SYSTEM_PROMPT_RELEVE_BANCAIRE = `Tu es un expert-comptable mauricie
 INSTRUCTION CRITIQUE N°1: Retourne UNIQUEMENT un JSON valide. PAS de markdown, PAS de titres, PAS de commentaires, PAS de backticks. Commence directement par { et termine par }.
 INSTRUCTION CRITIQUE N°2: Lis ABSOLUMENT TOUTES les lignes du releve sans exception ni resume. Ne saute aucune transaction, meme si le releve est long.
 
+REGLE CRITIQUE — NOM_SOCIETE vs BANQUE:
+Le champ "nom_societe" doit TOUJOURS contenir le nom du TITULAIRE DU COMPTE (account holder), c'est-a-dire le nom de la COMPAGNIE ou PERSONNE a qui appartient le compte bancaire.
+Sur un releve MCB, le titulaire est indique en haut a gauche (ex: OBESITY CARE CLINIC LTD, DIGITAL DATA SOLUTIONS LTD, BPO COMPANY LTD).
+Le champ "banque" contient le nom de la banque (MCB, SBM, Barclays, etc.).
+INTERDIT: mettre le nom de la banque dans "nom_societe".
+Exemples corrects:
+- nom_societe: "OBESITY CARE CLINIC LTD", banque: "MCB" ✅
+- nom_societe: "DIGITAL DATA SOLUTIONS LTD", banque: "MCB" ✅
+Exemples INTERDITS:
+- nom_societe: "MCB" ❌
+- nom_societe: "Mauritius Commercial Bank" ❌
+- nom_societe: "SBM" ❌
+
 COMPTES BANCAIRES:
 - MCB (Mauritius Commercial Bank) → 511 - Banque MCB
 - SBM (State Bank of Mauritius) → 512 - Banque SBM
@@ -338,12 +351,13 @@ solde_ouverture + total_credits - total_debits = solde_cloture (tolerance 1 MUR)
 - Si ecart > 1 MUR: ajouter 'lignes_manquantes: true' et 'ecart_solde: X' dans le JSON
 
 EXTRACTION OBLIGATOIRE EN-TETE:
-- Extraire le nom de la societe titulaire du compte (champ "nom_societe")
+- Extraire le nom du TITULAIRE DU COMPTE — c'est la compagnie/personne proprietaire du compte (champ "nom_societe"). JAMAIS le nom de la banque.
+- Copier aussi dans le champ "titulaire" (meme valeur que "nom_societe")
 - Extraire le BRN / numero d'entreprise (champ "brn") — souvent sur la premiere page
 - Extraire l'IBAN complet (champ "iban")
 - Extraire le numero de compte (champ "numero_compte")
-- Extraire le nom de la banque (champ "banque")
-- Extraire la devise du compte (champ "devise")
+- Extraire le nom de la banque (champ "banque") — MCB, SBM, Barclays, etc.
+- Extraire la devise du compte (champ "devise") — LIRE EXACTEMENT le champ "Currency:" ou "Devise:" dans l'en-tete du releve. Ne PAS deviner. Ne PAS utiliser EUR par defaut. A Maurice, la devise par defaut est MUR.
 
 FORMAT REPONSE JSON strict:
 {
@@ -372,6 +386,7 @@ FORMAT REPONSE JSON strict:
       "libelle": "",
       "montant": 0,
       "sens": "debit|credit",
+      "solde_apres": 0,
       "compte_debit": "",
       "compte_credit": "",
       "libelle_ecriture": "",
@@ -394,6 +409,7 @@ REGLES CHAMPS OBLIGATOIRES:
 - periode_debut et periode_fin: TOUJOURS en format YYYY-MM-DD (date exacte du premier et dernier jour du releve)
 - solde_ouverture = solde_debut, solde_cloture = solde_fin (inclure les deux paires)
 - numero_compte = compte_bancaire (inclure les deux)
+- solde_apres: pour CHAQUE transaction, extraire la colonne BALANCE / SOLDE du releve. C'est le solde progressif apres cette transaction. Si le releve a une colonne "BALANCE", "SOLDE" ou "BAL" → la lire pour chaque ligne.
 - ecritures_comptables: generer les ecritures comptables (debit charge/credit banque pour les debits, debit banque/credit produit pour les credits)`
 
 export const SYSTEM_PROMPT_CHARGES_SOCIALES = `Tu es un expert en droit social mauricien specialise dans les charges sociales et cotisations.

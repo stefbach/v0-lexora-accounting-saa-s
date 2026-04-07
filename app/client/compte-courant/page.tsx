@@ -167,7 +167,7 @@ export default function CompteCourantPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          {societes.length > 1 && (
+          {societes.length > 0 && (
             <Select value={societeId || ""} onValueChange={setSocieteId}>
               <SelectTrigger className="w-48"><SelectValue placeholder="Societe..." /></SelectTrigger>
               <SelectContent>{societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent>

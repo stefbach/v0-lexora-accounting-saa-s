@@ -3,16 +3,21 @@
 import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
-import { Search, Loader2, FileText, AlertTriangle } from "lucide-react"
+import { Search, Loader2, FileText, AlertTriangle, Download, User } from "lucide-react"
+import * as XLSX from "xlsx"
 
 const NAVY = "#0B0F2E"
 function formatMUR(amount: number) {
   return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(amount) + " MUR"
+}
+function fmt2(n: number) {
+  return new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
 }
 
 function getStatutBadge(statut: string) {
@@ -37,6 +42,7 @@ export default function ClientFournisseursPage() {
   const [loading, setLoading] = useState(true)
   const [factures, setFactures] = useState<any[]>([])
   const [totaux, setTotaux] = useState<any>({})
+  const [selectedFournisseur, setSelectedFournisseur] = useState<string>("all")
 
   useEffect(() => {
     Promise.all([
@@ -54,7 +60,7 @@ export default function ClientFournisseursPage() {
     if (!societe) return
     setLoading(true)
     try {
-      const res = await fetch(`/api/comptable/factures?societe_id=${societe}&type=fournisseur`)
+      const res = await fetch(`/api/comptable/factures?societe_id=${societe}&type=fournisseur&limit=1000`)
       const data = await res.json()
       setFactures(data.factures || [])
       setTotaux(data.totaux || {})
@@ -67,12 +73,48 @@ export default function ClientFournisseursPage() {
 
   useEffect(() => { load() }, [load])
 
-  const filtered = factures.filter(
-    (row) =>
+  // Build unique fournisseur list
+  const fournisseurs = Array.from(new Set(factures.map(f => f.tiers).filter(Boolean))).sort()
+
+  const filtered = factures.filter((row) => {
+    // Apply fournisseur filter
+    if (selectedFournisseur !== "all" && row.tiers !== selectedFournisseur) return false
+    // Apply search
+    return (
       (row.tiers || "").toLowerCase().includes(search.toLowerCase()) ||
       (row.numero_facture || "").toLowerCase().includes(search.toLowerCase()) ||
       (row.description || "").toLowerCase().includes(search.toLowerCase())
-  )
+    )
+  })
+
+  // Compute fournisseur-specific totals when one is selected
+  const fournisseurTotaux = selectedFournisseur !== "all" ? {
+    total_ht: filtered.reduce((s, f) => s + (f.montant_ht || 0), 0),
+    total_tva: filtered.reduce((s, f) => s + (f.montant_tva || 0), 0),
+    total_ttc: filtered.reduce((s, f) => s + (f.montant_ttc || 0), 0),
+    total_mur: filtered.reduce((s, f) => s + (f.montant_mur || f.montant_ttc || 0), 0),
+    nb_factures: filtered.length,
+    nb_en_attente: filtered.filter(f => f.statut === "en_attente").length,
+  } : null
+
+  const handleExport = () => {
+    const data = filtered.map(f => ({
+      "N° Facture": f.numero_facture || "—",
+      "Fournisseur": f.tiers || "—",
+      "Date": f.date_facture ? new Date(f.date_facture).toLocaleDateString("fr-FR") : "—",
+      "Montant HT": fmt2(f.montant_ht || 0),
+      "TVA": fmt2(f.montant_tva || 0),
+      "Montant TTC": fmt2(f.montant_ttc || 0),
+      "Devise": f.devise || "MUR",
+      "Statut": f.statut || "—",
+      "Échéance": f.date_echeance ? new Date(f.date_echeance).toLocaleDateString("fr-FR") : "—",
+    }))
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.json_to_sheet(data)
+    XLSX.utils.book_append_sheet(wb, ws, "Factures fournisseurs")
+    const dateStr = new Date().toISOString().split("T")[0]
+    XLSX.writeFile(wb, `fournisseurs_${dateStr}.xlsx`)
+  }
 
   return (
     <div className="flex-1 overflow-auto p-6 space-y-6">
@@ -85,10 +127,15 @@ export default function ClientFournisseursPage() {
             Suivi des factures fournisseurs et paiements
           </p>
         </div>
-        <Select value={societe} onValueChange={setSociete}>
-          <SelectTrigger className="w-[220px]"><SelectValue placeholder="Société" /></SelectTrigger>
-          <SelectContent>{societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <Select value={societe} onValueChange={setSociete}>
+            <SelectTrigger className="w-[220px]"><SelectValue placeholder="Société" /></SelectTrigger>
+            <SelectContent>{societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent>
+          </Select>
+          <Button variant="outline" onClick={handleExport} disabled={filtered.length === 0}>
+            <Download className="w-4 h-4 mr-2" />Exporter
+          </Button>
+        </div>
       </div>
 
       {/* KPIs */}
@@ -114,14 +161,42 @@ export default function ClientFournisseursPage() {
         </CardContent></Card>
       </div>
 
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Rechercher fournisseur, n° facture..."
-          className="pl-9"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      {/* Fournisseur-specific summary card */}
+      {fournisseurTotaux && (
+        <Card className="border-l-4 border-l-[#0B0F2E] bg-[#0B0F2E]/5">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <User className="w-5 h-5 text-[#0B0F2E]" />
+              <p className="font-bold text-[#0B0F2E]">{selectedFournisseur}</p>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+              <div><p className="text-gray-500">Total HT</p><p className="font-bold text-blue-600">{formatMUR(fournisseurTotaux.total_ht)}</p></div>
+              <div><p className="text-gray-500">Total TVA</p><p className="font-bold text-orange-600">{formatMUR(fournisseurTotaux.total_tva)}</p></div>
+              <div><p className="text-gray-500">Total TTC (MUR)</p><p className="font-bold text-emerald-600">{formatMUR(fournisseurTotaux.total_mur)}</p></div>
+              <div><p className="text-gray-500">Factures</p><p className="font-bold text-[#0B0F2E]">{fournisseurTotaux.nb_factures}</p></div>
+              <div><p className="text-gray-500">En attente</p><p className={`font-bold ${fournisseurTotaux.nb_en_attente > 0 ? "text-orange-600" : "text-green-600"}`}>{fournisseurTotaux.nb_en_attente}</p></div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="flex gap-3">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Rechercher fournisseur, n° facture..."
+            className="pl-9"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <Select value={selectedFournisseur} onValueChange={setSelectedFournisseur}>
+          <SelectTrigger className="w-[220px]"><SelectValue placeholder="Fournisseur" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tous les fournisseurs</SelectItem>
+            {fournisseurs.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+          </SelectContent>
+        </Select>
       </div>
 
       {loading ? (
@@ -165,7 +240,7 @@ export default function ClientFournisseursPage() {
                 {filtered.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
-                      {search
+                      {search || selectedFournisseur !== "all"
                         ? "Aucune facture fournisseur trouvée pour cette recherche."
                         : "Aucune facture fournisseur disponible. Les factures apparaîtront ici une fois traitées par OCR."}
                     </TableCell>

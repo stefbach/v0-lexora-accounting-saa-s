@@ -13,7 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Loader2, Building2, RefreshCw, TrendingUp, TrendingDown,
   ArrowUpRight, ArrowDownRight, Plus, Trash2, Save,
-  Landmark, CreditCard, BarChart3, PiggyBank, Wallet
+  Landmark, CreditCard, BarChart3, PiggyBank, Wallet,
+  ChevronLeft, ChevronRight, Calendar
 } from "lucide-react"
 
 const NAVY = "#0B0F2E"
@@ -66,11 +67,50 @@ export default function PrevisionnelPage() {
   const { profile, loading } = useProfile()
   const [data, setData] = useState<any>(null)
   const [fetching, setFetching] = useState(true)
-  const [selectedSociete, setSelectedSociete] = useState<string>("all")
+  const [selectedSociete, setSelectedSociete] = useState<string>("")
   const [societes, setSocietes] = useState<{ id: string; nom: string }[]>([])
   const [budgets, setBudgets] = useState<Record<string, number>>({})
   const [investments, setInvestments] = useState<Investment[]>([])
   const [credits, setCredits] = useState<Credit[]>([])
+
+  // Period filter state
+  type PeriodMode = "mensuel" | "trimestriel" | "annuel"
+  const now = new Date()
+  const [periodMode, setPeriodMode] = useState<PeriodMode>("mensuel")
+  const [selectedMonth, setSelectedMonth] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`)
+  const [selectedTrimestre, setSelectedTrimestre] = useState(() => {
+    const q = Math.ceil((now.getMonth() + 1) / 3)
+    return `T${q}`
+  })
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear())
+
+  function getPeriodDates(): { debut: string; fin: string } {
+    if (periodMode === "mensuel") {
+      const [y, m] = selectedMonth.split("-").map(Number)
+      const lastDay = new Date(y, m, 0).getDate()
+      return { debut: `${y}-${String(m).padStart(2, "0")}-01`, fin: `${y}-${String(m).padStart(2, "0")}-${lastDay}` }
+    }
+    if (periodMode === "trimestriel") {
+      const q = parseInt(selectedTrimestre.replace("T", ""))
+      const startMonth = (q - 1) * 3 + 1
+      const endMonth = q * 3
+      const lastDay = new Date(selectedYear, endMonth, 0).getDate()
+      return { debut: `${selectedYear}-${String(startMonth).padStart(2, "0")}-01`, fin: `${selectedYear}-${String(endMonth).padStart(2, "0")}-${lastDay}` }
+    }
+    // annuel
+    return { debut: `${selectedYear}-01-01`, fin: `${selectedYear}-12-31` }
+  }
+
+  function shiftMonth(delta: number) {
+    const [y, m] = selectedMonth.split("-").map(Number)
+    const d = new Date(y, m - 1 + delta, 1)
+    setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`)
+  }
+
+  function formatMonthLabel(m: string) {
+    const [y, mo] = m.split("-").map(Number)
+    return new Date(y, mo - 1).toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
+  }
 
   // Load localStorage data
   useEffect(() => {
@@ -100,16 +140,23 @@ export default function PrevisionnelPage() {
   const fetchData = useCallback(async () => {
     setFetching(true)
     try {
-      const url = selectedSociete !== "all"
-        ? `/api/client/financial?societe_id=${selectedSociete}`
-        : "/api/client/financial"
+      const { debut, fin } = getPeriodDates()
+      const base = selectedSociete && selectedSociete !== "all"
+        ? `societe_id=${selectedSociete}&`
+        : ""
+      const url = `/api/client/financial?${base}date_debut=${debut}&date_fin=${fin}`
       const res = await fetch(url)
       const json = await res.json()
       setData(json.financial)
-      if (json.financial?.availableSocietes) setSocietes(json.financial.availableSocietes)
+      if (json.financial?.availableSocietes) {
+        setSocietes(json.financial.availableSocietes)
+        if (!selectedSociete || selectedSociete === "" || selectedSociete === "all") {
+          setSelectedSociete(json.financial.availableSocietes[0]?.id || "all")
+        }
+      }
     } catch { setData(null) }
     finally { setFetching(false) }
-  }, [selectedSociete])
+  }, [selectedSociete, periodMode, selectedMonth, selectedTrimestre, selectedYear])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -235,14 +282,14 @@ export default function PrevisionnelPage() {
             <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Mon Previsionnel</h1>
             <p className="text-sm text-muted-foreground mt-1">Budget, tresorerie, BFR et investissements</p>
           </div>
-          {societes.length > 1 && (
+          {societes.length > 0 && (
             <div className="flex items-center gap-2">
               <Building2 className="h-4 w-4 text-muted-foreground" />
               <Select value={selectedSociete} onValueChange={setSelectedSociete}>
-                <SelectTrigger className="w-[220px] h-9"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="w-[220px] h-9"><SelectValue placeholder="Société" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Toutes les societes</SelectItem>
                   {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
+                  {societes.length > 1 && <SelectItem value="all">Toutes les sociétés</SelectItem>}
                 </SelectContent>
               </Select>
             </div>
@@ -265,6 +312,76 @@ export default function PrevisionnelPage() {
 
         {/* ===== TAB: Budget vs Reel ===== */}
         <TabsContent value="budget" className="space-y-4">
+          {/* Period selector */}
+          <Card>
+            <CardContent className="p-3">
+              <div className="flex flex-col sm:flex-row items-center gap-3">
+                <div className="flex rounded-lg border overflow-hidden">
+                  {(["mensuel", "trimestriel", "annuel"] as PeriodMode[]).map(mode => (
+                    <button key={mode} onClick={() => setPeriodMode(mode)}
+                      className={`px-3 py-1.5 text-xs font-medium transition-colors ${periodMode === mode ? "bg-[#0B0F2E] text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>
+                      {mode === "mensuel" ? "Mensuel" : mode === "trimestriel" ? "Trimestriel" : "Annuel"}
+                    </button>
+                  ))}
+                </div>
+                {periodMode === "mensuel" && (
+                  <div className="flex items-center gap-2">
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => shiftMonth(-1)}><ChevronLeft className="w-4 h-4" /></Button>
+                    <span className="text-sm font-medium min-w-[140px] text-center capitalize">{formatMonthLabel(selectedMonth)}</span>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => shiftMonth(1)}><ChevronRight className="w-4 h-4" /></Button>
+                  </div>
+                )}
+                {periodMode === "trimestriel" && (
+                  <div className="flex items-center gap-2">
+                    <Select value={selectedTrimestre} onValueChange={setSelectedTrimestre}>
+                      <SelectTrigger className="w-[80px] h-8"><SelectValue /></SelectTrigger>
+                      <SelectContent>{["T1", "T2", "T3", "T4"].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                    </Select>
+                    <Select value={String(selectedYear)} onValueChange={v => setSelectedYear(Number(v))}>
+                      <SelectTrigger className="w-[100px] h-8"><SelectValue /></SelectTrigger>
+                      <SelectContent>{[now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1].map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {periodMode === "annuel" && (
+                  <Select value={String(selectedYear)} onValueChange={v => setSelectedYear(Number(v))}>
+                    <SelectTrigger className="w-[100px] h-8"><SelectValue /></SelectTrigger>
+                    <SelectContent>{[now.getFullYear() - 2, now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1].map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent>
+                  </Select>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Summary: Variance cards */}
+          {data && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <Card><CardContent className="p-3">
+                <p className="text-xs text-gray-500">Entrées réelles</p>
+                <p className="text-lg font-bold text-green-600">{fmt(data.totalRevenue || 0)}</p>
+              </CardContent></Card>
+              <Card><CardContent className="p-3">
+                <p className="text-xs text-gray-500">Sorties réelles</p>
+                <p className="text-lg font-bold text-red-500">{fmt(data.totalExpenses || 0)}</p>
+              </CardContent></Card>
+              <Card><CardContent className="p-3">
+                <p className="text-xs text-gray-500">Résultat réel</p>
+                <p className={`text-lg font-bold ${(data.totalRevenue || 0) - (data.totalExpenses || 0) >= 0 ? "text-green-600" : "text-red-500"}`}>{fmt((data.totalRevenue || 0) - (data.totalExpenses || 0))}</p>
+              </CardContent></Card>
+              <Card><CardContent className="p-3">
+                <p className="text-xs text-gray-500">Variance globale</p>
+                {(() => {
+                  const budgetCA = budgets["ca"] || 0
+                  const budgetDep = BUDGET_ROWS.filter(r => r.type === "expense").reduce((s, r) => s + (budgets[r.key] || 0), 0)
+                  const budgetResult = budgetCA - budgetDep
+                  const reelResult = (data.totalRevenue || 0) - (data.totalExpenses || 0)
+                  const variance = budgetResult !== 0 ? ((reelResult - budgetResult) / Math.abs(budgetResult)) * 100 : 0
+                  return <p className={`text-lg font-bold ${variance >= 0 ? "text-green-600" : "text-red-500"}`}>{budgetResult !== 0 ? fmtPct(variance) : "—"}</p>
+                })()}
+              </CardContent></Card>
+            </div>
+          )}
+
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">

@@ -24,8 +24,7 @@ const adminSocieteNav: NavSection[] = [
     { href: "/client/societes", label: "Mes Sociétés", icon: Building2 },
   ]},
   { label: "Mes Finances", items: [
-    { href: "/client/finances", label: "Mes Chiffres", icon: DollarSign },
-    { href: "/client/tresorerie", label: "Mes Comptes Bancaires", icon: Landmark },
+    { href: "/client/banque", label: "Mes Comptes Bancaires", icon: Landmark },
     { href: "/client/tva", label: "Ma TVA", icon: Calculator },
     { href: "/client/salaires", label: "Salaires & Charges", icon: Wallet },
   ]},
@@ -35,7 +34,7 @@ const adminSocieteNav: NavSection[] = [
     { href: "/client/previsionnel", label: "Prévisionnel", icon: TrendingUp },
   ]},
   { label: "Mon Compte", items: [
-    { href: "/client/equipe", label: "Mon Équipe", icon: UsersIcon },
+    { href: "/client/utilisateurs", label: "Mon Équipe", icon: UsersIcon },
     { href: "/client/alertes", label: "Mes Alertes", icon: Bell },
     { href: "/client/profil", label: "Mon Profil", icon: Settings },
   ]},
@@ -48,7 +47,7 @@ const adminFreelanceNav: NavSection[] = [
   ]},
   { label: "Mes Finances", items: [
     { href: "/client/revenus-depenses", label: "Mes Revenus & Dépenses", icon: DollarSign },
-    { href: "/client/tresorerie", label: "Mes Comptes Bancaires", icon: Landmark },
+    { href: "/client/banque", label: "Mes Comptes Bancaires", icon: Landmark },
   ]},
   { label: "Analyse", items: [
     { href: "/client/bilan", label: "Mon Bilan", icon: ClipboardList },

@@ -26,6 +26,7 @@ interface Facture {
   lignes: unknown[] | null; client_offshore: boolean
   recurrent: boolean; recurrent_frequence: string | null
   irn?: string | null; mra_status?: string | null; type_document?: string | null
+  document_id?: string | null
 }
 interface Societe { id: string; nom: string }
 interface RecurringTemplate {
@@ -60,6 +61,7 @@ export default function ClientFacturesPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [filterStatut, setFilterStatut] = useState("all")
+  const [selectedSociete, setSelectedSociete] = useState("")
   const [activeTab, setActiveTab] = useState("factures")
 
   // Recurring templates
@@ -76,6 +78,9 @@ export default function ClientFacturesPage() {
   const [rMontant, setRMontant] = useState("")
   const [rDevise, setRDevise] = useState("MUR")
   const [rProchaineDate, setRProchaineDate] = useState("")
+
+  // Detail dialog
+  const [detailFacture, setDetailFacture] = useState<Facture | null>(null)
 
   // MRA fiscalisation
   const [fiscalisingId, setFiscalisingId] = useState<string | null>(null)
@@ -109,16 +114,21 @@ export default function ClientFacturesPage() {
     }
   }
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (societeId?: string) => {
     setLoading(true)
     try {
+      const finUrl = societeId && societeId !== "all"
+        ? `/api/client/financial?societe_id=${societeId}`
+        : "/api/client/financial"
       const [socRes, facRes] = await Promise.all([
         fetch("/api/client/societes"),
-        fetch("/api/client/financial"),
+        fetch(finUrl),
       ])
       const socData = await socRes.json()
       const finData = await facRes.json()
-      setSocietes(socData.societes || [])
+      const socs = socData.societes || []
+      setSocietes(socs)
+      if (socs.length > 0 && !selectedSociete) setSelectedSociete(socs[0].id)
       const allFactures = finData.financial?.factures || []
       setFactures(allFactures.filter((f: Facture) => f.type_facture === 'client'))
     } catch { }
@@ -131,9 +141,9 @@ export default function ClientFacturesPage() {
       const c = localStorage.getItem("lexora_invoice_clients")
       if (c) setClients(JSON.parse(c))
     } catch { }
-  }, [])
+  }, [selectedSociete])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { fetchData(selectedSociete) }, [selectedSociete])
 
   const filtered = factures.filter(f => {
     const matchSearch = !search ||
@@ -148,14 +158,13 @@ export default function ClientFacturesPage() {
   const nbRetard = filtered.filter(f => f.statut === 'retard').length
 
   const handlePreview = (f: Facture) => {
-    const settings = JSON.parse(localStorage.getItem("lexora_invoice_settings") || "{}")
-    const previewData = {
-      ...f,
-      client: { nom: f.tiers, entreprise: "", adresse: "", email: "", vat_number: "", offshore: f.client_offshore },
-      settings,
+    if (f.document_id) {
+      // Open the original PDF document
+      window.open(`/api/documents/${f.document_id}/download`, "_blank")
+    } else {
+      // Show detail dialog
+      setDetailFacture(f)
     }
-    sessionStorage.setItem("lexora_facture_preview", JSON.stringify(previewData))
-    window.open("/client/facture-preview", "_blank")
   }
 
   const handleDelete = async (f: Facture) => {
@@ -271,7 +280,16 @@ export default function ClientFacturesPage() {
           <h1 className="text-2xl font-bold text-[#0B0F2E]">Factures Clients</h1>
           <p className="text-sm text-gray-500">Gestion des creances clients - Conforme MRA</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          {societes.length > 0 && (
+            <Select value={selectedSociete} onValueChange={setSelectedSociete}>
+              <SelectTrigger className="w-[200px]"><SelectValue placeholder="Société" /></SelectTrigger>
+              <SelectContent>
+                {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
+                {societes.length > 1 && <SelectItem value="all">Toutes les sociétés</SelectItem>}
+              </SelectContent>
+            </Select>
+          )}
           <Button variant="outline" onClick={() => router.push("/client/facturation-settings")}><Settings className="w-4 h-4 mr-2" />Parametres</Button>
           <Button className="bg-[#0B0F2E]" onClick={() => router.push("/client/nouvelle-facture")}><Plus className="w-4 h-4 mr-2" />Nouvelle facture</Button>
         </div>
@@ -513,6 +531,68 @@ export default function ClientFacturesPage() {
           </Dialog>
         </TabsContent>
       </Tabs>
+
+      {/* Facture detail dialog (when no document_id) */}
+      <Dialog open={!!detailFacture} onOpenChange={open => { if (!open) setDetailFacture(null) }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-[#0B0F2E]">
+              Facture {detailFacture?.numero_facture || "—"}
+            </DialogTitle>
+          </DialogHeader>
+          {detailFacture && (
+            <div className="space-y-4 py-2">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div><span className="text-gray-500">Client :</span> <span className="font-medium">{detailFacture.tiers || "—"}</span></div>
+                <div><span className="text-gray-500">Date :</span> <span className="font-medium">{detailFacture.date_facture ? new Date(detailFacture.date_facture).toLocaleDateString("fr-FR") : "—"}</span></div>
+                <div><span className="text-gray-500">Échéance :</span> <span className="font-medium">{detailFacture.date_echeance ? new Date(detailFacture.date_echeance).toLocaleDateString("fr-FR") : "—"}</span></div>
+                <div><span className="text-gray-500">Statut :</span> <Badge className={`ml-1 ${STATUT_COLORS[detailFacture.statut] || ""}`}>{detailFacture.statut}</Badge></div>
+                <div><span className="text-gray-500">Devise :</span> <span className="font-medium">{detailFacture.devise}</span></div>
+                <div><span className="text-gray-500">Mode paiement :</span> <span className="font-medium">{detailFacture.mode_paiement || "—"}</span></div>
+              </div>
+              <div className="border rounded-lg p-3 bg-gray-50 space-y-1">
+                <div className="flex justify-between text-sm"><span className="text-gray-500">Montant HT</span><span className="font-mono">{fmt(detailFacture.montant_ht)} {detailFacture.devise}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-gray-500">TVA</span><span className="font-mono">{fmt(detailFacture.montant_tva)} {detailFacture.devise}</span></div>
+                <div className="flex justify-between text-sm font-bold border-t pt-1"><span>Total TTC</span><span className="font-mono">{fmt(detailFacture.montant_ttc)} {detailFacture.devise}</span></div>
+                {detailFacture.devise !== "MUR" && (
+                  <div className="flex justify-between text-sm text-blue-600"><span>Equiv. MUR</span><span className="font-mono">{fmt(Number(detailFacture.montant_mur) || 0)} MUR</span></div>
+                )}
+              </div>
+              {detailFacture.lignes && Array.isArray(detailFacture.lignes) && detailFacture.lignes.length > 0 && (
+                <div>
+                  <p className="text-sm font-semibold text-[#0B0F2E] mb-2">Lignes de facturation</p>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Description</TableHead>
+                        <TableHead className="text-right">Qté</TableHead>
+                        <TableHead className="text-right">PU</TableHead>
+                        <TableHead className="text-right">Total</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {detailFacture.lignes.map((l: any, i: number) => (
+                        <TableRow key={i}>
+                          <TableCell className="text-sm">{l.description || l.libelle || "—"}</TableCell>
+                          <TableCell className="text-right text-sm">{l.quantite ?? 1}</TableCell>
+                          <TableCell className="text-right text-sm font-mono">{fmt(l.prix_unitaire ?? l.pu ?? 0)}</TableCell>
+                          <TableCell className="text-right text-sm font-mono">{fmt(l.total ?? l.montant ?? 0)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+              {detailFacture.notes && (
+                <div className="text-sm"><span className="text-gray-500">Notes :</span> <span>{detailFacture.notes}</span></div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDetailFacture(null)}>Fermer</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

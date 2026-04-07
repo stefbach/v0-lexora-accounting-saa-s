@@ -7,9 +7,6 @@ import { Scale, FileText, Users, ShieldCheck, Settings, LogOut } from "lucide-re
 
 const LINKS = [
   { href: '/juridique', label: 'Tableau de bord', icon: Scale, exact: true },
-  { href: '/juridique/contrats', label: 'Contrats', icon: FileText },
-  { href: '/juridique/documents', label: 'Documents', icon: FileText },
-  { href: '/juridique/conformite', label: 'Conformité', icon: ShieldCheck },
   { href: '/rh/employes', label: 'Employés (lecture)', icon: Users },
 ]
 

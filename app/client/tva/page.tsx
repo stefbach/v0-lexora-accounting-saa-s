@@ -10,6 +10,8 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import {
   TrendingUp,
   TrendingDown,
@@ -24,10 +26,14 @@ import {
   Globe,
   MapPin,
   Info,
+  ChevronLeft,
+  ChevronRight,
+  Download,
 } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
 import Link from "next/link"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import * as XLSX from "xlsx"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -74,23 +80,66 @@ export default function TVAPage() {
   const [data, setData] = useState<any>(null)
   const [fetching, setFetching] = useState(true)
   const [computing, setComputing] = useState(false)
-  const [selectedSociete, setSelectedSociete] = useState<string>("all")
+  const [selectedSociete, setSelectedSociete] = useState<string>("")
   const [societes, setSocietes] = useState<{ id: string; nom: string }[]>([])
+  const [exportOpen, setExportOpen] = useState(false)
+
+  // Period filter
+  type PeriodMode = "mensuel" | "trimestriel"
+  const nowDate = new Date()
+  const [periodMode, setPeriodMode] = useState<PeriodMode>("mensuel")
+  const [selectedMonth, setSelectedMonth] = useState(`${nowDate.getFullYear()}-${String(nowDate.getMonth() + 1).padStart(2, "0")}`)
+  const [selectedTrimestre, setSelectedTrimestre] = useState(() => `T${Math.ceil((nowDate.getMonth() + 1) / 3)}`)
+  const [selectedYear, setSelectedYear] = useState(nowDate.getFullYear())
+
+  function getPeriodDates(): { debut: string; fin: string } {
+    if (periodMode === "mensuel") {
+      const [y, m] = selectedMonth.split("-").map(Number)
+      const lastDay = new Date(y, m, 0).getDate()
+      return { debut: `${y}-${String(m).padStart(2, "0")}-01`, fin: `${y}-${String(m).padStart(2, "0")}-${lastDay}` }
+    }
+    const q = parseInt(selectedTrimestre.replace("T", ""))
+    const startMonth = (q - 1) * 3 + 1
+    const endMonth = q * 3
+    const lastDay = new Date(selectedYear, endMonth, 0).getDate()
+    return { debut: `${selectedYear}-${String(startMonth).padStart(2, "0")}-01`, fin: `${selectedYear}-${String(endMonth).padStart(2, "0")}-${lastDay}` }
+  }
+
+  function shiftMonth(delta: number) {
+    const [y, m] = selectedMonth.split("-").map(Number)
+    const d = new Date(y, m - 1 + delta, 1)
+    setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`)
+  }
+
+  function formatMonthLabel(m: string) {
+    const [y, mo] = m.split("-").map(Number)
+    return new Date(y, mo - 1).toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
+  }
+
+  function getPeriodLabel(): string {
+    if (periodMode === "mensuel") return formatMonthLabel(selectedMonth)
+    return `${selectedTrimestre} ${selectedYear}`
+  }
 
   useEffect(() => {
     setFetching(true)
-    const url = selectedSociete !== "all"
-      ? `/api/client/financial?societe_id=${selectedSociete}`
-      : "/api/client/financial"
+    const { debut, fin } = getPeriodDates()
+    const base = selectedSociete && selectedSociete !== "all"
+      ? `societe_id=${selectedSociete}&`
+      : ""
+    const url = `/api/client/financial?${base}date_debut=${debut}&date_fin=${fin}`
     fetch(url)
       .then((res) => res.json())
       .then((json) => {
         setData(json.financial)
-        if (json.financial?.availableSocietes) setSocietes(json.financial.availableSocietes)
+        if (json.financial?.availableSocietes) {
+          setSocietes(json.financial.availableSocietes)
+          if (json.financial.availableSocietes.length > 0 && !selectedSociete) setSelectedSociete(json.financial.availableSocietes[0].id)
+        }
       })
       .catch(() => setData(null))
       .finally(() => setFetching(false))
-  }, [selectedSociete])
+  }, [selectedSociete, periodMode, selectedMonth, selectedTrimestre, selectedYear])
 
   if (loading || fetching) {
     return (
@@ -124,11 +173,14 @@ export default function TVAPage() {
   const supplierInvoices = invoices.filter((inv: any) => inv.type === "facture_fournisseur")
 
   // Classify supplier invoices: local vs foreign
+  // RULE: Only suppliers in the FOREIGN_SUPPLIERS list are foreign.
+  // Currency alone (EUR, USD) does NOT determine foreign status.
+  // A Mauritius company invoicing in EUR (e.g. Magellan Hub Ltd) is LOCAL.
   const localSupplierInvoices = supplierInvoices.filter(
-    (inv: any) => !isForeignSupplier(inv.emetteur) && inv.devise === "MUR"
+    (inv: any) => !isForeignSupplier(inv.emetteur)
   )
   const foreignSupplierInvoices = supplierInvoices.filter(
-    (inv: any) => isForeignSupplier(inv.emetteur) || (inv.devise && inv.devise !== "MUR")
+    (inv: any) => isForeignSupplier(inv.emetteur)
   )
 
   // Local valid: must have TVA amount, emetteur, and numero (implies MRA TVA number)
@@ -163,6 +215,66 @@ export default function TVAPage() {
   const tvaAPayer = Math.max(0, effectiveNette)
   const creditTVA = effectiveNette < 0 ? Math.abs(effectiveNette) : 0
 
+  // Export handlers
+  const handleExport = (type: "normale" | "deductible" | "reverse") => {
+    const dateStr = new Date().toISOString().split("T")[0]
+    const period = periodMode === "mensuel" ? selectedMonth : `${selectedTrimestre}_${selectedYear}`
+    const wb = XLSX.utils.book_new()
+
+    if (type === "normale") {
+      const rows = [
+        ...clientInvoices.map((inv: any) => ({
+          "Date": inv.date || "—",
+          "N° Facture": inv.numero || "—",
+          "Tiers": inv.destinataire || inv.emetteur || "—",
+          "Montant HT": inv.montant_ht_mur ?? inv.montant_ht ?? 0,
+          "TVA 15%": inv.montant_tva_mur ?? inv.montant_tva ?? 0,
+          "Montant TTC": inv.montant_ttc_mur ?? inv.montant_ttc ?? 0,
+          "Type": "Client",
+        })),
+        ...localSupplierInvoices.map((inv: any) => ({
+          "Date": inv.date || "—",
+          "N° Facture": inv.numero || "—",
+          "Tiers": inv.emetteur || "—",
+          "Montant HT": inv.montant_ht_mur ?? inv.montant_ht ?? 0,
+          "TVA 15%": inv.montant_tva_mur ?? inv.montant_tva ?? 0,
+          "Montant TTC": inv.montant_ttc_mur ?? inv.montant_ttc ?? 0,
+          "Type": "Fournisseur local",
+        })),
+      ]
+      const ws = XLSX.utils.json_to_sheet(rows)
+      XLSX.utils.book_append_sheet(wb, ws, "TVA Normale")
+      XLSX.writeFile(wb, `tva_normale_${period}_${dateStr}.xlsx`)
+    } else if (type === "deductible") {
+      const rows = validLocalInvoices.map((inv: any) => ({
+        "Date": inv.date || "—",
+        "N° Facture": inv.numero || "—",
+        "Fournisseur": inv.emetteur || "—",
+        "Montant HT": inv.montant_ht_mur ?? inv.montant_ht ?? 0,
+        "TVA déductible": inv.montant_tva_mur ?? inv.montant_tva ?? 0,
+        "Montant TTC": inv.montant_ttc_mur ?? inv.montant_ttc ?? 0,
+      }))
+      const ws = XLSX.utils.json_to_sheet(rows)
+      XLSX.utils.book_append_sheet(wb, ws, "TVA Déductible")
+      XLSX.writeFile(wb, `tva_deductible_${period}_${dateStr}.xlsx`)
+    } else {
+      const rows = foreignSupplierInvoices.map((inv: any) => {
+        const ht = inv.montant_ht_mur ?? inv.montant_ht ?? 0
+        return {
+          "Date": inv.date || "—",
+          "Fournisseur": inv.emetteur || "—",
+          "Devise": inv.devise || "—",
+          "Base HT (MUR)": ht,
+          "TVA collectée (15%)": ht * TVA_RATE,
+          "TVA déductible (15%)": ht * TVA_RATE,
+        }
+      })
+      const ws = XLSX.utils.json_to_sheet(rows)
+      XLSX.utils.book_append_sheet(wb, ws, "TVA Reverse Charge")
+      XLSX.writeFile(wb, `tva_reverse_charge_${period}_${dateStr}.xlsx`)
+    }
+  }
+
   const deadline = getDeadlineInfo()
 
   const handleCalculerTVA = async () => {
@@ -191,14 +303,14 @@ export default function TVAPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {societes.length > 1 && (
+          {societes.length > 0 && (
             <div className="flex items-center gap-2">
               <Building2 className="h-4 w-4 text-muted-foreground" />
               <Select value={selectedSociete} onValueChange={setSelectedSociete}>
                 <SelectTrigger className="w-[220px] h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Toutes les soci&eacute;t&eacute;s</SelectItem>
                   {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
+                  {societes.length > 1 && <SelectItem value="all">Toutes les soci&eacute;t&eacute;s</SelectItem>}
                 </SelectContent>
               </Select>
             </div>
@@ -223,22 +335,55 @@ export default function TVAPage() {
         </div>
       </div>
 
-      {/* Calculate button */}
-      <div>
-        <button
-          onClick={handleCalculerTVA}
-          disabled={computing}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-white text-sm font-medium transition-opacity disabled:opacity-60"
-          style={{ backgroundColor: NAVY }}
-        >
-          {computing ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Calculator className="h-4 w-4" />
-          )}
-          {computing ? "Calcul en cours..." : `Calculer la TVA — ${deadline.periodLabel}`}
-        </button>
-      </div>
+      {/* Period selector */}
+      <Card>
+        <CardContent className="p-3">
+          <div className="flex flex-col sm:flex-row items-center gap-3">
+            <div className="flex rounded-lg border overflow-hidden">
+              {(["mensuel", "trimestriel"] as PeriodMode[]).map(mode => (
+                <button key={mode} onClick={() => setPeriodMode(mode)}
+                  className={`px-4 py-1.5 text-xs font-medium transition-colors ${periodMode === mode ? "bg-[#0B0F2E] text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>
+                  {mode === "mensuel" ? "Mensuel" : "Trimestriel"}
+                </button>
+              ))}
+            </div>
+            {periodMode === "mensuel" && (
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => shiftMonth(-1)}><ChevronLeft className="w-4 h-4" /></Button>
+                <span className="text-sm font-medium min-w-[150px] text-center capitalize">{formatMonthLabel(selectedMonth)}</span>
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => shiftMonth(1)}><ChevronRight className="w-4 h-4" /></Button>
+              </div>
+            )}
+            {periodMode === "trimestriel" && (
+              <div className="flex items-center gap-2">
+                <Select value={selectedTrimestre} onValueChange={setSelectedTrimestre}>
+                  <SelectTrigger className="w-[80px] h-8"><SelectValue /></SelectTrigger>
+                  <SelectContent>{["T1", "T2", "T3", "T4"].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                </Select>
+                <Select value={String(selectedYear)} onValueChange={v => setSelectedYear(Number(v))}>
+                  <SelectTrigger className="w-[100px] h-8"><SelectValue /></SelectTrigger>
+                  <SelectContent>{[nowDate.getFullYear() - 1, nowDate.getFullYear(), nowDate.getFullYear() + 1].map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            )}
+            <Badge variant="outline" className="text-xs capitalize">{getPeriodLabel()}</Badge>
+            <div className="flex-1" />
+            {/* Export dropdown */}
+            <div className="relative">
+              <Button variant="outline" size="sm" onClick={() => setExportOpen(!exportOpen)}>
+                <Download className="w-4 h-4 mr-1" /> Exporter
+              </Button>
+              {exportOpen && (
+                <div className="absolute right-0 top-full mt-1 bg-white border rounded-lg shadow-lg z-10 w-56">
+                  <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={() => { handleExport("normale"); setExportOpen(false) }}>TVA normale</button>
+                  <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={() => { handleExport("deductible"); setExportOpen(false) }}>TVA déductible</button>
+                  <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 border-t" onClick={() => { handleExport("reverse"); setExportOpen(false) }}>TVA reverse charge</button>
+                </div>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -292,7 +437,7 @@ export default function TVAPage() {
             <FileText className="h-5 w-5" style={{ color: GOLD }} />
             D&eacute;claration TVA — Format MRA
           </CardTitle>
-          <p className="text-xs text-muted-foreground">P&eacute;riode : {deadline.periodLabel}</p>
+          <p className="text-xs text-muted-foreground">Période : <span className="capitalize">{getPeriodLabel()}</span></p>
         </CardHeader>
         <CardContent className="overflow-x-auto">
           <table className="w-full text-sm">
