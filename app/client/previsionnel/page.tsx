@@ -13,9 +13,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Loader2, Building2, RefreshCw, TrendingUp, TrendingDown,
   ArrowUpRight, ArrowDownRight, Plus, Trash2, Save,
-  Landmark, CreditCard, BarChart3, PiggyBank, Wallet,
-  ChevronLeft, ChevronRight, Calendar
+  Landmark, CreditCard, PiggyBank, Wallet
 } from "lucide-react"
+import { MonthPicker } from "@/components/ui/MonthPicker"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -74,10 +74,10 @@ export default function PrevisionnelPage() {
   const [credits, setCredits] = useState<Credit[]>([])
 
   // Period filter state
-  type PeriodMode = "mensuel" | "trimestriel" | "annuel"
+  type PeriodMode = "mensuel" | "trimestriel"
   const now = new Date()
   const [periodMode, setPeriodMode] = useState<PeriodMode>("mensuel")
-  const [selectedMonth, setSelectedMonth] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`)
+  const [selectedMonth, setSelectedMonth] = useState<string>(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`)
   const [selectedTrimestre, setSelectedTrimestre] = useState(() => {
     const q = Math.ceil((now.getMonth() + 1) / 3)
     return `T${q}`
@@ -90,37 +90,19 @@ export default function PrevisionnelPage() {
       const lastDay = new Date(y, m, 0).getDate()
       return { debut: `${y}-${String(m).padStart(2, "0")}-01`, fin: `${y}-${String(m).padStart(2, "0")}-${lastDay}` }
     }
-    if (periodMode === "trimestriel") {
-      const q = parseInt(selectedTrimestre.replace("T", ""))
-      const startMonth = (q - 1) * 3 + 1
-      const endMonth = q * 3
-      const lastDay = new Date(selectedYear, endMonth, 0).getDate()
-      return { debut: `${selectedYear}-${String(startMonth).padStart(2, "0")}-01`, fin: `${selectedYear}-${String(endMonth).padStart(2, "0")}-${lastDay}` }
-    }
-    // annuel
-    return { debut: `${selectedYear}-01-01`, fin: `${selectedYear}-12-31` }
+    // trimestriel
+    const q = parseInt(selectedTrimestre.replace("T", ""))
+    const startMonth = (q - 1) * 3 + 1
+    const endMonth = q * 3
+    const lastDay = new Date(selectedYear, endMonth, 0).getDate()
+    return { debut: `${selectedYear}-${String(startMonth).padStart(2, "0")}-01`, fin: `${selectedYear}-${String(endMonth).padStart(2, "0")}-${lastDay}` }
   }
 
-  function shiftMonth(delta: number) {
-    const [y, m] = selectedMonth.split("-").map(Number)
-    const d = new Date(y, m - 1 + delta, 1)
-    setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`)
-  }
-
-  function formatMonthLabel(m: string) {
-    const [y, mo] = m.split("-").map(Number)
-    return new Date(y, mo - 1).toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
-  }
-
-  // Load localStorage data
+  // Load budgets from localStorage (lightweight, OK for budgets)
   useEffect(() => {
     try {
       const b = localStorage.getItem("lexora_budgets")
       if (b) setBudgets(JSON.parse(b))
-      const inv = localStorage.getItem("lexora_investments")
-      if (inv) setInvestments(JSON.parse(inv))
-      const cr = localStorage.getItem("lexora_credits")
-      if (cr) setCredits(JSON.parse(cr))
     } catch { /* ignore */ }
   }, [])
 
@@ -128,14 +110,52 @@ export default function PrevisionnelPage() {
     setBudgets(b)
     localStorage.setItem("lexora_budgets", JSON.stringify(b))
   }, [])
-  const saveInvestments = useCallback((inv: Investment[]) => {
-    setInvestments(inv)
-    localStorage.setItem("lexora_investments", JSON.stringify(inv))
-  }, [])
-  const saveCredits = useCallback((cr: Credit[]) => {
-    setCredits(cr)
-    localStorage.setItem("lexora_credits", JSON.stringify(cr))
-  }, [])
+
+  // Load investissements/credits from DB
+  const fetchInvestissements = useCallback(async () => {
+    if (!selectedSociete || selectedSociete === "all") return
+    try {
+      const res = await fetch(`/api/client/investissements?societe_id=${selectedSociete}`)
+      const json = await res.json()
+      setInvestments((json.investissements || []).map((i: any) => ({
+        id: i.id, description: i.libelle, amount: Number(i.montant) || 0, date: i.date_debut || "",
+      })))
+      setCredits((json.credits || []).map((c: any) => ({
+        id: c.id, bank: c.banque || "", amount: Number(c.montant) || 0,
+        rate: Number(c.taux_interet) || 0, monthly: Number(c.mensualite) || 0, remaining: Number(c.capital_restant) || 0,
+      })))
+    } catch { /* keep existing */ }
+  }, [selectedSociete])
+
+  useEffect(() => { fetchInvestissements() }, [fetchInvestissements])
+
+  const saveInvestment = async (inv: Investment) => {
+    if (!selectedSociete || selectedSociete === "all") return
+    await fetch("/api/client/investissements", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: inv.id?.startsWith?.("new-") ? undefined : inv.id, societe_id: selectedSociete, type: "investissement", libelle: inv.description, montant: inv.amount, date_debut: inv.date || null }),
+    })
+    fetchInvestissements()
+  }
+
+  const deleteInvestment = async (id: string) => {
+    await fetch(`/api/client/investissements?id=${id}`, { method: "DELETE" })
+    fetchInvestissements()
+  }
+
+  const saveCredit = async (cr: Credit) => {
+    if (!selectedSociete || selectedSociete === "all") return
+    await fetch("/api/client/investissements", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: cr.id?.startsWith?.("new-") ? undefined : cr.id, societe_id: selectedSociete, type: "credit", libelle: cr.bank || "Crédit", montant: cr.amount, taux_interet: cr.rate, mensualite: cr.monthly, capital_restant: cr.remaining, banque: cr.bank }),
+    })
+    fetchInvestissements()
+  }
+
+  const deleteCredit = async (id: string) => {
+    await fetch(`/api/client/investissements?id=${id}`, { method: "DELETE" })
+    fetchInvestissements()
+  }
 
   const fetchData = useCallback(async () => {
     setFetching(true)
@@ -195,15 +215,16 @@ export default function PrevisionnelPage() {
     return result
   }, [data])
 
-  // Cash flow data for last 6 months + 3 projections
+  // Cash flow data: selected month + 2 before + 3 projections after
   const cashFlowData = useMemo(() => {
     if (!data) return []
     const factures = data.factures || []
-    const now = new Date()
+    const [sy, sm] = selectedMonth.split("-").map(Number)
     const months: { label: string; enc: number; dec: number; projection: boolean }[] = []
 
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    // Show 2 months before selected + selected month = 3 real months
+    for (let i = 2; i >= 0; i--) {
+      const d = new Date(sy, sm - 1 - i, 1)
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
       const label = d.toLocaleDateString("fr-FR", { month: "short", year: "2-digit" })
 
@@ -218,18 +239,18 @@ export default function PrevisionnelPage() {
       months.push({ label, enc, dec: decFrn, projection: false })
     }
 
-    // Average of last 3 for projections
-    const last3 = months.slice(-3)
-    const avgEnc = last3.reduce((s, m) => s + m.enc, 0) / 3
-    const avgDec = last3.reduce((s, m) => s + m.dec, 0) / 3
+    // 3 projection months after selected
+    const realMonths = months.filter(m => !m.projection)
+    const avgEnc = realMonths.length > 0 ? realMonths.reduce((s, m) => s + m.enc, 0) / realMonths.length : 0
+    const avgDec = realMonths.length > 0 ? realMonths.reduce((s, m) => s + m.dec, 0) / realMonths.length : 0
 
     for (let i = 1; i <= 3; i++) {
-      const d = new Date(now.getFullYear(), now.getMonth() + i, 1)
+      const d = new Date(sy, sm - 1 + i, 1)
       const label = d.toLocaleDateString("fr-FR", { month: "short", year: "2-digit" }) + " *"
       months.push({ label, enc: avgEnc, dec: avgDec, projection: true })
     }
     return months
-  }, [data])
+  }, [data, selectedMonth])
 
   // BFR
   const bfrData = useMemo(() => {
@@ -317,19 +338,15 @@ export default function PrevisionnelPage() {
             <CardContent className="p-3">
               <div className="flex flex-col sm:flex-row items-center gap-3">
                 <div className="flex rounded-lg border overflow-hidden">
-                  {(["mensuel", "trimestriel", "annuel"] as PeriodMode[]).map(mode => (
+                  {(["mensuel", "trimestriel"] as PeriodMode[]).map(mode => (
                     <button key={mode} onClick={() => setPeriodMode(mode)}
-                      className={`px-3 py-1.5 text-xs font-medium transition-colors ${periodMode === mode ? "bg-[#0B0F2E] text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>
-                      {mode === "mensuel" ? "Mensuel" : mode === "trimestriel" ? "Trimestriel" : "Annuel"}
+                      className={`px-4 py-1.5 text-xs font-medium transition-colors ${periodMode === mode ? "bg-[#0B0F2E] text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>
+                      {mode === "mensuel" ? "Mensuel" : "Trimestriel"}
                     </button>
                   ))}
                 </div>
                 {periodMode === "mensuel" && (
-                  <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => shiftMonth(-1)}><ChevronLeft className="w-4 h-4" /></Button>
-                    <span className="text-sm font-medium min-w-[140px] text-center capitalize">{formatMonthLabel(selectedMonth)}</span>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => shiftMonth(1)}><ChevronRight className="w-4 h-4" /></Button>
-                  </div>
+                  <MonthPicker value={selectedMonth} onChange={v => { if (v) setSelectedMonth(v) }} showTout={false} />
                 )}
                 {periodMode === "trimestriel" && (
                   <div className="flex items-center gap-2">
@@ -342,12 +359,6 @@ export default function PrevisionnelPage() {
                       <SelectContent>{[now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1].map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
-                )}
-                {periodMode === "annuel" && (
-                  <Select value={String(selectedYear)} onValueChange={v => setSelectedYear(Number(v))}>
-                    <SelectTrigger className="w-[100px] h-8"><SelectValue /></SelectTrigger>
-                    <SelectContent>{[now.getFullYear() - 2, now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1].map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent>
-                  </Select>
                 )}
               </div>
             </CardContent>
@@ -638,7 +649,8 @@ export default function PrevisionnelPage() {
                   Investissements
                 </CardTitle>
                 <Button size="sm" variant="outline" onClick={() => {
-                  saveInvestments([...investments, { id: crypto.randomUUID(), description: "", amount: 0, date: new Date().toISOString().slice(0, 10) }])
+                  const newInv = { id: `new-${Date.now()}`, description: "", amount: 0, date: new Date().toISOString().slice(0, 10) }
+                  setInvestments([...investments, newInv])
                 }}>
                   <Plus className="h-4 w-4 mr-1" /> Ajouter
                 </Button>
@@ -659,7 +671,7 @@ export default function PrevisionnelPage() {
                   </TableHeader>
                   <TableBody>
                     {investments.map((inv, idx) => (
-                      <TableRow key={inv.id}>
+                      <TableRow key={inv.id} onBlur={() => { if (inv.description) saveInvestment(inv) }}>
                         <TableCell>
                           <Input
                             value={inv.description}
@@ -668,7 +680,7 @@ export default function PrevisionnelPage() {
                             onChange={e => {
                               const copy = [...investments]
                               copy[idx] = { ...copy[idx], description: e.target.value }
-                              saveInvestments(copy)
+                              setInvestments(copy)
                             }}
                           />
                         </TableCell>
@@ -681,7 +693,7 @@ export default function PrevisionnelPage() {
                             onChange={e => {
                               const copy = [...investments]
                               copy[idx] = { ...copy[idx], amount: parseFloat(e.target.value) || 0 }
-                              saveInvestments(copy)
+                              setInvestments(copy)
                             }}
                           />
                         </TableCell>
@@ -693,12 +705,12 @@ export default function PrevisionnelPage() {
                             onChange={e => {
                               const copy = [...investments]
                               copy[idx] = { ...copy[idx], date: e.target.value }
-                              saveInvestments(copy)
+                              setInvestments(copy)
                             }}
                           />
                         </TableCell>
                         <TableCell>
-                          <Button variant="ghost" size="sm" onClick={() => saveInvestments(investments.filter((_, i) => i !== idx))}>
+                          <Button variant="ghost" size="sm" onClick={() => { deleteInvestment(inv.id); setInvestments(investments.filter((_, i) => i !== idx)) }}>
                             <Trash2 className="h-4 w-4 text-red-500" />
                           </Button>
                         </TableCell>
@@ -724,7 +736,7 @@ export default function PrevisionnelPage() {
                   Credits / Emprunts
                 </CardTitle>
                 <Button size="sm" variant="outline" onClick={() => {
-                  saveCredits([...credits, { id: crypto.randomUUID(), bank: "", amount: 0, rate: 0, monthly: 0, remaining: 0 }])
+                  setCredits([...credits, { id: `new-${Date.now()}`, bank: "", amount: 0, rate: 0, monthly: 0, remaining: 0 }])
                 }}>
                   <Plus className="h-4 w-4 mr-1" /> Ajouter
                 </Button>
@@ -747,29 +759,29 @@ export default function PrevisionnelPage() {
                   </TableHeader>
                   <TableBody>
                     {credits.map((cr, idx) => (
-                      <TableRow key={cr.id}>
+                      <TableRow key={cr.id} onBlur={() => { if (cr.bank || cr.amount > 0) saveCredit(cr) }}>
                         <TableCell>
                           <Input value={cr.bank} placeholder="Banque" className="h-8 w-32"
-                            onChange={e => { const c = [...credits]; c[idx] = { ...c[idx], bank: e.target.value }; saveCredits(c) }} />
+                            onChange={e => { const c = [...credits]; c[idx] = { ...c[idx], bank: e.target.value }; setCredits(c) }} />
                         </TableCell>
                         <TableCell>
                           <Input type="number" value={cr.amount || ""} placeholder="0" className="h-8 text-right w-28 ml-auto"
-                            onChange={e => { const c = [...credits]; c[idx] = { ...c[idx], amount: parseFloat(e.target.value) || 0 }; saveCredits(c) }} />
+                            onChange={e => { const c = [...credits]; c[idx] = { ...c[idx], amount: parseFloat(e.target.value) || 0 }; setCredits(c) }} />
                         </TableCell>
                         <TableCell>
                           <Input type="number" step="0.1" value={cr.rate || ""} placeholder="0" className="h-8 text-right w-20 ml-auto"
-                            onChange={e => { const c = [...credits]; c[idx] = { ...c[idx], rate: parseFloat(e.target.value) || 0 }; saveCredits(c) }} />
+                            onChange={e => { const c = [...credits]; c[idx] = { ...c[idx], rate: parseFloat(e.target.value) || 0 }; setCredits(c) }} />
                         </TableCell>
                         <TableCell>
                           <Input type="number" value={cr.monthly || ""} placeholder="0" className="h-8 text-right w-28 ml-auto"
-                            onChange={e => { const c = [...credits]; c[idx] = { ...c[idx], monthly: parseFloat(e.target.value) || 0 }; saveCredits(c) }} />
+                            onChange={e => { const c = [...credits]; c[idx] = { ...c[idx], monthly: parseFloat(e.target.value) || 0 }; setCredits(c) }} />
                         </TableCell>
                         <TableCell>
                           <Input type="number" value={cr.remaining || ""} placeholder="0" className="h-8 text-right w-28 ml-auto"
-                            onChange={e => { const c = [...credits]; c[idx] = { ...c[idx], remaining: parseFloat(e.target.value) || 0 }; saveCredits(c) }} />
+                            onChange={e => { const c = [...credits]; c[idx] = { ...c[idx], remaining: parseFloat(e.target.value) || 0 }; setCredits(c) }} />
                         </TableCell>
                         <TableCell>
-                          <Button variant="ghost" size="sm" onClick={() => saveCredits(credits.filter((_, i) => i !== idx))}>
+                          <Button variant="ghost" size="sm" onClick={() => { deleteCredit(cr.id); setCredits(credits.filter((_, i) => i !== idx)) }}>
                             <Trash2 className="h-4 w-4 text-red-500" />
                           </Button>
                         </TableCell>
