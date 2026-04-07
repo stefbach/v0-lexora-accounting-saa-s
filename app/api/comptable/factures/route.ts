@@ -15,7 +15,7 @@ export async function GET(request: Request) {
     const statut = searchParams.get('statut')
     const date_debut = searchParams.get('date_debut')
     const date_fin = searchParams.get('date_fin')
-    const limit = parseInt(searchParams.get('limit') || '100')
+    const limit = parseInt(searchParams.get('limit') || '1000')
 
     let query = supabase
       .from('factures')
