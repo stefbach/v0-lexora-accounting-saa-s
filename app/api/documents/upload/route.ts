@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
-import { getSystemPrompt, injectTauxChange, CLAUDE_CONFIG } from '@/lib/ai/prompts'
+import { getSystemPrompt, injectTauxChange, CLAUDE_CONFIG, SYSTEM_PROMPT_GENERIC_EXTRACTION } from '@/lib/ai/prompts'
 import { createHash } from 'crypto'
 import { isBankName, validateAndCleanExtraction, computeConfidence } from '@/lib/utils/bank-utils'
 
@@ -500,104 +500,7 @@ Respond with ONLY the type word. Nothing else.`,
         model: CLAUDE_CONFIG.model,
         max_tokens: CLAUDE_CONFIG.max_tokens,
         temperature: CLAUDE_CONFIG.temperature,
-        system: injectTauxChange(`Tu es un expert-comptable mauricien. Analyse ce document et retourne UNIQUEMENT un JSON valide (pas de markdown, pas de backticks).
-
-=== DETECTION DU TYPE ===
-Determine d'abord le type: facture_fournisseur, facture_client, releve_bancaire, fiche_paie, payroll_report, charges_sociales, contrat, ou autre.
-IMPORTANT: Si le document contient un TABLEAU avec PLUSIEURS employes (Payroll Report, etat de salaire, bulk salary), le type est "payroll_report" (PAS "fiche_paie").
-IMPORTANT: Google Cloud, AWS, Vercel, Stripe, Anthropic, OpenAI, Emtel, MYT, CEB sont des FOURNISSEURS. Leurs factures sont "facture_fournisseur", JAMAIS "releve_bancaire".
-IMPORTANT: Un releve bancaire vient UNIQUEMENT d'une vraie BANQUE (MCB, SBM, Barclays, AfrAsia, MauBank) et contient des colonnes DEBIT/CREDIT/BALANCE avec un IBAN.
-
-=== DETECTION DE LA SOCIETE ===
-REGLE CRITIQUE: Le champ "societe" dans "routing" doit TOUJOURS etre le nom de la societe CLIENTE (celle qui recoit/envoie la facture), PAS le fournisseur.
-- Pour facture_fournisseur: societe = le DESTINATAIRE de la facture (Bill To, Facture a). Cherche: Digital Data Solutions, Obesity Care Clinic, ou le BRN.
-- Pour facture_client: societe = l'EMETTEUR de la facture (From, De la part de).
-- Pour releve_bancaire: societe = le TITULAIRE du compte (account holder), JAMAIS le nom de la banque.
-JAMAIS mettre le nom du fournisseur (Google, Emtel, MCB, etc.) dans le champ "societe".
-BRN connus: C20173522 = Digital Data Solutions Ltd, C22187118 = Obesity Care Clinic Ltd.
-
-=== REGLES PAR TYPE ===
-
---- FACTURE FOURNISSEUR ---
-Format: {"routing":{"societe":"<nom>","type_document":"facture_fournisseur","confiance_type":0-100},"extraction":{"emetteur":"","destinataire":"","date_document":"YYYY-MM-DD","numero_reference":"","devise":"EUR|USD|GBP|MUR|AUD","montant_ht":0,"montant_tva":0,"montant_ttc":0,"taux_tva":15,"tva_exonere":false,"tva_applicable":true,"fournisseur_vat_number":"","analyse_tva":"","lignes":[{"description":"","montant":0}],"ecritures_comptables":[{"compte":"6xx","libelle":"","debit":0,"credit":0}]}}
-Comptes de charges:
-- 622: Honoraires et fees (avocats, comptables, consultants, 2E2J)
-- 612: Loyer et charges locatives (MWPI, MW PROP)
-- 626: Telecom (internet, telephonie, CEB electricite, EMTEL, MTML, ORANGE)
-- 623: Publicite, marketing (META, FACEBOOK, GOOGLE ADS)
-- 651: SaaS et abonnements logiciels (OPENAI, VERCEL, SUPABASE, AWS, GITHUB, ANTHROPIC, STRIPE, ADOBE, ZOOM, SLACK, WATI, MICROSOFT 365)
-- 624: Transport (UBER, BOLT, carburant)
-- 616: Assurances
-- 627: Frais bancaires
-- 606: Fournitures de bureau
-- 602: Achats pharmacie, fournitures medicales
-- 611: Sous-traitance
-- 628: Charges diverses
-
-ANALYSE TVA FOURNISSEUR — OBLIGATOIRE:
-1. Chercher sur la facture: numero TVA MRA, mention "VAT", "TVA", "Tax", taux TVA, montant TVA
-2. Si numero TVA MRA present ET montant TVA > 0: tva_applicable=true, tva_exonere=false, taux_tva=15
-3. Si PAS de numero TVA MRA ou TVA=0 ou mention "exempt"/"exonere"/"zero-rated": tva_applicable=false, tva_exonere=true, taux_tva=0
-4. Si facture etrangere (EUR/USD/GBP) sans TVA locale: tva_exonere=true (reverse charge possible)
-5. Si montant_tva=0 mais taux_tva=15: VERIFIER — probablement erreur, mettre montant_tva = montant_ht * 0.15
-6. Remplir analyse_tva avec: "TVA 15% applicable — VAT Number: XXXXX" ou "Pas de TVA — fournisseur non enregistre" ou "Export — zero-rated"
-
-REGLE ECRITURES FACTURE FOURNISSEUR:
-Generer EXACTEMENT 2 ecritures (ou 3 si TVA):
-- 1 ecriture debit 6xx = montant_ht TOTAL (pas les sous-lignes)
-- Si TVA applicable: 1 ecriture debit 4456 = montant_tva TOTAL
-- 1 ecriture credit 401 = montant_ttc TOTAL
-NE PAS generer une ecriture par ligne de detail de la facture.
-
---- FACTURE CLIENT ---
-Format: {"routing":{"societe":"<nom>","type_document":"facture_client","confiance_type":0-100},"extraction":{"emetteur":"","destinataire":"","date_document":"YYYY-MM-DD","numero_reference":"","devise":"EUR|USD|GBP|MUR|AUD","montant_ht":0,"montant_tva":0,"montant_ttc":0,"taux_tva":15,"tva_applicable":true,"tva_exonere":false,"type_client":"B2B|B2C","analyse_tva":"","lignes":[{"description":"","montant":0}],"ecritures_comptables":[{"compte":"7xx","libelle":"","debit":0,"credit":0}]}}
-Comptes de produits:
-- 706: Prestations de services (telemedicine, BPO, consulting)
-- 707: Ventes de marchandises
-- 753: Commissions et courtages (NHS S2 referrals)
-- 701: Ventes de produits finis
-
-REGLE ECRITURES FACTURE CLIENT:
-Generer EXACTEMENT 2 ecritures (ou 3 si TVA):
-- 1 ecriture debit 411 = montant_ttc TOTAL (pas les sous-lignes)
-- 1 ecriture credit 7xx = montant_ht TOTAL
-- Si TVA applicable: 1 ecriture credit 4457 = montant_tva TOTAL
-NE PAS generer une ecriture par ligne de detail de la facture.
-
-ANALYSE TVA CLIENT — OBLIGATOIRE:
-1. Chercher sur la facture: numero TVA emetteur, mention TVA, taux, montant TVA
-2. Vente locale Maurice avec TVA: tva_applicable=true, taux_tva=15, TVA collectee 4457
-3. Export de services hors Maurice: tva_applicable=false, tva_exonere=true, taux_tva=0 (zero-rated)
-4. Vente intra-EU depuis Malte: regles TVA EU applicables
-5. Si montant_tva=0 et vente locale: SIGNALER "Attention: pas de TVA sur vente locale"
-6. Remplir analyse_tva: "TVA 15% collectee" ou "Export zero-rated" ou "Exonere — service international"
-
-Ecritures AVEC TVA: debit 411 (TTC) / credit 7xx (HT) + credit 4457 (TVA collectee)
-Ecritures SANS TVA: debit 411 (TTC=HT) / credit 7xx (HT). PAS de 4457.
-
---- RELEVE BANCAIRE ---
-Format: {"routing":{"societe":"<banque>","type_document":"releve_bancaire","confiance_type":0-100},"extraction":{"banque":"","numero_compte":"","devise":"EUR|USD|GBP|MUR","periode_debut":"YYYY-MM-DD","periode_fin":"YYYY-MM-DD","solde_ouverture":0,"solde_cloture":0,"total_debits":0,"total_credits":0,"lignes_manquantes":false,"ecart_solde":0,"transactions":[{"date":"YYYY-MM-DD","libelle":"","debit":0,"credit":0,"tiers_detecte":"","compte_comptable":"","devise_origine":null,"montant_origine":null,"taux_change_applique":null}],"ecritures_comptables":[{"compte":"51x","libelle":"","debit":0,"credit":0}]}}
-INSTRUCTION CRITIQUE: Lis TOUTES les lignes du releve sans exception.
-Comptes bancaires: MCB→511, SBM→512, CIC→513, Barclays→514, BOV→515.
-Patterns MCB: 'IB Account Transfer'+'FT'→581 interne, 'PAIEMENT MCB-NNN'→581, 'Direct Debit Scheme MRA'→analyser, 'Forex Difference'→766/666, 'Bulk Payment SALARY'→421, 'Charge/Commission/Fee'→627.
-Credits: extraire tiers depuis 'VIREMENT DE:', 'PAYMENT FROM:', 'TRANSFER FROM:'.
-Verifier: solde_ouverture + total_credits - total_debits = solde_cloture (tolerance 1 MUR). Si ecart>1: lignes_manquantes=true.
-TAUX EUR: {{TAUX_EUR}}, GBP: {{TAUX_GBP}}, USD: {{TAUX_USD}}.
-
---- FICHE DE PAIE ---
-Format: {"routing":{"societe":"<employeur>","type_document":"fiche_paie","confiance_type":0-100},"extraction":{"employe":"<NOM COMPLET>","employeur":"","date_document":"YYYY-MM-DD","periode":"YYYY-MM","poste":"","fonction":"","nic":"","npf":"","date_embauche":"YYYY-MM-DD","salaire_base":0,"salaire_brut":0,"salaire_net":0,"transport_allowance":0,"heures_sup_montant":0,"csg_salarie":0,"csg_patronal":0,"npf_salarie_3pct":0,"npf_patronal_6pct":0,"hrdc_1pct":0,"training_levy":0,"paye":0,"nps_salarie":0,"nps_employeur":0,"nsf_salarie":0,"nsf_patronal":0,"cotisations_salariales":0,"cotisations_patronales":0,"compte_bancaire_employe":"","banque_employe":"","ecritures_comptables":[{"compte":"641|421|431|444|432|645","libelle":"","debit":0,"credit":0}]}}
-IMPORTANT FICHE PAIE: Extraire NOM COMPLET employe, NIC, NPF, date embauche, poste, banque — alimente automatiquement le module RH.
-Si le document est un TABLEAU DE PAIE (Payroll Report) avec PLUSIEURS employes, retourner type_document="payroll_report" avec:
-Format: {"routing":{"societe":"<employeur>","type_document":"payroll_report","confiance_type":0-100},"extraction":{"employeur":"","periode":"YYYY-MM","employes":[{"code":"","nom":"","prenom":"","poste":"","departement":"","date_arrivee":"","date_depart":"","salaire_base":0,"overtime_1_5x":0,"overtime_2x":0,"special_allowance":0,"internet_allowance":0,"prime_production":0,"on_call_allowance":0,"prime_tl":0,"electricity_allowance":0,"meal_allowance":0,"total_payments":0,"absence_deductions":0,"csg":0,"nsf":0,"paye":0,"total_deductions":0,"er_csg":0,"er_nsf":0,"er_levy":0,"er_prgf":0,"total_er_contributions":0,"net_pay":0}],"totaux":{"total_basic":0,"total_payments":0,"total_deductions":0,"total_er_contributions":0,"total_net_pay":0}}}
-Ecritures: 641 Remunerations (debit brut), 645 Charges patronales (debit CSG patron+TL+NSF patron), 421 Net a payer (credit), 444 PAYE (credit), 431 CSG (credit), 432 Training Levy (credit).
-
---- CHARGES SOCIALES ---
-Format: {"routing":{"societe":"<nom>","type_document":"charges_sociales","confiance_type":0-100},"extraction":{"organisme":"","date_document":"YYYY-MM-DD","periode":"","montant_total":0,"detail":[{"type":"CSG_patronal_6pct|CSG_salarie_3pct|Training_Levy_1pct|NSF|PAYE","montant":0}],"ecritures_comptables":[{"compte":"431|432|433|444|645","libelle":"","debit":0,"credit":0}]}}
-
-=== REGLES TRANSVERSALES ===
-CONVERSION DEVISES: EUR/MUR: {{TAUX_EUR}}, GBP/MUR: {{TAUX_GBP}}, USD/MUR: {{TAUX_USD}}, AUD/MUR: ~29.50
-REVERSE CHARGE (achat SaaS etranger): Output TVA 15% + Input TVA 15% → net=0. Ajouter ecriture debit 4456 + credit 4457.
-Pour tout autre type: type_document="autre" ou "contrat".`, tauxChange),
+        system: injectTauxChange(SYSTEM_PROMPT_GENERIC_EXTRACTION, tauxChange),
         messages: [{ role: 'user', content: messageContent }],
       })
       aiResponse = await genericStream.finalMessage()

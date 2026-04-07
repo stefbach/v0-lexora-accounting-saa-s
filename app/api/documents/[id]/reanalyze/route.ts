@@ -1,9 +1,9 @@
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
-import { getSystemPrompt, injectTauxChange, CLAUDE_CONFIG } from '@/lib/ai/prompts'
+import { getSystemPrompt, injectTauxChange, CLAUDE_CONFIG, SYSTEM_PROMPT_GENERIC_EXTRACTION } from '@/lib/ai/prompts'
 import type { PromptId } from '@/lib/ai/prompts'
-import { isBankName, validateAndCleanExtraction, computeConfidence } from '@/lib/utils/bank-utils'
+import { isBankName, validateAndCleanExtraction, computeConfidence, repairBankJSON } from '@/lib/utils/bank-utils'
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -108,10 +108,8 @@ export async function POST(
     if (promptId) {
       systemPrompt = getSystemPrompt(promptId, tauxChange)
     } else {
-      // Generic prompt for unknown types
-      systemPrompt = injectTauxChange(`Tu es un expert-comptable mauricien. Analyse ce document et retourne UNIQUEMENT un JSON valide.
-Format: {"routing":{"societe":"","type_document":"autre","confiance_type":0},"extraction":{"date_document":"","description":"","montant":0,"devise":"MUR"}}
-Taux: EUR={{TAUX_EUR}}, GBP={{TAUX_GBP}}, USD={{TAUX_USD}}`, tauxChange)
+      // Use full generic extraction prompt (same as upload route)
+      systemPrompt = injectTauxChange(SYSTEM_PROMPT_GENERIC_EXTRACTION, tauxChange)
     }
 
     // Inject hint into system prompt if provided
@@ -152,8 +150,9 @@ Taux: EUR={{TAUX_EUR}}, GBP={{TAUX_GBP}}, USD={{TAUX_USD}}`, tauxChange)
     const text = aiResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
     const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
 
-    let parsed: any = {}
-    try { parsed = JSON.parse(cleaned) } catch {
+    let parsed: any = repairBankJSON(text)
+    if (!parsed || typeof parsed !== 'object') {
+      console.warn('[reanalyze] All JSON parse strategies failed for doc', id)
       parsed = { routing: { type_document: typeForce, societe: 'INCONNU', confiance_type: 30 }, extraction: {} }
     }
 
@@ -413,18 +412,29 @@ Taux: EUR={{TAUX_EUR}}, GBP={{TAUX_GBP}}, USD={{TAUX_USD}}`, tauxChange)
       }
 
       if (existingBank) {
-        // SAFE UPDATE: never overwrite numero_compte or societe_id if already set
-        const safeUpdate: Record<string, unknown> = {}
-        if (solde !== null) safeUpdate.solde_actuel = solde
-        if (normPeriodeFin) safeUpdate.date_dernier_releve = normPeriodeFin
-        if (bankName) safeUpdate.banque = bankName
-        if (!existingBank.numero_compte && normNumeroCompte) safeUpdate.numero_compte = normNumeroCompte
-        if (!existingBank.devise && bankDevise) safeUpdate.devise = bankDevise
-        if (extractedIBAN) safeUpdate.iban = extractedIBAN
-        if (Object.keys(safeUpdate).length > 0) {
-          await supabase.from('comptes_bancaires').update(safeUpdate).eq('id', existingBank.id)
+        // HARD GUARD: verify société matches before ANY update
+        const { data: guardCheck } = await supabase.from('comptes_bancaires')
+          .select('id, societe_id, numero_compte').eq('id', existingBank.id).single()
+
+        if (guardCheck && guardCheck.societe_id !== bankSocieteId) {
+          console.error(`[reanalyze] HARD GUARD BLOCKED: attempt to update compte ${existingBank.id} from société ${guardCheck.societe_id} with data for société ${bankSocieteId}`)
+          existingBank = null // Force creation of new account instead
+        } else {
+          // SAFE UPDATE: never overwrite numero_compte or societe_id if already set
+          const safeUpdate: Record<string, unknown> = {}
+          if (solde !== null) safeUpdate.solde_actuel = solde
+          if (normPeriodeFin) safeUpdate.date_dernier_releve = normPeriodeFin
+          if (bankName) safeUpdate.banque = bankName
+          if (!guardCheck?.numero_compte && normNumeroCompte) safeUpdate.numero_compte = normNumeroCompte
+          if (!existingBank.devise && bankDevise) safeUpdate.devise = bankDevise
+          if (extractedIBAN) safeUpdate.iban = extractedIBAN
+          if (Object.keys(safeUpdate).length > 0) {
+            await supabase.from('comptes_bancaires').update(safeUpdate).eq('id', existingBank.id)
+          }
         }
-      } else if (bankName) {
+      }
+
+      if (!existingBank && bankName) {
         await supabase.from('comptes_bancaires').insert({
           societe_id: bankSocieteId, banque: bankName,
           nom_compte: normNumeroCompte || null,

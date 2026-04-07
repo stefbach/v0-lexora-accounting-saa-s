@@ -164,3 +164,60 @@ export function computeConfidence(extraction: any, detectedType: string): number
 
   return Math.min(score, 100)
 }
+
+/**
+ * Attempts to parse potentially malformed JSON from Claude's response.
+ * Uses 4 strategies: direct parse, fence extraction, brace matching, truncation repair.
+ */
+export function repairBankJSON(text: string): any | null {
+  if (!text) return null
+  const trimmed = text.trim()
+
+  // Strategy 1: Direct parse (response is pure JSON)
+  try { return JSON.parse(trimmed) } catch {}
+
+  // Strategy 2: Extract from markdown code fences ```json ... ```
+  const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/)
+  if (fenceMatch) {
+    try { return JSON.parse(fenceMatch[1].trim()) } catch {}
+  }
+
+  // Strategy 3: Find first { to last } in text
+  const firstBrace = trimmed.indexOf('{')
+  const lastBrace = trimmed.lastIndexOf('}')
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    try { return JSON.parse(trimmed.substring(firstBrace, lastBrace + 1)) } catch {}
+  }
+
+  // Strategy 4: JSON truncated by token limit — try to repair
+  if (firstBrace !== -1) {
+    let jsonCandidate = trimmed.substring(firstBrace)
+    // Remove trailing markdown
+    jsonCandidate = jsonCandidate.replace(/```\s*$/, '').trim()
+    // Count open/close braces and brackets to close them
+    let openBraces = 0, openBrackets = 0
+    let inString = false, escaped = false
+    for (const ch of jsonCandidate) {
+      if (escaped) { escaped = false; continue }
+      if (ch === '\\') { escaped = true; continue }
+      if (ch === '"') { inString = !inString; continue }
+      if (inString) continue
+      if (ch === '{') openBraces++
+      if (ch === '}') openBraces--
+      if (ch === '[') openBrackets++
+      if (ch === ']') openBrackets--
+    }
+    // Remove trailing incomplete value (after last comma)
+    if (openBraces > 0 || openBrackets > 0) {
+      jsonCandidate = jsonCandidate.replace(/,\s*"[^"]*"?\s*:?\s*[^,}\]]*$/, '')
+      jsonCandidate = jsonCandidate.replace(/,\s*\{[^}]*$/, '')
+      jsonCandidate = jsonCandidate.replace(/,\s*$/, '')
+    }
+    // Close unclosed brackets and braces
+    for (let i = 0; i < openBrackets; i++) jsonCandidate += ']'
+    for (let i = 0; i < openBraces; i++) jsonCandidate += '}'
+    try { return JSON.parse(jsonCandidate) } catch {}
+  }
+
+  return null
+}
