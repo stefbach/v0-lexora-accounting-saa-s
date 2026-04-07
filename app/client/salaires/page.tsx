@@ -41,14 +41,21 @@ interface Bulletin {
   employe_id: string
   societe_id: string
   periode: string
+  salaire_base: number
   salaire_brut: number
   salaire_net: number
   total_charges_patronales: number
   paye: number
   csg_salarie: number
   nsf_salarie: number
+  heures_sup_montant: number
+  transport_allowance: number
+  special_allowance_1: number
+  special_allowance_2: number
+  special_allowance_3: number
   statut: string
   employe?: { code: string; nom: string; prenom: string; poste?: string }
+  [key: string]: any
 }
 
 export default function ClientSalairesPage() {
@@ -141,11 +148,15 @@ export default function ClientSalairesPage() {
     fetchData()
   }, [fetchData])
 
-  // KPI calculations
-  const masseSalariale = totaux?.masse_salariale_brute || bulletins.reduce((s, b) => s + (Number(b.salaire_brut) || 0), 0)
-  const masseNette = totaux?.masse_salariale_nette || bulletins.reduce((s, b) => s + (Number(b.salaire_net) || 0), 0)
-  const chargesPatronales = totaux?.total_charges_patronales || bulletins.reduce((s, b) => s + (Number(b.total_charges_patronales) || 0), 0)
+  // KPI calculations — only count valide bulletins for cumulative totals
+  const valideBulletins = bulletins.filter(b => b.statut === 'valide')
+  const bulletinsForKPI = valideBulletins.length > 0 ? valideBulletins : bulletins // fallback to all if none validated
+  const masseSalariale = totaux?.masse_salariale_brute || bulletinsForKPI.reduce((s, b) => s + (Number(b.salaire_brut) || 0), 0)
+  const masseNette = totaux?.masse_salariale_nette || bulletinsForKPI.reduce((s, b) => s + (Number(b.salaire_net) || 0), 0)
+  const chargesPatronales = totaux?.total_charges_patronales || bulletinsForKPI.reduce((s, b) => s + (Number(b.total_charges_patronales) || 0), 0)
   const nbEmployes = employes.length
+  const totalPrimes = bulletins.reduce((s, b) => s + (Number(b.special_allowance_1) || 0) + (Number(b.special_allowance_2) || 0) + (Number(b.special_allowance_3) || 0), 0)
+  const totalOT = bulletins.reduce((s, b) => s + (Number(b.heures_sup_montant) || 0), 0)
 
   // Batch calculation
   async function handleCalculerPaie() {
@@ -498,6 +509,8 @@ export default function ClientSalairesPage() {
           </CardHeader>
           <CardContent>
             <p className="text-xl font-bold" style={{ color: "#0B0F2E" }}>{fmt(masseSalariale)}</p>
+            {isMoisBrouillon && <p className="text-xs text-yellow-600 mt-1">Provisoire</p>}
+            {(totalOT > 0 || totalPrimes > 0) && <p className="text-xs text-gray-400 mt-1">OT: {fmt(totalOT)} — Primes: {fmt(totalPrimes)}</p>}
           </CardContent>
         </Card>
         <Card>
@@ -628,6 +641,9 @@ export default function ClientSalairesPage() {
                     <TableRow>
                       <TableHead>Employ&eacute;</TableHead>
                       <TableHead>Code</TableHead>
+                      <TableHead className="text-right">Base</TableHead>
+                      <TableHead className="text-right">OT</TableHead>
+                      <TableHead className="text-right">Primes</TableHead>
                       <TableHead className="text-right">Brut</TableHead>
                       <TableHead className="text-right">Net</TableHead>
                       <TableHead className="text-right">PAYE</TableHead>
@@ -636,13 +652,18 @@ export default function ClientSalairesPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {bulletins.map((b) => (
+                    {bulletins.map((b) => {
+                      const primes = (Number(b.special_allowance_1) || 0) + (Number(b.special_allowance_2) || 0) + (Number(b.special_allowance_3) || 0)
+                      return (
                       <TableRow key={b.id}>
                         <TableCell className="font-medium">
                           {b.employe?.nom || ""} {b.employe?.prenom || ""}
                         </TableCell>
                         <TableCell>{b.employe?.code || ""}</TableCell>
-                        <TableCell className="text-right">{fmt(Number(b.salaire_brut) || 0)}</TableCell>
+                        <TableCell className="text-right text-sm">{fmt(Number(b.salaire_base) || 0)}</TableCell>
+                        <TableCell className="text-right text-sm">{(Number(b.heures_sup_montant) || 0) > 0 ? fmt(Number(b.heures_sup_montant)) : <span className="text-gray-300">—</span>}</TableCell>
+                        <TableCell className="text-right text-sm">{primes > 0 ? <span className="text-blue-600 font-medium">{fmt(primes)}</span> : <span className="text-gray-300">—</span>}</TableCell>
+                        <TableCell className="text-right font-bold">{fmt(Number(b.salaire_brut) || 0)}</TableCell>
                         <TableCell className="text-right">{fmt(Number(b.salaire_net) || 0)}</TableCell>
                         <TableCell className="text-right">{fmt(Number(b.paye) || 0)}</TableCell>
                         <TableCell>
@@ -673,7 +694,8 @@ export default function ClientSalairesPage() {
                           </div>
                         </TableCell>
                       </TableRow>
-                    ))}
+                      )
+                    })}
                   </TableBody>
                 </Table>
               )}

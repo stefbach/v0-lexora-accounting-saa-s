@@ -157,6 +157,80 @@ export default function ClientRapprochementPage() {
     } catch { alert("Erreur lors de l'enregistrement") }
   }
 
+  // Lettrage écritures comptables (401/411)
+  const [lettrageDialog, setLettrageDialog] = useState<any>(null)
+  const [lettrageSelection, setLettrageSelection] = useState<Set<string>>(new Set())
+  const [autoLettraging, setAutoLettraging] = useState(false)
+
+  const ecritures401 = ecritures.filter((e: any) => e.compte?.startsWith('401') && !e.lettre)
+  const ecritures411 = ecritures.filter((e: any) => e.compte?.startsWith('411') && !e.lettre)
+  const ecrituresLettrage = [...ecritures401, ...ecritures411]
+  const ecrituresLettrees = ecritures.filter((e: any) => e.lettre)
+
+  const handleLettrer = async () => {
+    if (!societeId || lettrageSelection.size < 2) return
+    try {
+      const ids = Array.from(lettrageSelection)
+      await fetch("/api/comptable/rapprochement", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "lettrer_multi", ecriture_ids: ids, societe_id: societeId }),
+      })
+      setLettrageDialog(null)
+      setLettrageSelection(new Set())
+      load()
+    } catch { alert("Erreur lettrage") }
+  }
+
+  const handleDelettrer = async (e: any) => {
+    try {
+      await fetch("/api/comptable/rapprochement", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delettrer", ecriture_id: e.id }),
+      })
+      load()
+    } catch { alert("Erreur") }
+  }
+
+  const handleAutoLettrage = async () => {
+    if (!societeId) return
+    setAutoLettraging(true)
+    try {
+      // For 401/411 écritures: match debit with credit of same amount + same tiers
+      const toLetter: string[][] = []
+      const used = new Set<string>()
+      for (const e of ecrituresLettrage) {
+        if (used.has(e.id)) continue
+        const amount = Number(e.debit) > 0 ? Number(e.debit) : Number(e.credit)
+        const isDebit = Number(e.debit) > 0
+        // Find opposite entry with same amount ±0.01
+        const match = ecrituresLettrage.find((e2: any) => {
+          if (e2.id === e.id || used.has(e2.id)) return false
+          if (e2.compte !== e.compte) return false // same account
+          const amount2 = Number(e2.debit) > 0 ? Number(e2.debit) : Number(e2.credit)
+          const isDebit2 = Number(e2.debit) > 0
+          if (isDebit === isDebit2) return false // must be opposite
+          return Math.abs(amount - amount2) <= 0.01
+        })
+        if (match) {
+          toLetter.push([e.id, match.id])
+          used.add(e.id)
+          used.add(match.id)
+        }
+      }
+      let lettered = 0
+      for (const ids of toLetter) {
+        await fetch("/api/comptable/rapprochement", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "lettrer_multi", ecriture_ids: ids, societe_id: societeId }),
+        })
+        lettered++
+      }
+      alert(`${lettered} paire(s) d'écritures lettrées automatiquement`)
+      load()
+    } catch { alert("Erreur auto-lettrage") }
+    finally { setAutoLettraging(false) }
+  }
+
   const allTransactions = data?.bankTransactions || []
   const allComptes = data?.comptes || []
   const factures = data?.factures || []
@@ -360,8 +434,112 @@ export default function ClientRapprochementPage() {
               </CardContent>
             </Card>
           )}
+
+          {/* Lettrage écritures comptables (401/411) */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-[#0B0F2E]">Lettrage écritures (401/411) — {ecrituresLettrage.length} non lettrées</CardTitle>
+              <Button variant="outline" size="sm" onClick={handleAutoLettrage} disabled={autoLettraging}>
+                <Zap className={`w-4 h-4 mr-1 ${autoLettraging ? "animate-spin" : ""}`} />
+                {autoLettraging ? "Analyse..." : "Auto-lettrage"}
+              </Button>
+            </CardHeader>
+            <CardContent className="p-0 overflow-x-auto">
+              {ecrituresLettrage.length === 0 ? (
+                <div className="p-8 text-center text-gray-400">Aucune écriture non lettrée en 401/411</div>
+              ) : (
+                <Table>
+                  <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Compte</TableHead><TableHead>Libellé</TableHead><TableHead className="text-right">Débit</TableHead><TableHead className="text-right">Crédit</TableHead><TableHead>Journal</TableHead><TableHead>Action</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {ecrituresLettrage.slice(0, 50).map((e: any) => (
+                      <TableRow key={e.id}>
+                        <TableCell className="text-sm">{formatDate(e.date_ecriture)}</TableCell>
+                        <TableCell className="font-mono text-sm">{e.compte}</TableCell>
+                        <TableCell className="text-sm max-w-[200px] truncate">{e.libelle || "—"}</TableCell>
+                        <TableCell className="text-right text-sm text-red-600 font-medium">{Number(e.debit) > 0 ? fmt(Number(e.debit)) : "—"}</TableCell>
+                        <TableCell className="text-right text-sm text-green-600 font-medium">{Number(e.credit) > 0 ? fmt(Number(e.credit)) : "—"}</TableCell>
+                        <TableCell className="text-sm">{e.journal || "—"}</TableCell>
+                        <TableCell>
+                          <Button variant="outline" size="sm" onClick={() => {
+                            setLettrageDialog(e)
+                            setLettrageSelection(new Set([e.id]))
+                          }}><Link2 className="w-3 h-3 mr-1" />Lettrer</Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Écritures lettrées */}
+          {ecrituresLettrees.length > 0 && (
+            <Card>
+              <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-green-600" />Écritures lettrées ({ecrituresLettrees.length})</CardTitle></CardHeader>
+              <CardContent className="p-0 overflow-x-auto">
+                <Table>
+                  <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Compte</TableHead><TableHead>Libellé</TableHead><TableHead className="text-right">Débit</TableHead><TableHead className="text-right">Crédit</TableHead><TableHead>Lettre</TableHead><TableHead>Action</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {ecrituresLettrees.slice(0, 30).map((e: any) => (
+                      <TableRow key={e.id} className="bg-green-50/50">
+                        <TableCell className="text-sm">{formatDate(e.date_ecriture)}</TableCell>
+                        <TableCell className="font-mono text-sm">{e.compte}</TableCell>
+                        <TableCell className="text-sm max-w-[200px] truncate">{e.libelle || "—"}</TableCell>
+                        <TableCell className="text-right text-sm">{Number(e.debit) > 0 ? fmt(Number(e.debit)) : "—"}</TableCell>
+                        <TableCell className="text-right text-sm">{Number(e.credit) > 0 ? fmt(Number(e.credit)) : "—"}</TableCell>
+                        <TableCell><Badge className="bg-green-100 text-green-700">{e.lettre}</Badge></TableCell>
+                        <TableCell><Button variant="ghost" size="sm" onClick={() => handleDelettrer(e)}><Unlink className="w-4 h-4 text-red-500" /></Button></TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
       </Tabs>
+
+      {/* Lettrage dialog */}
+      <Dialog open={!!lettrageDialog} onOpenChange={o => { if (!o) { setLettrageDialog(null); setLettrageSelection(new Set()) } }}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Lettrer les écritures</DialogTitle></DialogHeader>
+          {lettrageDialog && (
+            <div className="space-y-3">
+              <div className="p-3 bg-blue-50 rounded-lg text-sm">
+                <p className="font-medium">{lettrageDialog.compte} — {lettrageDialog.libelle}</p>
+                <p className="text-gray-500">{formatDate(lettrageDialog.date_ecriture)} — {Number(lettrageDialog.debit) > 0 ? `${fmt(Number(lettrageDialog.debit))} Débit` : `${fmt(Number(lettrageDialog.credit))} Crédit`}</p>
+              </div>
+              <p className="text-sm font-medium">Sélectionnez les écritures à lettrer ensemble :</p>
+              <div className="space-y-1 max-h-[300px] overflow-y-auto">
+                {ecrituresLettrage
+                  .filter((e: any) => e.compte === lettrageDialog.compte && e.id !== lettrageDialog.id)
+                  .map((e: any) => {
+                    const selected = lettrageSelection.has(e.id)
+                    return (
+                      <div key={e.id} onClick={() => {
+                        const next = new Set(lettrageSelection)
+                        if (next.has(e.id)) next.delete(e.id); else next.add(e.id)
+                        setLettrageSelection(next)
+                      }} className={`p-2 border rounded cursor-pointer ${selected ? "border-green-400 bg-green-50" : "border-gray-200 hover:bg-gray-50"}`}>
+                        <div className="flex justify-between text-sm">
+                          <span>{formatDate(e.date_ecriture)} — {e.libelle || "—"}</span>
+                          <span className="font-bold">{Number(e.debit) > 0 ? fmt(Number(e.debit)) + " D" : fmt(Number(e.credit)) + " C"}</span>
+                        </div>
+                      </div>
+                    )
+                  })}
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => { setLettrageDialog(null); setLettrageSelection(new Set()) }}>Annuler</Button>
+                <Button className="bg-[#0B0F2E]" onClick={handleLettrer} disabled={lettrageSelection.size < 2}>
+                  <Link2 className="w-4 h-4 mr-1" />Lettrer ({lettrageSelection.size} écritures)
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog lettrage manuel */}
       <Dialog open={!!linkDialog} onOpenChange={(o) => { if (!o) setLinkDialog(null) }}>
