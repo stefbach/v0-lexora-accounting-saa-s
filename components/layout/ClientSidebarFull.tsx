@@ -158,7 +158,6 @@ const MENU: MenuSection[] = [
   {
     section: "Mon Compte", sectionKey: "account.my_account",
     items: [
-      { href: "/client/societe", label: "Paramètres société", icon: Settings },
       { href: "/client/profil", label: "Mon Profil", labelKey: "account.my_profile", icon: Settings },
     ]
   },

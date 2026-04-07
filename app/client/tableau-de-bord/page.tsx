@@ -319,7 +319,7 @@ export default function TableauDeBord() {
                         {s.brn && <p className="text-xs text-gray-400">BRN : {s.brn}</p>}
                         <Badge variant="outline" className="text-xs mt-1">{s.statut || 'active'}</Badge>
                       </div>
-                      <Link href="/client/societe">
+                      <Link href={`/client/societe?id=${s.id}`}>
                         <Button variant="ghost" size="icon" title="Fiche société"><Pencil className="w-4 h-4 text-gray-400" /></Button>
                       </Link>
                     </CardContent>

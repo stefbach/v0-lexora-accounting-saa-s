@@ -237,6 +237,11 @@ export async function GET(request: Request) {
 
     // === COMPUTE FINANCIAL METRICS ===
 
+    // Exclude incomplete month payroll: SAL/OD-PAIE entries in current month
+    const currentMonthFirst = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+    const isPayrollCurrentMonth = (e: any) =>
+      (e.journal === 'SAL' || e.journal === 'OD-PAIE') && e.date_ecriture >= currentMonthFirst
+
     // Revenue: class 7 accounts
     const totalRevenue = allEcritures
       .filter(e => e.compte?.startsWith('7'))
@@ -246,9 +251,9 @@ export async function GET(request: Request) {
       .filter(e => e.compte?.startsWith('7'))
       .reduce((sum, e) => sum + (Number(e.credit) || 0) - (Number(e.debit) || 0), 0)
 
-    // Expenses: class 6 accounts
+    // Expenses: class 6 accounts (exclude incomplete month payroll)
     const totalExpenses = allEcritures
-      .filter(e => e.compte?.startsWith('6'))
+      .filter(e => e.compte?.startsWith('6') && !isPayrollCurrentMonth(e))
       .reduce((sum, e) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
 
     const monthlyExpenses = currentMonthEcritures
@@ -343,12 +348,13 @@ export async function GET(request: Request) {
       .reduce((sum, e) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
 
     // Payroll — P&L accounts (641 = salaires, 645 = charges patronales)
+    // Exclude incomplete current month payroll
     const salaires = allEcritures
-      .filter(e => e.compte?.startsWith('641'))
+      .filter(e => e.compte?.startsWith('641') && !isPayrollCurrentMonth(e))
       .reduce((sum, e) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
 
     const chargesSociales = allEcritures
-      .filter(e => e.compte?.startsWith('645') || e.compte?.startsWith('43'))
+      .filter(e => (e.compte?.startsWith('645') || e.compte?.startsWith('43')) && !isPayrollCurrentMonth(e))
       .reduce((sum, e) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
 
     // Balance sheet items (from écritures — these are less impacted by currency)
