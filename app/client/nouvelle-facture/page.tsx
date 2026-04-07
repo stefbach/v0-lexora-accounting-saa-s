@@ -97,7 +97,7 @@ export default function NouvelleFacturePage() {
     } catch { /* ignore */ }
     fetch("/api/client/societes").then(r => r.json()).then(d => {
       setSocietes(d.societes || [])
-      if (d.societes?.length === 1) setSocieteId(d.societes[0].id)
+      if (d.societes?.length > 0) setSocieteId(d.societes[0].id)
     }).catch(() => {})
     // Load existing invoices for credit note references
     fetch("/api/client/factures?statut=en_attente").then(r => r.json()).then(d => {
