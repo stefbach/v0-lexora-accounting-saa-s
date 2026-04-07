@@ -96,6 +96,8 @@ export default function ClientSalairesPage() {
   const [csgExported, setCsgExported] = useState(false)
   const [payeExported, setPayeExported] = useState(false)
   const [prgfDone, setPrgfDone] = useState(false)
+  const [comptabilise, setComptabilise] = useState(false)
+  const [comptabilising, setComptabilising] = useState(false)
   const [prevBulletins, setPrevBulletins] = useState<Bulletin[]>([])
 
   // Fetch societes
@@ -248,6 +250,28 @@ export default function ClientSalairesPage() {
     }
   }
 
+  // Comptabiliser — generate ecritures_comptables from validated bulletins
+  async function handleComptabiliser() {
+    if (!selectedSociete || !selectedPeriode) return
+    if (!confirm("Comptabiliser les bulletins validés pour cette période ? Les écritures SAL/OD-PAIE seront générées.")) return
+    setComptabilising(true)
+    try {
+      const res = await fetch("/api/rh/paie/comptabiliser", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ all_periode: true, societe_id: selectedSociete, periode: selectedPeriode }),
+      })
+      const json = await res.json()
+      if (json.error) {
+        alert("Erreur: " + json.error)
+      } else {
+        alert(`${json.nb_ecritures || 0} écritures comptables générées pour ${json.nb_bulletins || 0} bulletins`)
+        setComptabilise(true)
+      }
+    } catch { alert("Erreur comptabilisation") }
+    finally { setComptabilising(false) }
+  }
+
   // Import payroll
   async function handleImport() {
     if (!importFile || !selectedSociete || !selectedPeriode) return
@@ -349,14 +373,14 @@ export default function ClientSalairesPage() {
 
   // Workflow steps computation
   const hasBulletins = bulletins.length > 0
+  const allValidated = hasBulletins && bulletins.every(b => b.statut === 'valide')
   const workflowSteps = [
-    { label: "Pointage", icon: Clock, done: true },
     { label: "Calcul", icon: Calculator, done: hasBulletins },
-    { label: "Cloture", icon: Lock, done: periodClosed },
-    { label: "Virement", icon: Banknote, done: virementDone },
-    { label: "NSF/CSG", icon: FileText, done: csgExported },
+    { label: "Validation", icon: CheckCircle, done: allValidated },
+    { label: "Banque", icon: Banknote, done: virementDone },
+    { label: "CSG/NSF", icon: FileText, done: csgExported },
     { label: "PAYE", icon: FileText, done: payeExported },
-    { label: "PRGF", icon: FileText, done: prgfDone },
+    { label: "Compta", icon: DollarSign, done: comptabilise },
   ]
   const currentStepIdx = workflowSteps.findIndex(s => !s.done)
 
@@ -445,11 +469,14 @@ export default function ClientSalairesPage() {
               const bgColor = isDone ? "bg-green-500" : isCurrent ? "bg-[#D4AF37]" : "bg-gray-300"
               const textColor = isDone ? "text-green-700" : isCurrent ? "text-[#D4AF37]" : "text-gray-400"
               const toggleStep = () => {
-                if (idx === 2) setPeriodClosed(!periodClosed)
-                else if (idx === 3) setVirementDone(!virementDone)
-                else if (idx === 4) setCsgExported(!csgExported)
-                else if (idx === 5) setPayeExported(!payeExported)
-                else if (idx === 6) setPrgfDone(!prgfDone)
+                if (idx === 2 && allValidated && !virementDone) handleExport("virement")
+                else if (idx === 2) setVirementDone(!virementDone)
+                else if (idx === 3 && allValidated && !csgExported) handleExport("csg")
+                else if (idx === 3) setCsgExported(!csgExported)
+                else if (idx === 4 && allValidated && !payeExported) handleExport("paye")
+                else if (idx === 4) setPayeExported(!payeExported)
+                else if (idx === 5 && allValidated && !comptabilise) handleComptabiliser()
+                else if (idx === 5) setComptabilise(!comptabilise)
               }
               return (
                 <div key={step.label} className="flex items-center">
@@ -817,8 +844,19 @@ export default function ClientSalairesPage() {
                   disabled={!!exportLoading}
                 >
                   {exportLoading === "virement" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                  Virement bancaire
+                  Export Banque (MCB Bulk Payment)
                 </Button>
+                <div className="border-t pt-3 mt-3">
+                  <Button
+                    className="w-full justify-start bg-[#0B0F2E]"
+                    onClick={handleComptabiliser}
+                    disabled={comptabilising || comptabilise || !allValidated}
+                  >
+                    {comptabilising ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DollarSign className="mr-2 h-4 w-4" />}
+                    {comptabilise ? "Comptabilisé ✓" : comptabilising ? "Comptabilisation..." : "Comptabiliser (→ écritures SAL)"}
+                  </Button>
+                  {!allValidated && <p className="text-xs text-gray-400 mt-1">Validez tous les bulletins avant de comptabiliser</p>}
+                </div>
               </CardContent>
             </Card>
 
