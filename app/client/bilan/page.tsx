@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useProfile } from "@/hooks/use-profile"
-import { Loader2, Building2, Printer, Calendar, Upload, FileText, CheckCircle, AlertCircle } from "lucide-react"
+import { Loader2, Building2, Download, Calendar, Upload, FileText, CheckCircle, AlertCircle } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
@@ -452,8 +452,16 @@ export default function BilanPage() {
 
   return (
     <div className="p-6 space-y-6 max-w-[900px] mx-auto">
-      {/* Top bar: filter + print */}
-      <div className="flex items-center justify-between flex-wrap gap-4 print:hidden">
+      <style jsx global>{`
+        @media print {
+          .no-print { display: none !important; }
+          body { background: white !important; }
+          @page { margin: 15mm; size: A4; }
+        }
+      `}</style>
+
+      {/* Top bar: filter + download */}
+      <div className="flex items-center justify-between flex-wrap gap-4 no-print">
         <div className="flex items-center gap-3">
           {societes.length > 0 && (
             <div className="flex items-center gap-2">
@@ -488,25 +496,26 @@ export default function BilanPage() {
             )}
           </div>
         </div>
-        <button
+        <Button
           onClick={() => window.print()}
-          className="flex items-center gap-2 px-3 py-2 rounded text-sm font-medium border hover:bg-muted transition-colors"
+          variant="outline"
+          className="no-print flex items-center gap-2"
         >
-          <Printer className="h-4 w-4" />
-          Print
-        </button>
+          <Download className="h-4 w-4" />
+          Télécharger PDF
+        </Button>
       </div>
 
       {/* PDF Import for prior year data */}
-      <Card className="border-2 border-dashed print:hidden" style={{ borderColor: GOLD }}>
+      <Card className="border-2 border-dashed no-print" style={{ borderColor: GOLD }}>
         <CardContent className="py-4">
           <div className="flex flex-col sm:flex-row items-center gap-4">
             <div className="flex items-center gap-2">
               <Upload className="w-5 h-5" style={{ color: GOLD }} />
               <div>
-                <p className="text-sm font-semibold" style={{ color: NAVY }}>Importer les comptes de l&apos;exercice precedent</p>
+                <p className="text-sm font-semibold" style={{ color: NAVY }}>Données de l&apos;année précédente (optionnel)</p>
                 <p className="text-xs text-gray-500">
-                  Uploadez le bilan officiel (PDF) de l&apos;annee precedente pour pre-remplir la colonne N-1
+                  Si vous avez un bilan de l&apos;année précédente, uploadez-le pour afficher la comparaison N-1 dans le tableau.
                 </p>
               </div>
             </div>
@@ -531,7 +540,7 @@ export default function BilanPage() {
                 className="flex items-center gap-2"
               >
                 {importingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-                {importingPdf ? "Analyse en cours..." : "Analyser avec OCR"}
+                {importingPdf ? "Import en cours..." : "Importer le bilan précédent"}
               </Button>
             </div>
           </div>
