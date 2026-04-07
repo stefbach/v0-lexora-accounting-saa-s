@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Building2, TrendingUp, Plus, Loader2, Banknote, Receipt,
   ChevronLeft, ChevronRight, Calendar, Bell, Users, Pencil, Settings,
+  AlertTriangle, Info, ExternalLink,
 } from "lucide-react"
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from "recharts"
 
@@ -17,6 +18,7 @@ const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
 
 interface Societe { id: string; nom: string; brn: string; statut: string }
+interface Alerte { id: string; niveau: 'danger' | 'warning' | 'info'; titre: string; description: string; montant?: number; echeance?: string; lien?: string }
 
 function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + " MUR" }
 
@@ -72,6 +74,7 @@ export default function TableauDeBord() {
   const [exerciseData, setExerciseData] = useState<any>(null)
   const [tresorerie, setTresorerie] = useState({ totalBankMUR: 0, nbComptes: 0 })
   const [chartData, setChartData] = useState<any[]>([])
+  const [alertes, setAlertes] = useState<Alerte[]>([])
 
   useEffect(() => {
     fetch("/api/client/societes").then(r => r.json()).then(d => {
@@ -118,8 +121,68 @@ export default function TableauDeBord() {
           }).length || 0,
         })
         setTresorerie({ totalBankMUR: f.totalBankMUR || 0, nbComptes: f.bankAccounts?.length || 0 })
+
+        // Generate alertes from data
+        const generatedAlertes: Alerte[] = []
+        const todayStr = new Date().toISOString().slice(0, 10)
+        const in7days = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
+
+        // TYPE 1 — Factures en retard
+        const facturesRetard = (f.factures || []).filter((fc: any) =>
+          fc.date_echeance && fc.date_echeance < todayStr && fc.statut !== 'paye' && fc.statut !== 'annule'
+        )
+        facturesRetard.slice(0, 3).forEach((fc: any) => {
+          generatedAlertes.push({
+            id: `retard-${fc.id}`, niveau: 'danger',
+            titre: `Facture en retard — ${fc.tiers || 'Inconnu'}`,
+            description: `Échéance dépassée depuis le ${new Date(fc.date_echeance).toLocaleDateString('fr-FR')}`,
+            montant: Number(fc.montant_mur) || Number(fc.montant_ttc) || 0,
+            echeance: fc.date_echeance, lien: '/client/echeances',
+          })
+        })
+
+        // TYPE 2 — Factures échéant dans 7 jours
+        const facturesProches = (f.factures || []).filter((fc: any) =>
+          fc.date_echeance && fc.date_echeance >= todayStr && fc.date_echeance <= in7days && fc.statut !== 'paye' && fc.statut !== 'annule'
+        )
+        facturesProches.slice(0, 3).forEach((fc: any) => {
+          const days = Math.ceil((new Date(fc.date_echeance).getTime() - Date.now()) / 86400000)
+          generatedAlertes.push({
+            id: `proche-${fc.id}`, niveau: 'warning',
+            titre: `Échéance proche — ${fc.tiers || 'Inconnu'}`,
+            description: `Dans ${days} jour${days > 1 ? 's' : ''}`,
+            montant: Number(fc.montant_mur) || Number(fc.montant_ttc) || 0,
+            echeance: fc.date_echeance, lien: '/client/echeances',
+          })
+        })
+
+        // TYPE 3 — Déclaration TVA
+        if (new Date().getDate() > 15) {
+          generatedAlertes.push({
+            id: 'tva-declaration', niveau: 'info',
+            titre: 'Déclaration TVA',
+            description: `TVA du mois à soumettre avant le 20`,
+            lien: '/client/tva',
+          })
+        }
+
+        // TYPE 5 — Solde bancaire faible
+        ;(f.bankAccounts || []).forEach((acc: any) => {
+          if ((acc.solde_mur ?? acc.solde_actuel ?? 100000) < 50000) {
+            generatedAlertes.push({
+              id: `solde-${acc.id}`, niveau: 'danger',
+              titre: `Solde faible — ${acc.banque || 'Compte'}`,
+              description: `Solde actuel en dessous de 50 000 MUR`,
+              montant: acc.solde_mur ?? acc.solde_actuel ?? 0,
+              lien: '/client/banque',
+            })
+          }
+        })
+
+        setAlertes(generatedAlertes)
       } else {
         setMonthly(null)
+        setAlertes([])
       }
       if (eData?.financial) {
         const f = eData.financial
@@ -244,15 +307,25 @@ export default function TableauDeBord() {
                 <KpiCard label="Trésorerie" value={tresorerie.totalBankMUR} icon={Banknote} color="text-blue-600" bg="bg-blue-50" />
                 <KpiCard label="TVA nette" value={monthly.tvaNette} icon={Receipt} color="text-purple-600" bg="bg-purple-50" />
                 <KpiCard label="Masse salariale" valueStr={isCurrentMonth ? "Mois en cours" : undefined} value={isCurrentMonth ? undefined : monthly.salaires} icon={Users} color="text-orange-600" bg="bg-orange-50" />
-                <Card>
+                <Card className="cursor-pointer" onClick={() => document.getElementById('alertes-section')?.scrollIntoView({ behavior: 'smooth' })}>
                   <CardContent className="p-4">
-                    <div className={`w-8 h-8 rounded-lg ${monthly.echeances > 0 ? "bg-red-50" : "bg-green-50"} flex items-center justify-center mb-2`}>
-                      <Bell className={`w-4 h-4 ${monthly.echeances > 0 ? "text-red-600" : "text-green-600"}`} />
-                    </div>
-                    <p className="text-xs text-gray-500">Échéances</p>
-                    <p className={`text-lg font-bold mt-0.5 ${monthly.echeances > 0 ? "text-red-600" : "text-green-600"}`}>
-                      {monthly.echeances > 0 ? `${monthly.echeances} à venir` : "Aucune"}
-                    </p>
+                    {(() => {
+                      const nbDanger = alertes.filter(a => a.niveau === 'danger').length
+                      const nbWarning = alertes.filter(a => a.niveau === 'warning').length
+                      const total = nbDanger + nbWarning
+                      const bg = nbDanger > 0 ? "bg-red-50" : nbWarning > 0 ? "bg-orange-50" : "bg-green-50"
+                      const iconColor = nbDanger > 0 ? "text-red-600" : nbWarning > 0 ? "text-orange-600" : "text-green-600"
+                      const textColor = nbDanger > 0 ? "text-red-600" : nbWarning > 0 ? "text-orange-600" : "text-green-600"
+                      return <>
+                        <div className={`w-8 h-8 rounded-lg ${bg} flex items-center justify-center mb-2`}>
+                          <Bell className={`w-4 h-4 ${iconColor}`} />
+                        </div>
+                        <p className="text-xs text-gray-500">Alertes</p>
+                        <p className={`text-lg font-bold mt-0.5 ${textColor}`}>
+                          {total > 0 ? `${total} alerte${total > 1 ? 's' : ''}` : "Aucune"}
+                        </p>
+                      </>
+                    })()}
                   </CardContent>
                 </Card>
               </div>
@@ -306,6 +379,63 @@ export default function TableauDeBord() {
               </CardContent>
             </Card>
           )}
+
+          {/* Alertes & Rappels */}
+          <div id="alertes-section">
+            <h2 className="font-bold text-[#0B0F2E] mb-3 flex items-center gap-2">
+              <Bell className="w-4 h-4" /> Alertes & Rappels
+            </h2>
+            {alertes.length === 0 ? (
+              <Card className="border-green-200 bg-green-50">
+                <CardContent className="p-4 text-center text-sm text-green-700">
+                  Aucune alerte — tout est en ordre
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-2">
+                {alertes
+                  .sort((a, b) => {
+                    const order = { danger: 0, warning: 1, info: 2 }
+                    return (order[a.niveau] ?? 3) - (order[b.niveau] ?? 3)
+                  })
+                  .slice(0, 5)
+                  .map(a => {
+                    const borderColor = a.niveau === 'danger' ? 'border-l-red-500' : a.niveau === 'warning' ? 'border-l-orange-400' : 'border-l-blue-400'
+                    const bgColor = a.niveau === 'danger' ? 'bg-red-50/50' : a.niveau === 'warning' ? 'bg-orange-50/50' : 'bg-blue-50/50'
+                    const Icon = a.niveau === 'danger' ? AlertTriangle : a.niveau === 'warning' ? Bell : Info
+                    const iconColor = a.niveau === 'danger' ? 'text-red-500' : a.niveau === 'warning' ? 'text-orange-500' : 'text-blue-500'
+                    return (
+                      <Card key={a.id} className={`border-l-4 ${borderColor} ${bgColor}`}>
+                        <CardContent className="p-3 flex items-center justify-between">
+                          <div className="flex items-start gap-3">
+                            <Icon className={`w-4 h-4 mt-0.5 flex-shrink-0 ${iconColor}`} />
+                            <div>
+                              <p className="text-sm font-semibold text-[#0B0F2E]">{a.titre}</p>
+                              <p className="text-xs text-gray-500">{a.description}</p>
+                              {a.montant ? <p className="text-xs font-mono text-gray-600 mt-0.5">{fmt(a.montant)}</p> : null}
+                            </div>
+                          </div>
+                          {a.lien && (
+                            <Link href={a.lien}>
+                              <Button variant="ghost" size="sm" className="text-xs gap-1">
+                                <ExternalLink className="w-3 h-3" /> Voir
+                              </Button>
+                            </Link>
+                          )}
+                        </CardContent>
+                      </Card>
+                    )
+                  })}
+                {alertes.length > 5 && (
+                  <Link href="/client/alertes">
+                    <Button variant="outline" size="sm" className="w-full text-xs">
+                      Voir toutes les alertes ({alertes.length})
+                    </Button>
+                  </Link>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Mes sociétés */}
           {societes.length > 0 && (
