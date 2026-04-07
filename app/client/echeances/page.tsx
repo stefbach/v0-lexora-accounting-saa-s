@@ -70,6 +70,19 @@ export default function EcheancesPage() {
   const [editingEcheance, setEditingEcheance] = useState<string | null>(null)
   const [editingDate, setEditingDate] = useState("")
 
+  // Fetch ALL sociétés the user has access to
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/client/societes").then(r => r.json()).catch(() => ({ societes: [] })),
+      fetch("/api/comptable/societes").then(r => r.json()).catch(() => ({ societes: [] })),
+    ]).then(([d1, d2]) => {
+      const all = [...(d1.societes || []), ...(d2.societes || [])]
+      const unique = Array.from(new Map(all.map((s: any) => [s.id, s])).values()) as { id: string; nom: string }[]
+      setSocietes(unique)
+      if (unique.length > 0 && !selectedSociete) setSelectedSociete(unique[0].id)
+    })
+  }, [])
+
   const fetchData = useCallback(async () => {
     setFetching(true)
     try {
@@ -79,10 +92,6 @@ export default function EcheancesPage() {
       const res = await fetch(url)
       const json = await res.json()
       setData(json.financial)
-      if (json.financial?.availableSocietes) {
-        setSocietes(json.financial.availableSocietes)
-        if (json.financial.availableSocietes.length > 0 && !selectedSociete) setSelectedSociete(json.financial.availableSocietes[0].id)
-      }
     } catch { setData(null) }
     finally { setFetching(false) }
   }, [selectedSociete])

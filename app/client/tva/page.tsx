@@ -118,6 +118,19 @@ export default function TVAPage() {
     return `${selectedTrimestre} ${selectedYear}`
   }
 
+  // Fetch ALL sociétés the user has access to
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/client/societes").then(r => r.json()).catch(() => ({ societes: [] })),
+      fetch("/api/comptable/societes").then(r => r.json()).catch(() => ({ societes: [] })),
+    ]).then(([d1, d2]) => {
+      const all = [...(d1.societes || []), ...(d2.societes || [])]
+      const unique = Array.from(new Map(all.map((s: any) => [s.id, s])).values()) as { id: string; nom: string }[]
+      setSocietes(unique)
+      if (unique.length > 0 && !selectedSociete) setSelectedSociete(unique[0].id)
+    })
+  }, [])
+
   useEffect(() => {
     setFetching(true)
     const { debut, fin } = getPeriodDates()
@@ -129,10 +142,6 @@ export default function TVAPage() {
       .then((res) => res.json())
       .then((json) => {
         setData(json.financial)
-        if (json.financial?.availableSocietes) {
-          setSocietes(json.financial.availableSocietes)
-          if (json.financial.availableSocietes.length > 0 && !selectedSociete) setSelectedSociete(json.financial.availableSocietes[0].id)
-        }
       })
       .catch(() => setData(null))
       .finally(() => setFetching(false))
