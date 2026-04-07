@@ -180,7 +180,8 @@ export default function PrevisionnelPage() {
   }
 
   const saveCredit = async (cr: Credit) => {
-    if (!selectedSociete || selectedSociete === "all" || (!cr.bank && cr.amount === 0)) return
+    if (!selectedSociete || selectedSociete === "all") return
+    if (!cr.bank && cr.amount === 0 && cr.monthly === 0 && cr.remaining === 0) return
     setSaveStatus(prev => ({ ...prev, [cr.id]: 'saving' }))
     try {
       const isNew = cr.id?.startsWith?.("new-")
@@ -767,7 +768,14 @@ export default function PrevisionnelPage() {
                   </TableHeader>
                   <TableBody>
                     {investments.map((inv, idx) => (
-                      <TableRow key={inv.id} onBlur={() => { if (inv.description) saveInvestment(inv) }}>
+                      <TableRow key={inv.id} onBlur={() => {
+                        // Read current state to avoid stale closure
+                        setInvestments(current => {
+                          const latest = current[idx]
+                          if (latest?.description) saveInvestment(latest)
+                          return current
+                        })
+                      }}>
                         <TableCell>
                           <Input value={inv.description} placeholder="Description" className="h-8"
                             onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
@@ -836,7 +844,13 @@ export default function PrevisionnelPage() {
                   </TableHeader>
                   <TableBody>
                     {credits.map((cr, idx) => (
-                      <TableRow key={cr.id} onBlur={() => { if (cr.bank || cr.amount > 0) saveCredit(cr) }}>
+                      <TableRow key={cr.id} onBlur={() => {
+                        setCredits(current => {
+                          const latest = current[idx]
+                          if (latest && (latest.bank || latest.amount > 0)) saveCredit(latest)
+                          return current
+                        })
+                      }}>
                         <TableCell>
                           <Input value={cr.bank} placeholder="Banque" className="h-8 w-32"
                             onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
