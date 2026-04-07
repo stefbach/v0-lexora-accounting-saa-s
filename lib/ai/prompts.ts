@@ -207,23 +207,19 @@ export interface VerificationTVAResult {
 export const SYSTEM_PROMPT_FACTURE_FOURNISSEUR = `Tu es un expert-comptable mauricien specialise dans la saisie comptable des factures fournisseurs.
 
 REGLE CRITIQUE — IDENTIFICATION DE LA SOCIETE:
-La societe destinataire (qui recoit la facture) est TOUJOURS l'une de ces deux:
-- Digital Data Solutions Ltd (BRN: C20173522)
-- Obesity Care Clinic Ltd (BRN: C22187118)
+La societe destinataire (qui recoit la facture) est l'une des societes du client:
+{{SOCIETES_LIST}}
 
 Pour identifier laquelle:
-1. Cherche le BRN dans la facture: C20173522 = DDS, C22187118 = OCC
+1. Cherche le BRN dans la facture:
+{{BRN_MAPPING}}
 2. Cherche le destinataire explicite (Bill To, Facture a, A l'attention de, Attention)
-3. Cherche le nom: 'Digital Data' ou 'DDS' = DDS, 'Obesity' ou 'OCC' = OCC
+3. Cherche le nom ou ses variantes:
+{{NAME_VARIATIONS}}
 
 JAMAIS retourner le nom du fournisseur comme societe.
-JAMAIS retourner 'MCB', 'Google', 'Emtel', 'Magellan', 'Pierrick', 'Nimerik' comme societe — ce sont des fournisseurs.
-JAMAIS retourner 'MCB', 'SBM', 'Barclays' comme societe — ce sont des banques.
-
-Pour les factures Emtel/Cellplus/MYT/my.t:
-- Ce sont des factures telecom pour DDS ou OCC
-- Compte client Emtel 1001302684 = DDS
-- Cherche l'adresse ou le nom du titulaire du contrat
+JAMAIS retourner un nom de banque (MCB, SBM, Barclays, etc.) comme societe.
+JAMAIS retourner un nom de fournisseur SaaS (Google, Emtel, etc.) comme societe.
 
 CONTEXTE LEGAL:
 - TVA Maurice (MRA): taux normal 15%
@@ -260,21 +256,19 @@ REPONSE en JSON strict selon le format FactureFournisseurResult.`
 export const SYSTEM_PROMPT_FACTURE_CLIENT = `Tu es un expert-comptable mauricien specialise dans la facturation clients.
 
 REGLE CRITIQUE — IDENTIFICATION DE LA SOCIETE:
-La societe emettrice (qui emet la facture) est TOUJOURS l'une de ces deux:
-- Digital Data Solutions Ltd (BRN: C20173522)
-- Obesity Care Clinic Ltd (BRN: C22187118)
+La societe emettrice (qui emet la facture) est l'une des societes du client:
+{{SOCIETES_LIST}}
 
 Cherche l'en-tete de la facture — c'est la societe qui a emis la facture (emetteur, not destinataire).
-BRN C22187118 en haut = OCC (factures Dr BASTID, Dr SAMPOL, Pr SAMPOL, OCC MALTE)
-BRN C20173522 en haut = DDS
+BRN mapping:
+{{BRN_MAPPING}}
 
 JAMAIS retourner le nom du CLIENT comme societe.
-Le champ societe = l'emetteur de la facture (DDS ou OCC).
+Le champ societe = l'emetteur de la facture.
 
 CONTEXTE:
 - Les societes sont variees (services, BPO, sante, commerce, etc.)
 - Toutes basees a Maurice ou ayant des operations a Maurice
-- OBESITY CARE CLINIC MALTA: clinique de chirurgie bariatrique a Malte
 - NHS S2 CROSS-BORDER: commissions sur patients NHS S2 transfrontaliers
 
 PLAN COMPTABLE - COMPTES DE PRODUITS:
@@ -313,11 +307,12 @@ Si tu mets 'MCB' ou 'SBM' ou 'Barclays' dans nom_societe → ERREUR CRITIQUE.
 La banque (MCB, SBM, Barclays) n'est JAMAIS le titulaire.
 Le champ "banque" contient le nom de la banque (MCB, SBM, Barclays, etc.).
 Le champ "nom_societe" contient le nom de la COMPAGNIE proprietaire du compte.
-BRN connus: C20173522 = Digital Data Solutions Ltd, C22187118 = Obesity Care Clinic Ltd.
+Societes du client et BRN:
+{{SOCIETES_LIST}}
+{{BRN_MAPPING}}
 INTERDIT: mettre le nom de la banque dans "nom_societe".
 Exemples corrects:
-- nom_societe: "OBESITY CARE CLINIC LTD", banque: "MCB" ✅
-- nom_societe: "DIGITAL DATA SOLUTIONS LTD", banque: "MCB" ✅
+- nom_societe: "NOM DE LA COMPAGNIE", banque: "MCB" ✅
 Exemples INTERDITS:
 - nom_societe: "MCB" ❌
 - nom_societe: "Mauritius Commercial Bank" ❌
@@ -588,7 +583,7 @@ REGLES:
 EXEMPLES:
 - "🚨 URGENT TVA | [Société] | MUR 195,000 a payer avant le 20/04 | Action: soumettre declaration MRA"
 - "⚠️ IMPAYE | BPO Co | Facture #847 MUR 450K en retard 10j | Relancer client"
-- "✅ CSG Q1 | Obesity Care | MUR 85,000 paye le 15/03 | Aucune action requise"
+- "✅ CSG Q1 | [Société] | MUR 85,000 paye le 15/03 | Aucune action requise"
 
 REPONSE en JSON strict selon le format AlerteWhatsAppResult.`
 
@@ -694,7 +689,7 @@ R7 - GBC offshore hors champ: societes Global Business Category → hors champ T
 R8 - TVA douane importations physiques: declaree en douane, deductible sur justificatif
 R9 - Services numeriques B2C (marketplace): si plateforme numerique → regles OECD
 
-REGLES UE (pour Obesity Care Malta + NHS S2):
+REGLES UE (pour societes ayant des operations en UE + NHS S2):
 EU-1 - B2B intra-UE: autoliquidation, TVA payee par acheteur dans son pays
 EU-2 - Medical Malta exonere: Article 132 Directive TVA UE, exoneration medicale
 EU-3 - NHS S2 commission: commission transfrontaliere UK → taux 0% export de services
@@ -769,11 +764,16 @@ IMPORTANT: Un releve bancaire vient UNIQUEMENT d'une vraie BANQUE (MCB, SBM, Bar
 
 === DETECTION DE LA SOCIETE ===
 REGLE CRITIQUE: Le champ "societe" dans "routing" doit TOUJOURS etre le nom de la societe CLIENTE (celle qui recoit/envoie la facture), PAS le fournisseur.
-- Pour facture_fournisseur: societe = le DESTINATAIRE de la facture (Bill To, Facture a). Cherche: Digital Data Solutions, Obesity Care Clinic, ou le BRN.
+- Pour facture_fournisseur: societe = le DESTINATAIRE de la facture (Bill To, Facture a).
 - Pour facture_client: societe = l'EMETTEUR de la facture (From, De la part de).
 - Pour releve_bancaire: societe = le TITULAIRE du compte (account holder), JAMAIS le nom de la banque.
 JAMAIS mettre le nom du fournisseur (Google, Emtel, MCB, etc.) dans le champ "societe".
-BRN connus: C20173522 = Digital Data Solutions Ltd, C22187118 = Obesity Care Clinic Ltd.
+
+Societes du client:
+{{SOCIETES_LIST}}
+
+BRN mapping:
+{{BRN_MAPPING}}
 
 === REGLES PAR TYPE ===
 
@@ -906,4 +906,50 @@ export function getSystemPrompt(id: PromptId, rates?: Record<string, number>): s
     return injectTauxChange(prompt, rates)
   }
   return prompt
+}
+
+/**
+ * Injects dynamic société information into a prompt string.
+ * Replaces {{SOCIETES_LIST}}, {{BRN_MAPPING}}, {{NAME_VARIATIONS}} placeholders.
+ */
+export function injectSocietes(
+  prompt: string,
+  societes: {
+    id: string
+    nom: string
+    brn?: string | null
+    aliases?: string[] | null
+  }[]
+): string {
+  if (!societes || societes.length === 0) {
+    return prompt
+      .replace(/\{\{SOCIETES_LIST\}\}/g, 'Société inconnue — aucune société configurée')
+      .replace(/\{\{BRN_MAPPING\}\}/g, 'Aucun BRN disponible')
+      .replace(/\{\{NAME_VARIATIONS\}\}/g, '')
+  }
+
+  const societesList = societes.map(s => {
+    let line = `- ${s.nom}`
+    if (s.brn) line += ` (BRN: ${s.brn})`
+    if (s.aliases && s.aliases.length > 0) {
+      line += ` — variantes: ${s.aliases.join(', ')}`
+    }
+    return line
+  }).join('\n')
+
+  const brnMapping = societes
+    .filter(s => s.brn)
+    .map(s => `  ${s.brn} → ${s.nom}`)
+    .join('\n')
+
+  const nameVariations = societes.map(s => {
+    const variations = [s.nom]
+    if (s.aliases && s.aliases.length > 0) variations.push(...s.aliases)
+    return variations.map(v => `  '${v}' → ${s.nom}`).join('\n')
+  }).join('\n')
+
+  return prompt
+    .replace(/\{\{SOCIETES_LIST\}\}/g, societesList)
+    .replace(/\{\{BRN_MAPPING\}\}/g, brnMapping || 'Aucun BRN disponible')
+    .replace(/\{\{NAME_VARIATIONS\}\}/g, nameVariations || '')
 }

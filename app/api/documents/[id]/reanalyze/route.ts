@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
-import { getSystemPrompt, injectTauxChange, CLAUDE_CONFIG, SYSTEM_PROMPT_GENERIC_EXTRACTION } from '@/lib/ai/prompts'
+import { getSystemPrompt, injectTauxChange, injectSocietes, CLAUDE_CONFIG, SYSTEM_PROMPT_GENERIC_EXTRACTION } from '@/lib/ai/prompts'
 import type { PromptId } from '@/lib/ai/prompts'
 import { isBankName, validateAndCleanExtraction, computeConfidence, repairBankJSON } from '@/lib/utils/bank-utils'
 
@@ -101,15 +101,30 @@ export async function POST(
       }
     } catch { /* use defaults */ }
 
+    // Fetch user's sociétés for dynamic prompt injection
+    let societeDetailsForPrompt: { id: string; nom: string; brn?: string | null; aliases?: string[] | null }[] = []
+    try {
+      const { data: ownedSoc } = await supabase.from('societes').select('id, nom, brn, aliases').eq('created_by', user.id)
+      const { data: dossierSoc } = await supabase.from('dossiers').select('societe_id').eq('client_id', user.id)
+      const dossierSocIds = (dossierSoc || []).map(d => d.societe_id).filter(Boolean)
+      if (dossierSocIds.length > 0) {
+        const { data: fromDossiers } = await supabase.from('societes').select('id, nom, brn, aliases').in('id', dossierSocIds)
+        const all = [...(ownedSoc || []), ...(fromDossiers || [])]
+        societeDetailsForPrompt = Array.from(new Map(all.map(s => [s.id, s])).values())
+      } else {
+        societeDetailsForPrompt = ownedSoc || []
+      }
+    } catch { /* use empty list */ }
+
     // Build system prompt: use specialized prompt if available
     const promptId = TYPE_TO_PROMPT_ID[typeForce]
     let systemPrompt: string
 
     if (promptId) {
-      systemPrompt = getSystemPrompt(promptId, tauxChange)
+      systemPrompt = injectSocietes(getSystemPrompt(promptId, tauxChange), societeDetailsForPrompt)
     } else {
       // Use full generic extraction prompt (same as upload route)
-      systemPrompt = injectTauxChange(SYSTEM_PROMPT_GENERIC_EXTRACTION, tauxChange)
+      systemPrompt = injectSocietes(injectTauxChange(SYSTEM_PROMPT_GENERIC_EXTRACTION, tauxChange), societeDetailsForPrompt)
     }
 
     // Inject hint into system prompt if provided

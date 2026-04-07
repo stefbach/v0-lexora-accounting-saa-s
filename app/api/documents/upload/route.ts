@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
-import { getSystemPrompt, injectTauxChange, CLAUDE_CONFIG, SYSTEM_PROMPT_GENERIC_EXTRACTION } from '@/lib/ai/prompts'
+import { getSystemPrompt, injectTauxChange, injectSocietes, CLAUDE_CONFIG, SYSTEM_PROMPT_GENERIC_EXTRACTION } from '@/lib/ai/prompts'
 import { createHash } from 'crypto'
 import { isBankName, validateAndCleanExtraction, computeConfidence } from '@/lib/utils/bank-utils'
 
@@ -208,6 +208,21 @@ export async function POST(request: NextRequest) {
     }
     console.log('[upload] Exchange rates:', JSON.stringify(tauxChange))
 
+    // Fetch user's sociétés for dynamic prompt injection
+    let societeDetailsForPrompt: { id: string; nom: string; brn?: string | null; aliases?: string[] | null }[] = []
+    try {
+      const { data: ownedSoc } = await supabase.from('societes').select('id, nom, brn, aliases').eq('created_by', user.id)
+      const { data: dossierSoc } = await supabase.from('dossiers').select('societe_id').eq('client_id', user.id)
+      const dossierSocIds = (dossierSoc || []).map(d => d.societe_id).filter(Boolean)
+      if (dossierSocIds.length > 0) {
+        const { data: fromDossiers } = await supabase.from('societes').select('id, nom, brn, aliases').in('id', dossierSocIds)
+        const all = [...(ownedSoc || []), ...(fromDossiers || [])]
+        societeDetailsForPrompt = Array.from(new Map(all.map(s => [s.id, s])).values())
+      } else {
+        societeDetailsForPrompt = ownedSoc || []
+      }
+    } catch { /* use empty list */ }
+
     const isImage = ['jpg', 'jpeg', 'png', 'webp'].includes(ext)
     const isPdf = ext === 'pdf'
     const isExcel = ext === 'xlsx' || ext === 'xls'
@@ -376,10 +391,11 @@ export async function POST(request: NextRequest) {
           temperature: 0,
           system: `You are a document classifier for a Mauritius accounting system. Classify the document into EXACTLY ONE of these types:
 
-- facture_fournisseur: Invoice FROM a supplier TO the company (bill to pay). Signs: supplier name at top, bill to DDS/OCC, amount to pay, invoice number. Examples: Emtel bill, Google Cloud invoice, Pierrick Properties invoice, Magellan invoice, ServiQual invoice, Nimerik invoice, MYT bill, CEB bill, any telecom/SaaS/services invoice.
+- facture_fournisseur: Invoice FROM a supplier TO the company (bill to pay). Signs: supplier name at top, amount to pay, invoice number. Examples: Emtel bill, Google Cloud invoice, any telecom/SaaS/services invoice.
 IMPORTANT: Google Cloud, AWS, Vercel, Stripe, Anthropic, OpenAI are SaaS SUPPLIERS — NOT banks. Their invoices are facture_fournisseur.
 
-- facture_client: Invoice FROM the company TO a client (money to receive). Signs: DDS or OCC company header at top as the ISSUER, billed TO a client (Dr BASTID, SKYCALL, Dr SAMPOL, OCC MALTE, etc.).
+- facture_client: Invoice FROM the company TO a client (money to receive). Signs: company header at top as the ISSUER, billed TO a client.
+${societeDetailsForPrompt.length > 0 ? `Company names to look for: ${societeDetailsForPrompt.map(s => s.nom).join(', ')}` : ''}
 
 - releve_bancaire: Official bank statement from MCB, SBM, Barclays, AfrAsia, MauBank ONLY. Signs: bank logo, IBAN number starting with MU, columns: TRANS DATE, VALUE DATE, TRANSACTION DETAILS, DEBIT, CREDIT, BALANCE. NEVER classify a SaaS invoice as releve_bancaire.
 
@@ -405,7 +421,7 @@ Respond with ONLY the type word. Nothing else.`,
     if (messageContent === null) {
       console.log('[upload] Skipping AI call — already parsed locally')
     } else if (isLikelyBankStatement && isPdf) {
-      const bankSystemPrompt = getSystemPrompt('releve_bancaire', tauxChange)
+      const bankSystemPrompt = injectSocietes(getSystemPrompt('releve_bancaire', tauxChange), societeDetailsForPrompt)
       const bankStream = anthropic.messages.stream({
         model: CLAUDE_CONFIG.model,
         max_tokens: CLAUDE_CONFIG.max_tokens_releve_bancaire,
@@ -500,7 +516,7 @@ Respond with ONLY the type word. Nothing else.`,
         model: CLAUDE_CONFIG.model,
         max_tokens: CLAUDE_CONFIG.max_tokens,
         temperature: CLAUDE_CONFIG.temperature,
-        system: injectTauxChange(SYSTEM_PROMPT_GENERIC_EXTRACTION, tauxChange),
+        system: injectSocietes(injectTauxChange(SYSTEM_PROMPT_GENERIC_EXTRACTION, tauxChange), societeDetailsForPrompt),
         messages: [{ role: 'user', content: messageContent }],
       })
       aiResponse = await genericStream.finalMessage()
@@ -563,7 +579,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
     if (typeDocument === 'releve_bancaire' && !isLikelyBankStatement && isPdf) {
       console.log('[upload] Relevé bancaire détecté via prompt générique → retraitement spécialisé')
       try {
-        const bankSystemPrompt = getSystemPrompt('releve_bancaire', tauxChange)
+        const bankSystemPrompt = injectSocietes(getSystemPrompt('releve_bancaire', tauxChange), societeDetailsForPrompt)
         const bankStream2 = anthropic.messages.stream({
           model: CLAUDE_CONFIG.model,
           max_tokens: CLAUDE_CONFIG.max_tokens_releve_bancaire,
