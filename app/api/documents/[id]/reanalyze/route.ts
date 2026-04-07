@@ -309,7 +309,10 @@ export async function POST(
 
     // === FACTURE: create/update factures record if invoice type ===
     if ((finalTypeDocument === 'facture_fournisseur' || finalTypeDocument === 'facture_client') && finalDossierId) {
-      const factureSocieteId = dossier?.societe_id || null
+      // Always resolve societe_id from the FINAL dossier (post-routing), not the original
+      const { data: dossierForFacture } = await supabase
+        .from('dossiers').select('societe_id').eq('id', finalDossierId).maybeSingle()
+      const factureSocieteId = dossierForFacture?.societe_id || dossier?.societe_id || null
       if (factureSocieteId) {
         const devise = finalExtraction.devise || 'MUR'
         const fxRate = devise !== 'MUR' ? (tauxChange[devise] || 1) : 1

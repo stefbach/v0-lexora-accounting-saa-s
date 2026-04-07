@@ -1085,7 +1085,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
     if ((typeDocument === 'facture_client' || typeDocument === 'facture_fournisseur') && finalDossierId) {
       const { data: dossierForFacture } = await supabase
         .from('dossiers').select('societe_id').eq('id', finalDossierId).maybeSingle()
-      const factureSocieteId = societeId || dossierForFacture?.societe_id
+      const factureSocieteId = dossierForFacture?.societe_id || societeId
 
       if (factureSocieteId) {
         const montantHT = Number(extraction.montant_ht) || 0
