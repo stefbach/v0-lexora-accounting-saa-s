@@ -72,6 +72,7 @@ export default function PrevisionnelPage() {
   const [budgets, setBudgets] = useState<Record<string, number>>({})
   const [investments, setInvestments] = useState<Investment[]>([])
   const [credits, setCredits] = useState<Credit[]>([])
+  const [saveStatus, setSaveStatus] = useState<Record<string, 'saving' | 'saved' | 'error' | null>>({})
 
   // Period filter state
   type PeriodMode = "mensuel" | "trimestriel" | "annuel"
@@ -147,19 +148,27 @@ export default function PrevisionnelPage() {
 
   const saveInvestment = async (inv: Investment) => {
     if (!selectedSociete || selectedSociete === "all" || !inv.description) return
-    const isNew = inv.id?.startsWith?.("new-")
-    const res = await fetch("/api/client/investissements", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: isNew ? undefined : inv.id, societe_id: selectedSociete, type: "investissement", libelle: inv.description, montant: inv.amount, date_debut: inv.date || null }),
-    })
-    // If new item, update local state with real DB id
-    if (isNew) {
-      const json = await res.json()
-      if (json.item?.id) {
-        setInvestments(prev => prev.map(i => i.id === inv.id ? { ...i, id: json.item.id } : i))
+    setSaveStatus(prev => ({ ...prev, [inv.id]: 'saving' }))
+    try {
+      const isNew = inv.id?.startsWith?.("new-")
+      const res = await fetch("/api/client/investissements", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: isNew ? undefined : inv.id, societe_id: selectedSociete, type: "investissement", libelle: inv.description, montant: inv.amount, date_debut: inv.date || null }),
+      })
+      if (isNew) {
+        const json = await res.json()
+        if (json.item?.id) {
+          setInvestments(prev => prev.map(i => i.id === inv.id ? { ...i, id: json.item.id } : i))
+          setSaveStatus(prev => { const n = { ...prev }; delete n[inv.id]; n[json.item.id] = 'saved'; return n })
+          setTimeout(() => setSaveStatus(prev => ({ ...prev, [json.item.id]: null })), 2000)
+          return
+        }
       }
+      setSaveStatus(prev => ({ ...prev, [inv.id]: 'saved' }))
+      setTimeout(() => setSaveStatus(prev => ({ ...prev, [inv.id]: null })), 2000)
+    } catch {
+      setSaveStatus(prev => ({ ...prev, [inv.id]: 'error' }))
     }
-    // Do NOT refetch — local state is already correct
   }
 
   const deleteInvestment = async (id: string) => {
@@ -167,20 +176,31 @@ export default function PrevisionnelPage() {
       await fetch(`/api/client/investissements?id=${id}`, { method: "DELETE" })
     }
     setInvestments(prev => prev.filter(i => i.id !== id))
+    setSaveStatus(prev => { const n = { ...prev }; delete n[id]; return n })
   }
 
   const saveCredit = async (cr: Credit) => {
     if (!selectedSociete || selectedSociete === "all" || (!cr.bank && cr.amount === 0)) return
-    const isNew = cr.id?.startsWith?.("new-")
-    const res = await fetch("/api/client/investissements", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: isNew ? undefined : cr.id, societe_id: selectedSociete, type: "credit", libelle: cr.bank || "Crédit", montant: cr.amount, taux_interet: cr.rate, mensualite: cr.monthly, capital_restant: cr.remaining, banque: cr.bank }),
-    })
-    if (isNew) {
-      const json = await res.json()
-      if (json.item?.id) {
-        setCredits(prev => prev.map(c => c.id === cr.id ? { ...c, id: json.item.id } : c))
+    setSaveStatus(prev => ({ ...prev, [cr.id]: 'saving' }))
+    try {
+      const isNew = cr.id?.startsWith?.("new-")
+      const res = await fetch("/api/client/investissements", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: isNew ? undefined : cr.id, societe_id: selectedSociete, type: "credit", libelle: cr.bank || "Crédit", montant: cr.amount, taux_interet: cr.rate, mensualite: cr.monthly, capital_restant: cr.remaining, banque: cr.bank }),
+      })
+      if (isNew) {
+        const json = await res.json()
+        if (json.item?.id) {
+          setCredits(prev => prev.map(c => c.id === cr.id ? { ...c, id: json.item.id } : c))
+          setSaveStatus(prev => { const n = { ...prev }; delete n[cr.id]; n[json.item.id] = 'saved'; return n })
+          setTimeout(() => setSaveStatus(prev => ({ ...prev, [json.item.id]: null })), 2000)
+          return
+        }
       }
+      setSaveStatus(prev => ({ ...prev, [cr.id]: 'saved' }))
+      setTimeout(() => setSaveStatus(prev => ({ ...prev, [cr.id]: null })), 2000)
+    } catch {
+      setSaveStatus(prev => ({ ...prev, [cr.id]: 'error' }))
     }
   }
 
@@ -189,6 +209,7 @@ export default function PrevisionnelPage() {
       await fetch(`/api/client/investissements?id=${id}`, { method: "DELETE" })
     }
     setCredits(prev => prev.filter(c => c.id !== id))
+    setSaveStatus(prev => { const n = { ...prev }; delete n[id]; return n })
   }
 
   const fetchData = useCallback(async () => {
@@ -748,46 +769,26 @@ export default function PrevisionnelPage() {
                     {investments.map((inv, idx) => (
                       <TableRow key={inv.id} onBlur={() => { if (inv.description) saveInvestment(inv) }}>
                         <TableCell>
-                          <Input
-                            value={inv.description}
-                            placeholder="Description"
-                            className="h-8"
-                            onChange={e => {
-                              const copy = [...investments]
-                              copy[idx] = { ...copy[idx], description: e.target.value }
-                              setInvestments(copy)
-                            }}
-                          />
+                          <Input value={inv.description} placeholder="Description" className="h-8"
+                            onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                            onChange={e => { const c = [...investments]; c[idx] = { ...c[idx], description: e.target.value }; setInvestments(c) }} />
                         </TableCell>
                         <TableCell>
-                          <Input
-                            type="number"
-                            value={inv.amount || ""}
-                            placeholder="0"
-                            className="h-8 text-right w-32 ml-auto"
-                            onChange={e => {
-                              const copy = [...investments]
-                              copy[idx] = { ...copy[idx], amount: parseFloat(e.target.value) || 0 }
-                              setInvestments(copy)
-                            }}
-                          />
+                          <Input type="number" value={inv.amount || ""} placeholder="0" className="h-8 text-right w-32 ml-auto"
+                            onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                            onChange={e => { const c = [...investments]; c[idx] = { ...c[idx], amount: parseFloat(e.target.value) || 0 }; setInvestments(c) }} />
                         </TableCell>
                         <TableCell>
-                          <Input
-                            type="date"
-                            value={inv.date}
-                            className="h-8 w-40"
-                            onChange={e => {
-                              const copy = [...investments]
-                              copy[idx] = { ...copy[idx], date: e.target.value }
-                              setInvestments(copy)
-                            }}
-                          />
+                          <Input type="date" value={inv.date} className="h-8 w-40"
+                            onChange={e => { const c = [...investments]; c[idx] = { ...c[idx], date: e.target.value }; setInvestments(c) }} />
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="flex items-center gap-1">
                           <Button variant="ghost" size="sm" onClick={() => deleteInvestment(inv.id)}>
                             <Trash2 className="h-4 w-4 text-red-500" />
                           </Button>
+                          {saveStatus[inv.id] === 'saving' && <span className="text-xs text-gray-400 animate-pulse">Sauvegarde...</span>}
+                          {saveStatus[inv.id] === 'saved' && <span className="text-xs text-green-500">✓</span>}
+                          {saveStatus[inv.id] === 'error' && <span className="text-xs text-red-500">⚠</span>}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -799,6 +800,7 @@ export default function PrevisionnelPage() {
                   </TableBody>
                 </Table>
               )}
+              {investments.length > 0 && <p className="text-xs text-gray-400 px-4 py-2">Les modifications sont sauvegardées automatiquement</p>}
             </CardContent>
           </Card>
 
@@ -837,28 +839,36 @@ export default function PrevisionnelPage() {
                       <TableRow key={cr.id} onBlur={() => { if (cr.bank || cr.amount > 0) saveCredit(cr) }}>
                         <TableCell>
                           <Input value={cr.bank} placeholder="Banque" className="h-8 w-32"
+                            onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
                             onChange={e => { const c = [...credits]; c[idx] = { ...c[idx], bank: e.target.value }; setCredits(c) }} />
                         </TableCell>
                         <TableCell>
                           <Input type="number" value={cr.amount || ""} placeholder="0" className="h-8 text-right w-28 ml-auto"
+                            onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
                             onChange={e => { const c = [...credits]; c[idx] = { ...c[idx], amount: parseFloat(e.target.value) || 0 }; setCredits(c) }} />
                         </TableCell>
                         <TableCell>
                           <Input type="number" step="0.1" value={cr.rate || ""} placeholder="0" className="h-8 text-right w-20 ml-auto"
+                            onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
                             onChange={e => { const c = [...credits]; c[idx] = { ...c[idx], rate: parseFloat(e.target.value) || 0 }; setCredits(c) }} />
                         </TableCell>
                         <TableCell>
                           <Input type="number" value={cr.monthly || ""} placeholder="0" className="h-8 text-right w-28 ml-auto"
+                            onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
                             onChange={e => { const c = [...credits]; c[idx] = { ...c[idx], monthly: parseFloat(e.target.value) || 0 }; setCredits(c) }} />
                         </TableCell>
                         <TableCell>
                           <Input type="number" value={cr.remaining || ""} placeholder="0" className="h-8 text-right w-28 ml-auto"
+                            onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
                             onChange={e => { const c = [...credits]; c[idx] = { ...c[idx], remaining: parseFloat(e.target.value) || 0 }; setCredits(c) }} />
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="flex items-center gap-1">
                           <Button variant="ghost" size="sm" onClick={() => deleteCredit(cr.id)}>
                             <Trash2 className="h-4 w-4 text-red-500" />
                           </Button>
+                          {saveStatus[cr.id] === 'saving' && <span className="text-xs text-gray-400 animate-pulse">Sauvegarde...</span>}
+                          {saveStatus[cr.id] === 'saved' && <span className="text-xs text-green-500">✓</span>}
+                          {saveStatus[cr.id] === 'error' && <span className="text-xs text-red-500">⚠</span>}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -873,6 +883,7 @@ export default function PrevisionnelPage() {
                   </TableBody>
                 </Table>
               )}
+              {credits.length > 0 && <p className="text-xs text-gray-400 px-4 py-2">Les modifications sont sauvegardées automatiquement</p>}
             </CardContent>
           </Card>
         </TabsContent>
