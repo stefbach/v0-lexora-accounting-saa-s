@@ -11,9 +11,24 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Loader2, RefreshCw, Link2, Unlink, Zap, CheckCircle2, AlertCircle, ArrowRightLeft, Users, Building2, Search, ChevronDown, ChevronUp } from "lucide-react"
 import { MonthPicker } from "@/components/ui/MonthPicker"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 function formatDate(d: string) { return d ? new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" }) : "—" }
+
+function TruncatedCell({ text, className }: { text: string; className?: string }) {
+  if (!text || text === "—") return <span className={className}>{text || "—"}</span>
+  return (
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className={`block max-w-[300px] truncate cursor-help ${className || ""}`}>{text}</span>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-[400px] text-sm break-words">{text}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  )
+}
 
 export default function ClientRapprochementPage() {
   const [data, setData] = useState<any>(null)
@@ -302,7 +317,7 @@ export default function ClientRapprochementPage() {
                   {matched.map((tx: any) => (
                     <TableRow key={tx.id} className="bg-green-50/50">
                       <TableCell className="text-sm">{formatDate(tx.date)}</TableCell>
-                      <TableCell className="text-sm max-w-[200px] truncate">{tx.libelle}</TableCell>
+                      <TableCell className="text-sm"><TruncatedCell text={tx.libelle} /></TableCell>
                       <TableCell className="text-right font-medium">{tx.debit > 0 ? <span className="text-red-600">-{fmt(tx.debit)} {tx.devise}</span> : <span className="text-green-600">+{fmt(tx.credit)} {tx.devise}</span>}</TableCell>
                       <TableCell className="text-sm">{tx.tiers_detecte || "—"}</TableCell>
                       <TableCell><Badge className="bg-green-100 text-green-700">{tx.lettre || "OK"}</Badge></TableCell>
@@ -341,7 +356,7 @@ export default function ClientRapprochementPage() {
                   .map((tx: any) => (
                     <TableRow key={tx.id}>
                       <TableCell className="text-sm">{formatDate(tx.date)}</TableCell>
-                      <TableCell className="text-sm max-w-[200px] truncate">{tx.libelle}</TableCell>
+                      <TableCell className="text-sm"><TruncatedCell text={tx.libelle} /></TableCell>
                       <TableCell className="text-right text-sm text-red-600 font-medium">{tx.debit > 0 ? fmt(tx.debit) + " " + tx.devise : "—"}</TableCell>
                       <TableCell className="text-right text-sm text-green-600 font-medium">{tx.credit > 0 ? fmt(tx.credit) + " " + tx.devise : "—"}</TableCell>
                       <TableCell className="text-sm">{tx.tiers_detecte || "—"}</TableCell>
@@ -379,7 +394,7 @@ export default function ClientRapprochementPage() {
                   <TableRow key={e.id}>
                     <TableCell className="text-sm">{formatDate(e.date_ecriture)}</TableCell>
                     <TableCell className="font-mono text-sm">{e.compte}</TableCell>
-                    <TableCell className="text-sm max-w-[200px] truncate">{e.libelle || "—"}</TableCell>
+                    <TableCell className="text-sm"><TruncatedCell text={e.libelle || "—"} /></TableCell>
                     <TableCell className="text-right text-sm text-red-600 font-medium">{Number(e.debit) > 0 ? fmt(Number(e.debit)) : "—"}</TableCell>
                     <TableCell className="text-right text-sm text-green-600 font-medium">{Number(e.credit) > 0 ? fmt(Number(e.credit)) : "—"}</TableCell>
                     <TableCell className="text-sm">{e.journal || "—"}</TableCell>
@@ -409,7 +424,7 @@ export default function ClientRapprochementPage() {
                   <TableRow key={e.id} className="bg-green-50/50">
                     <TableCell className="text-sm">{formatDate(e.date_ecriture)}</TableCell>
                     <TableCell className="font-mono text-sm">{e.compte}</TableCell>
-                    <TableCell className="text-sm max-w-[200px] truncate">{e.libelle || "—"}</TableCell>
+                    <TableCell className="text-sm"><TruncatedCell text={e.libelle || "—"} /></TableCell>
                     <TableCell className="text-right text-sm">{Number(e.debit) > 0 ? fmt(Number(e.debit)) : "—"}</TableCell>
                     <TableCell className="text-right text-sm">{Number(e.credit) > 0 ? fmt(Number(e.credit)) : "—"}</TableCell>
                     <TableCell><Badge className="bg-green-100 text-green-700">{e.lettre}</Badge></TableCell>

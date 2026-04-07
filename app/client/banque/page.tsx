@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Search, Landmark, AlertCircle, Clock, RefreshCw, Loader2, Building2, X, Pencil } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { useProfile } from "@/hooks/use-profile"
 import { MonthPicker } from "@/components/ui/MonthPicker"
 
@@ -478,7 +479,9 @@ export default function ClientBanquePage() {
                     <Badge variant="outline" className="text-xs" style={{ borderColor: "#D4AF37" }}>{row.banque}</Badge>
                     {row.devise !== "MUR" && <span className="ml-1 text-muted-foreground">{row.devise}</span>}
                   </TableCell>
-                  <TableCell className="max-w-[220px] truncate">{row.libelle}</TableCell>
+                  <TableCell>
+                    <TooltipProvider delayDuration={200}><Tooltip><TooltipTrigger asChild><span className="block max-w-[300px] truncate cursor-help">{row.libelle}</span></TooltipTrigger><TooltipContent side="top" className="max-w-[400px] text-sm break-words">{row.libelle}</TooltipContent></Tooltip></TooltipProvider>
+                  </TableCell>
                   <TableCell className="text-right">
                     {row.debit > 0 ? (
                       <div>
