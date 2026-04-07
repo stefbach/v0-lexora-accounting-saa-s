@@ -34,7 +34,7 @@ const adminSocieteNav: NavSection[] = [
     { href: "/client/previsionnel", label: "Prévisionnel", icon: TrendingUp },
   ]},
   { label: "Mon Compte", items: [
-    { href: "/client/equipe", label: "Mon Équipe", icon: UsersIcon },
+    { href: "/client/utilisateurs", label: "Mon Équipe", icon: UsersIcon },
     { href: "/client/alertes", label: "Mes Alertes", icon: Bell },
     { href: "/client/profil", label: "Mon Profil", icon: Settings },
   ]},
