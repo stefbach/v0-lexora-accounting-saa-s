@@ -7,10 +7,9 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Loader2, RefreshCw, Link2, Unlink, Zap, CheckCircle2, AlertCircle, ArrowRightLeft, Users, Building2, Search } from "lucide-react"
+import { Loader2, RefreshCw, Link2, Unlink, Zap, CheckCircle2, AlertCircle, ArrowRightLeft, Users, Building2, Search, ChevronDown, ChevronUp } from "lucide-react"
 import { MonthPicker } from "@/components/ui/MonthPicker"
 
 function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
@@ -28,8 +27,9 @@ export default function ClientRapprochementPage() {
   const [payeParNom, setPayeParNom] = useState("")
   const [selectedMois, setSelectedMois] = useState<string | null>(null)
   const [selectedCompte, setSelectedCompte] = useState("all")
-  const [activeTab, setActiveTab] = useState("auto")
-  const [manualSearch, setManualSearch] = useState("")
+  const [matchedOpen, setMatchedOpen] = useState(false)
+  const [txSearch, setTxSearch] = useState("")
+  const [dialogTab, setDialogTab] = useState<"factures" | "ecritures" | "bach">("factures")
 
   // Get sociétés
   useEffect(() => {
@@ -285,199 +285,142 @@ export default function ClientRapprochementPage() {
         <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Non rapprochées</p><p className="text-2xl font-bold text-red-600">{unmatched.length}</p></CardContent></Card>
       </div>
 
-      {/* Tabs: Automatique + Manuel */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="auto"><Zap className="w-4 h-4 mr-1" />Automatique</TabsTrigger>
-          <TabsTrigger value="manuel"><Link2 className="w-4 h-4 mr-1" />Manuel</TabsTrigger>
-        </TabsList>
-
-        {/* TAB: Automatique */}
-        <TabsContent value="auto" className="space-y-4">
-          {/* Rapprochées */}
-          {matched.length > 0 && (
-            <Card>
-              <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-green-600" />Rapprochées ({matched.length})</CardTitle></CardHeader>
-              <CardContent className="p-0 overflow-x-auto">
-                <Table>
-                  <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Libellé</TableHead><TableHead className="text-right">Montant</TableHead><TableHead>Tiers</TableHead><TableHead>Lettre</TableHead><TableHead>Action</TableHead></TableRow></TableHeader>
-                  <TableBody>
-                    {matched.map((tx: any) => (
-                      <TableRow key={tx.id} className="bg-green-50/50">
-                        <TableCell className="text-sm">{formatDate(tx.date)}</TableCell>
-                        <TableCell className="text-sm max-w-[200px] truncate">{tx.libelle}</TableCell>
-                        <TableCell className="text-right font-medium">{tx.debit > 0 ? <span className="text-red-600">-{fmt(tx.debit)} {tx.devise}</span> : <span className="text-green-600">+{fmt(tx.credit)} {tx.devise}</span>}</TableCell>
-                        <TableCell className="text-sm">{tx.tiers_detecte || "—"}</TableCell>
-                        <TableCell><Badge className="bg-green-100 text-green-700">{tx.lettre || "OK"}</Badge></TableCell>
-                        <TableCell><Button variant="ghost" size="sm" onClick={() => handleUnlink(tx)}><Unlink className="w-4 h-4 text-red-500" /></Button></TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Non rapprochées */}
-          <Card>
-            <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2"><AlertCircle className="w-5 h-5 text-orange-500" />Non rapprochées ({unmatched.length})</CardTitle></CardHeader>
+      {/* SECTION 3 — Rapprochées (collapsible) */}
+      {matched.length > 0 && (
+        <Card>
+          <CardHeader className="cursor-pointer" onClick={() => setMatchedOpen(!matchedOpen)}>
+            <CardTitle className="text-[#0B0F2E] flex items-center justify-between">
+              <span className="flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-green-600" />Rapprochées ({matched.length})</span>
+              {matchedOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+            </CardTitle>
+          </CardHeader>
+          {matchedOpen && (
             <CardContent className="p-0 overflow-x-auto">
-              {unmatched.length === 0 ? (
-                <div className="p-8 text-center text-gray-400">Toutes les transactions sont rapprochées</div>
-              ) : (
-                <Table>
-                  <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Libellé</TableHead><TableHead className="text-right">Débit</TableHead><TableHead className="text-right">Crédit</TableHead><TableHead>Tiers</TableHead><TableHead>Action</TableHead></TableRow></TableHeader>
-                  <TableBody>
-                    {unmatched.map((tx: any) => (
-                      <TableRow key={tx.id}>
-                        <TableCell className="text-sm">{formatDate(tx.date)}</TableCell>
-                        <TableCell className="text-sm max-w-[200px] truncate">{tx.libelle}</TableCell>
-                        <TableCell className="text-right text-sm text-red-600 font-medium">{tx.debit > 0 ? fmt(tx.debit) + " " + tx.devise : "—"}</TableCell>
-                        <TableCell className="text-right text-sm text-green-600 font-medium">{tx.credit > 0 ? fmt(tx.credit) + " " + tx.devise : "—"}</TableCell>
-                        <TableCell className="text-sm">{tx.tiers_detecte || "—"}</TableCell>
-                        <TableCell><Button variant="outline" size="sm" onClick={() => setLinkDialog(tx)} className="gap-1"><Link2 className="w-3 h-3" />Lettrer</Button></TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
+              <Table>
+                <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Libellé</TableHead><TableHead className="text-right">Montant</TableHead><TableHead>Tiers</TableHead><TableHead>Lettre</TableHead><TableHead>Action</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {matched.map((tx: any) => (
+                    <TableRow key={tx.id} className="bg-green-50/50">
+                      <TableCell className="text-sm">{formatDate(tx.date)}</TableCell>
+                      <TableCell className="text-sm max-w-[200px] truncate">{tx.libelle}</TableCell>
+                      <TableCell className="text-right font-medium">{tx.debit > 0 ? <span className="text-red-600">-{fmt(tx.debit)} {tx.devise}</span> : <span className="text-green-600">+{fmt(tx.credit)} {tx.devise}</span>}</TableCell>
+                      <TableCell className="text-sm">{tx.tiers_detecte || "—"}</TableCell>
+                      <TableCell><Badge className="bg-green-100 text-green-700">{tx.lettre || "OK"}</Badge></TableCell>
+                      <TableCell><Button variant="ghost" size="sm" onClick={() => handleUnlink(tx)}><Unlink className="w-4 h-4 text-red-500" /></Button></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </CardContent>
-          </Card>
-        </TabsContent>
+          )}
+        </Card>
+      )}
 
-        {/* TAB: Manuel */}
-        <TabsContent value="manuel" className="space-y-4">
-          {/* Search */}
-          <div className="relative max-w-sm">
+      {/* SECTION 4 — Non rapprochées (main focus) */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-[#0B0F2E] flex items-center gap-2"><AlertCircle className="w-5 h-5 text-orange-500" />Non rapprochées ({unmatched.length})</CardTitle>
+          <div className="relative w-64">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Rechercher par libellé, tiers, montant..." className="pl-9" value={manualSearch} onChange={e => setManualSearch(e.target.value)} />
+            <Input placeholder="Rechercher..." className="pl-9 h-8 text-sm" value={txSearch} onChange={e => setTxSearch(e.target.value)} />
           </div>
-
-          {/* Unmatched transactions for manual matching */}
-          <Card>
-            <CardHeader><CardTitle className="text-[#0B0F2E]">Transactions non rapprochées ({unmatched.length})</CardTitle></CardHeader>
-            <CardContent className="p-0 overflow-x-auto">
-              {unmatched.length === 0 ? (
-                <div className="p-8 text-center text-gray-400">Aucune transaction non rapprochée</div>
-              ) : (
-                <Table>
-                  <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Libellé</TableHead><TableHead className="text-right">Débit</TableHead><TableHead className="text-right">Crédit</TableHead><TableHead>Tiers</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
-                  <TableBody>
-                    {unmatched
-                      .filter(tx => {
-                        if (!manualSearch) return true
-                        const s = manualSearch.toLowerCase()
-                        return tx.libelle?.toLowerCase().includes(s) || (tx.tiers_detecte || "").toLowerCase().includes(s) || String(tx.debit).includes(s) || String(tx.credit).includes(s)
-                      })
-                      .map((tx: any) => (
-                        <TableRow key={tx.id}>
-                          <TableCell className="text-sm">{formatDate(tx.date)}</TableCell>
-                          <TableCell className="text-sm max-w-[200px] truncate">{tx.libelle}</TableCell>
-                          <TableCell className="text-right text-sm text-red-600 font-medium">{tx.debit > 0 ? fmt(tx.debit) + " " + tx.devise : "—"}</TableCell>
-                          <TableCell className="text-right text-sm text-green-600 font-medium">{tx.credit > 0 ? fmt(tx.credit) + " " + tx.devise : "—"}</TableCell>
-                          <TableCell className="text-sm">{tx.tiers_detecte || "—"}</TableCell>
-                          <TableCell>
-                            <div className="flex gap-1">
-                              <Button variant="outline" size="sm" onClick={() => setLinkDialog(tx)} className="gap-1"><Link2 className="w-3 h-3" />Lettrer</Button>
-                              <Button variant="outline" size="sm" onClick={() => { setPayeParNom("STEPHANE BACH"); setPayeParType("associe"); setLinkDialog(tx) }} className="gap-1 text-purple-600 border-purple-200 hover:bg-purple-50"><Users className="w-3 h-3" />Bach</Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Factures en attente */}
-          {factures.length > 0 && (
-            <Card>
-              <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2"><ArrowRightLeft className="w-5 h-5" style={{ color: "#D4AF37" }} />Factures en attente ({factures.length})</CardTitle></CardHeader>
-              <CardContent className="p-0 overflow-x-auto">
-                <Table>
-                  <TableHeader><TableRow><TableHead>N°</TableHead><TableHead>Type</TableHead><TableHead>Tiers</TableHead><TableHead>Date</TableHead><TableHead className="text-right">Montant TTC</TableHead><TableHead>Statut</TableHead></TableRow></TableHeader>
-                  <TableBody>
-                    {factures.map((f: any) => (
-                      <TableRow key={f.id}>
-                        <TableCell className="font-medium">{f.numero_facture || "—"}</TableCell>
-                        <TableCell><Badge className={f.type_facture === "client" ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"}>{f.type_facture}</Badge></TableCell>
-                        <TableCell className="text-sm">{f.tiers || "—"}</TableCell>
-                        <TableCell className="text-sm">{formatDate(f.date_facture)}</TableCell>
-                        <TableCell className="text-right font-bold">{fmt(Number(f.montant_ttc) || 0)} {f.devise || "MUR"}</TableCell>
-                        <TableCell><Badge className="bg-orange-100 text-orange-700">{f.statut}</Badge></TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+        </CardHeader>
+        <CardContent className="p-0 overflow-x-auto">
+          {unmatched.length === 0 ? (
+            <div className="p-8 text-center text-gray-400">Toutes les transactions sont rapprochées</div>
+          ) : (
+            <Table>
+              <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Libellé</TableHead><TableHead className="text-right">Débit</TableHead><TableHead className="text-right">Crédit</TableHead><TableHead>Tiers</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
+              <TableBody>
+                {unmatched
+                  .filter(tx => {
+                    if (!txSearch) return true
+                    const s = txSearch.toLowerCase()
+                    return tx.libelle?.toLowerCase().includes(s) || (tx.tiers_detecte || "").toLowerCase().includes(s) || String(tx.debit).includes(s) || String(tx.credit).includes(s)
+                  })
+                  .map((tx: any) => (
+                    <TableRow key={tx.id}>
+                      <TableCell className="text-sm">{formatDate(tx.date)}</TableCell>
+                      <TableCell className="text-sm max-w-[200px] truncate">{tx.libelle}</TableCell>
+                      <TableCell className="text-right text-sm text-red-600 font-medium">{tx.debit > 0 ? fmt(tx.debit) + " " + tx.devise : "—"}</TableCell>
+                      <TableCell className="text-right text-sm text-green-600 font-medium">{tx.credit > 0 ? fmt(tx.credit) + " " + tx.devise : "—"}</TableCell>
+                      <TableCell className="text-sm">{tx.tiers_detecte || "—"}</TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          <Button variant="outline" size="sm" onClick={() => { setDialogTab("factures"); setLinkDialog(tx) }} className="gap-1"><Link2 className="w-3 h-3" />Lettrer</Button>
+                          <Button variant="outline" size="sm" onClick={() => { setPayeParNom("STEPHANE BACH"); setPayeParType("associe"); setDialogTab("bach"); setLinkDialog(tx) }} className="gap-1 text-purple-600 border-purple-200 hover:bg-purple-50"><Users className="w-3 h-3" />Bach</Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+              </TableBody>
+            </Table>
           )}
+        </CardContent>
+      </Card>
 
-          {/* Lettrage écritures comptables (401/411) */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-[#0B0F2E]">Lettrage écritures (401/411) — {ecrituresLettrage.length} non lettrées</CardTitle>
-              <Button variant="outline" size="sm" onClick={handleAutoLettrage} disabled={autoLettraging}>
-                <Zap className={`w-4 h-4 mr-1 ${autoLettraging ? "animate-spin" : ""}`} />
-                {autoLettraging ? "Analyse..." : "Auto-lettrage"}
-              </Button>
-            </CardHeader>
-            <CardContent className="p-0 overflow-x-auto">
-              {ecrituresLettrage.length === 0 ? (
-                <div className="p-8 text-center text-gray-400">Aucune écriture non lettrée en 401/411</div>
-              ) : (
-                <Table>
-                  <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Compte</TableHead><TableHead>Libellé</TableHead><TableHead className="text-right">Débit</TableHead><TableHead className="text-right">Crédit</TableHead><TableHead>Journal</TableHead><TableHead>Action</TableHead></TableRow></TableHeader>
-                  <TableBody>
-                    {ecrituresLettrage.slice(0, 50).map((e: any) => (
-                      <TableRow key={e.id}>
-                        <TableCell className="text-sm">{formatDate(e.date_ecriture)}</TableCell>
-                        <TableCell className="font-mono text-sm">{e.compte}</TableCell>
-                        <TableCell className="text-sm max-w-[200px] truncate">{e.libelle || "—"}</TableCell>
-                        <TableCell className="text-right text-sm text-red-600 font-medium">{Number(e.debit) > 0 ? fmt(Number(e.debit)) : "—"}</TableCell>
-                        <TableCell className="text-right text-sm text-green-600 font-medium">{Number(e.credit) > 0 ? fmt(Number(e.credit)) : "—"}</TableCell>
-                        <TableCell className="text-sm">{e.journal || "—"}</TableCell>
-                        <TableCell>
-                          <Button variant="outline" size="sm" onClick={() => {
-                            setLettrageDialog(e)
-                            setLettrageSelection(new Set([e.id]))
-                          }}><Link2 className="w-3 h-3 mr-1" />Lettrer</Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Écritures lettrées */}
-          {ecrituresLettrees.length > 0 && (
-            <Card>
-              <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-green-600" />Écritures lettrées ({ecrituresLettrees.length})</CardTitle></CardHeader>
-              <CardContent className="p-0 overflow-x-auto">
-                <Table>
-                  <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Compte</TableHead><TableHead>Libellé</TableHead><TableHead className="text-right">Débit</TableHead><TableHead className="text-right">Crédit</TableHead><TableHead>Lettre</TableHead><TableHead>Action</TableHead></TableRow></TableHeader>
-                  <TableBody>
-                    {ecrituresLettrees.slice(0, 30).map((e: any) => (
-                      <TableRow key={e.id} className="bg-green-50/50">
-                        <TableCell className="text-sm">{formatDate(e.date_ecriture)}</TableCell>
-                        <TableCell className="font-mono text-sm">{e.compte}</TableCell>
-                        <TableCell className="text-sm max-w-[200px] truncate">{e.libelle || "—"}</TableCell>
-                        <TableCell className="text-right text-sm">{Number(e.debit) > 0 ? fmt(Number(e.debit)) : "—"}</TableCell>
-                        <TableCell className="text-right text-sm">{Number(e.credit) > 0 ? fmt(Number(e.credit)) : "—"}</TableCell>
-                        <TableCell><Badge className="bg-green-100 text-green-700">{e.lettre}</Badge></TableCell>
-                        <TableCell><Button variant="ghost" size="sm" onClick={() => handleDelettrer(e)}><Unlink className="w-4 h-4 text-red-500" /></Button></TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+      {/* SECTION 5 — Lettrage écritures 401/411 */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-[#0B0F2E]">Lettrage fournisseurs/clients — {ecrituresLettrage.length} non lettrées</CardTitle>
+          <Button variant="outline" size="sm" onClick={handleAutoLettrage} disabled={autoLettraging}>
+            <Zap className={`w-4 h-4 mr-1 ${autoLettraging ? "animate-spin" : ""}`} />
+            {autoLettraging ? "Analyse..." : "Auto-lettrage"}
+          </Button>
+        </CardHeader>
+        <CardContent className="p-0 overflow-x-auto">
+          {ecrituresLettrage.length === 0 ? (
+            <div className="p-8 text-center text-gray-400">Aucune écriture non lettrée en 401/411</div>
+          ) : (
+            <Table>
+              <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Compte</TableHead><TableHead>Libellé</TableHead><TableHead className="text-right">Débit</TableHead><TableHead className="text-right">Crédit</TableHead><TableHead>Journal</TableHead><TableHead>Action</TableHead></TableRow></TableHeader>
+              <TableBody>
+                {ecrituresLettrage.slice(0, 50).map((e: any) => (
+                  <TableRow key={e.id}>
+                    <TableCell className="text-sm">{formatDate(e.date_ecriture)}</TableCell>
+                    <TableCell className="font-mono text-sm">{e.compte}</TableCell>
+                    <TableCell className="text-sm max-w-[200px] truncate">{e.libelle || "—"}</TableCell>
+                    <TableCell className="text-right text-sm text-red-600 font-medium">{Number(e.debit) > 0 ? fmt(Number(e.debit)) : "—"}</TableCell>
+                    <TableCell className="text-right text-sm text-green-600 font-medium">{Number(e.credit) > 0 ? fmt(Number(e.credit)) : "—"}</TableCell>
+                    <TableCell className="text-sm">{e.journal || "—"}</TableCell>
+                    <TableCell>
+                      <Button variant="outline" size="sm" onClick={() => {
+                        setLettrageDialog(e)
+                        setLettrageSelection(new Set([e.id]))
+                      }}><Link2 className="w-3 h-3 mr-1" />Lettrer</Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
-        </TabsContent>
-      </Tabs>
+        </CardContent>
+      </Card>
+
+      {/* Écritures lettrées (collapsible like rapprochées) */}
+      {ecrituresLettrees.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-green-600" />Écritures lettrées ({ecrituresLettrees.length})</CardTitle></CardHeader>
+          <CardContent className="p-0 overflow-x-auto">
+            <Table>
+              <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Compte</TableHead><TableHead>Libellé</TableHead><TableHead className="text-right">Débit</TableHead><TableHead className="text-right">Crédit</TableHead><TableHead>Lettre</TableHead><TableHead>Action</TableHead></TableRow></TableHeader>
+              <TableBody>
+                {ecrituresLettrees.slice(0, 30).map((e: any) => (
+                  <TableRow key={e.id} className="bg-green-50/50">
+                    <TableCell className="text-sm">{formatDate(e.date_ecriture)}</TableCell>
+                    <TableCell className="font-mono text-sm">{e.compte}</TableCell>
+                    <TableCell className="text-sm max-w-[200px] truncate">{e.libelle || "—"}</TableCell>
+                    <TableCell className="text-right text-sm">{Number(e.debit) > 0 ? fmt(Number(e.debit)) : "—"}</TableCell>
+                    <TableCell className="text-right text-sm">{Number(e.credit) > 0 ? fmt(Number(e.credit)) : "—"}</TableCell>
+                    <TableCell><Badge className="bg-green-100 text-green-700">{e.lettre}</Badge></TableCell>
+                    <TableCell><Button variant="ghost" size="sm" onClick={() => handleDelettrer(e)}><Unlink className="w-4 h-4 text-red-500" /></Button></TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Lettrage dialog */}
       <Dialog open={!!lettrageDialog} onOpenChange={o => { if (!o) { setLettrageDialog(null); setLettrageSelection(new Set()) } }}>
@@ -525,102 +468,120 @@ export default function ClientRapprochementPage() {
         <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Lettrer manuellement</DialogTitle></DialogHeader>
           {linkDialog && (
-            <div className="space-y-4">
+            <div className="space-y-3">
+              {/* Transaction details */}
               <div className="p-3 bg-gray-50 rounded-lg text-sm">
                 <p className="font-medium">{linkDialog.libelle}</p>
-                <p className="text-gray-500">{formatDate(linkDialog.date)} — {linkDialog.debit > 0 ? `-${fmt(linkDialog.debit)}` : `+${fmt(linkDialog.credit)}`} {linkDialog.devise}</p>
+                <p className="text-gray-500">{formatDate(linkDialog.date)} — {linkDialog.debit > 0 ? <span className="text-red-600 font-bold">-{fmt(linkDialog.debit)}</span> : <span className="text-green-600 font-bold">+{fmt(linkDialog.credit)}</span>} {linkDialog.devise}</p>
+                {linkDialog.tiers_detecte && <p className="text-xs text-gray-400 mt-1">Tiers: {linkDialog.tiers_detecte}</p>}
               </div>
 
-              {factures.length > 0 && (
-                <>
-                  <p className="text-sm font-medium">Factures en attente :</p>
-                  <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                    {factures.map((f: any) => {
+              {/* Tabs inside panel */}
+              <div className="flex gap-1 border-b">
+                {(["factures", "ecritures", "bach"] as const).map(tab => (
+                  <button key={tab} onClick={() => setDialogTab(tab)}
+                    className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${dialogTab === tab ? "border-[#D4AF37] text-[#0B0F2E]" : "border-transparent text-gray-400 hover:text-gray-600"}`}>
+                    {tab === "factures" ? `Factures (${factures.length})` : tab === "ecritures" ? `Écritures (${ecritures.length})` : "Compte Bach"}
+                  </button>
+                ))}
+              </div>
+
+              {/* Tab: Factures */}
+              {dialogTab === "factures" && (
+                <div className="space-y-2 max-h-[350px] overflow-y-auto">
+                  {factures.length === 0 ? (
+                    <p className="text-sm text-gray-400 py-4 text-center">Aucune facture en attente</p>
+                  ) : factures
+                    .sort((a: any, b: any) => {
+                      const txAmt = linkDialog.debit > 0 ? linkDialog.debit : linkDialog.credit
+                      return Math.abs((Number(a.montant_ttc) || 0) - txAmt) - Math.abs((Number(b.montant_ttc) || 0) - txAmt)
+                    })
+                    .map((f: any) => {
                       const txAmount = linkDialog.debit > 0 ? linkDialog.debit : linkDialog.credit
                       const fAmount = Number(f.montant_ttc) || 0
-                      const isClose = Math.abs(txAmount - fAmount) <= fAmount * 0.05
+                      const isClose = Math.abs(txAmount - fAmount) <= Math.max(fAmount * 0.05, 1)
                       return (
                         <div key={f.id} onClick={() => handleManualLink(linkDialog, f, "facture")}
                           className={`p-3 border rounded-lg cursor-pointer hover:bg-blue-50 ${isClose ? "border-green-300 bg-green-50" : "border-gray-200"}`}>
                           <div className="flex justify-between">
-                            <div><p className="font-medium text-sm">{f.numero_facture || "---"} <Badge className="text-xs ml-1">{f.type_facture}</Badge></p><p className="text-xs text-gray-500">{f.tiers}</p></div>
+                            <div><p className="font-medium text-sm">{f.numero_facture || "—"} <Badge className="text-xs ml-1">{f.type_facture}</Badge></p><p className="text-xs text-gray-500">{f.tiers} — {formatDate(f.date_facture)}</p></div>
                             <div className="text-right"><p className="font-bold text-sm">{fmt(fAmount)} {f.devise}</p>{isClose && <Badge className="bg-green-100 text-green-700 text-xs">Proche</Badge>}</div>
                           </div>
                         </div>
                       )
                     })}
-                  </div>
-                </>
+                </div>
               )}
 
-              {/* Paye par associe / collaborateur */}
-              {factures.length > 0 && (
-                <div className="border-t pt-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Users className="w-4 h-4 text-purple-600" />
-                    <p className="text-sm font-medium">Facture payee par un associe ou collaborateur</p>
-                  </div>
-                  <p className="text-xs text-gray-500 mb-3">
-                    Si cette facture n'a PAS ete payee via le compte bancaire mais par un associe ou collaborateur
-                    avec ses fonds personnels, selectionnez la facture ci-dessous.
-                  </p>
-                  <div className="grid grid-cols-2 gap-2 mb-3">
+              {/* Tab: Écritures */}
+              {dialogTab === "ecritures" && (
+                <div className="space-y-2 max-h-[350px] overflow-y-auto">
+                  {ecritures.length === 0 ? (
+                    <p className="text-sm text-gray-400 py-4 text-center">Aucune écriture non lettrée</p>
+                  ) : ecritures
+                    .sort((a: any, b: any) => {
+                      const txAmt = linkDialog.debit > 0 ? linkDialog.debit : linkDialog.credit
+                      const aAmt = Number(a.debit) > 0 ? Number(a.debit) : Number(a.credit)
+                      const bAmt = Number(b.debit) > 0 ? Number(b.debit) : Number(b.credit)
+                      return Math.abs(aAmt - txAmt) - Math.abs(bAmt - txAmt)
+                    })
+                    .map((e: any) => {
+                      const txAmount = linkDialog.debit > 0 ? linkDialog.debit : linkDialog.credit
+                      const eAmount = Number(e.debit) > 0 ? Number(e.debit) : Number(e.credit)
+                      const isClose = eAmount > 0 && Math.abs(txAmount - eAmount) <= Math.max(eAmount * 0.05, 1)
+                      return (
+                        <div key={e.id} onClick={() => handleManualLink(linkDialog, e, "ecriture")}
+                          className={`p-3 border rounded-lg cursor-pointer hover:bg-blue-50 ${isClose ? "border-green-300 bg-green-50" : "border-gray-200"}`}>
+                          <div className="flex justify-between">
+                            <div><p className="font-medium text-sm">{e.compte} — {e.libelle || "—"}</p><p className="text-xs text-gray-500">{formatDate(e.date_ecriture)} — {e.journal}</p></div>
+                            <div className="text-right"><p className="font-bold text-sm">{Number(e.debit) > 0 ? fmt(Number(e.debit)) + " D" : fmt(Number(e.credit)) + " C"}</p>{isClose && <Badge className="bg-green-100 text-green-700 text-xs">Proche</Badge>}</div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                </div>
+              )}
+
+              {/* Tab: Compte Bach */}
+              {dialogTab === "bach" && (
+                <div className="space-y-3">
+                  <p className="text-sm text-gray-500">Assigner cette opération au compte courant associé de STEPHANE BACH</p>
+                  <div className="grid grid-cols-2 gap-2">
                     <div>
                       <Label className="text-xs">Type</Label>
                       <Select value={payeParType} onValueChange={setPayeParType}>
                         <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="associe">Associe (455)</SelectItem>
+                          <SelectItem value="associe">Associé (455)</SelectItem>
                           <SelectItem value="collaborateur">Collaborateur (467)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     <div>
                       <Label className="text-xs">Nom</Label>
-                      <Input className="h-8 text-xs" value={payeParNom} onChange={e => setPayeParNom(e.target.value)} placeholder="Nom de la personne" />
+                      <Input className="h-8 text-xs" value={payeParNom} onChange={e => setPayeParNom(e.target.value)} placeholder="STEPHANE BACH" />
                     </div>
                   </div>
-                  {payeParNom && (
-                    <div className="space-y-2 max-h-[150px] overflow-y-auto">
-                      {factures.map((f: any) => {
-                        const fAmount = Number(f.montant_ttc) || 0
-                        return (
-                          <div key={`cca-${f.id}`} onClick={() => handlePayeParAssocie(f)}
-                            className="p-3 border border-purple-200 rounded-lg cursor-pointer hover:bg-purple-50">
-                            <div className="flex justify-between items-center">
-                              <div>
-                                <p className="font-medium text-sm">{f.numero_facture || "---"} <Badge className="text-xs ml-1 bg-purple-100 text-purple-700">{payeParType === 'associe' ? 'Associe' : 'Collaborateur'}</Badge></p>
-                                <p className="text-xs text-gray-500">{f.tiers} — paye par {payeParNom}</p>
-                              </div>
-                              <p className="font-bold text-sm">{fmt(fAmount)} {f.devise}</p>
+                  {payeParNom && factures.length > 0 && (
+                    <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                      <p className="text-xs font-medium text-gray-600">Sélectionnez la facture payée par {payeParNom} :</p>
+                      {factures.map((f: any) => (
+                        <div key={`bach-${f.id}`} onClick={() => handlePayeParAssocie(f)}
+                          className="p-3 border border-purple-200 rounded-lg cursor-pointer hover:bg-purple-50">
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <p className="font-medium text-sm">{f.numero_facture || "—"} <Badge className="text-xs ml-1 bg-purple-100 text-purple-700">Associé</Badge></p>
+                              <p className="text-xs text-gray-500">{f.tiers}</p>
                             </div>
+                            <p className="font-bold text-sm">{fmt(Number(f.montant_ttc) || 0)} {f.devise}</p>
                           </div>
-                        )
-                      })}
+                        </div>
+                      ))}
                     </div>
                   )}
-                </div>
-              )}
-
-              <p className="text-sm font-medium">Ecritures comptables :</p>
-              {ecritures.length === 0 ? (
-                <p className="text-sm text-gray-400">Aucune ecriture non lettree</p>
-              ) : (
-                <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                  {ecritures.map((e: any) => {
-                    const txAmount = linkDialog.debit > 0 ? linkDialog.debit : linkDialog.credit
-                    const eAmount = Number(e.debit) > 0 ? Number(e.debit) : Number(e.credit)
-                    const isClose = eAmount > 0 && Math.abs(txAmount - eAmount) <= Math.max(eAmount * 0.05, 1)
-                    return (
-                      <div key={e.id} onClick={() => handleManualLink(linkDialog, e, "ecriture")}
-                        className={`p-3 border rounded-lg cursor-pointer hover:bg-purple-50 ${isClose ? "border-green-300 bg-green-50" : "border-gray-200"}`}>
-                        <div className="flex justify-between">
-                          <div><p className="font-medium text-sm">{e.compte} — {e.libelle || "—"}</p><p className="text-xs text-gray-500">{formatDate(e.date_ecriture)} — {e.journal}</p></div>
-                          <div className="text-right"><p className="font-bold text-sm">{Number(e.debit) > 0 ? fmt(Number(e.debit)) + " D" : fmt(Number(e.credit)) + " C"}</p>{isClose && <Badge className="bg-green-100 text-green-700 text-xs">Proche</Badge>}</div>
-                        </div>
-                      </div>
-                    )
-                  })}
+                  {payeParNom && factures.length === 0 && (
+                    <p className="text-sm text-gray-400 text-center py-4">Aucune facture en attente à assigner</p>
+                  )}
                 </div>
               )}
 
