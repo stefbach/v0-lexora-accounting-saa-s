@@ -157,26 +157,49 @@ export async function GET(request: Request) {
     const availableSocietes = (ownedSocietesInfo || [])
       .map((s: any) => ({ id: s.id, nom: s.nom }))
 
-    // Get all accounting entries — depuis v2 en priorité, sinon v1
+    // === PARALLEL FETCH: all independent queries at once ===
     let ecrituresV2Query = supabase
       .from('ecritures_comptables_v2').select('*').in('societe_id', societeIds)
       .order('date_ecriture', { ascending: false })
     if (dateFilter) {
       ecrituresV2Query = ecrituresV2Query.gte('date_ecriture', dateFilter.debut).lte('date_ecriture', dateFilter.fin)
     }
-    const { data: ecrituresV2 } = await ecrituresV2Query
 
-    let ecrituresV1Result: { data: any[] | null } = { data: [] }
-    if (allDossierIds.length > 0) {
-      let v1Query = supabase
-        .from('ecritures_comptables').select('*').in('dossier_id', allDossierIds)
-        .order('date_ecriture', { ascending: false })
-      if (dateFilter) {
-        v1Query = v1Query.gte('date_ecriture', dateFilter.debut).lte('date_ecriture', dateFilter.fin)
-      }
-      ecrituresV1Result = await v1Query
+    let v1Query = allDossierIds.length > 0
+      ? supabase.from('ecritures_comptables').select('*').in('dossier_id', allDossierIds).order('date_ecriture', { ascending: false })
+      : null
+    if (v1Query && dateFilter) {
+      v1Query = v1Query.gte('date_ecriture', dateFilter.debut).lte('date_ecriture', dateFilter.fin)
     }
-    const ecrituresV1 = ecrituresV1Result.data
+
+    let facturesQuery = supabase
+      .from('factures').select('*').in('societe_id', societeIds)
+      .order('date_facture', { ascending: false })
+    if (dateFilter) {
+      facturesQuery = facturesQuery.gte('date_facture', dateFilter.debut).lte('date_facture', dateFilter.fin)
+    }
+
+    const [
+      { data: ecrituresV2 },
+      ecrituresV1Result,
+      { data: documents },
+      { data: comptesBank },
+      { data: tvaRecords },
+      { data: facturesData, error: facturesErr },
+      { data: relevesDB },
+    ] = await Promise.all([
+      ecrituresV2Query,
+      v1Query ? v1Query : Promise.resolve({ data: [] as any[] }),
+      supabase.from('documents').select('id, nom_fichier, type_document, statut, n8n_result, created_at, societe_detectee')
+        .in('dossier_id', dossierIds).eq('statut', 'traite').order('created_at', { ascending: false }),
+      supabase.from('comptes_bancaires').select('*').in('societe_id', societeIds).eq('actif', true),
+      supabase.from('tva_mensuelle').select('*').in('societe_id', societeIds).order('periode', { ascending: false }),
+      facturesQuery,
+      supabase.from('releves_bancaires').select('id, transactions_json, date_debut, date_fin, compte_bancaire_id')
+        .in('societe_id', societeIds).order('date_fin', { ascending: false }),
+    ])
+
+    const ecrituresV1 = ecrituresV1Result?.data || []
 
     // Fusionner v1 + v2 (v2 prioritaire, normaliser les noms de colonnes)
     const ecrituresFromV2 = (ecrituresV2 || []).map((e: any) => ({
@@ -193,30 +216,7 @@ export async function GET(request: Request) {
     }))
     const ecritures = ecrituresV2 && ecrituresV2.length > 0 ? ecrituresFromV2 : ecrituresFromV1
 
-    // Get processed documents
-    const { data: documents } = await supabase
-      .from('documents').select('id, nom_fichier, type_document, statut, n8n_result, created_at, societe_detectee')
-      .in('dossier_id', dossierIds).eq('statut', 'traite')
-      .order('created_at', { ascending: false })
-
-    // Get bank accounts
-    const { data: comptesBank } = await supabase
-      .from('comptes_bancaires').select('*').in('societe_id', societeIds).eq('actif', true)
-
-    // Get TVA records
-    const { data: tvaRecords } = await supabase
-      .from('tva_mensuelle').select('*').in('societe_id', societeIds)
-      .order('periode', { ascending: false })
-
-    // Get factures from table (source of truth for CA/dépenses)
     let facturesFromTable: any[] = []
-    let facturesQuery = supabase
-      .from('factures').select('*').in('societe_id', societeIds)
-      .order('date_facture', { ascending: false })
-    if (dateFilter) {
-      facturesQuery = facturesQuery.gte('date_facture', dateFilter.debut).lte('date_facture', dateFilter.fin)
-    }
-    const { data: facturesData, error: facturesErr } = await facturesQuery
     if (!facturesErr) facturesFromTable = facturesData || []
 
     // Compute CA and dépenses from factures table (more reliable than écritures)
@@ -390,12 +390,6 @@ export async function GET(request: Request) {
 
     // Extract bank transactions — source 1: releves_bancaires table (transactions_json)
     const bankTransactions: any[] = []
-
-    const { data: relevesDB } = await supabase
-      .from('releves_bancaires')
-      .select('id, transactions_json, date_debut, date_fin, compte_bancaire_id')
-      .in('societe_id', societeIds)
-      .order('date_fin', { ascending: false })
 
     // Build a map of compte_bancaire_id → { banque, devise }
     const compteBankMap: Record<string, { banque: string; devise: string }> = {}
@@ -580,7 +574,7 @@ export async function GET(request: Request) {
         exercice_precedent: exercicePrecedent,
         available_exercices: getAvailableExercices(),
       }
-    })
+    }, { headers: { 'Cache-Control': 'private, max-age=10, stale-while-revalidate=30' } })
   } catch (e: unknown) {
     console.error('Financial API error:', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })

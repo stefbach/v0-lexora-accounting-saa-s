@@ -50,7 +50,6 @@ export async function POST(request: Request) {
     const supabase = getAdminClient()
     const body = await request.json()
     const { id, societe_id, type, libelle, montant, date_debut, mensualite, taux_interet, capital_restant, banque, notes } = body
-    console.log('[investissements POST]', { id, type, libelle, montant, date_debut, mensualite, taux_interet, capital_restant, banque })
 
     if (!societe_id || !type || !libelle) {
       return NextResponse.json({ error: 'societe_id, type, libelle requis' }, { status: 400 })

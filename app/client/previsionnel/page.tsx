@@ -152,8 +152,7 @@ export default function PrevisionnelPage() {
 
   const saveInvestment = async (inv: Investment) => {
     if (!selectedSociete || selectedSociete === "all" || !inv.description) return
-    console.log('[previsionnel] saveInvestment:', { id: inv.id, description: inv.description, amount: inv.amount, date: inv.date })
-    setSaveStatus(prev => ({ ...prev, [inv.id]: 'saving' }))
+setSaveStatus(prev => ({ ...prev, [inv.id]: 'saving' }))
     try {
       const isNew = inv.id?.startsWith?.("new-")
       const res = await fetch("/api/client/investissements", {
@@ -187,8 +186,7 @@ export default function PrevisionnelPage() {
   const saveCredit = async (cr: Credit) => {
     if (!selectedSociete || selectedSociete === "all") return
     if (!cr.bank && cr.amount === 0 && cr.monthly === 0 && cr.remaining === 0) return
-    console.log('[previsionnel] saveCredit:', { id: cr.id, bank: cr.bank, amount: cr.amount, rate: cr.rate })
-    setSaveStatus(prev => ({ ...prev, [cr.id]: 'saving' }))
+setSaveStatus(prev => ({ ...prev, [cr.id]: 'saving' }))
     try {
       const isNew = cr.id?.startsWith?.("new-")
       const res = await fetch("/api/client/investissements", {

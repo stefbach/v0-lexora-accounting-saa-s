@@ -78,7 +78,7 @@ export async function GET() {
       societes = Array.from(map.values())
     }
 
-    return NextResponse.json({ societes })
+    return NextResponse.json({ societes }, { headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' } })
   } catch (e: unknown) {
     console.error('[client/societes] GET error:', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
