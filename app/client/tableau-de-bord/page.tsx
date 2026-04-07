@@ -72,7 +72,7 @@ export default function TableauDeBord() {
   // KPI data
   const [monthly, setMonthly] = useState<any>(null)
   const [exerciseData, setExerciseData] = useState<any>(null)
-  const [tresorerie, setTresorerie] = useState({ totalBankMUR: 0, nbComptes: 0 })
+  const [tresorerie, setTresorerie] = useState<{ totalBankMUR: number; nbComptes: number; comptes: { banque: string; devise: string; solde: number }[] }>({ totalBankMUR: 0, nbComptes: 0, comptes: [] })
   const [chartData, setChartData] = useState<any[]>([])
   const [alertes, setAlertes] = useState<Alerte[]>([])
 
@@ -120,7 +120,11 @@ export default function TableauDeBord() {
             return ech >= new Date() && ech <= in30
           }).length || 0,
         })
-        setTresorerie({ totalBankMUR: f.totalBankMUR || 0, nbComptes: f.bankAccounts?.length || 0 })
+        setTresorerie({
+          totalBankMUR: f.totalBankMUR || 0,
+          nbComptes: f.bankAccounts?.length || 0,
+          comptes: (f.bankAccounts || []).map((a: any) => ({ banque: a.banque || '—', devise: a.devise || 'MUR', solde: Number(a.solde_actuel) || 0 })),
+        })
 
         // Generate alertes from data
         const generatedAlertes: Alerte[] = []
@@ -157,7 +161,7 @@ export default function TableauDeBord() {
         })
 
         // TYPE 3 — Déclaration TVA
-        if (new Date().getDate() > 15) {
+        if (new Date().getDate() >= 15 && new Date().getDate() <= 20) {
           generatedAlertes.push({
             id: 'tva-declaration', niveau: 'info',
             titre: 'Déclaration TVA',
@@ -166,14 +170,19 @@ export default function TableauDeBord() {
           })
         }
 
-        // TYPE 5 — Solde bancaire faible
+        // TYPE 5 — Solde bancaire faible (MUR accounts only, or EUR < 500)
         ;(f.bankAccounts || []).forEach((acc: any) => {
-          if ((acc.solde_mur ?? acc.solde_actuel ?? 100000) < 50000) {
+          const devise = (acc.devise || 'MUR').toUpperCase()
+          const solde = Number(acc.solde_actuel) || 0
+          const threshold = devise === 'MUR' ? 50000 : devise === 'EUR' ? 500 : null
+          if (threshold !== null && solde < threshold) {
+            const lastDigits = acc.numero_compte ? `•${acc.numero_compte.slice(-4)}` : ''
+            const societeNom = acc.societe_nom || ''
             generatedAlertes.push({
               id: `solde-${acc.id}`, niveau: 'danger',
-              titre: `Solde faible — ${acc.banque || 'Compte'}`,
-              description: `Solde actuel en dessous de 50 000 MUR`,
-              montant: acc.solde_mur ?? acc.solde_actuel ?? 0,
+              titre: `Solde faible — ${societeNom ? societeNom + ' — ' : ''}${acc.banque || 'Compte'} ${devise} ${lastDigits}`,
+              description: `Solde actuel: ${solde.toLocaleString('fr-FR')} ${devise} (seuil: ${threshold.toLocaleString('fr-FR')} ${devise})`,
+              montant: solde,
               lien: '/client/banque',
             })
           }
@@ -304,7 +313,22 @@ export default function TableauDeBord() {
                 <KpiCard label="CA du mois" value={monthly.totalRevenue} icon={TrendingUp} color="text-green-600" bg="bg-green-50" />
                 <KpiCard label="Dépenses du mois" value={monthly.totalExpenses} icon={Receipt} color="text-red-500" bg="bg-red-50" />
                 <KpiCard label="Bénéfice du mois" value={monthly.resultat} icon={TrendingUp} color={monthly.resultat >= 0 ? "text-green-600" : "text-red-500"} bg={monthly.resultat >= 0 ? "bg-green-50" : "bg-red-50"} />
-                <KpiCard label="Trésorerie" value={tresorerie.totalBankMUR} icon={Banknote} color="text-blue-600" bg="bg-blue-50" />
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center mb-2">
+                      <Banknote className="w-4 h-4 text-blue-600" />
+                    </div>
+                    <p className="text-xs text-gray-500">Trésorerie</p>
+                    <p className="text-lg font-bold text-blue-600 mt-0.5">{tresorerie.totalBankMUR !== 0 ? fmt(tresorerie.totalBankMUR) : <span className="text-sm text-gray-400 font-normal">Pas de données</span>}</p>
+                    {tresorerie.comptes.length > 0 && (
+                      <div className="mt-1 space-y-0.5">
+                        {tresorerie.comptes.slice(0, 3).map((c, i) => (
+                          <p key={i} className="text-[10px] text-gray-400">{c.banque} {c.devise}: {c.solde.toLocaleString('fr-FR')} {c.devise}</p>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
                 <KpiCard label="TVA nette" value={monthly.tvaNette} icon={Receipt} color="text-purple-600" bg="bg-purple-50" />
                 <KpiCard label="Masse salariale" valueStr={isCurrentMonth ? "Mois en cours" : undefined} value={isCurrentMonth ? undefined : monthly.salaires} icon={Users} color="text-orange-600" bg="bg-orange-50" />
                 <Card className="cursor-pointer" onClick={() => document.getElementById('alertes-section')?.scrollIntoView({ behavior: 'smooth' })}>
@@ -353,7 +377,22 @@ export default function TableauDeBord() {
                 <KpiCard label="CA exercice" value={exerciseData.totalRevenue} icon={TrendingUp} color="text-green-600" bg="bg-green-50" />
                 <KpiCard label="Dépenses exercice" value={exerciseData.totalExpenses} icon={Receipt} color="text-red-500" bg="bg-red-50" />
                 <KpiCard label="Résultat net" value={exerciseData.resultat} icon={TrendingUp} color={exerciseData.resultat >= 0 ? "text-green-600" : "text-red-500"} bg={exerciseData.resultat >= 0 ? "bg-green-50" : "bg-red-50"} />
-                <KpiCard label="Trésorerie" value={tresorerie.totalBankMUR} icon={Banknote} color="text-blue-600" bg="bg-blue-50" />
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center mb-2">
+                      <Banknote className="w-4 h-4 text-blue-600" />
+                    </div>
+                    <p className="text-xs text-gray-500">Trésorerie</p>
+                    <p className="text-lg font-bold text-blue-600 mt-0.5">{tresorerie.totalBankMUR !== 0 ? fmt(tresorerie.totalBankMUR) : <span className="text-sm text-gray-400 font-normal">Pas de données</span>}</p>
+                    {tresorerie.comptes.length > 0 && (
+                      <div className="mt-1 space-y-0.5">
+                        {tresorerie.comptes.slice(0, 3).map((c, i) => (
+                          <p key={i} className="text-[10px] text-gray-400">{c.banque} {c.devise}: {c.solde.toLocaleString('fr-FR')} {c.devise}</p>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               </div>
             ) : (
               <Card><CardContent className="p-4 text-center text-sm text-gray-400">Aucune donnée pour cet exercice</CardContent></Card>

@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/table"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { MonthPicker } from "@/components/ui/MonthPicker"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -300,6 +301,11 @@ export default function BilanPage() {
   const [exercice, setExercice] = useState<string>("")
   const [prevExercice, setPrevExercice] = useState<string>("")
   const [availableExercices, setAvailableExercices] = useState<string[]>([])
+  const [viewMode, setViewMode] = useState<"exercice" | "mensuel">("exercice")
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => {
+    const n = new Date()
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`
+  })
 
   // PDF OCR Import state
   const [importingPdf, setImportingPdf] = useState(false)
@@ -368,7 +374,14 @@ export default function BilanPage() {
     setFetching(true)
     const params = new URLSearchParams()
     if (selectedSociete && selectedSociete !== "all") params.set("societe_id", selectedSociete)
-    if (exercice) params.set("exercice", exercice)
+    if (viewMode === "mensuel" && selectedMonth) {
+      const [y, m] = selectedMonth.split("-").map(Number)
+      const lastDay = new Date(y, m, 0).getDate()
+      params.set("date_debut", `${y}-${String(m).padStart(2, "0")}-01`)
+      params.set("date_fin", `${y}-${String(m).padStart(2, "0")}-${lastDay}`)
+    } else if (exercice) {
+      params.set("exercice", exercice)
+    }
     const url = `/api/client/financial${params.toString() ? "?" + params.toString() : ""}`
 
     fetch(url)
@@ -401,7 +414,7 @@ export default function BilanPage() {
         }
       })
       .catch(() => { setData(null); setPrevData(null); setFetching(false) })
-  }, [selectedSociete, exercice])
+  }, [selectedSociete, exercice, viewMode, selectedMonth])
 
   if (loading || fetching) {
     return (
@@ -456,21 +469,24 @@ export default function BilanPage() {
               </Select>
             </div>
           )}
-          {availableExercices.length > 0 && (
-            <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-              <Select value={exercice} onValueChange={setExercice}>
-                <SelectTrigger className="w-[160px] h-9">
-                  <SelectValue placeholder="Exercice" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableExercices.map(ex => (
-                    <SelectItem key={ex} value={ex}>{ex}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <div className="flex items-center gap-2">
+            <div className="flex rounded-lg border overflow-hidden">
+              <button onClick={() => setViewMode("exercice")} className={`px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === "exercice" ? "bg-[#0B0F2E] text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>Exercice</button>
+              <button onClick={() => setViewMode("mensuel")} className={`px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === "mensuel" ? "bg-[#0B0F2E] text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>Mensuel</button>
             </div>
-          )}
+            {viewMode === "exercice" && availableExercices.length > 0 && (
+              <>
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <Select value={exercice} onValueChange={setExercice}>
+                  <SelectTrigger className="w-[160px] h-9"><SelectValue placeholder="Exercice" /></SelectTrigger>
+                  <SelectContent>{availableExercices.map(ex => <SelectItem key={ex} value={ex}>{ex}</SelectItem>)}</SelectContent>
+                </Select>
+              </>
+            )}
+            {viewMode === "mensuel" && (
+              <MonthPicker value={selectedMonth} onChange={v => { if (v) setSelectedMonth(v) }} showTout={false} />
+            )}
+          </div>
         </div>
         <button
           onClick={() => window.print()}
