@@ -7,9 +7,10 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Loader2, RefreshCw, Link2, Unlink, Zap, CheckCircle2, AlertCircle, ArrowRightLeft, Users } from "lucide-react"
+import { Loader2, RefreshCw, Link2, Unlink, Zap, CheckCircle2, AlertCircle, ArrowRightLeft, Users, ChevronLeft, ChevronRight, Building2, Search } from "lucide-react"
 
 function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 function formatDate(d: string) { return d ? new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" }) : "—" }
@@ -24,6 +25,26 @@ export default function ClientRapprochementPage() {
   const [payeParAssocie, setPayeParAssocie] = useState(false)
   const [payeParType, setPayeParType] = useState("associe")
   const [payeParNom, setPayeParNom] = useState("")
+  const [selectedMois, setSelectedMois] = useState("all")
+  const [selectedCompte, setSelectedCompte] = useState("all")
+  const [activeTab, setActiveTab] = useState("auto")
+  const [manualSearch, setManualSearch] = useState("")
+
+  function shiftMois(delta: number) {
+    if (selectedMois === "all") {
+      const now = new Date()
+      setSelectedMois(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`)
+      return
+    }
+    const [y, m] = selectedMois.split("-").map(Number)
+    const d = new Date(y, m - 1 + delta, 1)
+    setSelectedMois(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`)
+  }
+  function formatMoisLabel(m: string) {
+    if (m === "all") return "Tous les mois"
+    const [y, mo] = m.split("-").map(Number)
+    return new Date(y, mo - 1).toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
+  }
 
   // Get sociétés
   useEffect(() => {
@@ -136,11 +157,27 @@ export default function ClientRapprochementPage() {
     } catch { alert("Erreur lors de l'enregistrement") }
   }
 
-  const transactions = data?.bankTransactions || []
+  const allTransactions = data?.bankTransactions || []
+  const allComptes = data?.comptes || []
   const factures = data?.factures || []
   const ecritures = (data?.ecritures || []).filter((e: any) => !e.lettre)
-  const matched = transactions.filter((t: any) => t.facture_id || t.ecriture_id)
-  const unmatched = transactions.filter((t: any) => !t.facture_id && !t.ecriture_id)
+
+  // Filter by month + compte
+  const transactions = allTransactions.filter((t: any) => {
+    if (selectedMois !== "all" && t.date) {
+      if (t.date.substring(0, 7) !== selectedMois) return false
+    }
+    if (selectedCompte !== "all" && t.compte_bancaire_id) {
+      if (String(t.compte_bancaire_id) !== selectedCompte && t.banque !== selectedCompte) return false
+    }
+    return true
+  })
+  const matched = transactions.filter((t: any) => t.facture_id || t.ecriture_id || t.lettre)
+  const proposed = transactions.filter((t: any) => t.statut === 'propose')
+  const unmatched = transactions.filter((t: any) => !t.facture_id && !t.ecriture_id && !t.lettre && t.statut !== 'propose')
+
+  // Bank comptes for selector
+  const uniqueBanques = Array.from(new Set(allTransactions.map((t: any) => t.banque).filter(Boolean))).sort()
 
   if (loading) return <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-[#0B0F2E]" /></div>
 
@@ -168,88 +205,163 @@ export default function ClientRapprochementPage() {
         </div>
       </div>
 
+      {/* Month navigator + Compte selector */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => shiftMois(-1)}><ChevronLeft className="w-4 h-4" /></Button>
+          <span className="text-sm font-medium min-w-[160px] text-center capitalize">{formatMoisLabel(selectedMois)}</span>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => shiftMois(1)}><ChevronRight className="w-4 h-4" /></Button>
+        </div>
+        <Button variant={selectedMois === "all" ? "default" : "outline"} size="sm" className={selectedMois === "all" ? "bg-[#0B0F2E]" : ""} onClick={() => setSelectedMois("all")}>Tout</Button>
+        {uniqueBanques.length > 1 && (
+          <Select value={selectedCompte} onValueChange={setSelectedCompte}>
+            <SelectTrigger className="w-[180px] h-8"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tous les comptes</SelectItem>
+              {uniqueBanques.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+
       {/* KPIs */}
       <div className="grid grid-cols-4 gap-4">
         <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Transactions</p><p className="text-2xl font-bold text-[#0B0F2E]">{transactions.length}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Rapprochees</p><p className="text-2xl font-bold text-green-600">{matched.length}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Non rapprochees</p><p className="text-2xl font-bold text-red-600">{unmatched.length}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Factures en attente</p><p className="text-2xl font-bold text-orange-600">{factures.length}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Rapprochées</p><p className="text-2xl font-bold text-green-600">{matched.length}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-gray-500">À valider</p><p className="text-2xl font-bold text-orange-600">{proposed.length}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Non rapprochées</p><p className="text-2xl font-bold text-red-600">{unmatched.length}</p></CardContent></Card>
       </div>
 
-      {/* Rapprochees */}
-      {matched.length > 0 && (
-        <Card>
-          <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-green-600" />Rapprochees ({matched.length})</CardTitle></CardHeader>
-          <CardContent className="p-0 overflow-x-auto">
-            <Table>
-              <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Libelle</TableHead><TableHead className="text-right">Montant</TableHead><TableHead>Tiers</TableHead><TableHead>Lettre</TableHead><TableHead>Action</TableHead></TableRow></TableHeader>
-              <TableBody>
-                {matched.map((tx: any) => (
-                  <TableRow key={tx.id} className="bg-green-50/50">
-                    <TableCell className="text-sm">{formatDate(tx.date)}</TableCell>
-                    <TableCell className="text-sm max-w-[200px] truncate">{tx.libelle}</TableCell>
-                    <TableCell className="text-right font-medium">{tx.debit > 0 ? <span className="text-red-600">-{fmt(tx.debit)} {tx.devise}</span> : <span className="text-green-600">+{fmt(tx.credit)} {tx.devise}</span>}</TableCell>
-                    <TableCell className="text-sm">{tx.tiers_detecte || "—"}</TableCell>
-                    <TableCell><Badge className="bg-green-100 text-green-700">{tx.lettre}</Badge></TableCell>
-                    <TableCell><Button variant="ghost" size="sm" onClick={() => handleUnlink(tx)}><Unlink className="w-4 h-4 text-red-500" /></Button></TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
+      {/* Tabs: Automatique + Manuel */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="auto"><Zap className="w-4 h-4 mr-1" />Automatique</TabsTrigger>
+          <TabsTrigger value="manuel"><Link2 className="w-4 h-4 mr-1" />Manuel</TabsTrigger>
+        </TabsList>
 
-      {/* Non rapprochees */}
-      <Card>
-        <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2"><AlertCircle className="w-5 h-5 text-orange-500" />Non rapprochees ({unmatched.length})</CardTitle></CardHeader>
-        <CardContent className="p-0 overflow-x-auto">
-          {unmatched.length === 0 ? (
-            <div className="p-8 text-center text-gray-400">Toutes les transactions sont rapprochees</div>
-          ) : (
-            <Table>
-              <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Libelle</TableHead><TableHead className="text-right">Debit</TableHead><TableHead className="text-right">Credit</TableHead><TableHead>Tiers</TableHead><TableHead>Compte</TableHead><TableHead>Action</TableHead></TableRow></TableHeader>
-              <TableBody>
-                {unmatched.map((tx: any) => (
-                  <TableRow key={tx.id}>
-                    <TableCell className="text-sm">{formatDate(tx.date)}</TableCell>
-                    <TableCell className="text-sm max-w-[200px] truncate">{tx.libelle}</TableCell>
-                    <TableCell className="text-right text-sm text-red-600 font-medium">{tx.debit > 0 ? fmt(tx.debit) + " " + tx.devise : "—"}</TableCell>
-                    <TableCell className="text-right text-sm text-green-600 font-medium">{tx.credit > 0 ? fmt(tx.credit) + " " + tx.devise : "—"}</TableCell>
-                    <TableCell className="text-sm">{tx.tiers_detecte || "—"}</TableCell>
-                    <TableCell className="font-mono text-sm text-gray-500">{tx.compte_comptable || "—"}</TableCell>
-                    <TableCell><Button variant="outline" size="sm" onClick={() => setLinkDialog(tx)} className="gap-1"><Link2 className="w-3 h-3" />Lettrer</Button></TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+        {/* TAB: Automatique */}
+        <TabsContent value="auto" className="space-y-4">
+          {/* Rapprochées */}
+          {matched.length > 0 && (
+            <Card>
+              <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-green-600" />Rapprochées ({matched.length})</CardTitle></CardHeader>
+              <CardContent className="p-0 overflow-x-auto">
+                <Table>
+                  <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Libellé</TableHead><TableHead className="text-right">Montant</TableHead><TableHead>Tiers</TableHead><TableHead>Lettre</TableHead><TableHead>Action</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {matched.map((tx: any) => (
+                      <TableRow key={tx.id} className="bg-green-50/50">
+                        <TableCell className="text-sm">{formatDate(tx.date)}</TableCell>
+                        <TableCell className="text-sm max-w-[200px] truncate">{tx.libelle}</TableCell>
+                        <TableCell className="text-right font-medium">{tx.debit > 0 ? <span className="text-red-600">-{fmt(tx.debit)} {tx.devise}</span> : <span className="text-green-600">+{fmt(tx.credit)} {tx.devise}</span>}</TableCell>
+                        <TableCell className="text-sm">{tx.tiers_detecte || "—"}</TableCell>
+                        <TableCell><Badge className="bg-green-100 text-green-700">{tx.lettre || "OK"}</Badge></TableCell>
+                        <TableCell><Button variant="ghost" size="sm" onClick={() => handleUnlink(tx)}><Unlink className="w-4 h-4 text-red-500" /></Button></TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
           )}
-        </CardContent>
-      </Card>
 
-      {/* Factures en attente */}
-      {factures.length > 0 && (
-        <Card>
-          <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2"><ArrowRightLeft className="w-5 h-5" style={{ color: "#D4AF37" }} />Factures en attente ({factures.length})</CardTitle></CardHeader>
-          <CardContent className="p-0 overflow-x-auto">
-            <Table>
-              <TableHeader><TableRow><TableHead>N°</TableHead><TableHead>Type</TableHead><TableHead>Tiers</TableHead><TableHead>Date</TableHead><TableHead className="text-right">Montant TTC</TableHead><TableHead>Statut</TableHead></TableRow></TableHeader>
-              <TableBody>
-                {factures.map((f: any) => (
-                  <TableRow key={f.id}>
-                    <TableCell className="font-medium">{f.numero_facture || "—"}</TableCell>
-                    <TableCell><Badge className={f.type_facture === "client" ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"}>{f.type_facture}</Badge></TableCell>
-                    <TableCell className="text-sm">{f.tiers || "—"}</TableCell>
-                    <TableCell className="text-sm">{formatDate(f.date_facture)}</TableCell>
-                    <TableCell className="text-right font-bold">{fmt(Number(f.montant_ttc) || 0)} {f.devise || "MUR"}</TableCell>
-                    <TableCell><Badge className="bg-orange-100 text-orange-700">{f.statut}</Badge></TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
+          {/* Non rapprochées */}
+          <Card>
+            <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2"><AlertCircle className="w-5 h-5 text-orange-500" />Non rapprochées ({unmatched.length})</CardTitle></CardHeader>
+            <CardContent className="p-0 overflow-x-auto">
+              {unmatched.length === 0 ? (
+                <div className="p-8 text-center text-gray-400">Toutes les transactions sont rapprochées</div>
+              ) : (
+                <Table>
+                  <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Libellé</TableHead><TableHead className="text-right">Débit</TableHead><TableHead className="text-right">Crédit</TableHead><TableHead>Tiers</TableHead><TableHead>Action</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {unmatched.map((tx: any) => (
+                      <TableRow key={tx.id}>
+                        <TableCell className="text-sm">{formatDate(tx.date)}</TableCell>
+                        <TableCell className="text-sm max-w-[200px] truncate">{tx.libelle}</TableCell>
+                        <TableCell className="text-right text-sm text-red-600 font-medium">{tx.debit > 0 ? fmt(tx.debit) + " " + tx.devise : "—"}</TableCell>
+                        <TableCell className="text-right text-sm text-green-600 font-medium">{tx.credit > 0 ? fmt(tx.credit) + " " + tx.devise : "—"}</TableCell>
+                        <TableCell className="text-sm">{tx.tiers_detecte || "—"}</TableCell>
+                        <TableCell><Button variant="outline" size="sm" onClick={() => setLinkDialog(tx)} className="gap-1"><Link2 className="w-3 h-3" />Lettrer</Button></TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* TAB: Manuel */}
+        <TabsContent value="manuel" className="space-y-4">
+          {/* Search */}
+          <div className="relative max-w-sm">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input placeholder="Rechercher par libellé, tiers, montant..." className="pl-9" value={manualSearch} onChange={e => setManualSearch(e.target.value)} />
+          </div>
+
+          {/* Unmatched transactions for manual matching */}
+          <Card>
+            <CardHeader><CardTitle className="text-[#0B0F2E]">Transactions non rapprochées ({unmatched.length})</CardTitle></CardHeader>
+            <CardContent className="p-0 overflow-x-auto">
+              {unmatched.length === 0 ? (
+                <div className="p-8 text-center text-gray-400">Aucune transaction non rapprochée</div>
+              ) : (
+                <Table>
+                  <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Libellé</TableHead><TableHead className="text-right">Débit</TableHead><TableHead className="text-right">Crédit</TableHead><TableHead>Tiers</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {unmatched
+                      .filter(tx => {
+                        if (!manualSearch) return true
+                        const s = manualSearch.toLowerCase()
+                        return tx.libelle?.toLowerCase().includes(s) || (tx.tiers_detecte || "").toLowerCase().includes(s) || String(tx.debit).includes(s) || String(tx.credit).includes(s)
+                      })
+                      .map((tx: any) => (
+                        <TableRow key={tx.id}>
+                          <TableCell className="text-sm">{formatDate(tx.date)}</TableCell>
+                          <TableCell className="text-sm max-w-[200px] truncate">{tx.libelle}</TableCell>
+                          <TableCell className="text-right text-sm text-red-600 font-medium">{tx.debit > 0 ? fmt(tx.debit) + " " + tx.devise : "—"}</TableCell>
+                          <TableCell className="text-right text-sm text-green-600 font-medium">{tx.credit > 0 ? fmt(tx.credit) + " " + tx.devise : "—"}</TableCell>
+                          <TableCell className="text-sm">{tx.tiers_detecte || "—"}</TableCell>
+                          <TableCell>
+                            <div className="flex gap-1">
+                              <Button variant="outline" size="sm" onClick={() => setLinkDialog(tx)} className="gap-1"><Link2 className="w-3 h-3" />Lettrer</Button>
+                              <Button variant="outline" size="sm" onClick={() => { setPayeParNom("STEPHANE BACH"); setPayeParType("associe"); setLinkDialog(tx) }} className="gap-1 text-purple-600 border-purple-200 hover:bg-purple-50"><Users className="w-3 h-3" />Bach</Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Factures en attente */}
+          {factures.length > 0 && (
+            <Card>
+              <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2"><ArrowRightLeft className="w-5 h-5" style={{ color: "#D4AF37" }} />Factures en attente ({factures.length})</CardTitle></CardHeader>
+              <CardContent className="p-0 overflow-x-auto">
+                <Table>
+                  <TableHeader><TableRow><TableHead>N°</TableHead><TableHead>Type</TableHead><TableHead>Tiers</TableHead><TableHead>Date</TableHead><TableHead className="text-right">Montant TTC</TableHead><TableHead>Statut</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {factures.map((f: any) => (
+                      <TableRow key={f.id}>
+                        <TableCell className="font-medium">{f.numero_facture || "—"}</TableCell>
+                        <TableCell><Badge className={f.type_facture === "client" ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"}>{f.type_facture}</Badge></TableCell>
+                        <TableCell className="text-sm">{f.tiers || "—"}</TableCell>
+                        <TableCell className="text-sm">{formatDate(f.date_facture)}</TableCell>
+                        <TableCell className="text-right font-bold">{fmt(Number(f.montant_ttc) || 0)} {f.devise || "MUR"}</TableCell>
+                        <TableCell><Badge className="bg-orange-100 text-orange-700">{f.statut}</Badge></TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+      </Tabs>
 
       {/* Dialog lettrage manuel */}
       <Dialog open={!!linkDialog} onOpenChange={(o) => { if (!o) setLinkDialog(null) }}>
@@ -354,6 +466,30 @@ export default function ClientRapprochementPage() {
                   })}
                 </div>
               )}
+
+              {/* Bach fallback suggestion */}
+              <div className="border-t pt-4">
+                <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                  <p className="text-sm font-medium text-purple-800 flex items-center gap-2">
+                    <Users className="w-4 h-4" />Assigner au compte courant de STEPHANE BACH ?
+                  </p>
+                  <p className="text-xs text-purple-600 mt-1">
+                    Si cette opération a été payée par l&apos;associé avec ses fonds personnels
+                  </p>
+                  <Button size="sm" className="mt-2 bg-purple-600 hover:bg-purple-700 text-white" onClick={() => {
+                    setPayeParNom("STEPHANE BACH")
+                    setPayeParType("associe")
+                    if (factures.length > 0) {
+                      // Find closest facture match
+                      const txAmount = linkDialog.debit > 0 ? linkDialog.debit : linkDialog.credit
+                      const closest = factures.sort((a: any, b: any) => Math.abs((Number(a.montant_ttc) || 0) - txAmount) - Math.abs((Number(b.montant_ttc) || 0) - txAmount))[0]
+                      if (closest) handlePayeParAssocie(closest)
+                    }
+                  }}>
+                    Assigner à Bach
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
         </DialogContent>
