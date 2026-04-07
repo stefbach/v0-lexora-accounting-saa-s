@@ -358,6 +358,13 @@ export default function CompteCourantPage() {
               </Button>
             </div>
           </CardHeader>
+          {/* Factures payées par cet associé */}
+          {factures.length === 0 && (
+            <div className="mb-4 p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-700">
+              Toutes les factures non assignées sont pour cet associé. Utilisez "Enregistrer une avance" pour lier une facture fournisseur.
+            </div>
+          )}
+
           <CardContent className="p-0 overflow-x-auto">
             {filteredMouvements.length === 0 ? (
               <div className="text-center py-12 text-gray-500">Aucun mouvement enregistre pour ce compte.</div>
@@ -369,31 +376,51 @@ export default function CompteCourantPage() {
                     <TableHead>Type</TableHead>
                     <TableHead>Description</TableHead>
                     <TableHead className="text-right">Montant (MUR)</TableHead>
+                    <TableHead className="text-right">Solde (MUR)</TableHead>
                     <TableHead>Lettre</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredMouvements.map((m: any) => (
-                    <TableRow key={m.id}>
-                      <TableCell className="text-sm">{formatDate(m.date_mouvement)}</TableCell>
-                      <TableCell>
-                        <Badge className={m.type === 'avance' ? 'bg-orange-100 text-orange-700' : m.type === 'remboursement' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}>
-                          {m.type}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm">{m.description || "--"}</TableCell>
-                      <TableCell className="text-right font-bold">
-                        {Number(m.montant) > 0 ? (
-                          <span className="text-orange-600">+{fmt(Number(m.montant))}</span>
-                        ) : (
-                          <span className="text-green-600">{fmt(Number(m.montant))}</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {m.lettre ? <Badge className="bg-green-100 text-green-700">{m.lettre}</Badge> : <span className="text-gray-400">--</span>}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {(() => {
+                    // Compute running balance (oldest first, then reverse for display)
+                    const sorted = [...filteredMouvements].sort((a, b) =>
+                      (a.date_mouvement || "").localeCompare(b.date_mouvement || "")
+                    )
+                    let runningBalance = 0
+                    const withBalance = sorted.map((m: any) => {
+                      const montant = Number(m.montant) || 0
+                      runningBalance += m.type === 'avance' ? montant : -montant
+                      return { ...m, soldeApres: runningBalance }
+                    })
+                    // Display newest first
+                    withBalance.reverse()
+                    return withBalance.map((m: any) => (
+                      <TableRow key={m.id}>
+                        <TableCell className="text-sm">{formatDate(m.date_mouvement)}</TableCell>
+                        <TableCell>
+                          <Badge className={m.type === 'avance' ? 'bg-orange-100 text-orange-700' : m.type === 'remboursement' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}>
+                            {m.type}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm">{m.description || "--"}</TableCell>
+                        <TableCell className="text-right font-bold">
+                          {m.type === 'avance' ? (
+                            <span className="text-orange-600">+{fmt(Number(m.montant))}</span>
+                          ) : (
+                            <span className="text-green-600">-{fmt(Number(m.montant))}</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-sm">
+                          <span className={m.soldeApres > 0 ? "text-orange-600" : m.soldeApres < 0 ? "text-green-600" : "text-gray-400"}>
+                            {fmt(m.soldeApres)}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          {m.lettre ? <Badge className="bg-green-100 text-green-700">{m.lettre}</Badge> : <span className="text-gray-400">--</span>}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  })()}
                 </TableBody>
               </Table>
             )}

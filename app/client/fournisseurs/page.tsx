@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
-import { Search, Loader2, FileText, AlertTriangle, Download, User } from "lucide-react"
+import { Search, Loader2, FileText, AlertTriangle, Download, User, ChevronLeft, ChevronRight } from "lucide-react"
 import * as XLSX from "xlsx"
 
 const NAVY = "#0B0F2E"
@@ -43,6 +43,23 @@ export default function ClientFournisseursPage() {
   const [factures, setFactures] = useState<any[]>([])
   const [totaux, setTotaux] = useState<any>({})
   const [selectedFournisseur, setSelectedFournisseur] = useState<string>("all")
+  const [selectedMois, setSelectedMois] = useState<string>("all")
+
+  function shiftMois(delta: number) {
+    if (selectedMois === "all") {
+      const now = new Date()
+      setSelectedMois(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`)
+      return
+    }
+    const [y, m] = selectedMois.split("-").map(Number)
+    const d = new Date(y, m - 1 + delta, 1)
+    setSelectedMois(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`)
+  }
+  function formatMoisLabel(m: string) {
+    if (m === "all") return "Tous les mois"
+    const [y, mo] = m.split("-").map(Number)
+    return new Date(y, mo - 1).toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
+  }
 
   useEffect(() => {
     Promise.all([
@@ -77,6 +94,10 @@ export default function ClientFournisseursPage() {
   const fournisseurs = Array.from(new Set(factures.map(f => f.tiers).filter(Boolean))).sort()
 
   const filtered = factures.filter((row) => {
+    // Apply month filter
+    if (selectedMois !== "all" && row.date_facture) {
+      if (row.date_facture.substring(0, 7) !== selectedMois) return false
+    }
     // Apply fournisseur filter
     if (selectedFournisseur !== "all" && row.tiers !== selectedFournisseur) return false
     // Apply search
@@ -136,6 +157,18 @@ export default function ClientFournisseursPage() {
             <Download className="w-4 h-4 mr-2" />Exporter
           </Button>
         </div>
+      </div>
+
+      {/* Month navigator */}
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => shiftMois(-1)}><ChevronLeft className="w-4 h-4" /></Button>
+          <span className="text-sm font-medium min-w-[160px] text-center capitalize">{formatMoisLabel(selectedMois)}</span>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => shiftMois(1)}><ChevronRight className="w-4 h-4" /></Button>
+        </div>
+        <Button variant={selectedMois === "all" ? "default" : "outline"} size="sm" className={selectedMois === "all" ? "bg-[#0B0F2E]" : ""} onClick={() => setSelectedMois("all")}>
+          Tout
+        </Button>
       </div>
 
       {/* KPIs */}

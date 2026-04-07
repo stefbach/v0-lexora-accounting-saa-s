@@ -13,7 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Loader2, Users, FileText, Building2, Calculator, Download, Upload,
   Eye, CheckCircle, DollarSign, TrendingUp, AlertCircle,
-  Clock, Lock, Banknote, ArrowRight, AlertTriangle
+  Clock, Lock, Banknote, ArrowRight, AlertTriangle,
+  ChevronLeft, ChevronRight
 } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
 
@@ -63,6 +64,18 @@ export default function ClientSalairesPage() {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
   })
+  function shiftPeriode(delta: number) {
+    const [y, m] = selectedPeriode.split("-").map(Number)
+    const d = new Date(y, m - 1 + delta, 1)
+    setSelectedPeriode(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`)
+  }
+  function formatPeriodeLabel(p: string) {
+    const [y, m] = p.split("-").map(Number)
+    return new Date(y, m - 1).toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
+  }
+  const isMoisBrouillon = bulletins.length > 0 && bulletins.every(b => b.statut === "brouillon")
+  const isMoisVide = !fetching && bulletins.length === 0
+
   const [exportLoading, setExportLoading] = useState<string | null>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [importFile, setImportFile] = useState<File | null>(null)
@@ -389,14 +402,25 @@ export default function ClientSalairesPage() {
             </div>
           )}
           <div className="flex items-center gap-2">
-            <Input
-              type="month"
-              value={selectedPeriode}
-              onChange={(e) => setSelectedPeriode(e.target.value)}
-              className="h-9 w-[160px]"
-            />
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => shiftPeriode(-1)}><ChevronLeft className="w-4 h-4" /></Button>
+            <span className="text-sm font-medium min-w-[140px] text-center capitalize">{formatPeriodeLabel(selectedPeriode)}</span>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => shiftPeriode(1)}><ChevronRight className="w-4 h-4" /></Button>
           </div>
         </div>
+
+        {/* Brouillon warning */}
+        {isMoisBrouillon && (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-yellow-50 border border-yellow-200 text-sm text-yellow-800">
+            <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+            <span>Mois en cours — salaires non finalis&eacute;s (brouillon)</span>
+          </div>
+        )}
+        {isMoisVide && (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-gray-50 border border-gray-200 text-sm text-gray-500">
+            <AlertCircle className="h-4 w-4 flex-shrink-0" />
+            <span>Aucun bulletin pour ce mois</span>
+          </div>
+        )}
       </div>
 
       {/* Payroll Workflow Timeline */}

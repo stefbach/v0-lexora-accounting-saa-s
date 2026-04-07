@@ -11,7 +11,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
-import { Search, Landmark, AlertCircle, Clock, RefreshCw, Loader2, Building2, X, Pencil } from "lucide-react"
+import { Search, Landmark, AlertCircle, Clock, RefreshCw, Loader2, Building2, X, Pencil, ChevronLeft, ChevronRight } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
 
 function formatAmount(amount: number, devise?: string) {
@@ -61,7 +61,24 @@ export default function ClientBanquePage() {
   const [selectedTx, setSelectedTx] = useState<any>(null)
   const [editingCompte, setEditingCompte] = useState<string | null>(null)
   const [editingNom, setEditingNom] = useState("")
+  const [selectedMois, setSelectedMois] = useState("all")
   const { profile } = useProfile()
+
+  function shiftMois(delta: number) {
+    if (selectedMois === "all") {
+      const now = new Date()
+      setSelectedMois(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`)
+      return
+    }
+    const [y, m] = selectedMois.split("-").map(Number)
+    const d = new Date(y, m - 1 + delta, 1)
+    setSelectedMois(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`)
+  }
+  function formatMoisLabel(m: string) {
+    if (m === "all") return "Tous les mois"
+    const [y, mo] = m.split("-").map(Number)
+    return new Date(y, mo - 1).toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
+  }
 
   async function fetchData(societeId?: string) {
     try {
@@ -195,9 +212,14 @@ export default function ClientBanquePage() {
     return new Date(b.date).getTime() - new Date(a.date).getTime()
   })
 
-  const hasActiveFilters = !!(search || selectedCompte !== "all" || dateFrom || dateTo || showOnlyNonRapprochees)
+  const hasActiveFilters = !!(search || selectedCompte !== "all" || dateFrom || dateTo || showOnlyNonRapprochees || selectedMois !== "all")
 
   const filtered = allTransactions.filter((row) => {
+    // Month filter
+    if (selectedMois !== "all" && row.date) {
+      const txMonth = row.date.substring(0, 7) // "YYYY-MM"
+      if (txMonth !== selectedMois) return false
+    }
     // Non-rapprochées filter (from KPI click)
     if (showOnlyNonRapprochees && (row.statut?.includes("rapproche") || row.statut?.includes("lettre"))) return false
     // Search filter
@@ -223,7 +245,10 @@ export default function ClientBanquePage() {
     return true
   })
 
-  const nonRaprochees = allTransactions.filter(
+  const txForMonth = selectedMois !== "all"
+    ? allTransactions.filter(t => t.date?.substring(0, 7) === selectedMois)
+    : allTransactions
+  const nonRaprochees = txForMonth.filter(
     (t) => !t.statut?.includes("rapproche") && !t.statut?.includes("lettre")
   ).length
 
@@ -390,6 +415,18 @@ export default function ClientBanquePage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Month navigator */}
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => shiftMois(-1)}><ChevronLeft className="w-4 h-4" /></Button>
+          <span className="text-sm font-medium min-w-[160px] text-center capitalize">{formatMoisLabel(selectedMois)}</span>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => shiftMois(1)}><ChevronRight className="w-4 h-4" /></Button>
+        </div>
+        <Button variant={selectedMois === "all" ? "default" : "outline"} size="sm" className={selectedMois === "all" ? "bg-[#0B0F2E]" : ""} onClick={() => setSelectedMois("all")}>
+          Tout
+        </Button>
+      </div>
 
       {/* Filtres */}
       <div className="flex flex-wrap items-end gap-3">
