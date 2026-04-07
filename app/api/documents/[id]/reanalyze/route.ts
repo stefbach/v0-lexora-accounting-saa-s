@@ -3,7 +3,7 @@ import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { getSystemPrompt, injectTauxChange, CLAUDE_CONFIG } from '@/lib/ai/prompts'
 import type { PromptId } from '@/lib/ai/prompts'
-import { isBankName } from '@/lib/utils/bank-utils'
+import { isBankName, validateAndCleanExtraction, computeConfidence } from '@/lib/utils/bank-utils'
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -190,6 +190,33 @@ Taux: EUR={{TAUX_EUR}}, GBP={{TAUX_GBP}}, USD={{TAUX_USD}}`, tauxChange)
       finalExtraction.titulaire = null
     }
 
+    // === OVERHAUL: Validate extraction + compute confidence ===
+    const { data: userSocietesForVal } = await supabase
+      .from('societes').select('id, nom, brn')
+      .or(`created_by.eq.${user.id}`)
+    const { data: userSocFromDossiersVal } = await supabase
+      .from('dossiers').select('societe_id, societes(id, nom, brn)')
+      .eq('client_id', user.id)
+    const allUserSocietesVal = [
+      ...(userSocietesForVal || []),
+      ...(userSocFromDossiersVal || []).map((d: any) => d.societes).filter(Boolean),
+    ]
+    const uniqueUserSocietesVal = Array.from(new Map(allUserSocietesVal.map((s: any) => [s.id, s])).values()) as { id: string; nom: string; brn?: string }[]
+
+    const validation = validateAndCleanExtraction(finalExtraction, finalTypeDocument, uniqueUserSocietesVal)
+    console.log(`[reanalyze] Validation: société_id=${validation.societe_id}, confidence=${validation.confidence}`)
+
+    if (validation.societe_id && !validation.needs_confirmation) {
+      const matchedSoc = uniqueUserSocietesVal.find(s => s.id === validation.societe_id)
+      if (matchedSoc) {
+        finalSociete = matchedSoc.nom
+        console.log(`[reanalyze] Société auto-matched: ${finalSociete}`)
+      }
+    }
+
+    const extractionConfidence = computeConfidence(finalExtraction, finalTypeDocument)
+    console.log(`[reanalyze] Confidence score: ${extractionConfidence}/100`)
+
     // Delete old accounting entries for this document
     if (doc.dossier_id) {
       await supabase.from('ecritures_comptables')
@@ -204,7 +231,7 @@ Taux: EUR={{TAUX_EUR}}, GBP={{TAUX_GBP}}, USD={{TAUX_USD}}`, tauxChange)
       type_document: finalTypeDocument,
       statut: 'traite',
       societe_detectee: finalSociete !== 'INCONNU' ? finalSociete : null,
-      confiance_type: finalConfiance,
+      confiance_type: extractionConfidence || finalConfiance,
       n8n_result: {
         routing: finalRouting,
         extraction: finalExtraction,

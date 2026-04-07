@@ -3,7 +3,7 @@ import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { getSystemPrompt, injectTauxChange, CLAUDE_CONFIG } from '@/lib/ai/prompts'
 import { createHash } from 'crypto'
-import { isBankName } from '@/lib/utils/bank-utils'
+import { isBankName, validateAndCleanExtraction, computeConfidence } from '@/lib/utils/bank-utils'
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -372,14 +372,29 @@ export async function POST(request: NextRequest) {
       try {
         const quickStream = anthropic.messages.stream({
           model: CLAUDE_CONFIG.model,
-          max_tokens: 256,
+          max_tokens: 1024,
           temperature: 0,
-          messages: [{ role: 'user', content: [...(messageContent as any[]), { type: 'text', text: 'Réponds en 1 mot : facture_client, facture_fournisseur, releve_bancaire, fiche_paie, ou autre ?' }] }],
+          system: `You are a document classifier for a Mauritius accounting system. Classify the document into EXACTLY ONE of these types:
+
+- facture_fournisseur: Invoice FROM a supplier TO the company (bill to pay). Signs: supplier name at top, bill to DDS/OCC, amount to pay, invoice number. Examples: Emtel bill, Google Cloud invoice, Pierrick Properties invoice, Magellan invoice, ServiQual invoice, Nimerik invoice, MYT bill, CEB bill, any telecom/SaaS/services invoice.
+IMPORTANT: Google Cloud, AWS, Vercel, Stripe, Anthropic, OpenAI are SaaS SUPPLIERS — NOT banks. Their invoices are facture_fournisseur.
+
+- facture_client: Invoice FROM the company TO a client (money to receive). Signs: DDS or OCC company header at top as the ISSUER, billed TO a client (Dr BASTID, SKYCALL, Dr SAMPOL, OCC MALTE, etc.).
+
+- releve_bancaire: Official bank statement from MCB, SBM, Barclays, AfrAsia, MauBank ONLY. Signs: bank logo, IBAN number starting with MU, columns: TRANS DATE, VALUE DATE, TRANSACTION DETAILS, DEBIT, CREDIT, BALANCE. NEVER classify a SaaS invoice as releve_bancaire.
+
+- fiche_paie: Employee payslip. Signs: employee name, salary breakdown, CSG, PAYE, NSF deductions.
+
+- autre: Everything else (contracts, reports, annual returns, etc.)
+
+Respond with ONLY the type word. Nothing else.`,
+          messages: [{ role: 'user', content: [...(messageContent as any[]), { type: 'text', text: 'Classify this document. Respond with ONLY the type word.' }] }],
         })
         const quickDetect = await quickStream.finalMessage()
-        const quickText = quickDetect.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('').toLowerCase()
-        isLikelyBankStatement = quickText.includes('releve_bancaire') || quickText.includes('relevé') || quickText.includes('bank')
-      } catch { /* continue */ }
+        const quickText = quickDetect.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('').toLowerCase().trim()
+        console.log('[upload] Quick detection result:', quickText)
+        isLikelyBankStatement = quickText.includes('releve_bancaire')
+      } catch (e) { console.error('[upload] Quick detection error:', e) }
     }
 
     // Si relevé bancaire détecté → aller directement au prompt spécialisé (évite double appel)
@@ -490,6 +505,16 @@ export async function POST(request: NextRequest) {
 === DETECTION DU TYPE ===
 Determine d'abord le type: facture_fournisseur, facture_client, releve_bancaire, fiche_paie, payroll_report, charges_sociales, contrat, ou autre.
 IMPORTANT: Si le document contient un TABLEAU avec PLUSIEURS employes (Payroll Report, etat de salaire, bulk salary), le type est "payroll_report" (PAS "fiche_paie").
+IMPORTANT: Google Cloud, AWS, Vercel, Stripe, Anthropic, OpenAI, Emtel, MYT, CEB sont des FOURNISSEURS. Leurs factures sont "facture_fournisseur", JAMAIS "releve_bancaire".
+IMPORTANT: Un releve bancaire vient UNIQUEMENT d'une vraie BANQUE (MCB, SBM, Barclays, AfrAsia, MauBank) et contient des colonnes DEBIT/CREDIT/BALANCE avec un IBAN.
+
+=== DETECTION DE LA SOCIETE ===
+REGLE CRITIQUE: Le champ "societe" dans "routing" doit TOUJOURS etre le nom de la societe CLIENTE (celle qui recoit/envoie la facture), PAS le fournisseur.
+- Pour facture_fournisseur: societe = le DESTINATAIRE de la facture (Bill To, Facture a). Cherche: Digital Data Solutions, Obesity Care Clinic, ou le BRN.
+- Pour facture_client: societe = l'EMETTEUR de la facture (From, De la part de).
+- Pour releve_bancaire: societe = le TITULAIRE du compte (account holder), JAMAIS le nom de la banque.
+JAMAIS mettre le nom du fournisseur (Google, Emtel, MCB, etc.) dans le champ "societe".
+BRN connus: C20173522 = Digital Data Solutions Ltd, C22187118 = Obesity Care Clinic Ltd.
 
 === REGLES PAR TYPE ===
 
@@ -702,6 +727,42 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
       console.warn(`[upload] Bank statement coherence issue: ecart_solde=${extraction.ecart_solde} for doc ${docId}`)
     }
 
+    // === OVERHAUL: Validate extraction + compute confidence ===
+    // Fetch user's sociétés for validation
+    const { data: userSocietesForValidation } = await supabase
+      .from('societes').select('id, nom, brn')
+      .or(`created_by.eq.${user.id}`)
+    const { data: userSocFromDossiers } = await supabase
+      .from('dossiers').select('societe_id, societes(id, nom, brn)')
+      .eq('client_id', user.id)
+    const allUserSocietes = [
+      ...(userSocietesForValidation || []),
+      ...(userSocFromDossiers || []).map((d: any) => d.societes).filter(Boolean),
+    ]
+    const uniqueUserSocietes = Array.from(new Map(allUserSocietes.map((s: any) => [s.id, s])).values()) as { id: string; nom: string; brn?: string }[]
+
+    // Apply validation
+    const validation = validateAndCleanExtraction(extraction, typeDocument, uniqueUserSocietes)
+    console.log(`[upload] Extraction validation: société_id=${validation.societe_id}, confidence=${validation.confidence}, needs_confirmation=${validation.needs_confirmation}`)
+
+    // If validation found a better société match, use it
+    if (validation.societe_id && !validation.needs_confirmation) {
+      const matchedSociete = uniqueUserSocietes.find(s => s.id === validation.societe_id)
+      if (matchedSociete) {
+        detectedSociete = matchedSociete.nom
+        console.log(`[upload] Société auto-matched via validation: ${detectedSociete}`)
+      }
+    }
+
+    // Compute extraction confidence
+    const extractionConfidence = computeConfidence(extraction, typeDocument)
+    console.log(`[upload] Extraction confidence score: ${extractionConfidence}/100`)
+
+    // If confidence too low (< 50), log warning
+    if (extractionConfidence < 50) {
+      console.warn(`[upload] LOW CONFIDENCE (${extractionConfidence}) for doc ${docId} — type=${typeDocument}, société=${detectedSociete}`)
+    }
+
     // Try to match detected société to client's known sociétés and re-route if needed
     let finalDossierId = resolvedDossierId
     if (detectedSociete && detectedSociete !== 'INCONNU' && !isBankName(detectedSociete)) {
@@ -839,7 +900,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
     const updateData: any = {
       type_document: typeDocument, statut: 'traite',
       societe_detectee: detectedSociete !== 'INCONNU' ? detectedSociete : null,
-      confiance_type: confianceType,
+      confiance_type: extractionConfidence || confianceType,
       n8n_result: {
         routing: parsed.routing,
         extraction,
