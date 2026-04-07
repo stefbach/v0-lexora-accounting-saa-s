@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import Link from "next/link"
 import { useProfile } from "@/hooks/use-profile"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -73,6 +73,10 @@ export default function PrevisionnelPage() {
   const [investments, setInvestments] = useState<Investment[]>([])
   const [credits, setCredits] = useState<Credit[]>([])
   const [saveStatus, setSaveStatus] = useState<Record<string, 'saving' | 'saved' | 'error' | null>>({})
+  const investmentsRef = useRef<Investment[]>([])
+  const creditsRef = useRef<Credit[]>([])
+  useEffect(() => { investmentsRef.current = investments }, [investments])
+  useEffect(() => { creditsRef.current = credits }, [credits])
 
   // Period filter state
   type PeriodMode = "mensuel" | "trimestriel" | "annuel"
@@ -148,6 +152,7 @@ export default function PrevisionnelPage() {
 
   const saveInvestment = async (inv: Investment) => {
     if (!selectedSociete || selectedSociete === "all" || !inv.description) return
+    console.log('[previsionnel] saveInvestment:', { id: inv.id, description: inv.description, amount: inv.amount, date: inv.date })
     setSaveStatus(prev => ({ ...prev, [inv.id]: 'saving' }))
     try {
       const isNew = inv.id?.startsWith?.("new-")
@@ -182,6 +187,7 @@ export default function PrevisionnelPage() {
   const saveCredit = async (cr: Credit) => {
     if (!selectedSociete || selectedSociete === "all") return
     if (!cr.bank && cr.amount === 0 && cr.monthly === 0 && cr.remaining === 0) return
+    console.log('[previsionnel] saveCredit:', { id: cr.id, bank: cr.bank, amount: cr.amount, rate: cr.rate })
     setSaveStatus(prev => ({ ...prev, [cr.id]: 'saving' }))
     try {
       const isNew = cr.id?.startsWith?.("new-")
@@ -768,13 +774,11 @@ export default function PrevisionnelPage() {
                   </TableHeader>
                   <TableBody>
                     {investments.map((inv, idx) => (
-                      <TableRow key={inv.id} onBlur={() => {
-                        // Read current state to avoid stale closure
-                        setInvestments(current => {
-                          const latest = current[idx]
-                          if (latest?.description) saveInvestment(latest)
-                          return current
-                        })
+                      <TableRow key={inv.id} onBlur={(e) => {
+                        // Only save when focus leaves the entire row (not just between cells)
+                        if (e.currentTarget.contains(e.relatedTarget as Node)) return
+                        const latest = investmentsRef.current[idx]
+                        if (latest?.description) saveInvestment(latest)
                       }}>
                         <TableCell>
                           <Input value={inv.description} placeholder="Description" className="h-8"
@@ -844,12 +848,10 @@ export default function PrevisionnelPage() {
                   </TableHeader>
                   <TableBody>
                     {credits.map((cr, idx) => (
-                      <TableRow key={cr.id} onBlur={() => {
-                        setCredits(current => {
-                          const latest = current[idx]
-                          if (latest && (latest.bank || latest.amount > 0)) saveCredit(latest)
-                          return current
-                        })
+                      <TableRow key={cr.id} onBlur={(e) => {
+                        if (e.currentTarget.contains(e.relatedTarget as Node)) return
+                        const latest = creditsRef.current[idx]
+                        if (latest && (latest.bank || latest.amount > 0 || latest.monthly > 0 || latest.remaining > 0)) saveCredit(latest)
                       }}>
                         <TableCell>
                           <Input value={cr.bank} placeholder="Banque" className="h-8 w-32"
