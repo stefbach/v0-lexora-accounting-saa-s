@@ -312,6 +312,19 @@ export default function BilanPage() {
   const [importMessage, setImportMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Fetch ALL sociétés the user has access to (same pattern as banque page)
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/client/societes").then(r => r.json()).catch(() => ({ societes: [] })),
+      fetch("/api/comptable/societes").then(r => r.json()).catch(() => ({ societes: [] })),
+    ]).then(([d1, d2]) => {
+      const all = [...(d1.societes || []), ...(d2.societes || [])]
+      const unique = Array.from(new Map(all.map((s: any) => [s.id, s])).values()) as { id: string; nom: string }[]
+      setSocietes(unique)
+      if (unique.length > 0 && !selectedSociete) setSelectedSociete(unique[0].id)
+    })
+  }, [])
+
   // Load prior year OCR data from localStorage
   useEffect(() => {
     if (!exercice) return
@@ -388,10 +401,6 @@ export default function BilanPage() {
       .then((res) => res.json())
       .then((json) => {
         setData(json.financial)
-        if (json.financial?.availableSocietes) {
-          setSocietes(json.financial.availableSocietes)
-          if (json.financial.availableSocietes.length > 0 && !selectedSociete) setSelectedSociete(json.financial.availableSocietes[0].id)
-        }
         const currentEx = json.financial?.exercice_actuel || ""
         const prevEx = json.financial?.exercice_precedent || ""
         if (!exercice && currentEx) setExercice(currentEx)
@@ -460,6 +469,11 @@ export default function BilanPage() {
         }
       `}</style>
 
+      {/* Context subtitle */}
+      <p className="text-xs text-gray-400 no-print">
+        Consolidation de tous les comptes de la société sélectionnée — conforme au Companies Act 2001
+      </p>
+
       {/* Top bar: filter + download */}
       <div className="flex items-center justify-between flex-wrap gap-4 no-print">
         <div className="flex items-center gap-3">
@@ -497,7 +511,20 @@ export default function BilanPage() {
           </div>
         </div>
         <Button
-          onClick={() => window.print()}
+          onClick={async () => {
+            const el = document.getElementById('bilan-content')
+            if (!el) return
+            const html2pdf = (await import('html2pdf.js')).default
+            const socName = societes.find(s => s.id === selectedSociete)?.nom || 'Societe'
+            const period = viewMode === 'mensuel' ? selectedMonth : exercice
+            await html2pdf().set({
+              margin: 15,
+              filename: `bilan_${socName.replace(/\s+/g, '_')}_${period}.pdf`,
+              image: { type: 'jpeg', quality: 0.98 },
+              html2canvas: { scale: 2 },
+              jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            }).from(el).save()
+          }}
           variant="outline"
           className="no-print flex items-center gap-2"
         >
@@ -572,7 +599,13 @@ export default function BilanPage() {
             </p>
           </div>
 
-          {/* Tabs: Balance Sheet | Profit & Loss */}
+          {/* Bilan content (for PDF export) */}
+          <div id="bilan-content">
+            <div className="hidden print:block mb-4">
+              <h2 className="text-lg font-bold" style={{ color: "#0B0F2E" }}>{societes.find(s => s.id === selectedSociete)?.nom || ""}</h2>
+              <p className="text-sm text-gray-500">Bilan — {viewMode === "mensuel" ? selectedMonth : `Exercice ${exercice}`}</p>
+              <p className="text-xs text-gray-400">Préparé conformément aux IFRS pour PME (Companies Act 2001 — Maurice)</p>
+            </div>
           <Tabs defaultValue="balance-sheet" className="space-y-4">
             <TabsList>
               <TabsTrigger value="balance-sheet">Balance Sheet</TabsTrigger>
@@ -591,6 +624,7 @@ export default function BilanPage() {
               </div>
             </TabsContent>
           </Tabs>
+          </div>
 
           {/* Footer */}
           <div className="text-center py-4 print:py-2">
