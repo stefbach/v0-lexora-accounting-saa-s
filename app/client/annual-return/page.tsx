@@ -452,7 +452,10 @@ export default function AnnualReturnPage() {
             Annual Return (ROC)
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Companies Act - Registrar of Companies, Mauritius
+            Companies Act 2001 — Registrar of Companies, Mauritius
+          </p>
+          <p className="text-xs text-blue-600 mt-1">
+            L&apos;Annual Return doit être soumis au Registrar dans les 28 jours suivant l&apos;anniversaire d&apos;incorporation.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -507,7 +510,7 @@ export default function AnnualReturnPage() {
               <Upload className="w-5 h-5" style={{ color: GOLD }} />
               <div>
                 <p className="text-sm font-semibold" style={{ color: NAVY }}>Importer PDF officiel</p>
-                <p className="text-xs text-gray-500">Importez votre Annual Return officiel (PDF) pour pre-remplir automatiquement le formulaire</p>
+                <p className="text-xs text-gray-500">Importez votre Annual Return officiel (PDF) pour pré-remplir automatiquement le formulaire</p>
               </div>
             </div>
             <div className="flex items-center gap-2">

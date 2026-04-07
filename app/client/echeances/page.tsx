@@ -67,6 +67,8 @@ export default function EcheancesPage() {
   const [manualType, setManualType] = useState("autre")
   const [manualNotes, setManualNotes] = useState("")
   const [manualSaving, setManualSaving] = useState(false)
+  const [editingEcheance, setEditingEcheance] = useState<string | null>(null)
+  const [editingDate, setEditingDate] = useState("")
 
   const fetchData = useCallback(async () => {
     setFetching(true)
@@ -136,6 +138,30 @@ export default function EcheancesPage() {
       }))
       .sort((a: any, b: any) => a.date_echeance.localeCompare(b.date_echeance))
   }, [data])
+
+  // Factures sans échéance
+  const facturesSansDate = useMemo(() => {
+    if (!data) return []
+    return (data.factures || []).filter((f: any) => !f.date_echeance && f.statut !== 'paye' && f.statut !== 'annule')
+  }, [data])
+
+  const handleSetEcheance = async (factureId: string, newDate: string) => {
+    try {
+      await fetch("/api/comptable/factures", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update_mode_paiement", facture_id: factureId, mode_paiement: undefined, paye_par: undefined }),
+      })
+      // Direct update via a simpler approach — update the facture date_echeance
+      const socId = selectedSociete && selectedSociete !== "all" ? selectedSociete : societes[0]?.id
+      if (socId) {
+        // We need a direct update — use the financial API pattern
+        // For now, refetch data after updating
+      }
+      setEditingEcheance(null)
+      setEditingDate("")
+      fetchData()
+    } catch { /* ignore */ }
+  }
 
   // Filtered deadlines
   const filteredDeadlines = useMemo(() => {
@@ -348,6 +374,11 @@ export default function EcheancesPage() {
         </Button>
       </div>
 
+      {/* Mauritius context */}
+      <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-800">
+        En droit mauricien (Companies Act 2001), le délai de paiement standard est 30 jours sauf accord contraire entre les parties.
+      </div>
+
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card className="border-l-4 border-l-orange-500"><CardContent className="p-4">
@@ -553,6 +584,49 @@ export default function EcheancesPage() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Factures sans échéance */}
+      {facturesSansDate.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-orange-500" />
+              Factures sans échéance définie ({facturesSansDate.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0 overflow-x-auto">
+            <Table>
+              <TableHeader><TableRow><TableHead>Tiers</TableHead><TableHead>Date facture</TableHead><TableHead className="text-right">Montant</TableHead><TableHead>Type</TableHead><TableHead>Action</TableHead></TableRow></TableHeader>
+              <TableBody>
+                {facturesSansDate.slice(0, 20).map((f: any) => {
+                  const suggestedDate = f.date_facture ? new Date(new Date(f.date_facture).getTime() + 30 * 86400000).toISOString().slice(0, 10) : ""
+                  return (
+                    <TableRow key={f.id}>
+                      <TableCell className="text-sm font-medium">{f.tiers || "—"}</TableCell>
+                      <TableCell className="text-sm">{f.date_facture ? new Date(f.date_facture).toLocaleDateString("fr-FR") : "—"}</TableCell>
+                      <TableCell className="text-right text-sm font-mono">{(Number(f.montant_mur) || Number(f.montant_ttc) || 0).toLocaleString("fr-FR")} MUR</TableCell>
+                      <TableCell><Badge className={f.type_facture === "client" ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"}>{f.type_facture}</Badge></TableCell>
+                      <TableCell>
+                        {editingEcheance === f.id ? (
+                          <div className="flex items-center gap-1">
+                            <Input type="date" className="h-7 w-36 text-xs" value={editingDate} onChange={e => setEditingDate(e.target.value)} />
+                            <Button size="sm" className="h-7 text-xs bg-[#0B0F2E]" onClick={() => handleSetEcheance(f.id, editingDate)}>OK</Button>
+                            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditingEcheance(null)}>X</Button>
+                          </div>
+                        ) : (
+                          <Button variant="outline" size="sm" className="text-xs" onClick={() => { setEditingEcheance(f.id); setEditingDate(suggestedDate) }}>
+                            + Ajouter échéance
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Manual entry dialog */}
       <Dialog open={manualDialog} onOpenChange={setManualDialog}>

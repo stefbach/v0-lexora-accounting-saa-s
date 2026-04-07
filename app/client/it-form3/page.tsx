@@ -322,7 +322,8 @@ export default function ITForm3Page() {
             <FileText className="w-7 h-7" style={{ color: GOLD }} />
             IT Form 3 - Return of Income (Company)
           </h1>
-          <p className="text-sm text-gray-500 mt-1">Mauritius Revenue Authority - Formulaire de retour de revenus pour sociétés</p>
+          <p className="text-sm text-gray-500 mt-1">Mauritius Revenue Authority — Déclaration d&apos;impôt sur le revenu des sociétés</p>
+          <p className="text-xs text-blue-600 mt-1">Pour un exercice juillet-juin, la date limite de soumission est le 31 décembre. Taux d&apos;imposition: 15%.</p>
         </div>
         <div className="flex items-center gap-2">
           {societes.length > 1 && (

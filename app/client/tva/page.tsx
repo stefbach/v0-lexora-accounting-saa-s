@@ -34,6 +34,8 @@ import { useProfile } from "@/hooks/use-profile"
 import Link from "next/link"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import * as XLSX from "xlsx"
+import { MonthPicker } from "@/components/ui/MonthPicker"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -83,6 +85,9 @@ export default function TVAPage() {
   const [selectedSociete, setSelectedSociete] = useState<string>("")
   const [societes, setSocietes] = useState<{ id: string; nom: string }[]>([])
   const [exportOpen, setExportOpen] = useState(false)
+  const [showAllClient, setShowAllClient] = useState(false)
+  const [showAllLocal, setShowAllLocal] = useState(false)
+  const [showAllForeign, setShowAllForeign] = useState(false)
 
   // Period filter
   type PeriodMode = "mensuel" | "trimestriel"
@@ -105,19 +110,11 @@ export default function TVAPage() {
     return { debut: `${selectedYear}-${String(startMonth).padStart(2, "0")}-01`, fin: `${selectedYear}-${String(endMonth).padStart(2, "0")}-${lastDay}` }
   }
 
-  function shiftMonth(delta: number) {
-    const [y, m] = selectedMonth.split("-").map(Number)
-    const d = new Date(y, m - 1 + delta, 1)
-    setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`)
-  }
-
-  function formatMonthLabel(m: string) {
-    const [y, mo] = m.split("-").map(Number)
-    return new Date(y, mo - 1).toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
-  }
-
   function getPeriodLabel(): string {
-    if (periodMode === "mensuel") return formatMonthLabel(selectedMonth)
+    if (periodMode === "mensuel") {
+      const [y, mo] = selectedMonth.split("-").map(Number)
+      return new Date(y, mo - 1).toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
+    }
     return `${selectedTrimestre} ${selectedYear}`
   }
 
@@ -292,8 +289,16 @@ export default function TVAPage() {
 
   return (
     <div className="p-6 space-y-6">
+      <style jsx global>{`
+        @media print {
+          .no-print { display: none !important; }
+          body { background: white !important; }
+          @page { margin: 15mm; size: A4; }
+        }
+      `}</style>
+
       {/* Header with deadline */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 no-print">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: NAVY }}>
             Ma TVA
@@ -348,11 +353,7 @@ export default function TVAPage() {
               ))}
             </div>
             {periodMode === "mensuel" && (
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => shiftMonth(-1)}><ChevronLeft className="w-4 h-4" /></Button>
-                <span className="text-sm font-medium min-w-[150px] text-center capitalize">{formatMonthLabel(selectedMonth)}</span>
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => shiftMonth(1)}><ChevronRight className="w-4 h-4" /></Button>
-              </div>
+              <MonthPicker value={selectedMonth} onChange={v => { if (v) setSelectedMonth(v) }} showTout={false} />
             )}
             {periodMode === "trimestriel" && (
               <div className="flex items-center gap-2">
@@ -378,6 +379,7 @@ export default function TVAPage() {
                   <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={() => { handleExport("normale"); setExportOpen(false) }}>TVA normale</button>
                   <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={() => { handleExport("deductible"); setExportOpen(false) }}>TVA déductible</button>
                   <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 border-t" onClick={() => { handleExport("reverse"); setExportOpen(false) }}>TVA reverse charge</button>
+                  <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 border-t" onClick={() => { window.print(); setExportOpen(false) }}>PDF (Déclaration MRA)</button>
                 </div>
               )}
             </div>
@@ -514,7 +516,7 @@ export default function TVAPage() {
       </Card>
 
       {/* Three sections: Local sales, Local deductible, Foreign reverse charge */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 no-print">
         {/* TVA sur ventes locales */}
         <Card>
           <CardHeader>
@@ -533,9 +535,9 @@ export default function TVAPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {clientInvoices.slice(0, 8).map((inv: any) => (
+                  {(showAllClient ? clientInvoices : clientInvoices.slice(0, 8)).map((inv: any) => (
                     <TableRow key={inv.id}>
-                      <TableCell className="font-medium text-xs">{inv.destinataire || inv.emetteur || "\u2014"}</TableCell>
+                      <TableCell className="font-medium text-xs"><TooltipProvider delayDuration={200}><Tooltip><TooltipTrigger asChild><span className="block max-w-[200px] truncate cursor-help">{inv.destinataire || inv.emetteur || "—"}</span></TooltipTrigger><TooltipContent className="max-w-[400px] break-words">{inv.destinataire || inv.emetteur || "—"}</TooltipContent></Tooltip></TooltipProvider></TableCell>
                       <TableCell className="text-right text-xs" style={{ color: "#22C55E" }}>
                         {formatMUR(inv.montant_tva_mur ?? inv.montant_tva ?? 0)}
                       </TableCell>
@@ -543,8 +545,10 @@ export default function TVAPage() {
                   ))}
                   {clientInvoices.length > 8 && (
                     <TableRow>
-                      <TableCell colSpan={2} className="text-center text-xs text-muted-foreground">
-                        ... et {clientInvoices.length - 8} autres
+                      <TableCell colSpan={2} className="text-center">
+                        <Button variant="ghost" size="sm" className="text-xs" onClick={() => setShowAllClient(!showAllClient)}>
+                          {showAllClient ? "Voir moins ↑" : `Voir les ${clientInvoices.length - 8} autres →`}
+                        </Button>
                       </TableCell>
                     </TableRow>
                   )}
@@ -579,16 +583,18 @@ export default function TVAPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {validLocalInvoices.slice(0, 8).map((inv: any) => (
+                  {(showAllLocal ? validLocalInvoices : validLocalInvoices.slice(0, 8)).map((inv: any) => (
                     <TableRow key={inv.id}>
-                      <TableCell className="font-medium text-xs">{inv.emetteur || "\u2014"}</TableCell>
+                      <TableCell className="font-medium text-xs"><TooltipProvider delayDuration={200}><Tooltip><TooltipTrigger asChild><span className="block max-w-[200px] truncate cursor-help">{inv.emetteur || "—"}</span></TooltipTrigger><TooltipContent className="max-w-[400px] break-words">{inv.emetteur || "—"}</TooltipContent></Tooltip></TooltipProvider></TableCell>
                       <TableCell className="text-right text-xs">{formatMUR(inv.montant_tva_mur ?? inv.montant_tva ?? 0)}</TableCell>
                     </TableRow>
                   ))}
                   {validLocalInvoices.length > 8 && (
                     <TableRow>
-                      <TableCell colSpan={2} className="text-center text-xs text-muted-foreground">
-                        ... et {validLocalInvoices.length - 8} autres
+                      <TableCell colSpan={2} className="text-center">
+                        <Button variant="ghost" size="sm" className="text-xs" onClick={() => setShowAllLocal(!showAllLocal)}>
+                          {showAllLocal ? "Voir moins ↑" : `Voir les ${validLocalInvoices.length - 8} autres →`}
+                        </Button>
                       </TableCell>
                     </TableRow>
                   )}
@@ -633,11 +639,11 @@ export default function TVAPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {foreignSupplierInvoices.slice(0, 8).map((inv: any) => {
+                    {(showAllForeign ? foreignSupplierInvoices : foreignSupplierInvoices.slice(0, 8)).map((inv: any) => {
                       const ht = inv.montant_ht_mur ?? inv.montant_ht ?? 0
                       return (
                         <TableRow key={inv.id}>
-                          <TableCell className="font-medium text-xs">{inv.emetteur || "\u2014"}</TableCell>
+                          <TableCell className="font-medium text-xs"><TooltipProvider delayDuration={200}><Tooltip><TooltipTrigger asChild><span className="block max-w-[200px] truncate cursor-help">{inv.emetteur || "—"}</span></TooltipTrigger><TooltipContent className="max-w-[400px] break-words">{inv.emetteur || "—"}</TooltipContent></Tooltip></TooltipProvider></TableCell>
                           <TableCell className="text-right text-xs">{formatMUR(ht)}</TableCell>
                           <TableCell className="text-right text-xs text-amber-600">{formatMUR(ht * TVA_RATE)}</TableCell>
                         </TableRow>
@@ -645,8 +651,10 @@ export default function TVAPage() {
                     })}
                     {foreignSupplierInvoices.length > 8 && (
                       <TableRow>
-                        <TableCell colSpan={3} className="text-center text-xs text-muted-foreground">
-                          ... et {foreignSupplierInvoices.length - 8} autres
+                        <TableCell colSpan={3} className="text-center">
+                          <Button variant="ghost" size="sm" className="text-xs" onClick={() => setShowAllForeign(!showAllForeign)}>
+                            {showAllForeign ? "Voir moins ↑" : `Voir les ${foreignSupplierInvoices.length - 8} autres →`}
+                          </Button>
                         </TableCell>
                       </TableRow>
                     )}
