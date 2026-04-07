@@ -13,10 +13,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Loader2, Users, FileText, Building2, Calculator, Download, Upload,
   Eye, CheckCircle, DollarSign, TrendingUp, AlertCircle,
-  Clock, Lock, Banknote, ArrowRight, AlertTriangle,
-  ChevronLeft, ChevronRight
+  Clock, Lock, Banknote, ArrowRight, AlertTriangle
 } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
+import { MonthPicker } from "@/components/ui/MonthPicker"
 
 function fmt(n: number) {
   return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " MUR"
@@ -71,15 +71,7 @@ export default function ClientSalairesPage() {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
   })
-  function shiftPeriode(delta: number) {
-    const [y, m] = selectedPeriode.split("-").map(Number)
-    const d = new Date(y, m - 1 + delta, 1)
-    setSelectedPeriode(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`)
-  }
-  function formatPeriodeLabel(p: string) {
-    const [y, m] = p.split("-").map(Number)
-    return new Date(y, m - 1).toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
-  }
+  // shiftPeriode and formatPeriodeLabel handled by MonthPicker component
   const isMoisBrouillon = bulletins.length > 0 && bulletins.every(b => b.statut === "brouillon")
   const isMoisVide = !fetching && bulletins.length === 0
 
@@ -436,11 +428,7 @@ export default function ClientSalairesPage() {
               </Select>
             </div>
           )}
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => shiftPeriode(-1)}><ChevronLeft className="w-4 h-4" /></Button>
-            <span className="text-sm font-medium min-w-[140px] text-center capitalize">{formatPeriodeLabel(selectedPeriode)}</span>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => shiftPeriode(1)}><ChevronRight className="w-4 h-4" /></Button>
-          </div>
+          <MonthPicker value={selectedPeriode} onChange={v => { if (v) setSelectedPeriode(v) }} showTout={false} />
         </div>
 
         {/* Brouillon warning */}

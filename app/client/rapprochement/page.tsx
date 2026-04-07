@@ -10,7 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Loader2, RefreshCw, Link2, Unlink, Zap, CheckCircle2, AlertCircle, ArrowRightLeft, Users, ChevronLeft, ChevronRight, Building2, Search } from "lucide-react"
+import { Loader2, RefreshCw, Link2, Unlink, Zap, CheckCircle2, AlertCircle, ArrowRightLeft, Users, Building2, Search } from "lucide-react"
+import { MonthPicker } from "@/components/ui/MonthPicker"
 
 function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 function formatDate(d: string) { return d ? new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" }) : "—" }
@@ -25,26 +26,10 @@ export default function ClientRapprochementPage() {
   const [payeParAssocie, setPayeParAssocie] = useState(false)
   const [payeParType, setPayeParType] = useState("associe")
   const [payeParNom, setPayeParNom] = useState("")
-  const [selectedMois, setSelectedMois] = useState("all")
+  const [selectedMois, setSelectedMois] = useState<string | null>(null)
   const [selectedCompte, setSelectedCompte] = useState("all")
   const [activeTab, setActiveTab] = useState("auto")
   const [manualSearch, setManualSearch] = useState("")
-
-  function shiftMois(delta: number) {
-    if (selectedMois === "all") {
-      const now = new Date()
-      setSelectedMois(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`)
-      return
-    }
-    const [y, m] = selectedMois.split("-").map(Number)
-    const d = new Date(y, m - 1 + delta, 1)
-    setSelectedMois(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`)
-  }
-  function formatMoisLabel(m: string) {
-    if (m === "all") return "Tous les mois"
-    const [y, mo] = m.split("-").map(Number)
-    return new Date(y, mo - 1).toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
-  }
 
   // Get sociétés
   useEffect(() => {
@@ -162,6 +147,29 @@ export default function ClientRapprochementPage() {
   const [lettrageSelection, setLettrageSelection] = useState<Set<string>>(new Set())
   const [autoLettraging, setAutoLettraging] = useState(false)
 
+  const allTransactions = data?.bankTransactions || []
+  const allComptes = data?.comptes || []
+  const factures = data?.factures || []
+  const ecritures = (data?.ecritures || []).filter((e: any) => !e.lettre)
+
+  // Filter by month + compte
+  const transactions = allTransactions.filter((t: any) => {
+    if (selectedMois !== null && t.date) {
+      if (t.date.substring(0, 7) !== selectedMois) return false
+    }
+    if (selectedCompte !== "all" && t.compte_bancaire_id) {
+      if (String(t.compte_bancaire_id) !== selectedCompte && t.banque !== selectedCompte) return false
+    }
+    return true
+  })
+  const matched = transactions.filter((t: any) => t.facture_id || t.ecriture_id || t.lettre)
+  const proposed = transactions.filter((t: any) => t.statut === 'propose')
+  const unmatched = transactions.filter((t: any) => !t.facture_id && !t.ecriture_id && !t.lettre && t.statut !== 'propose')
+
+  // Bank comptes for selector
+  const uniqueBanques = Array.from(new Set(allTransactions.map((t: any) => t.banque).filter(Boolean))).sort()
+
+  // Lettrage computed values (must be AFTER ecritures is defined)
   const ecritures401 = ecritures.filter((e: any) => e.compte?.startsWith('401') && !e.lettre)
   const ecritures411 = ecritures.filter((e: any) => e.compte?.startsWith('411') && !e.lettre)
   const ecrituresLettrage = [...ecritures401, ...ecritures411]
@@ -195,20 +203,18 @@ export default function ClientRapprochementPage() {
     if (!societeId) return
     setAutoLettraging(true)
     try {
-      // For 401/411 écritures: match debit with credit of same amount + same tiers
       const toLetter: string[][] = []
       const used = new Set<string>()
       for (const e of ecrituresLettrage) {
         if (used.has(e.id)) continue
         const amount = Number(e.debit) > 0 ? Number(e.debit) : Number(e.credit)
         const isDebit = Number(e.debit) > 0
-        // Find opposite entry with same amount ±0.01
         const match = ecrituresLettrage.find((e2: any) => {
           if (e2.id === e.id || used.has(e2.id)) return false
-          if (e2.compte !== e.compte) return false // same account
+          if (e2.compte !== e.compte) return false
           const amount2 = Number(e2.debit) > 0 ? Number(e2.debit) : Number(e2.credit)
           const isDebit2 = Number(e2.debit) > 0
-          if (isDebit === isDebit2) return false // must be opposite
+          if (isDebit === isDebit2) return false
           return Math.abs(amount - amount2) <= 0.01
         })
         if (match) {
@@ -230,28 +236,6 @@ export default function ClientRapprochementPage() {
     } catch { alert("Erreur auto-lettrage") }
     finally { setAutoLettraging(false) }
   }
-
-  const allTransactions = data?.bankTransactions || []
-  const allComptes = data?.comptes || []
-  const factures = data?.factures || []
-  const ecritures = (data?.ecritures || []).filter((e: any) => !e.lettre)
-
-  // Filter by month + compte
-  const transactions = allTransactions.filter((t: any) => {
-    if (selectedMois !== "all" && t.date) {
-      if (t.date.substring(0, 7) !== selectedMois) return false
-    }
-    if (selectedCompte !== "all" && t.compte_bancaire_id) {
-      if (String(t.compte_bancaire_id) !== selectedCompte && t.banque !== selectedCompte) return false
-    }
-    return true
-  })
-  const matched = transactions.filter((t: any) => t.facture_id || t.ecriture_id || t.lettre)
-  const proposed = transactions.filter((t: any) => t.statut === 'propose')
-  const unmatched = transactions.filter((t: any) => !t.facture_id && !t.ecriture_id && !t.lettre && t.statut !== 'propose')
-
-  // Bank comptes for selector
-  const uniqueBanques = Array.from(new Set(allTransactions.map((t: any) => t.banque).filter(Boolean))).sort()
 
   if (loading) return <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-[#0B0F2E]" /></div>
 
@@ -281,12 +265,7 @@ export default function ClientRapprochementPage() {
 
       {/* Month navigator + Compte selector */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => shiftMois(-1)}><ChevronLeft className="w-4 h-4" /></Button>
-          <span className="text-sm font-medium min-w-[160px] text-center capitalize">{formatMoisLabel(selectedMois)}</span>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => shiftMois(1)}><ChevronRight className="w-4 h-4" /></Button>
-        </div>
-        <Button variant={selectedMois === "all" ? "default" : "outline"} size="sm" className={selectedMois === "all" ? "bg-[#0B0F2E]" : ""} onClick={() => setSelectedMois("all")}>Tout</Button>
+        <MonthPicker value={selectedMois} onChange={setSelectedMois} />
         {uniqueBanques.length > 1 && (
           <Select value={selectedCompte} onValueChange={setSelectedCompte}>
             <SelectTrigger className="w-[180px] h-8"><SelectValue /></SelectTrigger>

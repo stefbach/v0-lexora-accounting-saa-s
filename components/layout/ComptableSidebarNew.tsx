@@ -100,7 +100,6 @@ const CLIENT_SECTIONS: NavSection[] = [
       { href: "/client/banque", label: "Banque", icon: Landmark },
       { href: "/client/rapprochement", label: "Rapprochement", icon: CreditCard },
       { href: "/client/grand-livre", label: "Grand Livre", icon: BookOpen },
-      { href: "/client/affectations", label: "Affectations comptables", icon: ClipboardList },
     ],
   },
   {

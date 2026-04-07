@@ -111,7 +111,6 @@ const MENU: MenuSection[] = [
       { href: "/client/banque", label: "Banque", labelKey: "acc.bank", icon: Banknote },
       { href: "/client/rapprochement", label: "Rapprochement & Lettrage", labelKey: "acc.reconciliation", icon: CreditCard },
       { href: "/client/fournisseurs", label: "Fournisseurs", labelKey: "acc.suppliers", icon: FileSpreadsheet },
-      { href: "/client/affectations", label: "Affectations comptables", icon: Settings },
       { href: "/client/salaires-compta", label: "Salaires", icon: CreditCard },
       { href: "/client/compte-courant", label: "Comptes Courants Associés", labelKey: "acc.current_accounts", icon: Users },
     ]
