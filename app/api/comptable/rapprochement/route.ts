@@ -1,8 +1,27 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { getTauxChange } from '@/lib/taux-change'
 
 export const dynamic = 'force-dynamic'
+
+// Normalize tiers name for matching
+function normalizeTiers(name: string): string {
+  return (name || '')
+    .toLowerCase()
+    .replace(/\s+(ltd|limited|sarl|sas|sa|co|company|cie|inc)\.?\s*$/i, '')
+    .replace(/[^a-z0-9\s]/g, '')
+    .trim()
+}
+
+// Word overlap score between two strings
+function wordOverlap(a: string, b: string): number {
+  const wordsA = normalizeTiers(a).split(/\s+/).filter(w => w.length > 2)
+  const wordsB = normalizeTiers(b).split(/\s+/).filter(w => w.length > 2)
+  if (wordsA.length === 0 || wordsB.length === 0) return 0
+  const overlap = wordsA.filter(w => wordsB.some(wb => wb.includes(w) || w.includes(wb))).length
+  return overlap / Math.max(wordsA.length, wordsB.length)
+}
 
 function getAdminClient() {
   return createClient(
@@ -147,16 +166,53 @@ export async function POST(request: Request) {
       let factures: any[] = []
       const { data: facturesData, error: factErr } = await supabase
         .from('factures')
-        .select('id, numero_facture, tiers, montant_ttc, type_facture, devise')
+        .select('id, numero_facture, tiers, montant_ttc, montant_mur, type_facture, devise, taux_change')
         .eq('societe_id', societe_id)
         .in('statut', ['en_attente', 'retard', 'partiel'])
       if (!factErr) factures = facturesData || []
+
+      // FX rates for cross-currency matching
+      const rates = await getTauxChange()
+      const toMUR = (amount: number, devise: string): number => {
+        if (!devise || devise === 'MUR') return amount
+        return amount * (rates[devise.toUpperCase()] || 1)
+      }
+
+      // Bank account currencies
+      const { data: comptesBancaires } = await supabase
+        .from('comptes_bancaires').select('id, devise').eq('societe_id', societe_id)
+      const compteDeviseMap: Record<string, string> = {}
+      ;(comptesBancaires || []).forEach((c: any) => { compteDeviseMap[c.id] = c.devise || 'MUR' })
+
+      // Salary bulletins for matching (last 3 months)
+      const threeMonthsAgo = new Date()
+      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3)
+      const { data: bulletins } = await supabase
+        .from('bulletins_paie').select('id, employe_id, salaire_net, periode, statut')
+        .eq('societe_id', societe_id).eq('statut', 'valide')
+        .gte('periode', threeMonthsAgo.toISOString().slice(0, 10))
+      const empIds = [...new Set((bulletins || []).map(b => b.employe_id).filter(Boolean))]
+      let empMap: Record<string, any> = {}
+      if (empIds.length > 0) {
+        const { data: emps } = await supabase.from('employes').select('id, nom, prenom').in('id', empIds)
+        for (const e of emps || []) empMap[e.id] = e
+      }
+
+      // Compte courant mouvements for Bach/associé matching
+      const { data: ccMouvements } = await supabase
+        .from('mouvements_compte_courant').select('id, montant, description, compte_courant_id, date_mouvement, type')
+        .eq('societe_id', societe_id).limit(100)
+      const { data: ccComptes } = await supabase
+        .from('comptes_courants_associes').select('id, nom').eq('societe_id', societe_id)
+      const ccNomMap: Record<string, string> = {}
+      ;(ccComptes || []).forEach((c: any) => { ccNomMap[c.id] = c.nom })
 
       let matchCount = 0
       const matches: any[] = []
 
       for (const releve of releves) {
         const txs: any[] = releve.transactions_json || []
+        const releveDevise = compteDeviseMap[releve.compte_bancaire_id] || 'MUR'
         const updatedTxs = [...txs]
         let changed = false
 
@@ -183,25 +239,24 @@ export async function POST(request: Request) {
               return txLib.includes(ref) || (ref.length > 3 && txLib.includes(ref.replace(/[^A-Z0-9]/g, '')))
             })
 
-            // 1b. Match by tiers name + amount (±1%) with word overlap scoring
+            // 1b. Match by tiers name + amount with cross-currency support
             let matchConfidence = ''
             if (!matchedFacture) {
+              const txAmountMUR = toMUR(txAmount, releveDevise)
               for (const f of factures) {
                 const typeMatch = isCredit ? f.type_facture === 'client' : f.type_facture === 'fournisseur'
                 if (!typeMatch) continue
-                const fAmount = Number(f.montant_ttc) || 0
-                const amountMatch = Math.abs(txAmount - fAmount) <= Math.max(fAmount * 0.01, 1)
-                if (!amountMatch) continue
+                const fAmountMUR = Number(f.montant_mur) || toMUR(Number(f.montant_ttc) || 0, f.devise || 'MUR')
+                // Same currency: 1% tolerance. Cross-currency: 5% tolerance
+                const sameCurrency = releveDevise === (f.devise || 'MUR')
+                const tolerance = sameCurrency ? 0.01 : 0.05
+                const diff = fAmountMUR > 0 ? Math.abs(txAmountMUR - fAmountMUR) / fAmountMUR : 1
+                if (diff > tolerance) continue
                 // Word overlap scoring for tiers match
-                const txTiers = (tx.tiers_detecte || tx.tiers || txLib).toLowerCase()
-                const fTiers = (f.tiers || '').toLowerCase()
-                const txWords = txTiers.split(/\s+/).filter(w => w.length > 3)
-                const fWords = fTiers.split(/\s+/).filter(w => w.length > 3)
-                const overlap = txWords.filter(w => fWords.some(fw => fw.includes(w) || w.includes(fw))).length
-                const wordScore = (txWords.length > 0 && fWords.length > 0) ? overlap / Math.max(txWords.length, fWords.length) : 0
-                if (wordScore >= 0.5) { matchedFacture = f; matchConfidence = 'tiers_and_amount'; break }
-                // Amount-only match (lower confidence)
-                if (Math.abs(txAmount - fAmount) <= Math.max(fAmount * 0.005, 0.5)) { matchedFacture = f; matchConfidence = 'amount_only'; break }
+                const tiersScore = wordOverlap(tx.tiers_detecte || tx.tiers || txLib, f.tiers || '')
+                if (tiersScore >= 0.4) { matchedFacture = f; matchConfidence = 'tiers_and_amount'; break }
+                // Amount-only match (lower confidence) — same currency only
+                if (sameCurrency && diff < 0.005) { matchedFacture = f; matchConfidence = 'amount_only'; break }
               }
             } else {
               matchConfidence = 'reference'
@@ -279,6 +334,66 @@ export async function POST(request: Request) {
               matches.push({ type: 'ecriture', transaction: tx.libelle, ecriture: matchedEcriture.libelle, montant: txAmount })
               ecritures = ecritures.filter(e => e.id !== matchedEcriture.id)
               matched = true; changed = true; matchCount++
+            }
+          }
+
+          // Strategy 3: Match salary payments with bulletins_paie
+          if (!matched && txDebit > 0 && (bulletins || []).length > 0) {
+            const txAmountMUR = toMUR(txAmount, releveDevise)
+            const matchedBulletin = (bulletins || []).find(b => {
+              const emp = empMap[b.employe_id]
+              if (!emp) return false
+              const empName = normalizeTiers(`${emp.nom} ${emp.prenom}`)
+              const txNorm = normalizeTiers(tx.libelle || '')
+              const nameMatch = wordOverlap(empName, txNorm) >= 0.4 || txNorm.includes(normalizeTiers(emp.nom))
+              if (!nameMatch) return false
+              const bNet = Number(b.salaire_net) || 0
+              return bNet > 0 && Math.abs(txAmountMUR - bNet) / bNet < 0.02
+            })
+            if (matchedBulletin) {
+              const emp = empMap[matchedBulletin.employe_id]
+              const code = `S${String(matchCount + 1).padStart(3, '0')}`
+              updatedTxs[i] = { ...tx, lettre: code, statut: 'rapproche', matched_type: 'salaire', employe_id: matchedBulletin.employe_id }
+              matches.push({ type: 'salaire', transaction: tx.libelle, ecriture: `Salaire ${emp?.nom} ${emp?.prenom}`, montant: txAmount })
+              matched = true; changed = true; matchCount++
+            }
+          }
+
+          // Strategy 4: Match MRA payments (TVA, CSG, PAYE)
+          if (!matched && txDebit > 0 && (tx.libelle || '').toUpperCase().includes('MAURITIUS REVENUE')) {
+            const mraEcriture = ecritures.find(e => {
+              if (!e.compte?.match(/^(444|431|432|4457)/)) return false
+              const eAmount = Number(e.credit) || 0
+              if (eAmount === 0) return false
+              return Math.abs(txAmount - eAmount) / eAmount < 0.05
+            })
+            if (mraEcriture) {
+              const code = `MRA${String(matchCount + 1).padStart(3, '0')}`
+              updatedTxs[i] = { ...tx, ecriture_id: mraEcriture.id, lettre: code, statut: 'rapproche', matched_type: 'mra' }
+              await supabase.from('ecritures_comptables').update({ lettre: code, date_lettrage: new Date().toISOString().split('T')[0] }).eq('id', mraEcriture.id)
+              matches.push({ type: 'mra', transaction: tx.libelle, ecriture: mraEcriture.libelle, montant: txAmount })
+              ecritures = ecritures.filter(e => e.id !== mraEcriture.id)
+              matched = true; changed = true; matchCount++
+            }
+          }
+
+          // Strategy 5: Match Bach/associé transfers
+          if (!matched && (ccMouvements || []).length > 0) {
+            const txNorm = normalizeTiers(tx.libelle || '')
+            for (const cc of ccComptes || []) {
+              const ccNorm = normalizeTiers(cc.nom)
+              if (wordOverlap(txNorm, ccNorm) < 0.3 && !txNorm.includes(ccNorm)) continue
+              const matchedMvt = (ccMouvements || []).find(m => {
+                if (m.compte_courant_id !== cc.id) return false
+                const mAmount = Number(m.montant) || 0
+                return mAmount > 0 && Math.abs(txAmount - mAmount) / mAmount < 0.02
+              })
+              if (matchedMvt) {
+                const code = `CCA${String(matchCount + 1).padStart(3, '0')}`
+                updatedTxs[i] = { ...tx, lettre: code, statut: 'rapproche', matched_type: 'associe', compte_courant_id: cc.id }
+                matches.push({ type: 'associe', transaction: tx.libelle, ecriture: `${cc.nom} — ${matchedMvt.description || 'mouvement'}`, montant: txAmount })
+                matched = true; changed = true; matchCount++; break
+              }
             }
           }
         }
