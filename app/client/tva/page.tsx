@@ -89,13 +89,32 @@ export default function TVAPage() {
   const [showAllLocal, setShowAllLocal] = useState(false)
   const [showAllForeign, setShowAllForeign] = useState(false)
 
-  // Period filter
+  // Period filter — Mauritius fiscal year quarters
+  // T1 = Jul-Sep, T2 = Oct-Dec, T3 = Jan-Mar, T4 = Apr-Jun
   type PeriodMode = "mensuel" | "trimestriel"
   const nowDate = new Date()
   const [periodMode, setPeriodMode] = useState<PeriodMode>("mensuel")
   const [selectedMonth, setSelectedMonth] = useState(`${nowDate.getFullYear()}-${String(nowDate.getMonth() + 1).padStart(2, "0")}`)
-  const [selectedTrimestre, setSelectedTrimestre] = useState(() => `T${Math.ceil((nowDate.getMonth() + 1) / 3)}`)
-  const [selectedYear, setSelectedYear] = useState(nowDate.getFullYear())
+  const [selectedTrimestre, setSelectedTrimestre] = useState(() => {
+    const m = nowDate.getMonth() + 1 // 1-12
+    if (m >= 7 && m <= 9) return 'T1'
+    if (m >= 10 && m <= 12) return 'T2'
+    if (m >= 1 && m <= 3) return 'T3'
+    return 'T4'
+  })
+  const [selectedYear, setSelectedYear] = useState(() => {
+    // Fiscal year: T1/T2 are in first calendar year, T3/T4 in second
+    const m = nowDate.getMonth() + 1
+    return m >= 7 ? nowDate.getFullYear() : nowDate.getFullYear() - 1
+  })
+
+  // Mauritius fiscal quarter → calendar month mapping
+  const QUARTER_MONTHS: Record<string, number[]> = {
+    'T1': [7, 8, 9], 'T2': [10, 11, 12], 'T3': [1, 2, 3], 'T4': [4, 5, 6]
+  }
+  const QUARTER_LABELS: Record<string, string> = {
+    'T1': 'T1 (Juil-Sep)', 'T2': 'T2 (Oct-Déc)', 'T3': 'T3 (Jan-Mar)', 'T4': 'T4 (Avr-Jun)'
+  }
 
   function getPeriodDates(): { debut: string; fin: string } {
     if (periodMode === "mensuel") {
@@ -103,11 +122,14 @@ export default function TVAPage() {
       const lastDay = new Date(y, m, 0).getDate()
       return { debut: `${y}-${String(m).padStart(2, "0")}-01`, fin: `${y}-${String(m).padStart(2, "0")}-${lastDay}` }
     }
-    const q = parseInt(selectedTrimestre.replace("T", ""))
-    const startMonth = (q - 1) * 3 + 1
-    const endMonth = q * 3
-    const lastDay = new Date(selectedYear, endMonth, 0).getDate()
-    return { debut: `${selectedYear}-${String(startMonth).padStart(2, "0")}-01`, fin: `${selectedYear}-${String(endMonth).padStart(2, "0")}-${lastDay}` }
+    const months = QUARTER_MONTHS[selectedTrimestre] || [1, 2, 3]
+    const startM = months[0]
+    const endM = months[months.length - 1]
+    // T1/T2 use selectedYear, T3/T4 use selectedYear+1
+    const startY = startM >= 7 ? selectedYear : selectedYear + 1
+    const endY = endM >= 7 ? selectedYear : selectedYear + 1
+    const lastDay = new Date(endY, endM, 0).getDate()
+    return { debut: `${startY}-${String(startM).padStart(2, "0")}-01`, fin: `${endY}-${String(endM).padStart(2, "0")}-${lastDay}` }
   }
 
   function getPeriodLabel(): string {
@@ -115,7 +137,7 @@ export default function TVAPage() {
       const [y, mo] = selectedMonth.split("-").map(Number)
       return new Date(y, mo - 1).toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
     }
-    return `${selectedTrimestre} ${selectedYear}`
+    return `${QUARTER_LABELS[selectedTrimestre] || selectedTrimestre} ${selectedYear}-${selectedYear + 1}`
   }
 
   // Fetch ALL sociétés the user has access to
@@ -172,7 +194,26 @@ export default function TVAPage() {
   const tvaDeductible = data?.tvaDeductible ?? 0
   const tvaRecords: any[] = data?.tvaRecords ?? []
   const invoices: any[] = data?.extractedInvoices ?? []
+  const factures: any[] = data?.factures ?? []
   const creditReporte = 0
+
+  // TVA from factures table (more reliable than extractedInvoices)
+  const facturesClient = factures.filter((f: any) => f.type_facture === 'client')
+  const facturesFournisseur = factures.filter((f: any) => f.type_facture === 'fournisseur')
+  const tvaCollecteeFactures = facturesClient.reduce((s: number, f: any) => s + (Number(f.montant_tva) || 0), 0)
+  const tvaDeductibleFactures = facturesFournisseur.reduce((s: number, f: any) => s + (Number(f.montant_tva) || 0), 0)
+
+  // Factures non soumises à TVA (montant_tva = 0 but montant_ht > 0)
+  const facturesNonTVA = factures.filter((f: any) => (Number(f.montant_tva) || 0) === 0 && (Number(f.montant_ht) || 0) > 0)
+
+  // Reverse charge: foreign fournisseurs (devise != MUR, not known Mauritius company)
+  const reverseChargeFacts = facturesFournisseur.filter((f: any) => {
+    if (!f.devise || f.devise === 'MUR') return false
+    const tiers = (f.tiers || '').toLowerCase()
+    // Exclude known Mauritius companies despite EUR invoices
+    if (tiers.includes('magellan')) return false
+    return true
+  })
 
   // Separate client invoices (TVA collectee) and supplier invoices
   const clientInvoices = invoices.filter((inv: any) => inv.type === "facture_client")
@@ -368,11 +409,11 @@ export default function TVAPage() {
               <div className="flex items-center gap-2">
                 <Select value={selectedTrimestre} onValueChange={setSelectedTrimestre}>
                   <SelectTrigger className="w-[80px] h-8"><SelectValue /></SelectTrigger>
-                  <SelectContent>{["T1", "T2", "T3", "T4"].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                  <SelectContent>{["T1", "T2", "T3", "T4"].map(t => <SelectItem key={t} value={t}>{QUARTER_LABELS[t]}</SelectItem>)}</SelectContent>
                 </Select>
                 <Select value={String(selectedYear)} onValueChange={v => setSelectedYear(Number(v))}>
                   <SelectTrigger className="w-[100px] h-8"><SelectValue /></SelectTrigger>
-                  <SelectContent>{[nowDate.getFullYear() - 1, nowDate.getFullYear(), nowDate.getFullYear() + 1].map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent>
+                  <SelectContent>{[nowDate.getFullYear() - 1, nowDate.getFullYear(), nowDate.getFullYear() + 1].map(y => <SelectItem key={y} value={String(y)}>{y}-{y + 1}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             )}
@@ -684,6 +725,80 @@ export default function TVAPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Factures non soumises à TVA */}
+      {facturesNonTVA.length > 0 && (
+        <Card className="no-print">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base" style={{ color: NAVY }}>
+              <Info className="h-5 w-5" style={{ color: "#6B7280" }} />
+              Factures non soumises à TVA ({facturesNonTVA.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>N°</TableHead><TableHead>Tiers</TableHead><TableHead className="text-right">Montant HT</TableHead><TableHead>Devise</TableHead><TableHead>Raison</TableHead></TableRow></TableHeader>
+              <TableBody>
+                {facturesNonTVA.slice(0, showAllClient ? 100 : 8).map((f: any) => {
+                  const raison = f.devise && f.devise !== 'MUR' && f.type_facture === 'client' ? 'Export — Exonéré' : f.devise && f.devise !== 'MUR' && f.type_facture === 'fournisseur' ? 'Import — Reverse charge possible' : 'Non assujetti à TVA'
+                  return (
+                    <TableRow key={f.id}>
+                      <TableCell className="text-xs">{f.date_facture ? new Date(f.date_facture).toLocaleDateString('fr-FR') : '—'}</TableCell>
+                      <TableCell className="text-xs font-mono">{f.numero_facture || '—'}</TableCell>
+                      <TableCell className="text-xs">{f.tiers || '—'}</TableCell>
+                      <TableCell className="text-right text-xs font-mono">{formatMUR(Number(f.montant_ht) || 0)}</TableCell>
+                      <TableCell className="text-xs"><Badge variant="outline">{f.devise || 'MUR'}</Badge></TableCell>
+                      <TableCell className="text-xs text-gray-500">{raison}</TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Reverse Charge Section */}
+      {reverseChargeFacts.length > 0 && (
+        <Card className="border-amber-200 no-print">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base" style={{ color: NAVY }}>
+              <Globe className="h-5 w-5 text-amber-500" />
+              Reverse Charge — Fournisseurs étrangers ({reverseChargeFacts.length})
+            </CardTitle>
+            <p className="text-xs text-gray-500 mt-1">
+              Services importés soumis au mécanisme de reverse charge (R5). TVA auto-déclarée : output + input = net 0.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Fournisseur</TableHead><TableHead>Devise</TableHead><TableHead className="text-right">Base HT</TableHead><TableHead className="text-right">TVA 15% (auto)</TableHead></TableRow></TableHeader>
+              <TableBody>
+                {reverseChargeFacts.map((f: any) => {
+                  const ht = Number(f.montant_ht) || Number(f.montant_ttc) || 0
+                  const tvaAuto = Math.round(ht * 0.15 * 100) / 100
+                  return (
+                    <TableRow key={f.id}>
+                      <TableCell className="text-xs">{f.date_facture ? new Date(f.date_facture).toLocaleDateString('fr-FR') : '—'}</TableCell>
+                      <TableCell className="text-xs font-medium">{f.tiers || '—'}</TableCell>
+                      <TableCell className="text-xs"><Badge variant="outline">{f.devise}</Badge></TableCell>
+                      <TableCell className="text-right text-xs font-mono">{formatMUR(ht)} {f.devise}</TableCell>
+                      <TableCell className="text-right text-xs font-mono text-amber-600">{formatMUR(tvaAuto)} MUR</TableCell>
+                    </TableRow>
+                  )
+                })}
+                <TableRow className="bg-amber-50/50 font-bold">
+                  <TableCell colSpan={4} className="text-right text-xs">Total Reverse Charge TVA</TableCell>
+                  <TableCell className="text-right text-xs font-mono text-amber-600">{formatMUR(reverseChargeFacts.reduce((s: number, f: any) => s + Math.round((Number(f.montant_ht) || Number(f.montant_ttc) || 0) * 0.15 * 100) / 100, 0))} MUR</TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+            <p className="text-xs text-blue-700 mt-2 flex items-center gap-1">
+              <Info className="h-3 w-3" /> Output TVA + Input TVA = effet net 0. Montants à déclarer dans les cases R5 de la déclaration MRA.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* TVA Records Table */}
       {tvaRecords.length > 0 && (
