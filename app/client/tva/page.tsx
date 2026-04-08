@@ -465,96 +465,16 @@ export default function TVAPage() {
                   <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 border-t" onClick={async () => {
                     setExportOpen(false)
                     try {
-                      const { pdf, Document, Page: PdfPage, Text: T, View: V, StyleSheet: SS } = await import('@react-pdf/renderer')
-                      const s = SS.create({
-                        page: { padding: 30, fontFamily: 'Helvetica', fontSize: 9 },
-                        title: { fontSize: 14, fontWeight: 'bold', textAlign: 'center', marginBottom: 4 },
-                        sub: { fontSize: 10, textAlign: 'center', color: '#444', marginBottom: 2 },
-                        row: { flexDirection: 'row' as const, borderBottomWidth: 0.5, borderBottomColor: '#ccc', borderLeftWidth: 0.5, borderLeftColor: '#ccc', borderRightWidth: 0.5, borderRightColor: '#ccc' },
-                        rowAlt: { flexDirection: 'row' as const, backgroundColor: '#f5f5f5', borderBottomWidth: 0.5, borderBottomColor: '#ccc', borderLeftWidth: 0.5, borderLeftColor: '#ccc', borderRightWidth: 0.5, borderRightColor: '#ccc' },
-                        rowTotal: { flexDirection: 'row' as const, backgroundColor: '#e0e0e0', borderTopWidth: 1.5, borderTopColor: '#000', borderLeftWidth: 0.5, borderLeftColor: '#ccc', borderRightWidth: 0.5, borderRightColor: '#ccc', borderBottomWidth: 1, borderBottomColor: '#000' },
-                        hdr: { flexDirection: 'row' as const, backgroundColor: '#1a1a1a' },
-                        hdrCell: { color: '#fff', fontSize: 8, fontWeight: 'bold' as const, padding: 6, borderRightWidth: 0.5, borderRightColor: '#555' },
-                        c: { padding: 5, fontSize: 8, borderRightWidth: 0.5, borderRightColor: '#ddd' },
-                        cb: { padding: 5, fontSize: 8, fontWeight: 'bold' as const, borderRightWidth: 0.5, borderRightColor: '#ddd' },
-                        cr: { padding: 5, fontSize: 8, textAlign: 'right' as const },
-                        sec: { fontSize: 11, fontWeight: 'bold' as const, backgroundColor: '#e8e8e8', padding: 6, marginBottom: 4, marginTop: 14, borderBottomWidth: 1, borderBottomColor: '#999' },
-                        footer: { position: 'absolute' as const, bottom: 20, left: 30, right: 30, textAlign: 'center' as const, fontSize: 7, color: '#888' },
-                      })
-                      const f = (n: number) => {
-                        const abs = Math.abs(n || 0)
-                        const formatted = abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                        return n < 0 ? `(${formatted})` : formatted
-                      }
+                      const { pdf } = await import('@react-pdf/renderer')
+                      const { TVADeclarationPDF } = await import('@/components/pdf/TVADeclarationPDF')
                       const socData = societes.find((x: any) => x.id === selectedSociete)
                       const pLabel = getPeriodLabel()
-                      // Box 3: ONLY taxable purchases (where montant_tva > 0)
                       const taxableAchatsHT = facturesFournisseurLocal.filter((fac: any) => (Number(fac.montant_tva) || 0) > 0).reduce((sum: number, fac: any) => sum + (Number(fac.montant_ht) || 0), 0)
                       const caHT = facturesClient.reduce((sum: number, fac: any) => sum + (Number(fac.montant_ht) || 0), 0)
-                      const box7 = effectiveCollectee - effectiveDeductible
-                      // Only show suppliers with TVA > 0 in the list
                       const taxableSuppliers = groupedLocalInvoices.filter(g => g.totalTVA > 0)
-
-                      const R = ({ box, desc, val, bg }: { box: string; desc: string; val: string; bg?: string }) => (
-                        <V style={[s.row, bg ? { backgroundColor: bg } : {}]}><T style={[s.cb, { width: 35 }]}>{box}</T><T style={[s.c, { flex: 1 }]}>{desc}</T><T style={[s.cr, { width: 120 }]}>{val}</T></V>
-                      )
-
-                      const doc = (
-                        <Document>
-                          <PdfPage size="A4" style={s.page}>
-                            <T style={s.title}>MAURITIUS REVENUE AUTHORITY</T>
-                            <T style={s.sub}>VALUE ADDED TAX RETURN — Déclaration TVA</T>
-                            <T style={[s.sub, { marginBottom: 6 }]}>{socData?.nom || ''} | BRN: {socData?.brn || ''} | VAT: {socData?.numero_tva_mra || 'N/A'}</T>
-                            <T style={[s.sub, { marginBottom: 15 }]}>Période: {pLabel} | Adresse: {socData?.adresse || ''}</T>
-
-                            <T style={s.sec}>VAT COMPUTATION / CALCUL DE LA TVA (MUR)</T>
-                            <V style={{ borderWidth: 1, borderColor: '#000' }}>
-                              <V style={s.hdr}><T style={[s.hdrCell, { width: 35 }]}>Box</T><T style={[s.hdrCell, { flex: 1 }]}>Description</T><T style={[s.hdrCell, { width: 120, textAlign: 'right' }]}>Montant (MUR)</T></V>
-                              <R box="1" desc="Value of Taxable Supplies (HT) — Fournitures taxables" val={f(caHT)} />
-                              <R box="2" desc="Output Tax (TVA sur ventes) — TVA collectée" val={f(effectiveCollectee)} bg="#f5f5f5" />
-                              <R box="3" desc="Taxable Purchases (HT) — Achats taxables seulement" val={f(taxableAchatsHT)} />
-                              <R box="4" desc="Input Tax (TVA sur achats locaux) — TVA déductible" val={f(effectiveDeductible)} bg="#f5f5f5" />
-                              {reverseChargeTVA > 0 && <R box="R5" desc={`Reverse Charge — Services importés — Base: ${f(totalReverseChargeBase)} — Output=Input=Net 0`} val={f(reverseChargeTVA)} bg="#fff8e1" />}
-                              <R box="5" desc="Crédit TVA reporté du mois/trimestre précédent" val={f(0)} />
-                              <R box="6" desc="Total TVA déductible (Box 4 + Box 5)" val={f(effectiveDeductible)} bg="#f5f5f5" />
-                              <R box="7" desc="TVA nette (Box 2 - Box 6)" val={f(box7)} bg="#fff3cd" />
-                              <R box="8" desc="TVA à payer (si Box 7 > 0)" val={f(tvaAPayer)} />
-                              <R box="9" desc="Crédit TVA à reporter (si Box 7 < 0)" val={f(creditTVA)} bg="#e0e0e0" />
-                            </V>
-
-                            {taxableSuppliers.length > 0 && (<>
-                              <T style={s.sec}>INPUT TAX DETAILS — FOURNISSEURS AVEC TVA</T>
-                              <V style={{ borderWidth: 1, borderColor: '#000' }}>
-                                <V style={s.hdr}><T style={[s.hdrCell, { flex: 1 }]}>Fournisseur</T><T style={[s.hdrCell, { width: 90, textAlign: 'right' }]}>TVA (MUR)</T></V>
-                                {taxableSuppliers.map((g, i) => <V key={i} style={i % 2 === 0 ? s.row : s.rowAlt}><T style={[s.c, { flex: 1 }]}>{g.tiers}{g.count > 1 ? ` (×${g.count})` : ''}</T><T style={[s.cr, { width: 90 }]}>{f(g.totalTVA)}</T></V>)}
-                                <V style={s.rowTotal}><T style={[s.cb, { flex: 1 }]}>TOTAL INPUT TAX</T><T style={[s.cr, { width: 90, fontWeight: 'bold' }]}>{f(effectiveDeductible)}</T></V>
-                              </V>
-                            </>)}
-
-                            {reverseChargeFacts.length > 0 && (<>
-                              <T style={s.sec}>REVERSE CHARGE R5 — SERVICES IMPORTÉS</T>
-                              <V style={{ borderWidth: 1, borderColor: '#000' }}>
-                                <V style={s.hdr}><T style={[s.hdrCell, { flex: 1 }]}>Fournisseur étranger</T><T style={[s.hdrCell, { width: 80, textAlign: 'right' }]}>Base HT</T><T style={[s.hdrCell, { width: 80, textAlign: 'right' }]}>TVA 15%</T></V>
-                                {reverseChargeFacts.map((rc: any, i: number) => <V key={i} style={i % 2 === 0 ? s.row : s.rowAlt}><T style={[s.c, { flex: 1 }]}>{rc.tiers}</T><T style={[s.cr, { width: 80 }]}>{f(Number(rc.montant_ht) || 0)}</T><T style={[s.cr, { width: 80 }]}>{f((Number(rc.montant_ht) || 0) * 0.15)}</T></V>)}
-                                <V style={s.rowTotal}><T style={[s.cb, { flex: 1 }]}>TOTAL R5 (Output = Input = Net 0)</T><T style={[s.cr, { width: 80, fontWeight: 'bold' }]}>{f(totalReverseChargeBase)}</T><T style={[s.cr, { width: 80, fontWeight: 'bold' }]}>{f(reverseChargeTVA)}</T></V>
-                              </V>
-                            </>)}
-
-                            <V style={{ marginTop: 20 }}>
-                              <T style={s.sec}>DÉCLARATION</T>
-                              <T style={{ fontSize: 8, marginBottom: 15, lineHeight: 1.5 }}>I/We declare that the information given in this return is true, correct and complete to the best of my/our knowledge and belief.</T>
-                              <V style={{ flexDirection: 'row', marginTop: 10 }}>
-                                <V style={{ flex: 1 }}><T style={{ fontSize: 8, color: '#666' }}>Name: ___________________________</T><T style={{ fontSize: 8, color: '#666', marginTop: 4 }}>Capacity: Director</T></V>
-                                <V style={{ flex: 1 }}><T style={{ fontSize: 8, color: '#666' }}>Signature: ___________________________</T><T style={{ fontSize: 8, color: '#666', marginTop: 4 }}>Date: ___________________________</T></V>
-                              </V>
-                            </V>
-
-                            <T style={s.footer}>{socData?.nom} | BRN: {socData?.brn} | Période: {pLabel} | Généré par LEXORA — MRA VAT Return</T>
-                          </PdfPage>
-                        </Document>
-                      )
-
-                      const blob = await pdf(doc).toBlob()
+                      const blob = await pdf(
+                        <TVADeclarationPDF societe={socData} periodeLabel={pLabel} effectiveCollectee={effectiveCollectee} effectiveDeductible={effectiveDeductible} tvaAPayer={tvaAPayer} creditTVA={creditTVA} totalReverseChargeBase={totalReverseChargeBase} reverseChargeTVA={reverseChargeTVA} caHT={caHT} taxableAchatsHT={taxableAchatsHT} groupedSuppliers={taxableSuppliers} reverseChargeFacts={reverseChargeFacts} />
+                      ).toBlob()
                       const url = URL.createObjectURL(blob)
                       const link = document.createElement('a')
                       link.href = url
