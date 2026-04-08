@@ -13,6 +13,46 @@ import { Loader2, BookOpen, ChevronLeft, ChevronRight, Download, RefreshCw } fro
 function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 function fmtDate(d: string) { return d ? new Date(d).toLocaleDateString("fr-FR") : "—" }
 
+const COMPTE_NAMES: Record<string, string> = {
+  '401': 'Fournisseurs', '411': 'Clients', '421': 'Personnel',
+  '431': 'CSG/NSF', '432': 'Training Levy', '444': 'PAYE',
+  '4456': 'TVA déductible', '4457': 'TVA collectée',
+  '455': 'Comptes courants associés', '467': 'Collaborateurs',
+  '512': 'Banque', '581': 'Virements internes',
+  '601': 'Achats', '606': 'Fournitures', '611': 'Sous-traitance',
+  '612': 'Loyers', '616': 'Assurances', '622': 'Honoraires',
+  '623': 'Publicité', '624': 'Transport', '626': 'Télécom',
+  '627': 'Frais bancaires', '628': 'Charges diverses',
+  '641': 'Salaires', '641100': 'Salaires bruts',
+  '645': 'Charges patronales', '645100': 'Cotisations patronales',
+  '651': 'Redevances SaaS', '666': 'Pertes de change',
+  '706': "Chiffre d'affaires", '753': 'Commissions',
+  '766': 'Gains de change',
+}
+
+function getCompteName(compte: string): string {
+  if (COMPTE_NAMES[compte]) return COMPTE_NAMES[compte]
+  // Try prefix match
+  for (let len = compte.length; len >= 2; len--) {
+    const prefix = compte.substring(0, len)
+    if (COMPTE_NAMES[prefix]) return COMPTE_NAMES[prefix]
+  }
+  return ''
+}
+
+function getLetterColor(lettre: string): string {
+  if (!lettre) return 'transparent'
+  if (lettre.startsWith('MRA')) return '#fee2e2'
+  if (lettre.startsWith('M')) return '#dbeafe'
+  if (lettre.startsWith('RG')) return '#d1fae5'
+  if (lettre.startsWith('R')) return '#dcfce7'
+  if (lettre.startsWith('S')) return '#f3e8ff'
+  if (lettre.startsWith('L')) return '#ffedd5'
+  if (lettre.startsWith('FEE')) return '#fef3c7'
+  if (lettre.startsWith('BNQ')) return '#e0f2fe'
+  return '#f3f4f6'
+}
+
 interface Societe { id: string; nom: string }
 
 export default function ClientGrandLivrePage() {
@@ -27,6 +67,8 @@ export default function ClientGrandLivrePage() {
   const [dateFin, setDateFin] = useState("")
   const [journal, setJournal] = useState("all")
   const [exercice, setExercice] = useState("")
+  const [lettreFilter, setLettreFilter] = useState<'all' | 'lettered' | 'unlettered'>('all')
+  const [highlightedLettre, setHighlightedLettre] = useState<string | null>(null)
 
   // Available exercices (Mauritius fiscal year July-June)
   const currentYear = new Date().getFullYear()
@@ -64,7 +106,12 @@ export default function ClientGrandLivrePage() {
 
   useEffect(() => { load() }, [load])
 
-  const ecritures = data?.ecritures || []
+  const allEcritures = data?.ecritures || []
+  const ecritures = allEcritures.filter((e: any) => {
+    if (lettreFilter === 'lettered') return e.lettre
+    if (lettreFilter === 'unlettered') return !e.lettre
+    return true
+  })
   const lettrage = data?.lettrage || { lettrees: 0, non_lettrees: 0, total: 0 }
   const soldeOuvertureParCompte: Record<string, number> = data?.solde_ouverture_par_compte || {}
   const hasSoldeOuverture = Object.keys(soldeOuvertureParCompte).length > 0
@@ -140,6 +187,22 @@ export default function ClientGrandLivrePage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Lettrage filter + highlight */}
+      <div className="flex items-center gap-3">
+        <span className="text-sm text-gray-500">Lettrage :</span>
+        <div className="flex rounded-lg border overflow-hidden">
+          {([['all', 'Toutes'], ['lettered', 'Lettrées'], ['unlettered', 'Non lettrées']] as const).map(([val, label]) => (
+            <button key={val} onClick={() => setLettreFilter(val)} className={`px-3 py-1 text-xs font-medium ${lettreFilter === val ? 'bg-[#0B0F2E] text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>{label}</button>
+          ))}
+        </div>
+        {highlightedLettre && (
+          <div className="flex items-center gap-2 px-3 py-1 bg-yellow-100 border border-yellow-300 rounded text-xs">
+            <span>Lettrage <strong>{highlightedLettre}</strong> : {ecritures.filter((e: any) => e.lettre === highlightedLettre).length} écritures liées</span>
+            <button onClick={() => setHighlightedLettre(null)} className="text-gray-500 hover:text-gray-800">✕</button>
+          </div>
+        )}
+      </div>
 
       {!selectedSociete ? (
         <Card><CardContent className="py-16 text-center text-gray-400">Selectionnez une societe</CardContent></Card>
@@ -250,16 +313,16 @@ export default function ClientGrandLivrePage() {
                         )
                       })()}
                       {ecritures.map((e: any, idx: number) => (
-                        <TableRow key={e.id} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50/50"}>
+                        <TableRow key={e.id} className={`${highlightedLettre && e.lettre === highlightedLettre ? 'bg-yellow-50' : idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
                           <TableCell className="text-xs font-mono whitespace-nowrap">{fmtDate(e.date_ecriture)}</TableCell>
                           <TableCell><Badge variant="outline" className="text-[10px] px-1 py-0">{e.journal || "—"}</Badge></TableCell>
                           <TableCell className="text-xs font-mono text-gray-500">{e.ref_folio || "—"}</TableCell>
-                          <TableCell className="text-xs font-mono font-semibold text-[#0B0F2E]">{e.numero_compte}</TableCell>
+                          <TableCell className="text-xs font-mono font-semibold text-[#0B0F2E]">{e.numero_compte}{getCompteName(e.numero_compte) ? <span className="ml-1 text-gray-400 font-normal">{getCompteName(e.numero_compte)}</span> : ''}</TableCell>
                           <TableCell className="text-xs max-w-[200px] truncate text-gray-700">{e.description || e.nom_compte || "—"}</TableCell>
                           <TableCell className="text-xs text-right font-mono">{e.debit_mur > 0 ? <span className="text-blue-700">{fmt(e.debit_mur)}</span> : "—"}</TableCell>
                           <TableCell className="text-xs text-right font-mono">{e.credit_mur > 0 ? <span className="text-purple-700">{fmt(e.credit_mur)}</span> : "—"}</TableCell>
                           <TableCell className={`text-xs text-right font-mono ${e.solde_progressif >= 0 ? "text-green-700" : "text-red-600"}`}>{fmt(e.solde_progressif)}</TableCell>
-                          <TableCell>{e.lettre ? <Badge className="bg-green-100 text-green-700 text-xs">{e.lettre}</Badge> : <span className="text-gray-300">—</span>}</TableCell>
+                          <TableCell>{e.lettre ? <span onClick={() => setHighlightedLettre(e.lettre === highlightedLettre ? null : e.lettre)} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-bold cursor-pointer" style={{ backgroundColor: getLetterColor(e.lettre) }}>{e.lettre}</span> : <span className="text-gray-300">—</span>}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
