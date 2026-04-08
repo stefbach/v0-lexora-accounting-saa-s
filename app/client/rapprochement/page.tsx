@@ -266,7 +266,7 @@ export default function ClientRapprochementPage() {
           const amount2 = Number(e2.debit) > 0 ? Number(e2.debit) : Number(e2.credit)
           const isDebit2 = Number(e2.debit) > 0
           if (isDebit === isDebit2) return false
-          return Math.abs(amount - amount2) <= 0.01
+          return Math.abs(amount - amount2) <= Math.max(amount * 0.01, 1)
         })
         if (match) {
           toLetter.push([e.id, match.id])
