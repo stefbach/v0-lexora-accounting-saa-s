@@ -391,19 +391,31 @@ export default function AnnualReturnPage() {
     }
   }
 
-  // Export PDF
-  const handleExportPDF = async () => {
+  // Export PDF — uses clean HTML to avoid CSS color parsing issues
+  const handleExportPDF = () => {
     const el = document.getElementById('annual-return-content')
-    if (!el) { window.print(); return }
-    const html2pdf = (await import('html2pdf.js')).default
-    const socNom = societes.find(s => s.id === selectedSociete)?.nom || 'Societe'
-    await html2pdf().set({
-      margin: 15,
-      filename: `Annual_Return_${socNom.replace(/\s+/g, '_')}_${new Date().getFullYear()}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2 },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-    }).from(el).save()
+    if (el) {
+      // Clone content, strip Tailwind colors, open in new window for print
+      const clone = el.cloneNode(true) as HTMLElement
+      // Remove all oklch/lab colors that crash html2canvas
+      clone.querySelectorAll('*').forEach(node => {
+        const el = node as HTMLElement
+        el.style.color = ''
+        el.style.backgroundColor = ''
+      })
+      const w = window.open('', '_blank')
+      if (w) {
+        w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Annual Return</title>
+<style>body{font-family:Arial,sans-serif;padding:20px;font-size:12px}
+@page{margin:15mm;size:A4}.no-print{display:none!important}</style></head><body>`)
+        w.document.write(clone.innerHTML)
+        w.document.write('</body></html>')
+        w.document.close()
+        setTimeout(() => w.print(), 500)
+      }
+    } else {
+      window.print()
+    }
   }
 
   // Update helpers
