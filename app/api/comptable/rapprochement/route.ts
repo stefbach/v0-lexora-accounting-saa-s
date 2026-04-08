@@ -224,7 +224,11 @@ export async function POST(request: Request) {
 
         for (let i = 0; i < updatedTxs.length; i++) {
           const tx = updatedTxs[i]
-          if (tx.lettre || tx.facture_id || tx.ecriture_id || tx.statut === 'rapproche' || tx.statut === 'interne') continue
+          // Skip only if fully processed: has matched_type AND (rapproche or interne)
+          // Re-process transactions that are 'rapproche' but have no matched_type (legacy)
+          if (tx.matched_type && (tx.statut === 'rapproche' || tx.statut === 'interne')) continue
+          // Skip manually lettered transactions
+          if (tx.lettre && tx.facture_id) continue
 
           // Period filter
           if (date_debut && tx.date && tx.date < date_debut) continue
@@ -473,18 +477,22 @@ export async function POST(request: Request) {
 
         // Always save if any transaction was modified
         if (changed) {
-          await supabase.from('releves_bancaires')
+          const { error: saveErr } = await supabase.from('releves_bancaires')
             .update({ transactions_json: updatedTxs })
             .eq('id', releve.id)
+          const modCount = updatedTxs.filter((t: any, j: number) => JSON.stringify(t) !== JSON.stringify(txs[j])).length
+          console.log(`[rapprochement] Saved releve ${releve.id}: ${modCount} transactions modified${saveErr ? ' ERROR: ' + saveErr.message : ''}`)
         }
       }
 
       console.log('[rapprochement] Result:', counts)
 
+      const totalClassified = counts.matched + counts.interne + counts.frais_bancaires + counts.salaire_bulk + counts.mra
       return NextResponse.json({
         matched: counts.matched, interne: counts.interne, frais_bancaires: counts.frais_bancaires,
         salaire_bulk: counts.salaire_bulk, mra: counts.mra, propose: counts.propose,
         not_matched: counts.not_matched, total: counts.total,
+        total_classified: totalClassified,
         matches: matchesList.slice(0, 10),
       })
     }

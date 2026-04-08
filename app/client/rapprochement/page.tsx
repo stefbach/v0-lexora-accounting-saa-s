@@ -35,7 +35,7 @@ export default function ClientRapprochementPage() {
   const [loading, setLoading] = useState(true)
   const [autoMatching, setAutoMatching] = useState(false)
   const [autoStep, setAutoStep] = useState("")
-  const [autoResult, setAutoResult] = useState<{ matched: number; total: number; interne: number; frais_bancaires: number; not_matched: number; matches: any[] } | null>(null)
+  const [autoResult, setAutoResult] = useState<{ matched: number; total: number; interne: number; frais_bancaires: number; salaire_bulk: number; mra: number; not_matched: number; total_classified: number; matches: any[] } | null>(null)
   const [linkDialog, setLinkDialog] = useState<any>(null)
   const [societeId, setSocieteId] = useState<string | null>(null)
   const [societes, setSocietes] = useState<any[]>([])
@@ -98,9 +98,9 @@ export default function ClientRapprochementPage() {
       const d = await res.json()
       await new Promise(r => setTimeout(r, 500))
       setAutoStep("")
-      setAutoResult({ matched: d.matched || 0, total: d.total || transactions.length, interne: d.interne || 0, frais_bancaires: d.frais_bancaires || 0, not_matched: d.not_matched || 0, matches: d.matches || [] })
+      setAutoResult({ matched: d.matched || 0, total: d.total || 0, interne: d.interne || 0, frais_bancaires: d.frais_bancaires || 0, salaire_bulk: d.salaire_bulk || 0, mra: d.mra || 0, not_matched: d.not_matched || 0, total_classified: d.total_classified || 0, matches: d.matches || [] })
       load()
-    } catch { setAutoStep(""); setAutoResult({ matched: 0, total: transactions.length, interne: 0, frais_bancaires: 0, not_matched: 0, matches: [] }) }
+    } catch { setAutoStep(""); setAutoResult({ matched: 0, total: 0, interne: 0, frais_bancaires: 0, salaire_bulk: 0, mra: 0, not_matched: 0, total_classified: 0, matches: [] }) }
     finally { setAutoMatching(false) }
   }
 
@@ -365,28 +365,24 @@ export default function ClientRapprochementPage() {
 
       {/* Auto-rapprochement result */}
       {autoResult && !autoStep && (
-        <Card className={autoResult.matched > 0 ? "border-green-200 bg-green-50" : "border-gray-200"}>
+        <Card className={autoResult.total_classified > 0 ? "border-green-200 bg-green-50" : "border-gray-200"}>
           <CardContent className="p-4">
             <p className="font-medium text-sm text-[#0B0F2E]">Rapprochement terminé</p>
-            <div className="flex flex-wrap gap-4 mt-2 text-sm">
-              <span className="text-green-600 font-bold">{autoResult.matched} rapprochée(s)</span>
-              {autoResult.interne > 0 && <span className="text-gray-400">{autoResult.interne} interne(s)</span>}
-              {autoResult.frais_bancaires > 0 && <span className="text-blue-500">{autoResult.frais_bancaires} frais bancaires</span>}
-              <span className="text-red-500">{autoResult.not_matched} non rapprochée(s)</span>
-              {autoResult.total > 0 && <span className="text-gray-400">{Math.round(((autoResult.matched + autoResult.interne) / autoResult.total) * 100)}% traité</span>}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-3 text-xs">
+              {autoResult.matched > 0 && <div className="flex items-center gap-1"><span className="text-green-600">⚡</span>{autoResult.matched} correspondance(s) factures/écritures</div>}
+              {autoResult.interne > 0 && <div className="flex items-center gap-1"><span className="text-gray-400">🏦</span>{autoResult.interne} transfert(s) interne(s)</div>}
+              {autoResult.frais_bancaires > 0 && <div className="flex items-center gap-1"><span className="text-blue-500">💰</span>{autoResult.frais_bancaires} frais bancaires</div>}
+              {autoResult.salaire_bulk > 0 && <div className="flex items-center gap-1"><span className="text-purple-500">👥</span>{autoResult.salaire_bulk} salaire(s)</div>}
+              {autoResult.mra > 0 && <div className="flex items-center gap-1"><span className="text-indigo-500">🏛️</span>{autoResult.mra} paiement(s) MRA</div>}
+              {autoResult.not_matched > 0 && <div className="flex items-center gap-1"><span className="text-red-500">❌</span>{autoResult.not_matched} sans correspondance</div>}
             </div>
-            {autoResult.matched === 0 && <p className="text-xs text-gray-500 mt-2">Utilisez le rapprochement manuel pour les transactions restantes.</p>}
-            {autoResult.matches.length > 0 && (
-              <div className="mt-3 space-y-1">
-                {autoResult.matches.slice(0, 5).map((m: any, i: number) => (
-                  <div key={i} className="text-xs text-green-700 flex items-center gap-2">
-                    <CheckCircle2 className="w-3 h-3" />
-                    <span>{m.type === 'facture' ? `Facture ${m.facture || ''}` : `Écriture ${m.ecriture || ''}`} — {fmt(m.montant)}</span>
-                  </div>
-                ))}
-                {autoResult.matches.length > 5 && <p className="text-xs text-gray-400">... et {autoResult.matches.length - 5} autres</p>}
+            {autoResult.total > 0 && (
+              <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
+                <div className="bg-green-500 h-2 rounded-full transition-all" style={{ width: `${Math.round((autoResult.total_classified / autoResult.total) * 100)}%` }} />
               </div>
             )}
+            {autoResult.total > 0 && <p className="text-xs text-gray-400 mt-1">{autoResult.total_classified}/{autoResult.total} transactions traitées ({Math.round((autoResult.total_classified / autoResult.total) * 100)}%)</p>}
+            {autoResult.not_matched > 0 && <p className="text-xs text-gray-500 mt-2">Utilisez le rapprochement manuel pour les {autoResult.not_matched} restante(s).</p>}
           </CardContent>
         </Card>
       )}
