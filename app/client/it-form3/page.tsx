@@ -281,9 +281,13 @@ export default function ITForm3Page() {
   }
 
   const handleSave = async () => {
+    if (!selectedSociete) { alert("Sélectionnez une société"); return }
     setSaving(true)
     try {
+      const yearNum = parseInt(assessmentYear)
       const payload = {
+        societe_id: selectedSociete,
+        exercice: `${yearNum - 1}-${yearNum}`,
         companyName,
         brn,
         tan,
@@ -301,9 +305,11 @@ export default function ITForm3Page() {
         taxCalculation: { revenuImposable, tauxIS, impotCalcule, apsApplicable, apsQuarterly, csrAmount, apsPayé, soldeAPayer },
         accountantName,
       }
-      await fetch("/api/comptable/it-form3", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
+      const res = await fetch("/api/comptable/it-form3", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
+      if (res.ok) { alert("IT Form 3 sauvegardé") } else { const err = await res.json(); alert("Erreur: " + (err.error || "Erreur serveur")) }
     } catch (e) {
       console.error("Error saving:", e)
+      alert("Erreur de sauvegarde")
     } finally {
       setSaving(false)
     }
@@ -776,54 +782,77 @@ export default function ITForm3Page() {
           Sauvegarder
         </Button>
         <Button
-          onClick={() => {
-            // Generate clean HTML PDF (avoids CSS color parsing issues with html2pdf)
-            const fmtN = (n: number) => n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-            const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>IT Form 3</title>
-<style>body{font-family:Arial,Helvetica,sans-serif;color:#1a1a1a;font-size:11px;padding:30px;line-height:1.6}
-h1{font-size:16px;text-align:center;margin-bottom:4px}h2{font-size:12px;text-align:center;color:#666;margin-bottom:20px}
-.sec{margin-bottom:15px}.sec-title{font-size:12px;font-weight:bold;background:#f0f0f0;padding:5px;margin-bottom:5px}
-.row{display:flex;justify-content:space-between;padding:3px 0;border-bottom:0.5px solid #eee;font-size:10px}
-.row b{font-weight:bold}.total{border-top:2px solid #333;font-weight:bold;font-size:11px;padding:6px 0}
-.footer{position:fixed;bottom:20px;left:30px;right:30px;text-align:center;font-size:8px;color:#999}
-@page{margin:15mm;size:A4}</style></head><body>
-<h1>IT FORM 3 — RETURN OF INCOME (COMPANY)</h1>
-<h2>Assessment Year ${assessmentYear} — Mauritius Revenue Authority</h2>
-<h2>${companyName}${brn ? ' — BRN: ' + brn : ''}${tan ? ' — TAN: ' + tan : ''}</h2>
-
-<div class="sec"><div class="sec-title">Income / Revenus</div>
-<div class="row"><span>Chiffre d'affaires</span><span>${fmtN(revenuAffaires)} MUR</span></div>
-<div class="row"><span>Revenus d'emploi</span><span>${fmtN(revenuEmploi)} MUR</span></div>
-<div class="row"><span>Revenus locatifs</span><span>${fmtN(revenuLocatif)} MUR</span></div>
-<div class="row"><span>Intérêts</span><span>${fmtN(revenuInterets)} MUR</span></div>
-<div class="row"><span>Dividendes</span><span>${fmtN(dividendes)} MUR</span></div>
-<div class="row"><span>Autres revenus</span><span>${fmtN(autresRevenus)} MUR</span></div>
-<div class="row total"><span>TOTAL REVENUS</span><span>${fmtN(totalRevenus)} MUR</span></div></div>
-
-<div class="sec"><div class="sec-title">Deductions</div>
-<div class="row"><span>Annual Allowance</span><span>${fmtN(annualAllowance)} MUR</span></div>
-<div class="row"><span>Autres déductions</span><span>${fmtN(autresDeductions)} MUR</span></div>
-<div class="row total"><span>TOTAL DEDUCTIONS</span><span>${fmtN(totalDeductions)} MUR</span></div></div>
-
-<div class="sec"><div class="sec-title">Tax Computation</div>
-<div class="row"><span>Revenu imposable</span><span>${fmtN(revenuImposable)} MUR</span></div>
-<div class="row"><span>Taux IS</span><span>${tauxIS}%</span></div>
-<div class="row"><span>Impôt calculé</span><span>${fmtN(impotCalcule)} MUR</span></div>
-<div class="row"><span>APS payé</span><span>(${fmtN(apsPayé)}) MUR</span></div>
-<div class="row"><span>CSR (2%)</span><span>${fmtN(csrAmount)} MUR</span></div>
-<div class="row total"><span>SOLDE À PAYER</span><span>${fmtN(soldeAPayer)} MUR</span></div></div>
-
-<div class="sec" style="margin-top:30px"><div class="sec-title">Declaration</div>
-<p style="font-size:9px">I declare that the information given in this return is true, correct and complete to the best of my knowledge and belief.</p>
-<div class="row"><span>Signature</span><span>________________________________</span></div>
-<div class="row"><span>Date</span><span>________________________________</span></div></div>
-
-<div class="footer">Prepared by LEXORA Accounting Software — lexora.finance</div>
-</body></html>`
-            const blob = new Blob([html], { type: 'text/html' })
-            const url = URL.createObjectURL(blob)
-            const w = window.open(url, '_blank')
-            if (w) { setTimeout(() => { w.print(); URL.revokeObjectURL(url) }, 500) }
+          onClick={async () => {
+            try {
+              const { pdf, Document, Page, Text, View, StyleSheet } = await import('@react-pdf/renderer')
+              const s = StyleSheet.create({
+                page: { padding: 30, fontFamily: 'Helvetica', fontSize: 10 },
+                title: { fontSize: 16, fontWeight: 'bold', textAlign: 'center', marginBottom: 4 },
+                subtitle: { fontSize: 11, textAlign: 'center', color: '#555', marginBottom: 4 },
+                sec: { marginBottom: 12 },
+                secTitle: { fontSize: 11, fontWeight: 'bold', backgroundColor: '#f0f0f0', padding: 6, marginBottom: 4 },
+                row: { flexDirection: 'row', paddingVertical: 4, borderBottomWidth: 0.5, borderBottomColor: '#ddd' },
+                label: { flex: 3, fontSize: 9 },
+                val: { flex: 1, fontSize: 9, textAlign: 'right', fontWeight: 'bold' },
+                footer: { position: 'absolute', bottom: 20, left: 30, right: 30, textAlign: 'center', fontSize: 7, color: '#999' },
+              })
+              const f = (n: number) => (n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+              const R = ({ l, v }: { l: string; v: string }) => (
+                <View style={s.row}><Text style={s.label}>{l}</Text><Text style={s.val}>{v}</Text></View>
+              )
+              const socData = societes.find((x: any) => x.id === selectedSociete)
+              const doc = (
+                <Document>
+                  <Page size="A4" style={s.page}>
+                    <Text style={s.title}>IT FORM 3 — RETURN OF INCOME (COMPANY)</Text>
+                    <Text style={s.subtitle}>Assessment Year {assessmentYear} — MRA</Text>
+                    <Text style={{ ...s.subtitle, marginBottom: 20 }}>{companyName}{brn ? ` — BRN: ${brn}` : ''}</Text>
+                    <View style={s.sec}>
+                      <Text style={s.secTitle}>1. Company Information</Text>
+                      <R l="Company Name" v={companyName} /><R l="BRN" v={brn || '—'} /><R l="TAN" v={tan || '—'} />
+                      <R l="Address" v={socData?.adresse || '—'} /><R l="Assessment Year" v={assessmentYear} />
+                    </View>
+                    <View style={s.sec}>
+                      <Text style={s.secTitle}>2. Income (MUR)</Text>
+                      <R l="Gross Revenue" v={`${f(revenuAffaires)} MUR`} /><R l="Employment Income" v={`${f(revenuEmploi)} MUR`} />
+                      <R l="Rental Income" v={`${f(revenuLocatif)} MUR`} /><R l="Interest Income" v={`${f(revenuInterets)} MUR`} />
+                      <R l="Dividends" v={`${f(dividendes)} MUR`} /><R l="Other Income" v={`${f(autresRevenus)} MUR`} />
+                      <R l="TOTAL INCOME" v={`${f(totalRevenus)} MUR`} />
+                    </View>
+                    <View style={s.sec}>
+                      <Text style={s.secTitle}>3. Deductions (MUR)</Text>
+                      <R l="Annual Allowance" v={`${f(annualAllowance)} MUR`} /><R l="Other Deductions" v={`${f(autresDeductions)} MUR`} />
+                      <R l="TOTAL DEDUCTIONS" v={`${f(totalDeductions)} MUR`} />
+                    </View>
+                    <View style={s.sec}>
+                      <Text style={s.secTitle}>4. Tax Computation (MUR)</Text>
+                      <R l="Chargeable Income" v={`${f(revenuImposable)} MUR`} /><R l="Tax Rate" v={`${tauxIS}%`} />
+                      <R l="Income Tax" v={`${f(impotCalcule)} MUR`} /><R l="APS Paid" v={`(${f(apsPayé)}) MUR`} />
+                      <R l="CSR (2%)" v={`${f(csrAmount)} MUR`} /><R l="NET TAX DUE" v={`${f(soldeAPayer)} MUR`} />
+                    </View>
+                    <View style={s.sec}>
+                      <Text style={s.secTitle}>5. Declaration</Text>
+                      <Text style={{ fontSize: 8, marginBottom: 15, lineHeight: 1.4 }}>I/We declare that the information given in this return is true, correct and complete.</Text>
+                      <R l="Name of Director" v="_______________" /><R l="Signature" v="_______________" />
+                      <R l="Date" v="_______________" /><R l="Capacity" v="_______________" />
+                    </View>
+                    <Text style={s.footer}>Prepared by LEXORA — IT Form 3 — MRA — {companyName} (BRN: {brn})</Text>
+                  </Page>
+                </Document>
+              )
+              const blob = await pdf(doc).toBlob()
+              const url = URL.createObjectURL(blob)
+              const link = document.createElement('a')
+              link.href = url
+              link.download = `IT_Form3_${companyName.replace(/\s+/g, '_')}_${assessmentYear}.pdf`
+              document.body.appendChild(link)
+              link.click()
+              document.body.removeChild(link)
+              URL.revokeObjectURL(url)
+            } catch (err) {
+              console.error('PDF generation error:', err)
+              alert('Erreur de génération PDF — essayez Ctrl+P pour imprimer')
+            }
           }}
           variant="outline"
           className="flex items-center gap-2"
