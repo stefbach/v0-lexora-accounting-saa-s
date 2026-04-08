@@ -114,6 +114,7 @@ export async function GET(request: Request) {
       rapprochements: rapprochements || [],
       bankTransactions, factures, ecritures,
       releves: releves || [],
+      comptesBancaires: comptes || [],
     })
   } catch (e: unknown) {
     console.error('[rapprochement GET]', e)

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -210,20 +210,12 @@ export default function ClientRapprochementPage() {
     return sortDir === 'asc' ? aAmt - bAmt : bAmt - aAmt
   })
 
-  // Bank comptes for selector (with last 4 digits)
-  const uniqueComptes = useMemo(() => {
-    const compteMap = new Map<string, { id: string; label: string }>()
-    allTransactions.forEach((t: any) => {
-      if (t.compte_bancaire_id && !compteMap.has(t.compte_bancaire_id)) {
-        const devise = t.devise || 'MUR'
-        const banque = t.banque || '—'
-        const numero = t.numero_compte || t.compte_bancaire_id
-        const last4 = numero.length > 4 ? `•${numero.slice(-4)}` : ''
-        compteMap.set(t.compte_bancaire_id, { id: t.compte_bancaire_id, label: `${banque} ${devise} ${last4}`.trim() })
-      }
-    })
-    return Array.from(compteMap.values())
-  }, [allTransactions])
+  // Bank comptes from API (always available, not dependent on transactions)
+  const comptesBancaires: any[] = data?.comptesBancaires || []
+  const uniqueComptes = comptesBancaires.map((c: any) => ({
+    id: c.id,
+    label: `${c.banque || '—'} ${c.devise || 'MUR'} ${c.numero_compte?.length > 4 ? '•' + c.numero_compte.slice(-4) : ''}`.trim(),
+  }))
 
   // Lettrage computed values (must be AFTER ecritures is defined)
   const ecritures401 = ecritures.filter((e: any) => e.compte?.startsWith('401') && !e.lettre)
@@ -322,15 +314,13 @@ export default function ClientRapprochementPage() {
       {/* Filters row: Month + Compte + Période */}
       <div className="flex flex-wrap items-center gap-3">
         <MonthPicker value={selectedMois} onChange={setSelectedMois} />
-        {uniqueComptes.length > 0 && (
-          <Select value={selectedCompte} onValueChange={setSelectedCompte}>
-            <SelectTrigger className="w-[200px] h-8"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tous les comptes</SelectItem>
-              {uniqueComptes.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        )}
+        <Select value={selectedCompte} onValueChange={setSelectedCompte}>
+          <SelectTrigger className="w-[220px] h-8"><SelectValue placeholder="Tous les comptes" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tous les comptes</SelectItem>
+            {uniqueComptes.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
         <div className="flex items-center gap-2">
           <span className="text-sm text-gray-500 whitespace-nowrap">Période :</span>
           <Select value={selectedPeriode} onValueChange={setSelectedPeriode}>
