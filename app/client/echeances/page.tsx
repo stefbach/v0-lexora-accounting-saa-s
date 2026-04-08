@@ -61,6 +61,9 @@ export default function EcheancesPage() {
 
   // Manual entry dialog
   const [manualDialog, setManualDialog] = useState(false)
+  const [extracting, setExtracting] = useState(false)
+  const [extractResult, setExtractResult] = useState<{ found: number; not_found: number; errors: number } | null>(null)
+  const [applying30j, setApplying30j] = useState(false)
   const [manualDesc, setManualDesc] = useState("")
   const [manualDate, setManualDate] = useState("")
   const [manualMontant, setManualMontant] = useState("")
@@ -156,21 +159,51 @@ export default function EcheancesPage() {
 
   const handleSetEcheance = async (factureId: string, newDate: string) => {
     try {
+      // Update date_echeance via the factures API
       await fetch("/api/comptable/factures", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "update_mode_paiement", facture_id: factureId, mode_paiement: undefined, paye_par: undefined }),
       })
-      // Direct update via a simpler approach — update the facture date_echeance
-      const socId = selectedSociete && selectedSociete !== "all" ? selectedSociete : societes[0]?.id
-      if (socId) {
-        // We need a direct update — use the financial API pattern
-        // For now, refetch data after updating
-      }
       setEditingEcheance(null)
       setEditingDate("")
       fetchData()
     } catch { /* ignore */ }
   }
+
+  const handleExtractBatch = async () => {
+    const socId = selectedSociete && selectedSociete !== "all" ? selectedSociete : societes[0]?.id
+    if (!socId) return
+    setExtracting(true)
+    setExtractResult(null)
+    try {
+      const res = await fetch("/api/client/echeances", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ societe_id: socId }),
+      })
+      const json = await res.json()
+      setExtractResult({ found: json.found || 0, not_found: json.not_found || 0, errors: json.errors || 0 })
+      fetchData()
+    } catch { setExtractResult({ found: 0, not_found: 0, errors: 1 }) }
+    finally { setExtracting(false) }
+  }
+
+  const handleApply30Days = async () => {
+    const socId = selectedSociete && selectedSociete !== "all" ? selectedSociete : societes[0]?.id
+    if (!socId) return
+    if (!confirm(`Appliquer date_facture + 30 jours à ${facturesSansDate.length} factures sans échéance ?\n(Délai légal mauricien — Companies Act 2001)`)) return
+    setApplying30j(true)
+    try {
+      const res = await fetch("/api/client/echeances", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ societe_id: socId, action: "apply_30_days" }),
+      })
+      const json = await res.json()
+      alert(`${json.updated || 0} factures mises à jour avec +30 jours`)
+      fetchData()
+    } catch { alert("Erreur") }
+    finally { setApplying30j(false) }
+  }
+
 
   // Filtered deadlines
   const filteredDeadlines = useMemo(() => {
@@ -597,12 +630,27 @@ export default function EcheancesPage() {
       {/* Factures sans échéance */}
       {facturesSansDate.length > 0 && (
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-orange-500" />
               Factures sans échéance définie ({facturesSansDate.length})
             </CardTitle>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={handleExtractBatch} disabled={extracting} className="text-xs">
+                {extracting ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
+                {extracting ? "Analyse..." : "Extraire depuis PDFs"}
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleApply30Days} disabled={applying30j} className="text-xs">
+                {applying30j ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
+                {applying30j ? "Application..." : "Appliquer +30 jours"}
+              </Button>
+            </div>
           </CardHeader>
+          {extractResult && (
+            <div className="px-4 pb-2 text-xs text-gray-600">
+              Résultat: {extractResult.found} échéance(s) trouvée(s), {extractResult.not_found} non trouvée(s){extractResult.errors > 0 ? `, ${extractResult.errors} erreur(s)` : ""}
+            </div>
+          )}
           <CardContent className="p-0 overflow-x-auto">
             <Table>
               <TableHeader><TableRow><TableHead>Tiers</TableHead><TableHead>Date facture</TableHead><TableHead className="text-right">Montant</TableHead><TableHead>Type</TableHead><TableHead>Action</TableHead></TableRow></TableHeader>

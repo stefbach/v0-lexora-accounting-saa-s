@@ -251,6 +251,10 @@ REGLES:
 4. Si la facture est en devise etrangere, convertis en MUR au taux du jour
 5. Signale toute anomalie (TVA manquante, montant incoherent, fournisseur non-identifie)
 
+CHAMP OBLIGATOIRE — date_echeance:
+Cherche dans la facture: 'Due Date', 'Date d echeance', 'Date limite de paiement', 'Payment Due', 'A payer avant', 'Due By', 'Payable le', toute mention de date de paiement.
+Si trouve → retourner au format YYYY-MM-DD. Si pas trouve → retourner null.
+
 REPONSE en JSON strict selon le format FactureFournisseurResult.`
 
 export const SYSTEM_PROMPT_FACTURE_CLIENT = `Tu es un expert-comptable mauricien specialise dans la facturation clients.
@@ -292,6 +296,10 @@ REGLES:
 2. Applique le bon taux de TVA selon la localisation du client
 3. Genere les ecritures: debit 411 / credit compte de produit + credit 4457 TVA
 4. Verifie la conformite MRA de la facture (numero sequentiel, BRN, numero TVA)
+
+CHAMP OBLIGATOIRE — date_echeance:
+Cherche dans la facture: 'Due Date', 'Date d echeance', 'Payment Terms', toute mention de date de paiement.
+Si trouve → retourner au format YYYY-MM-DD. Si pas trouve → retourner null.
 
 REPONSE en JSON strict selon le format FactureClientResult.`
 
@@ -800,6 +808,7 @@ ANALYSE TVA FOURNISSEUR — OBLIGATOIRE:
 4. Si facture etrangere (EUR/USD/GBP) sans TVA locale: tva_exonere=true (reverse charge possible)
 5. Si montant_tva=0 mais taux_tva=15: VERIFIER — probablement erreur, mettre montant_tva = montant_ht * 0.15
 6. Remplir analyse_tva avec: "TVA 15% applicable — VAT Number: XXXXX" ou "Pas de TVA — fournisseur non enregistre" ou "Export — zero-rated"
+7. OBLIGATOIRE: Extraire date_echeance (Due Date, Date limite paiement, Payment Due). Format YYYY-MM-DD. null si non trouve.
 
 REGLE ECRITURES FACTURE FOURNISSEUR:
 Generer EXACTEMENT 2 ecritures (ou 3 si TVA):
