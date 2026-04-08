@@ -223,23 +223,6 @@ export default function TVAPage() {
     return true
   })
 
-  // Group invoices by normalized tiers name for cleaner display
-  function groupByTiers(items: any[], tiersField: string, tvaField: string): { tiers: string; totalTVA: number; count: number }[] {
-    const groups: Record<string, { tiers: string; totalTVA: number; count: number }> = {}
-    for (const item of items) {
-      const raw = item[tiersField] || item.emetteur || item.destinataire || '—'
-      const key = raw.toLowerCase().split(/[—\-,]/)[0].trim().replace(/\s+(ltd|limited|sarl)\.?$/i, '').trim()
-      if (!groups[key]) groups[key] = { tiers: raw.split(/[—\-,]/)[0].trim(), totalTVA: 0, count: 0 }
-      groups[key].totalTVA += Number(item[tvaField]) || 0
-      groups[key].count++
-    }
-    return Object.values(groups).sort((a, b) => b.totalTVA - a.totalTVA)
-  }
-
-  const groupedClientInvoices = groupByTiers(clientInvoices, 'destinataire', 'montant_tva_mur')
-  const groupedLocalInvoices = groupByTiers(validLocalInvoices, 'emetteur', 'montant_tva_mur')
-  const groupedForeignInvoices = groupByTiers(foreignSupplierInvoices, 'emetteur', 'montant_ht_mur')
-
   // Separate client invoices (TVA collectee) and supplier invoices
   const clientInvoices = invoices.filter((inv: any) => inv.type === "facture_client")
   const supplierInvoices = invoices.filter((inv: any) => inv.type === "facture_fournisseur")
@@ -262,6 +245,22 @@ export default function TVAPage() {
   const rejectedLocalInvoices = localSupplierInvoices.filter(
     (inv: any) => (inv.montant_tva ?? 0) > 0 && (!inv.emetteur || !inv.numero)
   )
+
+  // Group invoices by normalized tiers name for cleaner display
+  function groupByTiers(items: any[], tiersField: string, tvaField: string): { tiers: string; totalTVA: number; count: number }[] {
+    const groups: Record<string, { tiers: string; totalTVA: number; count: number }> = {}
+    for (const item of items) {
+      const raw = item[tiersField] || item.emetteur || item.destinataire || '—'
+      const key = raw.toLowerCase().split(/[—\-,]/)[0].trim().replace(/\s+(ltd|limited|sarl)\.?$/i, '').trim()
+      if (!groups[key]) groups[key] = { tiers: raw.split(/[—\-,]/)[0].trim(), totalTVA: 0, count: 0 }
+      groups[key].totalTVA += Number(item[tvaField]) || 0
+      groups[key].count++
+    }
+    return Object.values(groups).sort((a, b) => b.totalTVA - a.totalTVA)
+  }
+  const groupedClientInvoices = groupByTiers(clientInvoices, 'destinataire', 'montant_tva_mur')
+  const groupedLocalInvoices = groupByTiers(validLocalInvoices, 'emetteur', 'montant_tva_mur')
+  const groupedForeignInvoices = groupByTiers(foreignSupplierInvoices, 'emetteur', 'montant_ht_mur')
 
   // TVA collectee from client invoices
   const totalTvaCollecteeFromInvoices = clientInvoices.reduce(
