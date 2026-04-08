@@ -127,24 +127,24 @@ export default function ITForm3Page() {
 
   // Fetch data on mount and when assessment year or société changes
   useEffect(() => {
-    // Safety timeout: if loading takes > 5s, show form with empty values
-    const safetyTimeout = setTimeout(() => setLoading(false), 5000)
+    const safetyTimeout = setTimeout(() => setLoading(false), 8000)
+    const controller = new AbortController()
     async function fetchData() {
       setLoading(true)
       try {
-        // Determine exercice from assessment year
-        // Assessment year 2026 = income year 2025-2026 (July 2025 - June 2026)
         const yearNum = parseInt(assessmentYear)
         const exercice = `${yearNum - 1}-${yearNum}`
         const prevExercice = `${yearNum - 2}-${yearNum - 1}`
 
         const socParam = selectedSociete ? `&societe_id=${selectedSociete}` : ""
         const [socRes, finRes, prevFinRes, priorFormRes] = await Promise.all([
-          fetch("/api/client/societes"),
-          fetch(`/api/client/financial?exercice=${exercice}${socParam}`),
-          fetch(`/api/client/financial?exercice=${prevExercice}${socParam}`),
-          fetch(`/api/comptable/it-form3?assessment_year=${yearNum - 1}`).catch(() => null),
+          fetch("/api/client/societes", { signal: controller.signal }),
+          fetch(`/api/client/financial?exercice=${exercice}${socParam}`, { signal: controller.signal }),
+          fetch(`/api/client/financial?exercice=${prevExercice}${socParam}`, { signal: controller.signal }).catch(() => null),
+          fetch(`/api/comptable/it-form3?assessment_year=${yearNum - 1}`, { signal: controller.signal }).catch(() => null),
         ])
+
+        if (controller.signal.aborted) return
 
         if (socRes.ok) {
           const socData = await socRes.json()
@@ -161,7 +161,7 @@ export default function ITForm3Page() {
           }
         }
 
-        if (finRes.ok) {
+        if (finRes && finRes.ok) {
           const finData = await finRes.json()
           const fin = finData?.financial || (Array.isArray(finData) ? finData[0] : finData)
           if (fin) {
@@ -169,8 +169,7 @@ export default function ITForm3Page() {
           }
         }
 
-        // Set prior year reference from previous year financial data
-        if (prevFinRes.ok) {
+        if (prevFinRes && prevFinRes.ok) {
           const prevFinData = await prevFinRes.json()
           const prevFin = prevFinData?.financial
           if (prevFin) {
@@ -185,28 +184,30 @@ export default function ITForm3Page() {
           }
         }
 
-        // Try to load prior year IT Form 3 submission
         if (priorFormRes && priorFormRes.ok) {
-          const priorForm = await priorFormRes.json()
-          if (priorForm && priorForm.data) {
-            const pf = priorForm.data
-            setPriorYearData({
-              revenuAffaires: pf.revenus?.revenuAffaires ?? 0,
-              totalRevenus: pf.revenus?.totalRevenus ?? 0,
-              totalDeductions: pf.deductions?.totalDeductions ?? 0,
-              revenuImposable: pf.taxCalculation?.revenuImposable ?? 0,
-              impotCalcule: pf.taxCalculation?.impotCalcule ?? 0,
-            })
-          }
+          try {
+            const priorForm = await priorFormRes.json()
+            if (priorForm?.data) {
+              const pf = priorForm.data
+              setPriorYearData({
+                revenuAffaires: pf.revenus?.revenuAffaires ?? 0,
+                totalRevenus: pf.revenus?.totalRevenus ?? 0,
+                totalDeductions: pf.deductions?.totalDeductions ?? 0,
+                revenuImposable: pf.taxCalculation?.revenuImposable ?? 0,
+                impotCalcule: pf.taxCalculation?.impotCalcule ?? 0,
+              })
+            }
+          } catch { /* prior form not available */ }
         }
-      } catch (e) {
-        console.error("Error fetching data:", e)
+      } catch (e: any) {
+        if (e?.name === 'AbortError') return
+        console.error("Error fetching IT Form 3 data:", e)
       } finally {
-        setLoading(false)
+        if (!controller.signal.aborted) setLoading(false)
       }
     }
     fetchData()
-    return () => clearTimeout(safetyTimeout)
+    return () => { controller.abort(); clearTimeout(safetyTimeout) }
   }, [assessmentYear, selectedSociete])
 
   const handleImportPdf = async (file: File) => {
@@ -331,7 +332,7 @@ export default function ITForm3Page() {
         </div>
         <div className="flex items-center gap-2">
           {societes.length > 1 && (
-            <Select value={selectedSociete} onValueChange={v => { setSelectedSociete(v); setLoading(true) }}>
+            <Select value={selectedSociete} onValueChange={setSelectedSociete}>
               <SelectTrigger className="w-[220px]"><SelectValue placeholder="Société" /></SelectTrigger>
               <SelectContent>{societes.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent>
             </Select>

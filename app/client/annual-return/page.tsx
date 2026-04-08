@@ -392,8 +392,18 @@ export default function AnnualReturnPage() {
   }
 
   // Export PDF
-  const handleExportPDF = () => {
-    window.print()
+  const handleExportPDF = async () => {
+    const el = document.getElementById('annual-return-content')
+    if (!el) { window.print(); return }
+    const html2pdf = (await import('html2pdf.js')).default
+    const socNom = societes.find(s => s.id === selectedSociete)?.nom || 'Societe'
+    await html2pdf().set({
+      margin: 15,
+      filename: `Annual_Return_${socNom.replace(/\s+/g, '_')}_${new Date().getFullYear()}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+    }).from(el).save()
   }
 
   // Update helpers
@@ -572,7 +582,7 @@ export default function AnnualReturnPage() {
           <Loader2 className="h-6 w-6 animate-spin" style={{ color: GOLD }} />
         </div>
       ) : (
-        <Tabs defaultValue="company-info" className="w-full">
+        <Tabs defaultValue="company-info" className="w-full" id="annual-return-content">
           <TabsList className="w-full flex flex-wrap h-auto gap-1 print:hidden">
             <TabsTrigger value="company-info" className="flex items-center gap-1.5 text-xs sm:text-sm">
               <Building2 className="h-3.5 w-3.5" />
