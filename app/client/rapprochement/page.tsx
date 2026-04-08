@@ -270,35 +270,12 @@ export default function ClientRapprochementPage() {
     if (!societeId) return
     setAutoLettraging(true)
     try {
-      const toLetter: string[][] = []
-      const used = new Set<string>()
-      for (const e of ecrituresLettrage) {
-        if (used.has(e.id)) continue
-        const amount = Number(e.debit) > 0 ? Number(e.debit) : Number(e.credit)
-        const isDebit = Number(e.debit) > 0
-        const match = ecrituresLettrage.find((e2: any) => {
-          if (e2.id === e.id || used.has(e2.id)) return false
-          if (e2.compte !== e.compte) return false
-          const amount2 = Number(e2.debit) > 0 ? Number(e2.debit) : Number(e2.credit)
-          const isDebit2 = Number(e2.debit) > 0
-          if (isDebit === isDebit2) return false
-          return Math.abs(amount - amount2) <= Math.max(amount * 0.01, 1)
-        })
-        if (match) {
-          toLetter.push([e.id, match.id])
-          used.add(e.id)
-          used.add(match.id)
-        }
-      }
-      let lettered = 0
-      for (const ids of toLetter) {
-        await fetch("/api/comptable/rapprochement", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "lettrer_ecritures", ecriture_ids: ids, societe_id: societeId }),
-        })
-        lettered++
-      }
-      alert(`${lettered} paire(s) d'écritures lettrées automatiquement`)
+      const res = await fetch("/api/comptable/rapprochement", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "auto_lettrage_bnq", societe_id: societeId }),
+      })
+      const d = await res.json()
+      alert(`${d.lettered || 0} paire(s) d'écritures lettrées automatiquement`)
       load()
     } catch { alert("Erreur auto-lettrage") }
     finally { setAutoLettraging(false) }

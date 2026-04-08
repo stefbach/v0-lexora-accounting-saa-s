@@ -845,6 +845,66 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, created })
     }
 
+    // === AUTO-LETTRAGE: use BNQ lettre codes to letter ACH entries ===
+    if (action === 'auto_lettrage_bnq') {
+      const { societe_id: socId } = body
+      if (!socId) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
+
+      const { data: dossier } = await supabase.from('dossiers').select('id').eq('societe_id', socId).limit(1).maybeSingle()
+      if (!dossier) return NextResponse.json({ error: 'Aucun dossier' }, { status: 404 })
+
+      // Get BNQ entries WITH lettre codes on 401/411
+      const { data: bnqEntries } = await supabase
+        .from('ecritures_comptables')
+        .select('id, compte, debit, credit, lettre, date_ecriture, libelle')
+        .eq('dossier_id', dossier.id)
+        .eq('journal', 'BNQ')
+        .not('lettre', 'is', null)
+        .or('compte.like.40%,compte.like.41%')
+
+      let letteredCount = 0
+
+      for (const bnq of bnqEntries || []) {
+        const bnqAmount = Number(bnq.debit) > 0 ? Number(bnq.debit) : Number(bnq.credit)
+        const isDebit = Number(bnq.debit) > 0
+        if (bnqAmount === 0) continue
+
+        // Find ACH entry: same compte, opposite direction, same amount ±2%, no lettre yet
+        const oppositeCol = isDebit ? 'credit' : 'debit'
+        const minAmt = Math.round(bnqAmount * 0.98 * 100) / 100
+        const maxAmt = Math.round(bnqAmount * 1.02 * 100) / 100
+
+        const { data: achEntries } = await supabase
+          .from('ecritures_comptables')
+          .select('id, credit, debit, date_ecriture, libelle')
+          .eq('dossier_id', dossier.id)
+          .eq('compte', bnq.compte)
+          .is('lettre', null)
+          .gte(oppositeCol, minAmt)
+          .lte(oppositeCol, maxAmt)
+          .order('date_ecriture', { ascending: false })
+          .limit(5)
+
+        if (!achEntries || achEntries.length === 0) continue
+
+        // Pick closest by date
+        const closest = achEntries.reduce((prev, curr) => {
+          const prevDiff = Math.abs(new Date(prev.date_ecriture || '').getTime() - new Date(bnq.date_ecriture || '').getTime())
+          const currDiff = Math.abs(new Date(curr.date_ecriture || '').getTime() - new Date(bnq.date_ecriture || '').getTime())
+          return currDiff < prevDiff ? curr : prev
+        })
+
+        // Apply same lettre to ACH entry
+        await supabase.from('ecritures_comptables')
+          .update({ lettre: bnq.lettre, date_lettrage: new Date().toISOString().split('T')[0] })
+          .eq('id', closest.id)
+
+        letteredCount++
+      }
+
+      return NextResponse.json({ success: true, lettered: letteredCount })
+    }
+
     // === LETTRER ECRITURES COMPTABLES (401/411) ===
     if (action === 'lettrer_ecritures') {
       const { ecriture_ids, societe_id: socId } = body
