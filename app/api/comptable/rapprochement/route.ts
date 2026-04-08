@@ -767,6 +767,84 @@ export async function POST(request: Request) {
       })
     }
 
+    // === GENERATE ECRITURES BNQ for existing matched transactions ===
+    if (action === 'generate_ecritures') {
+      const { societe_id: socId } = body
+      if (!socId) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
+
+      const { data: dossier } = await supabase.from('dossiers').select('id').eq('societe_id', socId).limit(1).maybeSingle()
+      if (!dossier) return NextResponse.json({ error: 'Aucun dossier pour cette société' }, { status: 404 })
+
+      const { data: releves } = await supabase.from('releves_bancaires').select('id, compte_bancaire_id, transactions_json').eq('societe_id', socId)
+      const { data: comptesBanc } = await supabase.from('comptes_bancaires').select('id, devise').eq('societe_id', socId)
+      const deviseMap: Record<string, string> = {}
+      ;(comptesBanc || []).forEach((c: any) => { deviseMap[c.id] = c.devise || 'MUR' })
+
+      const rates = await getTauxChange()
+      const toMURLocal = (amount: number, devise: string): number => {
+        if (!devise || devise === 'MUR') return amount
+        return amount * (rates[devise.toUpperCase()] || 1)
+      }
+
+      let created = 0
+
+      for (const releve of releves || []) {
+        const txs: any[] = releve.transactions_json || []
+        const releveDevise = deviseMap[releve.compte_bancaire_id] || 'MUR'
+
+        for (const tx of txs) {
+          if (tx.statut !== 'rapproche' || !tx.facture_id) continue
+
+          const txDebit = Number(tx.debit) || 0
+          const txCredit = Number(tx.credit) || 0
+          const txAmount = txDebit > 0 ? txDebit : txCredit
+          if (txAmount === 0) continue
+          const txAmountMUR = Math.round(toMURLocal(txAmount, releveDevise) * 100) / 100
+          const txDate = tx.date || new Date().toISOString().split('T')[0]
+
+          // Check if BNQ écriture already exists
+          const { data: existing } = await supabase.from('ecritures_comptables')
+            .select('id').eq('dossier_id', dossier.id).eq('journal', 'BNQ')
+            .eq('date_ecriture', txDate)
+            .or(`debit.eq.${txAmountMUR},credit.eq.${txAmountMUR}`)
+            .limit(1)
+          if (existing && existing.length > 0) continue
+
+          // Get facture details
+          const { data: facture } = await supabase.from('factures')
+            .select('numero_facture, tiers, type_facture, montant_mur')
+            .eq('id', tx.facture_id).maybeSingle()
+          if (!facture) continue
+
+          const lettre = tx.lettre || `BNQ${String(created + 1).padStart(3, '0')}`
+          const compte401 = facture.type_facture === 'fournisseur' ? '401' : '411'
+          const isPayment = txDebit > 0 // debit = payment out
+
+          await supabase.from('ecritures_comptables').insert([
+            { dossier_id: dossier.id, date_ecriture: txDate, journal: 'BNQ', compte: compte401,
+              libelle: `Paiement ${(facture.tiers || '').substring(0, 30)} — ${facture.numero_facture || ''}`,
+              debit: isPayment ? txAmountMUR : 0, credit: isPayment ? 0 : txAmountMUR, lettre },
+            { dossier_id: dossier.id, date_ecriture: txDate, journal: 'BNQ', compte: '512',
+              libelle: `Virement ${(facture.tiers || '').substring(0, 30)}`,
+              debit: isPayment ? 0 : txAmountMUR, credit: isPayment ? txAmountMUR : 0, lettre },
+          ])
+
+          // Letter existing 401/411 facture entry with same code
+          const factureMUR = Math.round(Number(facture.montant_mur || 0) * 100) / 100
+          if (factureMUR > 0) {
+            await supabase.from('ecritures_comptables')
+              .update({ lettre })
+              .eq('dossier_id', dossier.id).eq('compte', compte401).is('lettre', null)
+              .eq('credit', factureMUR).limit(1)
+          }
+
+          created++
+        }
+      }
+
+      return NextResponse.json({ success: true, created })
+    }
+
     // === LETTRER ECRITURES COMPTABLES (401/411) ===
     if (action === 'lettrer_ecritures') {
       const { ecriture_ids, societe_id: socId } = body

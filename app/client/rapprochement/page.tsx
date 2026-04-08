@@ -180,6 +180,22 @@ export default function ClientRapprochementPage() {
   const [lettrageDialog, setLettrageDialog] = useState<any>(null)
   const [lettrageSelection, setLettrageSelection] = useState<Set<string>>(new Set())
   const [autoLettraging, setAutoLettraging] = useState(false)
+  const [generatingEcritures, setGeneratingEcritures] = useState(false)
+
+  const handleGenerateEcritures = async () => {
+    if (!societeId) return
+    setGeneratingEcritures(true)
+    try {
+      const res = await fetch("/api/comptable/rapprochement", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "generate_ecritures", societe_id: societeId }),
+      })
+      const d = await res.json()
+      alert(`${d.created || 0} écriture(s) BNQ générée(s)`)
+      load()
+    } catch { alert("Erreur génération écritures") }
+    finally { setGeneratingEcritures(false) }
+  }
 
   const allTransactions = data?.bankTransactions || []
   const allComptes = data?.comptes || []
@@ -464,12 +480,18 @@ export default function ClientRapprochementPage() {
 
       {/* SECTION 5 — Lettrage écritures 401/411 */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
           <CardTitle className="text-[#0B0F2E]">Lettrage fournisseurs/clients — {ecrituresLettrage.length} non lettrées</CardTitle>
-          <Button variant="outline" size="sm" onClick={handleAutoLettrage} disabled={autoLettraging}>
-            <Zap className={`w-4 h-4 mr-1 ${autoLettraging ? "animate-spin" : ""}`} />
-            {autoLettraging ? "Analyse..." : "Auto-lettrage"}
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={handleGenerateEcritures} disabled={generatingEcritures}>
+              {generatingEcritures ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : null}
+              {generatingEcritures ? "Génération..." : "Générer écritures BNQ"}
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleAutoLettrage} disabled={autoLettraging}>
+              <Zap className={`w-4 h-4 mr-1 ${autoLettraging ? "animate-spin" : ""}`} />
+              {autoLettraging ? "Analyse..." : "Auto-lettrage"}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
           {ecrituresLettrage.length === 0 ? (
