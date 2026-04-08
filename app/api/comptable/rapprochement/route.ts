@@ -134,7 +134,7 @@ export async function POST(request: Request) {
 
     // === AUTO-RAPPROCHEMENT ===
     if (action === 'auto_rapprocher') {
-      const { societe_id } = body
+      const { societe_id, date_debut, date_fin } = body
       if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
 
       // Get bank transactions
@@ -144,8 +144,12 @@ export async function POST(request: Request) {
         .eq('societe_id', societe_id)
 
       if (!releves || releves.length === 0) {
-        return NextResponse.json({ matched: 0, message: 'Aucun relevé bancaire' })
+        return NextResponse.json({ matched: 0, total: 0, message: 'Aucun relevé bancaire' })
       }
+
+      // Société names for internal transfer detection
+      const { data: socData } = await supabase.from('societes').select('nom, aliases').eq('id', societe_id)
+      const societeNames = (socData || []).flatMap(s => [s.nom, ...(s.aliases || [])]).map(n => (n || '').toLowerCase()).filter(Boolean)
 
       // Get écritures comptables (v1) for matching
       const { data: dossiers } = await supabase
@@ -162,7 +166,7 @@ export async function POST(request: Request) {
         ecritures = data || []
       }
 
-      // Get factures (may not exist)
+      // Get factures
       let factures: any[] = []
       const { data: facturesData, error: factErr } = await supabase
         .from('factures')
@@ -171,7 +175,7 @@ export async function POST(request: Request) {
         .in('statut', ['en_attente', 'retard', 'partiel'])
       if (!factErr) factures = facturesData || []
 
-      // FX rates for cross-currency matching
+      // FX rates
       const rates = await getTauxChange()
       const toMUR = (amount: number, devise: string): number => {
         if (!devise || devise === 'MUR') return amount
@@ -184,31 +188,31 @@ export async function POST(request: Request) {
       const compteDeviseMap: Record<string, string> = {}
       ;(comptesBancaires || []).forEach((c: any) => { compteDeviseMap[c.id] = c.devise || 'MUR' })
 
-      // Salary bulletins for matching (last 3 months)
-      const threeMonthsAgo = new Date()
-      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3)
-      const { data: bulletins } = await supabase
+      // All bulletins for salary matching
+      const { data: allBulletins } = await supabase
         .from('bulletins_paie').select('id, employe_id, salaire_net, periode, statut')
         .eq('societe_id', societe_id).eq('statut', 'valide')
-        .gte('periode', threeMonthsAgo.toISOString().slice(0, 10))
-      const empIds = [...new Set((bulletins || []).map(b => b.employe_id).filter(Boolean))]
+      const empIds = [...new Set((allBulletins || []).map(b => b.employe_id).filter(Boolean))]
       let empMap: Record<string, any> = {}
       if (empIds.length > 0) {
         const { data: emps } = await supabase.from('employes').select('id, nom, prenom').in('id', empIds)
         for (const e of emps || []) empMap[e.id] = e
       }
 
-      // Compte courant mouvements for Bach/associé matching
-      const { data: ccMouvements } = await supabase
-        .from('mouvements_compte_courant').select('id, montant, description, compte_courant_id, date_mouvement, type')
-        .eq('societe_id', societe_id).limit(100)
+      // Compte courant associés
       const { data: ccComptes } = await supabase
         .from('comptes_courants_associes').select('id, nom').eq('societe_id', societe_id)
-      const ccNomMap: Record<string, string> = {}
-      ;(ccComptes || []).forEach((c: any) => { ccNomMap[c.id] = c.nom })
+      const { data: ccMouvements } = await supabase
+        .from('mouvements_compte_courant').select('id, montant, description, compte_courant_id, date_mouvement, type')
+        .eq('societe_id', societe_id).limit(200)
 
-      let matchCount = 0
-      const matches: any[] = []
+      // Pre-classification patterns
+      const BANK_FEE_PATTERNS = ['service fee', 'banking subs fee', 'merchant monthly fee', 'payment fee',
+        'outward transfer charge', 'tax amount due', 'card repayment', 'merchant discount',
+        'merchant settlement', 'e-commerce transaction fee', 'contra entry', 'commission', 'frais']
+
+      let counts = { matched: 0, interne: 0, frais_bancaires: 0, salaire_bulk: 0, mra: 0, salaire_individuel: 0, propose: 0, not_matched: 0, total: 0 }
+      const matchesList: any[] = []
 
       for (const releve of releves) {
         const txs: any[] = releve.transactions_json || []
@@ -218,13 +222,77 @@ export async function POST(request: Request) {
 
         for (let i = 0; i < updatedTxs.length; i++) {
           const tx = updatedTxs[i]
-          if (tx.lettre || tx.facture_id || tx.ecriture_id) continue
+          if (tx.lettre || tx.facture_id || tx.ecriture_id || tx.statut === 'rapproche' || tx.statut === 'interne') continue
+
+          // Period filter
+          if (date_debut && tx.date && tx.date < date_debut) continue
+          if (date_fin && tx.date && tx.date > date_fin) continue
 
           const txDebit = Number(tx.debit) || 0
           const txCredit = Number(tx.credit) || 0
           const txAmount = txCredit > 0 ? txCredit : txDebit
           if (txAmount === 0) continue
+          counts.total++
 
+          const txLib = (tx.libelle || '').toLowerCase()
+          const txTiers = (tx.tiers_detecte || tx.tiers || '').toLowerCase()
+          let classified = false
+
+          // RULE A — Internal transfers
+          if (txLib.includes('own account transfer') || txLib.includes('ib account transfer ft') ||
+              societeNames.some(n => n.length > 3 && (txTiers.includes(n) || txLib.includes(n)))) {
+            updatedTxs[i] = { ...tx, statut: 'interne', matched_type: 'transfert_interne', note: 'Virement interne' }
+            counts.interne++; changed = true; classified = true
+          }
+
+          // RULE B — Bank fees
+          if (!classified && BANK_FEE_PATTERNS.some(p => txLib.includes(p))) {
+            const feeEcriture = ecritures.find(e => e.compte?.startsWith('627') && Math.abs((Number(e.debit) || 0) - txDebit) / Math.max(txDebit, 1) < 0.15)
+            updatedTxs[i] = { ...tx, statut: 'rapproche', matched_type: 'frais_bancaires', note: 'Frais bancaires', ecriture_id: feeEcriture?.id || null }
+            if (feeEcriture) { ecritures = ecritures.filter(e => e.id !== feeEcriture.id); await supabase.from('ecritures_comptables').update({ lettre: `FEE${i}`, date_lettrage: new Date().toISOString().split('T')[0] }).eq('id', feeEcriture.id) }
+            counts.frais_bancaires++; counts.matched++; changed = true; classified = true
+          }
+
+          // RULE C — Bulk salary
+          if (!classified && txLib.includes('bulk payment') && (txLib.includes('salary') || txLib.includes('bonus') || txTiers === 'personnel')) {
+            const txMonth = tx.date?.substring(0, 7) || ''
+            if (txMonth) {
+              const monthBulletins = (allBulletins || []).filter(b => b.periode?.startsWith(txMonth))
+              const sumNet = monthBulletins.reduce((s: number, b: any) => s + (Number(b.salaire_net) || 0), 0)
+              const isVerified = sumNet > 0 && Math.abs(txDebit - sumNet) / sumNet < 0.05
+              updatedTxs[i] = { ...tx, statut: 'rapproche', matched_type: isVerified ? 'salaire_bulk' : 'salaire_bulk_non_verifie', note: isVerified ? `Masse salariale ${txMonth}` : 'Bulk salary — montant non vérifié' }
+            } else {
+              updatedTxs[i] = { ...tx, statut: 'rapproche', matched_type: 'salaire_bulk_non_verifie', note: 'Bulk salary' }
+            }
+            counts.salaire_bulk++; counts.matched++; changed = true; classified = true
+          }
+
+          // RULE D — MRA payments
+          if (!classified && (txTiers.includes('mauritius revenue') || txLib.includes('mauritius revenue'))) {
+            const mraEcriture = ecritures.find(e => {
+              if (!e.compte?.match(/^(444|431|432|4457)/)) return false
+              const eAmt = Number(e.credit) || Number(e.debit) || 0
+              return eAmt > 0 && Math.abs(txDebit - eAmt) / eAmt < 0.10
+            })
+            if (mraEcriture) {
+              updatedTxs[i] = { ...tx, statut: 'rapproche', ecriture_id: mraEcriture.id, matched_type: 'paiement_mra', note: `Paiement MRA — ${mraEcriture.compte}` }
+              await supabase.from('ecritures_comptables').update({ lettre: `MRA${i}`, date_lettrage: new Date().toISOString().split('T')[0] }).eq('id', mraEcriture.id)
+              ecritures = ecritures.filter(e => e.id !== mraEcriture.id)
+            } else {
+              updatedTxs[i] = { ...tx, statut: 'a_verifier', matched_type: 'paiement_mra_non_verifie', note: 'Paiement MRA — écriture non trouvée' }
+            }
+            counts.mra++; counts.matched++; changed = true; classified = true
+          }
+
+          // RULE E — Salary reversal
+          if (!classified && (txLib.includes('bulk payment reversal') || txLib.includes('salary reversal') || txLib.includes('salary proceeds'))) {
+            updatedTxs[i] = { ...tx, statut: 'rapproche', matched_type: 'reversal_salaire', note: 'Reversal virement salaire' }
+            counts.matched++; changed = true; classified = true
+          }
+
+          if (classified) continue
+
+          // === STANDARD MATCHING (factures, écritures, salary, associé) ===
           let matched = false
 
           // Strategy 1: Match with factures — by reference first, then by amount
@@ -262,7 +330,7 @@ export async function POST(request: Request) {
               matchConfidence = 'reference'
             }
             if (matchedFacture) {
-              const code = `R${String(matchCount + 1).padStart(3, '0')}`
+              const code = `R${String(counts.matched + 1).padStart(3, '0')}`
               const isHighConfidence = matchConfidence === 'reference' || matchConfidence === 'tiers_and_amount'
               updatedTxs[i] = { ...tx, facture_id: matchedFacture.id, lettre: code, statut: isHighConfidence ? 'rapproche' : 'propose', match_confidence: matchConfidence }
               // Only mark facture as paye for high-confidence matches
@@ -298,9 +366,9 @@ export async function POST(request: Request) {
                 }
               }
 
-              matches.push({ type: 'facture', transaction: tx.libelle, facture: matchedFacture.numero_facture, montant: txAmount, ecart_change: ecartChange })
+              matchesList.push({ type: 'facture', transaction: tx.libelle, facture: matchedFacture.numero_facture, montant: txAmount, ecart_change: ecartChange })
               factures = factures.filter(f => f.id !== matchedFacture.id)
-              matched = true; changed = true; matchCount++
+              matched = true; changed = true; counts.matched++
             }
           }
 
@@ -325,15 +393,15 @@ export async function POST(request: Request) {
               return (txW.length > 0 && eW.length > 0 && overlap / Math.max(txW.length, eW.length) >= 0.3)
             })
             if (matchedEcriture) {
-              const code = `L${String(matchCount + 1).padStart(3, '0')}`
+              const code = `L${String(counts.matched + 1).padStart(3, '0')}`
               updatedTxs[i] = { ...tx, ecriture_id: matchedEcriture.id, lettre: code, statut: 'rapproche' }
               // Also letter the écriture
               await supabase.from('ecritures_comptables')
                 .update({ lettre: code, date_lettrage: new Date().toISOString().split('T')[0], lettrage_auto: true })
                 .eq('id', matchedEcriture.id)
-              matches.push({ type: 'ecriture', transaction: tx.libelle, ecriture: matchedEcriture.libelle, montant: txAmount })
+              matchesList.push({ type: 'ecriture', transaction: tx.libelle, ecriture: matchedEcriture.libelle, montant: txAmount })
               ecritures = ecritures.filter(e => e.id !== matchedEcriture.id)
-              matched = true; changed = true; matchCount++
+              matched = true; changed = true; counts.matched++
             }
           }
 
@@ -352,10 +420,10 @@ export async function POST(request: Request) {
             })
             if (matchedBulletin) {
               const emp = empMap[matchedBulletin.employe_id]
-              const code = `S${String(matchCount + 1).padStart(3, '0')}`
+              const code = `S${String(counts.matched + 1).padStart(3, '0')}`
               updatedTxs[i] = { ...tx, lettre: code, statut: 'rapproche', matched_type: 'salaire', employe_id: matchedBulletin.employe_id }
-              matches.push({ type: 'salaire', transaction: tx.libelle, ecriture: `Salaire ${emp?.nom} ${emp?.prenom}`, montant: txAmount })
-              matched = true; changed = true; matchCount++
+              matchesList.push({ type: 'salaire', transaction: tx.libelle, ecriture: `Salaire ${emp?.nom} ${emp?.prenom}`, montant: txAmount })
+              matched = true; changed = true; counts.matched++
             }
           }
 
@@ -368,12 +436,12 @@ export async function POST(request: Request) {
               return Math.abs(txAmount - eAmount) / eAmount < 0.05
             })
             if (mraEcriture) {
-              const code = `MRA${String(matchCount + 1).padStart(3, '0')}`
+              const code = `MRA${String(counts.matched + 1).padStart(3, '0')}`
               updatedTxs[i] = { ...tx, ecriture_id: mraEcriture.id, lettre: code, statut: 'rapproche', matched_type: 'mra' }
               await supabase.from('ecritures_comptables').update({ lettre: code, date_lettrage: new Date().toISOString().split('T')[0] }).eq('id', mraEcriture.id)
-              matches.push({ type: 'mra', transaction: tx.libelle, ecriture: mraEcriture.libelle, montant: txAmount })
+              matchesList.push({ type: 'mra', transaction: tx.libelle, ecriture: mraEcriture.libelle, montant: txAmount })
               ecritures = ecritures.filter(e => e.id !== mraEcriture.id)
-              matched = true; changed = true; matchCount++
+              matched = true; changed = true; counts.matched++
             }
           }
 
@@ -389,15 +457,19 @@ export async function POST(request: Request) {
                 return mAmount > 0 && Math.abs(txAmount - mAmount) / mAmount < 0.02
               })
               if (matchedMvt) {
-                const code = `CCA${String(matchCount + 1).padStart(3, '0')}`
+                const code = `CCA${String(counts.matched + 1).padStart(3, '0')}`
                 updatedTxs[i] = { ...tx, lettre: code, statut: 'rapproche', matched_type: 'associe', compte_courant_id: cc.id }
-                matches.push({ type: 'associe', transaction: tx.libelle, ecriture: `${cc.nom} — ${matchedMvt.description || 'mouvement'}`, montant: txAmount })
-                matched = true; changed = true; matchCount++; break
+                matchesList.push({ type: 'associe', transaction: tx.libelle, ecriture: `${cc.nom} — ${matchedMvt.description || 'mouvement'}`, montant: txAmount })
+                matched = true; changed = true; counts.matched++; break
               }
             }
           }
+
+          if (!matched && !classified) counts.not_matched++
+          if (matched) { changed = true }
         }
 
+        // Always save if any transaction was modified
         if (changed) {
           await supabase.from('releves_bancaires')
             .update({ transactions_json: updatedTxs })
@@ -405,7 +477,12 @@ export async function POST(request: Request) {
         }
       }
 
-      return NextResponse.json({ matched: matchCount, matches })
+      return NextResponse.json({
+        matched: counts.matched, interne: counts.interne, frais_bancaires: counts.frais_bancaires,
+        salaire_bulk: counts.salaire_bulk, mra: counts.mra, propose: counts.propose,
+        not_matched: counts.not_matched, total: counts.total,
+        matches: matchesList.slice(0, 10),
+      })
     }
 
     // === LETTRAGE MANUEL ===

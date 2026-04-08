@@ -35,7 +35,7 @@ export default function ClientRapprochementPage() {
   const [loading, setLoading] = useState(true)
   const [autoMatching, setAutoMatching] = useState(false)
   const [autoStep, setAutoStep] = useState("")
-  const [autoResult, setAutoResult] = useState<{ matched: number; total: number; matches: any[] } | null>(null)
+  const [autoResult, setAutoResult] = useState<{ matched: number; total: number; interne: number; frais_bancaires: number; not_matched: number; matches: any[] } | null>(null)
   const [linkDialog, setLinkDialog] = useState<any>(null)
   const [societeId, setSocieteId] = useState<string | null>(null)
   const [societes, setSocietes] = useState<any[]>([])
@@ -47,6 +47,10 @@ export default function ClientRapprochementPage() {
   const [matchedOpen, setMatchedOpen] = useState(false)
   const [txSearch, setTxSearch] = useState("")
   const [dialogTab, setDialogTab] = useState<"factures" | "ecritures" | "bach">("factures")
+  const [sortField, setSortField] = useState<'date' | 'amount'>('date')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const [selectedPeriode, setSelectedPeriode] = useState('tout')
+  const [associes, setAssocies] = useState<any[]>([])
 
   // Get sociétés
   useEffect(() => {
@@ -65,8 +69,12 @@ export default function ClientRapprochementPage() {
     if (!societeId) return
     setLoading(true)
     try {
-      const res = await fetch(`/api/comptable/rapprochement?societe_id=${societeId}`)
+      const [res, ccRes] = await Promise.all([
+        fetch(`/api/comptable/rapprochement?societe_id=${societeId}`),
+        fetch(`/api/comptable/compte-courant?societe_id=${societeId}`).catch(() => null),
+      ])
       setData(await res.json())
+      if (ccRes?.ok) { const ccData = await ccRes.json(); setAssocies(ccData.comptes || []) }
     } catch { setData(null) }
     finally { setLoading(false) }
   }, [societeId])
@@ -83,15 +91,16 @@ export default function ClientRapprochementPage() {
       setAutoStep("Recherche des factures correspondantes...")
       const res = await fetch("/api/comptable/rapprochement", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "auto_rapprocher", societe_id: societeId }),
+        body: JSON.stringify({ action: "auto_rapprocher", societe_id: societeId,
+          ...(selectedPeriode !== 'tout' ? { date_debut: selectedPeriode === '2025-2026' ? '2025-07-01' : '2024-07-01', date_fin: selectedPeriode === '2025-2026' ? '2026-06-30' : '2025-06-30' } : {}) }),
       })
       setAutoStep("Rapprochement des écritures comptables...")
       const d = await res.json()
       await new Promise(r => setTimeout(r, 500))
       setAutoStep("")
-      setAutoResult({ matched: d.matched || 0, total: transactions.length, matches: d.matches || [] })
+      setAutoResult({ matched: d.matched || 0, total: d.total || transactions.length, interne: d.interne || 0, frais_bancaires: d.frais_bancaires || 0, not_matched: d.not_matched || 0, matches: d.matches || [] })
       load()
-    } catch { setAutoStep(""); setAutoResult({ matched: 0, total: transactions.length, matches: [] }) }
+    } catch { setAutoStep(""); setAutoResult({ matched: 0, total: transactions.length, interne: 0, frais_bancaires: 0, not_matched: 0, matches: [] }) }
     finally { setAutoMatching(false) }
   }
 
@@ -177,18 +186,29 @@ export default function ClientRapprochementPage() {
   const ecritures = (data?.ecritures || []).filter((e: any) => !e.lettre)
 
   // Filter by month + compte
+  // Period filter
+  const periodDebut = selectedPeriode === '2025-2026' ? '2025-07-01' : selectedPeriode === '2024-2025' ? '2024-07-01' : null
+  const periodFin = selectedPeriode === '2025-2026' ? '2026-06-30' : selectedPeriode === '2024-2025' ? '2025-06-30' : null
+
   const transactions = allTransactions.filter((t: any) => {
-    if (selectedMois !== null && t.date) {
-      if (t.date.substring(0, 7) !== selectedMois) return false
-    }
-    if (selectedCompte !== "all" && t.compte_bancaire_id) {
-      if (String(t.compte_bancaire_id) !== selectedCompte && t.banque !== selectedCompte) return false
-    }
+    if (selectedMois !== null && t.date) { if (t.date.substring(0, 7) !== selectedMois) return false }
+    if (selectedCompte !== "all" && t.compte_bancaire_id) { if (String(t.compte_bancaire_id) !== selectedCompte && t.banque !== selectedCompte) return false }
+    if (periodDebut && t.date && t.date < periodDebut) return false
+    if (periodFin && t.date && t.date > periodFin) return false
     return true
   })
-  const matched = transactions.filter((t: any) => t.facture_id || t.ecriture_id || t.lettre)
-  const proposed = transactions.filter((t: any) => t.statut === 'propose')
-  const unmatched = transactions.filter((t: any) => !t.facture_id && !t.ecriture_id && !t.lettre && t.statut !== 'propose')
+  const matched = transactions.filter((t: any) => t.statut === 'rapproche' || t.facture_id || t.ecriture_id || t.lettre)
+  const interne = transactions.filter((t: any) => t.statut === 'interne' || t.matched_type === 'transfert_interne')
+  const proposed = transactions.filter((t: any) => t.statut === 'propose' || t.statut === 'a_verifier')
+  const unmatched = transactions.filter((t: any) => !t.facture_id && !t.ecriture_id && !t.lettre && t.statut !== 'rapproche' && t.statut !== 'interne' && t.statut !== 'propose' && t.statut !== 'a_verifier')
+
+  // Sort unmatched
+  const sortedUnmatched = [...unmatched].sort((a, b) => {
+    if (sortField === 'date') { const cmp = (a.date || '').localeCompare(b.date || ''); return sortDir === 'asc' ? cmp : -cmp }
+    const aAmt = (Number(a.debit) || 0) + (Number(a.credit) || 0)
+    const bAmt = (Number(b.debit) || 0) + (Number(b.credit) || 0)
+    return sortDir === 'asc' ? aAmt - bAmt : bAmt - aAmt
+  })
 
   // Bank comptes for selector
   const uniqueBanques = Array.from(new Set(allTransactions.map((t: any) => t.banque).filter(Boolean))).sort()
@@ -301,10 +321,23 @@ export default function ClientRapprochementPage() {
         )}
       </div>
 
+      {/* Period filter */}
+      <div className="flex items-center gap-3 no-print">
+        <Select value={selectedPeriode} onValueChange={setSelectedPeriode}>
+          <SelectTrigger className="w-[200px] h-8"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="2025-2026">Exercice 2025-2026</SelectItem>
+            <SelectItem value="2024-2025">Exercice 2024-2025</SelectItem>
+            <SelectItem value="tout">Tout</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       {/* KPIs */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Transactions</p><p className="text-2xl font-bold text-[#0B0F2E]">{transactions.length}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Rapprochées</p><p className="text-2xl font-bold text-green-600">{matched.length}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Internes</p><p className="text-2xl font-bold text-gray-400">{interne.length}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-gray-500">À valider</p><p className="text-2xl font-bold text-orange-600">{proposed.length}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Non rapprochées</p><p className="text-2xl font-bold text-red-600">{unmatched.length}</p></CardContent></Card>
       </div>
@@ -324,10 +357,12 @@ export default function ClientRapprochementPage() {
         <Card className={autoResult.matched > 0 ? "border-green-200 bg-green-50" : "border-gray-200"}>
           <CardContent className="p-4">
             <p className="font-medium text-sm text-[#0B0F2E]">Rapprochement terminé</p>
-            <div className="flex gap-6 mt-2 text-sm">
+            <div className="flex flex-wrap gap-4 mt-2 text-sm">
               <span className="text-green-600 font-bold">{autoResult.matched} rapprochée(s)</span>
-              <span className="text-red-500">{autoResult.total - autoResult.matched} non rapprochée(s)</span>
-              {autoResult.total > 0 && <span className="text-gray-400">{Math.round((autoResult.matched / autoResult.total) * 100)}%</span>}
+              {autoResult.interne > 0 && <span className="text-gray-400">{autoResult.interne} interne(s)</span>}
+              {autoResult.frais_bancaires > 0 && <span className="text-blue-500">{autoResult.frais_bancaires} frais bancaires</span>}
+              <span className="text-red-500">{autoResult.not_matched} non rapprochée(s)</span>
+              {autoResult.total > 0 && <span className="text-gray-400">{Math.round(((autoResult.matched + autoResult.interne) / autoResult.total) * 100)}% traité</span>}
             </div>
             {autoResult.matched === 0 && <p className="text-xs text-gray-500 mt-2">Utilisez le rapprochement manuel pour les transactions restantes.</p>}
             {autoResult.matches.length > 0 && (
@@ -378,11 +413,17 @@ export default function ClientRapprochementPage() {
 
       {/* SECTION 4 — Non rapprochées (main focus) */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
           <CardTitle className="text-[#0B0F2E] flex items-center gap-2"><AlertCircle className="w-5 h-5 text-orange-500" />Non rapprochées ({unmatched.length})</CardTitle>
-          <div className="relative w-64">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Rechercher..." className="pl-9 h-8 text-sm" value={txSearch} onChange={e => setTxSearch(e.target.value)} />
+          <div className="flex items-center gap-2">
+            <div className="flex rounded border overflow-hidden text-xs">
+              <button onClick={() => { setSortField('date'); setSortDir(d => d === 'desc' ? 'asc' : 'desc') }} className={`px-2 py-1 ${sortField === 'date' ? 'bg-[#0B0F2E] text-white' : 'bg-white'}`}>Date {sortField === 'date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</button>
+              <button onClick={() => { setSortField('amount'); setSortDir(d => d === 'desc' ? 'asc' : 'desc') }} className={`px-2 py-1 ${sortField === 'amount' ? 'bg-[#0B0F2E] text-white' : 'bg-white'}`}>Montant {sortField === 'amount' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</button>
+            </div>
+            <div className="relative w-48">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input placeholder="Rechercher..." className="pl-9 h-8 text-sm" value={txSearch} onChange={e => setTxSearch(e.target.value)} />
+            </div>
           </div>
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
@@ -392,7 +433,7 @@ export default function ClientRapprochementPage() {
             <Table>
               <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Libellé</TableHead><TableHead className="text-right">Débit</TableHead><TableHead className="text-right">Crédit</TableHead><TableHead>Tiers</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
               <TableBody>
-                {unmatched
+                {sortedUnmatched
                   .filter(tx => {
                     if (!txSearch) return true
                     const s = txSearch.toLowerCase()
@@ -408,7 +449,9 @@ export default function ClientRapprochementPage() {
                       <TableCell>
                         <div className="flex gap-1">
                           <Button variant="outline" size="sm" onClick={() => { setDialogTab("factures"); setLinkDialog(tx) }} className="gap-1"><Link2 className="w-3 h-3" />Lettrer</Button>
-                          <Button variant="outline" size="sm" onClick={() => { setPayeParNom("STEPHANE BACH"); setPayeParType("associe"); setDialogTab("bach"); setLinkDialog(tx) }} className="gap-1 text-purple-600 border-purple-200 hover:bg-purple-50"><Users className="w-3 h-3" />Bach</Button>
+                          {associes.length > 0 && (
+                            <Button variant="outline" size="sm" onClick={() => { setPayeParNom(associes[0]?.nom || ""); setPayeParType("associe"); setDialogTab("bach"); setLinkDialog(tx) }} className="gap-1 text-purple-600 border-purple-200 hover:bg-purple-50"><Users className="w-3 h-3" />{associes.length === 1 ? associes[0].nom?.split(' ').pop() : 'CC Associé'}</Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -541,7 +584,7 @@ export default function ClientRapprochementPage() {
                 {(["factures", "ecritures", "bach"] as const).map(tab => (
                   <button key={tab} onClick={() => setDialogTab(tab)}
                     className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${dialogTab === tab ? "border-[#D4AF37] text-[#0B0F2E]" : "border-transparent text-gray-400 hover:text-gray-600"}`}>
-                    {tab === "factures" ? `Factures (${factures.length})` : tab === "ecritures" ? `Écritures (${ecritures.length})` : "Compte Bach"}
+                    {tab === "factures" ? `Factures (${factures.length})` : tab === "ecritures" ? `Écritures (${ecritures.length})` : "CC Associé"}
                   </button>
                 ))}
               </div>
@@ -602,10 +645,10 @@ export default function ClientRapprochementPage() {
                 </div>
               )}
 
-              {/* Tab: Compte Bach */}
+              {/* Tab: Compte Courant Associé */}
               {dialogTab === "bach" && (
                 <div className="space-y-3">
-                  <p className="text-sm text-gray-500">Assigner cette opération au compte courant associé de STEPHANE BACH</p>
+                  <p className="text-sm text-gray-500">Assigner cette opération au compte courant d&apos;un associé</p>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <Label className="text-xs">Type</Label>
@@ -619,7 +662,14 @@ export default function ClientRapprochementPage() {
                     </div>
                     <div>
                       <Label className="text-xs">Nom</Label>
-                      <Input className="h-8 text-xs" value={payeParNom} onChange={e => setPayeParNom(e.target.value)} placeholder="STEPHANE BACH" />
+                      {associes.length > 0 ? (
+                        <Select value={payeParNom} onValueChange={setPayeParNom}>
+                          <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Choisir..." /></SelectTrigger>
+                          <SelectContent>{associes.map((a: any) => <SelectItem key={a.id} value={a.nom}>{a.nom} ({a.type})</SelectItem>)}</SelectContent>
+                        </Select>
+                      ) : (
+                        <Input className="h-8 text-xs" value={payeParNom} onChange={e => setPayeParNom(e.target.value)} placeholder="Nom de l'associé" />
+                      )}
                     </div>
                   </div>
                   {payeParNom && factures.length > 0 && (
