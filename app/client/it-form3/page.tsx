@@ -24,7 +24,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs"
-import { Calculator, FileText, Save, Printer, Loader2, Upload, CheckCircle, AlertCircle } from "lucide-react"
+import { Calculator, FileText, Save, Download, Loader2, Upload, CheckCircle, AlertCircle } from "lucide-react"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -125,8 +125,10 @@ export default function ITForm3Page() {
     revenuImposable: number; impotCalcule: number
   } | null>(null)
 
-  // Fetch data on mount and when assessment year changes
+  // Fetch data on mount and when assessment year or société changes
   useEffect(() => {
+    // Safety timeout: if loading takes > 5s, show form with empty values
+    const safetyTimeout = setTimeout(() => setLoading(false), 5000)
     async function fetchData() {
       setLoading(true)
       try {
@@ -136,10 +138,11 @@ export default function ITForm3Page() {
         const exercice = `${yearNum - 1}-${yearNum}`
         const prevExercice = `${yearNum - 2}-${yearNum - 1}`
 
+        const socParam = selectedSociete ? `&societe_id=${selectedSociete}` : ""
         const [socRes, finRes, prevFinRes, priorFormRes] = await Promise.all([
           fetch("/api/client/societes"),
-          fetch(`/api/client/financial?exercice=${exercice}`),
-          fetch(`/api/client/financial?exercice=${prevExercice}`),
+          fetch(`/api/client/financial?exercice=${exercice}${socParam}`),
+          fetch(`/api/client/financial?exercice=${prevExercice}${socParam}`),
           fetch(`/api/comptable/it-form3?assessment_year=${yearNum - 1}`).catch(() => null),
         ])
 
@@ -203,7 +206,8 @@ export default function ITForm3Page() {
       }
     }
     fetchData()
-  }, [assessmentYear])
+    return () => clearTimeout(safetyTimeout)
+  }, [assessmentYear, selectedSociete])
 
   const handleImportPdf = async (file: File) => {
     setImportingPdf(true)
@@ -382,7 +386,7 @@ export default function ITForm3Page() {
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="form" className="w-full">
+      <Tabs defaultValue="form" className="w-full" id="it-form-content">
         <TabsList className="print:hidden">
           <TabsTrigger value="form">Formulaire</TabsTrigger>
           <TabsTrigger value="summary">Résumé & Calcul</TabsTrigger>
@@ -771,13 +775,24 @@ export default function ITForm3Page() {
           Sauvegarder
         </Button>
         <Button
-          onClick={() => window.print()}
+          onClick={async () => {
+            const el = document.getElementById('it-form-content')
+            if (!el) { window.print(); return }
+            const html2pdf = (await import('html2pdf.js')).default
+            await html2pdf().set({
+              margin: 15,
+              filename: `IT_Form3_${companyName.replace(/\s+/g, '_')}_${assessmentYear}.pdf`,
+              image: { type: 'jpeg', quality: 0.98 },
+              html2canvas: { scale: 2 },
+              jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            }).from(el).save()
+          }}
           variant="outline"
           className="flex items-center gap-2"
           style={{ borderColor: NAVY, color: NAVY }}
         >
-          <Printer className="w-4 h-4" />
-          Exporter PDF
+          <Download className="w-4 h-4" />
+          Télécharger PDF
         </Button>
       </div>
     </div>

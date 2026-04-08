@@ -302,6 +302,7 @@ export default function BilanPage() {
   const [prevExercice, setPrevExercice] = useState<string>("")
   const [availableExercices, setAvailableExercices] = useState<string[]>([])
   const [viewMode, setViewMode] = useState<"exercice" | "mensuel">("exercice")
+  const [activeTab, setActiveTab] = useState("balance-sheet")
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
     const n = new Date()
     return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`
@@ -530,15 +531,17 @@ export default function BilanPage() {
         </div>
         <Button
           onClick={async () => {
-            const el = document.getElementById('bilan-pdf-content')
+            const elementId = activeTab === 'profit-loss' ? 'pnl-pdf-content' : 'bilan-pdf-content'
+            const el = document.getElementById(elementId)
             if (!el) return
             el.style.display = 'block'
             const html2pdf = (await import('html2pdf.js')).default
             const socName = selectedSoc?.nom || 'Societe'
             const period = viewMode === 'mensuel' ? selectedMonth : exercice
+            const prefix = activeTab === 'profit-loss' ? 'pnl' : 'bilan'
             await html2pdf().set({
               margin: [15, 15, 20, 15],
-              filename: `bilan_${socName.replace(/\s+/g, '_')}_${period}.pdf`,
+              filename: `${prefix}_${socName.replace(/\s+/g, '_')}_${period}.pdf`,
               image: { type: 'jpeg', quality: 0.98 },
               html2canvas: { scale: 2 },
               jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
@@ -626,7 +629,7 @@ export default function BilanPage() {
               <p className="text-sm text-gray-500">Bilan — {viewMode === "mensuel" ? selectedMonth : `Exercice ${exercice}`}</p>
               <p className="text-xs text-gray-400">Préparé conformément aux IFRS pour PME (Companies Act 2001 — Maurice)</p>
             </div>
-          <Tabs defaultValue="balance-sheet" className="space-y-4">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
             <TabsList>
               <TabsTrigger value="balance-sheet">Balance Sheet</TabsTrigger>
               <TabsTrigger value="profit-loss">Profit &amp; Loss</TabsTrigger>
@@ -741,6 +744,43 @@ export default function BilanPage() {
           </div>
           <p style={{ fontStyle: 'italic', marginBottom: '8px' }}>&quot;These financial statements were authorised for issue by the Board of Directors.&quot;</p>
           <p style={{ fontStyle: 'italic', marginBottom: '16px' }}>&quot;The notes to the financial statements form an integral part of these financial statements.&quot;</p>
+          <p style={{ textAlign: 'center', color: '#999', fontSize: '8px' }}>Prepared by LEXORA Accounting Software — lexora.finance</p>
+        </div>
+      </div>
+
+      {/* === P&L PDF TEMPLATE (separate from Balance Sheet) === */}
+      <div id="pnl-pdf-content" style={{ display: 'none', fontFamily: 'Arial, Helvetica, sans-serif', color: '#1a1a1a', fontSize: '11px', lineHeight: '1.5' }}>
+        <div style={{ borderBottom: '2px solid #0B0F2E', paddingBottom: '12px', marginBottom: '20px' }}>
+          <p style={{ fontSize: '16px', fontWeight: 'bold', textTransform: 'uppercase', color: '#0B0F2E', marginBottom: '4px' }}>{selectedSoc?.nom || "SOCIÉTÉ"}</p>
+          {selectedSoc?.brn && <p style={{ fontSize: '10px', color: '#666' }}>Business Registration Number: {selectedSoc.brn}</p>}
+          {selectedSoc?.adresse && <p style={{ fontSize: '10px', color: '#666' }}>Registered Office: {selectedSoc.adresse}</p>}
+          <div style={{ marginTop: '16px', textAlign: 'center' }}>
+            <p style={{ fontSize: '14px', fontWeight: 'bold', color: '#0B0F2E' }}>STATEMENT OF PROFIT OR LOSS AND OTHER COMPREHENSIVE INCOME</p>
+            <p style={{ fontSize: '11px', color: '#444', marginTop: '4px' }}>{periodLabel}</p>
+            <p style={{ fontSize: '9px', color: '#888', marginTop: '2px' }}>All amounts in Mauritian Rupees (MUR)</p>
+          </div>
+        </div>
+        <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '20px' }}>
+          <thead>
+            <tr style={{ borderBottom: '2px solid #0B0F2E' }}>
+              <th style={{ textAlign: 'left', padding: '6px 4px', fontSize: '10px', fontWeight: 'bold' }}>Description</th>
+              <th style={{ textAlign: 'right', padding: '6px 4px', fontSize: '10px', fontWeight: 'bold' }}>{exercice || "Current"} (MUR)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td style={{ padding: '4px 4px', fontSize: '10px' }}>Revenue</td><td style={{ textAlign: 'right', fontSize: '10px' }}>{fmt(totalRevenue)}</td></tr>
+            <tr><td style={{ padding: '2px 4px', fontSize: '10px' }}>Operating Expenses</td><td style={{ textAlign: 'right', fontSize: '10px', color: '#DC2626' }}>({fmt(totalExpenses)})</td></tr>
+            <tr style={{ borderTop: '1px solid #ddd' }}><td style={{ fontWeight: 'bold', padding: '6px 4px', fontSize: '10px' }}>PROFIT BEFORE TAX</td><td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '10px' }}>{totalRevenue - totalExpenses >= 0 ? fmt(totalRevenue - totalExpenses) : `(${fmt(Math.abs(totalRevenue - totalExpenses))})`}</td></tr>
+            <tr><td style={{ padding: '2px 4px', fontSize: '10px' }}>Income Tax (15%)</td><td style={{ textAlign: 'right', fontSize: '10px', color: '#DC2626' }}>{totalRevenue - totalExpenses > 0 ? `(${fmt((totalRevenue - totalExpenses) * 0.15)})` : "0.00"}</td></tr>
+            <tr style={{ borderTop: '2px solid #0B0F2E', borderBottom: '2px solid #0B0F2E' }}><td style={{ fontWeight: 'bold', padding: '6px 4px', fontSize: '11px' }}>PROFIT FOR THE YEAR</td><td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '11px' }}>{(() => { const pbt = totalRevenue - totalExpenses; const tax = pbt > 0 ? pbt * 0.15 : 0; const net = pbt - tax; return net >= 0 ? fmt(net) : `(${fmt(Math.abs(net))})` })()}</td></tr>
+          </tbody>
+        </table>
+        <div style={{ borderTop: '1px solid #ccc', paddingTop: '16px', marginTop: '30px', fontSize: '9px', color: '#666' }}>
+          <p style={{ marginBottom: '20px' }}>Approved by the Board of Directors on: ________________________________</p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
+            <p>Director: ________________________________</p>
+            <p>Date: ________________________________</p>
+          </div>
           <p style={{ textAlign: 'center', color: '#999', fontSize: '8px' }}>Prepared by LEXORA Accounting Software — lexora.finance</p>
         </div>
       </div>
