@@ -34,6 +34,8 @@ export default function ClientRapprochementPage() {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [autoMatching, setAutoMatching] = useState(false)
+  const [autoStep, setAutoStep] = useState("")
+  const [autoResult, setAutoResult] = useState<{ matched: number; total: number; matches: any[] } | null>(null)
   const [linkDialog, setLinkDialog] = useState<any>(null)
   const [societeId, setSocieteId] = useState<string | null>(null)
   const [societes, setSocietes] = useState<any[]>([])
@@ -74,15 +76,22 @@ export default function ClientRapprochementPage() {
   const handleAutoMatch = async () => {
     if (!societeId) return
     setAutoMatching(true)
+    setAutoResult(null)
     try {
+      setAutoStep("Analyse des transactions bancaires...")
+      await new Promise(r => setTimeout(r, 800))
+      setAutoStep("Recherche des factures correspondantes...")
       const res = await fetch("/api/comptable/rapprochement", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "auto_rapprocher", societe_id: societeId }),
       })
+      setAutoStep("Rapprochement des écritures comptables...")
       const d = await res.json()
-      alert(`${d.matched || 0} transaction(s) rapprochee(s) automatiquement`)
+      await new Promise(r => setTimeout(r, 500))
+      setAutoStep("")
+      setAutoResult({ matched: d.matched || 0, total: transactions.length, matches: d.matches || [] })
       load()
-    } catch { alert("Erreur rapprochement auto") }
+    } catch { setAutoStep(""); setAutoResult({ matched: 0, total: transactions.length, matches: [] }) }
     finally { setAutoMatching(false) }
   }
 
@@ -196,7 +205,7 @@ export default function ClientRapprochementPage() {
       const ids = Array.from(lettrageSelection)
       await fetch("/api/comptable/rapprochement", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "lettrer_multi", ecriture_ids: ids, societe_id: societeId }),
+        body: JSON.stringify({ action: "lettrer_ecritures", ecriture_ids: ids, societe_id: societeId }),
       })
       setLettrageDialog(null)
       setLettrageSelection(new Set())
@@ -242,7 +251,7 @@ export default function ClientRapprochementPage() {
       for (const ids of toLetter) {
         await fetch("/api/comptable/rapprochement", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "lettrer_multi", ecriture_ids: ids, societe_id: societeId }),
+          body: JSON.stringify({ action: "lettrer_ecritures", ecriture_ids: ids, societe_id: societeId }),
         })
         lettered++
       }
@@ -299,6 +308,42 @@ export default function ClientRapprochementPage() {
         <Card><CardContent className="p-4"><p className="text-xs text-gray-500">À valider</p><p className="text-2xl font-bold text-orange-600">{proposed.length}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Non rapprochées</p><p className="text-2xl font-bold text-red-600">{unmatched.length}</p></CardContent></Card>
       </div>
+
+      {/* Auto-rapprochement progress */}
+      {autoStep && (
+        <Card className="border-blue-200 bg-blue-50">
+          <CardContent className="p-4 flex items-center gap-3">
+            <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+            <span className="text-sm text-blue-800">{autoStep}</span>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Auto-rapprochement result */}
+      {autoResult && !autoStep && (
+        <Card className={autoResult.matched > 0 ? "border-green-200 bg-green-50" : "border-gray-200"}>
+          <CardContent className="p-4">
+            <p className="font-medium text-sm text-[#0B0F2E]">Rapprochement terminé</p>
+            <div className="flex gap-6 mt-2 text-sm">
+              <span className="text-green-600 font-bold">{autoResult.matched} rapprochée(s)</span>
+              <span className="text-red-500">{autoResult.total - autoResult.matched} non rapprochée(s)</span>
+              {autoResult.total > 0 && <span className="text-gray-400">{Math.round((autoResult.matched / autoResult.total) * 100)}%</span>}
+            </div>
+            {autoResult.matched === 0 && <p className="text-xs text-gray-500 mt-2">Utilisez le rapprochement manuel pour les transactions restantes.</p>}
+            {autoResult.matches.length > 0 && (
+              <div className="mt-3 space-y-1">
+                {autoResult.matches.slice(0, 5).map((m: any, i: number) => (
+                  <div key={i} className="text-xs text-green-700 flex items-center gap-2">
+                    <CheckCircle2 className="w-3 h-3" />
+                    <span>{m.type === 'facture' ? `Facture ${m.facture || ''}` : `Écriture ${m.ecriture || ''}`} — {fmt(m.montant)}</span>
+                  </div>
+                ))}
+                {autoResult.matches.length > 5 && <p className="text-xs text-gray-400">... et {autoResult.matches.length - 5} autres</p>}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* SECTION 3 — Rapprochées (collapsible) */}
       {matched.length > 0 && (

@@ -183,26 +183,37 @@ export async function POST(request: Request) {
               return txLib.includes(ref) || (ref.length > 3 && txLib.includes(ref.replace(/[^A-Z0-9]/g, '')))
             })
 
-            // 1b. Match by tiers name + amount (±1%)
+            // 1b. Match by tiers name + amount (±1%) with word overlap scoring
+            let matchConfidence = ''
             if (!matchedFacture) {
-              matchedFacture = factures.find(f => {
+              for (const f of factures) {
                 const typeMatch = isCredit ? f.type_facture === 'client' : f.type_facture === 'fournisseur'
-                if (!typeMatch) return false
+                if (!typeMatch) continue
                 const fAmount = Number(f.montant_ttc) || 0
                 const amountMatch = Math.abs(txAmount - fAmount) <= Math.max(fAmount * 0.01, 1)
-                if (!amountMatch) return false
-                // Bonus: tiers name match
+                if (!amountMatch) continue
+                // Word overlap scoring for tiers match
                 const txTiers = (tx.tiers_detecte || tx.tiers || txLib).toLowerCase()
                 const fTiers = (f.tiers || '').toLowerCase()
-                if (fTiers.length > 3 && txTiers.includes(fTiers.substring(0, Math.min(fTiers.length, 10)))) return true
-                // Still match by amount alone if close enough
-                return Math.abs(txAmount - fAmount) <= Math.max(fAmount * 0.005, 0.5)
-              })
+                const txWords = txTiers.split(/\s+/).filter(w => w.length > 3)
+                const fWords = fTiers.split(/\s+/).filter(w => w.length > 3)
+                const overlap = txWords.filter(w => fWords.some(fw => fw.includes(w) || w.includes(fw))).length
+                const wordScore = (txWords.length > 0 && fWords.length > 0) ? overlap / Math.max(txWords.length, fWords.length) : 0
+                if (wordScore >= 0.5) { matchedFacture = f; matchConfidence = 'tiers_and_amount'; break }
+                // Amount-only match (lower confidence)
+                if (Math.abs(txAmount - fAmount) <= Math.max(fAmount * 0.005, 0.5)) { matchedFacture = f; matchConfidence = 'amount_only'; break }
+              }
+            } else {
+              matchConfidence = 'reference'
             }
             if (matchedFacture) {
               const code = `R${String(matchCount + 1).padStart(3, '0')}`
-              updatedTxs[i] = { ...tx, facture_id: matchedFacture.id, lettre: code, statut: 'rapproche' }
-              await supabase.from('factures').update({ statut: 'paye' }).eq('id', matchedFacture.id)
+              const isHighConfidence = matchConfidence === 'reference' || matchConfidence === 'tiers_and_amount'
+              updatedTxs[i] = { ...tx, facture_id: matchedFacture.id, lettre: code, statut: isHighConfidence ? 'rapproche' : 'propose', match_confidence: matchConfidence }
+              // Only mark facture as paye for high-confidence matches
+              if (isHighConfidence) {
+                await supabase.from('factures').update({ statut: 'paye' }).eq('id', matchedFacture.id)
+              }
 
               // IAS 21: calculer l'écart de change si devise étrangère
               const fDevise = matchedFacture.devise || 'MUR'
@@ -250,10 +261,13 @@ export async function POST(request: Request) {
               if (Math.abs(txAmount - eAmount) > Math.max(eAmount * 0.01, 1)) return false
               // Prefer bank accounts (51x)
               if (e.compte?.startsWith('51')) return true
-              // Also match on tiers accounts (41x, 40x)
+              // Word overlap matching for tiers/libellé
               const txTiers = (tx.tiers_detecte || tx.tiers || tx.libelle || '').toLowerCase()
               const eTiers = (e.libelle || '').toLowerCase()
-              return txTiers.includes(eTiers.substring(0, 10)) || eTiers.includes(txTiers.substring(0, 10))
+              const txW = txTiers.split(/\s+/).filter(w => w.length > 3)
+              const eW = eTiers.split(/\s+/).filter(w => w.length > 3)
+              const overlap = txW.filter(w => eW.some(ew => ew.includes(w) || w.includes(ew))).length
+              return (txW.length > 0 && eW.length > 0 && overlap / Math.max(txW.length, eW.length) >= 0.3)
             })
             if (matchedEcriture) {
               const code = `L${String(matchCount + 1).padStart(3, '0')}`
@@ -442,6 +456,22 @@ export async function POST(request: Request) {
         total_factures: facturesTotal,
         ecart: Math.round(ecart * 100) / 100,
       })
+    }
+
+    // === LETTRER ECRITURES COMPTABLES (401/411) ===
+    if (action === 'lettrer_ecritures') {
+      const { ecriture_ids, societe_id: socId } = body
+      if (!ecriture_ids || !Array.isArray(ecriture_ids) || ecriture_ids.length < 2) {
+        return NextResponse.json({ error: 'Au moins 2 ecriture_ids requis' }, { status: 400 })
+      }
+      const lettreCode = `LE${String(Date.now()).slice(-4)}`
+      const now = new Date().toISOString().split('T')[0]
+      for (const eid of ecriture_ids) {
+        await supabase.from('ecritures_comptables')
+          .update({ lettre: lettreCode, date_lettrage: now })
+          .eq('id', eid)
+      }
+      return NextResponse.json({ success: true, lettre: lettreCode, nb: ecriture_ids.length })
     }
 
     // === PAYE PAR ASSOCIE — l'associé a payé des factures ===
