@@ -197,11 +197,19 @@ export default function TVAPage() {
   const factures: any[] = data?.factures ?? []
   const creditReporte = 0
 
-  // TVA from factures table (more reliable than extractedInvoices)
+  // TVA from factures table — LOCAL fournisseurs only (exclude reverse charge)
   const facturesClient = factures.filter((f: any) => f.type_facture === 'client')
   const facturesFournisseur = factures.filter((f: any) => f.type_facture === 'fournisseur')
+  const facturesFournisseurLocal = facturesFournisseur.filter((f: any) => {
+    // Exclude foreign suppliers from TVA déductible (they go in reverse charge)
+    if (f.devise && f.devise !== 'MUR') {
+      const tiers = (f.tiers || '').toLowerCase()
+      if (!tiers.includes('magellan')) return false // foreign → exclude
+    }
+    return true
+  })
   const tvaCollecteeFactures = facturesClient.reduce((s: number, f: any) => s + (Number(f.montant_tva) || 0), 0)
-  const tvaDeductibleFactures = facturesFournisseur.reduce((s: number, f: any) => s + (Number(f.montant_tva) || 0), 0)
+  const tvaDeductibleFactures = facturesFournisseurLocal.reduce((s: number, f: any) => s + (Number(f.montant_tva) || 0), 0)
 
   // Factures non soumises à TVA (montant_tva = 0 but montant_ht > 0)
   const facturesNonTVA = factures.filter((f: any) => (Number(f.montant_tva) || 0) === 0 && (Number(f.montant_ht) || 0) > 0)
@@ -214,6 +222,23 @@ export default function TVAPage() {
     if (tiers.includes('magellan')) return false
     return true
   })
+
+  // Group invoices by normalized tiers name for cleaner display
+  function groupByTiers(items: any[], tiersField: string, tvaField: string): { tiers: string; totalTVA: number; count: number }[] {
+    const groups: Record<string, { tiers: string; totalTVA: number; count: number }> = {}
+    for (const item of items) {
+      const raw = item[tiersField] || item.emetteur || item.destinataire || '—'
+      const key = raw.toLowerCase().split(/[—\-,]/)[0].trim().replace(/\s+(ltd|limited|sarl)\.?$/i, '').trim()
+      if (!groups[key]) groups[key] = { tiers: raw.split(/[—\-,]/)[0].trim(), totalTVA: 0, count: 0 }
+      groups[key].totalTVA += Number(item[tvaField]) || 0
+      groups[key].count++
+    }
+    return Object.values(groups).sort((a, b) => b.totalTVA - a.totalTVA)
+  }
+
+  const groupedClientInvoices = groupByTiers(clientInvoices, 'destinataire', 'montant_tva_mur')
+  const groupedLocalInvoices = groupByTiers(validLocalInvoices, 'emetteur', 'montant_tva_mur')
+  const groupedForeignInvoices = groupByTiers(foreignSupplierInvoices, 'emetteur', 'montant_ht_mur')
 
   // Separate client invoices (TVA collectee) and supplier invoices
   const clientInvoices = invoices.filter((inv: any) => inv.type === "facture_client")
@@ -254,9 +279,9 @@ export default function TVAPage() {
   )
   const reverseChargeTVA = totalReverseChargeBase * TVA_RATE
 
-  // Use ecritures-based values if available, else computed from invoices
-  const effectiveCollectee = tvaCollectee || totalTvaCollecteeFromInvoices
-  const effectiveDeductible = tvaDeductible || totalTvaDeductibleLocale
+  // Use factures table values as primary (most reliable), fallback to écritures
+  const effectiveCollectee = tvaCollecteeFactures || tvaCollectee || totalTvaCollecteeFromInvoices
+  const effectiveDeductible = tvaDeductibleFactures || tvaDeductible || totalTvaDeductibleLocale
   // TVA a payer = collectee - deductible locale (reverse charge nets to 0)
   const effectiveNette = effectiveCollectee - effectiveDeductible - creditReporte
   const tvaAPayer = Math.max(0, effectiveNette)
@@ -585,19 +610,17 @@ export default function TVAPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(showAllClient ? clientInvoices : clientInvoices.slice(0, 8)).map((inv: any) => (
-                    <TableRow key={inv.id}>
-                      <TableCell className="font-medium text-xs"><TooltipProvider delayDuration={200}><Tooltip><TooltipTrigger asChild><span className="block max-w-[200px] truncate cursor-help">{inv.destinataire || inv.emetteur || "—"}</span></TooltipTrigger><TooltipContent className="max-w-[400px] break-words">{inv.destinataire || inv.emetteur || "—"}</TooltipContent></Tooltip></TooltipProvider></TableCell>
-                      <TableCell className="text-right text-xs" style={{ color: "#22C55E" }}>
-                        {formatMUR(inv.montant_tva_mur ?? inv.montant_tva ?? 0)}
-                      </TableCell>
+                  {(showAllClient ? groupedClientInvoices : groupedClientInvoices.slice(0, 8)).map((g, idx) => (
+                    <TableRow key={idx}>
+                      <TableCell className="font-medium text-xs">{g.tiers} {g.count > 1 ? <Badge variant="outline" className="text-[10px] ml-1">×{g.count}</Badge> : null}</TableCell>
+                      <TableCell className="text-right text-xs" style={{ color: "#22C55E" }}>{formatMUR(g.totalTVA)}</TableCell>
                     </TableRow>
                   ))}
-                  {clientInvoices.length > 8 && (
+                  {groupedClientInvoices.length > 8 && (
                     <TableRow>
                       <TableCell colSpan={2} className="text-center">
                         <Button variant="ghost" size="sm" className="text-xs" onClick={() => setShowAllClient(!showAllClient)}>
-                          {showAllClient ? "Voir moins ↑" : `Voir les ${clientInvoices.length - 8} autres →`}
+                          {showAllClient ? "Voir moins ↑" : `Voir les ${groupedClientInvoices.length - 8} autres →`}
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -633,17 +656,17 @@ export default function TVAPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(showAllLocal ? validLocalInvoices : validLocalInvoices.slice(0, 8)).map((inv: any) => (
-                    <TableRow key={inv.id}>
-                      <TableCell className="font-medium text-xs"><TooltipProvider delayDuration={200}><Tooltip><TooltipTrigger asChild><span className="block max-w-[200px] truncate cursor-help">{inv.emetteur || "—"}</span></TooltipTrigger><TooltipContent className="max-w-[400px] break-words">{inv.emetteur || "—"}</TooltipContent></Tooltip></TooltipProvider></TableCell>
-                      <TableCell className="text-right text-xs">{formatMUR(inv.montant_tva_mur ?? inv.montant_tva ?? 0)}</TableCell>
+                  {(showAllLocal ? groupedLocalInvoices : groupedLocalInvoices.slice(0, 8)).map((g, idx) => (
+                    <TableRow key={idx}>
+                      <TableCell className="font-medium text-xs">{g.tiers} {g.count > 1 ? <Badge variant="outline" className="text-[10px] ml-1">×{g.count}</Badge> : null}</TableCell>
+                      <TableCell className="text-right text-xs">{formatMUR(g.totalTVA)}</TableCell>
                     </TableRow>
                   ))}
-                  {validLocalInvoices.length > 8 && (
+                  {groupedLocalInvoices.length > 8 && (
                     <TableRow>
                       <TableCell colSpan={2} className="text-center">
                         <Button variant="ghost" size="sm" className="text-xs" onClick={() => setShowAllLocal(!showAllLocal)}>
-                          {showAllLocal ? "Voir moins ↑" : `Voir les ${validLocalInvoices.length - 8} autres →`}
+                          {showAllLocal ? "Voir moins ↑" : `Voir les ${groupedLocalInvoices.length - 8} autres →`}
                         </Button>
                       </TableCell>
                     </TableRow>
