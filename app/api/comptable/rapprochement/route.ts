@@ -422,9 +422,9 @@ export async function POST(request: Request) {
           }
 
           // Strategy 3: Match salary payments with bulletins_paie
-          if (!matched && txDebit > 0 && (bulletins || []).length > 0) {
+          if (!matched && txDebit > 0 && (allBulletins || []).length > 0) {
             const txAmountMUR = toMUR(txAmount, releveDevise)
-            const matchedBulletin = (bulletins || []).find(b => {
+            const matchedBulletin = (allBulletins || []).find(b => {
               const emp = empMap[b.employe_id]
               if (!emp) return false
               const empName = normalizeTiers(`${emp.nom} ${emp.prenom}`)

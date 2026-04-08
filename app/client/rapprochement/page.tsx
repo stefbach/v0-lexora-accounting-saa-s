@@ -448,7 +448,7 @@ export default function ClientRapprochementPage() {
                         <div className="flex gap-1">
                           <Button variant="outline" size="sm" onClick={() => { setDialogTab("factures"); setLinkDialog(tx) }} className="gap-1"><Link2 className="w-3 h-3" />Lettrer</Button>
                           {associes.length > 0 && (
-                            <Button variant="outline" size="sm" onClick={() => { setPayeParNom(associes[0]?.nom || ""); setPayeParType("associe"); setDialogTab("bach"); setLinkDialog(tx) }} className="gap-1 text-purple-600 border-purple-200 hover:bg-purple-50"><Users className="w-3 h-3" />{associes.length === 1 ? associes[0].nom?.split(' ').pop() : 'CC Associé'}</Button>
+                            <Button variant="outline" size="sm" onClick={() => { setPayeParNom(associes[0]?.nom || ""); setPayeParType("associe"); setDialogTab("bach"); setLinkDialog(tx) }} className="gap-1 text-purple-600 border-purple-200 hover:bg-purple-50"><Users className="w-3 h-3" />{associes.length === 1 ? associes[0].nom?.split(/\s+/).filter(Boolean)[0] || 'Associé' : 'CC Associé'}</Button>
                           )}
                         </div>
                       </TableCell>
