@@ -64,6 +64,8 @@ export default function EcheancesPage() {
   const [extracting, setExtracting] = useState(false)
   const [extractResult, setExtractResult] = useState<{ found: number; not_found: number; errors: number } | null>(null)
   const [applying30j, setApplying30j] = useState(false)
+  const [selectedFactures, setSelectedFactures] = useState<string[]>([])
+  const [dayPopover, setDayPopover] = useState<{ date: string; events: any[] } | null>(null)
   const [manualDesc, setManualDesc] = useState("")
   const [manualDate, setManualDate] = useState("")
   const [manualMontant, setManualMontant] = useState("")
@@ -178,7 +180,7 @@ export default function EcheancesPage() {
     try {
       const res = await fetch("/api/client/echeances", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ societe_id: socId }),
+        body: JSON.stringify({ societe_id: socId, facture_ids: selectedFactures.length > 0 ? selectedFactures : null }),
       })
       const json = await res.json()
       setExtractResult({ found: json.found || 0, not_found: json.not_found || 0, errors: json.errors || 0 })
@@ -190,12 +192,13 @@ export default function EcheancesPage() {
   const handleApply30Days = async () => {
     const socId = selectedSociete && selectedSociete !== "all" ? selectedSociete : societes[0]?.id
     if (!socId) return
-    if (!confirm(`Appliquer date_facture + 30 jours à ${facturesSansDate.length} factures sans échéance ?\n(Délai légal mauricien — Companies Act 2001)`)) return
+    const count = selectedFactures.length > 0 ? selectedFactures.length : facturesSansDate.length
+    if (!confirm(`Appliquer date_facture + 30 jours à ${count} factures sans échéance ?\n(Délai légal mauricien — Companies Act 2001)`)) return
     setApplying30j(true)
     try {
       const res = await fetch("/api/client/echeances", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ societe_id: socId, action: "apply_30_days" }),
+        body: JSON.stringify({ societe_id: socId, action: "apply_30_days", facture_ids: selectedFactures.length > 0 ? selectedFactures : null }),
       })
       const json = await res.json()
       alert(`${json.updated || 0} factures mises à jour avec +30 jours`)
@@ -569,7 +572,7 @@ export default function EcheancesPage() {
                         <div key={cell.date} className={`min-h-[80px] border rounded-md p-1 ${isToday ? "border-2 border-[#D4AF37] bg-amber-50/50" : "border-gray-200"}`}>
                           <div className={`text-xs font-medium mb-0.5 ${isToday ? "text-[#D4AF37] font-bold" : "text-muted-foreground"}`}>{cell.day}</div>
                           <div className="space-y-0.5">
-                            {dayEvents.slice(0, 3).map((ev, j) => {
+                            {dayEvents.slice(0, 2).map((ev, j) => {
                               const c = EVENT_COLORS[ev.type] || EVENT_COLORS.tva
                               return (
                                 <div key={`${ev.type}-${j}`} className={`text-[10px] leading-tight px-1 py-0.5 rounded truncate ${c.bg} ${c.text}`}
@@ -578,7 +581,16 @@ export default function EcheancesPage() {
                                 </div>
                               )
                             })}
-                            {dayEvents.length > 3 && <div className="text-[10px] text-muted-foreground pl-1">+{dayEvents.length - 3}</div>}
+                            {dayEvents.length > 2 && (
+                              <button onClick={() => setDayPopover({ date: cell.date, events: dayEvents })} className="text-[10px] text-blue-600 hover:text-blue-800 pl-1 cursor-pointer">
+                                +{dayEvents.length - 2} autres
+                              </button>
+                            )}
+                            {dayEvents.some(e => e.amount) && (() => {
+                              const total = dayEvents.reduce((s, e) => s + (e.amount || 0), 0)
+                              const color = total > 100000 ? "text-red-600" : total > 50000 ? "text-orange-600" : "text-gray-400"
+                              return total > 0 ? <div className={`text-[9px] font-mono ${color} mt-0.5`}>{Math.round(total).toLocaleString("fr-FR")} MUR</div> : null
+                            })()}
                           </div>
                         </div>
                       )
@@ -636,9 +648,10 @@ export default function EcheancesPage() {
               Factures sans échéance définie ({facturesSansDate.length})
             </CardTitle>
             <div className="flex gap-2">
+              {selectedFactures.length > 0 && <span className="text-xs text-gray-500 mr-2">{selectedFactures.length} sélectionnée(s)</span>}
               <Button variant="outline" size="sm" onClick={handleExtractBatch} disabled={extracting} className="text-xs">
                 {extracting ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
-                {extracting ? "Analyse..." : "Extraire depuis PDFs"}
+                {extracting ? "Analyse..." : "Lancer analyse échéances"}
               </Button>
               <Button variant="outline" size="sm" onClick={handleApply30Days} disabled={applying30j} className="text-xs">
                 {applying30j ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
@@ -653,12 +666,16 @@ export default function EcheancesPage() {
           )}
           <CardContent className="p-0 overflow-x-auto">
             <Table>
-              <TableHeader><TableRow><TableHead>Tiers</TableHead><TableHead>Date facture</TableHead><TableHead className="text-right">Montant</TableHead><TableHead>Type</TableHead><TableHead>Action</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow>
+                <TableHead className="w-8"><input type="checkbox" checked={selectedFactures.length === facturesSansDate.length && facturesSansDate.length > 0} onChange={() => setSelectedFactures(selectedFactures.length === facturesSansDate.length ? [] : facturesSansDate.map((f: any) => f.id))} className="cursor-pointer" /></TableHead>
+                <TableHead>Tiers</TableHead><TableHead>Date facture</TableHead><TableHead className="text-right">Montant</TableHead><TableHead>Type</TableHead><TableHead>Action</TableHead>
+              </TableRow></TableHeader>
               <TableBody>
                 {facturesSansDate.slice(0, 20).map((f: any) => {
                   const suggestedDate = f.date_facture ? new Date(new Date(f.date_facture).getTime() + 30 * 86400000).toISOString().slice(0, 10) : ""
                   return (
                     <TableRow key={f.id}>
+                      <TableCell className="w-8"><input type="checkbox" checked={selectedFactures.includes(f.id)} onChange={() => setSelectedFactures(prev => prev.includes(f.id) ? prev.filter(x => x !== f.id) : [...prev, f.id])} className="cursor-pointer" /></TableCell>
                       <TableCell className="text-sm font-medium">{f.tiers || "—"}</TableCell>
                       <TableCell className="text-sm">{f.date_facture ? new Date(f.date_facture).toLocaleDateString("fr-FR") : "—"}</TableCell>
                       <TableCell className="text-right text-sm font-mono">{(Number(f.montant_mur) || Number(f.montant_ttc) || 0).toLocaleString("fr-FR")} MUR</TableCell>
@@ -684,6 +701,37 @@ export default function EcheancesPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Day detail popover */}
+      <Dialog open={!!dayPopover} onOpenChange={o => { if (!o) setDayPopover(null) }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-[#0B0F2E]">
+              Échéances du {dayPopover?.date ? new Date(dayPopover.date + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }) : ""}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[400px] overflow-y-auto">
+            {dayPopover?.events.map((ev, i) => {
+              const c = EVENT_COLORS[ev.type] || EVENT_COLORS.tva
+              return (
+                <div key={i} className={`flex justify-between items-center p-2 rounded ${c.bg} ${c.text}`}>
+                  <div>
+                    <p className="text-sm font-medium">{ev.label}</p>
+                    <Badge className="text-[10px]" variant="outline">{c.label}</Badge>
+                  </div>
+                  {ev.amount ? <p className="text-sm font-mono font-bold">{Math.round(ev.amount).toLocaleString("fr-FR")} MUR</p> : null}
+                </div>
+              )
+            })}
+          </div>
+          {dayPopover?.events.some(e => e.amount) && (
+            <div className="border-t pt-2 flex justify-between font-bold text-sm">
+              <span>Total</span>
+              <span>{Math.round(dayPopover.events.reduce((s, e) => s + (e.amount || 0), 0)).toLocaleString("fr-FR")} MUR</span>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Manual entry dialog */}
       <Dialog open={manualDialog} onOpenChange={setManualDialog}>

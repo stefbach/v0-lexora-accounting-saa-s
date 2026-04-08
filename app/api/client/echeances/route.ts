@@ -24,18 +24,17 @@ export async function POST(request: Request) {
 
     const supabase = getAdminClient()
     const body = await request.json().catch(() => ({}))
-    const { societe_id, action } = body
+    const { societe_id, action, facture_ids } = body
 
     // Action: apply +30 days to all factures without date_echeance
     if (action === 'apply_30_days') {
       if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
 
-      const { data: factures } = await supabase
-        .from('factures')
-        .select('id, date_facture')
-        .eq('societe_id', societe_id)
-        .is('date_echeance', null)
+      let q = supabase.from('factures').select('id, date_facture')
+        .eq('societe_id', societe_id).is('date_echeance', null)
         .not('statut', 'in', '("paye","annule")')
+      if (facture_ids?.length > 0) q = q.in('id', facture_ids)
+      const { data: factures } = await q
 
       let updated = 0
       for (const f of factures || []) {
@@ -52,14 +51,11 @@ export async function POST(request: Request) {
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
 
     // Get factures without date_echeance that have a linked document
-    const { data: factures } = await supabase
-      .from('factures')
-      .select('id, document_id, tiers, montant_ttc')
-      .eq('societe_id', societe_id)
-      .is('date_echeance', null)
-      .not('statut', 'in', '("paye","annule")')
-      .not('document_id', 'is', null)
-      .limit(20)
+    let extractQ = supabase.from('factures').select('id, document_id, tiers, montant_ttc')
+      .eq('societe_id', societe_id).is('date_echeance', null)
+      .not('statut', 'in', '("paye","annule")').not('document_id', 'is', null)
+    if (facture_ids?.length > 0) extractQ = extractQ.in('id', facture_ids)
+    const { data: factures } = await extractQ.limit(20)
 
     if (!factures || factures.length === 0) {
       return NextResponse.json({ total: 0, processed: 0, found: 0, not_found: 0, errors: 0 })
