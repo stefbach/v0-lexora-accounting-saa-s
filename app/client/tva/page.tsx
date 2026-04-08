@@ -462,7 +462,90 @@ export default function TVAPage() {
                   <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={() => { handleExport("normale"); setExportOpen(false) }}>TVA normale</button>
                   <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={() => { handleExport("deductible"); setExportOpen(false) }}>TVA déductible</button>
                   <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 border-t" onClick={() => { handleExport("reverse"); setExportOpen(false) }}>TVA reverse charge</button>
-                  <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 border-t" onClick={() => { window.print(); setExportOpen(false) }}>PDF (Déclaration MRA)</button>
+                  <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 border-t" onClick={async () => {
+                    setExportOpen(false)
+                    try {
+                      const { pdf, Document, Page: PdfPage, Text: T, View: V, StyleSheet: SS } = await import('@react-pdf/renderer')
+                      const s = SS.create({
+                        page: { padding: 30, fontFamily: 'Helvetica', fontSize: 9 },
+                        title: { fontSize: 14, fontWeight: 'bold', textAlign: 'center', marginBottom: 4 },
+                        sub: { fontSize: 10, textAlign: 'center', color: '#444', marginBottom: 2 },
+                        row: { flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: '#ccc' },
+                        rowAlt: { flexDirection: 'row', backgroundColor: '#f9f9f9', borderBottomWidth: 0.5, borderBottomColor: '#ccc' },
+                        rowTotal: { flexDirection: 'row', backgroundColor: '#e8e8e8', borderTopWidth: 1, borderTopColor: '#000' },
+                        hdr: { flexDirection: 'row', backgroundColor: '#333' },
+                        hdrCell: { color: '#fff', fontSize: 8, fontWeight: 'bold', padding: 5 },
+                        c: { padding: 5, fontSize: 8 },
+                        cb: { padding: 5, fontSize: 8, fontWeight: 'bold' },
+                        cr: { padding: 5, fontSize: 8, textAlign: 'right' },
+                        sec: { fontSize: 11, fontWeight: 'bold', backgroundColor: '#f0f0f0', padding: 6, marginBottom: 4, marginTop: 12 },
+                        footer: { position: 'absolute', bottom: 20, left: 30, right: 30, textAlign: 'center', fontSize: 7, color: '#888' },
+                      })
+                      const f = (n: number) => (n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' MUR'
+                      const socData = societes.find((x: any) => x.id === selectedSociete)
+                      const pLabel = getPeriodLabel()
+                      const achatsHT = facturesFournisseurLocal.reduce((sum: number, fac: any) => sum + (Number(fac.montant_ht) || 0), 0)
+                      const caHT = facturesClient.reduce((sum: number, fac: any) => sum + (Number(fac.montant_ht) || 0), 0)
+
+                      const R = ({ box, desc, val, bg }: { box: string; desc: string; val: string; bg?: string }) => (
+                        <V style={[s.row, bg ? { backgroundColor: bg } : {}]}><T style={[s.cb, { width: 35 }]}>{box}</T><T style={[s.c, { flex: 1 }]}>{desc}</T><T style={[s.cr, { width: 110 }]}>{val}</T></V>
+                      )
+
+                      const doc = (
+                        <Document>
+                          <PdfPage size="A4" style={s.page}>
+                            <T style={s.title}>MAURITIUS REVENUE AUTHORITY</T>
+                            <T style={s.sub}>VALUE ADDED TAX RETURN — Déclaration TVA</T>
+                            <T style={[s.sub, { marginBottom: 15 }]}>{socData?.nom || ''} — BRN: {socData?.brn || ''} — VAT: {socData?.numero_tva_mra || 'N/A'} — Période: {pLabel}</T>
+
+                            <T style={s.sec}>VAT COMPUTATION / CALCUL DE LA TVA</T>
+                            <V style={{ borderWidth: 1, borderColor: '#000' }}>
+                              <V style={s.hdr}><T style={[s.hdrCell, { width: 35 }]}>Box</T><T style={[s.hdrCell, { flex: 1 }]}>Description</T><T style={[s.hdrCell, { width: 110, textAlign: 'right' }]}>Montant (MUR)</T></V>
+                              <R box="1" desc="Taxable Supplies (HT)" val={f(caHT)} />
+                              <R box="2" desc="Output Tax (TVA sur ventes)" val={f(effectiveCollectee)} bg="#f9f9f9" />
+                              <R box="3" desc="Taxable Purchases (HT)" val={f(achatsHT)} />
+                              <R box="4" desc="Input Tax (TVA sur achats locaux)" val={f(effectiveDeductible)} bg="#f9f9f9" />
+                              {reverseChargeTVA > 0 && <R box="R5" desc={`Reverse Charge — Base: ${f(totalReverseChargeBase)} — Net: 0`} val={f(reverseChargeTVA)} bg="#fff8e1" />}
+                              <R box="5" desc="Crédit TVA reporté" val="0.00 MUR" />
+                              <R box="6" desc="Total TVA déductible (4+5)" val={f(effectiveDeductible)} bg="#f9f9f9" />
+                              <R box="7" desc="TVA nette (2-6)" val={f(Math.max(0, effectiveCollectee - effectiveDeductible))} bg="#fff3cd" />
+                              <R box="8" desc="TVA à payer" val={f(tvaAPayer)} />
+                              <R box="9" desc="Crédit TVA à reporter" val={f(creditTVA)} bg="#e8e8e8" />
+                            </V>
+
+                            {groupedLocalInvoices.length > 0 && (<>
+                              <T style={s.sec}>INPUT TAX — FOURNISSEURS LOCAUX</T>
+                              <V style={{ borderWidth: 1, borderColor: '#ccc' }}>
+                                {groupedLocalInvoices.map((g, i) => <V key={i} style={i % 2 === 0 ? s.row : s.rowAlt}><T style={[s.c, { flex: 1 }]}>{g.tiers}{g.count > 1 ? ` (×${g.count})` : ''}</T><T style={[s.cr, { width: 80 }]}>{f(g.totalTVA)}</T></V>)}
+                                <V style={s.rowTotal}><T style={[s.cb, { flex: 1 }]}>TOTAL</T><T style={[s.cr, { width: 80, fontWeight: 'bold' }]}>{f(effectiveDeductible)}</T></V>
+                              </V>
+                            </>)}
+
+                            <V style={{ marginTop: 25 }}>
+                              <T style={s.sec}>DÉCLARATION</T>
+                              <T style={{ fontSize: 8, marginBottom: 15 }}>I/We declare that the information is true, correct and complete.</T>
+                              <V style={s.row}><T style={[s.c, { flex: 1 }]}>Name / Nom: ____________________</T><T style={[s.c, { flex: 1 }]}>Signature: ____________________</T><T style={[s.c, { flex: 1 }]}>Date: ____________________</T></V>
+                            </V>
+
+                            <T style={s.footer}>{socData?.nom} — BRN: {socData?.brn} — Période: {pLabel} — Généré par LEXORA — MRA VAT Return</T>
+                          </PdfPage>
+                        </Document>
+                      )
+
+                      const blob = await pdf(doc).toBlob()
+                      const url = URL.createObjectURL(blob)
+                      const link = document.createElement('a')
+                      link.href = url
+                      link.download = `TVA_${(socData?.nom || 'Societe').replace(/\s+/g, '_')}_${pLabel.replace(/\s+/g, '_')}_MRA.pdf`
+                      document.body.appendChild(link)
+                      link.click()
+                      document.body.removeChild(link)
+                      URL.revokeObjectURL(url)
+                    } catch (err) {
+                      console.error('PDF export error:', err)
+                      alert('Erreur génération PDF')
+                    }
+                  }}>PDF (Déclaration MRA)</button>
                 </div>
               )}
             </div>
