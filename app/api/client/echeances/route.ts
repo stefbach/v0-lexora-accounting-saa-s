@@ -55,6 +55,7 @@ export async function POST(request: Request) {
       .eq('societe_id', societe_id).is('date_echeance', null)
       .not('statut', 'in', '("paye","annule")').not('document_id', 'is', null)
     if (facture_ids?.length > 0) extractQ = extractQ.in('id', facture_ids)
+    // Limit Claude calls to 20 per batch (avoid timeout), but total list available
     const { data: factures } = await extractQ.limit(20)
 
     if (!factures || factures.length === 0) {

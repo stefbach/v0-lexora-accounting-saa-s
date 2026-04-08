@@ -66,6 +66,7 @@ export default function EcheancesPage() {
   const [applying30j, setApplying30j] = useState(false)
   const [selectedFactures, setSelectedFactures] = useState<string[]>([])
   const [dayPopover, setDayPopover] = useState<{ date: string; events: any[] } | null>(null)
+  const [visibleCount, setVisibleCount] = useState(20)
   const [manualDesc, setManualDesc] = useState("")
   const [manualDate, setManualDate] = useState("")
   const [manualMontant, setManualMontant] = useState("")
@@ -671,7 +672,7 @@ export default function EcheancesPage() {
                 <TableHead>Tiers</TableHead><TableHead>Date facture</TableHead><TableHead className="text-right">Montant</TableHead><TableHead>Type</TableHead><TableHead>Action</TableHead>
               </TableRow></TableHeader>
               <TableBody>
-                {facturesSansDate.slice(0, 20).map((f: any) => {
+                {facturesSansDate.slice(0, visibleCount).map((f: any) => {
                   const suggestedDate = f.date_facture ? new Date(new Date(f.date_facture).getTime() + 30 * 86400000).toISOString().slice(0, 10) : ""
                   return (
                     <TableRow key={f.id}>
@@ -699,6 +700,20 @@ export default function EcheancesPage() {
               </TableBody>
             </Table>
           </CardContent>
+          {facturesSansDate.length > visibleCount && (
+            <div className="text-center py-3 border-t">
+              <p className="text-xs text-gray-500 mb-2">Affichage de {Math.min(visibleCount, facturesSansDate.length)} sur {facturesSansDate.length} factures</p>
+              <div className="flex justify-center gap-2">
+                <Button variant="outline" size="sm" className="text-xs" onClick={() => setVisibleCount(prev => prev + 20)}>Voir 20 de plus</Button>
+                <Button variant="ghost" size="sm" className="text-xs" onClick={() => setVisibleCount(facturesSansDate.length)}>Tout afficher ({facturesSansDate.length})</Button>
+              </div>
+            </div>
+          )}
+          {visibleCount >= facturesSansDate.length && facturesSansDate.length > 20 && (
+            <div className="text-center py-2 border-t">
+              <Button variant="ghost" size="sm" className="text-xs text-gray-400" onClick={() => setVisibleCount(20)}>Réduire la liste</Button>
+            </div>
+          )}
         </Card>
       )}
 
