@@ -223,9 +223,15 @@ export default function TVAPage() {
     return true
   })
 
-  // Separate client invoices (TVA collectee) and supplier invoices
-  const clientInvoices = invoices.filter((inv: any) => inv.type === "facture_client")
-  const supplierInvoices = invoices.filter((inv: any) => inv.type === "facture_fournisseur")
+  // Separate client invoices (TVA collectee) and supplier invoices — filtered by period
+  const { debut: pDebut, fin: pFin } = getPeriodDates()
+  const inPeriod = (inv: any) => {
+    const d = inv.date || inv.date_document || ''
+    if (!d) return true // include undated items
+    return d >= pDebut && d <= pFin
+  }
+  const clientInvoices = invoices.filter((inv: any) => inv.type === "facture_client" && inPeriod(inv))
+  const supplierInvoices = invoices.filter((inv: any) => inv.type === "facture_fournisseur" && inPeriod(inv))
 
   // Classify supplier invoices: local vs foreign
   // RULE: Only suppliers in the FOREIGN_SUPPLIERS list are foreign.
@@ -251,8 +257,8 @@ export default function TVAPage() {
     const groups: Record<string, { tiers: string; totalTVA: number; count: number }> = {}
     for (const item of items) {
       const raw = item[tiersField] || item.emetteur || item.destinataire || '—'
-      const key = raw.toLowerCase().split(/[—\-,]/)[0].trim().replace(/\s+(ltd|limited|sarl)\.?$/i, '').trim()
-      if (!groups[key]) groups[key] = { tiers: raw.split(/[—\-,]/)[0].trim(), totalTVA: 0, count: 0 }
+      const key = raw.toLowerCase().split(/[—,]/)[0].trim().replace(/\s+(ltd|limited|sarl)\.?$/i, '').trim()
+      if (!groups[key]) groups[key] = { tiers: raw.split(/[—,]/)[0].trim(), totalTVA: 0, count: 0 }
       groups[key].totalTVA += Number(item[tvaField]) || 0
       groups[key].count++
     }
@@ -278,9 +284,11 @@ export default function TVAPage() {
   )
   const reverseChargeTVA = totalReverseChargeBase * TVA_RATE
 
-  // Use factures table values as primary (most reliable), fallback to écritures
-  const effectiveCollectee = tvaCollecteeFactures || tvaCollectee || totalTvaCollecteeFromInvoices
-  const effectiveDeductible = tvaDeductibleFactures || tvaDeductible || totalTvaDeductibleLocale
+  // Factures table is ALWAYS the source of truth (already period-filtered by API)
+  // Only fallback to écritures if factures array is completely empty
+  const hasFacures = factures.length > 0
+  const effectiveCollectee = hasFacures ? tvaCollecteeFactures : (tvaCollectee || totalTvaCollecteeFromInvoices || 0)
+  const effectiveDeductible = hasFacures ? tvaDeductibleFactures : (tvaDeductible || totalTvaDeductibleLocale || 0)
   // TVA a payer = collectee - deductible locale (reverse charge nets to 0)
   const effectiveNette = effectiveCollectee - effectiveDeductible - creditReporte
   const tvaAPayer = Math.max(0, effectiveNette)
