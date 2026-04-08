@@ -62,7 +62,8 @@ export default function EcheancesPage() {
   // Manual entry dialog
   const [manualDialog, setManualDialog] = useState(false)
   const [extracting, setExtracting] = useState(false)
-  const [extractResult, setExtractResult] = useState<{ found: number; not_found: number; errors: number } | null>(null)
+  const [extractResult, setExtractResult] = useState<{ found: number; not_found: number } | null>(null)
+  const [progress, setProgress] = useState<{ current: number; total: number; currentFile: string; found: number; notFound: number } | null>(null)
   const [applying30j, setApplying30j] = useState(false)
   const [selectedFactures, setSelectedFactures] = useState<string[]>([])
   const [dayPopover, setDayPopover] = useState<{ date: string; events: any[] } | null>(null)
@@ -176,18 +177,33 @@ export default function EcheancesPage() {
   const handleExtractBatch = async () => {
     const socId = selectedSociete && selectedSociete !== "all" ? selectedSociete : societes[0]?.id
     if (!socId) return
+    const toProcess = selectedFactures.length > 0
+      ? facturesSansDate.filter((f: any) => selectedFactures.includes(f.id) && f.document_id)
+      : facturesSansDate.filter((f: any) => f.document_id)
+    if (toProcess.length === 0) { alert("Aucune facture avec document PDF à analyser"); return }
+
     setExtracting(true)
     setExtractResult(null)
-    try {
-      const res = await fetch("/api/client/echeances", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ societe_id: socId, facture_ids: selectedFactures.length > 0 ? selectedFactures : null }),
-      })
-      const json = await res.json()
-      setExtractResult({ found: json.found || 0, not_found: json.not_found || 0, errors: json.errors || 0 })
-      fetchData()
-    } catch { setExtractResult({ found: 0, not_found: 0, errors: 1 }) }
-    finally { setExtracting(false) }
+    let found = 0, notFound = 0
+
+    for (let i = 0; i < toProcess.length; i++) {
+      const f = toProcess[i]
+      setProgress({ current: i + 1, total: toProcess.length, currentFile: f.tiers || f.numero_facture || "Document", found, notFound })
+      try {
+        const res = await fetch("/api/client/echeances", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ societe_id: socId, action: "extract_one", facture_id: f.id }),
+        })
+        const json = await res.json()
+        if (json.found) found++; else notFound++
+      } catch { notFound++ }
+    }
+
+    setProgress(null)
+    setExtracting(false)
+    setExtractResult({ found, not_found: notFound })
+    setSelectedFactures([])
+    fetchData()
   }
 
   const handleApply30Days = async () => {
@@ -652,7 +668,7 @@ export default function EcheancesPage() {
               {selectedFactures.length > 0 && <span className="text-xs text-gray-500 mr-2">{selectedFactures.length} sélectionnée(s)</span>}
               <Button variant="outline" size="sm" onClick={handleExtractBatch} disabled={extracting} className="text-xs">
                 {extracting ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
-                {extracting ? "Analyse..." : "Lancer analyse échéances"}
+                {extracting && progress ? `Analyse... (${progress.current}/${progress.total})` : "Lancer analyse échéances"}
               </Button>
               <Button variant="outline" size="sm" onClick={handleApply30Days} disabled={applying30j} className="text-xs">
                 {applying30j ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
@@ -660,9 +676,28 @@ export default function EcheancesPage() {
               </Button>
             </div>
           </CardHeader>
-          {extractResult && (
-            <div className="px-4 pb-2 text-xs text-gray-600">
-              Résultat: {extractResult.found} échéance(s) trouvée(s), {extractResult.not_found} non trouvée(s){extractResult.errors > 0 ? `, ${extractResult.errors} erreur(s)` : ""}
+          {/* Progress bar during analysis */}
+          {progress && (
+            <div className="px-4 pb-3 space-y-2">
+              <div className="flex justify-between text-xs text-gray-600">
+                <span>Analyse en cours...</span>
+                <span>{progress.current}/{progress.total}</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div className="bg-blue-500 h-2 rounded-full transition-all duration-300" style={{ width: `${(progress.current / progress.total) * 100}%` }} />
+              </div>
+              <p className="text-xs text-gray-500 truncate">Analyse: {progress.currentFile}</p>
+              <p className="text-[10px] text-gray-400">{progress.found} trouvée(s) — {progress.notFound} sans date</p>
+            </div>
+          )}
+          {/* Final result summary */}
+          {extractResult && !progress && (
+            <div className="px-4 pb-3">
+              <div className={`p-3 rounded-lg text-sm ${extractResult.found > 0 ? "bg-green-50 border border-green-200 text-green-800" : "bg-gray-50 border border-gray-200 text-gray-600"}`}>
+                <p className="font-medium">{extractResult.found > 0 ? "Analyse terminée" : "Analyse terminée — aucune date trouvée"}</p>
+                <p className="text-xs mt-1">{extractResult.found} échéance(s) trouvée(s) — {extractResult.not_found} sans date explicite dans le PDF</p>
+                {extractResult.not_found > 0 && <p className="text-xs mt-1 text-gray-500">Utilisez &quot;Appliquer +30 jours&quot; pour les {extractResult.not_found} restante(s)</p>}
+              </div>
             </div>
           )}
           <CardContent className="p-0 overflow-x-auto">

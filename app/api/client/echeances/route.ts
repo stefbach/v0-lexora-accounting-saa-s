@@ -47,7 +47,57 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, updated })
     }
 
-    // Action: extract date_echeance from PDFs via Claude
+    // Action: extract date_echeance from ONE document via Claude
+    if (action === 'extract_one') {
+      const { facture_id } = body
+      if (!facture_id) return NextResponse.json({ error: 'facture_id requis' }, { status: 400 })
+
+      const { data: facture } = await supabase.from('factures').select('id, document_id').eq('id', facture_id).single()
+      if (!facture?.document_id) return NextResponse.json({ found: false, reason: 'no_document' })
+
+      const { data: doc } = await supabase.from('documents').select('storage_path, type_fichier').eq('id', facture.document_id).single()
+      if (!doc?.storage_path) return NextResponse.json({ found: false, reason: 'no_file' })
+
+      const { data: fileData } = await supabase.storage.from('documents').download(doc.storage_path)
+      if (!fileData) return NextResponse.json({ found: false, reason: 'download_failed' })
+
+      const buffer = Buffer.from(await fileData.arrayBuffer())
+      const base64 = buffer.toString('base64')
+      const isPdf = doc.type_fichier === 'pdf'
+      const isImage = ['jpeg', 'jpg', 'png'].includes(doc.type_fichier || '')
+
+      if (!isPdf && !isImage) return NextResponse.json({ found: false, reason: 'unsupported_type' })
+
+      const { default: Anthropic } = await import('@anthropic-ai/sdk')
+      const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
+
+      const mediaType = isPdf ? 'application/pdf' : (doc.type_fichier === 'png' ? 'image/png' : 'image/jpeg')
+      const contentType = isPdf ? 'document' : 'image'
+      const stream = anthropic.messages.stream({
+        model: CLAUDE_CONFIG.model, max_tokens: 256, temperature: 0,
+        messages: [{ role: 'user', content: [
+          { type: contentType as any, source: { type: 'base64', media_type: mediaType, data: base64 } },
+          { type: 'text', text: 'Find ONLY the due date or payment deadline on this invoice. Return ONLY JSON: {"date_echeance": "YYYY-MM-DD"} or {"date_echeance": null}' },
+        ] }],
+      })
+      const response = await stream.finalMessage()
+      const text = response.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
+      const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
+
+      let parsed: any = null
+      try { parsed = JSON.parse(cleaned) } catch {
+        const match = cleaned.match(/\{[\s\S]*\}/)
+        if (match) try { parsed = JSON.parse(match[0]) } catch {}
+      }
+
+      if (parsed?.date_echeance) {
+        await supabase.from('factures').update({ date_echeance: parsed.date_echeance }).eq('id', facture_id)
+        return NextResponse.json({ found: true, date_echeance: parsed.date_echeance })
+      }
+      return NextResponse.json({ found: false })
+    }
+
+    // Action: batch extract date_echeance from PDFs via Claude (legacy)
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
 
     // Get factures without date_echeance that have a linked document
