@@ -214,6 +214,8 @@ export async function POST(request: Request) {
       let counts = { matched: 0, interne: 0, frais_bancaires: 0, salaire_bulk: 0, mra: 0, salaire_individuel: 0, propose: 0, not_matched: 0, total: 0 }
       const matchesList: any[] = []
 
+      console.log('[rapprochement] Starting auto_rapprocher:', { societe_id, releves: releves.length, ecritures: ecritures.length, factures: factures.length, societeNames, date_debut, date_fin })
+
       for (const releve of releves) {
         const txs: any[] = releve.transactions_json || []
         const releveDevise = compteDeviseMap[releve.compte_bancaire_id] || 'MUR'
@@ -445,7 +447,7 @@ export async function POST(request: Request) {
             }
           }
 
-          // Strategy 5: Match Bach/associé transfers
+          // Strategy 5: Match associé transfers
           if (!matched && (ccMouvements || []).length > 0) {
             const txNorm = normalizeTiers(tx.libelle || '')
             for (const cc of ccComptes || []) {
@@ -476,6 +478,8 @@ export async function POST(request: Request) {
             .eq('id', releve.id)
         }
       }
+
+      console.log('[rapprochement] Result:', counts)
 
       return NextResponse.json({
         matched: counts.matched, interne: counts.interne, frais_bancaires: counts.frais_bancaires,

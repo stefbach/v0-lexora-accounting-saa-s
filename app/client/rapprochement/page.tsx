@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -192,7 +192,7 @@ export default function ClientRapprochementPage() {
 
   const transactions = allTransactions.filter((t: any) => {
     if (selectedMois !== null && t.date) { if (t.date.substring(0, 7) !== selectedMois) return false }
-    if (selectedCompte !== "all" && t.compte_bancaire_id) { if (String(t.compte_bancaire_id) !== selectedCompte && t.banque !== selectedCompte) return false }
+    if (selectedCompte !== "all" && t.compte_bancaire_id) { if (String(t.compte_bancaire_id) !== selectedCompte) return false }
     if (periodDebut && t.date && t.date < periodDebut) return false
     if (periodFin && t.date && t.date > periodFin) return false
     return true
@@ -210,8 +210,20 @@ export default function ClientRapprochementPage() {
     return sortDir === 'asc' ? aAmt - bAmt : bAmt - aAmt
   })
 
-  // Bank comptes for selector
-  const uniqueBanques = Array.from(new Set(allTransactions.map((t: any) => t.banque).filter(Boolean))).sort()
+  // Bank comptes for selector (with last 4 digits)
+  const uniqueComptes = useMemo(() => {
+    const compteMap = new Map<string, { id: string; label: string }>()
+    allTransactions.forEach((t: any) => {
+      if (t.compte_bancaire_id && !compteMap.has(t.compte_bancaire_id)) {
+        const devise = t.devise || 'MUR'
+        const banque = t.banque || '—'
+        const numero = t.numero_compte || t.compte_bancaire_id
+        const last4 = numero.length > 4 ? `•${numero.slice(-4)}` : ''
+        compteMap.set(t.compte_bancaire_id, { id: t.compte_bancaire_id, label: `${banque} ${devise} ${last4}`.trim() })
+      }
+    })
+    return Array.from(compteMap.values())
+  }, [allTransactions])
 
   // Lettrage computed values (must be AFTER ecritures is defined)
   const ecritures401 = ecritures.filter((e: any) => e.compte?.startsWith('401') && !e.lettre)
@@ -307,30 +319,29 @@ export default function ClientRapprochementPage() {
         </div>
       </div>
 
-      {/* Month navigator + Compte selector */}
+      {/* Filters row: Month + Compte + Période */}
       <div className="flex flex-wrap items-center gap-3">
         <MonthPicker value={selectedMois} onChange={setSelectedMois} />
-        {uniqueBanques.length > 1 && (
+        {uniqueComptes.length > 0 && (
           <Select value={selectedCompte} onValueChange={setSelectedCompte}>
-            <SelectTrigger className="w-[180px] h-8"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-[200px] h-8"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tous les comptes</SelectItem>
-              {uniqueBanques.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+              {uniqueComptes.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>)}
             </SelectContent>
           </Select>
         )}
-      </div>
-
-      {/* Period filter */}
-      <div className="flex items-center gap-3 no-print">
-        <Select value={selectedPeriode} onValueChange={setSelectedPeriode}>
-          <SelectTrigger className="w-[200px] h-8"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="2025-2026">Exercice 2025-2026</SelectItem>
-            <SelectItem value="2024-2025">Exercice 2024-2025</SelectItem>
-            <SelectItem value="tout">Tout</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-500 whitespace-nowrap">Période :</span>
+          <Select value={selectedPeriode} onValueChange={setSelectedPeriode}>
+            <SelectTrigger className="w-[200px] h-8"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="2025-2026">Exercice 2025-2026</SelectItem>
+              <SelectItem value="2024-2025">Exercice 2024-2025</SelectItem>
+              <SelectItem value="tout">Tout</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* KPIs */}
@@ -695,29 +706,34 @@ export default function ClientRapprochementPage() {
                 </div>
               )}
 
-              {/* Bach fallback suggestion */}
-              <div className="border-t pt-4">
-                <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
-                  <p className="text-sm font-medium text-purple-800 flex items-center gap-2">
-                    <Users className="w-4 h-4" />Assigner au compte courant de STEPHANE BACH ?
-                  </p>
-                  <p className="text-xs text-purple-600 mt-1">
-                    Si cette opération a été payée par l&apos;associé avec ses fonds personnels
-                  </p>
-                  <Button size="sm" className="mt-2 bg-purple-600 hover:bg-purple-700 text-white" onClick={() => {
-                    setPayeParNom("STEPHANE BACH")
-                    setPayeParType("associe")
-                    if (factures.length > 0) {
-                      // Find closest facture match
-                      const txAmount = linkDialog.debit > 0 ? linkDialog.debit : linkDialog.credit
-                      const closest = factures.sort((a: any, b: any) => Math.abs((Number(a.montant_ttc) || 0) - txAmount) - Math.abs((Number(b.montant_ttc) || 0) - txAmount))[0]
-                      if (closest) handlePayeParAssocie(closest)
-                    }
-                  }}>
-                    Assigner à Bach
-                  </Button>
+              {/* Associé fallback suggestion */}
+              {associes.length > 0 && (
+                <div className="border-t pt-4">
+                  <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                    <p className="text-sm font-medium text-purple-800 flex items-center gap-2">
+                      <Users className="w-4 h-4" />Assigner au compte courant associé ?
+                    </p>
+                    <p className="text-xs text-purple-600 mt-1">
+                      Si cette opération a été payée par un associé avec ses fonds personnels
+                    </p>
+                    <div className="flex gap-2 mt-2">
+                      {associes.slice(0, 3).map((a: any) => (
+                        <Button key={a.id} size="sm" className="bg-purple-600 hover:bg-purple-700 text-white" onClick={() => {
+                          setPayeParNom(a.nom)
+                          setPayeParType(a.type || "associe")
+                          if (factures.length > 0) {
+                            const txAmount = linkDialog.debit > 0 ? linkDialog.debit : linkDialog.credit
+                            const closest = [...factures].sort((fa: any, fb: any) => Math.abs((Number(fa.montant_ttc) || 0) - txAmount) - Math.abs((Number(fb.montant_ttc) || 0) - txAmount))[0]
+                            if (closest) handlePayeParAssocie(closest)
+                          }
+                        }}>
+                          {a.nom}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
         </DialogContent>
