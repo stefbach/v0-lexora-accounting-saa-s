@@ -49,7 +49,7 @@ export default function ClientRapprochementPage() {
   const [dialogTab, setDialogTab] = useState<"factures" | "ecritures" | "bach">("factures")
   const [sortField, setSortField] = useState<'date' | 'amount'>('date')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
-  const [selectedPeriode, setSelectedPeriode] = useState('tout')
+  const [selectedPeriode, setSelectedPeriode] = useState('2025-2026')
   const [associes, setAssocies] = useState<any[]>([])
 
   // Get sociétés
@@ -196,6 +196,8 @@ export default function ClientRapprochementPage() {
     if (selectedCompte !== "all" && t.compte_bancaire_id) { if (String(t.compte_bancaire_id) !== selectedCompte) return false }
     if (periodDebut && t.date && t.date < periodDebut) return false
     if (periodFin && t.date && t.date > periodFin) return false
+    // If period selected but transaction has no date, exclude it
+    if ((periodDebut || periodFin) && !t.date) return false
     return true
   })
   const matched = transactions.filter((t: any) => t.statut === 'rapproche' || t.facture_id || t.ecriture_id || t.lettre)

@@ -345,6 +345,58 @@ export async function POST(request: Request) {
             } else {
               matchConfidence = 'reference'
             }
+
+            // 1c. Match by écriture 401 net amount (handles TDS deductions)
+            if (!matchedFacture) {
+              const txAmountMUR = toMUR(txAmount, releveDevise)
+              for (const f of factures) {
+                const typeMatch = isCredit ? f.type_facture === 'client' : f.type_facture === 'fournisseur'
+                if (!typeMatch) continue
+                const tiersScore = wordOverlap(tx.tiers_detecte || tx.tiers || (tx.libelle || ''), f.tiers || '')
+                if (tiersScore < 0.3) continue
+                // Find matching écriture 401/411 by tiers name + date proximity
+                const compte401 = isCredit ? '411' : '401'
+                const ecr = ecritures.find(e => {
+                  if (!e.compte?.startsWith(compte401.substring(0, 2))) return false
+                  const eAmt = isCredit ? Number(e.debit) || 0 : Number(e.credit) || 0
+                  if (eAmt === 0) return false
+                  const eAmtMUR = toMUR(eAmt, releveDevise)
+                  return Math.abs(txAmountMUR - eAmtMUR) / eAmtMUR < 0.02 &&
+                    wordOverlap(e.libelle || '', f.tiers || '') >= 0.3
+                })
+                if (ecr) { matchedFacture = f; matchConfidence = 'tiers_and_amount'; break }
+              }
+            }
+
+            // 1d. Grouped matching: 1 payment = N factures from same tiers in same month
+            if (!matchedFacture) {
+              const txAmountMUR = toMUR(txAmount, releveDevise)
+              const txMonth = tx.date?.substring(0, 7) || ''
+              if (txMonth) {
+                const tiersFactures = factures.filter(f => {
+                  const typeMatch = isCredit ? f.type_facture === 'client' : f.type_facture === 'fournisseur'
+                  if (!typeMatch) return false
+                  return wordOverlap(tx.tiers_detecte || tx.tiers || (tx.libelle || ''), f.tiers || '') >= 0.3 &&
+                    (f.date_facture || '').substring(0, 7) === txMonth
+                })
+                if (tiersFactures.length > 1) {
+                  const sumMUR = tiersFactures.reduce((s, f) => s + (Number(f.montant_mur) || toMUR(Number(f.montant_ttc) || 0, f.devise || 'MUR')), 0)
+                  if (sumMUR > 0 && Math.abs(txAmountMUR - sumMUR) / sumMUR < 0.05) {
+                    // Grouped match found
+                    const code = `RG${String(counts.matched + 1).padStart(3, '0')}`
+                    const isHighConfidence = true
+                    updatedTxs[i] = { ...tx, facture_ids: tiersFactures.map(f => f.id), facture_id: tiersFactures[0].id, lettre: code, statut: 'rapproche', matched_type: 'facture_groupee', match_confidence: 'grouped', note: `${tiersFactures.length} factures ${(tx.tiers_detecte || tx.tiers || '').substring(0, 20)}` }
+                    for (const gf of tiersFactures) {
+                      await supabase.from('factures').update({ statut: 'paye' }).eq('id', gf.id)
+                      factures = factures.filter(f => f.id !== gf.id)
+                    }
+                    matchesList.push({ type: 'facture_groupee', transaction: tx.libelle, facture: `${tiersFactures.length} factures`, montant: txAmount })
+                    matched = true; changed = true; counts.matched++
+                  }
+                }
+              }
+            }
+
             if (matchedFacture) {
               const code = `R${String(counts.matched + 1).padStart(3, '0')}`
               const isHighConfidence = matchConfidence === 'reference' || matchConfidence === 'tiers_and_amount'
