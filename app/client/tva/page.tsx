@@ -264,9 +264,10 @@ export default function TVAPage() {
     }
     return Object.values(groups).sort((a, b) => b.totalTVA - a.totalTVA)
   }
-  const groupedClientInvoices = groupByTiers(clientInvoices, 'destinataire', 'montant_tva_mur')
-  const groupedLocalInvoices = groupByTiers(validLocalInvoices, 'emetteur', 'montant_tva_mur')
-  const groupedForeignInvoices = groupByTiers(foreignSupplierInvoices, 'emetteur', 'montant_ht_mur')
+  // Group from factures table (correct names) — NOT from extractedInvoices/OCR
+  const groupedClientInvoices = groupByTiers(facturesClient, 'tiers', 'montant_tva')
+  const groupedLocalInvoices = groupByTiers(facturesFournisseurLocal, 'tiers', 'montant_tva')
+  const groupedForeignInvoices = groupByTiers(reverseChargeFacts, 'tiers', 'montant_ht')
 
   // TVA collectee from client invoices
   const totalTvaCollecteeFromInvoices = clientInvoices.reduce(
@@ -279,8 +280,8 @@ export default function TVAPage() {
   )
 
   // Reverse charge on foreign invoices: output + input = net 0
-  const totalReverseChargeBase = foreignSupplierInvoices.reduce(
-    (s: number, inv: any) => s + (inv.montant_ht_mur ?? inv.montant_ht ?? 0), 0
+  const totalReverseChargeBase = reverseChargeFacts.reduce(
+    (s: number, f: any) => s + (Number(f.montant_ht) || 0), 0
   )
   const reverseChargeTVA = totalReverseChargeBase * TVA_RATE
 
@@ -491,14 +492,14 @@ export default function TVAPage() {
       </div>
 
       {/* Reverse Charge Warning */}
-      {foreignSupplierInvoices.length > 0 && (
+      {reverseChargeFacts.length > 0 && (
         <Card className="border-2 border-amber-300 bg-amber-50">
           <CardContent className="py-4">
             <div className="flex items-start gap-3">
               <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
               <div>
                 <p className="text-sm font-semibold text-amber-800">
-                  Reverse Charge (R5) applicable sur {foreignSupplierInvoices.length} facture(s) &eacute;trang&egrave;re(s)
+                  Reverse Charge (R5) applicable sur {reverseChargeFacts.length} facture(s) &eacute;trang&egrave;re(s)
                 </p>
                 <p className="text-xs text-amber-700 mt-1">
                   Les factures de fournisseurs &eacute;trangers (sans num&eacute;ro TVA MRA) sont soumises au m&eacute;canisme de Reverse Charge :
@@ -697,18 +698,18 @@ export default function TVAPage() {
         </Card>
 
         {/* Reverse Charge (fournisseurs etrangers) */}
-        <Card className={foreignSupplierInvoices.length > 0 ? "border-amber-200" : ""}>
+        <Card className={reverseChargeFacts.length > 0 ? "border-amber-200" : ""}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base" style={{ color: NAVY }}>
               <Globe className="h-5 w-5" style={{ color: "#F59E0B" }} />
-              Reverse Charge R5 ({foreignSupplierInvoices.length})
+              Reverse Charge R5 ({reverseChargeFacts.length})
             </CardTitle>
             <p className="text-xs text-muted-foreground">
               Fournisseurs &eacute;trangers — TVA net = 0
             </p>
           </CardHeader>
           <CardContent>
-            {foreignSupplierInvoices.length > 0 ? (
+            {reverseChargeFacts.length > 0 ? (
               <>
                 <Table>
                   <TableHeader>
@@ -729,11 +730,11 @@ export default function TVAPage() {
                         </TableRow>
                       )
                     })}
-                    {foreignSupplierInvoices.length > 8 && (
+                    {reverseChargeFacts.length > 8 && (
                       <TableRow>
                         <TableCell colSpan={3} className="text-center">
                           <Button variant="ghost" size="sm" className="text-xs" onClick={() => setShowAllForeign(!showAllForeign)}>
-                            {showAllForeign ? "Voir moins ↑" : `Voir les ${foreignSupplierInvoices.length - 8} autres →`}
+                            {showAllForeign ? "Voir moins ↑" : `Voir les ${reverseChargeFacts.length - 8} autres →`}
                           </Button>
                         </TableCell>
                       </TableRow>
