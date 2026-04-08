@@ -215,21 +215,30 @@ export async function POST(request: Request) {
       let counts = { matched: 0, interne: 0, frais_bancaires: 0, salaire_bulk: 0, mra: 0, salaire_individuel: 0, propose: 0, not_matched: 0, total: 0 }
       const matchesList: any[] = []
 
-      console.log('[rapprochement] Starting auto_rapprocher:', { societe_id, releves: releves.length, ecritures: ecritures.length, factures: factures.length, societeNames, date_debut, date_fin })
+      // Also get ALL société names (not just current) for internal transfer detection
+      const { data: allUserSocData } = await supabase.from('dossiers').select('societe_id').eq('client_id', (await supabase.from('dossiers').select('client_id').eq('societe_id', societe_id).limit(1).maybeSingle()).data?.client_id || '')
+      const allSocIds = [...new Set([societe_id, ...(allUserSocData || []).map((d: any) => d.societe_id)])].filter(Boolean)
+      if (allSocIds.length > 1) {
+        const { data: otherSocs } = await supabase.from('societes').select('nom, aliases').in('id', allSocIds)
+        const otherNames = (otherSocs || []).flatMap(s => [s.nom, ...(s.aliases || [])]).map(n => (n || '').toLowerCase()).filter(Boolean)
+        societeNames.push(...otherNames.filter(n => !societeNames.includes(n)))
+      }
+
+      console.log('[rapprochement] Starting:', { societe_id, releves: releves.length, ecritures: ecritures.length, factures: factures.length, societeNames, date_debut, date_fin })
 
       for (const releve of releves) {
         const txs: any[] = releve.transactions_json || []
         const releveDevise = compteDeviseMap[releve.compte_bancaire_id] || 'MUR'
         const updatedTxs = [...txs]
         let changed = false
+        let skippedCount = 0
 
         for (let i = 0; i < updatedTxs.length; i++) {
           const tx = updatedTxs[i]
           // Skip only if fully processed: has matched_type AND (rapproche or interne)
-          // Re-process transactions that are 'rapproche' but have no matched_type (legacy)
-          if (tx.matched_type && (tx.statut === 'rapproche' || tx.statut === 'interne')) continue
+          if (tx.matched_type && (tx.statut === 'rapproche' || tx.statut === 'interne')) { skippedCount++; continue }
           // Skip manually lettered transactions
-          if (tx.lettre && tx.facture_id) continue
+          if (tx.lettre && tx.facture_id) { skippedCount++; continue }
 
           // Period filter
           if (date_debut && tx.date && tx.date < date_debut) continue
@@ -475,6 +484,8 @@ export async function POST(request: Request) {
           if (!matched && !classified) counts.not_matched++
           if (matched) { changed = true }
         }
+
+        console.log(`[rapprochement] Releve ${releve.id}: ${txs.length} txs, ${skippedCount} skipped, changed=${changed}`)
 
         // Always save if any transaction was modified
         if (changed) {

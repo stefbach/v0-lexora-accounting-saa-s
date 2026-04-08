@@ -74,7 +74,7 @@ export default function ClientRapprochementPage() {
         fetch(`/api/comptable/compte-courant?societe_id=${societeId}`).catch(() => null),
       ])
       setData(await res.json())
-      if (ccRes?.ok) { const ccData = await ccRes.json(); setAssocies(ccData.comptes || []) }
+      if (ccRes?.ok) { const ccData = await ccRes.json(); console.log('[rapprochement] associes loaded:', ccData.comptes?.length || 0); setAssocies(ccData.comptes || []) }
     } catch { setData(null) }
     finally { setLoading(false) }
   }, [societeId])
@@ -98,6 +98,7 @@ export default function ClientRapprochementPage() {
       const d = await res.json()
       await new Promise(r => setTimeout(r, 500))
       setAutoStep("")
+      console.log('[rapprochement] auto_rapprocher response:', d)
       setAutoResult({ matched: d.matched || 0, total: d.total || 0, interne: d.interne || 0, frais_bancaires: d.frais_bancaires || 0, salaire_bulk: d.salaire_bulk || 0, mra: d.mra || 0, not_matched: d.not_matched || 0, total_classified: d.total_classified || 0, matches: d.matches || [] })
       load()
     } catch { setAutoStep(""); setAutoResult({ matched: 0, total: 0, interne: 0, frais_bancaires: 0, salaire_bulk: 0, mra: 0, not_matched: 0, total_classified: 0, matches: [] }) }
