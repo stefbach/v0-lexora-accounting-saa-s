@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
 function getAdminClient() {
@@ -8,9 +9,21 @@ function getAdminClient() {
   return createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
+async function requireAdmin() {
+  const supabaseAuth = await createServerClient()
+  const { data: { user }, error: authError } = await supabaseAuth.auth.getUser()
+  if (!user || authError) return null
+  const { data: profile } = await supabaseAuth.from('profiles').select('role').eq('id', user.id).single()
+  if (!profile || !['admin', 'super_admin'].includes(profile.role)) return null
+  return user
+}
+
 // GET — List all dossiers with joined data
 export async function GET() {
   try {
+    const adminUser = await requireAdmin()
+    if (!adminUser) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
     const supabase = getAdminClient()
 
     // Simple select without FK joins
@@ -53,6 +66,9 @@ export async function GET() {
 // POST — Create a dossier (link client ↔ société ↔ comptable)
 export async function POST(request: NextRequest) {
   try {
+    const adminUser = await requireAdmin()
+    if (!adminUser) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
     const { client_id, societe_id, comptable_id } = await request.json()
 
     if (!client_id || !societe_id) {

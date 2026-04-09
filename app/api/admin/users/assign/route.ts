@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
 function getAdminClient() {
@@ -15,6 +16,12 @@ function getAdminClient() {
 // POST — Assign a client to a comptable
 export async function POST(request: NextRequest) {
   try {
+    const supabaseAuth = await createServerClient()
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser()
+    if (!user || authError) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const { data: profile } = await supabaseAuth.from('profiles').select('role').eq('id', user.id).single()
+    if (!profile || !['admin', 'super_admin'].includes(profile.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
     const { client_id, comptable_id } = await request.json()
 
     if (!client_id) {

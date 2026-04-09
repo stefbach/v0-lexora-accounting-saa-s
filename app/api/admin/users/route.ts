@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
 function getAdminClient() {
@@ -7,10 +8,22 @@ function getAdminClient() {
   return createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
+async function requireAdmin() {
+  const supabaseAuth = await createServerClient()
+  const { data: { user }, error: authError } = await supabaseAuth.auth.getUser()
+  if (!user || authError) return null
+  const { data: profile } = await supabaseAuth.from('profiles').select('role').eq('id', user.id).single()
+  if (!profile || !['admin', 'super_admin'].includes(profile.role)) return null
+  return user
+}
+
 const VALID_ROLES = ['admin', 'super_admin', 'client_admin', 'client_user', 'client_assistant', 'comptable', 'comptable_dedie', 'rh', 'juridique', 'employe', 'manager', 'direction']
 
 export async function GET(request: NextRequest) {
   try {
+    const adminUser = await requireAdmin()
+    if (!adminUser) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
     const supabase = getAdminClient()
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get('user_id')
@@ -49,6 +62,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const adminUser = await requireAdmin()
+    if (!adminUser) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
     const body = await request.json()
     const { email, password, full_name, role, phone, societe_id, comptable_id, modules_utilisateur } = body
 
@@ -131,6 +147,9 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
+    const adminUser = await requireAdmin()
+    if (!adminUser) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
     const body = await request.json()
     const { user_id, role, actif, full_name, email, phone, societe_id, societe_ids, modules_utilisateur } = body
     if (!user_id) return NextResponse.json({ error: 'user_id requis' }, { status: 400 })

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
 function getAdminClient() {
@@ -8,9 +9,21 @@ function getAdminClient() {
   return createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
+async function requireAdmin() {
+  const supabaseAuth = await createServerClient()
+  const { data: { user }, error: authError } = await supabaseAuth.auth.getUser()
+  if (!user || authError) return null
+  const { data: profile } = await supabaseAuth.from('profiles').select('role').eq('id', user.id).single()
+  if (!profile || !['admin', 'super_admin'].includes(profile.role)) return null
+  return user
+}
+
 // GET — List all plans + all societes with their current plan
 export async function GET() {
   try {
+    const adminUser = await requireAdmin()
+    if (!adminUser) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
     const supabase = getAdminClient()
 
     const [plansRes, societesRes] = await Promise.all([
@@ -70,6 +83,9 @@ export async function GET() {
 // POST — Various actions for service plans
 export async function POST(request: NextRequest) {
   try {
+    const adminUser = await requireAdmin()
+    if (!adminUser) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
     const body = await request.json()
     const { action } = body
     const supabase = getAdminClient()
