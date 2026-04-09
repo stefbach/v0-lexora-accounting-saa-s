@@ -210,10 +210,11 @@ export async function GET(request: Request) {
       soldesProgressifs[e.id] = soldesParCompte[e.numero_compte]
     }
 
-    // Pagination
+    // Pagination (limit=0 means no pagination — used for PDF export)
     const total = allEntries.length
-    const pages = Math.ceil(total / limit)
-    const pagedEntries = allEntries.slice(offset, offset + limit).map(e => ({
+    const noPagination = limit === 0
+    const pages = noPagination ? 1 : Math.ceil(total / limit)
+    const pagedEntries = (noPagination ? allEntries : allEntries.slice(offset, offset + limit)).map(e => ({
       ...e, solde_progressif: soldesProgressifs[e.id] ?? 0,
     }))
 

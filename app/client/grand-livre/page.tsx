@@ -129,18 +129,35 @@ export default function ClientGrandLivrePage() {
   }
 
   const exportPDF = async () => {
-    if (!ecritures.length || pdfLoading) return
+    if (!selectedSociete || pdfLoading) return
     setPdfLoading(true)
     try {
+      // Fetch ALL entries (no pagination) for the PDF
+      const params = new URLSearchParams({ societe_id: selectedSociete, limit: "0" })
+      if (compteDebut) params.set("compte_debut", compteDebut)
+      if (compteFin) params.set("compte_fin", compteFin)
+      if (dateDebut) params.set("date_debut", dateDebut)
+      if (dateFin) params.set("date_fin", dateFin)
+      if (journal && journal !== "all") params.set("journal", journal)
+      if (exercice) params.set("exercice", exercice)
+      const res = await fetch(`/api/comptable/grand-livre?${params}`)
+      const pdfData = await res.json()
+      const allPdfEcritures = pdfData?.ecritures || []
+
+      if (allPdfEcritures.length === 0) {
+        setPdfLoading(false)
+        return
+      }
+
       const { pdf } = await import('@react-pdf/renderer')
       const { GrandLivrePDF } = await import('@/components/pdf/GrandLivrePDF')
       const socData = societes.find(s => s.id === selectedSociete)
       const blob = await pdf(
         <GrandLivrePDF
           societe={socData}
-          dateDebut={dateDebut}
-          dateFin={dateFin}
-          ecritures={ecritures}
+          dateDebut={dateDebut || pdfData?.exercice ? `${pdfData.exercice?.split('-')[0]}-07-01` : ''}
+          dateFin={dateFin || pdfData?.exercice ? `${pdfData.exercice?.split('-')[1]}-06-30` : ''}
+          ecritures={allPdfEcritures}
           compteNames={COMPTE_NAMES}
         />
       ).toBlob()
@@ -171,7 +188,7 @@ export default function ClientGrandLivrePage() {
           <Button variant="outline" size="sm" onClick={exportCSV} disabled={!ecritures.length}>
             <Download className="w-4 h-4 mr-2" />CSV
           </Button>
-          <Button variant="outline" size="sm" onClick={exportPDF} disabled={!ecritures.length || pdfLoading}>
+          <Button variant="outline" size="sm" onClick={exportPDF} disabled={!selectedSociete || pdfLoading}>
             {pdfLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileDown className="w-4 h-4 mr-2" />}PDF
           </Button>
         </div>
