@@ -176,27 +176,36 @@ export function GrandLivrePDF({ societe, dateDebut, dateFin, ecritures, compteNa
             <Text style={s.title}>GRAND LIVRE</Text>
             <Text style={s.sub}>General Ledger — {societe?.nom || '—'}</Text>
 
-            <View style={{ flexDirection: 'row', marginBottom: 24, marginTop: 8 }}>
-              <View style={{ flex: 2, paddingRight: 8 }}>
-                <Text style={{ fontSize: 8, fontWeight: 'bold', color: '#666' }}>Société</Text>
-                <View style={{ marginBottom: 4 }}><Text style={{ fontSize: 9 }}>{societe?.nom || '—'}</Text></View>
-                <Text style={{ fontSize: 8, fontWeight: 'bold', color: '#666' }}>BRN</Text>
+            <View style={{
+              flexDirection: 'row',
+              marginBottom: 20,
+              marginTop: 10,
+              borderBottomWidth: 1,
+              borderBottomColor: '#cccccc',
+              paddingBottom: 10,
+            }}>
+              <View style={{ flex: 4 }}>
+                <Text style={{ fontSize: 7, color: '#888888', marginBottom: 2 }}>SOCIÉTÉ</Text>
+                <Text style={{ fontSize: 9, marginBottom: 6 }}>{societe?.nom || '—'}</Text>
+                <Text style={{ fontSize: 7, color: '#888888', marginBottom: 2 }}>BRN</Text>
                 <Text style={{ fontSize: 9 }}>{societe?.brn || '—'}</Text>
               </View>
-              <View style={{ flex: 2, paddingRight: 8 }}>
-                <Text style={{ fontSize: 8, fontWeight: 'bold', color: '#666' }}>Période</Text>
-                <View style={{ marginBottom: 4 }}><Text style={{ fontSize: 9 }}>{periodeLabel}</Text></View>
-                <Text style={{ fontSize: 8, fontWeight: 'bold', color: '#666' }}>Généré le</Text>
+              <View style={{ flex: 4 }}>
+                <Text style={{ fontSize: 7, color: '#888888', marginBottom: 2 }}>PÉRIODE</Text>
+                <Text style={{ fontSize: 9, marginBottom: 6 }}>{periodeLabel}</Text>
+                <Text style={{ fontSize: 7, color: '#888888', marginBottom: 2 }}>GÉNÉRÉ LE</Text>
                 <Text style={{ fontSize: 9 }}>{generatedDate}</Text>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 8, fontWeight: 'bold', color: '#666' }}>Comptes</Text>
-                <View style={{ marginBottom: 4 }}><Text style={{ fontSize: 9 }}>{groups.length}</Text></View>
-                <Text style={{ fontSize: 8, fontWeight: 'bold', color: '#666' }}>Écritures</Text>
+              <View style={{ flex: 2 }}>
+                <Text style={{ fontSize: 7, color: '#888888', marginBottom: 2 }}>COMPTES</Text>
+                <Text style={{ fontSize: 9, marginBottom: 6 }}>{groups.length}</Text>
+                <Text style={{ fontSize: 7, color: '#888888', marginBottom: 2 }}>ÉCRITURES</Text>
                 <Text style={{ fontSize: 9 }}>{ecritures.length}</Text>
               </View>
             </View>
           </>)}
+
+          <View style={{ marginTop: 12 }} />
 
           {/* Account groups */}
           {pageGroups.map((group) => (
