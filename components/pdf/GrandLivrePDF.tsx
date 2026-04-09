@@ -3,12 +3,13 @@ import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
 const s = StyleSheet.create({
   page: { padding: 30, fontFamily: 'Helvetica', fontSize: 8, color: '#000' },
   title: { fontSize: 13, fontWeight: 'bold', textAlign: 'center', marginBottom: 2 },
-  sub: { fontSize: 9, textAlign: 'center', marginBottom: 8, color: '#444' },
-  infoRow: { flexDirection: 'row', marginBottom: 10 },
-  infoBox: { width: '33%', borderWidth: 1, borderColor: '#ccc', padding: 5, backgroundColor: '#fafafa', marginRight: 4 },
-  infoBoxLast: { width: '33%', borderWidth: 1, borderColor: '#ccc', padding: 5, backgroundColor: '#fafafa' },
-  infoLbl: { fontSize: 7, color: '#666', marginBottom: 1 },
-  infoVal: { fontSize: 9, fontWeight: 'bold' },
+  sub: { fontSize: 9, textAlign: 'center', marginBottom: 10, color: '#444' },
+  hdrBlock: { flexDirection: 'row', marginBottom: 20 },
+  hdrCol1: { width: '40%' },
+  hdrCol2: { width: '30%' },
+  hdrCol3: { width: '30%' },
+  hdrLbl: { fontSize: 7, fontWeight: 'bold', color: '#2c3e50', marginTop: 4 },
+  hdrVal: { fontSize: 9, marginBottom: 2 },
   secHdr: { backgroundColor: '#2c3e50', padding: 4, marginTop: 8, marginBottom: 0 },
   secTxt: { color: '#fff', fontSize: 8, fontWeight: 'bold' },
   table: { width: '100%', borderWidth: 0.5, borderColor: '#999', marginBottom: 6 },
@@ -17,7 +18,7 @@ const s = StyleSheet.create({
   rowAlt: { flexDirection: 'row', backgroundColor: '#f8f8f8', borderBottomWidth: 0.3, borderBottomColor: '#ccc', minHeight: 14 },
   rowTotal: { flexDirection: 'row', backgroundColor: '#2c3e50', minHeight: 16 },
   rowGrandTotal: { flexDirection: 'row', backgroundColor: '#1a252f', minHeight: 18 },
-  // Column widths as percentages: Date 8%, Jnl 5%, Pièce 14%, Libellé 35%, Lettre 6%, Débit 11%, Crédit 11%, Solde 10%
+  // Column widths: Date 8%, Jnl 5%, Pièce 14%, Libellé 35%, Lettre 6%, Débit 11%, Crédit 11%, Solde 10%
   cDate: { width: '8%', padding: 2, borderRightWidth: 0.3, borderRightColor: '#ddd', justifyContent: 'center' },
   cJournal: { width: '5%', padding: 2, borderRightWidth: 0.3, borderRightColor: '#ddd', justifyContent: 'center' },
   cPiece: { width: '14%', padding: 2, borderRightWidth: 0.3, borderRightColor: '#ddd', justifyContent: 'center', overflow: 'hidden' },
@@ -71,6 +72,43 @@ interface CompteGroup {
   soldeFinal: number
 }
 
+// Extended account names for payroll/tax accounts not in the page's COMPTE_NAMES
+const COMPTE_NAMES_PDF: Record<string, string> = {
+  '421': 'Net à payer employés', '421000': 'Net à payer employés',
+  '4212': '13ème mois à payer',
+  '431': 'CSG à payer', '431000': 'CSG à payer',
+  '431100': 'NSF à payer',
+  '432': 'Training Levy à payer', '432000': 'Training Levy à payer',
+  '432100': 'PRGF à payer',
+  '444': 'PAYE à payer', '444000': 'PAYE à payer',
+  '4429': 'TDS retenu à verser MRA',
+  '4431': 'TDS retenu à la source', '4434': 'TDS retenu à la source',
+  '641000': 'Salaires bruts — STC', '641100': 'Salaires de base',
+  '641200': 'Heures supplémentaires', '641300': 'Primes et indemnités',
+  '641900': 'Retenues absences', '6416': 'Provision 13ème mois',
+  '6411': 'Rémunérations',
+  '6451': 'CSG patronale', '645100': 'CSG patronale',
+  '6452': 'NSF patronal', '645200': 'NSF patronal',
+  '6453': 'PRGF patronal', '645300': 'PRGF patronal',
+  '6454': 'Training Levy patronal', '645400': 'Training Levy patronal',
+}
+
+function resolveCompteName(compte: string, compteNames: Record<string, string>, entryNom?: string): string {
+  // 1. Exact match in caller's map
+  if (compteNames[compte]) return compteNames[compte]
+  // 2. Exact match in PDF extended map
+  if (COMPTE_NAMES_PDF[compte]) return COMPTE_NAMES_PDF[compte]
+  // 3. Prefix match in caller's map (e.g. '641100' → '641' → 'Salaires')
+  for (let len = compte.length; len >= 2; len--) {
+    const prefix = compte.substring(0, len)
+    if (compteNames[prefix]) return compteNames[prefix]
+    if (COMPTE_NAMES_PDF[prefix]) return COMPTE_NAMES_PDF[prefix]
+  }
+  // 4. Entry's own nom_compte if non-empty
+  if (entryNom && entryNom.trim()) return entryNom
+  return ''
+}
+
 interface GrandLivrePDFProps {
   societe: any
   dateDebut: string
@@ -93,7 +131,7 @@ export function GrandLivrePDF({ societe, dateDebut, dateFin, ecritures, compteNa
     .map(([compte, entries]) => {
       const totalDebit = entries.reduce((s, e) => s + (Number(e.debit_mur) || 0), 0)
       const totalCredit = entries.reduce((s, e) => s + (Number(e.credit_mur) || 0), 0)
-      const nom = compteNames[compte] || entries[0]?.nom_compte || ''
+      const nom = resolveCompteName(compte, compteNames, entries[0]?.nom_compte)
       return { compte, nom, entries, totalDebit, totalCredit, soldeFinal: totalDebit - totalCredit }
     })
 
@@ -144,24 +182,24 @@ export function GrandLivrePDF({ societe, dateDebut, dateFin, ecritures, compteNa
             <Text style={s.title}>GRAND LIVRE</Text>
             <Text style={s.sub}>General Ledger — {societe?.nom || '—'}</Text>
 
-            <View style={s.infoRow}>
-              <View style={s.infoBox}>
-                <Text style={s.infoLbl}>Société</Text>
-                <Text style={s.infoVal}>{societe?.nom || '—'}</Text>
-                <Text style={[s.infoLbl, { marginTop: 2 }]}>BRN</Text>
-                <Text style={s.infoVal}>{societe?.brn || '—'}</Text>
+            <View style={s.hdrBlock}>
+              <View style={s.hdrCol1}>
+                <Text style={s.hdrLbl}>Société</Text>
+                <Text style={s.hdrVal}>{societe?.nom || '—'}</Text>
+                <Text style={s.hdrLbl}>BRN</Text>
+                <Text style={s.hdrVal}>{societe?.brn || '—'}</Text>
               </View>
-              <View style={s.infoBox}>
-                <Text style={s.infoLbl}>Période</Text>
-                <Text style={s.infoVal}>{periodeLabel}</Text>
-                <Text style={[s.infoLbl, { marginTop: 2 }]}>Généré le</Text>
-                <Text style={s.infoVal}>{generatedDate}</Text>
+              <View style={s.hdrCol2}>
+                <Text style={s.hdrLbl}>Période</Text>
+                <Text style={s.hdrVal}>{periodeLabel}</Text>
+                <Text style={s.hdrLbl}>Généré le</Text>
+                <Text style={s.hdrVal}>{generatedDate}</Text>
               </View>
-              <View style={s.infoBoxLast}>
-                <Text style={s.infoLbl}>Comptes</Text>
-                <Text style={s.infoVal}>{groups.length}</Text>
-                <Text style={[s.infoLbl, { marginTop: 2 }]}>Écritures</Text>
-                <Text style={s.infoVal}>{ecritures.length}</Text>
+              <View style={s.hdrCol3}>
+                <Text style={s.hdrLbl}>Comptes</Text>
+                <Text style={s.hdrVal}>{groups.length}</Text>
+                <Text style={s.hdrLbl}>Écritures</Text>
+                <Text style={s.hdrVal}>{ecritures.length}</Text>
               </View>
             </View>
           </>)}
@@ -170,7 +208,7 @@ export function GrandLivrePDF({ societe, dateDebut, dateFin, ecritures, compteNa
           {pageGroups.map((group) => (
             <View key={group.compte} wrap={false}>
               <View style={s.secHdr}>
-                <Text style={s.secTxt}>{group.compte} — {group.nom || 'Compte'}</Text>
+                <Text style={s.secTxt}>{group.compte}{group.nom ? ` — ${group.nom}` : ''}</Text>
               </View>
               <View style={s.table}>
                 <Header />
