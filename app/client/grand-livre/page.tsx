@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Loader2, BookOpen, ChevronLeft, ChevronRight, Download, RefreshCw } from "lucide-react"
+import { Loader2, BookOpen, ChevronLeft, ChevronRight, Download, RefreshCw, FileDown } from "lucide-react"
 
 function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 function fmtDate(d: string) { return d ? new Date(d).toLocaleDateString("fr-FR") : "—" }
@@ -69,6 +69,7 @@ export default function ClientGrandLivrePage() {
   const [exercice, setExercice] = useState("")
   const [lettreFilter, setLettreFilter] = useState<'all' | 'lettered' | 'unlettered'>('all')
   const [highlightedLettre, setHighlightedLettre] = useState<string | null>(null)
+  const [pdfLoading, setPdfLoading] = useState(false)
 
   // Available exercices (Mauritius fiscal year July-June)
   const currentYear = new Date().getFullYear()
@@ -127,6 +128,35 @@ export default function ClientGrandLivrePage() {
     const a = document.createElement("a"); a.href = url; a.download = "grand-livre.csv"; a.click()
   }
 
+  const exportPDF = async () => {
+    if (!ecritures.length || pdfLoading) return
+    setPdfLoading(true)
+    try {
+      const { pdf } = await import('@react-pdf/renderer')
+      const { GrandLivrePDF } = await import('@/components/pdf/GrandLivrePDF')
+      const socData = societes.find(s => s.id === selectedSociete)
+      const blob = await pdf(
+        <GrandLivrePDF
+          societe={socData}
+          dateDebut={dateDebut}
+          dateFin={dateFin}
+          ecritures={ecritures}
+          compteNames={COMPTE_NAMES}
+        />
+      ).toBlob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `grand-livre_${socData?.nom || 'export'}_${new Date().toISOString().split('T')[0]}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      console.error('[grand-livre] PDF export error:', e)
+    } finally {
+      setPdfLoading(false)
+    }
+  }
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -140,6 +170,9 @@ export default function ClientGrandLivrePage() {
           </Button>
           <Button variant="outline" size="sm" onClick={exportCSV} disabled={!ecritures.length}>
             <Download className="w-4 h-4 mr-2" />CSV
+          </Button>
+          <Button variant="outline" size="sm" onClick={exportPDF} disabled={!ecritures.length || pdfLoading}>
+            {pdfLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileDown className="w-4 h-4 mr-2" />}PDF
           </Button>
         </div>
       </div>
