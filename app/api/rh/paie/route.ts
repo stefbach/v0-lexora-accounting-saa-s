@@ -487,6 +487,9 @@ export async function POST(request: Request) {
         total_primes += totalPrimesFixes
 
         // 2c. Auto-rules (meal allowance, call allowance, etc.)
+        // Declare here (computed later after leave/pointage analysis) so they're available in auto-rules
+        let totalHeuresTravaillees = 0
+        let seuilAjuste = 234 // default: 26 days × 9h, recalculated after sick leave analysis
         let totalAutoRules = 0
         const autoRulesApplied: string[] = []
         for (const regle of autoRegles) {
@@ -550,11 +553,11 @@ export async function POST(request: Request) {
         const heuresParJour = 9 // standard daily hours
         const joursTravailMois = 26 // standard working days per month
         const seuilMensuelStandard = joursTravailMois * heuresParJour // 234h standard
-        const seuilAjuste = (joursTravailMois - joursSickLeave) * heuresParJour
+        seuilAjuste = (joursTravailMois - joursSickLeave) * heuresParJour
         // Note: joursLocalLeave do NOT reduce the threshold
 
         // Calculate total hours worked from pointages
-        let totalHeuresTravaillees = 0
+        totalHeuresTravaillees = 0
         for (const pt of pointagesMois || []) {
           if (!pt.heure_entree || !pt.heure_sortie) continue
           const debut = new Date(`1970-01-01T${pt.heure_entree}`)

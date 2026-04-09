@@ -137,7 +137,7 @@ export async function POST(request: Request) {
           societe_id: retry.data.id,
           comptable_id: user.id, // fallback if NOT NULL
           statut: 'actif',
-        }, { onConflict: 'client_id,societe_id', ignoreDuplicates: true }).catch(() => {})
+        }, { onConflict: 'client_id,societe_id', ignoreDuplicates: true })
       }
       return NextResponse.json({ societe: retry.data })
     }
@@ -158,7 +158,7 @@ export async function POST(request: Request) {
           societe_id: data.id,
           comptable_id: null,
           statut: 'actif',
-        }).catch(() => {})
+        })
       }
     }
 

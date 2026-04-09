@@ -967,15 +967,14 @@ export async function POST(request: Request) {
       })
 
       // Mettre à jour le solde CCA
-      await supabase.rpc('increment_solde_cca', { cca_id: ccaId, delta: totalMontant }).catch(() => {
+      const { error: rpcError } = await supabase.rpc('increment_solde_cca', { cca_id: ccaId, delta: totalMontant })
+      if (rpcError) {
         // Si la fonction RPC n'existe pas, faire manuellement
-        supabase.from('comptes_courants_associes')
+        const { data: ccaData } = await supabase.from('comptes_courants_associes')
           .select('solde').eq('id', ccaId).single()
-          .then(({ data }) => {
-            const newSolde = (Number(data?.solde) || 0) + totalMontant
-            supabase.from('comptes_courants_associes').update({ solde: newSolde }).eq('id', ccaId)
-          })
-      })
+        const newSolde = (Number(ccaData?.solde) || 0) + totalMontant
+        await supabase.from('comptes_courants_associes').update({ solde: newSolde }).eq('id', ccaId)
+      }
 
       // Créer les écritures comptables
       const { data: dossier } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()

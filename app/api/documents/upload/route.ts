@@ -230,6 +230,7 @@ export async function POST(request: NextRequest) {
     let typeDocument = ''
     let extraction: any = {}
     let parsed: any = {}
+    let detectedSociete = 'INCONNU'
     let messageContent: any
     if (isImage) {
       const mt = ext === 'png' ? 'image/png' : 'image/jpeg'
@@ -527,7 +528,7 @@ Respond with ONLY the type word. Nothing else.`,
     }
 
     if (!typeDocument) typeDocument = parsed.routing?.type_document || 'autre'
-    let detectedSociete = parsed.routing?.societe || 'INCONNU'
+    detectedSociete = parsed.routing?.societe || 'INCONNU'
     const confianceType = parsed.routing?.confiance_type || null
     if (!extraction || Object.keys(extraction).length === 0) extraction = parsed.extraction || {}
 
@@ -933,9 +934,10 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
               source: 'ocr_payroll_report',
               document_id: doc.id,
             }
-            await supabase.from('bulletins_paie').upsert(bulletinData, { onConflict: 'employe_id,periode' }).catch(() => {
-              supabase.from('bulletins_paie').insert(bulletinData).catch(() => {})
-            })
+            const { error: upsertErr } = await supabase.from('bulletins_paie').upsert(bulletinData, { onConflict: 'employe_id,periode' })
+            if (upsertErr) {
+              await supabase.from('bulletins_paie').insert(bulletinData)
+            }
           }
         }
 
@@ -1030,9 +1032,8 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
             .upsert(bulletinData, { onConflict: 'employe_id,periode' })
           if (bulErr) {
             // If upsert fails (constraint might not exist), try insert
-            await supabase.from('bulletins_paie').insert(bulletinData).catch(e => {
-              console.warn('[upload] bulletin insert fallback:', e)
-            })
+            const { error: insertErr } = await supabase.from('bulletins_paie').insert(bulletinData)
+            if (insertErr) console.warn('[upload] bulletin insert fallback:', insertErr)
           }
           console.log(`[upload] Bulletin RH créé: ${empNom} période ${periodeStr}`)
         }
@@ -1063,7 +1064,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
               montant_csg_patronal: type.includes('patronal') ? montant : 0,
               source: 'ocr',
               document_id: doc.id,
-            }, { onConflict: 'societe_id,periode' }).catch(() => {})
+            }, { onConflict: 'societe_id,periode' })
           }
 
           if (type.includes('PAYE')) {
@@ -1073,7 +1074,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
               montant_paye: montant,
               source: 'ocr',
               document_id: doc.id,
-            }, { onConflict: 'societe_id,periode' }).catch(() => {})
+            }, { onConflict: 'societe_id,periode' })
           }
         }
 
