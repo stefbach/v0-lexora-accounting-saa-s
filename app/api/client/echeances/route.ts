@@ -76,9 +76,9 @@ export async function POST(request: Request) {
       const stream = anthropic.messages.stream({
         model: CLAUDE_CONFIG.model, max_tokens: 256, temperature: 0,
         messages: [{ role: 'user', content: [
-          { type: contentType as any, source: { type: 'base64', media_type: mediaType, data: base64 } },
+          { type: contentType, source: { type: 'base64', media_type: mediaType, data: base64 } },
           { type: 'text', text: 'Find ONLY the due date or payment deadline on this invoice. Return ONLY JSON: {"date_echeance": "YYYY-MM-DD"} or {"date_echeance": null}' },
-        ] }],
+        ] as any[] }],
       })
       const response = await stream.finalMessage()
       const text = response.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
