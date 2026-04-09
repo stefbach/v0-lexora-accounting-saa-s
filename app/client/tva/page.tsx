@@ -199,6 +199,7 @@ export default function TVAPage() {
 
   // TVA from factures table — LOCAL fournisseurs only (exclude reverse charge)
   const facturesClient = factures.filter((f: any) => f.type_facture === 'client')
+  const facturesClientLocal = facturesClient.filter((f: any) => !f.client_offshore)
   const facturesFournisseur = factures.filter((f: any) => f.type_facture === 'fournisseur')
   const facturesFournisseurLocal = facturesFournisseur.filter((f: any) => {
     // Exclude foreign suppliers from TVA déductible (they go in reverse charge)
@@ -208,7 +209,7 @@ export default function TVAPage() {
     }
     return true
   })
-  const tvaCollecteeFactures = facturesClient.reduce((s: number, f: any) => s + (Number(f.montant_tva) || 0), 0)
+  const tvaCollecteeFactures = facturesClientLocal.reduce((s: number, f: any) => s + (Number(f.montant_tva) || 0), 0)
   const tvaDeductibleFactures = facturesFournisseurLocal.reduce((s: number, f: any) => s + (Number(f.montant_tva) || 0), 0)
 
   // Factures non soumises à TVA (montant_tva = 0 but montant_ht > 0)
@@ -479,7 +480,7 @@ export default function TVAPage() {
                       const socData = societes.find((x: any) => x.id === selectedSociete)
                       const pLabel = getPeriodLabel()
                       const taxableAchatsHT = facturesFournisseurLocal.filter((fac: any) => (Number(fac.montant_tva) || 0) > 0).reduce((sum: number, fac: any) => sum + (Number(fac.montant_ht) || 0), 0)
-                      const caHT = facturesClient.reduce((sum: number, fac: any) => sum + (Number(fac.montant_ht) || 0), 0)
+                      const caHT = facturesClientLocal.reduce((sum: number, fac: any) => sum + (Number(fac.montant_ht) || 0), 0)
                       const taxableSuppliers = groupedLocalInvoices.filter(g => g.totalTVA > 0)
                       const blob = await pdf(
                         <TVADeclarationPDF societe={socData} periodeLabel={pLabel} effectiveCollectee={effectiveCollectee} effectiveDeductible={effectiveDeductible} tvaAPayer={tvaAPayer} creditTVA={creditTVA} totalReverseChargeBase={totalReverseChargeBase} reverseChargeTVA={reverseChargeTVA} caHT={caHT} taxableAchatsHT={taxableAchatsHT} groupedSuppliers={taxableSuppliers} reverseChargeFacts={reverseChargeFacts} />
@@ -571,7 +572,7 @@ export default function TVAPage() {
               <tr className="border-b border-gray-100">
                 <td className="py-2 font-medium" style={{ color: NAVY }}>1</td>
                 <td className="py-2">Chiffre d&apos;affaires taxable</td>
-                <td className="py-2 text-right font-medium">{formatMUR(data?.totalRevenue ?? 0)}</td>
+                <td className="py-2 text-right font-medium">{formatMUR(facturesClientLocal.reduce((s: number, f: any) => s + (Number(f.montant_ht) || 0), 0))}</td>
               </tr>
               <tr className="border-b border-gray-100">
                 <td className="py-2 font-medium" style={{ color: NAVY }}>2</td>
