@@ -256,6 +256,7 @@ export async function POST(request: Request) {
 
           // RULE A — Internal transfers
           if (txLib.includes('own account transfer') || txLib.includes('ib account transfer ft') ||
+              txLib.includes('ib own account') || txLib.includes('virement interne') ||
               societeNames.some(n => n.length > 3 && (txTiers.includes(n) || txLib.includes(n)))) {
             updatedTxs[i] = { ...tx, statut: 'interne', matched_type: 'transfert_interne', note: 'Virement interne' }
             counts.interne++; changed = true; classified = true
@@ -793,14 +794,40 @@ export async function POST(request: Request) {
         const releveDevise = deviseMap[releve.compte_bancaire_id] || 'MUR'
 
         for (const tx of txs) {
-          if (tx.statut !== 'rapproche' || !tx.facture_id) continue
-
           const txDebit = Number(tx.debit) || 0
           const txCredit = Number(tx.credit) || 0
           const txAmount = txDebit > 0 ? txDebit : txCredit
           if (txAmount === 0) continue
           const txAmountMUR = Math.round(toMURLocal(txAmount, releveDevise) * 100) / 100
           const txDate = tx.date || new Date().toISOString().split('T')[0]
+
+          // --- Internal transfers → 581 both sides ---
+          if (tx.statut === 'interne' || tx.matched_type === 'transfert_interne') {
+            const { data: existing581 } = await supabase.from('ecritures_comptables')
+              .select('id').eq('dossier_id', dossier.id).eq('journal', 'BNQ')
+              .eq('compte', '581').eq('date_ecriture', txDate)
+              .or(`debit.eq.${txAmountMUR},credit.eq.${txAmountMUR}`)
+              .limit(1)
+            if (existing581 && existing581.length > 0) continue
+
+            const lettre581 = `VI${String(created + 1).padStart(3, '0')}`
+            const isOutgoing = txDebit > 0
+            const libelle = `Virement interne ${(tx.libelle || '').substring(0, 30)}`
+
+            await supabase.from('ecritures_comptables').insert([
+              // 512 → 581 (bank to transit)
+              { dossier_id: dossier.id, date_ecriture: txDate, journal: 'BNQ', compte: '512',
+                libelle, debit: isOutgoing ? 0 : txAmountMUR, credit: isOutgoing ? txAmountMUR : 0, lettre: lettre581 },
+              // 581 debit (transit out)
+              { dossier_id: dossier.id, date_ecriture: txDate, journal: 'BNQ', compte: '581',
+                libelle, debit: isOutgoing ? txAmountMUR : 0, credit: isOutgoing ? 0 : txAmountMUR, lettre: lettre581 },
+            ])
+            created++
+            continue
+          }
+
+          // --- Regular matched transactions ---
+          if (tx.statut !== 'rapproche' || !tx.facture_id) continue
 
           // Check if BNQ écriture already exists
           const { data: existing } = await supabase.from('ecritures_comptables')
