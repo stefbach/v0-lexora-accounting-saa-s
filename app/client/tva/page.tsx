@@ -234,14 +234,23 @@ export default function TVAPage() {
   const supplierInvoices = invoices.filter((inv: any) => inv.type === "facture_fournisseur" && inPeriod(inv))
 
   // Classify supplier invoices: local vs foreign
-  // RULE: Only suppliers in the FOREIGN_SUPPLIERS list are foreign.
-  // Currency alone (EUR, USD) does NOT determine foreign status.
+  // Uses same currency-based logic as facturesFournisseurLocal (Filter A) and reverseChargeFacts (Filter C)
   // A Mauritius company invoicing in EUR (e.g. Magellan Hub Ltd) is LOCAL.
   const localSupplierInvoices = supplierInvoices.filter(
-    (inv: any) => !isForeignSupplier(inv.emetteur)
+    (inv: any) => {
+      if (inv.devise && inv.devise !== 'MUR') {
+        const t = (inv.emetteur || '').toLowerCase()
+        if (!t.includes('magellan')) return false
+      }
+      return true
+    }
   )
   const foreignSupplierInvoices = supplierInvoices.filter(
-    (inv: any) => isForeignSupplier(inv.emetteur)
+    (inv: any) => {
+      if (!inv.devise || inv.devise === 'MUR') return false
+      const t = (inv.emetteur || '').toLowerCase()
+      return !t.includes('magellan')
+    }
   )
 
   // Local valid: must have TVA amount, emetteur, and numero (implies MRA TVA number)
