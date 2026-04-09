@@ -179,7 +179,7 @@ export default function ClientGrandLivrePage() {
 
       {/* Filtres */}
       <Card>
-        <CardContent className="p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
+        <CardContent className="p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
           <div>
             <Label className="text-xs">Societe</Label>
             <Select value={selectedSociete} onValueChange={v => { setSelectedSociete(v); setPage(1) }}>
