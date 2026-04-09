@@ -213,7 +213,9 @@ export default function TVAPage() {
   const tvaDeductibleFactures = facturesFournisseurLocal.reduce((s: number, f: any) => s + (Number(f.montant_tva) || 0), 0)
 
   // Factures non soumises à TVA (montant_tva = 0 but montant_ht > 0)
-  const facturesNonTVA = factures.filter((f: any) => (Number(f.montant_tva) || 0) === 0 && (Number(f.montant_ht) || 0) > 0)
+  // Exclude invoices already shown in Reverse Charge R5 (foreign fournisseurs with devise != MUR)
+  const isReverseCharge = (f: any) => f.type_facture === 'fournisseur' && f.devise && f.devise !== 'MUR' && !(f.tiers || '').toLowerCase().includes('magellan')
+  const facturesNonTVA = factures.filter((f: any) => (Number(f.montant_tva) || 0) === 0 && (Number(f.montant_ht) || 0) > 0 && !isReverseCharge(f))
 
   // Reverse charge: foreign fournisseurs (devise != MUR, not known Mauritius company)
   const reverseChargeFacts = facturesFournisseur.filter((f: any) => {
@@ -275,7 +277,7 @@ export default function TVAPage() {
     return Object.values(groups).sort((a, b) => b.totalTVA - a.totalTVA)
   }
   // Group from factures table (correct names) — NOT from extractedInvoices/OCR
-  const groupedClientInvoices = groupByTiers(facturesClient, 'tiers', 'montant_tva')
+  const groupedClientInvoices = groupByTiers(facturesClientLocal, 'tiers', 'montant_tva')
   const groupedLocalInvoices = groupByTiers(facturesFournisseurLocal, 'tiers', 'montant_tva')
   const groupedForeignInvoices = groupByTiers(reverseChargeFacts, 'tiers', 'montant_ht')
 
@@ -640,11 +642,11 @@ export default function TVAPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base" style={{ color: NAVY }}>
               <TrendingUp className="h-5 w-5" style={{ color: "#22C55E" }} />
-              TVA sur ventes locales ({clientInvoices.length})
+              TVA sur ventes locales ({facturesClientLocal.length})
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {clientInvoices.length > 0 ? (
+            {facturesClientLocal.length > 0 ? (
               <Table>
                 <TableHeader>
                   <TableRow>
