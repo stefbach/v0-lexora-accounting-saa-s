@@ -3,13 +3,7 @@ import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
 const s = StyleSheet.create({
   page: { padding: 30, fontFamily: 'Helvetica', fontSize: 8, color: '#000' },
   title: { fontSize: 13, fontWeight: 'bold', textAlign: 'center', marginBottom: 2 },
-  sub: { fontSize: 9, textAlign: 'center', marginBottom: 10, color: '#444' },
-  hdrBlock: { flexDirection: 'row', marginBottom: 20 },
-  hdrCol1: { width: '40%' },
-  hdrCol2: { width: '30%' },
-  hdrCol3: { width: '30%' },
-  hdrLbl: { fontSize: 7, fontWeight: 'bold', color: '#2c3e50', marginTop: 4 },
-  hdrVal: { fontSize: 9, marginBottom: 2 },
+  sub: { fontSize: 9, textAlign: 'center', marginBottom: 4, color: '#444' },
   secHdr: { backgroundColor: '#2c3e50', padding: 4, marginTop: 8, marginBottom: 0 },
   secTxt: { color: '#fff', fontSize: 8, fontWeight: 'bold' },
   table: { width: '100%', borderWidth: 0.5, borderColor: '#999', marginBottom: 6 },
@@ -182,24 +176,24 @@ export function GrandLivrePDF({ societe, dateDebut, dateFin, ecritures, compteNa
             <Text style={s.title}>GRAND LIVRE</Text>
             <Text style={s.sub}>General Ledger — {societe?.nom || '—'}</Text>
 
-            <View style={s.hdrBlock}>
-              <View style={s.hdrCol1}>
-                <Text style={s.hdrLbl}>Société</Text>
-                <Text style={s.hdrVal}>{societe?.nom || '—'}</Text>
-                <Text style={s.hdrLbl}>BRN</Text>
-                <Text style={s.hdrVal}>{societe?.brn || '—'}</Text>
+            <View style={{ flexDirection: 'row', marginBottom: 24, marginTop: 8 }}>
+              <View style={{ flex: 2, paddingRight: 8 }}>
+                <Text style={{ fontSize: 8, fontWeight: 'bold', color: '#666' }}>Société</Text>
+                <View style={{ marginBottom: 4 }}><Text style={{ fontSize: 9 }}>{societe?.nom || '—'}</Text></View>
+                <Text style={{ fontSize: 8, fontWeight: 'bold', color: '#666' }}>BRN</Text>
+                <Text style={{ fontSize: 9 }}>{societe?.brn || '—'}</Text>
               </View>
-              <View style={s.hdrCol2}>
-                <Text style={s.hdrLbl}>Période</Text>
-                <Text style={s.hdrVal}>{periodeLabel}</Text>
-                <Text style={s.hdrLbl}>Généré le</Text>
-                <Text style={s.hdrVal}>{generatedDate}</Text>
+              <View style={{ flex: 2, paddingRight: 8 }}>
+                <Text style={{ fontSize: 8, fontWeight: 'bold', color: '#666' }}>Période</Text>
+                <View style={{ marginBottom: 4 }}><Text style={{ fontSize: 9 }}>{periodeLabel}</Text></View>
+                <Text style={{ fontSize: 8, fontWeight: 'bold', color: '#666' }}>Généré le</Text>
+                <Text style={{ fontSize: 9 }}>{generatedDate}</Text>
               </View>
-              <View style={s.hdrCol3}>
-                <Text style={s.hdrLbl}>Comptes</Text>
-                <Text style={s.hdrVal}>{groups.length}</Text>
-                <Text style={s.hdrLbl}>Écritures</Text>
-                <Text style={s.hdrVal}>{ecritures.length}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 8, fontWeight: 'bold', color: '#666' }}>Comptes</Text>
+                <View style={{ marginBottom: 4 }}><Text style={{ fontSize: 9 }}>{groups.length}</Text></View>
+                <Text style={{ fontSize: 8, fontWeight: 'bold', color: '#666' }}>Écritures</Text>
+                <Text style={{ fontSize: 9 }}>{ecritures.length}</Text>
               </View>
             </View>
           </>)}
