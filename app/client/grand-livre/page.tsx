@@ -217,8 +217,8 @@ export default function ClientGrandLivrePage() {
               </SelectContent>
             </Select>
           </div>
-          <div><Label className="text-xs">Compte debut</Label><Input className="h-9" placeholder="401" value={compteDebut} onChange={e => setCompteDebut(e.target.value)} /></div>
-          <div><Label className="text-xs">Compte fin</Label><Input className="h-9" placeholder="512" value={compteFin} onChange={e => setCompteFin(e.target.value)} /></div>
+          <div><Label className="text-xs">Compte debut</Label><Input className="h-9" placeholder="ex: 401" value={compteDebut} onChange={e => setCompteDebut(e.target.value)} /></div>
+          <div><Label className="text-xs">Compte fin</Label><Input className="h-9" placeholder="ex: 706" value={compteFin} onChange={e => setCompteFin(e.target.value)} /></div>
           <div><Label className="text-xs">Date debut</Label><Input className="h-9" type="date" value={dateDebut} onChange={e => setDateDebut(e.target.value)} /></div>
           <div><Label className="text-xs">Date fin</Label><Input className="h-9" type="date" value={dateFin} onChange={e => setDateFin(e.target.value)} /></div>
           <div>
