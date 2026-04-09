@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
 function getAdminClient() {
@@ -6,6 +7,15 @@ function getAdminClient() {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !serviceKey) throw new Error('Missing Supabase admin credentials')
   return createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
+}
+
+async function requireComptable() {
+  const supabaseAuth = await createServerClient()
+  const { data: { user }, error: authError } = await supabaseAuth.auth.getUser()
+  if (!user || authError) return null
+  const { data: profile } = await supabaseAuth.from('profiles').select('role').eq('id', user.id).single()
+  if (!profile || !['admin', 'super_admin', 'comptable', 'comptable_dedie'].includes(profile.role)) return null
+  return user
 }
 
 /** Normalize fournisseur name: uppercase, remove legal suffixes, trim */
@@ -19,6 +29,8 @@ function normalizeFournisseur(name: string): string {
 }
 
 export async function GET(request: NextRequest) {
+  const authUser = await requireComptable()
+  if (!authUser) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const supabase = getAdminClient()
 
   try {
@@ -43,6 +55,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const authUser = await requireComptable()
+  if (!authUser) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const supabase = getAdminClient()
 
   try {

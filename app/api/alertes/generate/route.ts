@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 
 function getAdminClient() {
@@ -12,6 +13,10 @@ function getAdminClient() {
 // Can be called via cron or manually
 export async function POST() {
   try {
+    const supabaseAuth = await createServerClient()
+    const { data: { user } } = await supabaseAuth.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
     const supabase = getAdminClient()
     const today = new Date()
     const currentDay = today.getDate()
