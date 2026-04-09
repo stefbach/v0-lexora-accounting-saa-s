@@ -185,27 +185,26 @@ export function GrandLivrePDF({ societe, dateDebut, dateFin, ecritures, compteNa
               paddingBottom: 10,
             }}>
               <View style={{ flex: 4 }}>
-                <Text style={{ fontSize: 7, color: '#888888', marginBottom: 2 }}>SOCIÉTÉ</Text>
+                <Text style={{ fontSize: 7, color: '#888888', marginBottom: 4 }}>SOCIÉTÉ</Text>
                 <Text style={{ fontSize: 9, marginBottom: 6 }}>{societe?.nom || '—'}</Text>
-                <Text style={{ fontSize: 7, color: '#888888', marginBottom: 2 }}>BRN</Text>
+                <Text style={{ fontSize: 7, color: '#888888', marginBottom: 4 }}>BRN</Text>
                 <Text style={{ fontSize: 9 }}>{societe?.brn || '—'}</Text>
               </View>
               <View style={{ flex: 4 }}>
-                <Text style={{ fontSize: 7, color: '#888888', marginBottom: 2 }}>PÉRIODE</Text>
+                <Text style={{ fontSize: 7, color: '#888888', marginBottom: 4 }}>PÉRIODE</Text>
                 <Text style={{ fontSize: 9, marginBottom: 6 }}>{periodeLabel}</Text>
-                <Text style={{ fontSize: 7, color: '#888888', marginBottom: 2 }}>GÉNÉRÉ LE</Text>
+                <Text style={{ fontSize: 7, color: '#888888', marginBottom: 4 }}>GÉNÉRÉ LE</Text>
                 <Text style={{ fontSize: 9 }}>{generatedDate}</Text>
               </View>
               <View style={{ flex: 2 }}>
-                <Text style={{ fontSize: 7, color: '#888888', marginBottom: 2 }}>COMPTES</Text>
+                <Text style={{ fontSize: 7, color: '#888888', marginBottom: 4 }}>COMPTES</Text>
                 <Text style={{ fontSize: 9, marginBottom: 6 }}>{groups.length}</Text>
-                <Text style={{ fontSize: 7, color: '#888888', marginBottom: 2 }}>ÉCRITURES</Text>
+                <Text style={{ fontSize: 7, color: '#888888', marginBottom: 4 }}>ÉCRITURES</Text>
                 <Text style={{ fontSize: 9 }}>{ecritures.length}</Text>
               </View>
             </View>
+            <View style={{ marginTop: 12 }} />
           </>)}
-
-          <View style={{ marginTop: 12 }} />
 
           {/* Account groups */}
           {pageGroups.map((group) => (
