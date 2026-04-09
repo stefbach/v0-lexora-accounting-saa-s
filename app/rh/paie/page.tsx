@@ -56,8 +56,8 @@ export default function PaiePage() {
         if (firstSociete !== "all") params.set("societe_id", firstSociete)
         const data = await fetch(`/api/rh/paie?${params}`).then(r => r.json())
         const allBulletins = data.bulletins || []
-        const periods = [...new Set(allBulletins.map((b: any) => (b.periode || "").slice(0, 7)).filter(Boolean))]
-        periods.sort((a: string, b: string) => b.localeCompare(a))
+        const periods = [...new Set(allBulletins.map((b: any) => (b.periode || "").slice(0, 7)).filter(Boolean))] as string[]
+        periods.sort((a, b) => b.localeCompare(a))
         setAvailablePeriodes(periods)
         if (periods.length > 0) {
           setPeriode(periods[0])

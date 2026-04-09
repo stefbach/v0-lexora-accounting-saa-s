@@ -66,7 +66,7 @@ const DOCUMENT_TYPES = [
   { value: "autre", label: "Autre" },
 ]
 
-function getSocieteBadgeStyle(name?: string): Record<string, string> {
+function getSocieteBadgeStyle(name?: string | null): Record<string, string> {
   if (!name) return { backgroundColor: '#f3f4f6', color: '#374151', borderColor: '#e5e7eb' }
   const n = name.toLowerCase()
   if (n.includes('obesity') || n.includes('occ'))

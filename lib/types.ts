@@ -1,3 +1,33 @@
+export type DocumentStatus = 'en_attente' | 'en_cours' | 'traite' | 'erreur'
+
+export type DocumentType = 'facture_fournisseur' | 'facture_client' | 'releve_bancaire' | 'bulletin_paie' | 'payroll_report' | 'charges_sociales' | 'fiche_paie' | 'contrat' | 'autre' | string
+
+export interface Document {
+  id: string
+  nom_fichier: string
+  type_document: DocumentType
+  statut: DocumentStatus
+  societe_detectee: string | null
+  dossier_id: string | null
+  uploaded_by: string
+  created_at: string
+  taille_fichier: number
+  confiance: number | null
+  n8n_result: any
+  [key: string]: any
+}
+
+export type TVAStatut = 'a_payer' | 'credit' | 'neant'
+
+export interface TVAMensuelle {
+  periode: string
+  tva_collectee: number
+  tva_deductible: number
+  tva_nette: number
+  statut: TVAStatut
+  [key: string]: any
+}
+
 export interface ParametresPaieMRA {
   csg_seuil_taux_reduit: number
   csg_salarie_taux_reduit: number

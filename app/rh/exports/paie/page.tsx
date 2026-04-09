@@ -124,7 +124,6 @@ export default function ExportPaiePage() {
         bank_code: e.bank_code || "",
         mode_paiement: e.mode_paiement || "bulk",
         inclus_mra: e.inclus_mra !== false,
-        bank_code: e.bank_code || "",
       }))
       setEmployes(emps.sort((a, b) => `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`)))
 

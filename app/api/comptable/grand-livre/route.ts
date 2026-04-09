@@ -62,7 +62,7 @@ export async function GET(request: Request) {
     if (effectiveDateFin)   v2Query = v2Query.lte('date_ecriture', effectiveDateFin)
     if (journal)      v2Query = v2Query.eq('journal', journal)
 
-    let { data: v2Data, error: v2Err } = await v2Query
+    let { data: v2Data, error: v2Err } = await v2Query as { data: any[] | null, error: any }
     if (v2Err) {
       // Retry without lettrage columns
       let v2Fallback = supabase.from('ecritures_comptables_v2')
@@ -74,7 +74,7 @@ export async function GET(request: Request) {
       if (effectiveDateFin)   v2Fallback = v2Fallback.lte('date_ecriture', effectiveDateFin)
       if (journal)      v2Fallback = v2Fallback.eq('journal', journal)
       const fb = await v2Fallback
-      v2Data = fb.data
+      v2Data = fb.data as any[]
     }
     if (v2Data && v2Data.length > 0) {
       allEntries = v2Data.map(e => ({
@@ -126,7 +126,7 @@ export async function GET(request: Request) {
           if (journal)      v1FallbackQuery = v1FallbackQuery.eq('journal', journal)
 
           const fallback = await v1FallbackQuery
-          v1Data = fallback.data
+          v1Data = fallback.data as any[]
           if (fallback.error) console.error('[grand-livre] v1 fallback also failed:', fallback.error.message)
         }
 

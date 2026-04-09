@@ -300,7 +300,7 @@ export async function POST(request: Request) {
       }
 
       const joursTravailles = jours_travailles > 0 ? jours_travailles : (body.jours_travailles || 26)
-      const resultat = calculerBulletin(elements, params, joursTravailles, Number(emp.pct_refacturation) || 0)
+      const resultat = calculerBulletin(elements, params as any, joursTravailles, Number(emp.pct_refacturation) || 0)
 
       // Déduire absences injustifiées du net
       const salaire_net_final = Math.round((resultat.salaire_net - montant_absence) * 100) / 100
@@ -640,7 +640,7 @@ export async function POST(request: Request) {
         }
 
         const jt = jours_travailles > 0 ? jours_travailles : 26
-        const resultat = calculerBulletin(elements, params, jt, Number(emp.pct_refacturation) || 0)
+        const resultat = calculerBulletin(elements, params as any, jt, Number(emp.pct_refacturation) || 0)
 
         // Hors champs MRA : pas de CSG, NSF, PAYE, pas de charges patronales
         if (isHorsMRA) {

@@ -391,7 +391,7 @@ function SummaryCard({ item }: { item: WRALeaveType }) {
         className="w-10 h-10 rounded-full flex items-center justify-center mb-2"
         style={{ background: item.color + "20" }}
       >
-        <Icon className="h-5 w-5" style={{ color: item.color }} />
+        {(Icon as any)({ className: "h-5 w-5", style: { color: item.color } })}
       </div>
       <p className="text-2xl font-extrabold leading-none" style={{ color: NAVY }}>
         {item.quota}
@@ -456,7 +456,7 @@ function WRACard({ item }: { item: WRALeaveType }) {
             className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
             style={{ background: item.color + "20" }}
           >
-            <Icon className="h-6 w-6" style={{ color: item.color }} />
+            {(Icon as any)({ className: "h-6 w-6", style: { color: item.color } })}
           </div>
           <div>
             <h3 className="font-bold text-sm leading-tight" style={{ color: NAVY }}>

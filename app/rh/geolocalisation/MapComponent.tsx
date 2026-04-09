@@ -95,7 +95,7 @@ export default function MapComponent({ positions }: { positions: Position[] }) {
     // Add a note for employees without GPS
     const sansGPS = positions.filter(p => !p.latitude || !p.longitude)
     if (sansGPS.length > 0 && markers.length > 0) {
-      const corner = L.control({ position: "bottomleft" })
+      const corner = (L.control as any)({ position: "bottomleft" })
       corner.onAdd = () => {
         const div = L.DomUtil.create("div")
         div.style.cssText = "background:white;padding:8px 12px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.15);font-size:11px;color:#666;max-width:200px;"

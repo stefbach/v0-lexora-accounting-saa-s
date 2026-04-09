@@ -496,9 +496,9 @@ export async function POST(request: Request) {
               // Word overlap matching for tiers/libellé
               const txTiers = (tx.tiers_detecte || tx.tiers || tx.libelle || '').toLowerCase()
               const eTiers = (e.libelle || '').toLowerCase()
-              const txW = txTiers.split(/\s+/).filter(w => w.length > 3)
-              const eW = eTiers.split(/\s+/).filter(w => w.length > 3)
-              const overlap = txW.filter(w => eW.some(ew => ew.includes(w) || w.includes(ew))).length
+              const txW = txTiers.split(/\s+/).filter((w: any) => w.length > 3)
+              const eW = eTiers.split(/\s+/).filter((w: any) => w.length > 3)
+              const overlap = txW.filter((w: any) => eW.some((ew: any) => ew.includes(w) || w.includes(ew))).length
               return (txW.length > 0 && eW.length > 0 && overlap / Math.max(txW.length, eW.length) >= 0.3)
             })
             if (matchedEcriture) {
