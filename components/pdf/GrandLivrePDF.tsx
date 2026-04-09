@@ -2,8 +2,8 @@ import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
 
 const s = StyleSheet.create({
   page: { padding: 30, fontFamily: 'Helvetica', fontSize: 8, color: '#000' },
-  title: { fontSize: 13, fontWeight: 'bold', textAlign: 'center', marginBottom: 2 },
-  sub: { fontSize: 9, textAlign: 'center', marginBottom: 4, color: '#444' },
+  title: { fontSize: 13, fontWeight: 'bold', textAlign: 'center', marginBottom: 4, marginTop: 20 },
+  sub: { fontSize: 9, textAlign: 'center', marginBottom: 16, color: '#444' },
   secHdr: { backgroundColor: '#2c3e50', padding: 4, marginTop: 8, marginBottom: 0 },
   secTxt: { color: '#fff', fontSize: 8, fontWeight: 'bold' },
   table: { width: '100%', borderWidth: 0.5, borderColor: '#999', marginBottom: 6 },
@@ -179,7 +179,7 @@ export function GrandLivrePDF({ societe, dateDebut, dateFin, ecritures, compteNa
             <View style={{
               flexDirection: 'row',
               marginBottom: 20,
-              marginTop: 10,
+              marginTop: 0,
               borderBottomWidth: 1,
               borderBottomColor: '#cccccc',
               paddingBottom: 10,
