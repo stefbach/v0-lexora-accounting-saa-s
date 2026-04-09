@@ -252,7 +252,7 @@ export default function UtilisateursPage() {
     setLoading(true)
     try {
       const [u, s] = await Promise.all([
-        fetch("/api/admin/users").then((r) => r.json()),
+        fetch("/api/client/users").then((r) => r.json()),
         fetch("/api/client/societes").then((r) => r.json()),
       ])
       setUsers(u.users || [])
@@ -320,7 +320,7 @@ export default function UtilisateursPage() {
       const societePayload = isMulti && createForm.societe_ids.length > 0
         ? { societe_ids: createForm.societe_ids, societe_id: createForm.societe_ids[0] }
         : { societe_id: createForm.societe_id || undefined }
-      const res = await fetch("/api/admin/users", {
+      const res = await fetch("/api/client/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -348,7 +348,7 @@ export default function UtilisateursPage() {
     setEditUser(user)
     let userSocieteIds: string[] = user.societe_id ? [user.societe_id] : []
     try {
-      const res = await fetch(`/api/admin/users?user_id=${user.id}&action=societes`)
+      const res = await fetch(`/api/client/users?user_id=${user.id}&action=societes`)
       const data = await res.json()
       if (data.societe_ids && data.societe_ids.length > 0) userSocieteIds = data.societe_ids
     } catch {}
@@ -383,7 +383,7 @@ export default function UtilisateursPage() {
       if (isMultiEdit && editForm.societe_ids.length > 0) {
         payload.societe_ids = editForm.societe_ids
       }
-      const res = await fetch("/api/admin/users", {
+      const res = await fetch("/api/client/users", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -401,7 +401,7 @@ export default function UtilisateursPage() {
 
   const toggleActif = async (user: User) => {
     const newActif = user.actif === false ? true : false
-    await fetch("/api/admin/users", {
+    await fetch("/api/client/users", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ user_id: user.id, actif: newActif }),
