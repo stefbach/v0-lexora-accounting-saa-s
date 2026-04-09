@@ -4,8 +4,9 @@ const s = StyleSheet.create({
   page: { padding: 30, fontFamily: 'Helvetica', fontSize: 8, color: '#000' },
   title: { fontSize: 13, fontWeight: 'bold', textAlign: 'center', marginBottom: 2 },
   sub: { fontSize: 9, textAlign: 'center', marginBottom: 8, color: '#444' },
-  infoRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
-  infoBox: { flex: 1, borderWidth: 1, borderColor: '#ccc', padding: 5, backgroundColor: '#fafafa' },
+  infoRow: { flexDirection: 'row', marginBottom: 10 },
+  infoBox: { width: '33%', borderWidth: 1, borderColor: '#ccc', padding: 5, backgroundColor: '#fafafa', marginRight: 4 },
+  infoBoxLast: { width: '33%', borderWidth: 1, borderColor: '#ccc', padding: 5, backgroundColor: '#fafafa' },
   infoLbl: { fontSize: 7, color: '#666', marginBottom: 1 },
   infoVal: { fontSize: 9, fontWeight: 'bold' },
   secHdr: { backgroundColor: '#2c3e50', padding: 4, marginTop: 8, marginBottom: 0 },
@@ -16,18 +17,19 @@ const s = StyleSheet.create({
   rowAlt: { flexDirection: 'row', backgroundColor: '#f8f8f8', borderBottomWidth: 0.3, borderBottomColor: '#ccc', minHeight: 14 },
   rowTotal: { flexDirection: 'row', backgroundColor: '#2c3e50', minHeight: 16 },
   rowGrandTotal: { flexDirection: 'row', backgroundColor: '#1a252f', minHeight: 18 },
-  // Column widths for 8-column layout
-  cDate: { width: 52, padding: 2, borderRightWidth: 0.3, borderRightColor: '#ddd', justifyContent: 'center' },
-  cJournal: { width: 30, padding: 2, borderRightWidth: 0.3, borderRightColor: '#ddd', justifyContent: 'center' },
-  cPiece: { width: 40, padding: 2, borderRightWidth: 0.3, borderRightColor: '#ddd', justifyContent: 'center' },
-  cLibelle: { flex: 1, padding: 2, borderRightWidth: 0.3, borderRightColor: '#ddd', justifyContent: 'center' },
-  cLettre: { width: 32, padding: 2, borderRightWidth: 0.3, borderRightColor: '#ddd', justifyContent: 'center' },
-  cDebit: { width: 62, padding: 2, borderRightWidth: 0.3, borderRightColor: '#ddd', justifyContent: 'center', textAlign: 'right' },
-  cCredit: { width: 62, padding: 2, borderRightWidth: 0.3, borderRightColor: '#ddd', justifyContent: 'center', textAlign: 'right' },
-  cSolde: { width: 65, padding: 2, justifyContent: 'center', textAlign: 'right' },
-  hdrTxt: { color: '#fff', fontSize: 7, fontWeight: 'bold' },
-  txt: { fontSize: 7 },
-  bold: { fontSize: 7, fontWeight: 'bold' },
+  // Column widths as percentages: Date 8%, Jnl 5%, Pièce 14%, Libellé 35%, Lettre 6%, Débit 11%, Crédit 11%, Solde 10%
+  cDate: { width: '8%', padding: 2, borderRightWidth: 0.3, borderRightColor: '#ddd', justifyContent: 'center' },
+  cJournal: { width: '5%', padding: 2, borderRightWidth: 0.3, borderRightColor: '#ddd', justifyContent: 'center' },
+  cPiece: { width: '14%', padding: 2, borderRightWidth: 0.3, borderRightColor: '#ddd', justifyContent: 'center', overflow: 'hidden' },
+  cLibelle: { width: '35%', padding: 2, borderRightWidth: 0.3, borderRightColor: '#ddd', justifyContent: 'center', overflow: 'hidden' },
+  cLettre: { width: '6%', padding: 2, borderRightWidth: 0.3, borderRightColor: '#ddd', justifyContent: 'center' },
+  cDebit: { width: '11%', padding: 2, borderRightWidth: 0.3, borderRightColor: '#ddd', justifyContent: 'center', alignItems: 'flex-end' },
+  cCredit: { width: '11%', padding: 2, borderRightWidth: 0.3, borderRightColor: '#ddd', justifyContent: 'center', alignItems: 'flex-end' },
+  cSolde: { width: '10%', padding: 2, justifyContent: 'center', alignItems: 'flex-end' },
+  hdrTxt: { color: '#fff', fontSize: 6.5, fontWeight: 'bold' },
+  txt: { fontSize: 6.5 },
+  txtRight: { fontSize: 6.5, textAlign: 'right' },
+  bold: { fontSize: 6.5, fontWeight: 'bold' },
   totalTxt: { fontSize: 7, fontWeight: 'bold', color: '#fff' },
   grandTotalTxt: { fontSize: 8, fontWeight: 'bold', color: '#fff' },
   footer: { position: 'absolute', bottom: 15, left: 30, right: 30, borderTopWidth: 0.5, borderTopColor: '#999', paddingTop: 3, flexDirection: 'row', justifyContent: 'space-between', fontSize: 6, color: '#888' },
@@ -155,7 +157,7 @@ export function GrandLivrePDF({ societe, dateDebut, dateFin, ecritures, compteNa
                 <Text style={[s.infoLbl, { marginTop: 2 }]}>Généré le</Text>
                 <Text style={s.infoVal}>{generatedDate}</Text>
               </View>
-              <View style={s.infoBox}>
+              <View style={s.infoBoxLast}>
                 <Text style={s.infoLbl}>Comptes</Text>
                 <Text style={s.infoVal}>{groups.length}</Text>
                 <Text style={[s.infoLbl, { marginTop: 2 }]}>Écritures</Text>
@@ -176,11 +178,11 @@ export function GrandLivrePDF({ societe, dateDebut, dateFin, ecritures, compteNa
                   <View key={e.id} style={i % 2 === 0 ? s.row : s.rowAlt}>
                     <View style={s.cDate}><Text style={s.txt}>{fmtDate(e.date_ecriture)}</Text></View>
                     <View style={s.cJournal}><Text style={s.txt}>{e.journal || '—'}</Text></View>
-                    <View style={s.cPiece}><Text style={s.txt}>{e.ref_folio || '—'}</Text></View>
-                    <View style={s.cLibelle}><Text style={s.txt}>{(e.description || e.nom_compte || '—').substring(0, 50)}</Text></View>
+                    <View style={s.cPiece}><Text style={s.txt}>{(e.ref_folio || '—').substring(0, 20)}</Text></View>
+                    <View style={s.cLibelle}><Text style={s.txt}>{(e.description || e.nom_compte || '—').substring(0, 45)}</Text></View>
                     <View style={s.cLettre}><Text style={s.txt}>{e.lettre || ''}</Text></View>
-                    <View style={s.cDebit}><Text style={s.txt}>{(Number(e.debit_mur) || 0) > 0 ? fmt(e.debit_mur) : ''}</Text></View>
-                    <View style={s.cCredit}><Text style={s.txt}>{(Number(e.credit_mur) || 0) > 0 ? fmt(e.credit_mur) : ''}</Text></View>
+                    <View style={s.cDebit}><Text style={s.txtRight}>{(Number(e.debit_mur) || 0) > 0 ? fmt(e.debit_mur) : ''}</Text></View>
+                    <View style={s.cCredit}><Text style={s.txtRight}>{(Number(e.credit_mur) || 0) > 0 ? fmt(e.credit_mur) : ''}</Text></View>
                     <View style={s.cSolde}><Text style={[s.bold, { color: e.solde_progressif < 0 ? '#c0392b' : '#000' }]}>{fmt(e.solde_progressif)}</Text></View>
                   </View>
                 ))}
