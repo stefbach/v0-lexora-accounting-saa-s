@@ -145,7 +145,9 @@ Voulez-vous vraiment continuer ?`
         auto: data.stats?.auto_apply || 0,
         arbitration: data.stats?.needs_arbitration || 0,
         total: data.stats?.proposed || 0,
-      })
+        orphans: data.stats?.orphans || 0,
+        by_strategy: data.stats?.by_strategy || {},
+      } as any)
     } catch (e: any) {
       setAiError("Erreur reseau: " + (e.message || ""))
     } finally { setAiAnalyzing(false) }
@@ -595,25 +597,56 @@ Voulez-vous vraiment continuer ?`
                 <Button variant="ghost" size="sm" onClick={() => setAiError(null)} className="ml-auto h-6 w-6 p-0"><X className="w-3 h-3" /></Button>
               </div>
             ) : aiStats && (
-              <div className="flex items-center gap-4 flex-wrap">
-                <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}>
-                  <Sparkles className="w-5 h-5 text-white" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-purple-900">Analyse IA terminee</p>
-                  <p className="text-xs text-gray-600">
-                    {aiStats.total} proposition(s) generees — {aiStats.auto} match(s) a haute confiance (&gt;= 85%), {aiStats.arbitration} a arbitrer
-                  </p>
-                </div>
-                {aiStats.auto > 0 && (
-                  <Button onClick={applyAllHighConfidence} disabled={applyingBatch} size="sm" className="text-white" style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}>
-                    {applyingBatch ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <CheckCircle2 className="w-3 h-3 mr-1" />}
-                    Tout appliquer ({aiStats.auto})
+              <div className="space-y-3">
+                <div className="flex items-center gap-4 flex-wrap">
+                  <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}>
+                    <Sparkles className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-purple-900">Analyse terminee</p>
+                    <p className="text-xs text-gray-600">
+                      {aiStats.total} proposition(s) — {aiStats.auto} auto-matches (haute confiance), {aiStats.arbitration} a arbitrer
+                    </p>
+                  </div>
+                  {aiStats.auto > 0 && (
+                    <Button onClick={applyAllHighConfidence} disabled={applyingBatch} size="sm" className="text-white" style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}>
+                      {applyingBatch ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <CheckCircle2 className="w-3 h-3 mr-1" />}
+                      Tout appliquer ({aiStats.auto})
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="sm" onClick={() => { setAiStats(null); setAiProposals({}); setRejectedProposals(new Set()) }}>
+                    Effacer
                   </Button>
+                </div>
+                {/* Progress bar */}
+                <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div className="h-full transition-all" style={{
+                    width: `${aiStats.total > 0 ? (aiStats.total / (aiStats.total + (aiStats as any).orphans || 1)) * 100 : 0}%`,
+                    background: "linear-gradient(90deg, #10b981, #7c3aed)",
+                  }} />
+                </div>
+                {/* Strategy breakdown */}
+                {(aiStats as any).by_strategy && Object.keys((aiStats as any).by_strategy).length > 0 && (
+                  <div className="flex items-center gap-2 flex-wrap text-[10px]">
+                    <span className="text-gray-500 font-medium">Strategies:</span>
+                    {Object.entries((aiStats as any).by_strategy).map(([k, v]) => {
+                      const labels: Record<string, { label: string; color: string }> = {
+                        exact_reference: { label: "Ref. exacte", color: "bg-emerald-100 text-emerald-700" },
+                        exact_amount: { label: "Montant exact", color: "bg-green-100 text-green-700" },
+                        close_amount: { label: "Montant proche", color: "bg-blue-100 text-blue-700" },
+                        grouped_sum: { label: "Paiement groupe", color: "bg-purple-100 text-purple-700" },
+                        partial: { label: "Partiel", color: "bg-amber-100 text-amber-700" },
+                        historical: { label: "Historique", color: "bg-indigo-100 text-indigo-700" },
+                      }
+                      const meta = labels[k] || { label: k, color: "bg-gray-100 text-gray-700" }
+                      return (
+                        <span key={k} className={`px-2 py-0.5 rounded-full font-medium ${meta.color}`}>
+                          {meta.label}: {String(v)}
+                        </span>
+                      )
+                    })}
+                  </div>
                 )}
-                <Button variant="ghost" size="sm" onClick={() => { setAiStats(null); setAiProposals({}); setRejectedProposals(new Set()) }}>
-                  Effacer
-                </Button>
               </div>
             )}
           </CardContent>
