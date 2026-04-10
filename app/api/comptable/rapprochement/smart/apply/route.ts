@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createEcrituresForPayment } from '@/lib/accounting/ecritures-factures'
+import { getTauxChange, convertToMUR } from '@/lib/taux-change'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -205,14 +206,17 @@ export async function POST(request: Request) {
         continue
       }
 
-      // VERIFICATION 4: Amount tolerance (5%)
-      const txAmount = Math.max(Number(tx.debit) || 0, Number(tx.credit) || 0)
+      // VERIFICATION 4: Amount tolerance (8% — covers TDS + bank fees)
+      const txRaw = Math.max(Number(tx.debit) || 0, Number(tx.credit) || 0)
+      const txDev = (tx.devise || 'MUR').toUpperCase()
+      const ratesFx = await getTauxChange()
+      const txAmount = txDev !== 'MUR' ? convertToMUR(txRaw, txDev, ratesFx) : txRaw
       const sumFactures = factures.reduce((s: number, f: any) => s + (Number(f.montant_mur) || Number(f.montant_ttc) || 0), 0)
-      if (sumFactures > 0 && Math.abs(txAmount - sumFactures) / sumFactures > 0.05) {
+      if (sumFactures > 0 && Math.abs(txAmount - sumFactures) / sumFactures > 0.08) {
         errors.push({
           releve_id,
           transaction_idx,
-          error: `Ecart trop important: tx ${txAmount.toFixed(2)} vs factures ${sumFactures.toFixed(2)} (${((Math.abs(txAmount - sumFactures) / sumFactures) * 100).toFixed(1)}%)`,
+          error: `Ecart trop important: tx ${txAmount.toFixed(2)} MUR vs factures ${sumFactures.toFixed(2)} MUR (${((Math.abs(txAmount - sumFactures) / sumFactures) * 100).toFixed(1)}%)`,
         })
         skipped++
         continue
@@ -269,11 +273,11 @@ export async function POST(request: Request) {
       await createEcrituresForPayment(supabase, {
         societe_id,
         date_payment: datePayment,
-        amount_mur: Math.round(txAmount * 100) / 100,
+        amount_mur: Math.round(txAmount * 100) / 100,  // already converted to MUR
         type: payType,
         tiers,
         ref_folio: `BANK-${releve_id}-${transaction_idx}`,
-        description: `Paiement ${numFactures} — ${tiers}`,
+        description: `Paiement ${numFactures} — ${tiers}${txDev !== 'MUR' ? ` [${txRaw.toFixed(2)} ${txDev}]` : ''}`,
       })
 
       applied++

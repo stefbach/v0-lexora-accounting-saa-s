@@ -3,6 +3,7 @@ import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createEcrituresForPayment } from '@/lib/accounting/ecritures-factures'
+import { getTauxChange, convertToMUR } from '@/lib/taux-change'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 90
@@ -298,7 +299,13 @@ async function executeTool(name: string, input: any, supabase: ReturnType<typeof
     }
 
     // 3. Generate BNQ journal entries (Grand Livre)
-    const txAmountForEntry = Math.max(Number(tx.debit) || 0, Number(tx.credit) || 0)
+    // CRITICAL: convert transaction amount to MUR for journal entries
+    const rates = await getTauxChange()
+    const txDevise = (tx.devise || 'MUR').toUpperCase()
+    const txAmountRaw = Math.max(Number(tx.debit) || 0, Number(tx.credit) || 0)
+    const txAmountMUR = txDevise !== 'MUR'
+      ? convertToMUR(txAmountRaw, txDevise, rates)
+      : txAmountRaw
     const isOutgoingEntry = (Number(tx.debit) || 0) > 0
     const payType: 'supplier' | 'client' = isOutgoingEntry ? 'supplier' : 'client'
     const tiers = (factures[0]?.tiers || tx.tiers_detecte || tx.tiers || '').substring(0, 50)
@@ -310,11 +317,11 @@ async function executeTool(name: string, input: any, supabase: ReturnType<typeof
     await createEcrituresForPayment(supabase, {
       societe_id: releve.societe_id,
       date_payment: datePayment,
-      amount_mur: Math.round(txAmountForEntry * 100) / 100,
+      amount_mur: Math.round(txAmountMUR * 100) / 100,
       type: payType,
       tiers,
       ref_folio: `BANK-${releve_id}-${transaction_idx}`,
-      description: `Paiement ${numFactures} — ${tiers}`,
+      description: `Paiement ${numFactures} — ${tiers}${txDevise !== 'MUR' ? ` [${txAmountRaw.toFixed(2)} ${txDevise}]` : ''}`,
     })
 
     return { success: true, applied: facture_ids.length, lettre, reconciled_factures: factures.map((f: any) => f.numero_facture) }
@@ -398,8 +405,11 @@ async function executeTool(name: string, input: any, supabase: ReturnType<typeof
           .eq('ref_folio', refFolio)
         if ((count || 0) > 0) continue
 
-        // Generate missing entries
-        const txAmount = Math.max(Number(tx.debit) || 0, Number(tx.credit) || 0)
+        // Generate missing entries — convert to MUR
+        const ratesFx = await getTauxChange()
+        const txRaw = Math.max(Number(tx.debit) || 0, Number(tx.credit) || 0)
+        const txDev = (tx.devise || 'MUR').toUpperCase()
+        const txAmount = txDev !== 'MUR' ? convertToMUR(txRaw, txDev, ratesFx) : txRaw
         if (txAmount === 0) continue
         const isOutgoing = (Number(tx.debit) || 0) > 0
         const payType: 'supplier' | 'client' = isOutgoing ? 'supplier' : 'client'
