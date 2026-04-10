@@ -1,0 +1,259 @@
+import { NextResponse } from 'next/server'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase/server'
+import { createEcrituresForPayment } from '@/lib/accounting/ecritures-factures'
+
+export const dynamic = 'force-dynamic'
+export const maxDuration = 60
+
+function getAdminClient() {
+  return createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+}
+
+/**
+ * POST /api/comptable/rapprochement/smart/apply
+ *
+ * Apply smart-engine proposals in batch, optionally filtered by min_confidence.
+ *
+ * Body:
+ *   societe_id: string
+ *   proposals: Array<{
+ *     releve_id: string
+ *     transaction_idx: number
+ *     facture_ids: string[]
+ *     confidence: number
+ *     reasoning: string
+ *   }>
+ *   min_confidence?: number  (default 0.85)
+ *
+ * Returns:
+ *   { applied, skipped, errors[], stats }
+ */
+export async function POST(request: Request) {
+  try {
+    const authClient = await createServerClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Non autorise' }, { status: 401 })
+
+    const supabase = getAdminClient()
+    const body = await request.json()
+    const {
+      societe_id,
+      proposals,
+      min_confidence = 0.85,
+    } = body
+
+    if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
+    if (!Array.isArray(proposals) || proposals.length === 0) {
+      return NextResponse.json({ error: 'proposals requis (array non vide)' }, { status: 400 })
+    }
+
+    const minConf = Number(min_confidence) || 0.85
+
+    // Filter proposals above confidence threshold
+    const toApply = proposals.filter(p => (Number(p.confidence) || 0) >= minConf)
+    const skippedLowConf = proposals.length - toApply.length
+
+    let applied = 0
+    let skipped = skippedLowConf
+    const errors: Array<{ releve_id: string; transaction_idx: number; error: string }> = []
+
+    // Pre-load all releves for this societe to avoid N+1 queries
+    const { data: relevesRaw } = await supabase
+      .from('releves_bancaires')
+      .select('id, transactions_json, societe_id')
+      .eq('societe_id', societe_id)
+
+    const releveMap = new Map<string, any>()
+    for (const r of relevesRaw || []) {
+      releveMap.set(r.id, { ...r, updatedTxs: [...(r.transactions_json || [])] })
+    }
+
+    // Track factures that have been matched in this batch (avoid double-applying)
+    const usedFactureIds = new Set<string>()
+
+    for (const proposal of toApply) {
+      const { releve_id, transaction_idx, facture_ids, reasoning, confidence } = proposal
+
+      if (!releve_id || transaction_idx === undefined || !Array.isArray(facture_ids) || facture_ids.length === 0) {
+        errors.push({ releve_id, transaction_idx, error: 'Parametres manquants' })
+        skipped++
+        continue
+      }
+
+      // VERIFICATION 1: Transaction exists and is not already reconciled
+      const releve = releveMap.get(releve_id)
+      if (!releve) {
+        errors.push({ releve_id, transaction_idx, error: 'Releve non trouve' })
+        skipped++
+        continue
+      }
+      const tx = releve.updatedTxs[transaction_idx]
+      if (!tx) {
+        errors.push({ releve_id, transaction_idx, error: 'Transaction non trouvee' })
+        skipped++
+        continue
+      }
+      if (tx.statut === 'rapproche' || tx.lettre) {
+        errors.push({ releve_id, transaction_idx, error: 'Transaction deja rapprochee' })
+        skipped++
+        continue
+      }
+
+      // VERIFICATION 2: Check for in-batch duplicate facture usage
+      const alreadyUsed = facture_ids.filter(fid => usedFactureIds.has(fid))
+      if (alreadyUsed.length > 0) {
+        errors.push({ releve_id, transaction_idx, error: `Factures deja utilisees dans ce batch: ${alreadyUsed.join(', ')}` })
+        skipped++
+        continue
+      }
+
+      // VERIFICATION 3: Fetch factures and validate
+      const { data: factures } = await supabase.from('factures')
+        .select('id, numero_facture, tiers, montant_ttc, montant_mur, devise, type_facture, statut, rapproche_releve_id')
+        .in('id', facture_ids)
+
+      if (!factures || factures.length !== facture_ids.length) {
+        errors.push({ releve_id, transaction_idx, error: `Factures manquantes: demande ${facture_ids.length}, trouve ${factures?.length || 0}` })
+        skipped++
+        continue
+      }
+
+      const alreadyReconciled = factures.filter((f: any) => f.rapproche_releve_id || f.statut === 'paye')
+      if (alreadyReconciled.length > 0) {
+        errors.push({ releve_id, transaction_idx, error: `Factures deja rapprochees: ${alreadyReconciled.map((f: any) => f.numero_facture).join(', ')}` })
+        skipped++
+        continue
+      }
+
+      // VERIFICATION 4: Amount tolerance (5%)
+      const txAmount = Math.max(Number(tx.debit) || 0, Number(tx.credit) || 0)
+      const sumFactures = factures.reduce((s: number, f: any) => s + (Number(f.montant_mur) || Number(f.montant_ttc) || 0), 0)
+      if (sumFactures > 0 && Math.abs(txAmount - sumFactures) / sumFactures > 0.05) {
+        errors.push({
+          releve_id,
+          transaction_idx,
+          error: `Ecart trop important: tx ${txAmount.toFixed(2)} vs factures ${sumFactures.toFixed(2)} (${((Math.abs(txAmount - sumFactures) / sumFactures) * 100).toFixed(1)}%)`,
+        })
+        skipped++
+        continue
+      }
+
+      // VERIFICATION 5: Direction check (debit=supplier, credit=client)
+      const isOutgoing = (Number(tx.debit) || 0) > 0
+      const expectedType = isOutgoing ? 'fournisseur' : 'client'
+      const wrongType = factures.find((f: any) => f.type_facture !== expectedType)
+      if (wrongType) {
+        errors.push({
+          releve_id,
+          transaction_idx,
+          error: `Direction incorrecte: tx ${isOutgoing ? 'sortie' : 'entree'} mais facture ${wrongType.numero_facture} est ${wrongType.type_facture}`,
+        })
+        skipped++
+        continue
+      }
+
+      // ALL CHECKS PASSED — apply the match
+      const lettre = `SM${Date.now().toString().slice(-6)}`
+      const reconcileDate = new Date().toISOString()
+
+      // Update transaction in the cached releve (will save at end)
+      releve.updatedTxs[transaction_idx] = {
+        ...tx,
+        facture_ids,
+        facture_id: facture_ids[0],
+        lettre,
+        statut: 'rapproche',
+        matched_type: facture_ids.length > 1 ? 'facture_groupee' : 'facture_unique',
+        match_confidence: `smart_${Math.round((Number(confidence) || 0) * 100)}`,
+        note: reasoning || '',
+        rapproche_at: reconcileDate,
+      }
+
+      // Update factures
+      for (const fid of facture_ids) {
+        await supabase.from('factures').update({
+          statut: 'paye',
+          rapproche_releve_id: releve_id,
+          rapproche_transaction_idx: transaction_idx,
+          rapproche_date: reconcileDate,
+          rapproche_source: 'smart',
+        }).eq('id', fid)
+        usedFactureIds.add(fid)
+      }
+
+      // Generate BNQ journal entries
+      const payType: 'supplier' | 'client' = isOutgoing ? 'supplier' : 'client'
+      const tiers = (factures[0]?.tiers || tx.tiers_detecte || tx.tiers || '').substring(0, 50)
+      const datePayment = tx.date || new Date().toISOString().split('T')[0]
+      const numFactures = factures.length > 1
+        ? `${factures.length} factures`
+        : (factures[0]?.numero_facture || '')
+
+      await createEcrituresForPayment(supabase, {
+        societe_id,
+        date_payment: datePayment,
+        amount_mur: Math.round(txAmount * 100) / 100,
+        type: payType,
+        tiers,
+        ref_folio: `BANK-${releve_id}-${transaction_idx}`,
+        description: `Paiement ${numFactures} — ${tiers}`,
+      })
+
+      applied++
+    }
+
+    // Persist all releve changes (batch save)
+    for (const [rid, releve] of releveMap) {
+      const original = (relevesRaw || []).find(r => r.id === rid)
+      if (!original) continue
+      // Only save if there were changes
+      if (JSON.stringify(releve.updatedTxs) !== JSON.stringify(original.transactions_json)) {
+        await supabase.from('releves_bancaires')
+          .update({ transactions_json: releve.updatedTxs })
+          .eq('id', rid)
+      }
+    }
+
+    // Consistency check stats (lightweight — no auto-fix)
+    let consistencyStats: any = null
+    try {
+      const { data: factures } = await supabase.from('factures')
+        .select('id, statut, rapproche_releve_id')
+        .eq('societe_id', societe_id)
+      const { data: releves } = await supabase.from('releves_bancaires')
+        .select('transactions_json').eq('societe_id', societe_id)
+      const claimedIds = new Set<string>()
+      for (const r of releves || []) {
+        for (const tx of r.transactions_json || []) {
+          const ids: string[] = tx.facture_ids || (tx.facture_id ? [tx.facture_id] : [])
+          ids.forEach(id => claimedIds.add(id))
+        }
+      }
+      const payeCount = (factures || []).filter(f => f.statut === 'paye').length
+      const orphans = (factures || []).filter(f => f.statut === 'paye' && !f.rapproche_releve_id && !claimedIds.has(f.id)).length
+      consistencyStats = { total_factures: factures?.length || 0, paye: payeCount, orphans }
+    } catch { /* non-blocking */ }
+
+    return NextResponse.json({
+      applied,
+      skipped,
+      errors,
+      stats: {
+        total_proposals: proposals.length,
+        above_threshold: toApply.length,
+        applied,
+        skipped_low_confidence: skippedLowConf,
+        skipped_validation_errors: skipped - skippedLowConf,
+        consistency: consistencyStats,
+      },
+    })
+  } catch (e: any) {
+    console.error('[smart/apply] error:', e.message)
+    return NextResponse.json({ error: e.message || 'Erreur' }, { status: 500 })
+  }
+}

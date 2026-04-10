@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { createEcrituresForPayment } from '@/lib/accounting/ecritures-factures'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 90
@@ -76,6 +77,28 @@ const TOOLS: Anthropic.Tool[] = [
     input_schema: {
       type: 'object',
       properties: { societe_id: { type: 'string' } },
+      required: ['societe_id'],
+    },
+  },
+  {
+    name: 'run_consistency_check',
+    description: 'Check for inconsistencies between bank transactions and invoices (double claims, orphaned payments, missing links). Call this at the end of a reconciliation session to validate the work.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        societe_id: { type: 'string' },
+      },
+      required: ['societe_id'],
+    },
+  },
+  {
+    name: 'generate_journal_entries',
+    description: 'Generate BNQ journal entries for all matched transactions that are missing accounting entries. Call this after applying matches to ensure the Grand Livre is up to date.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        societe_id: { type: 'string' },
+      },
       required: ['societe_id'],
     },
   },
@@ -239,6 +262,27 @@ async function executeTool(name: string, input: any, supabase: ReturnType<typeof
         rapproche_source: 'ai',
       }).eq('id', fid)
     }
+
+    // 3. Generate BNQ journal entries (Grand Livre)
+    const txAmountForEntry = Math.max(Number(tx.debit) || 0, Number(tx.credit) || 0)
+    const isOutgoingEntry = (Number(tx.debit) || 0) > 0
+    const payType: 'supplier' | 'client' = isOutgoingEntry ? 'supplier' : 'client'
+    const tiers = (factures[0]?.tiers || tx.tiers_detecte || tx.tiers || '').substring(0, 50)
+    const datePayment = tx.date || new Date().toISOString().split('T')[0]
+    const numFactures = factures.length > 1
+      ? `${factures.length} factures (${factures.map((f: any) => f.numero_facture).join(', ')})`
+      : (factures[0]?.numero_facture || '')
+
+    await createEcrituresForPayment(supabase, {
+      societe_id: releve.societe_id,
+      date_payment: datePayment,
+      amount_mur: Math.round(txAmountForEntry * 100) / 100,
+      type: payType,
+      tiers,
+      ref_folio: `BANK-${releve_id}-${transaction_idx}`,
+      description: `Paiement ${numFactures} — ${tiers}`,
+    })
+
     return { success: true, applied: facture_ids.length, lettre, reconciled_factures: factures.map((f: any) => f.numero_facture) }
   }
 
@@ -260,6 +304,88 @@ async function executeTool(name: string, input: any, supabase: ReturnType<typeof
       .eq('societe_id', societe_id)
       .in('statut', ['en_attente', 'retard', 'partiel'])
     return { total_transactions: total, matched, unmatched, unpaid_invoices: unpaidCount || 0 }
+  }
+
+  if (name === 'run_consistency_check') {
+    const { societe_id } = input
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : 'http://localhost:3000'
+      const res = await fetch(`${baseUrl}/api/comptable/rapprochement/consistency?societe_id=${societe_id}`, {
+        headers: { 'x-internal-call': '1' },
+      })
+      if (!res.ok) {
+        // Fallback: run consistency logic directly
+        const { data: factures } = await supabase.from('factures')
+          .select('id, numero_facture, tiers, statut, rapproche_releve_id')
+          .eq('societe_id', societe_id)
+        const { data: releves } = await supabase.from('releves_bancaires')
+          .select('id, transactions_json').eq('societe_id', societe_id)
+        const claimedIds = new Set<string>()
+        for (const r of releves || []) {
+          for (const tx of r.transactions_json || []) {
+            const ids: string[] = tx.facture_ids || (tx.facture_id ? [tx.facture_id] : [])
+            ids.forEach(id => claimedIds.add(id))
+          }
+        }
+        const orphans = (factures || []).filter(f => f.statut === 'paye' && !f.rapproche_releve_id && !claimedIds.has(f.id))
+        return {
+          stats: { total_factures: factures?.length || 0, orphans: orphans.length },
+          inconsistencies: orphans.map(f => ({ type: 'paye_sans_rapprochement', facture: { numero: f.numero_facture, tiers: f.tiers } })),
+        }
+      }
+      return await res.json()
+    } catch (e: any) {
+      return { error: 'Consistency check failed: ' + e.message }
+    }
+  }
+
+  if (name === 'generate_journal_entries') {
+    const { societe_id } = input
+    // Find all rapproche transactions that don't have a BANK-* entry in ecritures_comptables_v2
+    const { data: releves } = await supabase.from('releves_bancaires')
+      .select('id, transactions_json').eq('societe_id', societe_id)
+
+    let generated = 0
+    let errors = 0
+    for (const releve of releves || []) {
+      const txs: any[] = releve.transactions_json || []
+      for (let idx = 0; idx < txs.length; idx++) {
+        const tx = txs[idx]
+        if (tx.statut !== 'rapproche') continue
+        if (!tx.facture_id && !tx.facture_ids?.length) continue
+
+        const refFolio = `BANK-${releve.id}-${idx}`
+        // Check if ecritures already exist for this ref_folio
+        const { count } = await supabase.from('ecritures_comptables_v2')
+          .select('id', { count: 'exact', head: true })
+          .eq('societe_id', societe_id)
+          .eq('ref_folio', refFolio)
+        if ((count || 0) > 0) continue
+
+        // Generate missing entries
+        const txAmount = Math.max(Number(tx.debit) || 0, Number(tx.credit) || 0)
+        if (txAmount === 0) continue
+        const isOutgoing = (Number(tx.debit) || 0) > 0
+        const payType: 'supplier' | 'client' = isOutgoing ? 'supplier' : 'client'
+        const tiers = (tx.tiers_detecte || tx.tiers || '').substring(0, 50)
+        const datePayment = tx.date || new Date().toISOString().split('T')[0]
+
+        const result = await createEcrituresForPayment(supabase, {
+          societe_id,
+          date_payment: datePayment,
+          amount_mur: Math.round(txAmount * 100) / 100,
+          type: payType,
+          tiers,
+          ref_folio: refFolio,
+          description: tx.note || `Paiement bancaire — ${tiers}`,
+        })
+        if (result.ok) generated++
+        else errors++
+      }
+    }
+    return { generated, errors, message: `${generated} ecritures BNQ generees${errors > 0 ? `, ${errors} erreurs` : ''}` }
   }
 
   return { error: `Unknown tool: ${name}` }
@@ -312,19 +438,26 @@ VERIFICATIONS OBLIGATOIRES AVANT apply_match :
 - Les factures ne doivent PAS deja etre marquees payees ou rapprochees
 - Le tiers bancaire doit correspondre au tiers des factures (tolerance sur variations de nom)
 
-WORKFLOW :
-1. list_unmatched_transactions → recupere les transactions a rapprocher
-2. list_unpaid_invoices → recupere TOUTES les factures impayees
-3. Pour chaque transaction : analyse systematique
-4. Si TOUS les 4 criteres ci-dessus sont satisfaits avec confidence >= 0.90 → apply_match
-5. Si criteres ok mais confidence 0.65-0.90 → propose_match (l'utilisateur decidera)
-6. Si un seul critere echoue ou confidence < 0.65 → ne fais rien, rapporte dans le resume
+WORKFLOW COMPLET :
+1. get_reconciliation_stats → etat initial (total, rapproches, non-rapproches, factures impayees)
+2. list_unmatched_transactions → recupere les transactions a rapprocher
+3. list_unpaid_invoices → recupere TOUTES les factures impayees
+4. Pour chaque transaction : analyse systematique
+   - Si TOUS les 4 criteres ci-dessus sont satisfaits avec confidence >= 0.90 → apply_match
+   - Si criteres ok mais confidence 0.65-0.90 → propose_match (l'utilisateur decidera)
+   - Si un seul critere echoue ou confidence < 0.65 → ne fais rien, rapporte dans le resume
+5. generate_journal_entries → generer les ecritures BNQ manquantes pour le Grand Livre
+6. run_consistency_check → valider la coherence finale (double claims, orphelins)
+7. Resume : X rapproches auto, Y proposes, Z orphelins, W incoherences
 
 IMPORTANT :
 - NE MARQUE JAMAIS une facture payee sans certitude quasi totale
 - Mieux vaut ne rien faire que creer une incoherence
 - Si doute → propose_match, pas apply_match
 - apply_match valide 4 contraintes cote serveur — ne le contourne pas
+- Apres chaque apply_match, les ecritures BNQ sont automatiquement generees
+- Appelle generate_journal_entries a la fin pour couvrir les cas manques
+- Appelle run_consistency_check en dernier pour valider l'integrite
 
 Societe_id actuellement selectionne : ${societe_id}
 

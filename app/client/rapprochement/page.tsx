@@ -53,8 +53,70 @@ export default function ClientRapprochementPage() {
   const [selectedPeriode, setSelectedPeriode] = useState('2025-2026')
   const [associes, setAssocies] = useState<any[]>([])
 
-  // Reset state
-  const [resetting, setResetting] = useState(false)
+  // Smart Apply state
+  const [smartLoading, setSmartLoading] = useState(false)
+  const [smartResult, setSmartResult] = useState<any>(null)
+  const [smartProposals, setSmartProposals] = useState<any[]>([])
+  const [smartDialog, setSmartDialog] = useState<'summary' | 'list' | null>(null)
+
+  const handleSmartRapprochement = async () => {
+    if (!societeId) return
+    setSmartLoading(true)
+    setSmartResult(null)
+    setSmartProposals([])
+    try {
+      const res = await fetch('/api/comptable/rapprochement/smart', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          societe_id: societeId,
+          ...(selectedPeriode !== 'tout' ? {
+            date_debut: selectedPeriode === '2025-2026' ? '2025-07-01' : '2024-07-01',
+            date_fin: selectedPeriode === '2025-2026' ? '2026-06-30' : '2025-06-30',
+          } : {}),
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) { alert('Erreur smart: ' + (data.error || 'inconnue')); return }
+      setSmartProposals(data.proposals || [])
+      setSmartResult(data.stats || {})
+      setSmartDialog('summary')
+    } catch (e: any) {
+      alert('Erreur reseau: ' + (e.message || ''))
+    } finally { setSmartLoading(false) }
+  }
+
+  const handleSmartApplyAll = async () => {
+    if (!societeId || smartProposals.length === 0) return
+    setSmartLoading(true)
+    try {
+      const res = await fetch('/api/comptable/rapprochement/smart/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          societe_id: societeId,
+          proposals: smartProposals,
+          min_confidence: 0.85,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) { alert('Erreur apply: ' + (data.error || 'inconnue')); return }
+      const s = data.stats || {}
+      alert(
+        `Rapprochement Smart terminé :\n\n` +
+        `✅ ${data.applied} rapprochements appliqués\n` +
+        `⏭ ${data.skipped} ignorés (confiance insuffisante ou déjà traités)\n` +
+        (data.errors?.length > 0 ? `⚠️ ${data.errors.length} erreur(s)\n` : '') +
+        (s.consistency?.orphans > 0 ? `\n⚠️ ${s.consistency.orphans} facture(s) orpheline(s) détectée(s)` : '\n✅ Cohérence OK')
+      )
+      setSmartDialog(null)
+      setSmartProposals([])
+      setSmartResult(null)
+      await load()
+    } catch (e: any) {
+      alert('Erreur reseau: ' + (e.message || ''))
+    } finally { setSmartLoading(false) }
+  }
 
   const handleResetAll = async () => {
     if (!societeId) return
@@ -477,6 +539,10 @@ Voulez-vous vraiment continuer ?`
           <Button onClick={handleAutoMatch} disabled={autoMatching} className="bg-[#0B0F2E]">
             <Zap className={`w-4 h-4 mr-2 ${autoMatching ? "animate-spin" : ""}`} />
             {autoMatching ? "Analyse..." : "Rapprochement auto"}
+          </Button>
+          <Button onClick={handleSmartRapprochement} disabled={smartLoading || !societeId} className="text-white" style={{ background: "linear-gradient(135deg, #059669, #0891b2)" }}>
+            <Search className={`w-4 h-4 mr-2 ${smartLoading ? "animate-spin" : ""}`} />
+            {smartLoading ? "Analyse..." : "🎯 Rapprochement Smart"}
           </Button>
           <Button onClick={runAiAnalysis} disabled={aiAnalyzing || !societeId} className="text-white" style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}>
             <Sparkles className={`w-4 h-4 mr-2 ${aiAnalyzing ? "animate-spin" : ""}`} />
@@ -1040,6 +1106,94 @@ Voulez-vous vraiment continuer ?`
               )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Smart Apply Dialog ────────────────────────────────────────── */}
+      <Dialog open={smartDialog === 'summary'} onOpenChange={(o) => { if (!o) setSmartDialog(null) }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>🎯 Rapprochement Smart — Résultats</DialogTitle>
+          </DialogHeader>
+          {smartResult && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-3 text-center">
+                <div className="bg-green-50 rounded-lg p-3">
+                  <p className="text-2xl font-bold text-green-700">{smartResult.auto_apply || 0}</p>
+                  <p className="text-xs text-green-600">Haute confiance (≥85%)</p>
+                </div>
+                <div className="bg-orange-50 rounded-lg p-3">
+                  <p className="text-2xl font-bold text-orange-700">{smartResult.needs_arbitration || 0}</p>
+                  <p className="text-xs text-orange-600">À valider manuellement</p>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <p className="text-2xl font-bold text-gray-700">{smartResult.orphans || 0}</p>
+                  <p className="text-xs text-gray-500">Orphelins</p>
+                </div>
+              </div>
+              <p className="text-sm text-gray-500 text-center">
+                {smartResult.proposed || 0} match{smartResult.proposed !== 1 ? 'es' : ''} proposé{smartResult.proposed !== 1 ? 's' : ''} sur {smartResult.total || 0} transaction{smartResult.total !== 1 ? 's' : ''} non-rapprochée{smartResult.total !== 1 ? 's' : ''}
+              </p>
+              <div className="flex flex-col gap-2">
+                <Button
+                  onClick={handleSmartApplyAll}
+                  disabled={smartLoading || (smartResult.auto_apply || 0) === 0}
+                  className="w-full text-white"
+                  style={{ background: "linear-gradient(135deg, #059669, #0891b2)" }}
+                >
+                  {smartLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Zap className="w-4 h-4 mr-2" />}
+                  Appliquer tout (≥85%) — {smartResult.auto_apply || 0} rapprochements
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setSmartDialog('list')}
+                  disabled={(smartProposals.length || 0) === 0}
+                  className="w-full"
+                >
+                  <Search className="w-4 h-4 mr-2" />
+                  Voir les propositions ({smartProposals.length})
+                </Button>
+                <Button variant="ghost" onClick={() => setSmartDialog(null)} className="w-full">
+                  Annuler
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={smartDialog === 'list'} onOpenChange={(o) => { if (!o) setSmartDialog('summary') }}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>🎯 Propositions Smart ({smartProposals.length})</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            {smartProposals.map((p: any, idx: number) => (
+              <div key={idx} className={`border rounded-lg p-3 text-sm ${p.confidence >= 0.85 ? 'border-green-200 bg-green-50' : 'border-orange-200 bg-orange-50'}`}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-medium truncate max-w-[200px]">{p.transaction?.libelle || '—'}</span>
+                  <Badge className={p.confidence >= 0.85 ? 'bg-green-600' : 'bg-orange-500'}>
+                    {Math.round(p.confidence * 100)}%
+                  </Badge>
+                </div>
+                <div className="flex justify-between text-xs text-gray-600">
+                  <span>{p.transaction?.date || '—'}</span>
+                  <span className="font-mono">{p.transaction?.debit ? `-${fmt(p.transaction.debit)}` : `+${fmt(p.transaction?.credit || 0)}`} MUR</span>
+                </div>
+                <div className="mt-1 text-xs text-gray-500">
+                  <span className="font-medium">Facture(s) :</span> {p.factures?.map((f: any) => f.numero_facture || f.tiers).join(', ') || '—'}
+                </div>
+                <div className="mt-1 text-xs text-gray-400 italic">{p.reasoning}</div>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2 pt-2 sticky bottom-0 bg-white border-t">
+            <Button onClick={handleSmartApplyAll} disabled={smartLoading || (smartResult?.auto_apply || 0) === 0} className="flex-1 text-white" style={{ background: "linear-gradient(135deg, #059669, #0891b2)" }}>
+              {smartLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Zap className="w-4 h-4 mr-2" />}
+              Appliquer (≥85%)
+            </Button>
+            <Button variant="outline" onClick={() => setSmartDialog('summary')} className="flex-1">Retour</Button>
+          </div>
         </DialogContent>
       </Dialog>
 

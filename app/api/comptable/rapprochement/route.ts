@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createEcrituresForPayment } from '@/lib/accounting/ecritures-factures'
+import { analyzeAllTransactions, MatchingTransaction, MatchingFacture } from '@/lib/accounting/matching-engine'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getTauxChange } from '@/lib/taux-change'
@@ -234,6 +235,8 @@ export async function POST(request: Request) {
         const updatedTxs = [...txs]
         let changed = false
         let skippedCount = 0
+        // Collect indices of unclassified transactions for batch engine matching
+        const unclassifiedTxIndices: number[] = []
 
         for (let i = 0; i < updatedTxs.length; i++) {
           const tx = updatedTxs[i]
@@ -311,275 +314,139 @@ export async function POST(request: Request) {
 
           if (classified) continue
 
-          // === STANDARD MATCHING (factures, écritures, salary, associé) ===
-          let matched = false
+          // === STANDARD MATCHING via matching-engine ===
+          // Collect this transaction for batch engine processing below (after rules loop)
+          // We use a deferred approach: accumulate unclassified transactions per releve,
+          // then run analyzeAllTransactions once per releve for efficiency.
+          unclassifiedTxIndices.push(i)
+        }
 
-          // Strategy 1: Match with factures — by reference first, then by amount
-          if (factures.length > 0) {
-            const isCredit = txCredit > 0
-            const txLib = (tx.libelle || '').toUpperCase()
-
-            // 1a. Match by invoice reference in bank libelle
-            let matchedFacture = factures.find(f => {
-              if (!f.numero_facture) return false
-              const ref = f.numero_facture.toUpperCase()
-              return txLib.includes(ref) || (ref.length > 3 && txLib.includes(ref.replace(/[^A-Z0-9]/g, '')))
-            })
-
-            // 1b. Match by tiers name + amount with cross-currency support
-            let matchConfidence = ''
-            if (!matchedFacture) {
-              const txAmountMUR = toMUR(txAmount, releveDevise)
-              for (const f of factures) {
-                const typeMatch = isCredit ? f.type_facture === 'client' : f.type_facture === 'fournisseur'
-                if (!typeMatch) continue
-                const fAmountMUR = Number(f.montant_mur) || toMUR(Number(f.montant_ttc) || 0, f.devise || 'MUR')
-                // Same currency: 1% tolerance. Cross-currency: 5% tolerance
-                const sameCurrency = releveDevise === (f.devise || 'MUR')
-                const tolerance = sameCurrency ? 0.01 : 0.05
-                const diff = fAmountMUR > 0 ? Math.abs(txAmountMUR - fAmountMUR) / fAmountMUR : 1
-                if (diff > tolerance) continue
-                // Word overlap scoring for tiers match
-                const tiersScore = wordOverlap(tx.tiers_detecte || tx.tiers || txLib, f.tiers || '')
-                if (tiersScore >= 0.4) { matchedFacture = f; matchConfidence = 'tiers_and_amount'; break }
-                // Amount-only match (lower confidence) — same currency only
-                if (sameCurrency && diff < 0.005) { matchedFacture = f; matchConfidence = 'amount_only'; break }
-              }
-            } else {
-              matchConfidence = 'reference'
+        // Run the matching engine on all unclassified transactions for this releve
+        if (unclassifiedTxIndices.length > 0) {
+          const engineTxs: MatchingTransaction[] = unclassifiedTxIndices.map(i => {
+            const tx = updatedTxs[i]
+            return {
+              releve_id: releve.id,
+              transaction_idx: i,
+              date: tx.date || '',
+              libelle: tx.libelle || '',
+              tiers_detecte: tx.tiers_detecte || tx.tiers || null,
+              debit: Number(tx.debit) || 0,
+              credit: Number(tx.credit) || 0,
+              devise: releveDevise,
             }
+          })
 
-            // 1c. Match by écriture 401 net amount (handles TDS deductions)
-            if (!matchedFacture) {
-              const txAmountMUR = toMUR(txAmount, releveDevise)
-              for (const f of factures) {
-                const typeMatch = isCredit ? f.type_facture === 'client' : f.type_facture === 'fournisseur'
-                if (!typeMatch) continue
-                const tiersScore = wordOverlap(tx.tiers_detecte || tx.tiers || (tx.libelle || ''), f.tiers || '')
-                if (tiersScore < 0.3) continue
-                // Find matching écriture 401/411 by tiers name + date proximity
-                const compte401 = isCredit ? '411' : '401'
-                const ecr = ecritures.find(e => {
-                  if (!e.compte?.startsWith(compte401.substring(0, 2))) return false
-                  const eAmt = isCredit ? Number(e.debit) || 0 : Number(e.credit) || 0
-                  if (eAmt === 0) return false
-                  const eAmtMUR = toMUR(eAmt, releveDevise)
-                  return Math.abs(txAmountMUR - eAmtMUR) / eAmtMUR < 0.02 &&
-                    wordOverlap(e.libelle || '', f.tiers || '') >= 0.3
-                })
-                if (ecr) { matchedFacture = f; matchConfidence = 'tiers_and_amount'; break }
-              }
-            }
+          const engineFactures: MatchingFacture[] = factures.map((f: any) => ({
+            id: f.id,
+            numero_facture: f.numero_facture,
+            tiers: f.tiers,
+            montant_ttc: Number(f.montant_ttc) || 0,
+            montant_mur: f.montant_mur != null ? Number(f.montant_mur) : null,
+            devise: f.devise,
+            date_facture: f.date_facture,
+            date_echeance: f.date_echeance,
+            conditions_paiement: f.conditions_paiement != null ? Number(f.conditions_paiement) : null,
+            type_facture: (f.type_facture === 'fournisseur' ? 'fournisseur' : 'client') as 'client' | 'fournisseur',
+            statut: f.statut,
+          }))
 
-            // 1d. Grouped matching: 1 payment = N factures from same tiers in same month
-            if (!matchedFacture) {
-              const txAmountMUR = toMUR(txAmount, releveDevise)
-              const txMonth = tx.date?.substring(0, 7) || ''
-              if (txMonth) {
-                const tiersFactures = factures.filter(f => {
-                  const typeMatch = isCredit ? f.type_facture === 'client' : f.type_facture === 'fournisseur'
-                  if (!typeMatch) return false
-                  return wordOverlap(tx.tiers_detecte || tx.tiers || (tx.libelle || ''), f.tiers || '') >= 0.3 &&
-                    (f.date_facture || '').substring(0, 7) === txMonth
-                })
-                if (tiersFactures.length > 1) {
-                  const sumMUR = tiersFactures.reduce((s, f) => s + (Number(f.montant_mur) || toMUR(Number(f.montant_ttc) || 0, f.devise || 'MUR')), 0)
-                  if (sumMUR > 0 && Math.abs(txAmountMUR - sumMUR) / sumMUR < 0.05) {
-                    // Grouped match found
-                    const code = `RG${String(counts.matched + 1).padStart(3, '0')}`
-                    const isHighConfidence = true
-                    updatedTxs[i] = { ...tx, facture_ids: tiersFactures.map(f => f.id), facture_id: tiersFactures[0].id, lettre: code, statut: 'rapproche', matched_type: 'facture_groupee', match_confidence: 'grouped', note: `${tiersFactures.length} factures ${(tx.tiers_detecte || tx.tiers || '').substring(0, 20)}`, rapproche_at: new Date().toISOString() }
-                    const reconcileDate = new Date().toISOString()
-                    for (const gf of tiersFactures) {
-                      await supabase.from('factures').update({
-                        statut: 'paye',
-                        rapproche_releve_id: releve.id,
-                        rapproche_transaction_idx: i,
-                        rapproche_date: reconcileDate,
-                        rapproche_source: 'auto',
-                      }).eq('id', gf.id)
-                      factures = factures.filter(f => f.id !== gf.id)
-                    }
-                    // Generate payment entries (use shared helper for consistency)
-                    const gpAmountMUR = toMUR(txAmount, releveDevise)
-                    const gpDateStr = tx.date || new Date().toISOString().split('T')[0]
-                    const gpType: 'supplier' | 'client' = (tiersFactures[0]?.type_facture === 'fournisseur') ? 'supplier' : 'client'
-                    await createEcrituresForPayment(supabase, {
-                      societe_id,
-                      date_payment: gpDateStr,
-                      amount_mur: Math.round(gpAmountMUR * 100) / 100,
-                      type: gpType,
-                      tiers: (tx.tiers_detecte || tx.tiers || '').substring(0, 50),
-                      ref_folio: `BANK-${releve.id}-${i}`,
-                      description: `Paiement groupe ${tiersFactures.length} factures — ${(tx.tiers_detecte || tx.tiers || '').substring(0, 30)}`,
-                    })
-                    matchesList.push({ type: 'facture_groupee', transaction: tx.libelle, facture: `${tiersFactures.length} factures`, montant: txAmount })
-                    matched = true; changed = true; counts.matched++
-                  }
-                }
-              }
-            }
+          const proposals = analyzeAllTransactions(engineTxs, engineFactures)
 
-            if (matchedFacture) {
+          for (const proposal of proposals) {
+            const i = proposal.transaction.transaction_idx
+            const tx = updatedTxs[i]
+            const conf = proposal.confidence
+
+            if (conf >= 0.85) {
+              // High confidence: auto-apply
+              const matchedFactures = proposal.factures
+              const isGroup = matchedFactures.length > 1
               const code = `R${String(counts.matched + 1).padStart(3, '0')}`
-              const isHighConfidence = matchConfidence === 'reference' || matchConfidence === 'tiers_and_amount'
-              updatedTxs[i] = { ...tx, facture_id: matchedFacture.id, lettre: code, statut: isHighConfidence ? 'rapproche' : 'propose', match_confidence: matchConfidence, rapproche_at: isHighConfidence ? new Date().toISOString() : undefined }
-              // Only mark facture as paye for high-confidence matches
-              if (isHighConfidence) {
+              const reconcileDate = new Date().toISOString()
+
+              updatedTxs[i] = {
+                ...tx,
+                facture_ids: proposal.facture_ids,
+                facture_id: proposal.facture_ids[0],
+                lettre: code,
+                statut: 'rapproche',
+                matched_type: isGroup ? 'facture_groupee' : 'facture_unique',
+                match_confidence: `engine_${Math.round(conf * 100)}`,
+                note: proposal.reasoning,
+                rapproche_at: reconcileDate,
+              }
+
+              // Update factures
+              for (const f of matchedFactures) {
                 await supabase.from('factures').update({
                   statut: 'paye',
                   rapproche_releve_id: releve.id,
                   rapproche_transaction_idx: i,
-                  rapproche_date: new Date().toISOString(),
+                  rapproche_date: reconcileDate,
                   rapproche_source: 'auto',
-                }).eq('id', matchedFacture.id)
-
-                // Generate payment entries via shared helper
-                // (idempotent by ref_folio, writes to ecritures_comptables_v2)
-                const payAmountMUR = toMUR(txAmount, releveDevise)
-                const payDateStr = tx.date || new Date().toISOString().split('T')[0]
-                const payType: 'supplier' | 'client' = matchedFacture.type_facture === 'fournisseur' ? 'supplier' : 'client'
-                await createEcrituresForPayment(supabase, {
-                  societe_id,
-                  date_payment: payDateStr,
-                  amount_mur: Math.round(payAmountMUR * 100) / 100,
-                  type: payType,
-                  tiers: (matchedFacture.tiers || '').substring(0, 50),
-                  ref_folio: `BANK-${releve.id}-${i}`,
-                  description: `Paiement ${matchedFacture.numero_facture || ''} — ${(matchedFacture.tiers || '').substring(0, 30)}`,
-                })
+                }).eq('id', f.id)
+                factures = factures.filter((ff: any) => ff.id !== f.id)
               }
 
-              // IAS 21: calculer l'écart de change si devise étrangère
-              const fDevise = matchedFacture.devise || 'MUR'
-              const fTauxFacture = Number(matchedFacture.taux_change) || 1
-              let ecartChange = 0
-              if (fDevise !== 'MUR' && fTauxFacture > 0) {
-                const { data: currentRates } = await supabase
-                  .from('taux_change').select('taux').eq('devise', fDevise).order('date_taux', { ascending: false }).limit(1).maybeSingle()
-                const tauxPaiement = currentRates?.taux || fTauxFacture
-                const fMontant = Number(matchedFacture.montant_ttc) || 0
-                const valeurFacture = fMontant * fTauxFacture  // MUR au taux facture
-                const valeurPaiement = fMontant * tauxPaiement  // MUR au taux paiement
-                ecartChange = Math.round((valeurPaiement - valeurFacture) * 100) / 100
+              // Generate BNQ journal entries
+              const txAmount = Math.max(Number(tx.debit) || 0, Number(tx.credit) || 0)
+              const payAmountMUR = toMUR(txAmount, releveDevise)
+              const isOutgoing = (Number(tx.debit) || 0) > 0
+              const payType: 'supplier' | 'client' = isOutgoing ? 'supplier' : 'client'
+              const tiers = (matchedFactures[0]?.tiers || tx.tiers_detecte || tx.tiers || '').substring(0, 50)
+              const numFactures = isGroup
+                ? `${matchedFactures.length} factures (${matchedFactures.map(f => f.numero_facture).join(', ')})`
+                : (matchedFactures[0]?.numero_facture || '')
 
-                if (Math.abs(ecartChange) > 1) {
-                  // Créer une écriture de gain/perte de change
-                  const { data: dossiers } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
-                  if (dossiers) {
-                    const gainOuPerte = ecartChange > 0 ? { compte: '766', libelle: `Gain de change — ${matchedFacture.tiers || matchedFacture.numero_facture}`, debit: ecartChange, credit: 0 }
-                      : { compte: '666', libelle: `Perte de change — ${matchedFacture.tiers || matchedFacture.numero_facture}`, debit: 0, credit: Math.abs(ecartChange) }
-                    await supabase.from('ecritures_comptables').insert({
-                      dossier_id: dossiers.id, date_ecriture: new Date().toISOString().split('T')[0],
-                      journal: 'OD', compte: gainOuPerte.compte, libelle: gainOuPerte.libelle,
-                      debit: gainOuPerte.debit, credit: gainOuPerte.credit,
-                    })
-                  }
-                }
-              }
-
-              matchesList.push({ type: 'facture', transaction: tx.libelle, facture: matchedFacture.numero_facture, montant: txAmount, ecart_change: ecartChange })
-              factures = factures.filter(f => f.id !== matchedFacture.id)
-              matched = true; changed = true; counts.matched++
-            }
-          }
-
-          // Strategy 2: Match with écritures comptables (debit ↔ credit on bank accounts)
-          if (!matched && ecritures.length > 0) {
-            const matchedEcriture = ecritures.find(e => {
-              // Match debit transaction → credit écriture, and vice versa
-              const eDebit = Number(e.debit) || 0
-              const eCredit = Number(e.credit) || 0
-              const eAmount = txCredit > 0 ? eDebit : eCredit
-              if (eAmount === 0) return false
-              // Match by amount (1% tolerance)
-              if (Math.abs(txAmount - eAmount) > Math.max(eAmount * 0.01, 1)) return false
-              // Prefer bank accounts (51x)
-              if (e.compte?.startsWith('51')) return true
-              // Word overlap matching for tiers/libellé
-              const txTiers = (tx.tiers_detecte || tx.tiers || tx.libelle || '').toLowerCase()
-              const eTiers = (e.libelle || '').toLowerCase()
-              const txW = txTiers.split(/\s+/).filter((w: any) => w.length > 3)
-              const eW = eTiers.split(/\s+/).filter((w: any) => w.length > 3)
-              const overlap = txW.filter((w: any) => eW.some((ew: any) => ew.includes(w) || w.includes(ew))).length
-              return (txW.length > 0 && eW.length > 0 && overlap / Math.max(txW.length, eW.length) >= 0.3)
-            })
-            if (matchedEcriture) {
-              const code = `L${String(counts.matched + 1).padStart(3, '0')}`
-              updatedTxs[i] = { ...tx, ecriture_id: matchedEcriture.id, lettre: code, statut: 'rapproche' }
-              // Also letter the écriture
-              await supabase.from('ecritures_comptables')
-                .update({ lettre: code, date_lettrage: new Date().toISOString().split('T')[0], lettrage_auto: true })
-                .eq('id', matchedEcriture.id)
-              matchesList.push({ type: 'ecriture', transaction: tx.libelle, ecriture: matchedEcriture.libelle, montant: txAmount })
-              ecritures = ecritures.filter(e => e.id !== matchedEcriture.id)
-              matched = true; changed = true; counts.matched++
-            }
-          }
-
-          // Strategy 3: Match salary payments with bulletins_paie
-          if (!matched && txDebit > 0 && (allBulletins || []).length > 0) {
-            const txAmountMUR = toMUR(txAmount, releveDevise)
-            const matchedBulletin = (allBulletins || []).find(b => {
-              const emp = empMap[b.employe_id]
-              if (!emp) return false
-              const empName = normalizeTiers(`${emp.nom} ${emp.prenom}`)
-              const txNorm = normalizeTiers(tx.libelle || '')
-              const nameMatch = wordOverlap(empName, txNorm) >= 0.4 || txNorm.includes(normalizeTiers(emp.nom))
-              if (!nameMatch) return false
-              const bNet = Number(b.salaire_net) || 0
-              return bNet > 0 && Math.abs(txAmountMUR - bNet) / bNet < 0.02
-            })
-            if (matchedBulletin) {
-              const emp = empMap[matchedBulletin.employe_id]
-              const code = `S${String(counts.matched + 1).padStart(3, '0')}`
-              updatedTxs[i] = { ...tx, lettre: code, statut: 'rapproche', matched_type: 'salaire', employe_id: matchedBulletin.employe_id }
-              matchesList.push({ type: 'salaire', transaction: tx.libelle, ecriture: `Salaire ${emp?.nom} ${emp?.prenom}`, montant: txAmount })
-              matched = true; changed = true; counts.matched++
-            }
-          }
-
-          // Strategy 4: Match MRA payments (TVA, CSG, PAYE)
-          if (!matched && txDebit > 0 && (tx.libelle || '').toUpperCase().includes('MAURITIUS REVENUE')) {
-            const mraEcriture = ecritures.find(e => {
-              if (!e.compte?.match(/^(444|431|432|4457)/)) return false
-              const eAmount = Number(e.credit) || 0
-              if (eAmount === 0) return false
-              return Math.abs(txAmount - eAmount) / eAmount < 0.05
-            })
-            if (mraEcriture) {
-              const code = `MRA${String(counts.matched + 1).padStart(3, '0')}`
-              updatedTxs[i] = { ...tx, ecriture_id: mraEcriture.id, lettre: code, statut: 'rapproche', matched_type: 'mra' }
-              await supabase.from('ecritures_comptables').update({ lettre: code, date_lettrage: new Date().toISOString().split('T')[0] }).eq('id', mraEcriture.id)
-              matchesList.push({ type: 'mra', transaction: tx.libelle, ecriture: mraEcriture.libelle, montant: txAmount })
-              ecritures = ecritures.filter(e => e.id !== mraEcriture.id)
-              matched = true; changed = true; counts.matched++
-            }
-          }
-
-          // Strategy 5: Match associé transfers
-          if (!matched && (ccMouvements || []).length > 0) {
-            const txNorm = normalizeTiers(tx.libelle || '')
-            for (const cc of ccComptes || []) {
-              const ccNorm = normalizeTiers(cc.nom)
-              if (wordOverlap(txNorm, ccNorm) < 0.3 && !txNorm.includes(ccNorm)) continue
-              const matchedMvt = (ccMouvements || []).find(m => {
-                if (m.compte_courant_id !== cc.id) return false
-                const mAmount = Number(m.montant) || 0
-                return mAmount > 0 && Math.abs(txAmount - mAmount) / mAmount < 0.02
+              await createEcrituresForPayment(supabase, {
+                societe_id,
+                date_payment: tx.date || new Date().toISOString().split('T')[0],
+                amount_mur: Math.round(payAmountMUR * 100) / 100,
+                type: payType,
+                tiers,
+                ref_folio: `BANK-${releve.id}-${i}`,
+                description: `Paiement ${numFactures} — ${tiers}`,
               })
-              if (matchedMvt) {
-                const code = `CCA${String(counts.matched + 1).padStart(3, '0')}`
-                updatedTxs[i] = { ...tx, lettre: code, statut: 'rapproche', matched_type: 'associe', compte_courant_id: cc.id }
-                matchesList.push({ type: 'associe', transaction: tx.libelle, ecriture: `${cc.nom} — ${matchedMvt.description || 'mouvement'}`, montant: txAmount })
-                matched = true; changed = true; counts.matched++; break
+
+              matchesList.push({
+                type: isGroup ? 'facture_groupee' : 'facture',
+                transaction: tx.libelle,
+                facture: isGroup ? `${matchedFactures.length} factures` : matchedFactures[0]?.numero_facture,
+                montant: txAmount,
+                strategy: proposal.strategy,
+                confidence: conf,
+              })
+              changed = true
+              counts.matched++
+            } else if (conf >= 0.65) {
+              // Medium confidence: propose for manual review
+              const code = `P${String(counts.propose + 1).padStart(3, '0')}`
+              updatedTxs[i] = {
+                ...tx,
+                facture_ids: proposal.facture_ids,
+                facture_id: proposal.facture_ids[0],
+                lettre: code,
+                statut: 'propose',
+                matched_type: 'propose',
+                match_confidence: `engine_${Math.round(conf * 100)}`,
+                note: proposal.reasoning,
               }
+              changed = true
+              counts.propose++
+            } else {
+              counts.not_matched++
             }
           }
 
-          if (!matched && !classified) counts.not_matched++
-          if (matched) { changed = true }
+          // Count unmatched: transactions that had no proposal
+          const matchedIndices = new Set(proposals.map(p => p.transaction.transaction_idx))
+          for (const i of unclassifiedTxIndices) {
+            if (!matchedIndices.has(i)) counts.not_matched++
+          }
         }
+
+        // (end of per-releve processing)
 
         console.log(`[rapprochement] Releve ${releve.id}: ${txs.length} txs, ${skippedCount} skipped, changed=${changed}`)
 
