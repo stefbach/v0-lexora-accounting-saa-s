@@ -14,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Search, Plus, Loader2, FileText, TrendingUp, Clock, AlertCircle,
   Eye, Trash2, RefreshCw, CalendarDays, Settings, Pencil, CheckCircle2,
-  Shield, ShieldCheck, X
+  Shield, ShieldCheck, X, Building2
 } from "lucide-react"
 
 interface Facture {
@@ -168,12 +168,46 @@ export default function ClientFacturesPage() {
   }
 
   const handleDelete = async (f: Facture) => {
-    if (f.statut !== "brouillon") return
-    if (!confirm("Supprimer cette facture brouillon ?")) return
+    if (f.statut !== "brouillon") {
+      if (!confirm(`Cette facture est en statut "${f.statut}". La supprimer definitivement ?\n\nLes ecritures comptables associees seront aussi supprimees.`)) return
+    } else {
+      if (!confirm("Supprimer cette facture brouillon ?")) return
+    }
     try {
-      const res = await fetch(`/api/client/factures?id=${f.id}`, { method: "DELETE" })
+      const res = await fetch(`/api/client/factures?id=${f.id}&force=1`, { method: "DELETE" })
       if (res.ok) fetchData()
-    } catch { }
+      else { const d = await res.json().catch(() => ({})); alert(d.error || "Erreur suppression") }
+    } catch (e: any) { alert("Erreur reseau: " + (e.message || "")) }
+  }
+
+  // Reassign invoice to a different societe
+  const [reassignOpen, setReassignOpen] = useState(false)
+  const [reassignFacture, setReassignFacture] = useState<Facture | null>(null)
+  const [reassignSocieteId, setReassignSocieteId] = useState("")
+  const [reassignSaving, setReassignSaving] = useState(false)
+
+  const openReassign = (f: Facture) => {
+    setReassignFacture(f)
+    setReassignSocieteId(f.societe_id)
+    setReassignOpen(true)
+  }
+
+  const saveReassign = async () => {
+    if (!reassignFacture || !reassignSocieteId) return
+    if (reassignSocieteId === reassignFacture.societe_id) { setReassignOpen(false); return }
+    setReassignSaving(true)
+    try {
+      const res = await fetch("/api/client/factures", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: reassignFacture.id, societe_id: reassignSocieteId }),
+      })
+      const data = await res.json()
+      if (!res.ok) { alert(data.error || "Erreur"); return }
+      setReassignOpen(false)
+      fetchData()
+    } catch (e: any) { alert("Erreur reseau: " + (e.message || "")) }
+    finally { setReassignSaving(false) }
   }
 
   // ── Recurring ──
@@ -389,9 +423,8 @@ export default function ClientFacturesPage() {
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
                             <Button variant="ghost" size="sm" onClick={() => handlePreview(f)} title="Apercu"><Eye className="w-4 h-4" /></Button>
-                            {f.statut === "brouillon" && (
-                              <Button variant="ghost" size="sm" onClick={() => handleDelete(f)} className="text-red-500 hover:text-red-700" title="Supprimer"><Trash2 className="w-4 h-4" /></Button>
-                            )}
+                            <Button variant="ghost" size="sm" onClick={() => openReassign(f)} title="Changer de societe" className="text-amber-600 hover:text-amber-700"><Building2 className="w-4 h-4" /></Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleDelete(f)} className="text-red-500 hover:text-red-700" title="Supprimer"><Trash2 className="w-4 h-4" /></Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -590,6 +623,55 @@ export default function ClientFacturesPage() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setDetailFacture(null)}>Fermer</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reassign société dialog */}
+      <Dialog open={reassignOpen} onOpenChange={setReassignOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Building2 className="w-5 h-5 text-amber-600" />
+              Changer de societe
+            </DialogTitle>
+          </DialogHeader>
+          {reassignFacture && (
+            <div className="space-y-4 py-2">
+              <div className="p-3 bg-gray-50 rounded-lg text-sm">
+                <p><strong>Facture :</strong> {reassignFacture.numero_facture || "—"}</p>
+                <p><strong>Client :</strong> {reassignFacture.tiers || "—"}</p>
+                <p><strong>Montant :</strong> {fmt(reassignFacture.montant_ttc)} {reassignFacture.devise}</p>
+              </div>
+              <div>
+                <Label>Societe actuelle</Label>
+                <p className="text-sm text-gray-500 mt-1">
+                  {societes.find(s => s.id === reassignFacture.societe_id)?.nom || "Inconnue"}
+                </p>
+              </div>
+              <div>
+                <Label>Reassigner vers</Label>
+                <Select value={reassignSocieteId} onValueChange={setReassignSocieteId}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Choisir une societe..." /></SelectTrigger>
+                  <SelectContent>
+                    {societes.map(s => (
+                      <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <p className="text-xs text-amber-600 flex items-start gap-1">
+                <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
+                La facture et le document numerise associe seront deplaces vers la nouvelle societe.
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReassignOpen(false)}>Annuler</Button>
+            <Button onClick={saveReassign} disabled={reassignSaving || !reassignSocieteId} className="bg-[#0B0F2E] text-white">
+              {reassignSaving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+              Reassigner
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -334,12 +334,40 @@ export async function PATCH(request: Request) {
       .single()
 
     if (existing && existing.statut !== 'brouillon' && existing.statut !== 'en_attente') {
-      // Allow status updates (e.g., marking as paid) but not content edits on finalized invoices
-      const allowedUpdates = ['statut', 'mode_paiement', 'paye_par', 'notes']
+      // Allow status updates (e.g., marking as paid) + societe_id correction (reassignment)
+      // but not full content edits on finalized invoices
+      const allowedUpdates = ['statut', 'mode_paiement', 'paye_par', 'notes', 'societe_id']
       const keys = Object.keys(updates)
       const hasDisallowed = keys.some(k => !allowedUpdates.includes(k))
       if (hasDisallowed) {
-        return NextResponse.json({ error: 'Seules les factures brouillon peuvent etre modifiees' }, { status: 400 })
+        return NextResponse.json({ error: 'Seules les factures brouillon peuvent etre modifiees (sauf statut/mode_paiement/societe)' }, { status: 400 })
+      }
+    }
+
+    // If societe_id is changed, also update the linked document record
+    if (updates.societe_id && existing && updates.societe_id !== existing.societe_id) {
+      try {
+        // Find old and new dossier
+        const { data: newDossier } = await supabase
+          .from('dossiers').select('id').eq('societe_id', updates.societe_id).limit(1).maybeSingle()
+        const { data: newSoc } = await supabase
+          .from('societes').select('nom').eq('id', updates.societe_id).maybeSingle()
+        if (newDossier?.id) {
+          // Find the linked document by n8n_result.facture_id
+          const { data: linkedDocs } = await supabase
+            .from('documents')
+            .select('id, n8n_result')
+            .contains('n8n_result', { facture_id: id })
+          for (const doc of linkedDocs || []) {
+            await supabase.from('documents').update({
+              dossier_id: newDossier.id,
+              societe_detectee: newSoc?.nom || null,
+            }).eq('id', doc.id)
+          }
+          console.log(`[factures PATCH] Reassigned facture ${id} and ${linkedDocs?.length || 0} linked document(s) to societe ${updates.societe_id}`)
+        }
+      } catch (e: any) {
+        console.warn('[factures PATCH] Failed to update linked document societe:', e.message)
       }
     }
 
@@ -395,18 +423,46 @@ export async function DELETE(request: Request) {
 
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
+    const force = searchParams.get('force') === '1'
     if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
 
-    // Only allow deleting drafts
     const { data: existing } = await supabase
       .from('factures')
-      .select('statut')
+      .select('statut, societe_id, numero_facture')
       .eq('id', id)
       .single()
 
     if (!existing) return NextResponse.json({ error: 'Facture introuvable' }, { status: 404 })
-    if (existing.statut !== 'brouillon') {
-      return NextResponse.json({ error: 'Seules les factures brouillon peuvent etre supprimees' }, { status: 400 })
+
+    // Non-drafts require force=1 (confirmed delete with cascade)
+    if (existing.statut !== 'brouillon' && !force) {
+      return NextResponse.json({ error: `Facture en statut "${existing.statut}". Utilisez force=1 pour supprimer avec les ecritures associees.` }, { status: 400 })
+    }
+
+    // Cascade: delete linked documents (n8n_result contains facture_id)
+    try {
+      const { data: linkedDocs } = await supabase
+        .from('documents').select('id').contains('n8n_result', { facture_id: id })
+      for (const doc of linkedDocs || []) {
+        await supabase.from('documents').delete().eq('id', doc.id)
+      }
+      if (linkedDocs && linkedDocs.length > 0) {
+        console.log(`[factures DELETE] Removed ${linkedDocs.length} linked document(s) for facture ${id}`)
+      }
+    } catch (e: any) {
+      console.warn('[factures DELETE] Failed to remove linked documents:', e.message)
+    }
+
+    // Cascade: delete accounting entries
+    try {
+      const libellePrefix = `Facture ${existing.numero_facture || ''}`
+      const { data: dossier } = await supabase.from('dossiers').select('id').eq('societe_id', existing.societe_id).limit(1).maybeSingle()
+      if (dossier?.id) {
+        await supabase.from('ecritures_comptables')
+          .delete().eq('dossier_id', dossier.id).like('libelle', `${libellePrefix}%`)
+      }
+    } catch (e: any) {
+      console.warn('[factures DELETE] Failed to remove ecritures:', e.message)
     }
 
     const { error } = await supabase

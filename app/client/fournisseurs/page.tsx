@@ -9,7 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
-import { Search, Loader2, FileText, AlertTriangle, Download, User } from "lucide-react"
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Search, Loader2, FileText, AlertTriangle, Download, User, Trash2, Building2, AlertCircle } from "lucide-react"
 import * as XLSX from "xlsx"
 import { MonthPicker } from "@/components/ui/MonthPicker"
 
@@ -74,6 +76,46 @@ export default function ClientFournisseursPage() {
   }, [societe])
 
   useEffect(() => { load() }, [load])
+
+  // Delete
+  const handleDelete = async (f: any) => {
+    if (!confirm(`Supprimer la facture ${f.numero_facture || ""} de ${f.tiers || ""} ?\n\nLes ecritures comptables associees seront aussi supprimees.`)) return
+    try {
+      const res = await fetch(`/api/comptable/factures?id=${f.id}`, { method: "DELETE" })
+      if (res.ok) load()
+      else { const d = await res.json().catch(() => ({})); alert(d.error || "Erreur") }
+    } catch (e: any) { alert("Erreur: " + (e.message || "")) }
+  }
+
+  // Reassign
+  const [reassignOpen, setReassignOpen] = useState(false)
+  const [reassignFacture, setReassignFacture] = useState<any>(null)
+  const [reassignSocieteId, setReassignSocieteId] = useState("")
+  const [reassignSaving, setReassignSaving] = useState(false)
+
+  const openReassign = (f: any) => {
+    setReassignFacture(f)
+    setReassignSocieteId(f.societe_id || "")
+    setReassignOpen(true)
+  }
+
+  const saveReassign = async () => {
+    if (!reassignFacture || !reassignSocieteId) return
+    if (reassignSocieteId === reassignFacture.societe_id) { setReassignOpen(false); return }
+    setReassignSaving(true)
+    try {
+      const res = await fetch("/api/comptable/factures", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: reassignFacture.id, societe_id: reassignSocieteId }),
+      })
+      const data = await res.json()
+      if (!res.ok) { alert(data.error || "Erreur"); return }
+      setReassignOpen(false)
+      load()
+    } catch (e: any) { alert("Erreur: " + (e.message || "")) }
+    finally { setReassignSaving(false) }
+  }
 
   // Build unique fournisseur list
   const fournisseurs = Array.from(new Set(factures.map(f => f.tiers).filter(Boolean))).sort()
@@ -230,6 +272,7 @@ export default function ClientFournisseursPage() {
                   <TableHead>Échéance</TableHead>
                   <TableHead>Statut</TableHead>
                   <TableHead>Devise</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -244,11 +287,21 @@ export default function ClientFournisseursPage() {
                     <TableCell>{row.date_echeance ? new Date(row.date_echeance).toLocaleDateString("fr-FR") : "—"}</TableCell>
                     <TableCell>{getStatutBadge(row.statut)}</TableCell>
                     <TableCell>{row.devise || "MUR"}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="sm" onClick={() => openReassign(row)} title="Changer de societe" className="h-7 w-7 p-0 text-amber-600">
+                          <Building2 className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => handleDelete(row)} title="Supprimer" className="h-7 w-7 p-0 text-red-500">
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
                 {filtered.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                       {search || selectedFournisseur !== "all"
                         ? "Aucune facture fournisseur trouvée pour cette recherche."
                         : "Aucune facture fournisseur disponible. Les factures apparaîtront ici une fois traitées par OCR."}
@@ -260,6 +313,55 @@ export default function ClientFournisseursPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Reassign dialog */}
+      <Dialog open={reassignOpen} onOpenChange={setReassignOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Building2 className="w-5 h-5 text-amber-600" />
+              Changer de societe
+            </DialogTitle>
+          </DialogHeader>
+          {reassignFacture && (
+            <div className="space-y-4 py-2">
+              <div className="p-3 bg-gray-50 rounded-lg text-sm">
+                <p><strong>Fournisseur :</strong> {reassignFacture.tiers || "—"}</p>
+                <p><strong>N° Facture :</strong> {reassignFacture.numero_facture || "—"}</p>
+                <p><strong>Montant :</strong> {fmt2(reassignFacture.montant_ttc || 0)} {reassignFacture.devise || "MUR"}</p>
+              </div>
+              <div>
+                <Label>Societe actuelle</Label>
+                <p className="text-sm text-gray-500 mt-1">
+                  {societes.find(s => s.id === reassignFacture.societe_id)?.nom || "Inconnue"}
+                </p>
+              </div>
+              <div>
+                <Label>Reassigner vers</Label>
+                <Select value={reassignSocieteId} onValueChange={setReassignSocieteId}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {societes.map((s: any) => (
+                      <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <p className="text-xs text-amber-600 flex items-start gap-1">
+                <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
+                La facture et le document numerise associe seront deplaces vers la nouvelle societe.
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReassignOpen(false)}>Annuler</Button>
+            <Button onClick={saveReassign} disabled={reassignSaving || !reassignSocieteId} className="bg-[#0B0F2E] text-white">
+              {reassignSaving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+              Reassigner
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

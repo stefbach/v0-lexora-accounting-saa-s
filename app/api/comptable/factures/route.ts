@@ -113,3 +113,86 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
+
+// PATCH — update a facture (including societe_id reassignment)
+export async function PATCH(request: Request) {
+  try {
+    const { createClient: createAdminClient } = await import('@supabase/supabase-js')
+    const admin = createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } })
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Non autorise' }, { status: 401 })
+
+    const body = await request.json()
+    const { id, ...updates } = body
+    if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
+
+    const { data: existing } = await admin.from('factures').select('*').eq('id', id).single()
+    if (!existing) return NextResponse.json({ error: 'Facture introuvable' }, { status: 404 })
+
+    updates.updated_at = new Date().toISOString()
+    const { data, error } = await admin.from('factures').update(updates).eq('id', id).select().single()
+    if (error) throw error
+
+    // If societe_id changed, update linked document record too
+    if (updates.societe_id && updates.societe_id !== existing.societe_id) {
+      try {
+        const { data: newDossier } = await admin.from('dossiers').select('id').eq('societe_id', updates.societe_id).limit(1).maybeSingle()
+        const { data: newSoc } = await admin.from('societes').select('nom').eq('id', updates.societe_id).maybeSingle()
+        if (newDossier?.id) {
+          const { data: linkedDocs } = await admin.from('documents').select('id').contains('n8n_result', { facture_id: id })
+          for (const doc of linkedDocs || []) {
+            await admin.from('documents').update({ dossier_id: newDossier.id, societe_detectee: newSoc?.nom || null }).eq('id', doc.id)
+          }
+        }
+      } catch (e: any) {
+        console.warn('[comptable/factures PATCH] Linked document update failed:', e.message)
+      }
+    }
+
+    return NextResponse.json({ facture: data })
+  } catch (e: unknown) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
+  }
+}
+
+// DELETE — delete a facture (cascade to linked document + ecritures)
+export async function DELETE(request: Request) {
+  try {
+    const { createClient: createAdminClient } = await import('@supabase/supabase-js')
+    const admin = createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } })
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Non autorise' }, { status: 401 })
+
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get('id')
+    if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
+
+    const { data: existing } = await admin.from('factures').select('*').eq('id', id).single()
+    if (!existing) return NextResponse.json({ error: 'Facture introuvable' }, { status: 404 })
+
+    // Cascade: delete linked document
+    try {
+      const { data: linkedDocs } = await admin.from('documents').select('id').contains('n8n_result', { facture_id: id })
+      for (const doc of linkedDocs || []) await admin.from('documents').delete().eq('id', doc.id)
+    } catch {}
+
+    // Cascade: delete accounting entries
+    try {
+      const libellePrefix = `Facture ${existing.numero_facture || ''}`
+      const { data: dossier } = await admin.from('dossiers').select('id').eq('societe_id', existing.societe_id).limit(1).maybeSingle()
+      if (dossier?.id) {
+        await admin.from('ecritures_comptables').delete().eq('dossier_id', dossier.id).like('libelle', `${libellePrefix}%`)
+      }
+    } catch {}
+
+    const { error } = await admin.from('factures').delete().eq('id', id)
+    if (error) throw error
+    return NextResponse.json({ success: true })
+  } catch (e: unknown) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
+  }
+}
