@@ -689,51 +689,61 @@ function TierCard({
 
 /* ---------- Matrix Table ---------- */
 function MatrixTable({ txt }: { txt: Txt }) {
+  const tierCount = txt.tierNamesShort.length
+  const totalCols = 1 + tierCount
+  const featureColWidth = "40%"
+  const tierColWidth = `${60 / tierCount}%`
+
   return (
     <div style={{ overflowX: "auto", marginTop: "32px" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px", minWidth: "700px" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px", minWidth: "700px", tableLayout: "fixed" }}>
+        <colgroup>
+          <col style={{ width: featureColWidth }} />
+          {txt.tierNamesShort.map((t) => (
+            <col key={t} style={{ width: tierColWidth }} />
+          ))}
+        </colgroup>
         <thead>
           <tr>
-            <th style={{ textAlign: "left", padding: "12px 16px", color: C.muted, fontWeight: 600, borderBottom: `1px solid ${C.navyBorder}`, width: "40%" }}>{txt.matrixCol}</th>
+            <th style={{ textAlign: "left", padding: "12px 16px", color: C.muted, fontWeight: 600, borderBottom: `1px solid ${C.navyBorder}` }}>{txt.matrixCol}</th>
             {txt.tierNamesShort.map((t) => (
-              <th key={t} style={{ textAlign: "center", padding: "12px 8px", color: C.gold, fontWeight: 700, borderBottom: `1px solid ${C.navyBorder}`, width: "15%" }}>{t}</th>
+              <th key={t} style={{ textAlign: "center", padding: "12px 8px", color: C.gold, fontWeight: 700, borderBottom: `1px solid ${C.navyBorder}` }}>{t}</th>
             ))}
           </tr>
         </thead>
-        <tbody>
-          {txt.matrixCats.map((cat, ci) => (
-            <tbody key={cat.category}>
-              <tr>
-                <td colSpan={5} style={{
-                  padding: "14px 16px 8px", fontWeight: 700, fontSize: "14px",
-                  borderBottom: `1px solid ${C.navyBorder}`,
-                  color: (cat as any).isGreen ? C.green : C.gold,
-                  backgroundColor: (cat as any).isGreen ? `${C.green}08` : `${C.gold}08`,
-                }}>
-                  {cat.category}
-                </td>
-              </tr>
-              {cat.features.map((fname, fi) => {
-                const row = matrixTiers[ci]?.[fi] || [false, false, false, false]
-                return (
-                  <tr key={fname} style={(cat as any).isGreen ? { backgroundColor: `${C.green}05` } : undefined}>
-                    <td style={{ padding: "10px 16px", color: C.white, borderBottom: `1px solid ${C.navyBorder}20` }}>{fname}</td>
-                    {row.map((v: boolean | string, ti: number) => (
-                      <td key={ti} style={{
-                        textAlign: "center", padding: "10px 8px",
-                        borderBottom: `1px solid ${C.navyBorder}20`,
-                        color: v === true ? C.green : v === false ? C.muted : C.blue,
-                        fontWeight: typeof v === "string" ? 600 : 400,
-                      }}>
-                        {v === true ? <Check className="w-4 h-4 inline-block" /> : v === false ? <Minus className="w-4 h-4 inline-block" /> : String(v)}
-                      </td>
-                    ))}
-                  </tr>
-                )
-              })}
-            </tbody>
-          ))}
-        </tbody>
+        {txt.matrixCats.map((cat, ci) => (
+          <tbody key={cat.category}>
+            <tr>
+              <td colSpan={totalCols} style={{
+                padding: "14px 16px 8px", fontWeight: 700, fontSize: "14px",
+                borderBottom: `1px solid ${C.navyBorder}`,
+                color: (cat as any).isGreen ? C.green : C.gold,
+                backgroundColor: (cat as any).isGreen ? `${C.green}08` : `${C.gold}08`,
+              }}>
+                {cat.category}
+              </td>
+            </tr>
+            {cat.features.map((fname, fi) => {
+              const row = matrixTiers[ci]?.[fi] || [false, false, false, false]
+              return (
+                <tr key={fname} style={(cat as any).isGreen ? { backgroundColor: `${C.green}05` } : undefined}>
+                  <td style={{ padding: "10px 16px", color: C.white, borderBottom: `1px solid ${C.navyBorder}20`, textAlign: "left" }}>{fname}</td>
+                  {row.map((v: boolean | string, ti: number) => (
+                    <td key={ti} style={{
+                      textAlign: "center", padding: "10px 8px",
+                      borderBottom: `1px solid ${C.navyBorder}20`,
+                      color: v === true ? C.green : v === false ? C.muted : C.blue,
+                      fontWeight: typeof v === "string" ? 600 : 400,
+                      verticalAlign: "middle",
+                    }}>
+                      {v === true ? <Check className="w-4 h-4 inline-block" /> : v === false ? <Minus className="w-4 h-4 inline-block" /> : String(v)}
+                    </td>
+                  ))}
+                </tr>
+              )
+            })}
+          </tbody>
+        ))}
       </table>
     </div>
   )

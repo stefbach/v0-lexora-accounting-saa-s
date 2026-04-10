@@ -27,11 +27,6 @@ import {
   ArrowRight,
   CheckCircle2,
   Briefcase,
-  LayoutDashboard,
-  Coins,
-  Gift,
-  TrendingUp,
-  ShieldCheck,
 } from "lucide-react"
 
 export default function HomePage() {
@@ -125,11 +120,8 @@ export default function HomePage() {
             <a href="#ai" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif" }}>
               {t('home.ai_intelligence', locale)}
             </a>
-            <a href="#plans" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif" }}>
-              {t('home.plans', locale)}
-            </a>
-            <a href="#expert-comptable" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif" }}>
-              {locale === "fr" ? "Experts-Comptables" : "Accountants"}
+            <a href="#offres" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif" }}>
+              {locale === "fr" ? "Offres" : "Offers"}
             </a>
             <a href="#compliance" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif" }}>
               {t('home.compliance', locale)}
@@ -280,284 +272,341 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* PLANS — teaser CTA vers /tarifs */}
-        <section id="plans" className="py-20 md:py-28" style={{ backgroundColor: "#FFFFFF" }}>
-          <div className="mx-auto max-w-3xl px-6 text-center">
-            <h2 className="mb-4 text-3xl font-bold md:text-4xl" style={{ color: "#0B0F2E", fontFamily: "'Poppins', sans-serif", fontWeight: 700 }}>
-              {t('home.adapted_plans', locale)}
-            </h2>
-            <p className="mx-auto mb-8 max-w-2xl" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif", fontWeight: 300, lineHeight: 1.7 }}>
-              {t('home.adapted_plans_desc', locale)}
-            </p>
-            <div className="flex flex-wrap items-center justify-center gap-4 mb-10">
-              {["Comptabilité + Facturation", "RH & Paie", "Pack Complet ERP"].map((label) => (
-                <div
-                  key={label}
-                  className="rounded-full px-5 py-2 text-sm font-medium"
-                  style={{ backgroundColor: "#F0F2F8", color: "#0B0F2E", border: "1px solid #E2E5F0", fontFamily: "'Poppins', sans-serif" }}
-                >
-                  {label}
-                </div>
-              ))}
-            </div>
-            <Link href="/tarifs">
-              <Button
-                size="lg"
-                className="px-10 text-base font-semibold"
-                style={{ backgroundColor: "#D4AF37", color: "#0B0F2E", fontFamily: "'Poppins', sans-serif", fontWeight: 700, borderRadius: "6px" }}
-              >
-                {locale === "fr" ? "Voir tous les tarifs" : "View all pricing"}
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Button>
-            </Link>
-          </div>
-        </section>
-
-        {/* EXPERT-COMPTABLE — dark partner offer */}
-        <section
-          id="expert-comptable"
-          className="relative overflow-hidden py-20 md:py-28"
-          style={{ backgroundColor: "#0B0F2E" }}
-        >
-          <div
-            className="absolute inset-0 opacity-[0.06]"
-            style={{
-              backgroundImage:
-                "linear-gradient(#D4AF37 1px, transparent 1px), linear-gradient(90deg, #D4AF37 1px, transparent 1px)",
-              backgroundSize: "60px 60px",
-            }}
-          />
-          <div
-            className="pointer-events-none absolute inset-0"
-            style={{
-              background:
-                "radial-gradient(ellipse 60% 50% at 50% 0%, rgba(212,175,55,0.10) 0%, transparent 70%)",
-            }}
-          />
-
-          <div className="relative mx-auto max-w-7xl px-6">
+        {/* OFFRES — Deux offres claires : Client direct + Expert-Comptable */}
+        <section id="offres" className="py-20 md:py-28" style={{ backgroundColor: "#FFFFFF" }}>
+          <div className="mx-auto max-w-6xl px-6">
+            {/* Header */}
             <div className="mb-14 text-center">
               <Badge
-                className="mb-6 border-0 px-4 py-1.5 text-sm font-medium"
+                className="mb-5 border-0 px-4 py-1.5 text-sm font-medium"
                 style={{
-                  backgroundColor: "rgba(212,175,55,0.12)",
-                  color: "#D4AF37",
-                  border: "1px solid rgba(212,175,55,0.25)",
+                  backgroundColor: "rgba(65,145,255,0.08)",
+                  color: "#4191FF",
+                  border: "1px solid rgba(65,145,255,0.25)",
                   fontFamily: "'Poppins', sans-serif",
                 }}
               >
-                <Briefcase className="mr-2 h-4 w-4" />
-                {locale === "fr"
-                  ? "Programme Partenaire · Experts-Comptables"
-                  : "Partner Program · Accountants"}
+                {locale === "fr" ? "Nos offres" : "Our offers"}
               </Badge>
               <h2
-                className="mb-6 text-3xl font-bold tracking-tight md:text-5xl"
-                style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif", fontWeight: 700 }}
+                className="mb-4 text-3xl font-bold md:text-4xl"
+                style={{ color: "#0B0F2E", fontFamily: "'Poppins', sans-serif", fontWeight: 700 }}
               >
-                {locale === "fr" ? (
-                  <>
-                    Votre cabinet. <span style={{ color: "#D4AF37" }}>Une plateforme.</span>
-                    <br />
-                    Tous vos clients.
-                  </>
-                ) : (
-                  <>
-                    Your firm. <span style={{ color: "#D4AF37" }}>One platform.</span>
-                    <br />
-                    All your clients.
-                  </>
-                )}
+                {locale === "fr"
+                  ? "Deux façons d'accéder à Lexora"
+                  : "Two ways to access Lexora"}
               </h2>
               <p
-                className="mx-auto max-w-2xl text-lg"
+                className="mx-auto max-w-2xl"
                 style={{
-                  color: "#8B90B8",
+                  color: "#4A5490",
                   fontFamily: "'Poppins', sans-serif",
                   fontWeight: 300,
                   lineHeight: 1.7,
                 }}
               >
                 {locale === "fr"
-                  ? "Gérez l'ensemble de votre portefeuille depuis un seul tableau de bord. Comptabilité automatisée, paie conforme, fiscal MRA — Lexora s'intègre dans votre mission. Votre accès cabinet est gratuit."
-                  : "Manage your entire client portfolio from a single dashboard. Automated accounting, compliant payroll, MRA tax — Lexora integrates into your engagement. Your firm access is free."}
+                  ? "Un accès direct pour votre entreprise, ou le programme partenaire si vous êtes expert-comptable et gérez plusieurs dossiers."
+                  : "Direct access for your business, or the partner program if you are an accountant managing multiple client files."}
               </p>
             </div>
 
-            {/* Key benefits grid */}
-            <div className="mb-14 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-              {[
-                {
-                  icon: Gift,
-                  title: locale === "fr" ? "Accès cabinet gratuit" : "Free firm access",
-                  desc:
-                    locale === "fr"
-                      ? "Aucun abonnement, aucun engagement. Vous accédez immédiatement au tableau de bord multi-dossiers."
-                      : "No subscription, no commitment. Immediate access to the multi-client dashboard.",
-                },
-                {
-                  icon: LayoutDashboard,
-                  title: locale === "fr" ? "Multi-dossiers unifié" : "Unified multi-client view",
-                  desc:
-                    locale === "fr"
-                      ? "Tous vos clients visibles en un écran. Statut des déclarations et alertes fiscales consolidées."
-                      : "All clients on one screen. Consolidated filing status and tax alerts across your portfolio.",
-                },
-                {
-                  icon: Coins,
-                  title: locale === "fr" ? "Revenu récurrent" : "Recurring revenue",
-                  desc:
-                    locale === "fr"
-                      ? "Commission mensuelle récurrente pour chaque client actif, versée automatiquement par Lexora."
-                      : "Recurring monthly commission for each active client, paid automatically by Lexora.",
-                },
-                {
-                  icon: ShieldCheck,
-                  title: locale === "fr" ? "Conformité MRA native" : "Native MRA compliance",
-                  desc:
-                    locale === "fr"
-                      ? "e-Invoicing IRN, QR Code, IT Form 3, Annual Return ROC, TVA 9-Box — intégrés nativement."
-                      : "e-Invoicing IRN, QR Code, IT Form 3, Annual Return ROC, VAT 9-Box — natively integrated.",
-                },
-              ].map((item) => (
-                <div
-                  key={item.title}
-                  className="group rounded-xl p-6 transition-all duration-300 hover:-translate-y-1"
+            {/* Two offer cards side-by-side */}
+            <div className="grid gap-6 lg:grid-cols-2 lg:gap-8">
+              {/* ========================================== */}
+              {/* OFFER 1 — CLIENT DIRECT (blue, light)      */}
+              {/* ========================================== */}
+              <div
+                className="relative flex flex-col rounded-2xl p-8 md:p-10"
+                style={{
+                  backgroundColor: "#F8F9FC",
+                  border: "1px solid #E2E5F0",
+                }}
+              >
+                {/* Top label */}
+                <div className="mb-6 flex items-center gap-3">
+                  <div
+                    className="flex h-12 w-12 items-center justify-center rounded-xl"
+                    style={{ backgroundColor: "rgba(65,145,255,0.10)" }}
+                  >
+                    <Building2 className="h-6 w-6" style={{ color: "#4191FF" }} />
+                  </div>
+                  <div>
+                    <div
+                      className="text-[10px] font-bold uppercase tracking-widest"
+                      style={{ color: "#4191FF", fontFamily: "'Poppins', sans-serif" }}
+                    >
+                      {locale === "fr" ? "Offre 1 · Entreprise" : "Offer 1 · Business"}
+                    </div>
+                    <div
+                      className="text-xs"
+                      style={{ color: "#8B90B8", fontFamily: "'Poppins', sans-serif" }}
+                    >
+                      {locale === "fr" ? "Accès direct" : "Direct access"}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Title */}
+                <h3
+                  className="mb-3 text-2xl md:text-3xl"
+                  style={{ color: "#0B0F2E", fontFamily: "'Poppins', sans-serif", fontWeight: 700 }}
+                >
+                  {locale === "fr" ? "Pour votre entreprise" : "For your business"}
+                </h3>
+                <p
+                  className="mb-6 text-sm"
                   style={{
-                    backgroundColor: "rgba(255,255,255,0.02)",
-                    border: "1px solid #1E2760",
+                    color: "#4A5490",
+                    fontFamily: "'Poppins', sans-serif",
+                    fontWeight: 300,
+                    lineHeight: 1.7,
+                  }}
+                >
+                  {locale === "fr"
+                    ? "Gérez vous-même votre comptabilité, votre paie et votre fiscalité MRA depuis une interface unique. Idéal pour les PME, freelances et dirigeants autonomes."
+                    : "Manage your own accounting, payroll and MRA tax filings from a single interface. Ideal for SMEs, freelancers and autonomous business owners."}
+                </p>
+
+                {/* Features */}
+                <ul className="mb-6 space-y-3">
+                  {(locale === "fr"
+                    ? [
+                        "Accès direct à tous les modules (Compta, RH, Facturation, Fiscal)",
+                        "Conformité MRA native (IRN, QR Code, e-MRA, IT Form 3)",
+                        "OCR IA illimité, rapprochement bancaire automatique",
+                        "Support inclus, mises à jour réglementaires continues",
+                      ]
+                    : [
+                        "Direct access to all modules (Accounting, HR, Invoicing, Tax)",
+                        "Native MRA compliance (IRN, QR Code, e-MRA, IT Form 3)",
+                        "Unlimited AI OCR, automatic bank reconciliation",
+                        "Support included, continuous regulatory updates",
+                      ]
+                  ).map((item, i) => (
+                    <li key={i} className="flex items-start gap-3">
+                      <CheckCircle2
+                        className="mt-0.5 h-5 w-5 shrink-0"
+                        style={{ color: "#4191FF" }}
+                      />
+                      <span
+                        className="text-sm"
+                        style={{ color: "#0B0F2E", fontFamily: "'Poppins', sans-serif" }}
+                      >
+                        {item}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+
+                {/* Price hint */}
+                <div
+                  className="mb-6 rounded-xl p-4"
+                  style={{
+                    backgroundColor: "#FFFFFF",
+                    border: "1px solid #E2E5F0",
                   }}
                 >
                   <div
-                    className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl"
-                    style={{
-                      backgroundColor: "rgba(212,175,55,0.10)",
-                      border: "1px solid rgba(212,175,55,0.25)",
-                    }}
+                    className="text-xs uppercase tracking-wider"
+                    style={{ color: "#8B90B8", fontFamily: "'Poppins', sans-serif" }}
                   >
-                    <item.icon className="h-6 w-6" style={{ color: "#D4AF37" }} />
+                    {locale === "fr" ? "À partir de" : "Starting at"}
                   </div>
-                  <h3
-                    className="mb-2 text-lg"
-                    style={{
-                      color: "#E8EAFC",
-                      fontFamily: "'Poppins', sans-serif",
-                      fontWeight: 500,
-                    }}
+                  <div
+                    className="text-3xl font-bold"
+                    style={{ color: "#0B0F2E", fontFamily: "'Poppins', sans-serif" }}
                   >
-                    {item.title}
-                  </h3>
-                  <p
-                    className="text-sm"
-                    style={{
-                      color: "#8B90B8",
-                      fontFamily: "'Poppins', sans-serif",
-                      fontWeight: 300,
-                      lineHeight: 1.7,
-                    }}
-                  >
-                    {item.desc}
-                  </p>
+                    Rs 1 500
+                    <span
+                      className="text-sm font-normal"
+                      style={{ color: "#8B90B8" }}
+                    >
+                      {locale === "fr" ? " / mois" : " / month"}
+                    </span>
+                  </div>
                 </div>
-              ))}
-            </div>
 
-            {/* Metrics + CTA */}
-            <div
-              className="rounded-2xl p-8 md:p-10"
-              style={{
-                backgroundColor: "rgba(255,255,255,0.02)",
-                border: "1px solid #1E2760",
-              }}
-            >
-              <div className="grid items-center gap-8 md:grid-cols-3">
-                <div className="text-center md:text-left md:border-r md:pr-8" style={{ borderColor: "#1E2760" }}>
-                  <div
-                    className="mb-1 text-4xl font-bold"
-                    style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif" }}
-                  >
-                    <span style={{ color: "#D4AF37", fontSize: "1.5rem" }}>Rs</span> 0
-                  </div>
-                  <p
-                    className="text-xs uppercase tracking-wider"
-                    style={{ color: "#8B90B8", fontFamily: "'Poppins', sans-serif" }}
-                  >
-                    {locale === "fr" ? "Coût d'accès cabinet" : "Firm access cost"}
-                  </p>
-                </div>
-                <div className="text-center md:border-r md:px-8" style={{ borderColor: "#1E2760" }}>
-                  <div
-                    className="mb-1 text-4xl font-bold"
-                    style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif" }}
-                  >
-                    7
-                  </div>
-                  <p
-                    className="text-xs uppercase tracking-wider"
-                    style={{ color: "#8B90B8", fontFamily: "'Poppins', sans-serif" }}
-                  >
-                    {locale === "fr" ? "Modules MRA-conformes" : "MRA-compliant modules"}
-                  </p>
-                </div>
-                <div className="text-center md:text-right md:pl-8">
-                  <div
-                    className="mb-1 text-4xl font-bold"
-                    style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif" }}
-                  >
-                    40<span style={{ color: "#D4AF37" }}>+</span>
-                  </div>
-                  <p
-                    className="text-xs uppercase tracking-wider"
-                    style={{ color: "#8B90B8", fontFamily: "'Poppins', sans-serif" }}
-                  >
-                    {locale === "fr" ? "Fonctionnalités incluses" : "Features included"}
-                  </p>
+                {/* CTA */}
+                <div className="mt-auto">
+                  <Link href="/tarifs" className="block">
+                    <Button
+                      size="lg"
+                      className="w-full text-base font-semibold"
+                      style={{
+                        backgroundColor: "#4191FF",
+                        color: "#FFFFFF",
+                        fontFamily: "'Poppins', sans-serif",
+                        fontWeight: 600,
+                        borderRadius: "8px",
+                      }}
+                    >
+                      {locale === "fr" ? "Voir tous les tarifs" : "View all pricing"}
+                      <ArrowRight className="ml-2 h-5 w-5" />
+                    </Button>
+                  </Link>
                 </div>
               </div>
 
-              <div className="mt-8 flex flex-col items-center justify-center gap-4 border-t pt-8 sm:flex-row" style={{ borderColor: "#1E2760" }}>
-                <a href="mailto:contact@lexora.finance?subject=Demande démonstration cabinet — Expert-Comptable">
-                  <Button
-                    size="lg"
-                    className="px-8 text-base font-semibold"
-                    style={{
-                      backgroundColor: "#D4AF37",
-                      color: "#0B0F2E",
-                      fontFamily: "'Poppins', sans-serif",
-                      fontWeight: 700,
-                      borderRadius: "6px",
-                    }}
-                  >
-                    {locale === "fr" ? "Demander une démo cabinet" : "Request a firm demo"}
-                    <ArrowRight className="ml-2 h-5 w-5" />
-                  </Button>
-                </a>
-                <Link href="/tarifs">
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    className="px-8 text-base font-semibold"
-                    style={{
-                      border: "1px solid #4191FF",
-                      color: "#4191FF",
-                      backgroundColor: "transparent",
-                      fontFamily: "'Poppins', sans-serif",
-                      fontWeight: 500,
-                      borderRadius: "6px",
-                    }}
-                  >
-                    {locale === "fr" ? "Conditions partenaire" : "Partner terms"}
-                  </Button>
-                </Link>
-              </div>
-              <p
-                className="mt-4 text-center text-xs"
-                style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif" }}
+              {/* ========================================== */}
+              {/* OFFER 2 — EXPERT-COMPTABLE (dark, gold)    */}
+              {/* ========================================== */}
+              <div
+                id="expert-comptable"
+                className="relative flex flex-col overflow-hidden rounded-2xl p-8 md:p-10"
+                style={{
+                  backgroundColor: "#0B0F2E",
+                  border: "1px solid #D4AF37",
+                }}
               >
-                {locale === "fr"
-                  ? "Accès cabinet gratuit · Aucun engagement · Convention partenaire sur demande"
-                  : "Free firm access · No commitment · Partner agreement on request"}
-              </p>
+                {/* Gold gradient overlay */}
+                <div
+                  className="pointer-events-none absolute inset-0"
+                  style={{
+                    background:
+                      "radial-gradient(ellipse 80% 40% at 50% 0%, rgba(212,175,55,0.12) 0%, transparent 70%)",
+                  }}
+                />
+
+                {/* "Featured" ribbon */}
+                <div
+                  className="absolute right-0 top-0 rounded-bl-xl px-4 py-1 text-[10px] font-bold uppercase tracking-widest"
+                  style={{
+                    backgroundColor: "#D4AF37",
+                    color: "#0B0F2E",
+                    fontFamily: "'Poppins', sans-serif",
+                  }}
+                >
+                  {locale === "fr" ? "Gratuit pour le cabinet" : "Free for the firm"}
+                </div>
+
+                {/* Top label */}
+                <div className="relative mb-6 flex items-center gap-3">
+                  <div
+                    className="flex h-12 w-12 items-center justify-center rounded-xl"
+                    style={{
+                      backgroundColor: "rgba(212,175,55,0.12)",
+                      border: "1px solid rgba(212,175,55,0.30)",
+                    }}
+                  >
+                    <Briefcase className="h-6 w-6" style={{ color: "#D4AF37" }} />
+                  </div>
+                  <div>
+                    <div
+                      className="text-[10px] font-bold uppercase tracking-widest"
+                      style={{ color: "#D4AF37", fontFamily: "'Poppins', sans-serif" }}
+                    >
+                      {locale === "fr" ? "Offre 2 · Expert-Comptable" : "Offer 2 · Accountant"}
+                    </div>
+                    <div
+                      className="text-xs"
+                      style={{ color: "#8B90B8", fontFamily: "'Poppins', sans-serif" }}
+                    >
+                      {locale === "fr" ? "Programme Partenaire" : "Partner Program"}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Title */}
+                <h3
+                  className="relative mb-3 text-2xl md:text-3xl"
+                  style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif", fontWeight: 700 }}
+                >
+                  {locale === "fr" ? "Pour votre cabinet comptable" : "For your accounting firm"}
+                </h3>
+                <p
+                  className="relative mb-6 text-sm"
+                  style={{
+                    color: "#8B90B8",
+                    fontFamily: "'Poppins', sans-serif",
+                    fontWeight: 300,
+                    lineHeight: 1.7,
+                  }}
+                >
+                  {locale === "fr"
+                    ? "Gérez l'ensemble de votre portefeuille clients depuis un seul tableau de bord. Lexora s'intègre dans votre mission comptable et vous reverse une commission récurrente."
+                    : "Manage your entire client portfolio from a single dashboard. Lexora integrates into your engagement and pays you a recurring commission."}
+                </p>
+
+                {/* Features */}
+                <ul className="relative mb-6 space-y-3">
+                  {(locale === "fr"
+                    ? [
+                        "Tableau de bord multi-dossiers : tous vos clients en un écran",
+                        "Permissions différenciées cabinet / client par module",
+                        "Alertes fiscales consolidées sur tout votre portefeuille",
+                        "Commission mensuelle récurrente sur chaque client actif",
+                      ]
+                    : [
+                        "Multi-client dashboard: all your clients on one screen",
+                        "Differentiated firm / client permissions by module",
+                        "Consolidated tax alerts across your entire portfolio",
+                        "Recurring monthly commission on each active client",
+                      ]
+                  ).map((item, i) => (
+                    <li key={i} className="flex items-start gap-3">
+                      <CheckCircle2
+                        className="mt-0.5 h-5 w-5 shrink-0"
+                        style={{ color: "#D4AF37" }}
+                      />
+                      <span
+                        className="text-sm"
+                        style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif" }}
+                      >
+                        {item}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+
+                {/* Price hint */}
+                <div
+                  className="relative mb-6 rounded-xl p-4"
+                  style={{
+                    backgroundColor: "rgba(212,175,55,0.06)",
+                    border: "1px solid rgba(212,175,55,0.25)",
+                  }}
+                >
+                  <div
+                    className="text-xs uppercase tracking-wider"
+                    style={{ color: "#D4AF37", fontFamily: "'Poppins', sans-serif" }}
+                  >
+                    {locale === "fr" ? "Accès cabinet" : "Firm access"}
+                  </div>
+                  <div
+                    className="text-3xl font-bold"
+                    style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif" }}
+                  >
+                    <span style={{ color: "#D4AF37", fontSize: "1.25rem" }}>Rs</span> 0
+                    <span className="text-sm font-normal" style={{ color: "#8B90B8" }}>
+                      {locale === "fr" ? " · aucun engagement" : " · no commitment"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* CTA */}
+                <div className="relative mt-auto">
+                  <a
+                    href="mailto:contact@lexora.finance?subject=Demande démonstration cabinet — Expert-Comptable"
+                    className="block"
+                  >
+                    <Button
+                      size="lg"
+                      className="w-full text-base font-semibold"
+                      style={{
+                        backgroundColor: "#D4AF37",
+                        color: "#0B0F2E",
+                        fontFamily: "'Poppins', sans-serif",
+                        fontWeight: 700,
+                        borderRadius: "8px",
+                      }}
+                    >
+                      {locale === "fr" ? "Demander une démo cabinet" : "Request a firm demo"}
+                      <ArrowRight className="ml-2 h-5 w-5" />
+                    </Button>
+                  </a>
+                </div>
+              </div>
             </div>
           </div>
         </section>
