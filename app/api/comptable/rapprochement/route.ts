@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { createEcrituresForPayment } from '@/lib/accounting/ecritures-factures'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getTauxChange } from '@/lib/taux-change'
@@ -399,16 +400,19 @@ export async function POST(request: Request) {
                       }).eq('id', gf.id)
                       factures = factures.filter(f => f.id !== gf.id)
                     }
-                    // Generate grouped paiement entries
-                    const { data: gpDossier } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
-                    if (gpDossier) {
-                      const gpAmountMUR = toMUR(txAmount, releveDevise)
-                      const gpDateStr = tx.date || new Date().toISOString().split('T')[0]
-                      await supabase.from('ecritures_comptables').insert([
-                        { dossier_id: gpDossier.id, date_ecriture: gpDateStr, journal: 'BNQ', compte: '401', libelle: `Paiement groupé ${(tx.tiers_detecte || tx.tiers || '').substring(0, 30)} — ${tiersFactures.length} factures`, debit: Math.round(gpAmountMUR * 100) / 100, credit: 0, lettre: code },
-                        { dossier_id: gpDossier.id, date_ecriture: gpDateStr, journal: 'BNQ', compte: '512', libelle: `Virement groupé ${(tx.tiers_detecte || tx.tiers || '').substring(0, 30)}`, debit: 0, credit: Math.round(gpAmountMUR * 100) / 100, lettre: code },
-                      ])
-                    }
+                    // Generate payment entries (use shared helper for consistency)
+                    const gpAmountMUR = toMUR(txAmount, releveDevise)
+                    const gpDateStr = tx.date || new Date().toISOString().split('T')[0]
+                    const gpType: 'supplier' | 'client' = (tiersFactures[0]?.type_facture === 'fournisseur') ? 'supplier' : 'client'
+                    await createEcrituresForPayment(supabase, {
+                      societe_id,
+                      date_payment: gpDateStr,
+                      amount_mur: Math.round(gpAmountMUR * 100) / 100,
+                      type: gpType,
+                      tiers: (tx.tiers_detecte || tx.tiers || '').substring(0, 50),
+                      ref_folio: `BANK-${releve.id}-${i}`,
+                      description: `Paiement groupe ${tiersFactures.length} factures — ${(tx.tiers_detecte || tx.tiers || '').substring(0, 30)}`,
+                    })
                     matchesList.push({ type: 'facture_groupee', transaction: tx.libelle, facture: `${tiersFactures.length} factures`, montant: txAmount })
                     matched = true; changed = true; counts.matched++
                   }
@@ -430,36 +434,20 @@ export async function POST(request: Request) {
                   rapproche_source: 'auto',
                 }).eq('id', matchedFacture.id)
 
-                // Generate paiement accounting entries (401/512 or 411/512)
-                const { data: payDossier } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
-                if (payDossier) {
-                  const txAmountMUR = toMUR(txAmount, releveDevise)
-                  const compte401 = matchedFacture.type_facture === 'fournisseur' ? '401' : '411'
-                  const txDateStr = tx.date || new Date().toISOString().split('T')[0]
-                  const payLibelle = `Paiement ${(matchedFacture.tiers || '').substring(0, 30)} — ${matchedFacture.numero_facture || ''}`
-
-                  // Check no duplicate paiement entry exists
-                  const { data: existingPay } = await supabase.from('ecritures_comptables')
-                    .select('id').eq('dossier_id', payDossier.id).eq('journal', 'BNQ')
-                    .eq('compte', compte401).eq('debit', Math.round(txAmountMUR * 100) / 100)
-                    .gte('date_ecriture', txDateStr).limit(1).maybeSingle()
-
-                  if (!existingPay) {
-                    await supabase.from('ecritures_comptables').insert([
-                      { dossier_id: payDossier.id, date_ecriture: txDateStr, journal: 'BNQ', compte: compte401, libelle: payLibelle, debit: Math.round(txAmountMUR * 100) / 100, credit: 0, lettre: code },
-                      { dossier_id: payDossier.id, date_ecriture: txDateStr, journal: 'BNQ', compte: '512', libelle: `Virement ${(matchedFacture.tiers || '').substring(0, 30)}`, debit: 0, credit: Math.round(txAmountMUR * 100) / 100, lettre: code },
-                    ])
-
-                    // Letter the existing 401/411 credit entry (from facture) with same code
-                    await supabase.from('ecritures_comptables')
-                      .update({ lettre: code })
-                      .eq('dossier_id', payDossier.id)
-                      .eq('compte', compte401)
-                      .is('lettre', null)
-                      .eq('credit', Math.round(txAmountMUR * 100) / 100)
-                      .ilike('libelle', `%${normalizeTiers(matchedFacture.tiers || '').split(' ')[0] || ''}%`)
-                  }
-                }
+                // Generate payment entries via shared helper
+                // (idempotent by ref_folio, writes to ecritures_comptables_v2)
+                const payAmountMUR = toMUR(txAmount, releveDevise)
+                const payDateStr = tx.date || new Date().toISOString().split('T')[0]
+                const payType: 'supplier' | 'client' = matchedFacture.type_facture === 'fournisseur' ? 'supplier' : 'client'
+                await createEcrituresForPayment(supabase, {
+                  societe_id,
+                  date_payment: payDateStr,
+                  amount_mur: Math.round(payAmountMUR * 100) / 100,
+                  type: payType,
+                  tiers: (matchedFacture.tiers || '').substring(0, 50),
+                  ref_folio: `BANK-${releve.id}-${i}`,
+                  description: `Paiement ${matchedFacture.numero_facture || ''} — ${(matchedFacture.tiers || '').substring(0, 30)}`,
+                })
               }
 
               // IAS 21: calculer l'écart de change si devise étrangère

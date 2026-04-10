@@ -342,27 +342,24 @@ export async function GET(request: Request) {
 
     // === BILAN: calculate from factures (MUR) when available, else from écritures ===
 
-    // Créances clients (compte 411) — from unpaid factures client (montant_mur)
-    let creances = 0
+    // Créances clients (compte 411) — SOURCE OF TRUTH = écritures 411
+    // Solde débiteur du compte 411 = factures émises - paiements reçus = montant dû par les clients
+    const creancesFromEcritures = allEcritures
+      .filter(e => e.compte?.startsWith('41'))
+      .reduce((sum, e) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
+    // Fallback si aucune écriture : utiliser les factures non payées
     const facturesClientImpayees = facturesFromTable.filter(f => f.type_facture === 'client' && f.statut !== 'paye' && f.statut !== 'annule')
-    if (facturesClientImpayees.length > 0) {
-      creances = facturesClientImpayees.reduce((s, f) => s + (Number(f.montant_mur) || convertToMUR(Number(f.montant_ttc) || 0, f.devise || 'MUR', rates)), 0)
-    } else {
-      creances = allEcritures
-        .filter(e => e.compte?.startsWith('41'))
-        .reduce((sum, e) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
-    }
+    const creancesFromFactures = facturesClientImpayees.reduce((s, f) => s + (Number(f.montant_mur) || convertToMUR(Number(f.montant_ttc) || 0, f.devise || 'MUR', rates)), 0)
+    const creances = creancesFromEcritures > 0 ? creancesFromEcritures : creancesFromFactures
 
-    // Dettes fournisseurs (compte 401) — from unpaid factures fournisseur
-    let dettesFournisseurs = 0
+    // Dettes fournisseurs (compte 401) — SOURCE OF TRUTH = écritures 401
+    // Solde créditeur du compte 401 = factures reçues - paiements émis = montant dû aux fournisseurs
+    const dettesFromEcritures = allEcritures
+      .filter(e => e.compte?.startsWith('40'))
+      .reduce((sum, e) => sum + (Number(e.credit) || 0) - (Number(e.debit) || 0), 0)
     const facturesFournImpayees = facturesFromTable.filter(f => f.type_facture === 'fournisseur' && f.statut !== 'paye' && f.statut !== 'annule')
-    if (facturesFournImpayees.length > 0) {
-      dettesFournisseurs = facturesFournImpayees.reduce((s, f) => s + (Number(f.montant_mur) || convertToMUR(Number(f.montant_ttc) || 0, f.devise || 'MUR', rates)), 0)
-    } else {
-      dettesFournisseurs = allEcritures
-        .filter(e => e.compte?.startsWith('40'))
-        .reduce((sum, e) => sum + (Number(e.credit) || 0) - (Number(e.debit) || 0), 0)
-    }
+    const dettesFromFactures = facturesFournImpayees.reduce((s, f) => s + (Number(f.montant_mur) || convertToMUR(Number(f.montant_ttc) || 0, f.devise || 'MUR', rates)), 0)
+    const dettesFournisseurs = dettesFromEcritures > 0 ? dettesFromEcritures : dettesFromFactures
 
     // Monthly revenue for last 2 months for trend
     const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
