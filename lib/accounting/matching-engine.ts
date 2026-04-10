@@ -152,37 +152,39 @@ function tryExactReference(tx: MatchingTransaction, factures: MatchingFacture[],
 
 // ═══ Strategy 2 & 3: Amount + Tiers ═══
 function tryAmountAndTiers(tx: MatchingTransaction, factures: MatchingFacture[], rates?: Record<string, number>): MatchProposal | null {
-  const txAmountMUR = toMUR(Math.max(tx.debit, tx.credit), tx.devise, rates)
   const txAmountRaw = Math.max(tx.debit, tx.credit)
+  const txAmountMUR = toMUR(txAmountRaw, tx.devise, rates)
   const txDevise = (tx.devise || 'MUR').toUpperCase()
   const txTiers = (tx.tiers_detecte || tx.libelle || '').toLowerCase()
   if (txAmountMUR === 0) return null
 
   let best: MatchProposal | null = null
   for (const f of factures) {
+    const fMontantMUR = Number(f.montant_mur) || 0
+    const fMontantTTC = Number(f.montant_ttc) || 0
     const fDevise = (f.devise || 'MUR').toUpperCase()
-    const fAmountMUR = Number(f.montant_mur) || toMUR(Number(f.montant_ttc) || 0, f.devise, rates)
-    const fAmountRaw = Number(f.montant_ttc) || 0
 
-    // Same currency: compare raw amounts (ignore MUR conversion entirely)
-    // Different currency: compare MUR-converted amounts with wider tolerance
+    // montant_mur is the ground truth (authoritative MUR amount)
+    // Prioritize: txAmountMUR vs montant_mur
+    // Fallback: same-currency raw compare, then cross-currency via toMUR
     let diff: number
-    let sameCurrency: boolean
-    if (txDevise === fDevise && txDevise !== 'MUR') {
-      // Both in same foreign currency (e.g. both EUR) — compare directly
-      diff = fAmountRaw > 0 ? Math.abs(txAmountRaw - fAmountRaw) / fAmountRaw : 1
-      sameCurrency = true
-    } else if (txDevise === fDevise) {
-      // Both MUR
-      diff = fAmountMUR > 0 ? Math.abs(txAmountMUR - fAmountMUR) / fAmountMUR : 1
-      sameCurrency = true
+    let compareLabel: string
+
+    if (fMontantMUR > 0) {
+      diff = Math.abs(txAmountMUR - fMontantMUR) / fMontantMUR
+      compareLabel = 'MUR'
+    } else if (txDevise === fDevise && txDevise !== 'MUR' && fMontantTTC > 0) {
+      diff = Math.abs(txAmountRaw - fMontantTTC) / fMontantTTC
+      compareLabel = txDevise
+    } else if (fMontantTTC > 0) {
+      const fAmtMUR = toMUR(fMontantTTC, f.devise, rates)
+      diff = fAmtMUR > 0 ? Math.abs(txAmountMUR - fAmtMUR) / fAmtMUR : 1
+      compareLabel = 'MUR (converti)'
     } else {
-      // Cross-currency: compare MUR
-      diff = fAmountMUR > 0 ? Math.abs(txAmountMUR - fAmountMUR) / fAmountMUR : 1
-      sameCurrency = false
+      continue
     }
 
-    const tolerance = sameCurrency ? 0.01 : 0.08
+    const tolerance = 0.08 // 8% covers TDS (5%) + bank fees + rounding
     if (diff > tolerance) continue
 
     const score = tiersScore(txTiers, f.tiers || '')
@@ -225,7 +227,7 @@ function tryAmountAndTiers(tx: MatchingTransaction, factures: MatchingFacture[],
         strategy,
         confidence: Math.min(1, Math.max(0, confidence)),
         reasoning: `Tiers "${f.tiers}" (similarite ${Math.round(score * 100)}%), montant ${isExactAmount ? 'exact' : `ecart ${(diff * 100).toFixed(1)}%`}${txDevise !== 'MUR' ? ` [${txDevise}]` : ''}, delai ${delay}j ${withinTerms ? '(dans termes)' : '(hors termes)'}`,
-        amount_diff: sameCurrency && txDevise !== 'MUR' ? Math.abs(txAmountRaw - fAmountRaw) : Math.abs(txAmountMUR - fAmountMUR),
+        amount_diff: diff * (fMontantMUR > 0 ? fMontantMUR : txAmountMUR),
         delay_days: delay,
         within_terms: withinTerms,
       }
@@ -260,21 +262,18 @@ function tryGroupedSum(tx: MatchingTransaction, factures: MatchingFacture[], rat
       for (let i = 0; i < n; i++) if (mask & (1 << i)) bits++
       if (bits < 2 || bits > 5) continue
       const subset: MatchingFacture[] = []
-      // Use native currency sum if all factures share tx currency
-      const allSameCurrency = group.every(f => (f.devise || 'MUR').toUpperCase() === txDevise)
       let sum = 0
       for (let i = 0; i < n; i++) {
         if (mask & (1 << i)) {
           subset.push(group[i])
-          if (allSameCurrency && txDevise !== 'MUR') {
-            sum += Number(group[i].montant_ttc) || 0
-          } else {
-            sum += Number(group[i].montant_mur) || toMUR(Number(group[i].montant_ttc) || 0, group[i].devise, rates)
-          }
+          // Always sum in MUR using montant_mur as ground truth
+          const fMUR = Number(group[i].montant_mur) || toMUR(Number(group[i].montant_ttc) || 0, group[i].devise, rates)
+          sum += fMUR
         }
       }
       if (sum === 0) continue
-      const compareAmount = allSameCurrency && txDevise !== 'MUR' ? txAmountRaw : txAmountMUR
+      const compareAmount = txAmountMUR  // always compare in MUR
+      const allSameCurrency = false // not used anymore but keep for reasoning label
       const diff = Math.abs(compareAmount - sum) / sum
       if (diff > 0.08) continue // 8% tolerance — covers TDS/WHT deductions (5%) + bank fees
 
