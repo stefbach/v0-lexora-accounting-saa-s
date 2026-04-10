@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createEcrituresForPayment } from '@/lib/accounting/ecritures-factures'
-import { getTauxChange, convertToMUR } from '@/lib/taux-change'
+import { getTauxForDate } from '@/lib/taux-change'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -209,8 +209,10 @@ export async function POST(request: Request) {
       // VERIFICATION 4: Amount tolerance (8% — covers TDS + bank fees)
       const txRaw = Math.max(Number(tx.debit) || 0, Number(tx.credit) || 0)
       const txDev = (tx.devise || 'MUR').toUpperCase()
-      const ratesFx = await getTauxChange()
-      const txAmount = txDev !== 'MUR' ? convertToMUR(txRaw, txDev, ratesFx) : txRaw
+      const datePayment = tx.date || new Date().toISOString().split('T')[0]
+      const txAmount = txDev !== 'MUR'
+        ? txRaw * (await getTauxForDate(txDev, datePayment))
+        : txRaw
       const sumFactures = factures.reduce((s: number, f: any) => s + (Number(f.montant_mur) || Number(f.montant_ttc) || 0), 0)
       if (sumFactures > 0 && Math.abs(txAmount - sumFactures) / sumFactures > 0.08) {
         errors.push({
@@ -265,7 +267,6 @@ export async function POST(request: Request) {
       // Generate BNQ journal entries (only for facture-based proposals)
       const payType: 'supplier' | 'client' = isOutgoing ? 'supplier' : 'client'
       const tiers = (factures[0]?.tiers || tx.tiers_detecte || tx.tiers || '').substring(0, 50)
-      const datePayment = tx.date || new Date().toISOString().split('T')[0]
       const numFactures = factures.length > 1
         ? `${factures.length} factures`
         : (factures[0]?.numero_facture || '')

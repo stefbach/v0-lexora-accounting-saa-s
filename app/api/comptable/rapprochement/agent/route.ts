@@ -3,7 +3,7 @@ import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createEcrituresForPayment } from '@/lib/accounting/ecritures-factures'
-import { getTauxChange, convertToMUR } from '@/lib/taux-change'
+import { getTauxForDate } from '@/lib/taux-change'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 90
@@ -299,12 +299,12 @@ async function executeTool(name: string, input: any, supabase: ReturnType<typeof
     }
 
     // 3. Generate BNQ journal entries (Grand Livre)
-    // CRITICAL: convert transaction amount to MUR for journal entries
-    const rates = await getTauxChange()
+    // CRITICAL: convert transaction amount to MUR using the rate of the transaction date (MRA-compliant)
     const txDevise = (tx.devise || 'MUR').toUpperCase()
     const txAmountRaw = Math.max(Number(tx.debit) || 0, Number(tx.credit) || 0)
+    const txDate = tx.date || new Date().toISOString().split('T')[0]
     const txAmountMUR = txDevise !== 'MUR'
-      ? convertToMUR(txAmountRaw, txDevise, rates)
+      ? txAmountRaw * (await getTauxForDate(txDevise, txDate))
       : txAmountRaw
     const isOutgoingEntry = (Number(tx.debit) || 0) > 0
     const payType: 'supplier' | 'client' = isOutgoingEntry ? 'supplier' : 'client'
@@ -405,16 +405,17 @@ async function executeTool(name: string, input: any, supabase: ReturnType<typeof
           .eq('ref_folio', refFolio)
         if ((count || 0) > 0) continue
 
-        // Generate missing entries — convert to MUR
-        const ratesFx = await getTauxChange()
+        // Generate missing entries — convert to MUR using rate of the transaction date (MRA-compliant)
         const txRaw = Math.max(Number(tx.debit) || 0, Number(tx.credit) || 0)
         const txDev = (tx.devise || 'MUR').toUpperCase()
-        const txAmount = txDev !== 'MUR' ? convertToMUR(txRaw, txDev, ratesFx) : txRaw
+        const datePayment = tx.date || new Date().toISOString().split('T')[0]
+        const txAmount = txDev !== 'MUR'
+          ? txRaw * (await getTauxForDate(txDev, datePayment))
+          : txRaw
         if (txAmount === 0) continue
         const isOutgoing = (Number(tx.debit) || 0) > 0
         const payType: 'supplier' | 'client' = isOutgoing ? 'supplier' : 'client'
         const tiers = (tx.tiers_detecte || tx.tiers || '').substring(0, 50)
-        const datePayment = tx.date || new Date().toISOString().split('T')[0]
 
         const result = await createEcrituresForPayment(supabase, {
           societe_id,
