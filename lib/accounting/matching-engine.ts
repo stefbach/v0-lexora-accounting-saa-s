@@ -125,9 +125,14 @@ function tryExactReference(tx: MatchingTransaction, factures: MatchingFacture[],
     const facRef = cleanRef(f.numero_facture)
     if (facRef.length < 3) continue
     if (txRef.includes(facRef)) {
-      const txAmountMUR = toMUR(Math.max(tx.debit, tx.credit), tx.devise, rates)
-      const fAmount = Number(f.montant_mur) || toMUR(Number(f.montant_ttc) || 0, f.devise, rates)
-      const diff = fAmount > 0 ? Math.abs(txAmountMUR - fAmount) / fAmount : 1
+      const txRaw = Math.max(tx.debit, tx.credit)
+      const fRaw = Number(f.montant_ttc) || 0
+      const txDevise = (tx.devise || 'MUR').toUpperCase()
+      const fDevise = (f.devise || 'MUR').toUpperCase()
+      // Same currency → compare raw; cross-currency → compare MUR
+      const txAmt = (txDevise === fDevise && txDevise !== 'MUR') ? txRaw : toMUR(txRaw, tx.devise, rates)
+      const fAmt = (txDevise === fDevise && txDevise !== 'MUR') ? fRaw : (Number(f.montant_mur) || toMUR(fRaw, f.devise, rates))
+      const diff = fAmt > 0 ? Math.abs(txAmt - fAmt) / fAmt : 1
       const delay = daysBetween(f.date_facture || '', tx.date)
       return {
         transaction: tx,
@@ -135,8 +140,8 @@ function tryExactReference(tx: MatchingTransaction, factures: MatchingFacture[],
         factures: [f],
         strategy: 'exact_reference',
         confidence: diff < 0.05 ? 1.0 : 0.9,
-        reasoning: `Reference "${f.numero_facture}" trouvee dans le libelle bancaire (montant ${tx.devise !== 'MUR' ? tx.devise + ' → MUR converti' : 'MUR'})`,
-        amount_diff: Math.abs(txAmountMUR - fAmount),
+        reasoning: `Reference "${f.numero_facture}" trouvee dans le libelle bancaire${txDevise !== 'MUR' ? ` [${txDevise}]` : ''}`,
+        amount_diff: Math.abs(txAmt - fAmt),
         delay_days: delay,
         within_terms: delay <= (Number(f.conditions_paiement) || 30) + 10,
       }
@@ -148,17 +153,36 @@ function tryExactReference(tx: MatchingTransaction, factures: MatchingFacture[],
 // ═══ Strategy 2 & 3: Amount + Tiers ═══
 function tryAmountAndTiers(tx: MatchingTransaction, factures: MatchingFacture[], rates?: Record<string, number>): MatchProposal | null {
   const txAmountMUR = toMUR(Math.max(tx.debit, tx.credit), tx.devise, rates)
+  const txAmountRaw = Math.max(tx.debit, tx.credit)
+  const txDevise = (tx.devise || 'MUR').toUpperCase()
   const txTiers = (tx.tiers_detecte || tx.libelle || '').toLowerCase()
   if (txAmountMUR === 0) return null
 
   let best: MatchProposal | null = null
   for (const f of factures) {
-    const fAmount = Number(f.montant_mur) || toMUR(Number(f.montant_ttc) || 0, f.devise, rates)
-    if (fAmount === 0) continue
-    const diff = Math.abs(txAmountMUR - fAmount) / fAmount
-    // Cross-currency: 5% tolerance; same currency: 1%
-    const sameCurrency = (tx.devise || 'MUR') === (f.devise || 'MUR')
-    const tolerance = sameCurrency ? 0.01 : 0.05
+    const fDevise = (f.devise || 'MUR').toUpperCase()
+    const fAmountMUR = Number(f.montant_mur) || toMUR(Number(f.montant_ttc) || 0, f.devise, rates)
+    const fAmountRaw = Number(f.montant_ttc) || 0
+
+    // Same currency: compare raw amounts (ignore MUR conversion entirely)
+    // Different currency: compare MUR-converted amounts with wider tolerance
+    let diff: number
+    let sameCurrency: boolean
+    if (txDevise === fDevise && txDevise !== 'MUR') {
+      // Both in same foreign currency (e.g. both EUR) — compare directly
+      diff = fAmountRaw > 0 ? Math.abs(txAmountRaw - fAmountRaw) / fAmountRaw : 1
+      sameCurrency = true
+    } else if (txDevise === fDevise) {
+      // Both MUR
+      diff = fAmountMUR > 0 ? Math.abs(txAmountMUR - fAmountMUR) / fAmountMUR : 1
+      sameCurrency = true
+    } else {
+      // Cross-currency: compare MUR
+      diff = fAmountMUR > 0 ? Math.abs(txAmountMUR - fAmountMUR) / fAmountMUR : 1
+      sameCurrency = false
+    }
+
+    const tolerance = sameCurrency ? 0.01 : 0.08
     if (diff > tolerance) continue
 
     const score = tiersScore(txTiers, f.tiers || '')
@@ -200,8 +224,8 @@ function tryAmountAndTiers(tx: MatchingTransaction, factures: MatchingFacture[],
         factures: [f],
         strategy,
         confidence: Math.min(1, Math.max(0, confidence)),
-        reasoning: `Tiers "${f.tiers}" (similarite ${Math.round(score * 100)}%), montant ${isExactAmount ? 'exact' : `ecart ${(diff * 100).toFixed(1)}%`}${tx.devise !== 'MUR' ? ` [${tx.devise}→MUR]` : ''}, delai ${delay}j ${withinTerms ? '(dans termes)' : '(hors termes)'}`,
-        amount_diff: Math.abs(txAmountMUR - fAmount),
+        reasoning: `Tiers "${f.tiers}" (similarite ${Math.round(score * 100)}%), montant ${isExactAmount ? 'exact' : `ecart ${(diff * 100).toFixed(1)}%`}${txDevise !== 'MUR' ? ` [${txDevise}]` : ''}, delai ${delay}j ${withinTerms ? '(dans termes)' : '(hors termes)'}`,
+        amount_diff: sameCurrency && txDevise !== 'MUR' ? Math.abs(txAmountRaw - fAmountRaw) : Math.abs(txAmountMUR - fAmountMUR),
         delay_days: delay,
         within_terms: withinTerms,
       }
@@ -212,39 +236,46 @@ function tryAmountAndTiers(tx: MatchingTransaction, factures: MatchingFacture[],
 
 // ═══ Strategy 4: Grouped Sum ═══
 function tryGroupedSum(tx: MatchingTransaction, factures: MatchingFacture[], rates?: Record<string, number>): MatchProposal | null {
-  const txAmountMUR = toMUR(Math.max(tx.debit, tx.credit), tx.devise, rates)
+  const txAmountRaw = Math.max(tx.debit, tx.credit)
+  const txAmountMUR = toMUR(txAmountRaw, tx.devise, rates)
+  const txDevise = (tx.devise || 'MUR').toUpperCase()
   const txTiers = (tx.tiers_detecte || tx.libelle || '').toLowerCase()
   if (txAmountMUR === 0) return null
 
-  // Group factures by tiers
+  // Group factures by tiers — lower tiers threshold to 0.3 to catch more
   const byTiers = new Map<string, MatchingFacture[]>()
   for (const f of factures) {
     const key = normalize(f.tiers || '')
     if (!key) continue
-    // Only include tiers with decent similarity to bank libellé
-    if (tiersScore(txTiers, f.tiers || '') < 0.5) continue
+    if (tiersScore(txTiers, f.tiers || '') < 0.3) continue
     if (!byTiers.has(key)) byTiers.set(key, [])
     byTiers.get(key)!.push(f)
   }
 
   for (const [, group] of byTiers) {
     if (group.length < 2) continue
-    // Try subsets of size 2..5 (limit combinatorial explosion)
     const n = Math.min(group.length, 6)
     for (let mask = 1; mask < (1 << n); mask++) {
       let bits = 0
       for (let i = 0; i < n; i++) if (mask & (1 << i)) bits++
       if (bits < 2 || bits > 5) continue
       const subset: MatchingFacture[] = []
+      // Use native currency sum if all factures share tx currency
+      const allSameCurrency = group.every(f => (f.devise || 'MUR').toUpperCase() === txDevise)
       let sum = 0
       for (let i = 0; i < n; i++) {
         if (mask & (1 << i)) {
           subset.push(group[i])
-          sum += Number(group[i].montant_mur) || toMUR(Number(group[i].montant_ttc) || 0, group[i].devise, rates)
+          if (allSameCurrency && txDevise !== 'MUR') {
+            sum += Number(group[i].montant_ttc) || 0
+          } else {
+            sum += Number(group[i].montant_mur) || toMUR(Number(group[i].montant_ttc) || 0, group[i].devise, rates)
+          }
         }
       }
       if (sum === 0) continue
-      const diff = Math.abs(txAmountMUR - sum) / sum
+      const compareAmount = allSameCurrency && txDevise !== 'MUR' ? txAmountRaw : txAmountMUR
+      const diff = Math.abs(compareAmount - sum) / sum
       if (diff > 0.08) continue // 8% tolerance — covers TDS/WHT deductions (5%) + bank fees
 
       const avgDelay = subset.reduce((s, f) => s + daysBetween(f.date_facture || '', tx.date), 0) / subset.length
@@ -262,8 +293,8 @@ function tryGroupedSum(tx: MatchingTransaction, factures: MatchingFacture[], rat
         factures: subset,
         strategy: 'grouped_sum',
         confidence: conf,
-        reasoning: `${subset.length} factures de "${tiersName}" dont la somme MUR (${sum.toFixed(2)}) correspond au paiement${tx.devise !== 'MUR' ? ` [${tx.devise}→MUR]` : ''} ${diff < 0.005 ? 'exactement' : `(ecart ${(diff * 100).toFixed(1)}%${looksLikeTDS ? ' — probable TDS/retenue' : ''})`}, delai moyen ${Math.round(avgDelay)}j`,
-        amount_diff: Math.abs(txAmountMUR - sum),
+        reasoning: `${subset.length} factures de "${tiersName}"${allSameCurrency && txDevise !== 'MUR' ? ` [${txDevise}]` : ''} dont la somme (${sum.toFixed(2)}) correspond au paiement ${diff < 0.005 ? 'exactement' : `(ecart ${(diff * 100).toFixed(1)}%${looksLikeTDS ? ' — probable TDS/retenue' : ''})`}, delai moyen ${Math.round(avgDelay)}j`,
+        amount_diff: Math.abs(compareAmount - sum),
         delay_days: Math.round(avgDelay),
         within_terms: withinTerms,
       }
