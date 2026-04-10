@@ -74,6 +74,7 @@ export async function GET(request: Request) {
       ;(r.transactions_json || []).forEach((tx: any, idx: number) => {
         bankTransactions.push({
           id: `${r.id}-${idx}`, releve_id: r.id,
+          transaction_idx: idx,
           date: tx.date || '', libelle: tx.libelle || '',
           debit: Number(tx.debit) || 0, credit: Number(tx.credit) || 0,
           tiers_detecte: tx.tiers_detecte || tx.tiers || null,

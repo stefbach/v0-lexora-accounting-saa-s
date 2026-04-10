@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -53,56 +53,62 @@ export default function ClientRapprochementPage() {
   const [selectedPeriode, setSelectedPeriode] = useState('2025-2026')
   const [associes, setAssocies] = useState<any[]>([])
 
-  // Agent IA state
-  const [agentOpen, setAgentOpen] = useState(false)
-  const [agentMessages, setAgentMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string; tool_calls?: any[] }>>([])
-  const [agentInput, setAgentInput] = useState("")
-  const [agentLoading, setAgentLoading] = useState(false)
-
-  const sendAgentMessage = async (message?: string) => {
-    const msg = (message ?? agentInput).trim()
-    if (!msg || !societeId || agentLoading) return
-    const newMessages = [...agentMessages, { role: 'user' as const, content: msg }]
-    setAgentMessages(newMessages)
-    setAgentInput("")
-    setAgentLoading(true)
-    try {
-      const res = await fetch("/api/comptable/rapprochement/agent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: newMessages, societe_id: societeId }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        setAgentMessages(m => [...m, { role: 'assistant', content: `Erreur : ${data.error || 'inconnue'}` }])
-      } else {
-        setAgentMessages(m => [...m, { role: 'assistant', content: data.response || "(pas de reponse)", tool_calls: data.tool_calls }])
-        // If the agent applied matches, reload the data
-        if (data.tool_calls?.some((t: any) => t.name === 'apply_match' && t.result?.success)) {
-          load()
-        }
-      }
-    } catch (e: any) {
-      setAgentMessages(m => [...m, { role: 'assistant', content: `Erreur reseau : ${e.message || ''}` }])
-    } finally { setAgentLoading(false) }
-  }
-
-  const resetAgent = () => {
-    setAgentMessages([])
-    setAgentInput("")
-    setAppliedProposals(new Set())
-    setRejectedProposals(new Set())
-  }
-
-  // Track which proposals have been applied/rejected
-  const [appliedProposals, setAppliedProposals] = useState<Set<string>>(new Set())
+  // Agent IA state — inline analysis (no chat)
+  const [aiAnalyzing, setAiAnalyzing] = useState(false)
+  const [aiProposals, setAiProposals] = useState<Record<string, any>>({}) // keyed by releve_id:idx
+  const [aiStats, setAiStats] = useState<{ auto: number; arbitration: number; total: number } | null>(null)
+  const [aiError, setAiError] = useState<string | null>(null)
   const [rejectedProposals, setRejectedProposals] = useState<Set<string>>(new Set())
   const [applyingKey, setApplyingKey] = useState<string | null>(null)
+  const [applyingBatch, setApplyingBatch] = useState(false)
 
   const proposalKey = (releve_id: string, idx: number) => `${releve_id}:${idx}`
 
-  const applyProposal = async (releve_id: string, transaction_idx: number, facture_ids: string[], reasoning: string) => {
-    const key = proposalKey(releve_id, transaction_idx)
+  // Trigger AI analysis on unmatched transactions
+  const runAiAnalysis = async () => {
+    if (!societeId) return
+    setAiAnalyzing(true)
+    setAiError(null)
+    try {
+      const res = await fetch("/api/comptable/rapprochement/smart", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          societe_id: societeId,
+          use_claude: true,
+          apply: false, // just propose, don't auto-apply yet
+          ...(selectedPeriode !== 'tout' ? {
+            date_debut: selectedPeriode === '2025-2026' ? '2025-07-01' : '2024-07-01',
+            date_fin: selectedPeriode === '2025-2026' ? '2026-06-30' : '2025-06-30',
+          } : {}),
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setAiError(data.error || "Erreur analyse IA")
+        return
+      }
+      // Index proposals by transaction key
+      const byKey: Record<string, any> = {}
+      for (const p of data.proposals || []) {
+        const key = proposalKey(p.releve_id, p.transaction_idx)
+        byKey[key] = p
+      }
+      setAiProposals(byKey)
+      setAiStats({
+        auto: data.stats?.auto_apply || 0,
+        arbitration: data.stats?.needs_arbitration || 0,
+        total: data.stats?.proposed || 0,
+      })
+    } catch (e: any) {
+      setAiError("Erreur reseau: " + (e.message || ""))
+    } finally { setAiAnalyzing(false) }
+  }
+
+  // Apply a single proposal
+  const applyAiProposal = async (key: string) => {
+    const p = aiProposals[key]
+    if (!p) return
     setApplyingKey(key)
     try {
       const res = await fetch("/api/comptable/rapprochement/agent", {
@@ -112,24 +118,64 @@ export default function ClientRapprochementPage() {
           societe_id: societeId,
           direct_action: {
             tool: "apply_match",
-            input: { releve_id, transaction_idx, facture_ids, reasoning },
+            input: {
+              releve_id: p.releve_id,
+              transaction_idx: p.transaction_idx,
+              facture_ids: p.facture_ids,
+              reasoning: p.reasoning,
+            },
           },
         }),
       })
       const data = await res.json()
       if (!res.ok || !data.result?.success) {
-        alert("Erreur : " + (data.result?.error || data.error || "inconnue"))
+        alert("Erreur: " + (data.result?.error || data.error || "inconnue"))
         return
       }
-      setAppliedProposals(p => new Set([...p, key]))
-      load()
+      // Remove from proposals
+      setAiProposals(prev => { const next = { ...prev }; delete next[key]; return next })
+      await load()
     } catch (e: any) {
-      alert("Erreur reseau : " + (e.message || ""))
+      alert("Erreur reseau: " + (e.message || ""))
     } finally { setApplyingKey(null) }
   }
 
-  const rejectProposal = (releve_id: string, transaction_idx: number) => {
-    setRejectedProposals(p => new Set([...p, proposalKey(releve_id, transaction_idx)]))
+  // Apply all high-confidence proposals in batch
+  const applyAllHighConfidence = async () => {
+    const highConf = Object.entries(aiProposals).filter(([_, p]: any) => !p.needs_arbitration && p.confidence >= 0.85)
+    if (highConf.length === 0) return
+    if (!confirm(`Appliquer ${highConf.length} rapprochement(s) automatique(s) ?`)) return
+    setApplyingBatch(true)
+    try {
+      for (const [key, p] of highConf) {
+        const pp = p as any
+        await fetch("/api/comptable/rapprochement/agent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            societe_id: societeId,
+            direct_action: {
+              tool: "apply_match",
+              input: {
+                releve_id: pp.releve_id,
+                transaction_idx: pp.transaction_idx,
+                facture_ids: pp.facture_ids,
+                reasoning: pp.reasoning,
+              },
+            },
+          }),
+        })
+        setAiProposals(prev => { const next = { ...prev }; delete next[key]; return next })
+      }
+      await load()
+    } catch (e: any) {
+      alert("Erreur: " + (e.message || ""))
+    } finally { setApplyingBatch(false) }
+  }
+
+  const rejectAiProposal = (key: string) => {
+    setRejectedProposals(p => new Set([...p, key]))
+    setAiProposals(prev => { const next = { ...prev }; delete next[key]; return next })
   }
 
   // Get sociétés
@@ -384,9 +430,9 @@ export default function ClientRapprochementPage() {
             <Zap className={`w-4 h-4 mr-2 ${autoMatching ? "animate-spin" : ""}`} />
             {autoMatching ? "Analyse..." : "Rapprochement auto"}
           </Button>
-          <Button onClick={() => setAgentOpen(true)} disabled={!societeId} className="text-white" style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}>
-            <Sparkles className="w-4 h-4 mr-2" />
-            Agent IA
+          <Button onClick={runAiAnalysis} disabled={aiAnalyzing || !societeId} className="text-white" style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}>
+            <Sparkles className={`w-4 h-4 mr-2 ${aiAnalyzing ? "animate-spin" : ""}`} />
+            {aiAnalyzing ? "Analyse IA..." : "Analyser avec IA"}
           </Button>
         </div>
       </div>
@@ -488,6 +534,42 @@ export default function ClientRapprochementPage() {
         </Card>
       )}
 
+      {/* AI Analysis banner */}
+      {(aiStats || aiError) && (
+        <Card className="border-2" style={{ borderColor: aiError ? '#fca5a5' : '#c4b5fd', background: aiError ? '#fef2f2' : 'linear-gradient(135deg, #f5f3ff, #faf5ff)' }}>
+          <CardContent className="p-4">
+            {aiError ? (
+              <div className="flex items-center gap-2 text-sm text-red-700">
+                <AlertCircle className="w-4 h-4" />
+                <span>{aiError}</span>
+                <Button variant="ghost" size="sm" onClick={() => setAiError(null)} className="ml-auto h-6 w-6 p-0"><X className="w-3 h-3" /></Button>
+              </div>
+            ) : aiStats && (
+              <div className="flex items-center gap-4 flex-wrap">
+                <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}>
+                  <Sparkles className="w-5 h-5 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-purple-900">Analyse IA terminee</p>
+                  <p className="text-xs text-gray-600">
+                    {aiStats.total} proposition(s) generees — {aiStats.auto} match(s) a haute confiance (&gt;= 85%), {aiStats.arbitration} a arbitrer
+                  </p>
+                </div>
+                {aiStats.auto > 0 && (
+                  <Button onClick={applyAllHighConfidence} disabled={applyingBatch} size="sm" className="text-white" style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}>
+                    {applyingBatch ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <CheckCircle2 className="w-3 h-3 mr-1" />}
+                    Tout appliquer ({aiStats.auto})
+                  </Button>
+                )}
+                <Button variant="ghost" size="sm" onClick={() => { setAiStats(null); setAiProposals({}); setRejectedProposals(new Set()) }}>
+                  Effacer
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* SECTION 4 — Non rapprochées (main focus) */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
@@ -516,8 +598,14 @@ export default function ClientRapprochementPage() {
                     const s = txSearch.toLowerCase()
                     return tx.libelle?.toLowerCase().includes(s) || (tx.tiers_detecte || "").toLowerCase().includes(s) || String(tx.debit).includes(s) || String(tx.credit).includes(s)
                   })
-                  .map((tx: any) => (
-                    <TableRow key={tx.id}>
+                  .map((tx: any) => {
+                    // Find AI proposal for this transaction
+                    const txKey = proposalKey(tx.releve_id, tx.transaction_idx ?? tx.idx ?? -1)
+                    const proposal = aiProposals[txKey]
+                    const isHighConf = proposal?.confidence >= 0.85 && !proposal?.needs_arbitration
+                    return (
+                    <React.Fragment key={tx.id}>
+                    <TableRow className={proposal ? "bg-purple-50/30" : ""}>
                       <TableCell className="text-sm">{formatDate(tx.date)}</TableCell>
                       <TableCell className="text-sm"><TruncatedCell text={tx.libelle} /></TableCell>
                       <TableCell className="text-right text-sm text-red-600 font-medium">{tx.debit > 0 ? fmt(tx.debit) + " " + tx.devise : "—"}</TableCell>
@@ -532,7 +620,68 @@ export default function ClientRapprochementPage() {
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    {/* AI proposal inline sub-row */}
+                    {proposal && (
+                      <TableRow className="border-t-0 bg-purple-50/50">
+                        <TableCell colSpan={6} className="py-3">
+                          <div className="flex items-start gap-3 pl-4">
+                            <div className="h-7 w-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5" style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}>
+                              <Sparkles className="w-3.5 h-3.5 text-white" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap mb-1">
+                                <span className="text-xs font-bold text-purple-900">
+                                  {proposal.match_type === 'facture_groupee' ? 'Paiement groupe' : 'Proposition IA'}
+                                </span>
+                                <Badge className={`text-[9px] px-1.5 py-0 ${isHighConf ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                                  {Math.round((proposal.confidence || 0) * 100)}% confiance
+                                </Badge>
+                                {proposal.within_terms === false && (
+                                  <Badge className="text-[9px] px-1.5 py-0 bg-orange-100 text-orange-700">
+                                    Hors delais ({proposal.delay_days}j)
+                                  </Badge>
+                                )}
+                                {isHighConf && <Badge className="text-[9px] px-1.5 py-0 bg-green-100 text-green-700">Auto-match</Badge>}
+                              </div>
+                              <p className="text-[11px] text-gray-600 leading-snug mb-2">{proposal.reasoning}</p>
+                              {/* Invoices list */}
+                              {proposal.facture_ids && proposal.facture_ids.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 mb-2">
+                                  {proposal.facture_ids.map((fid: string, fi: number) => (
+                                    <span key={fi} className="text-[10px] px-2 py-0.5 bg-white border border-purple-200 rounded-full font-mono text-purple-800">
+                                      {fid.slice(0, 8)}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                              {/* Action buttons */}
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  className="h-7 text-[11px] text-white"
+                                  style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}
+                                  disabled={applyingKey === txKey}
+                                  onClick={() => applyAiProposal(txKey)}
+                                >
+                                  {applyingKey === txKey ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <CheckCircle2 className="w-3 h-3 mr-1" />}
+                                  Appliquer le rapprochement
+                                </Button>
+                                <Button
+                                  size="sm" variant="outline"
+                                  className="h-7 text-[11px] text-gray-600"
+                                  onClick={() => rejectAiProposal(txKey)}
+                                >
+                                  <X className="w-3 h-3 mr-1" /> Rejeter
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    </React.Fragment>
+                    )
+                  })}
               </TableBody>
             </Table>
           )}
@@ -811,212 +960,6 @@ export default function ClientRapprochementPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Agent IA Panel */}
-      <Dialog open={agentOpen} onOpenChange={setAgentOpen}>
-        <DialogContent className="max-w-2xl h-[80vh] flex flex-col p-0 gap-0" aria-describedby="agent-desc">
-          <span id="agent-desc" className="sr-only">Agent IA de rapprochement bancaire avec outils natifs Claude</span>
-          <DialogHeader className="p-5 border-b" style={{ background: "linear-gradient(135deg, #7c3aed08, #4f46e508)" }}>
-            <DialogTitle className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="h-9 w-9 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}>
-                  <Bot className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <p className="text-base font-bold" style={{ color: "#0B0F2E" }}>Agent IA — Rapprochement</p>
-                  <p className="text-xs text-gray-500 font-normal">Claude Sonnet 4.6 avec outils natifs</p>
-                </div>
-              </div>
-              <Button variant="ghost" size="sm" onClick={resetAgent} className="text-xs">
-                <X className="w-3 h-3 mr-1" /> Reset
-              </Button>
-            </DialogTitle>
-          </DialogHeader>
-
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-5 space-y-4">
-            {agentMessages.length === 0 && (
-              <div className="text-center py-8">
-                <div className="h-16 w-16 rounded-2xl flex items-center justify-center mx-auto mb-3" style={{ background: "linear-gradient(135deg, #7c3aed20, #4f46e520)" }}>
-                  <Sparkles className="w-8 h-8" style={{ color: "#7c3aed" }} />
-                </div>
-                <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>Agent de rapprochement intelligent</p>
-                <p className="text-xs text-gray-400 mt-1 max-w-sm mx-auto">
-                  Posez une question ou utilisez une suggestion. L&apos;agent peut analyser les transactions, proposer des matches et executer les rapprochements.
-                </p>
-                <div className="flex flex-col gap-2 max-w-sm mx-auto mt-5">
-                  {[
-                    "Analyse l'etat du rapprochement et resume ce qui reste a faire",
-                    "Cherche les transactions qui correspondent a plusieurs factures du meme fournisseur",
-                    "Rapproche automatiquement les paiements evidents (confiance >= 90%)",
-                    "Quelles transactions sont hors delais de paiement (> 60 jours) ?",
-                  ].map((q, i) => (
-                    <button key={i} onClick={() => sendAgentMessage(q)}
-                      className="text-left px-3 py-2 rounded-lg text-xs bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-700 transition-colors">
-                      {q}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-            {agentMessages.map((m, i) => {
-              const proposals = (m.tool_calls || []).filter((tc: any) => tc.name === 'propose_match' && tc.result?.proposed)
-              const applied = (m.tool_calls || []).filter((tc: any) => tc.name === 'apply_match' && tc.result?.success)
-              return (
-              <div key={i} className="space-y-2">
-                <div className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
-                    m.role === 'user' ? 'bg-[#0B0F2E] text-white' : 'bg-gray-50 border border-gray-200 text-gray-800'
-                  }`}>
-                    <p className="text-sm whitespace-pre-wrap leading-relaxed">{m.content}</p>
-                    {m.tool_calls && m.tool_calls.length > 0 && (
-                      <div className="mt-2 pt-2 border-t border-gray-200 space-y-0.5">
-                        {m.tool_calls.map((tc: any, ti: number) => (
-                          <div key={ti} className="flex items-start gap-1.5 text-[10px] text-gray-500">
-                            <Wrench className="w-3 h-3 mt-0.5 shrink-0" />
-                            <div className="flex-1">
-                              <span className="font-mono font-semibold text-purple-600">{tc.name}</span>
-                              {tc.result?.count !== undefined && <span className="ml-1">→ {tc.result.count} resultats</span>}
-                              {tc.result?.success && <span className="ml-1 text-green-600">✓ applique</span>}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Auto-applied matches: green success cards */}
-                {applied.map((tc: any, ai: number) => (
-                  <div key={`a${ai}`} className="ml-2 p-3 rounded-xl border border-green-200 bg-green-50 text-xs">
-                    <div className="flex items-center gap-2 text-green-700 font-semibold">
-                      <CheckCircle2 className="w-4 h-4" />
-                      Rapprochement applique
-                    </div>
-                    <p className="text-green-600 mt-1">{tc.input?.reasoning || 'Match automatique'}</p>
-                    <p className="text-green-500 mt-0.5">{tc.input?.facture_ids?.length || 0} facture(s) marquee(s) payee(s)</p>
-                  </div>
-                ))}
-
-                {/* Interactive proposal cards */}
-                {proposals.map((tc: any, pi: number) => {
-                  const p = tc.result
-                  const key = proposalKey(p.releve_id, p.transaction_idx)
-                  const isApplied = appliedProposals.has(key)
-                  const isRejected = rejectedProposals.has(key)
-                  const isApplying = applyingKey === key
-                  if (isRejected) return null
-                  return (
-                    <div key={`p${pi}`} className="ml-2 p-3 rounded-xl border-2 border-purple-200 bg-purple-50 text-xs space-y-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 text-purple-700 font-semibold">
-                            <Sparkles className="w-3.5 h-3.5" />
-                            Proposition de rapprochement
-                            <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-purple-200">
-                              {Math.round((p.confidence || 0) * 100)}%
-                            </span>
-                          </div>
-                          <p className="text-gray-600 mt-1 text-[11px]">{p.reasoning}</p>
-                        </div>
-                      </div>
-
-                      {/* Transaction */}
-                      {p.transaction && (
-                        <div className="bg-white rounded-lg p-2 border border-purple-100">
-                          <p className="text-[9px] font-bold text-gray-400 uppercase">Transaction bancaire</p>
-                          <p className="font-medium truncate">{p.transaction.libelle}</p>
-                          <div className="flex justify-between text-gray-500 mt-0.5">
-                            <span>{p.transaction.date}</span>
-                            <span className="font-bold text-red-600">
-                              {p.transaction.debit > 0 ? `${fmt(p.transaction.debit)} sortie` : `${fmt(p.transaction.credit)} entree`}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Factures */}
-                      {p.factures && p.factures.length > 0 && (
-                        <div className="bg-white rounded-lg p-2 border border-purple-100 space-y-1.5">
-                          <p className="text-[9px] font-bold text-gray-400 uppercase">{p.factures.length === 1 ? 'Facture' : `${p.factures.length} factures`}</p>
-                          {p.factures.map((f: any, fi: number) => (
-                            <div key={fi} className="flex items-center justify-between text-[11px]">
-                              <div className="flex-1 min-w-0">
-                                <p className="font-medium truncate">{f.numero_facture || '—'} — {f.tiers || '—'}</p>
-                                <p className="text-gray-400 text-[10px]">{f.date_facture}</p>
-                              </div>
-                              <span className="font-bold text-gray-700 shrink-0 ml-2">
-                                {fmt(Number(f.montant_mur) || Number(f.montant_ttc) || 0)}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Action buttons */}
-                      <div className="flex gap-2">
-                        {isApplied ? (
-                          <div className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-green-100 text-green-700 text-[11px] font-semibold">
-                            <CheckCircle2 className="w-3.5 h-3.5" /> Applique
-                          </div>
-                        ) : (
-                          <>
-                            <Button
-                              size="sm"
-                              className="flex-1 h-8 text-[11px]"
-                              style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}
-                              onClick={() => applyProposal(p.releve_id, p.transaction_idx, p.facture_ids, p.reasoning)}
-                              disabled={isApplying}
-                            >
-                              {isApplying ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <CheckCircle2 className="w-3 h-3 mr-1" />}
-                              Appliquer
-                            </Button>
-                            <Button
-                              size="sm" variant="outline"
-                              className="flex-1 h-8 text-[11px] text-gray-600"
-                              onClick={() => rejectProposal(p.releve_id, p.transaction_idx)}
-                            >
-                              <X className="w-3 h-3 mr-1" /> Rejeter
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-              )
-            })}
-            {agentLoading && (
-              <div className="flex justify-start">
-                <div className="bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3">
-                  <div className="flex items-center gap-2 text-sm text-gray-500">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    L&apos;agent reflechit...
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Input */}
-          <div className="border-t p-4 bg-white">
-            <div className="flex gap-2">
-              <Textarea
-                value={agentInput}
-                onChange={e => setAgentInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendAgentMessage() } }}
-                placeholder="Posez une question a l'agent..."
-                className="flex-1 min-h-[44px] max-h-32 resize-none text-sm"
-                disabled={agentLoading}
-              />
-              <Button onClick={() => sendAgentMessage()} disabled={!agentInput.trim() || agentLoading} className="self-end" style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}>
-                <Send className="w-4 h-4" />
-              </Button>
-            </div>
-            <p className="text-[10px] text-gray-400 mt-1.5">L&apos;agent peut lister les transactions, analyser les factures et proposer/appliquer des rapprochements.</p>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
