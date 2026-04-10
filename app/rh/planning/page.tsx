@@ -114,10 +114,34 @@ export default function PlanningPage() {
   const [saving, setSaving] = useState(false)
   const [published, setPublished] = useState(false)
 
-  // Créneaux configuration
+  // Créneaux configuration — persist per société in localStorage
   const [creneaux, setCreneaux] = useState<Creneau[]>(DEFAULT_CRENEAUX)
   const [creneauConfigOpen, setCreneauConfigOpen] = useState(false)
   const [editingCreneau, setEditingCreneau] = useState<Creneau | null>(null)
+
+  // Load creneaux from localStorage when société changes
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const key = `lexora_creneaux_${societe || "default"}`
+    try {
+      const stored = localStorage.getItem(key)
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setCreneaux(parsed)
+          return
+        }
+      }
+    } catch {}
+    setCreneaux(DEFAULT_CRENEAUX)
+  }, [societe])
+
+  // Save creneaux to localStorage whenever they change
+  const persistCreneaux = useCallback((next: Creneau[]) => {
+    if (typeof window === "undefined") return
+    const key = `lexora_creneaux_${societe || "default"}`
+    try { localStorage.setItem(key, JSON.stringify(next)) } catch {}
+  }, [societe])
 
   // Employee filter — who appears in the planning
   const [allEmployes, setAllEmployes] = useState<any[]>([])
@@ -687,19 +711,31 @@ export default function PlanningPage() {
       pause_debut: "12:00", pause_fin: "12:30", pause_minutes: 30,
       heures_effectives: 7.5, couleur: COLORS[creneaux.length % COLORS.length],
     }
-    setCreneaux(prev => [...prev, newC])
+    setCreneaux(prev => {
+      const next = [...prev, newC]
+      persistCreneaux(next)
+      return next
+    })
     setEditingCreneau(newC)
   }
 
   const updateCreneau = (updated: Creneau) => {
     updated.pause_minutes = computeMinutes(updated.pause_debut, updated.pause_fin)
     updated.heures_effectives = computeEffective(updated.heure_debut, updated.heure_fin, updated.pause_debut, updated.pause_fin)
-    setCreneaux(prev => prev.map(c => c.id === updated.id ? updated : c))
+    setCreneaux(prev => {
+      const next = prev.map(c => c.id === updated.id ? updated : c)
+      persistCreneaux(next)
+      return next
+    })
     setEditingCreneau(null)
   }
 
   const deleteCreneau = (id: string) => {
-    setCreneaux(prev => prev.filter(c => c.id !== id))
+    setCreneaux(prev => {
+      const next = prev.filter(c => c.id !== id)
+      persistCreneaux(next)
+      return next
+    })
     setEditingCreneau(null)
   }
 
