@@ -134,7 +134,7 @@ export async function POST(request: Request) {
             date_facture: e.date_ecriture,
             date_echeance: null,
             conditions_paiement: 30,
-            type_facture: isClient ? 'client' : 'fournisseur',
+            type_facture: (isClient ? 'client' : 'fournisseur') as 'client' | 'fournisseur',
             statut: 'en_attente',
           }
         }).filter(f => f.montant_ttc > 0)
