@@ -90,6 +90,46 @@ export default function ClientRapprochementPage() {
   const resetAgent = () => {
     setAgentMessages([])
     setAgentInput("")
+    setAppliedProposals(new Set())
+    setRejectedProposals(new Set())
+  }
+
+  // Track which proposals have been applied/rejected
+  const [appliedProposals, setAppliedProposals] = useState<Set<string>>(new Set())
+  const [rejectedProposals, setRejectedProposals] = useState<Set<string>>(new Set())
+  const [applyingKey, setApplyingKey] = useState<string | null>(null)
+
+  const proposalKey = (releve_id: string, idx: number) => `${releve_id}:${idx}`
+
+  const applyProposal = async (releve_id: string, transaction_idx: number, facture_ids: string[], reasoning: string) => {
+    const key = proposalKey(releve_id, transaction_idx)
+    setApplyingKey(key)
+    try {
+      const res = await fetch("/api/comptable/rapprochement/agent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          societe_id: societeId,
+          direct_action: {
+            tool: "apply_match",
+            input: { releve_id, transaction_idx, facture_ids, reasoning },
+          },
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.result?.success) {
+        alert("Erreur : " + (data.result?.error || data.error || "inconnue"))
+        return
+      }
+      setAppliedProposals(p => new Set([...p, key]))
+      load()
+    } catch (e: any) {
+      alert("Erreur reseau : " + (e.message || ""))
+    } finally { setApplyingKey(null) }
+  }
+
+  const rejectProposal = (releve_id: string, transaction_idx: number) => {
+    setRejectedProposals(p => new Set([...p, proposalKey(releve_id, transaction_idx)]))
   }
 
   // Get sociétés
@@ -818,31 +858,134 @@ export default function ClientRapprochementPage() {
                 </div>
               </div>
             )}
-            {agentMessages.map((m, i) => (
-              <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
-                  m.role === 'user'
-                    ? 'bg-[#0B0F2E] text-white'
-                    : 'bg-gray-50 border border-gray-200 text-gray-800'
-                }`}>
-                  <p className="text-sm whitespace-pre-wrap leading-relaxed">{m.content}</p>
-                  {m.tool_calls && m.tool_calls.length > 0 && (
-                    <div className="mt-2 pt-2 border-t border-gray-200 space-y-1">
-                      {m.tool_calls.map((tc: any, ti: number) => (
-                        <div key={ti} className="flex items-start gap-1.5 text-[10px] text-gray-500">
-                          <Wrench className="w-3 h-3 mt-0.5 shrink-0" />
-                          <div className="flex-1">
-                            <span className="font-mono font-semibold text-purple-600">{tc.name}</span>
-                            {tc.result?.count !== undefined && <span className="ml-1">→ {tc.result.count} resultats</span>}
-                            {tc.result?.success && <span className="ml-1 text-green-600">✓ applique</span>}
+            {agentMessages.map((m, i) => {
+              const proposals = (m.tool_calls || []).filter((tc: any) => tc.name === 'propose_match' && tc.result?.proposed)
+              const applied = (m.tool_calls || []).filter((tc: any) => tc.name === 'apply_match' && tc.result?.success)
+              return (
+              <div key={i} className="space-y-2">
+                <div className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
+                    m.role === 'user' ? 'bg-[#0B0F2E] text-white' : 'bg-gray-50 border border-gray-200 text-gray-800'
+                  }`}>
+                    <p className="text-sm whitespace-pre-wrap leading-relaxed">{m.content}</p>
+                    {m.tool_calls && m.tool_calls.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-gray-200 space-y-0.5">
+                        {m.tool_calls.map((tc: any, ti: number) => (
+                          <div key={ti} className="flex items-start gap-1.5 text-[10px] text-gray-500">
+                            <Wrench className="w-3 h-3 mt-0.5 shrink-0" />
+                            <div className="flex-1">
+                              <span className="font-mono font-semibold text-purple-600">{tc.name}</span>
+                              {tc.result?.count !== undefined && <span className="ml-1">→ {tc.result.count} resultats</span>}
+                              {tc.result?.success && <span className="ml-1 text-green-600">✓ applique</span>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Auto-applied matches: green success cards */}
+                {applied.map((tc: any, ai: number) => (
+                  <div key={`a${ai}`} className="ml-2 p-3 rounded-xl border border-green-200 bg-green-50 text-xs">
+                    <div className="flex items-center gap-2 text-green-700 font-semibold">
+                      <CheckCircle2 className="w-4 h-4" />
+                      Rapprochement applique
+                    </div>
+                    <p className="text-green-600 mt-1">{tc.input?.reasoning || 'Match automatique'}</p>
+                    <p className="text-green-500 mt-0.5">{tc.input?.facture_ids?.length || 0} facture(s) marquee(s) payee(s)</p>
+                  </div>
+                ))}
+
+                {/* Interactive proposal cards */}
+                {proposals.map((tc: any, pi: number) => {
+                  const p = tc.result
+                  const key = proposalKey(p.releve_id, p.transaction_idx)
+                  const isApplied = appliedProposals.has(key)
+                  const isRejected = rejectedProposals.has(key)
+                  const isApplying = applyingKey === key
+                  if (isRejected) return null
+                  return (
+                    <div key={`p${pi}`} className="ml-2 p-3 rounded-xl border-2 border-purple-200 bg-purple-50 text-xs space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 text-purple-700 font-semibold">
+                            <Sparkles className="w-3.5 h-3.5" />
+                            Proposition de rapprochement
+                            <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-purple-200">
+                              {Math.round((p.confidence || 0) * 100)}%
+                            </span>
+                          </div>
+                          <p className="text-gray-600 mt-1 text-[11px]">{p.reasoning}</p>
+                        </div>
+                      </div>
+
+                      {/* Transaction */}
+                      {p.transaction && (
+                        <div className="bg-white rounded-lg p-2 border border-purple-100">
+                          <p className="text-[9px] font-bold text-gray-400 uppercase">Transaction bancaire</p>
+                          <p className="font-medium truncate">{p.transaction.libelle}</p>
+                          <div className="flex justify-between text-gray-500 mt-0.5">
+                            <span>{p.transaction.date}</span>
+                            <span className="font-bold text-red-600">
+                              {p.transaction.debit > 0 ? `${fmt(p.transaction.debit)} sortie` : `${fmt(p.transaction.credit)} entree`}
+                            </span>
                           </div>
                         </div>
-                      ))}
+                      )}
+
+                      {/* Factures */}
+                      {p.factures && p.factures.length > 0 && (
+                        <div className="bg-white rounded-lg p-2 border border-purple-100 space-y-1.5">
+                          <p className="text-[9px] font-bold text-gray-400 uppercase">{p.factures.length === 1 ? 'Facture' : `${p.factures.length} factures`}</p>
+                          {p.factures.map((f: any, fi: number) => (
+                            <div key={fi} className="flex items-center justify-between text-[11px]">
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium truncate">{f.numero_facture || '—'} — {f.tiers || '—'}</p>
+                                <p className="text-gray-400 text-[10px]">{f.date_facture}</p>
+                              </div>
+                              <span className="font-bold text-gray-700 shrink-0 ml-2">
+                                {fmt(Number(f.montant_mur) || Number(f.montant_ttc) || 0)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Action buttons */}
+                      <div className="flex gap-2">
+                        {isApplied ? (
+                          <div className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-green-100 text-green-700 text-[11px] font-semibold">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Applique
+                          </div>
+                        ) : (
+                          <>
+                            <Button
+                              size="sm"
+                              className="flex-1 h-8 text-[11px]"
+                              style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}
+                              onClick={() => applyProposal(p.releve_id, p.transaction_idx, p.facture_ids, p.reasoning)}
+                              disabled={isApplying}
+                            >
+                              {isApplying ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <CheckCircle2 className="w-3 h-3 mr-1" />}
+                              Appliquer
+                            </Button>
+                            <Button
+                              size="sm" variant="outline"
+                              className="flex-1 h-8 text-[11px] text-gray-600"
+                              onClick={() => rejectProposal(p.releve_id, p.transaction_idx)}
+                            >
+                              <X className="w-3 h-3 mr-1" /> Rejeter
+                            </Button>
+                          </>
+                        )}
+                      </div>
                     </div>
-                  )}
-                </div>
+                  )
+                })}
               </div>
-            ))}
+              )
+            })}
             {agentLoading && (
               <div className="flex justify-start">
                 <div className="bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3">

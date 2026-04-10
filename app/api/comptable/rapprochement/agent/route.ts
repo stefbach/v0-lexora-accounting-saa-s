@@ -142,8 +142,23 @@ async function executeTool(name: string, input: any, supabase: ReturnType<typeof
   }
 
   if (name === 'propose_match') {
-    // Just return the proposal for the frontend to display
-    return { proposed: true, ...input }
+    // Enrich proposal with transaction + invoice details for the frontend
+    const { releve_id, transaction_idx, facture_ids, confidence, reasoning } = input
+    const { data: releve } = await supabase.from('releves_bancaires').select('transactions_json').eq('id', releve_id).single()
+    const tx = releve?.transactions_json?.[transaction_idx]
+    const { data: factures } = facture_ids?.length > 0
+      ? await supabase.from('factures').select('id, numero_facture, tiers, montant_ttc, montant_mur, devise, date_facture, date_echeance, type_facture').in('id', facture_ids)
+      : { data: [] }
+    return {
+      proposed: true,
+      releve_id, transaction_idx, facture_ids, confidence, reasoning,
+      transaction: tx ? {
+        date: tx.date, libelle: tx.libelle,
+        tiers: tx.tiers_detecte || tx.tiers,
+        debit: Number(tx.debit) || 0, credit: Number(tx.credit) || 0,
+      } : null,
+      factures: factures || [],
+    }
   }
 
   if (name === 'apply_match') {
@@ -201,7 +216,14 @@ export async function POST(request: Request) {
 
     const supabase = getAdminClient()
     const body = await request.json()
-    const { messages = [], societe_id } = body
+    const { messages = [], societe_id, direct_action } = body
+
+    // Direct action mode: apply a proposal without going through Claude
+    if (direct_action) {
+      const result = await executeTool(direct_action.tool, direct_action.input, supabase)
+      return NextResponse.json({ result })
+    }
+
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
 
     if (!process.env.ANTHROPIC_API_KEY) {
@@ -215,8 +237,7 @@ export async function POST(request: Request) {
     const model = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6'
 
     const systemPrompt = `Tu es un agent expert-comptable specialise en rapprochement bancaire a Maurice.
-
-Tu as acces a des outils pour analyser les transactions bancaires et les factures impayees, et proposer des rapprochements intelligents.
+Tu es AUTONOME : tu dois ANALYSER, DECIDER et AGIR directement sans demander de confirmation.
 
 Regles IMPORTANTES de rapprochement :
 1. DEBIT bancaire = sortie d'argent = paiement d'une facture FOURNISSEUR
@@ -227,17 +248,23 @@ Regles IMPORTANTES de rapprochement :
 6. Tolerance de montant : 5% ou 100 MUR max (frais bancaires, TDS, arrondis)
 7. Le nom du tiers en banque peut etre tronque ou variant — tolere les variations
 
-Workflow typique :
-1. get_reconciliation_stats → vue d'ensemble
-2. list_unmatched_transactions → voir ce qui reste a rapprocher
-3. list_unpaid_invoices → voir les factures disponibles
-4. Pour chaque transaction : analyse intelligente + propose_match avec reasoning clair
-5. Si confidence >= 0.9 → apply_match automatiquement
-6. Sinon → demande confirmation a l'utilisateur avant apply_match
+WORKFLOW OBLIGATOIRE (tu dois appeler ces outils) :
+1. list_unmatched_transactions → recupere les transactions a rapprocher
+2. list_unpaid_invoices → recupere toutes les factures impayees
+3. Pour chaque transaction non rapprochee : analyse intelligente
+4. Si confidence >= 0.85 → APPELLE apply_match DIRECTEMENT (pas besoin de confirmation)
+5. Si confidence 0.6-0.85 → APPELLE propose_match (l'utilisateur validera)
+6. Si confidence < 0.6 → rapporte simplement dans la reponse finale
+
+IMPORTANT :
+- Tu NE DOIS PAS te contenter de lister. Tu DOIS AGIR avec apply_match / propose_match.
+- Sois AGRESSIF : chaque match evident doit etre applique automatiquement.
+- Ne demande jamais de confirmation a l'utilisateur dans le texte, agis directement.
+- A la fin, resume brievement ce que tu as fait (X rapprochements automatiques, Y propositions).
 
 Societe_id actuellement selectionne : ${societe_id}
 
-Reponds toujours en francais, de maniere concise et structuree.`
+Reponds en francais, concis, avec des bullet points.`
 
     // Agentic loop with tool calls (max 4 iterations to stay within serverless timeout)
     const conversationMessages = messages.map((m: any) => ({
