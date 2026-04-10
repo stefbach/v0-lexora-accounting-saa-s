@@ -9,7 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Loader2, RefreshCw, Link2, Unlink, Zap, CheckCircle2, AlertCircle, ArrowRightLeft, Users, Building2, Search, ChevronDown, ChevronUp } from "lucide-react"
+import { Loader2, RefreshCw, Link2, Unlink, Zap, CheckCircle2, AlertCircle, ArrowRightLeft, Users, Building2, Search, ChevronDown, ChevronUp, Sparkles, Send, Bot, Wrench, X } from "lucide-react"
+import { Textarea } from "@/components/ui/textarea"
 import { MonthPicker } from "@/components/ui/MonthPicker"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
@@ -51,6 +52,45 @@ export default function ClientRapprochementPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [selectedPeriode, setSelectedPeriode] = useState('2025-2026')
   const [associes, setAssocies] = useState<any[]>([])
+
+  // Agent IA state
+  const [agentOpen, setAgentOpen] = useState(false)
+  const [agentMessages, setAgentMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string; tool_calls?: any[] }>>([])
+  const [agentInput, setAgentInput] = useState("")
+  const [agentLoading, setAgentLoading] = useState(false)
+
+  const sendAgentMessage = async (message?: string) => {
+    const msg = (message ?? agentInput).trim()
+    if (!msg || !societeId || agentLoading) return
+    const newMessages = [...agentMessages, { role: 'user' as const, content: msg }]
+    setAgentMessages(newMessages)
+    setAgentInput("")
+    setAgentLoading(true)
+    try {
+      const res = await fetch("/api/comptable/rapprochement/agent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: newMessages, societe_id: societeId }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setAgentMessages(m => [...m, { role: 'assistant', content: `Erreur : ${data.error || 'inconnue'}` }])
+      } else {
+        setAgentMessages(m => [...m, { role: 'assistant', content: data.response || "(pas de reponse)", tool_calls: data.tool_calls }])
+        // If the agent applied matches, reload the data
+        if (data.tool_calls?.some((t: any) => t.name === 'apply_match' && t.result?.success)) {
+          load()
+        }
+      }
+    } catch (e: any) {
+      setAgentMessages(m => [...m, { role: 'assistant', content: `Erreur reseau : ${e.message || ''}` }])
+    } finally { setAgentLoading(false) }
+  }
+
+  const resetAgent = () => {
+    setAgentMessages([])
+    setAgentInput("")
+  }
 
   // Get sociétés
   useEffect(() => {
@@ -303,6 +343,10 @@ export default function ClientRapprochementPage() {
           <Button onClick={handleAutoMatch} disabled={autoMatching} className="bg-[#0B0F2E]">
             <Zap className={`w-4 h-4 mr-2 ${autoMatching ? "animate-spin" : ""}`} />
             {autoMatching ? "Analyse..." : "Rapprochement auto"}
+          </Button>
+          <Button onClick={() => setAgentOpen(true)} disabled={!societeId} className="text-white" style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}>
+            <Sparkles className="w-4 h-4 mr-2" />
+            Agent IA
           </Button>
         </div>
       </div>
@@ -724,6 +768,109 @@ export default function ClientRapprochementPage() {
               )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Agent IA Panel */}
+      <Dialog open={agentOpen} onOpenChange={setAgentOpen}>
+        <DialogContent className="max-w-2xl h-[80vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="p-5 border-b" style={{ background: "linear-gradient(135deg, #7c3aed08, #4f46e508)" }}>
+            <DialogTitle className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="h-9 w-9 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}>
+                  <Bot className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <p className="text-base font-bold" style={{ color: "#0B0F2E" }}>Agent IA — Rapprochement</p>
+                  <p className="text-xs text-gray-500 font-normal">Claude Sonnet 4.6 avec outils natifs</p>
+                </div>
+              </div>
+              <Button variant="ghost" size="sm" onClick={resetAgent} className="text-xs">
+                <X className="w-3 h-3 mr-1" /> Reset
+              </Button>
+            </DialogTitle>
+          </DialogHeader>
+
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto p-5 space-y-4">
+            {agentMessages.length === 0 && (
+              <div className="text-center py-8">
+                <div className="h-16 w-16 rounded-2xl flex items-center justify-center mx-auto mb-3" style={{ background: "linear-gradient(135deg, #7c3aed20, #4f46e520)" }}>
+                  <Sparkles className="w-8 h-8" style={{ color: "#7c3aed" }} />
+                </div>
+                <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>Agent de rapprochement intelligent</p>
+                <p className="text-xs text-gray-400 mt-1 max-w-sm mx-auto">
+                  Posez une question ou utilisez une suggestion. L&apos;agent peut analyser les transactions, proposer des matches et executer les rapprochements.
+                </p>
+                <div className="flex flex-col gap-2 max-w-sm mx-auto mt-5">
+                  {[
+                    "Analyse l'etat du rapprochement et resume ce qui reste a faire",
+                    "Cherche les transactions qui correspondent a plusieurs factures du meme fournisseur",
+                    "Rapproche automatiquement les paiements evidents (confiance >= 90%)",
+                    "Quelles transactions sont hors delais de paiement (> 60 jours) ?",
+                  ].map((q, i) => (
+                    <button key={i} onClick={() => sendAgentMessage(q)}
+                      className="text-left px-3 py-2 rounded-lg text-xs bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-700 transition-colors">
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {agentMessages.map((m, i) => (
+              <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
+                  m.role === 'user'
+                    ? 'bg-[#0B0F2E] text-white'
+                    : 'bg-gray-50 border border-gray-200 text-gray-800'
+                }`}>
+                  <p className="text-sm whitespace-pre-wrap leading-relaxed">{m.content}</p>
+                  {m.tool_calls && m.tool_calls.length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-gray-200 space-y-1">
+                      {m.tool_calls.map((tc: any, ti: number) => (
+                        <div key={ti} className="flex items-start gap-1.5 text-[10px] text-gray-500">
+                          <Wrench className="w-3 h-3 mt-0.5 shrink-0" />
+                          <div className="flex-1">
+                            <span className="font-mono font-semibold text-purple-600">{tc.name}</span>
+                            {tc.result?.count !== undefined && <span className="ml-1">→ {tc.result.count} resultats</span>}
+                            {tc.result?.success && <span className="ml-1 text-green-600">✓ applique</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+            {agentLoading && (
+              <div className="flex justify-start">
+                <div className="bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3">
+                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    L&apos;agent reflechit...
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Input */}
+          <div className="border-t p-4 bg-white">
+            <div className="flex gap-2">
+              <Textarea
+                value={agentInput}
+                onChange={e => setAgentInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendAgentMessage() } }}
+                placeholder="Posez une question a l'agent..."
+                className="flex-1 min-h-[44px] max-h-32 resize-none text-sm"
+                disabled={agentLoading}
+              />
+              <Button onClick={() => sendAgentMessage()} disabled={!agentInput.trim() || agentLoading} className="self-end" style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}>
+                <Send className="w-4 h-4" />
+              </Button>
+            </div>
+            <p className="text-[10px] text-gray-400 mt-1.5">L&apos;agent peut lister les transactions, analyser les factures et proposer/appliquer des rapprochements.</p>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
