@@ -57,7 +57,7 @@ function daysBetween(d1: string, d2: string): number {
  */
 function* subsets<T>(arr: T[], maxSize: number): Generator<T[]> {
   if (arr.length === 0 || maxSize === 0) return
-  const n = Math.min(arr.length, 12) // limit to avoid combinatorial explosion
+  const n = Math.min(arr.length, 8) // cap lower to avoid combinatorial explosion (2^8 = 256)
   for (let mask = 1; mask < (1 << n); mask++) {
     const subset: T[] = []
     for (let i = 0; i < n; i++) {
@@ -92,6 +92,11 @@ export async function POST(request: Request) {
     const { societe_id, date_debut, date_fin, use_claude = true, apply = false } = body
 
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
+
+    // Global timeout guard (serverless-safe): 45s budget
+    const startTime = Date.now()
+    const TIMEOUT_MS = 45000
+    const isTimedOut = () => (Date.now() - startTime) > TIMEOUT_MS
 
     // 1. Fetch unmatched bank transactions
     const { data: releves } = await supabase
@@ -132,11 +137,22 @@ export async function POST(request: Request) {
       })
     }
 
+    // Hard cap to avoid timeouts
+    const MAX_TXS_TO_PROCESS = 150
+    if (unmatchedTxs.length > MAX_TXS_TO_PROCESS) {
+      console.log(`[smart] Capping ${unmatchedTxs.length} transactions to ${MAX_TXS_TO_PROCESS}`)
+      unmatchedTxs.splice(MAX_TXS_TO_PROCESS)
+    }
+
     // 4. Pre-match using heuristics (payment terms + amount + tiers)
     const proposals: MatchProposal[] = []
     const usedFactureIds = new Set<string>()
 
     for (const { releve_id, idx, tx } of unmatchedTxs) {
+      if (isTimedOut()) {
+        console.warn('[smart] Timeout reached, stopping analysis at', proposals.length, 'proposals')
+        break
+      }
       const txDebit = Number(tx.debit) || 0
       const txCredit = Number(tx.credit) || 0
       const txAmount = txDebit > 0 ? txDebit : txCredit
@@ -244,7 +260,8 @@ export async function POST(request: Request) {
     const needsAI = proposals.filter(p => p.confidence >= 0.4 && p.confidence < 0.8)
     const unmatchedCount = unmatchedTxs.length - proposals.length
 
-    if (use_claude && (needsAI.length > 0 || unmatchedCount > 0) && process.env.ANTHROPIC_API_KEY) {
+    // Only call Claude if: explicitly requested + not timed out + budget remaining
+    if (use_claude && !isTimedOut() && (Date.now() - startTime) < 25000 && (needsAI.length > 0 || unmatchedCount > 0) && process.env.ANTHROPIC_API_KEY) {
       try {
         // Build a condensed summary for Claude
         const txsToAnalyze = [

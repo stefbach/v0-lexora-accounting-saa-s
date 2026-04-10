@@ -75,8 +75,8 @@ export default function ClientRapprochementPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           societe_id: societeId,
-          use_claude: true,
-          apply: false, // just propose, don't auto-apply yet
+          use_claude: false, // heuristic only for speed — avoids timeouts
+          apply: false,
           ...(selectedPeriode !== 'tout' ? {
             date_debut: selectedPeriode === '2025-2026' ? '2025-07-01' : '2024-07-01',
             date_fin: selectedPeriode === '2025-2026' ? '2026-06-30' : '2025-06-30',
