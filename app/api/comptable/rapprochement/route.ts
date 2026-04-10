@@ -387,9 +387,16 @@ export async function POST(request: Request) {
                     // Grouped match found
                     const code = `RG${String(counts.matched + 1).padStart(3, '0')}`
                     const isHighConfidence = true
-                    updatedTxs[i] = { ...tx, facture_ids: tiersFactures.map(f => f.id), facture_id: tiersFactures[0].id, lettre: code, statut: 'rapproche', matched_type: 'facture_groupee', match_confidence: 'grouped', note: `${tiersFactures.length} factures ${(tx.tiers_detecte || tx.tiers || '').substring(0, 20)}` }
+                    updatedTxs[i] = { ...tx, facture_ids: tiersFactures.map(f => f.id), facture_id: tiersFactures[0].id, lettre: code, statut: 'rapproche', matched_type: 'facture_groupee', match_confidence: 'grouped', note: `${tiersFactures.length} factures ${(tx.tiers_detecte || tx.tiers || '').substring(0, 20)}`, rapproche_at: new Date().toISOString() }
+                    const reconcileDate = new Date().toISOString()
                     for (const gf of tiersFactures) {
-                      await supabase.from('factures').update({ statut: 'paye' }).eq('id', gf.id)
+                      await supabase.from('factures').update({
+                        statut: 'paye',
+                        rapproche_releve_id: releve.id,
+                        rapproche_transaction_idx: i,
+                        rapproche_date: reconcileDate,
+                        rapproche_source: 'auto',
+                      }).eq('id', gf.id)
                       factures = factures.filter(f => f.id !== gf.id)
                     }
                     // Generate grouped paiement entries
@@ -412,10 +419,16 @@ export async function POST(request: Request) {
             if (matchedFacture) {
               const code = `R${String(counts.matched + 1).padStart(3, '0')}`
               const isHighConfidence = matchConfidence === 'reference' || matchConfidence === 'tiers_and_amount'
-              updatedTxs[i] = { ...tx, facture_id: matchedFacture.id, lettre: code, statut: isHighConfidence ? 'rapproche' : 'propose', match_confidence: matchConfidence }
+              updatedTxs[i] = { ...tx, facture_id: matchedFacture.id, lettre: code, statut: isHighConfidence ? 'rapproche' : 'propose', match_confidence: matchConfidence, rapproche_at: isHighConfidence ? new Date().toISOString() : undefined }
               // Only mark facture as paye for high-confidence matches
               if (isHighConfidence) {
-                await supabase.from('factures').update({ statut: 'paye' }).eq('id', matchedFacture.id)
+                await supabase.from('factures').update({
+                  statut: 'paye',
+                  rapproche_releve_id: releve.id,
+                  rapproche_transaction_idx: i,
+                  rapproche_date: new Date().toISOString(),
+                  rapproche_source: 'auto',
+                }).eq('id', matchedFacture.id)
 
                 // Generate paiement accounting entries (401/512 or 411/512)
                 const { data: payDossier } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
@@ -619,11 +632,18 @@ export async function POST(request: Request) {
 
       const lettreCode = `M${String(Date.now()).slice(-4)}`
 
-      txs[txIdx] = { ...txs[txIdx], facture_id: facture_id || null, ecriture_id: ecriture_id || null, lettre: lettreCode, statut: 'rapproche' }
+      const reconcileDate = new Date().toISOString()
+      txs[txIdx] = { ...txs[txIdx], facture_id: facture_id || null, ecriture_id: ecriture_id || null, lettre: lettreCode, statut: 'rapproche', rapproche_at: reconcileDate }
       await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', releve_id)
 
       if (facture_id) {
-        await supabase.from('factures').update({ statut: 'paye' }).eq('id', facture_id)
+        await supabase.from('factures').update({
+          statut: 'paye',
+          rapproche_releve_id: releve_id,
+          rapproche_transaction_idx: txIdx,
+          rapproche_date: reconcileDate,
+          rapproche_source: 'manual',
+        }).eq('id', facture_id)
       }
       if (ecriture_id) {
         await supabase.from('ecritures_comptables')
@@ -650,7 +670,15 @@ export async function POST(request: Request) {
         await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', releve_id)
       }
 
-      if (facture_id) await supabase.from('factures').update({ statut: 'en_attente' }).eq('id', facture_id)
+      if (facture_id) {
+        await supabase.from('factures').update({
+          statut: 'en_attente',
+          rapproche_releve_id: null,
+          rapproche_transaction_idx: null,
+          rapproche_date: null,
+          rapproche_source: null,
+        }).eq('id', facture_id)
+      }
       if (ecriture_id) await supabase.from('ecritures_comptables').update({ lettre: null, date_lettrage: null }).eq('id', ecriture_id)
 
       return NextResponse.json({ success: true })
@@ -724,10 +752,17 @@ export async function POST(request: Request) {
       const ecart = Math.abs(txAmount - facturesTotal)
 
       const lettreCode = `RM${String(Date.now()).slice(-4)}`
+      const reconcileDate = new Date().toISOString()
 
-      // Marquer toutes les factures comme payées
+      // Marquer toutes les factures comme payées WITH reconciliation link
       for (const fId of facture_ids) {
-        await supabase.from('factures').update({ statut: 'paye' }).eq('id', fId)
+        await supabase.from('factures').update({
+          statut: 'paye',
+          rapproche_releve_id: releve_id,
+          rapproche_transaction_idx: txIdx,
+          rapproche_date: reconcileDate,
+          rapproche_source: 'manual',
+        }).eq('id', fId)
       }
 
       // Mettre à jour la transaction avec toutes les facture_ids
@@ -740,6 +775,7 @@ export async function POST(request: Request) {
         rapprochement_multi: true,
         nb_factures: facture_ids.length,
         ecart_montant: Math.round(ecart * 100) / 100,
+        rapproche_at: reconcileDate,
       }
       await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', releve_id)
 

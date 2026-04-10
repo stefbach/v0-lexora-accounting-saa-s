@@ -374,12 +374,20 @@ Trouve les meilleurs matches pour CHAQUE transaction. Privilegie les matches sur
           matched_type: prop.match_type,
           match_confidence: 'auto_ai',
           note: prop.reasoning,
+          rapproche_at: new Date().toISOString(),
         }
         await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', prop.releve_id)
 
-        // Mark factures as paye
+        // Mark factures as paye WITH reconciliation link (consistent state)
+        const reconcileDate = new Date().toISOString()
         for (const fid of prop.facture_ids) {
-          await supabase.from('factures').update({ statut: 'paye' }).eq('id', fid)
+          await supabase.from('factures').update({
+            statut: 'paye',
+            rapproche_releve_id: prop.releve_id,
+            rapproche_transaction_idx: prop.transaction_idx,
+            rapproche_date: reconcileDate,
+            rapproche_source: 'auto',
+          }).eq('id', fid)
         }
         applied++
       }

@@ -163,25 +163,83 @@ async function executeTool(name: string, input: any, supabase: ReturnType<typeof
 
   if (name === 'apply_match') {
     const { releve_id, transaction_idx, facture_ids, reasoning } = input
-    const { data: releve } = await supabase.from('releves_bancaires').select('transactions_json').eq('id', releve_id).single()
-    if (!releve?.transactions_json) return { success: false, error: 'Relevé non trouvé' }
+    if (!releve_id || transaction_idx === undefined || !Array.isArray(facture_ids) || facture_ids.length === 0) {
+      return { success: false, error: 'Parametres manquants' }
+    }
+
+    // VERIFICATION 1: Fetch the actual transaction
+    const { data: releve } = await supabase.from('releves_bancaires').select('transactions_json, societe_id').eq('id', releve_id).single()
+    if (!releve?.transactions_json) return { success: false, error: 'Releve non trouve' }
     const txs = [...releve.transactions_json]
-    if (!txs[transaction_idx]) return { success: false, error: 'Transaction non trouvée' }
+    if (!txs[transaction_idx]) return { success: false, error: 'Transaction non trouvee' }
+    const tx = txs[transaction_idx]
+    if (tx.statut === 'rapproche' || tx.lettre) {
+      return { success: false, error: 'Transaction deja rapprochee' }
+    }
+
+    // VERIFICATION 2: Fetch factures and verify they exist + are unpaid + not already reconciled
+    const { data: factures } = await supabase.from('factures')
+      .select('id, numero_facture, tiers, montant_ttc, montant_mur, devise, type_facture, statut, rapproche_releve_id')
+      .in('id', facture_ids)
+    if (!factures || factures.length !== facture_ids.length) {
+      return { success: false, error: `Factures manquantes: demande ${facture_ids.length}, trouve ${factures?.length || 0}` }
+    }
+    const alreadyReconciled = factures.filter((f: any) => f.rapproche_releve_id || f.statut === 'paye')
+    if (alreadyReconciled.length > 0) {
+      return { success: false, error: `Factures deja rapprochees/payees: ${alreadyReconciled.map((f: any) => f.numero_facture).join(', ')}` }
+    }
+
+    // VERIFICATION 3: Sum of facture amounts must match transaction amount (tolerance 5%)
+    const txAmount = Math.max(Number(tx.debit) || 0, Number(tx.credit) || 0)
+    const sumFactures = factures.reduce((s: number, f: any) => s + (Number(f.montant_mur) || Number(f.montant_ttc) || 0), 0)
+    if (sumFactures > 0 && Math.abs(txAmount - sumFactures) / sumFactures > 0.05) {
+      return {
+        success: false,
+        error: `Ecart trop important: transaction ${txAmount.toFixed(2)} vs factures ${sumFactures.toFixed(2)} (${((Math.abs(txAmount - sumFactures) / sumFactures) * 100).toFixed(1)}%)`,
+      }
+    }
+
+    // VERIFICATION 4: Direction check (debit=supplier, credit=client)
+    const isOutgoing = (Number(tx.debit) || 0) > 0
+    const expectedType = isOutgoing ? 'fournisseur' : 'client'
+    const wrongType = factures.find((f: any) => f.type_facture !== expectedType)
+    if (wrongType) {
+      return {
+        success: false,
+        error: `Direction incorrecte: transaction ${isOutgoing ? 'sortie' : 'entree'} mais facture ${wrongType.numero_facture} est ${wrongType.type_facture}`,
+      }
+    }
+
+    // ALL CHECKS PASSED — apply the match atomically
+    const lettre = `AI${Date.now().toString().slice(-6)}`
+    const reconcileDate = new Date().toISOString()
+
+    // 1. Update transaction
     txs[transaction_idx] = {
-      ...txs[transaction_idx],
+      ...tx,
       facture_ids,
       facture_id: facture_ids[0],
-      lettre: `AI${Date.now().toString().slice(-4)}`,
+      lettre,
       statut: 'rapproche',
       matched_type: facture_ids.length > 1 ? 'facture_groupee' : 'facture_unique',
       match_confidence: 'ai_agent',
       note: reasoning,
+      rapproche_at: reconcileDate,
     }
-    await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', releve_id)
+    const { error: releveErr } = await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', releve_id)
+    if (releveErr) return { success: false, error: 'Erreur MAJ releve: ' + releveErr.message }
+
+    // 2. Update factures with full reconciliation link
     for (const fid of facture_ids) {
-      await supabase.from('factures').update({ statut: 'paye' }).eq('id', fid)
+      await supabase.from('factures').update({
+        statut: 'paye',
+        rapproche_releve_id: releve_id,
+        rapproche_transaction_idx: transaction_idx,
+        rapproche_date: reconcileDate,
+        rapproche_source: 'ai',
+      }).eq('id', fid)
     }
-    return { success: true, applied: facture_ids.length }
+    return { success: true, applied: facture_ids.length, lettre, reconciled_factures: factures.map((f: any) => f.numero_facture) }
   }
 
   if (name === 'get_reconciliation_stats') {
@@ -237,34 +295,40 @@ export async function POST(request: Request) {
     const model = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6'
 
     const systemPrompt = `Tu es un agent expert-comptable specialise en rapprochement bancaire a Maurice.
-Tu es AUTONOME : tu dois ANALYSER, DECIDER et AGIR directement sans demander de confirmation.
+Tu es METHODIQUE et RIGOUREUX : un mauvais rapprochement cree des incoherences comptables graves.
 
 Regles IMPORTANTES de rapprochement :
-1. DEBIT bancaire = sortie d'argent = paiement d'une facture FOURNISSEUR
-2. CREDIT bancaire = entree d'argent = encaissement d'une facture CLIENT
+1. DEBIT bancaire = sortie d'argent = paiement d'une facture FOURNISSEUR (JAMAIS client)
+2. CREDIT bancaire = entree d'argent = encaissement d'une facture CLIENT (JAMAIS fournisseur)
 3. Un seul paiement peut solder 1 OU PLUSIEURS factures du meme tiers (paiement groupe)
 4. Les delais de paiement standards : 0j (comptant), 30j, 45j, 60j
 5. Un retard de paiement est normal — pas un obstacle au rapprochement
 6. Tolerance de montant : 5% ou 100 MUR max (frais bancaires, TDS, arrondis)
 7. Le nom du tiers en banque peut etre tronque ou variant — tolere les variations
 
-WORKFLOW OBLIGATOIRE (tu dois appeler ces outils) :
+VERIFICATIONS OBLIGATOIRES AVANT apply_match :
+- La somme des montants des factures doit etre PROCHE du montant de la transaction (tolerance 5%)
+- Les factures doivent etre du bon TYPE (fournisseur pour debit, client pour credit)
+- Les factures ne doivent PAS deja etre marquees payees ou rapprochees
+- Le tiers bancaire doit correspondre au tiers des factures (tolerance sur variations de nom)
+
+WORKFLOW :
 1. list_unmatched_transactions → recupere les transactions a rapprocher
-2. list_unpaid_invoices → recupere toutes les factures impayees
-3. Pour chaque transaction non rapprochee : analyse intelligente
-4. Si confidence >= 0.85 → APPELLE apply_match DIRECTEMENT (pas besoin de confirmation)
-5. Si confidence 0.6-0.85 → APPELLE propose_match (l'utilisateur validera)
-6. Si confidence < 0.6 → rapporte simplement dans la reponse finale
+2. list_unpaid_invoices → recupere TOUTES les factures impayees
+3. Pour chaque transaction : analyse systematique
+4. Si TOUS les 4 criteres ci-dessus sont satisfaits avec confidence >= 0.90 → apply_match
+5. Si criteres ok mais confidence 0.65-0.90 → propose_match (l'utilisateur decidera)
+6. Si un seul critere echoue ou confidence < 0.65 → ne fais rien, rapporte dans le resume
 
 IMPORTANT :
-- Tu NE DOIS PAS te contenter de lister. Tu DOIS AGIR avec apply_match / propose_match.
-- Sois AGRESSIF : chaque match evident doit etre applique automatiquement.
-- Ne demande jamais de confirmation a l'utilisateur dans le texte, agis directement.
-- A la fin, resume brievement ce que tu as fait (X rapprochements automatiques, Y propositions).
+- NE MARQUE JAMAIS une facture payee sans certitude quasi totale
+- Mieux vaut ne rien faire que creer une incoherence
+- Si doute → propose_match, pas apply_match
+- apply_match valide 4 contraintes cote serveur — ne le contourne pas
 
 Societe_id actuellement selectionne : ${societe_id}
 
-Reponds en francais, concis, avec des bullet points.`
+Reponds en francais, concis, avec le nombre de rapprochements auto / proposes / orphelins.`
 
     // Agentic loop with tool calls (max 4 iterations to stay within serverless timeout)
     const conversationMessages = messages.map((m: any) => ({
