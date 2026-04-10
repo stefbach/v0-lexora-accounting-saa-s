@@ -1,7 +1,17 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createSupabase } from '@supabase/supabase-js'
+import { createEcrituresForFacture } from '@/lib/accounting/ecritures-factures'
 
 export const dynamic = 'force-dynamic'
+
+function getAdminClient() {
+  return createSupabase(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+}
 
 export async function GET(request: Request) {
   try {
@@ -108,6 +118,23 @@ export async function POST(request: Request) {
       .single()
 
     if (error) throw error
+
+    // Auto-generate journal entries (401/607/4456 for supplier, 411/706/4457 for client)
+    if (data && statut !== 'brouillon') {
+      const admin = getAdminClient()
+      await createEcrituresForFacture(admin, {
+        id: data.id,
+        societe_id: data.societe_id,
+        numero_facture: data.numero_facture || '',
+        tiers: data.tiers || '',
+        date_facture: data.date_facture,
+        montant_ht: Number(data.montant_ht) || 0,
+        montant_tva: Number(data.montant_tva) || 0,
+        montant_ttc: Number(data.montant_ttc) || 0,
+        type_facture: data.type_facture || 'client',
+      })
+    }
+
     return NextResponse.json({ facture: data }, { status: 201 })
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
@@ -181,11 +208,18 @@ export async function DELETE(request: Request) {
     } catch {}
 
     // Cascade: delete accounting entries
+    // Cascade: delete all journal entries linked to this facture (by ref_folio)
     try {
-      const libellePrefix = `Facture ${existing.numero_facture || ''}`
-      const { data: dossier } = await admin.from('dossiers').select('id').eq('societe_id', existing.societe_id).limit(1).maybeSingle()
-      if (dossier?.id) {
-        await admin.from('ecritures_comptables').delete().eq('dossier_id', dossier.id).like('libelle', `${libellePrefix}%`)
+      await admin.from('ecritures_comptables_v2').delete()
+        .eq('societe_id', existing.societe_id)
+        .eq('ref_folio', `FAC-${id}`)
+    } catch {}
+    // Also delete payment entries for this facture
+    try {
+      const { data: f } = await admin.from('factures').select('rapproche_releve_id, rapproche_transaction_idx').eq('id', id).maybeSingle()
+      if (f?.rapproche_releve_id && f?.rapproche_transaction_idx != null) {
+        await admin.from('ecritures_comptables_v2').delete()
+          .eq('ref_folio', `BANK-${f.rapproche_releve_id}-${f.rapproche_transaction_idx}`)
       }
     } catch {}
 

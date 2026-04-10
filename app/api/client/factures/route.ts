@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
+import { createEcrituresForFacture as createEcrituresShared } from '@/lib/accounting/ecritures-factures'
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -296,15 +297,16 @@ export async function POST(request: Request) {
 
     // Auto-create ecritures comptables when invoice is finalized
     if (statut === 'en_attente' && data) {
-      await createEcrituresForFacture(supabase, {
+      await createEcrituresShared(supabase, {
         id: data.id,
         societe_id,
         numero_facture: finalNumero,
         tiers: tiers || '',
         date_facture,
-        montant_ht,
-        montant_tva,
-        montant_ttc: ttc,
+        montant_ht: Number(montant_ht) || 0,
+        montant_tva: Number(montant_tva) || 0,
+        montant_ttc: Number(ttc) || 0,
+        type_facture: 'client',
       })
     }
 
@@ -396,15 +398,16 @@ export async function PATCH(request: Request) {
       updates.statut === 'en_attente' &&
       data
     ) {
-      await createEcrituresForFacture(supabase, {
+      await createEcrituresShared(supabase, {
         id: data.id,
         societe_id: data.societe_id,
         numero_facture: data.numero_facture || '',
         tiers: data.tiers || '',
         date_facture: data.date_facture,
-        montant_ht: data.montant_ht || 0,
-        montant_tva: data.montant_tva || 0,
-        montant_ttc: data.montant_ttc || 0,
+        montant_ht: Number(data.montant_ht) || 0,
+        montant_tva: Number(data.montant_tva) || 0,
+        montant_ttc: Number(data.montant_ttc) || 0,
+        type_facture: data.type_facture || 'client',
       })
     }
 

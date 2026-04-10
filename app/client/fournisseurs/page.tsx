@@ -152,6 +152,28 @@ export default function ClientFournisseursPage() {
     } finally { setConsistencyFixing(null) }
   }
 
+  // Backfill journal entries for existing invoices (phase 1 + phase 3 fix)
+  const runBackfillEcritures = async () => {
+    if (!societe) return
+    if (!confirm("Generer les ecritures comptables (401, 411, 607, 706, 4456, 4457) pour toutes les factures existantes ?\n\nCette operation est idempotente (peut etre relancee sans doublons).")) return
+    setConsistencyFixing('backfill_ecritures')
+    try {
+      const res = await fetch("/api/comptable/factures/backfill-ecritures", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ societe_id: societe }),
+      })
+      const data = await res.json()
+      if (!res.ok) { alert(data.error || "Erreur"); return }
+      const s = data.stats || {}
+      alert(`Ecritures generees : ${s.ecritures_generees || 0} factures + ${s.paiements_generes || 0} paiements\nErreurs : ${(s.errors || []).length}`)
+      await loadConsistency()
+      await load()
+    } catch (e: any) {
+      alert("Erreur: " + (e.message || ""))
+    } finally { setConsistencyFixing(null) }
+  }
+
   // Build unique fournisseur list
   const fournisseurs = Array.from(new Set(factures.map(f => f.tiers).filter(Boolean))).sort()
 
@@ -298,10 +320,20 @@ export default function ClientFournisseursPage() {
                   </p>
                 )}
               </div>
-              <div className="flex gap-2 shrink-0">
+              <div className="flex gap-2 shrink-0 flex-wrap">
                 <Button variant="outline" size="sm" onClick={loadConsistency} disabled={consistencyLoading}>
                   {consistencyLoading ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <RefreshCw className="w-3 h-3 mr-1" />}
                   Verifier
+                </Button>
+                <Button
+                  size="sm"
+                  className="bg-purple-600 text-white hover:bg-purple-700"
+                  onClick={runBackfillEcritures}
+                  disabled={!!consistencyFixing}
+                  title="Genere 401/411/607/706/4456/4457 pour toutes les factures existantes"
+                >
+                  {consistencyFixing === 'backfill_ecritures' ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <FileText className="w-3 h-3 mr-1" />}
+                  Generer ecritures comptables
                 </Button>
                 {(consistency.stats.paye_sans_rapprochement > 0 || (consistency.inconsistencies?.length || 0) > 0) && (
                   <Button
@@ -311,7 +343,7 @@ export default function ClientFournisseursPage() {
                     disabled={!!consistencyFixing}
                   >
                     {consistencyFixing === 'link_existing_matches' ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Wrench className="w-3 h-3 mr-1" />}
-                    Reparer automatiquement
+                    Reparer liens
                   </Button>
                 )}
               </div>
