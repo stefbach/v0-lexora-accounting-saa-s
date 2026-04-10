@@ -773,7 +773,8 @@ export default function ClientRapprochementPage() {
 
       {/* Agent IA Panel */}
       <Dialog open={agentOpen} onOpenChange={setAgentOpen}>
-        <DialogContent className="max-w-2xl h-[80vh] flex flex-col p-0 gap-0">
+        <DialogContent className="max-w-2xl h-[80vh] flex flex-col p-0 gap-0" aria-describedby="agent-desc">
+          <span id="agent-desc" className="sr-only">Agent IA de rapprochement bancaire avec outils natifs Claude</span>
           <DialogHeader className="p-5 border-b" style={{ background: "linear-gradient(135deg, #7c3aed08, #4f46e508)" }}>
             <DialogTitle className="flex items-center justify-between">
               <div className="flex items-center gap-2">

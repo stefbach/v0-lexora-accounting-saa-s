@@ -112,7 +112,7 @@ async function executeTool(name: string, input: any, supabase: ReturnType<typeof
         })
       })
     }
-    return { count: unmatched.length, transactions: unmatched.slice(0, 50) }
+    return { count: unmatched.length, transactions: unmatched.slice(0, 30) }
   }
 
   if (name === 'list_unpaid_invoices') {
@@ -121,6 +121,8 @@ async function executeTool(name: string, input: any, supabase: ReturnType<typeof
       .select('id, numero_facture, tiers, type_facture, montant_ttc, montant_mur, devise, date_facture, date_echeance, conditions_paiement, statut')
       .eq('societe_id', societe_id)
       .in('statut', ['en_attente', 'retard', 'partiel'])
+      .order('date_facture', { ascending: true })
+      .limit(40)
     if (type && type !== 'all') query = query.eq('type_facture', type)
     const { data: factures } = await query
     return {
@@ -237,48 +239,82 @@ Societe_id actuellement selectionne : ${societe_id}
 
 Reponds toujours en francais, de maniere concise et structuree.`
 
-    // Agentic loop with tool calls (max 10 iterations)
+    // Agentic loop with tool calls (max 4 iterations to stay within serverless timeout)
     const conversationMessages = messages.map((m: any) => ({
       role: m.role,
       content: m.content,
     }))
 
-    let response = await anthropic.messages.create({
-      model,
-      max_tokens: 4096,
-      system: systemPrompt,
-      tools: TOOLS,
-      messages: conversationMessages,
-    })
+    // Global timeout: 55s (under Vercel Pro 60s limit)
+    const startTime = Date.now()
+    const TIMEOUT_MS = 55000
+    const isTimedOut = () => (Date.now() - startTime) > TIMEOUT_MS
+
+    let response
+    try {
+      response = await anthropic.messages.create({
+        model,
+        max_tokens: 2048,
+        system: systemPrompt,
+        tools: TOOLS,
+        messages: conversationMessages,
+      })
+    } catch (e: any) {
+      console.error('[agent] Claude call failed:', e.message)
+      return NextResponse.json({
+        error: 'Claude API error',
+        response: `Erreur lors de l'appel a Claude : ${e.message}. Reessayez ou utilisez le bouton "Rapprochement auto".`,
+        tool_calls: [],
+      }, { status: 500 })
+    }
 
     const toolCalls: any[] = []
     let iterations = 0
-    while (response.stop_reason === 'tool_use' && iterations < 10) {
+    const MAX_ITER = 4
+    while (response.stop_reason === 'tool_use' && iterations < MAX_ITER && !isTimedOut()) {
       iterations++
       const toolUses = response.content.filter((c: any) => c.type === 'tool_use') as Anthropic.ToolUseBlock[]
       const toolResults: Anthropic.ToolResultBlockParam[] = []
 
       for (const toolUse of toolUses) {
-        const result = await executeTool(toolUse.name, toolUse.input, supabase)
-        toolCalls.push({ name: toolUse.name, input: toolUse.input, result })
-        toolResults.push({
-          type: 'tool_result',
-          tool_use_id: toolUse.id,
-          content: JSON.stringify(result),
-        })
+        try {
+          const result = await executeTool(toolUse.name, toolUse.input, supabase)
+          toolCalls.push({ name: toolUse.name, input: toolUse.input, result })
+          // Truncate large tool results to avoid blowing the context window
+          let resultStr = JSON.stringify(result)
+          if (resultStr.length > 8000) resultStr = resultStr.slice(0, 8000) + '... [truncated]'
+          toolResults.push({
+            type: 'tool_result',
+            tool_use_id: toolUse.id,
+            content: resultStr,
+          })
+        } catch (e: any) {
+          console.error(`[agent] Tool ${toolUse.name} failed:`, e.message)
+          toolResults.push({
+            type: 'tool_result',
+            tool_use_id: toolUse.id,
+            content: JSON.stringify({ error: e.message }),
+            is_error: true,
+          })
+        }
       }
 
-      // Add assistant response + tool results to conversation
       conversationMessages.push({ role: 'assistant', content: response.content })
       conversationMessages.push({ role: 'user', content: toolResults })
 
-      response = await anthropic.messages.create({
-        model,
-        max_tokens: 4096,
-        system: systemPrompt,
-        tools: TOOLS,
-        messages: conversationMessages,
-      })
+      if (isTimedOut()) break
+      try {
+        response = await anthropic.messages.create({
+          model,
+          max_tokens: 2048,
+          system: systemPrompt,
+          tools: TOOLS,
+          messages: conversationMessages,
+        })
+      } catch (e: any) {
+        console.error('[agent] Claude iteration failed:', e.message)
+        break
+      }
     }
 
     // Extract final text response
