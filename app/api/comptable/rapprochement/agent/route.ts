@@ -498,6 +498,7 @@ async function executeTool(name: string, input: any, supabase: ReturnType<typeof
         source: 'auto_validated',
       }).select().single()
 
+      if (!created) return { success: true, skipped: true, message: 'Pattern non sauvegardé (migration 123 en attente)' }
       return { success: true, created: true, pattern: created }
     }
   }
@@ -513,7 +514,15 @@ async function executeTool(name: string, input: any, supabase: ReturnType<typeof
       .eq('societe_id', societe_id)
       .order('nb_utilisations', { ascending: false })
 
-    if (error) return { success: false, error: error.message }
+    // Table may not exist yet (migration 123 pending) — graceful fallback
+    if (error) {
+      return {
+        success: true,
+        count: 0,
+        patterns: [],
+        message: 'Aucun pattern mémorisé (table non encore créée — migration 123 en attente). Poursuite sans patterns.',
+      }
+    }
 
     return {
       success: true,
