@@ -199,17 +199,33 @@ export async function POST(request: Request) {
         }
       })
 
-      // Batch upsert in chunks to avoid payload limits
+      // Delete all existing assignments for this planning and reinsert
+      // This is safer than upsert (no UNIQUE constraint dependency)
+      const { error: delErr } = await supabase.from('planning_assignments')
+        .delete().eq('planning_id', planningRecord.id)
+      if (delErr) {
+        console.error('[planning POST] delete error:', delErr.message)
+        return NextResponse.json({ error: `Erreur suppression: ${delErr.message}` }, { status: 500 })
+      }
+
+      // Batch insert in chunks to avoid payload limits
       const CHUNK_SIZE = 500
       let totalInserted = 0
+      const insertErrors: string[] = []
       for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
         const chunk = rows.slice(i, i + CHUNK_SIZE)
         const { data: inserted, error: insErr } = await supabase
           .from('planning_assignments')
-          .upsert(chunk, { onConflict: 'planning_id,employe_id,date' })
+          .insert(chunk)
           .select()
-        if (insErr) throw insErr
+        if (insErr) {
+          console.error('[planning POST] insert error:', insErr.message, 'chunk size:', chunk.length, 'first row:', JSON.stringify(chunk[0]))
+          insertErrors.push(insErr.message)
+        }
         totalInserted += inserted?.length || 0
+      }
+      if (insertErrors.length > 0 && totalInserted === 0) {
+        return NextResponse.json({ error: `Erreur sauvegarde: ${insertErrors[0]}` }, { status: 500 })
       }
 
       // If publishing, update statut
