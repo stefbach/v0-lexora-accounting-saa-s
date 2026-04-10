@@ -555,7 +555,7 @@ export async function POST(request: Request) {
     }
 
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-    const model = process.env.ANTHROPIC_MODEL || 'claude-opus-4-6'
+    const model = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-5'
 
     const systemPrompt = `Tu es LEXORA AI — expert-comptable IA spécialisé en rapprochement bancaire pour entreprises mauriciennes.
 Tu es AUTONOME, MÉTHODIQUE et tu APPRENDS de chaque session.
@@ -617,7 +617,7 @@ Réponds en français, concis, avec le nombre de rapprochements auto / proposés
       response = await anthropic.messages.create({
         model,
         max_tokens: 2048,
-        thinking: { type: 'adaptive' },
+
         system: systemPrompt,
         tools: TOOLS,
         messages: conversationMessages,
@@ -670,7 +670,7 @@ Réponds en français, concis, avec le nombre de rapprochements auto / proposés
         response = await anthropic.messages.create({
           model,
           max_tokens: 2048,
-          thinking: { type: 'adaptive' },
+  
           system: systemPrompt,
           tools: TOOLS,
           messages: conversationMessages,
