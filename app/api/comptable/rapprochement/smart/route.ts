@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
-import { analyzeAllTransactions, MatchingTransaction, MatchingFacture, MatchProposal } from '@/lib/accounting/matching-engine'
+import { analyzeAllTransactions, MatchingTransaction, MatchingFacture, MatchProposal, HistoricalPattern } from '@/lib/accounting/matching-engine'
 import { getTauxChange } from '@/lib/taux-change'
 
 export const dynamic = 'force-dynamic'
@@ -153,10 +153,36 @@ export async function POST(request: Request) {
     // 3. Load FX rates for cross-currency matching
     const rates = await getTauxChange()
 
-    // 4. Run the matching engine (with FX rates)
-    const proposalsRaw: MatchProposal[] = analyzeAllTransactions(unmatchedTxs, factures, rates)
+    // 4. Load historical patterns for this société
+    let patterns: HistoricalPattern[] = []
+    try {
+      const { data: patternsRaw } = await supabase
+        .from('rapprochement_patterns')
+        .select('id, tiers_banque, libelle_pattern, montant_min, montant_max, type_cible, cible_tiers, cible_compte, confidence_cumul, nb_utilisations')
+        .eq('societe_id', societe_id)
+        .order('nb_utilisations', { ascending: false })
 
-    // 4. Format for API response
+      patterns = (patternsRaw || []).map(p => ({
+        id: p.id,
+        tiers_banque: p.tiers_banque,
+        libelle_pattern: p.libelle_pattern,
+        montant_min: p.montant_min !== null ? Number(p.montant_min) : null,
+        montant_max: p.montant_max !== null ? Number(p.montant_max) : null,
+        type_cible: p.type_cible,
+        cible_tiers: p.cible_tiers,
+        cible_compte: p.cible_compte,
+        confidence_cumul: Number(p.confidence_cumul) || 0.8,
+        nb_utilisations: Number(p.nb_utilisations) || 1,
+      }))
+    } catch {
+      // Patterns table may not exist yet — proceed without patterns
+      patterns = []
+    }
+
+    // 5. Run the matching engine (with FX rates and historical patterns)
+    const proposalsRaw: MatchProposal[] = analyzeAllTransactions(unmatchedTxs, factures, rates, patterns)
+
+    // 6. Format for API response
     const proposals = proposalsRaw.map(p => ({
       releve_id: p.transaction.releve_id,
       transaction_idx: p.transaction.transaction_idx,

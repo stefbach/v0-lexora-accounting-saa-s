@@ -102,6 +102,40 @@ const TOOLS: Anthropic.Tool[] = [
       required: ['societe_id'],
     },
   },
+  {
+    name: 'learn_pattern',
+    description: 'Save a reconciliation pattern to memory so it applies automatically in future sessions. Call this whenever you successfully match a transaction with high confidence (>= 0.85), to teach the system this pattern.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        societe_id: { type: 'string' },
+        tiers_banque: { type: 'string', description: 'Normalized bank tiers name' },
+        libelle_pattern: { type: 'string', description: 'Keyword from bank libellé (optional)' },
+        montant_min: { type: 'number', description: 'Minimum amount for this pattern to apply (optional)' },
+        montant_max: { type: 'number', description: 'Maximum amount for this pattern to apply (optional)' },
+        type_cible: {
+          type: 'string',
+          enum: ['facture_tiers', 'ecriture_compte', 'salaire', 'mra', 'frais_bancaires'],
+          description: 'Type of reconciliation target',
+        },
+        cible_tiers: { type: 'string', description: 'Target tiers name in invoices/entries (optional)' },
+        cible_compte: { type: 'string', description: 'Target accounting account number (optional)' },
+        confidence_cumul: { type: 'number', description: 'Initial confidence for this pattern (0-1)' },
+      },
+      required: ['societe_id', 'tiers_banque', 'type_cible'],
+    },
+  },
+  {
+    name: 'load_patterns',
+    description: 'Load all learned reconciliation patterns for this société. Call this at the start of a session to benefit from previous learning.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        societe_id: { type: 'string' },
+      },
+      required: ['societe_id'],
+    },
+  },
 ]
 
 // ─── Tool implementations ──────────────────────────────────────────
@@ -388,6 +422,109 @@ async function executeTool(name: string, input: any, supabase: ReturnType<typeof
     return { generated, errors, message: `${generated} ecritures BNQ generees${errors > 0 ? `, ${errors} erreurs` : ''}` }
   }
 
+  // ── learn_pattern: save a reconciliation pattern ──
+  if (name === 'learn_pattern') {
+    const {
+      societe_id,
+      tiers_banque,
+      libelle_pattern,
+      montant_min,
+      montant_max,
+      type_cible,
+      cible_tiers,
+      cible_compte,
+      confidence_cumul,
+    } = input
+
+    if (!societe_id || !tiers_banque || !type_cible) {
+      return { success: false, error: 'societe_id, tiers_banque, type_cible requis' }
+    }
+
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL
+        ? process.env.NEXT_PUBLIC_APP_URL
+        : process.env.VERCEL_URL
+          ? `https://${process.env.VERCEL_URL}`
+          : 'http://localhost:3000'
+
+      const res = await fetch(`${baseUrl}/api/comptable/rapprochement/patterns`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-internal-call': '1' },
+        body: JSON.stringify({
+          action: 'learn',
+          societe_id,
+          tiers_banque,
+          libelle_pattern: libelle_pattern || null,
+          montant_min: montant_min || null,
+          montant_max: montant_max || null,
+          type_cible,
+          cible_tiers: cible_tiers || null,
+          cible_compte: cible_compte || null,
+          confidence_cumul: confidence_cumul || 0.85,
+          source: 'auto_validated',
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) return { success: false, error: data.error }
+      return { success: true, pattern: data.pattern, created: data.created, updated: data.updated }
+    } catch (e: any) {
+      // Direct DB fallback
+      const { data: existing } = await supabase
+        .from('rapprochement_patterns')
+        .select('id, nb_utilisations, confidence_cumul')
+        .eq('societe_id', societe_id)
+        .eq('tiers_banque', tiers_banque.toLowerCase().trim())
+        .maybeSingle()
+
+      if (existing) {
+        await supabase.from('rapprochement_patterns').update({
+          nb_utilisations: existing.nb_utilisations + 1,
+          derniere_utilisation: new Date().toISOString(),
+          cible_tiers: cible_tiers || undefined,
+        }).eq('id', existing.id)
+        return { success: true, updated: true }
+      }
+
+      const { data: created } = await supabase.from('rapprochement_patterns').insert({
+        societe_id,
+        tiers_banque: tiers_banque.toLowerCase().trim(),
+        libelle_pattern: libelle_pattern || null,
+        montant_min: montant_min || null,
+        montant_max: montant_max || null,
+        type_cible,
+        cible_tiers: cible_tiers || null,
+        cible_compte: cible_compte || null,
+        confidence_cumul: confidence_cumul || 0.85,
+        source: 'auto_validated',
+      }).select().single()
+
+      return { success: true, created: true, pattern: created }
+    }
+  }
+
+  // ── load_patterns: load all patterns for a société ──
+  if (name === 'load_patterns') {
+    const { societe_id } = input
+    if (!societe_id) return { success: false, error: 'societe_id requis' }
+
+    const { data: patterns, error } = await supabase
+      .from('rapprochement_patterns')
+      .select('id, tiers_banque, libelle_pattern, montant_min, montant_max, type_cible, cible_tiers, cible_compte, confidence_cumul, nb_utilisations, source, derniere_utilisation')
+      .eq('societe_id', societe_id)
+      .order('nb_utilisations', { ascending: false })
+
+    if (error) return { success: false, error: error.message }
+
+    return {
+      success: true,
+      count: patterns?.length || 0,
+      patterns: patterns || [],
+      message: patterns?.length
+        ? `${patterns.length} pattern(s) mémorisé(s) chargés`
+        : 'Aucun pattern mémorisé pour cette société — première session',
+    }
+  }
+
   return { error: `Unknown tool: ${name}` }
 }
 
@@ -418,52 +555,53 @@ export async function POST(request: Request) {
     }
 
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-    const model = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6'
+    const model = process.env.ANTHROPIC_MODEL || 'claude-opus-4-6'
 
-    const systemPrompt = `Tu es un agent expert-comptable specialise en rapprochement bancaire a Maurice.
-Tu es METHODIQUE et RIGOUREUX : un mauvais rapprochement cree des incoherences comptables graves.
+    const systemPrompt = `Tu es LEXORA AI — expert-comptable IA spécialisé en rapprochement bancaire pour entreprises mauriciennes.
+Tu es AUTONOME, MÉTHODIQUE et tu APPRENDS de chaque session.
 
-Regles IMPORTANTES de rapprochement :
-1. DEBIT bancaire = sortie d'argent = paiement d'une facture FOURNISSEUR (JAMAIS client)
-2. CREDIT bancaire = entree d'argent = encaissement d'une facture CLIENT (JAMAIS fournisseur)
-3. Un seul paiement peut solder 1 OU PLUSIEURS factures du meme tiers (paiement groupe)
-4. Les delais de paiement standards : 0j (comptant), 30j, 45j, 60j
-5. Un retard de paiement est normal — pas un obstacle au rapprochement
-6. Tolerance de montant : 5% ou 100 MUR max (frais bancaires, TDS, arrondis)
-7. Le nom du tiers en banque peut etre tronque ou variant — tolere les variations
+CAPACITÉS :
+- Tu lis les transactions bancaires et les écritures comptables
+- Tu raisonnes sur chaque transaction : tiers, montant, date, sens (débit/crédit)
+- Tu appliques les matches certains, proposes les ambigus, expliques les orphelins
+- Tu mémorises les patterns réussis avec learn_pattern pour les sessions futures
+- Tu utilises les patterns mémorisés pour accélérer les prochaines sessions
+
+RÈGLES COMPTABLES (Maurice) :
+1. DÉBIT bancaire = sortie = paiement FOURNISSEUR (jamais client)
+2. CRÉDIT bancaire = entrée = encaissement CLIENT (jamais fournisseur)
+3. Tolérance montant : 5% ou 200 MUR max (frais bancaires, TDS)
+4. Exercice fiscal : 1 juillet → 30 juin
+5. Taux CSG 2025 : 3%/1.5% salarié, 6% patronal
+
+WORKFLOW COMPLET (TOUJOURS dans cet ordre) :
+1. load_patterns → charge la mémoire des sessions précédentes
+2. get_reconciliation_stats → photo initiale
+3. list_unmatched_transactions → transactions à traiter
+4. list_unpaid_invoices → factures disponibles
+5. Pour CHAQUE transaction non classifiée :
+   a. Vérifier si un pattern mémorisé correspond → apply_match direct
+   b. Sinon analyser : tiers, montant, sens, date
+   c. confidence >= 0.90 → apply_match + learn_pattern
+   d. confidence 0.65-0.89 → propose_match (sans learn)
+   e. confidence < 0.65 → orphelin, noter dans résumé
+6. generate_journal_entries → Grand Livre à jour
+7. run_consistency_check → validation
+8. Résumé final : X auto (dont Y via patterns), Z proposés, W orphelins
+
+IMPORTANT : Après chaque apply_match réussi avec confidence >= 0.85, appelle learn_pattern pour mémoriser ce pattern.
 
 VERIFICATIONS OBLIGATOIRES AVANT apply_match :
-- La somme des montants des factures doit etre PROCHE du montant de la transaction (tolerance 5%)
-- Les factures doivent etre du bon TYPE (fournisseur pour debit, client pour credit)
-- Les factures ne doivent PAS deja etre marquees payees ou rapprochees
-- Le tiers bancaire doit correspondre au tiers des factures (tolerance sur variations de nom)
+- La somme des montants des factures doit être PROCHE du montant de la transaction (tolérance 5%)
+- Les factures doivent être du bon TYPE (fournisseur pour débit, client pour crédit)
+- Les factures ne doivent PAS déjà être marquées payées ou rapprochées
+- Le tiers bancaire doit correspondre au tiers des factures (tolérance sur variations de nom)
 
-WORKFLOW COMPLET :
-1. get_reconciliation_stats → etat initial (total, rapproches, non-rapproches, factures impayees)
-2. list_unmatched_transactions → recupere les transactions a rapprocher
-3. list_unpaid_invoices → recupere TOUTES les factures impayees
-4. Pour chaque transaction : analyse systematique
-   - Si TOUS les 4 criteres ci-dessus sont satisfaits avec confidence >= 0.90 → apply_match
-   - Si criteres ok mais confidence 0.65-0.90 → propose_match (l'utilisateur decidera)
-   - Si un seul critere echoue ou confidence < 0.65 → ne fais rien, rapporte dans le resume
-5. generate_journal_entries → generer les ecritures BNQ manquantes pour le Grand Livre
-6. run_consistency_check → valider la coherence finale (double claims, orphelins)
-7. Resume : X rapproches auto, Y proposes, Z orphelins, W incoherences
+Société sélectionnée : ${societe_id}
 
-IMPORTANT :
-- NE MARQUE JAMAIS une facture payee sans certitude quasi totale
-- Mieux vaut ne rien faire que creer une incoherence
-- Si doute → propose_match, pas apply_match
-- apply_match valide 4 contraintes cote serveur — ne le contourne pas
-- Apres chaque apply_match, les ecritures BNQ sont automatiquement generees
-- Appelle generate_journal_entries a la fin pour couvrir les cas manques
-- Appelle run_consistency_check en dernier pour valider l'integrite
+Réponds en français, concis, avec le nombre de rapprochements auto / proposés / orphelins.`
 
-Societe_id actuellement selectionne : ${societe_id}
-
-Reponds en francais, concis, avec le nombre de rapprochements auto / proposes / orphelins.`
-
-    // Agentic loop with tool calls (max 4 iterations to stay within serverless timeout)
+    // Agentic loop with tool calls
     const conversationMessages = messages.map((m: any) => ({
       role: m.role,
       content: m.content,
@@ -479,6 +617,7 @@ Reponds en francais, concis, avec le nombre de rapprochements auto / proposes / 
       response = await anthropic.messages.create({
         model,
         max_tokens: 2048,
+        thinking: { type: 'adaptive' },
         system: systemPrompt,
         tools: TOOLS,
         messages: conversationMessages,
@@ -487,14 +626,14 @@ Reponds en francais, concis, avec le nombre de rapprochements auto / proposes / 
       console.error('[agent] Claude call failed:', e.message)
       return NextResponse.json({
         error: 'Claude API error',
-        response: `Erreur lors de l'appel a Claude : ${e.message}. Reessayez ou utilisez le bouton "Rapprochement auto".`,
+        response: `Erreur lors de l'appel à Claude : ${e.message}. Réessayez ou utilisez le bouton "Rapprochement auto".`,
         tool_calls: [],
       }, { status: 500 })
     }
 
     const toolCalls: any[] = []
     let iterations = 0
-    const MAX_ITER = 4
+    const MAX_ITER = 6
     while (response.stop_reason === 'tool_use' && iterations < MAX_ITER && !isTimedOut()) {
       iterations++
       const toolUses = response.content.filter((c: any) => c.type === 'tool_use') as Anthropic.ToolUseBlock[]
@@ -531,6 +670,7 @@ Reponds en francais, concis, avec le nombre de rapprochements auto / proposes / 
         response = await anthropic.messages.create({
           model,
           max_tokens: 2048,
+          thinking: { type: 'adaptive' },
           system: systemPrompt,
           tools: TOOLS,
           messages: conversationMessages,
@@ -541,7 +681,7 @@ Reponds en francais, concis, avec le nombre de rapprochements auto / proposes / 
       }
     }
 
-    // Extract final text response
+    // Extract final text response (skip thinking blocks)
     const textBlocks = response.content.filter((c: any) => c.type === 'text') as Anthropic.TextBlock[]
     const finalText = textBlocks.map(b => b.text).join('\n\n')
 

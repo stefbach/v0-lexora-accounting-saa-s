@@ -9,10 +9,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Loader2, RefreshCw, Link2, Unlink, Zap, CheckCircle2, AlertCircle, ArrowRightLeft, Users, Building2, Search, ChevronDown, ChevronUp, Sparkles, Send, Bot, Wrench, X } from "lucide-react"
+import { Loader2, RefreshCw, Link2, Unlink, Zap, CheckCircle2, AlertCircle, ArrowRightLeft, Users, Building2, Search, ChevronDown, ChevronUp, Sparkles, Send, Bot, Wrench, X, MessageSquare } from "lucide-react"
 import { Textarea } from "@/components/ui/textarea"
 import { MonthPicker } from "@/components/ui/MonthPicker"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 function formatDate(d: string) { return d ? new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" }) : "—" }
@@ -53,6 +54,13 @@ export default function ClientRapprochementPage() {
   const [selectedPeriode, setSelectedPeriode] = useState('2025-2026')
   const [associes, setAssocies] = useState<any[]>([])
   const [resetting, setResetting] = useState(false)
+
+  // ── Chat IA state ──────────────────────────────────────────────────
+  const [chatOpen, setChatOpen] = useState(false)
+  const [chatMessages, setChatMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string; tool_calls?: any[] }>>([])
+  const [chatInput, setChatInput] = useState('')
+  const [chatLoading, setChatLoading] = useState(false)
+  const chatEndRef = React.useRef<HTMLDivElement>(null)
 
   // Smart Apply state
   const [smartLoading, setSmartLoading] = useState(false)
@@ -288,6 +296,46 @@ Voulez-vous vraiment continuer ?`
     setRejectedProposals(p => new Set([...p, key]))
     setAiProposals(prev => { const next = { ...prev }; delete next[key]; return next })
   }
+
+  // ── Chat IA functions ──────────────────────────────────────────────
+  const sendChatMessage = async (overrideText?: string) => {
+    const text = overrideText || chatInput.trim()
+    if (!text || !societeId || chatLoading) return
+    setChatInput('')
+    const userMsg = { role: 'user' as const, content: text }
+    const updatedMessages = [...chatMessages, userMsg]
+    setChatMessages(updatedMessages)
+    setChatLoading(true)
+    try {
+      const res = await fetch('/api/comptable/rapprochement/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          societe_id: societeId,
+          messages: updatedMessages.map(m => ({ role: m.role, content: m.content })),
+        }),
+      })
+      const data = await res.json()
+      const aiMsg = {
+        role: 'assistant' as const,
+        content: data.response || data.error || 'Erreur inconnue',
+        tool_calls: data.tool_calls || [],
+      }
+      setChatMessages(prev => [...prev, aiMsg])
+      // Reload main data if agent applied matches
+      const appliedTools = (data.tool_calls || []).filter((t: any) => t.name === 'apply_match' && t.result?.success)
+      if (appliedTools.length > 0) await load()
+    } catch (e: any) {
+      setChatMessages(prev => [...prev, { role: 'assistant', content: `❌ Erreur réseau: ${e.message}` }])
+    } finally {
+      setChatLoading(false)
+    }
+  }
+
+  // Auto-scroll chat to bottom
+  React.useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [chatMessages])
 
   // Get sociétés
   useEffect(() => {
@@ -548,6 +596,15 @@ Voulez-vous vraiment continuer ?`
           <Button onClick={runAiAnalysis} disabled={aiAnalyzing || !societeId} className="text-white" style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}>
             <Sparkles className={`w-4 h-4 mr-2 ${aiAnalyzing ? "animate-spin" : ""}`} />
             {aiAnalyzing ? "Analyse IA..." : "Analyser avec IA"}
+          </Button>
+          <Button
+            onClick={() => setChatOpen(true)}
+            disabled={!societeId}
+            className="text-white"
+            style={{ background: "linear-gradient(135deg, #0891b2, #0e7490)" }}
+          >
+            <MessageSquare className="w-4 h-4 mr-2" />
+            💬 Chat IA
           </Button>
           <Button onClick={handleResetAll} disabled={resetting || !societeId} variant="outline" className="border-red-300 text-red-600 hover:bg-red-50">
             {resetting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Unlink className="w-4 h-4 mr-2" />}
@@ -1197,6 +1254,133 @@ Voulez-vous vraiment continuer ?`
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ── Chat IA Panel (fixed right drawer) ───────────────────────── */}
+      {chatOpen && (
+        <div className="fixed right-0 top-0 h-full w-96 bg-white shadow-2xl border-l border-gray-200 z-50 flex flex-col">
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-[#0891b2] to-[#0e7490] text-white">
+            <div className="flex items-center gap-2">
+              <Bot className="w-5 h-5" />
+              <div>
+                <p className="font-semibold text-sm">LEXORA AI</p>
+                <p className="text-xs opacity-80">Expert Rapprochement</p>
+              </div>
+              <div className={`ml-2 w-2 h-2 rounded-full ${chatLoading ? 'bg-yellow-300 animate-pulse' : 'bg-green-300'}`} />
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setChatOpen(false)} className="text-white hover:bg-white/20 p-1">
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+
+          {/* Quick action button */}
+          <div className="px-3 py-2 border-b border-gray-100">
+            <Button
+              className="w-full text-white text-xs h-8"
+              style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}
+              disabled={chatLoading}
+              onClick={() => sendChatMessage("Lance une analyse complète du rapprochement bancaire : charge les patterns, liste les transactions non rapprochées, trouve les factures correspondantes, applique les matches certains et propose les ambigus.")}
+            >
+              <Sparkles className="w-3 h-3 mr-1" />
+              🤖 Lancer analyse complète
+            </Button>
+          </div>
+
+          {/* Quick chips */}
+          <div className="px-3 py-2 border-b border-gray-100 flex flex-wrap gap-1">
+            {[
+              "Analyse toutes les transactions",
+              "Montre les orphelins",
+              "Applique les patterns mémorisés",
+              "Rapport de cohérence",
+            ].map(chip => (
+              <button
+                key={chip}
+                onClick={() => sendChatMessage(chip)}
+                disabled={chatLoading}
+                className="text-xs px-2 py-1 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 disabled:opacity-50 transition-colors"
+              >
+                {chip}
+              </button>
+            ))}
+          </div>
+
+          {/* Messages */}
+          <ScrollArea className="flex-1 px-3 py-3">
+            {chatMessages.length === 0 && (
+              <div className="text-center text-gray-400 text-sm mt-8 space-y-2">
+                <Bot className="w-8 h-8 mx-auto opacity-40" />
+                <p>Bonjour ! Je suis LEXORA AI.</p>
+                <p className="text-xs">Posez-moi une question ou lancez une analyse complète.</p>
+              </div>
+            )}
+            {chatMessages.map((msg, idx) => (
+              <div key={idx} className={`mb-3 flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[85%] rounded-xl px-3 py-2 text-sm ${
+                  msg.role === 'user'
+                    ? 'bg-[#0891b2] text-white'
+                    : 'bg-gray-100 text-gray-800'
+                }`}>
+                  {msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0 && (
+                    <details className="mb-2 text-xs">
+                      <summary className="cursor-pointer text-gray-500 flex items-center gap-1">
+                        <Wrench className="w-3 h-3" />
+                        {msg.tool_calls.length} outil(s) utilisé(s)
+                      </summary>
+                      <div className="mt-1 space-y-1 pl-2 border-l-2 border-gray-300">
+                        {msg.tool_calls.map((t: any, ti: number) => (
+                          <div key={ti} className="text-gray-500">
+                            <span className="font-mono text-[10px] bg-gray-200 px-1 rounded">{t.name}</span>
+                            {t.result?.success === false && (
+                              <span className="ml-1 text-red-500">❌ {t.result.error}</span>
+                            )}
+                            {t.result?.success === true && (
+                              <span className="ml-1 text-green-600">✅</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+                  <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                </div>
+              </div>
+            ))}
+            {chatLoading && (
+              <div className="flex justify-start mb-3">
+                <div className="bg-gray-100 rounded-xl px-3 py-2 flex items-center gap-2">
+                  <Loader2 className="w-3 h-3 animate-spin text-gray-500" />
+                  <span className="text-xs text-gray-500">LEXORA AI réfléchit...</span>
+                </div>
+              </div>
+            )}
+            <div ref={chatEndRef} />
+          </ScrollArea>
+
+          {/* Input */}
+          <div className="px-3 py-3 border-t border-gray-200">
+            <div className="flex gap-2">
+              <Input
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage() } }}
+                placeholder="Posez une question..."
+                disabled={chatLoading}
+                className="flex-1 text-sm h-9"
+              />
+              <Button
+                onClick={() => sendChatMessage()}
+                disabled={chatLoading || !chatInput.trim()}
+                size="sm"
+                className="h-9 px-3 bg-[#0891b2] hover:bg-[#0e7490] text-white"
+              >
+                <Send className="w-4 h-4" />
+              </Button>
+            </div>
+            <p className="text-[10px] text-gray-400 mt-1 text-center">Entrée pour envoyer · Ctrl+Entrée pour saut de ligne</p>
+          </div>
+        </div>
+      )}
 
     </div>
   )
