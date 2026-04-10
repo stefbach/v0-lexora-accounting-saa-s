@@ -224,12 +224,24 @@ export async function GET(request: Request) {
       .filter(f => f.type_facture === 'client' && f.statut !== 'annule')
       .reduce((s, f) => s + (Number(f.montant_mur) || convertToMUR(Number(f.montant_ttc) || 0, f.devise || 'MUR', rates)), 0)
 
-    const depensesFromFactures = facturesFromTable
+    // Fournisseur invoices total (from factures table — MUR)
+    const depensesFournisseursFactures = facturesFromTable
       .filter(f => f.type_facture === 'fournisseur' && f.statut !== 'annule')
       .reduce((s, f) => s + (Number(f.montant_mur) || convertToMUR(Number(f.montant_ttc) || 0, f.devise || 'MUR', rates)), 0)
+    // depensesFromFactures will be augmented with payroll (641, 645) from écritures below
+    // (computed after allEcritures is built)
+    let depensesFromFactures = depensesFournisseursFactures
 
     const allEcritures = ecritures || []
     const allDocs = documents || []
+
+    // Augment depensesFromFactures with payroll expenses from écritures
+    // (salaires 641, charges patronales 645, impots/taxes 63, charges financières 66)
+    // These are NOT in the factures fournisseurs table
+    const depensesNonFournisseursEcritures = allEcritures
+      .filter((e: any) => e.compte?.startsWith('6') && !e.compte?.startsWith('628'))
+      .reduce((sum: number, e: any) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
+    depensesFromFactures = depensesFournisseursFactures + depensesNonFournisseursEcritures
 
     const now = new Date()
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -289,16 +301,24 @@ export async function GET(request: Request) {
     let expensesByAccount: Record<string, number> = {}
 
     if (facturesFromTable.length > 0) {
-      // Build revenue/expense breakdown from factures (amounts already in MUR)
+      // Build revenue breakdown from factures (amounts already in MUR)
       facturesFromTable.filter(f => f.type_facture === 'client' && f.statut !== 'annule').forEach(f => {
         const prefix = '706' // Default: prestations de services
         const mur = Number(f.montant_mur) || convertToMUR(Number(f.montant_ht) || 0, f.devise || 'MUR', rates)
         revenueByAccount[prefix] = (revenueByAccount[prefix] || 0) + mur
       })
+      // Supplier invoices → 628 (services diverses)
       facturesFromTable.filter(f => f.type_facture === 'fournisseur' && f.statut !== 'annule').forEach(f => {
         const prefix = '628' // Default: charges diverses
         const mur = Number(f.montant_mur) || convertToMUR(Number(f.montant_ht) || 0, f.devise || 'MUR', rates)
         expensesByAccount[prefix] = (expensesByAccount[prefix] || 0) + mur
+      })
+      // ALSO add all non-fournisseur expenses from écritures:
+      // salaires (641), charges sociales (645), impôts/taxes (63x), charges financières (66x), etc.
+      // NOT 628 (avoid double-counting with fournisseur factures above)
+      allEcritures.filter(e => e.compte?.startsWith('6') && !e.compte?.startsWith('628') && !isPayrollCurrentMonth(e)).forEach(e => {
+        const prefix = (e.compte || '6').substring(0, 3)
+        expensesByAccount[prefix] = (expensesByAccount[prefix] || 0) + (Number(e.debit) || 0) - (Number(e.credit) || 0)
       })
     } else {
       // Fallback: from écritures (may be in foreign currency — not ideal)
