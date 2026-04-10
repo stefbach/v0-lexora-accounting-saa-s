@@ -26,6 +26,12 @@ import {
   Globe,
   ArrowRight,
   CheckCircle2,
+  Briefcase,
+  LayoutDashboard,
+  Coins,
+  Gift,
+  TrendingUp,
+  ShieldCheck,
 } from "lucide-react"
 
 export default function HomePage() {
@@ -121,6 +127,9 @@ export default function HomePage() {
             </a>
             <a href="#plans" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif" }}>
               {t('home.plans', locale)}
+            </a>
+            <a href="#expert-comptable" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif" }}>
+              {locale === "fr" ? "Experts-Comptables" : "Accountants"}
             </a>
             <a href="#compliance" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif" }}>
               {t('home.compliance', locale)}
@@ -301,6 +310,255 @@ export default function HomePage() {
                 <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
             </Link>
+          </div>
+        </section>
+
+        {/* EXPERT-COMPTABLE — dark partner offer */}
+        <section
+          id="expert-comptable"
+          className="relative overflow-hidden py-20 md:py-28"
+          style={{ backgroundColor: "#0B0F2E" }}
+        >
+          <div
+            className="absolute inset-0 opacity-[0.06]"
+            style={{
+              backgroundImage:
+                "linear-gradient(#D4AF37 1px, transparent 1px), linear-gradient(90deg, #D4AF37 1px, transparent 1px)",
+              backgroundSize: "60px 60px",
+            }}
+          />
+          <div
+            className="pointer-events-none absolute inset-0"
+            style={{
+              background:
+                "radial-gradient(ellipse 60% 50% at 50% 0%, rgba(212,175,55,0.10) 0%, transparent 70%)",
+            }}
+          />
+
+          <div className="relative mx-auto max-w-7xl px-6">
+            <div className="mb-14 text-center">
+              <Badge
+                className="mb-6 border-0 px-4 py-1.5 text-sm font-medium"
+                style={{
+                  backgroundColor: "rgba(212,175,55,0.12)",
+                  color: "#D4AF37",
+                  border: "1px solid rgba(212,175,55,0.25)",
+                  fontFamily: "'Poppins', sans-serif",
+                }}
+              >
+                <Briefcase className="mr-2 h-4 w-4" />
+                {locale === "fr"
+                  ? "Programme Partenaire · Experts-Comptables"
+                  : "Partner Program · Accountants"}
+              </Badge>
+              <h2
+                className="mb-6 text-3xl font-bold tracking-tight md:text-5xl"
+                style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif", fontWeight: 700 }}
+              >
+                {locale === "fr" ? (
+                  <>
+                    Votre cabinet. <span style={{ color: "#D4AF37" }}>Une plateforme.</span>
+                    <br />
+                    Tous vos clients.
+                  </>
+                ) : (
+                  <>
+                    Your firm. <span style={{ color: "#D4AF37" }}>One platform.</span>
+                    <br />
+                    All your clients.
+                  </>
+                )}
+              </h2>
+              <p
+                className="mx-auto max-w-2xl text-lg"
+                style={{
+                  color: "#8B90B8",
+                  fontFamily: "'Poppins', sans-serif",
+                  fontWeight: 300,
+                  lineHeight: 1.7,
+                }}
+              >
+                {locale === "fr"
+                  ? "Gérez l'ensemble de votre portefeuille depuis un seul tableau de bord. Comptabilité automatisée, paie conforme, fiscal MRA — Lexora s'intègre dans votre mission. Votre accès cabinet est gratuit."
+                  : "Manage your entire client portfolio from a single dashboard. Automated accounting, compliant payroll, MRA tax — Lexora integrates into your engagement. Your firm access is free."}
+              </p>
+            </div>
+
+            {/* Key benefits grid */}
+            <div className="mb-14 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+              {[
+                {
+                  icon: Gift,
+                  title: locale === "fr" ? "Accès cabinet gratuit" : "Free firm access",
+                  desc:
+                    locale === "fr"
+                      ? "Aucun abonnement, aucun engagement. Vous accédez immédiatement au tableau de bord multi-dossiers."
+                      : "No subscription, no commitment. Immediate access to the multi-client dashboard.",
+                },
+                {
+                  icon: LayoutDashboard,
+                  title: locale === "fr" ? "Multi-dossiers unifié" : "Unified multi-client view",
+                  desc:
+                    locale === "fr"
+                      ? "Tous vos clients visibles en un écran. Statut des déclarations et alertes fiscales consolidées."
+                      : "All clients on one screen. Consolidated filing status and tax alerts across your portfolio.",
+                },
+                {
+                  icon: Coins,
+                  title: locale === "fr" ? "Revenu récurrent" : "Recurring revenue",
+                  desc:
+                    locale === "fr"
+                      ? "Commission mensuelle récurrente pour chaque client actif, versée automatiquement par Lexora."
+                      : "Recurring monthly commission for each active client, paid automatically by Lexora.",
+                },
+                {
+                  icon: ShieldCheck,
+                  title: locale === "fr" ? "Conformité MRA native" : "Native MRA compliance",
+                  desc:
+                    locale === "fr"
+                      ? "e-Invoicing IRN, QR Code, IT Form 3, Annual Return ROC, TVA 9-Box — intégrés nativement."
+                      : "e-Invoicing IRN, QR Code, IT Form 3, Annual Return ROC, VAT 9-Box — natively integrated.",
+                },
+              ].map((item) => (
+                <div
+                  key={item.title}
+                  className="group rounded-xl p-6 transition-all duration-300 hover:-translate-y-1"
+                  style={{
+                    backgroundColor: "rgba(255,255,255,0.02)",
+                    border: "1px solid #1E2760",
+                  }}
+                >
+                  <div
+                    className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl"
+                    style={{
+                      backgroundColor: "rgba(212,175,55,0.10)",
+                      border: "1px solid rgba(212,175,55,0.25)",
+                    }}
+                  >
+                    <item.icon className="h-6 w-6" style={{ color: "#D4AF37" }} />
+                  </div>
+                  <h3
+                    className="mb-2 text-lg"
+                    style={{
+                      color: "#E8EAFC",
+                      fontFamily: "'Poppins', sans-serif",
+                      fontWeight: 500,
+                    }}
+                  >
+                    {item.title}
+                  </h3>
+                  <p
+                    className="text-sm"
+                    style={{
+                      color: "#8B90B8",
+                      fontFamily: "'Poppins', sans-serif",
+                      fontWeight: 300,
+                      lineHeight: 1.7,
+                    }}
+                  >
+                    {item.desc}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            {/* Metrics + CTA */}
+            <div
+              className="rounded-2xl p-8 md:p-10"
+              style={{
+                backgroundColor: "rgba(255,255,255,0.02)",
+                border: "1px solid #1E2760",
+              }}
+            >
+              <div className="grid items-center gap-8 md:grid-cols-3">
+                <div className="text-center md:text-left md:border-r md:pr-8" style={{ borderColor: "#1E2760" }}>
+                  <div
+                    className="mb-1 text-4xl font-bold"
+                    style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif" }}
+                  >
+                    <span style={{ color: "#D4AF37", fontSize: "1.5rem" }}>Rs</span> 0
+                  </div>
+                  <p
+                    className="text-xs uppercase tracking-wider"
+                    style={{ color: "#8B90B8", fontFamily: "'Poppins', sans-serif" }}
+                  >
+                    {locale === "fr" ? "Coût d'accès cabinet" : "Firm access cost"}
+                  </p>
+                </div>
+                <div className="text-center md:border-r md:px-8" style={{ borderColor: "#1E2760" }}>
+                  <div
+                    className="mb-1 text-4xl font-bold"
+                    style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif" }}
+                  >
+                    7
+                  </div>
+                  <p
+                    className="text-xs uppercase tracking-wider"
+                    style={{ color: "#8B90B8", fontFamily: "'Poppins', sans-serif" }}
+                  >
+                    {locale === "fr" ? "Modules MRA-conformes" : "MRA-compliant modules"}
+                  </p>
+                </div>
+                <div className="text-center md:text-right md:pl-8">
+                  <div
+                    className="mb-1 text-4xl font-bold"
+                    style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif" }}
+                  >
+                    40<span style={{ color: "#D4AF37" }}>+</span>
+                  </div>
+                  <p
+                    className="text-xs uppercase tracking-wider"
+                    style={{ color: "#8B90B8", fontFamily: "'Poppins', sans-serif" }}
+                  >
+                    {locale === "fr" ? "Fonctionnalités incluses" : "Features included"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-8 flex flex-col items-center justify-center gap-4 border-t pt-8 sm:flex-row" style={{ borderColor: "#1E2760" }}>
+                <a href="mailto:contact@lexora.finance?subject=Demande démonstration cabinet — Expert-Comptable">
+                  <Button
+                    size="lg"
+                    className="px-8 text-base font-semibold"
+                    style={{
+                      backgroundColor: "#D4AF37",
+                      color: "#0B0F2E",
+                      fontFamily: "'Poppins', sans-serif",
+                      fontWeight: 700,
+                      borderRadius: "6px",
+                    }}
+                  >
+                    {locale === "fr" ? "Demander une démo cabinet" : "Request a firm demo"}
+                    <ArrowRight className="ml-2 h-5 w-5" />
+                  </Button>
+                </a>
+                <Link href="/tarifs">
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    className="px-8 text-base font-semibold"
+                    style={{
+                      border: "1px solid #4191FF",
+                      color: "#4191FF",
+                      backgroundColor: "transparent",
+                      fontFamily: "'Poppins', sans-serif",
+                      fontWeight: 500,
+                      borderRadius: "6px",
+                    }}
+                  >
+                    {locale === "fr" ? "Conditions partenaire" : "Partner terms"}
+                  </Button>
+                </Link>
+              </div>
+              <p
+                className="mt-4 text-center text-xs"
+                style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif" }}
+              >
+                {locale === "fr"
+                  ? "Accès cabinet gratuit · Aucun engagement · Convention partenaire sur demande"
+                  : "Free firm access · No commitment · Partner agreement on request"}
+              </p>
+            </div>
           </div>
         </section>
 
