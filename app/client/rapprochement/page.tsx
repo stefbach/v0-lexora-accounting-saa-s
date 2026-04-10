@@ -316,9 +316,14 @@ Voulez-vous vraiment continuer ?`
         }),
       })
       const data = await res.json()
+      // Show specific error message for missing API key
+      let content = data.response || data.error || 'Erreur inconnue'
+      if (res.status === 503 || content.includes('ANTHROPIC_API_KEY')) {
+        content = '⚠️ Agent IA indisponible : la clé ANTHROPIC_API_KEY n\'est pas configurée dans les variables d\'environnement v0.app.\n\nVa dans v0.dev → Settings → Environment Variables → ajoute ANTHROPIC_API_KEY.'
+      }
       const aiMsg = {
         role: 'assistant' as const,
-        content: data.response || data.error || 'Erreur inconnue',
+        content,
         tool_calls: data.tool_calls || [],
       }
       setChatMessages(prev => [...prev, aiMsg])
