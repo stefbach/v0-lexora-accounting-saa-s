@@ -19,7 +19,7 @@ function getAdminClient() {
 const TOOLS: Anthropic.Tool[] = [
   {
     name: 'list_unmatched_transactions',
-    description: 'List bank transactions that are not yet reconciled for the société. Returns up to 50 most recent unmatched transactions.',
+    description: 'List bank transactions that are not yet reconciled for the société. Returns up to 100 most recent unmatched transactions.',
     input_schema: {
       type: 'object',
       properties: {
@@ -169,7 +169,7 @@ async function executeTool(name: string, input: any, supabase: ReturnType<typeof
         })
       })
     }
-    return { count: unmatched.length, transactions: unmatched.slice(0, 30) }
+    return { count: unmatched.length, transactions: unmatched.slice(0, 100) }
   }
 
   if (name === 'list_unpaid_invoices') {
@@ -179,7 +179,7 @@ async function executeTool(name: string, input: any, supabase: ReturnType<typeof
       .eq('societe_id', societe_id)
       .in('statut', ['en_attente', 'retard', 'partiel'])
       .order('date_facture', { ascending: true })
-      .limit(40)
+      .limit(200)
     if (type && type !== 'all') query = query.eq('type_facture', type)
     const { data: factures } = await query
     return {
