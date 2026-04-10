@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Search, Loader2, FileText, AlertTriangle, Download, User, Trash2, Building2, AlertCircle } from "lucide-react"
+import { Search, Loader2, FileText, AlertTriangle, Download, User, Trash2, Building2, AlertCircle, RefreshCw, Wrench, CheckCircle2 } from "lucide-react"
 import * as XLSX from "xlsx"
 import { MonthPicker } from "@/components/ui/MonthPicker"
 
@@ -117,6 +117,41 @@ export default function ClientFournisseursPage() {
     finally { setReassignSaving(false) }
   }
 
+  // Consistency check
+  const [consistency, setConsistency] = useState<any>(null)
+  const [consistencyLoading, setConsistencyLoading] = useState(false)
+  const [consistencyFixing, setConsistencyFixing] = useState<string | null>(null)
+
+  const loadConsistency = useCallback(async () => {
+    if (!societe) return
+    setConsistencyLoading(true)
+    try {
+      const res = await fetch(`/api/comptable/rapprochement/consistency?societe_id=${societe}`)
+      if (res.ok) setConsistency(await res.json())
+    } catch {} finally { setConsistencyLoading(false) }
+  }, [societe])
+
+  useEffect(() => { loadConsistency() }, [loadConsistency])
+
+  const runFix = async (action: 'link_existing_matches' | 'unmark_orphans') => {
+    if (!societe) return
+    setConsistencyFixing(action)
+    try {
+      const res = await fetch("/api/comptable/rapprochement/consistency", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ societe_id: societe, action }),
+      })
+      const data = await res.json()
+      if (!res.ok) { alert(data.error || "Erreur"); return }
+      alert(`${data.fixed || 0} facture(s) corrigee(s)`)
+      await loadConsistency()
+      await load()
+    } catch (e: any) {
+      alert("Erreur: " + (e.message || ""))
+    } finally { setConsistencyFixing(null) }
+  }
+
   // Build unique fournisseur list
   const fournisseurs = Array.from(new Set(factures.map(f => f.tiers).filter(Boolean))).sort()
 
@@ -211,6 +246,79 @@ export default function ClientFournisseursPage() {
           <p className="text-xs text-gray-400">En attente / {totaux.nb_retard || 0} en retard</p>
         </CardContent></Card>
       </div>
+
+      {/* Consistency check banner */}
+      {consistency?.stats && (
+        <Card className={`border-l-4 ${(consistency.inconsistencies?.length || 0) > 0 ? 'border-l-red-500 bg-red-50' : 'border-l-green-500 bg-green-50'}`}>
+          <CardContent className="p-4">
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  {(consistency.inconsistencies?.length || 0) > 0 ? (
+                    <AlertTriangle className="h-5 w-5 text-red-500" />
+                  ) : (
+                    <CheckCircle2 className="h-5 w-5 text-green-600" />
+                  )}
+                  <p className="text-sm font-bold" style={{ color: NAVY }}>
+                    Coherence factures / rapprochement bancaire
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-xs mt-2">
+                  <div>
+                    <p className="text-gray-500">Total factures</p>
+                    <p className="font-bold text-base">{consistency.stats.total_factures}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Payees</p>
+                    <p className="font-bold text-base text-green-600">{consistency.stats.paye_count}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Dont rapprochees bancaire</p>
+                    <p className="font-bold text-base text-blue-600">{consistency.stats.paye_avec_rapprochement}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Payees sans lien bancaire</p>
+                    <p className={`font-bold text-base ${consistency.stats.paye_sans_rapprochement > 0 ? 'text-orange-600' : 'text-gray-400'}`}>
+                      {consistency.stats.paye_sans_rapprochement}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Incoherences</p>
+                    <p className={`font-bold text-base ${(consistency.inconsistencies?.length || 0) > 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                      {consistency.inconsistencies?.length || 0}
+                    </p>
+                  </div>
+                </div>
+                {(consistency.stats.paye_sans_rapprochement > 0 || (consistency.inconsistencies?.length || 0) > 0) && (
+                  <p className="text-xs text-gray-500 mt-2">
+                    {consistency.stats.paye_sans_rapprochement > 0 && (
+                      <>{consistency.stats.paye_sans_rapprochement} facture(s) payee(s) sans rapprochement bancaire. </>
+                    )}
+                    Cliquez &quot;Reparer automatiquement&quot; pour lier les paiements aux transactions existantes.
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <Button variant="outline" size="sm" onClick={loadConsistency} disabled={consistencyLoading}>
+                  {consistencyLoading ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <RefreshCw className="w-3 h-3 mr-1" />}
+                  Verifier
+                </Button>
+                {(consistency.stats.paye_sans_rapprochement > 0 || (consistency.inconsistencies?.length || 0) > 0) && (
+                  <Button
+                    size="sm"
+                    className="bg-[#0B0F2E] text-white"
+                    onClick={() => runFix('link_existing_matches')}
+                    disabled={!!consistencyFixing}
+                  >
+                    {consistencyFixing === 'link_existing_matches' ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Wrench className="w-3 h-3 mr-1" />}
+                    Reparer automatiquement
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Fournisseur-specific summary card */}
       {fournisseurTotaux && (

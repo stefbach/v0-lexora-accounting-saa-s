@@ -25,10 +25,20 @@ export async function GET(request: Request) {
     const societe_id = searchParams.get('societe_id')
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
 
-    // Fetch all factures
-    const { data: factures } = await supabase.from('factures')
+    // Fetch all factures — try with rapproche_* fields, fall back to basic fields if migration not run
+    let factures: any[] | null = null
+    const { data: fWithLink, error: fErrWithLink } = await supabase.from('factures')
       .select('id, numero_facture, tiers, type_facture, montant_ttc, montant_mur, devise, statut, date_facture, rapproche_releve_id, rapproche_transaction_idx, rapproche_date, rapproche_source')
       .eq('societe_id', societe_id)
+    if (fErrWithLink) {
+      // Migration 121 not run yet — fall back without the rapproche_* columns
+      const { data: fBasic } = await supabase.from('factures')
+        .select('id, numero_facture, tiers, type_facture, montant_ttc, montant_mur, devise, statut, date_facture')
+        .eq('societe_id', societe_id)
+      factures = (fBasic || []).map(f => ({ ...f, rapproche_releve_id: null, rapproche_transaction_idx: null, rapproche_date: null, rapproche_source: null }))
+    } else {
+      factures = fWithLink
+    }
 
     // Fetch all bank transactions that claim to be matched
     const { data: releves } = await supabase.from('releves_bancaires')
@@ -145,9 +155,14 @@ export async function POST(request: Request) {
 
     if (action === 'link_existing_matches') {
       // Back-fill: for all transactions with facture_id and statut=rapproche,
-      // update the linked factures with the rapproche_* fields
+      // update the linked factures with the rapproche_* fields (if migration 121 was run)
+      // OR at least mark them as paye
       const { data: releves } = await supabase.from('releves_bancaires')
         .select('id, transactions_json').eq('societe_id', societe_id)
+      // Detect if migration 121 has run
+      const { error: migTest } = await supabase.from('factures')
+        .select('rapproche_releve_id').eq('societe_id', societe_id).limit(1)
+      const hasMigration121 = !migTest
       for (const r of releves || []) {
         const txs: any[] = r.transactions_json || []
         for (let idx = 0; idx < txs.length; idx++) {
@@ -155,15 +170,17 @@ export async function POST(request: Request) {
           if (tx.statut !== 'rapproche') continue
           const facIds: string[] = tx.facture_ids || (tx.facture_id ? [tx.facture_id] : [])
           for (const fid of facIds) {
-            const { data: f } = await supabase.from('factures').select('rapproche_releve_id').eq('id', fid).maybeSingle()
-            if (f && !f.rapproche_releve_id) {
-              await supabase.from('factures').update({
-                statut: 'paye',
-                rapproche_releve_id: r.id,
-                rapproche_transaction_idx: idx,
-                rapproche_date: tx.rapproche_at || new Date().toISOString(),
-                rapproche_source: 'backfill',
-              }).eq('id', fid)
+            const { data: f } = await supabase.from('factures').select('id, statut').eq('id', fid).maybeSingle()
+            if (!f) continue
+            const updates: any = { statut: 'paye' }
+            if (hasMigration121) {
+              updates.rapproche_releve_id = r.id
+              updates.rapproche_transaction_idx = idx
+              updates.rapproche_date = tx.rapproche_at || new Date().toISOString()
+              updates.rapproche_source = 'backfill'
+            }
+            if (f.statut !== 'paye' || hasMigration121) {
+              await supabase.from('factures').update(updates).eq('id', fid)
               fixed++
             }
           }
