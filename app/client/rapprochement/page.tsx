@@ -52,6 +52,7 @@ export default function ClientRapprochementPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [selectedPeriode, setSelectedPeriode] = useState('2025-2026')
   const [associes, setAssocies] = useState<any[]>([])
+  const [resetting, setResetting] = useState(false)
 
   // Smart Apply state
   const [smartLoading, setSmartLoading] = useState(false)
