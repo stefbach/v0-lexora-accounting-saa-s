@@ -25,21 +25,40 @@ function isWeekend(dateStr: string): boolean { const d = new Date(dateStr + "T12
 //   - Rest day / unplanned day: 200% for first 8h, 300% beyond
 //   - Public holiday: 200% for first 8h, 300% beyond 8h
 // Night shift: +15% of base for night hours (21h-6h) — separate from OT
-function calcOT(hEntree: string, hSortie: string, ferieDay: boolean, planningHours: number = 9, isPlannedWorkDay: boolean = true, isRestDay: boolean = false) {
+
+// Compute night hours (21:00–06:00) for a shift that may cross midnight.
+// Iterates minute by minute to handle all cases robustly:
+// - 18:00-23:00 -> 2h night (21-23)
+// - 05:00-14:00 -> 1h night (5-6)
+// - 22:00-07:00 -> 8h night (22-6)
+// - 20:00-02:00 -> 5h night (21-24 + 0-2)
+function computeNightHours(hEntree: string, hSortie: string): number {
+  if (!hEntree || !hSortie) return 0
+  const [sh, sm] = hEntree.split(':').map(Number)
+  const [eh, em] = hSortie.split(':').map(Number)
+  const startMinutes = sh * 60 + sm
+  let endMinutes = eh * 60 + em
+  if (endMinutes <= startMinutes) endMinutes += 24 * 60 // crosses midnight
+  let nightMinutes = 0
+  for (let m = startMinutes; m < endMinutes; m++) {
+    const hourOfDay = Math.floor(m / 60) % 24
+    if (hourOfDay >= 21 || hourOfDay < 6) nightMinutes++
+  }
+  return nightMinutes / 60
+}
+
+function calcOT(hEntree: string, hSortie: string, ferieDay: boolean, planningHours: number = 9, isPlannedWorkDay: boolean = true, isRestDay: boolean = false, pauseMinutes: number = 60) {
   if (!hEntree || !hSortie) return { normales: 0, ot15: 0, ot2: 0, ot3: 0, heuresNuit: 0 }
   const debut = new Date(`1970-01-01T${hEntree}`)
   const fin = new Date(`1970-01-01T${hSortie}`)
-  let totalH = (fin.getTime() - debut.getTime()) / 3600000 - 1 // minus 1h lunch
+  // Support shifts crossing midnight: if end <= start, assume next day
+  let rawMs = fin.getTime() - debut.getTime()
+  if (rawMs <= 0) rawMs += 24 * 3600 * 1000
+  let totalH = rawMs / 3600000 - (pauseMinutes / 60) // subtract pause (default 1h lunch)
   if (totalH <= 0) totalH = 0
 
-  // Calculate night hours (21h-6h)
-  let heuresNuit = 0
-  const hDebut = debut.getHours() + debut.getMinutes() / 60
-  const hFin = fin.getHours() + fin.getMinutes() / 60
-  // Night window: 21:00 - 06:00
-  if (hDebut >= 21) heuresNuit += Math.min(hFin > hDebut ? hFin - hDebut : 24 - hDebut + hFin, totalH + 1)
-  else if (hFin <= 6) heuresNuit += Math.min(hFin, totalH + 1)
-  else if (hDebut < 6) heuresNuit += Math.min(6 - hDebut, totalH + 1)
+  // Calculate night hours (21h-6h) using robust minute-by-minute algorithm
+  const heuresNuit = computeNightHours(hEntree, hSortie)
 
   // Public holiday: 200% first 8h, 300% beyond
   if (ferieDay) {
@@ -253,7 +272,15 @@ export async function POST(request: Request) {
         // Work day is "planned" if planning says it's a work day (not repos)
         // If no planning exists, fall back to weekday=planned, weekend=unplanned
         const isPlannedWorkDay = plan ? !plan.est_repos : !isWeekend(pt.date_pointage)
-        const ot = calcOT(pt.heure_entree, pt.heure_sortie || '', ferie, planningHours, isPlannedWorkDay)
+        // Compute actual pause from pointage (fallback to 60 min = 1h lunch)
+        let pauseMinutes = 60
+        if (pt.heure_pause_debut && pt.heure_pause_fin) {
+          const [psh, psm] = pt.heure_pause_debut.split(':').map(Number)
+          const [peh, pem] = pt.heure_pause_fin.split(':').map(Number)
+          pauseMinutes = (peh * 60 + pem) - (psh * 60 + psm)
+          if (pauseMinutes < 0) pauseMinutes = 60
+        }
+        const ot = calcOT(pt.heure_entree, pt.heure_sortie || '', ferie, planningHours, isPlannedWorkDay, false, pauseMinutes)
         const montant15 = ot.ot15 * taux_horaire * 1.5
         const montant2 = ot.ot2 * taux_horaire * 2
         total_ot_montant += montant15 + montant2
@@ -458,7 +485,15 @@ export async function POST(request: Request) {
           const planningHours = plan ? plan.heures_prevues : 9
           const isPlannedWorkDay = plan ? !plan.est_repos : !weekend
           const isRestDay = plan ? plan.est_repos : weekend
-          const ot = calcOT(pt.heure_entree, pt.heure_sortie || '', ferie, planningHours, isPlannedWorkDay, isRestDay)
+          // Compute actual pause from pointage (fallback to 60 min = 1h lunch)
+          let pauseMinutes = 60
+          if (pt.heure_pause_debut && pt.heure_pause_fin) {
+            const [psh, psm] = pt.heure_pause_debut.split(':').map(Number)
+            const [peh, pem] = pt.heure_pause_fin.split(':').map(Number)
+            pauseMinutes = (peh * 60 + pem) - (psh * 60 + psm)
+            if (pauseMinutes < 0) pauseMinutes = 60
+          }
+          const ot = calcOT(pt.heure_entree, pt.heure_sortie || '', ferie, planningHours, isPlannedWorkDay, isRestDay, pauseMinutes)
           // WRA 2019 rates: 150% weekday OT, 200% rest/holiday, 300% holiday >8h
           total_ot_montant += ot.ot15 * taux_horaire * 1.5
             + ot.ot2 * taux_horaire * 2

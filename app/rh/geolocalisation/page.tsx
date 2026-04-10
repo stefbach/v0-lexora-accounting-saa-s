@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
-import { Loader2, MapPin, Users, Navigation, Truck, RefreshCw, Clock, Coffee, Send, Bot } from "lucide-react"
+import { Loader2, MapPin, Users, Navigation, Truck, RefreshCw, Clock, Coffee, Send, Bot, Sparkles, Lightbulb, TrendingUp, AlertTriangle, Route, Zap, Brain, CheckCircle2 } from "lucide-react"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -318,6 +318,22 @@ export default function GeolocalisationPage() {
   const [aiQuery, setAiQuery] = useState("")
   const [aiResponse, setAiResponse] = useState<string | null>(null)
 
+  // Claude IA state
+  interface ClaudeInsights {
+    insights: string
+    suggestions: string[]
+    metrics: Record<string, string | number>
+    error?: string
+    raw?: boolean
+  }
+  const [claudeLoading, setClaudeLoading] = useState(false)
+  const [claudeData, setClaudeData] = useState<ClaudeInsights | null>(null)
+  const [claudeError, setClaudeError] = useState<string | null>(null)
+  const [nlQuery, setNlQuery] = useState("")
+  const [nlLoading, setNlLoading] = useState(false)
+  const [nlData, setNlData] = useState<ClaudeInsights | null>(null)
+  const [nlError, setNlError] = useState<string | null>(null)
+
   useEffect(() => {
     Promise.all([
       fetch("/api/comptable/societes").then(r => r.json()).catch(() => ({ societes: [] })),
@@ -343,6 +359,63 @@ export default function GeolocalisationPage() {
   }, [societe])
 
   useEffect(() => { load() }, [load])
+
+  // Call Claude for a full team analysis
+  const runClaudeAnalysis = useCallback(async () => {
+    setClaudeLoading(true)
+    setClaudeError(null)
+    try {
+      const res = await fetch("/api/rh/geolocalisation/ai-insights", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          employees: positions,
+          context: "Analyse globale: composition d'equipe par zone, optimisation transport, couverture shifts, zones a risque et recommandations de routage.",
+          mode: "insights",
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        setClaudeError(data.error || "Erreur lors de l'appel a l'IA")
+        setClaudeData(null)
+      } else {
+        setClaudeData(data)
+      }
+    } catch (e: any) {
+      setClaudeError(e?.message || "Erreur reseau")
+    } finally {
+      setClaudeLoading(false)
+    }
+  }, [positions])
+
+  // Call Claude for a natural language question
+  const runClaudeQuery = useCallback(async (question: string) => {
+    if (!question.trim()) return
+    setNlLoading(true)
+    setNlError(null)
+    try {
+      const res = await fetch("/api/rh/geolocalisation/ai-insights", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          employees: positions,
+          context: question,
+          mode: "query",
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        setNlError(data.error || "Erreur lors de l'appel a l'IA")
+        setNlData(null)
+      } else {
+        setNlData(data)
+      }
+    } catch (e: any) {
+      setNlError(e?.message || "Erreur reseau")
+    } finally {
+      setNlLoading(false)
+    }
+  }, [positions])
 
   // Filter by group
   const filteredPositions = useMemo(() => {
@@ -467,6 +540,296 @@ export default function GeolocalisationPage() {
           </Card>
         ))}
       </div>
+
+      {/* ====== IA Assistant Geolocalisation (Claude) ====== */}
+      <Card
+        className="rounded-3xl border-0 overflow-hidden shadow-xl"
+        style={{
+          background: `linear-gradient(135deg, ${NAVY} 0%, #11173E 55%, #1A2150 100%)`,
+          borderTop: `3px solid ${GOLD}`,
+        }}
+      >
+        <CardHeader className="pb-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div
+                className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-lg"
+                style={{ background: `linear-gradient(135deg, ${GOLD} 0%, #F4D06F 100%)` }}
+              >
+                <Brain className="w-6 h-6" style={{ color: NAVY }} />
+              </div>
+              <div>
+                <CardTitle className="text-lg font-bold text-white flex items-center gap-2">
+                  IA Assistant Geolocalisation
+                  <Badge
+                    className="text-[9px] font-semibold tracking-wider"
+                    style={{ backgroundColor: `${GOLD}25`, color: GOLD, border: `1px solid ${GOLD}50` }}
+                  >
+                    <Sparkles className="w-2.5 h-2.5 mr-1" /> CLAUDE
+                  </Badge>
+                </CardTitle>
+                <p className="text-xs" style={{ color: "rgba(255,255,255,0.55)" }}>
+                  Analyse intelligente des equipes, transport, couverture et zones a risque
+                </p>
+              </div>
+            </div>
+            <Button
+              onClick={runClaudeAnalysis}
+              disabled={claudeLoading || positions.length === 0}
+              className="shrink-0 font-semibold shadow-lg transition-all hover:scale-[1.02]"
+              style={{
+                background: `linear-gradient(135deg, ${GOLD} 0%, #E8C252 100%)`,
+                color: NAVY,
+                border: "none",
+              }}
+            >
+              {claudeLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Analyse en cours...
+                </>
+              ) : (
+                <>
+                  <Zap className="w-4 h-4 mr-2" />
+                  Analyser avec Claude
+                </>
+              )}
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Error state */}
+          {claudeError && (
+            <div
+              className="p-4 rounded-2xl text-sm flex items-start gap-3"
+              style={{
+                backgroundColor: "rgba(220, 38, 38, 0.1)",
+                border: "1px solid rgba(220, 38, 38, 0.3)",
+                color: "#fca5a5",
+              }}
+            >
+              <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold">Erreur IA</p>
+                <p className="text-xs mt-1 opacity-80">{claudeError}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Results panel */}
+          {claudeData && !claudeError && (
+            <div className="space-y-4">
+              {/* Insights narrative */}
+              {claudeData.insights && (
+                <div
+                  className="p-5 rounded-2xl leading-relaxed"
+                  style={{
+                    background: "rgba(255,255,255,0.04)",
+                    borderLeft: `3px solid ${GOLD}`,
+                    color: "rgba(255,255,255,0.92)",
+                  }}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <TrendingUp className="w-4 h-4" style={{ color: GOLD }} />
+                    <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: GOLD }}>
+                      Analyse executive
+                    </span>
+                  </div>
+                  <p className="text-sm whitespace-pre-wrap">{claudeData.insights}</p>
+                </div>
+              )}
+
+              {/* Metrics badges */}
+              {claudeData.metrics && Object.keys(claudeData.metrics).length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(claudeData.metrics).map(([key, value]) => (
+                    <div
+                      key={key}
+                      className="px-3 py-2 rounded-xl flex items-center gap-2"
+                      style={{
+                        background: "rgba(212,175,55,0.08)",
+                        border: `1px solid ${GOLD}33`,
+                      }}
+                    >
+                      <span className="text-[10px] uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.55)" }}>
+                        {key.replace(/_/g, " ")}
+                      </span>
+                      <span className="text-sm font-bold" style={{ color: GOLD }}>
+                        {String(value)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Suggestions list */}
+              {claudeData.suggestions && claudeData.suggestions.length > 0 && (
+                <div
+                  className="p-5 rounded-2xl"
+                  style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    <Lightbulb className="w-4 h-4" style={{ color: GOLD }} />
+                    <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: GOLD }}>
+                      Recommandations actionnables
+                    </span>
+                  </div>
+                  <ul className="space-y-2.5">
+                    {claudeData.suggestions.map((s, i) => (
+                      <li key={i} className="flex items-start gap-3 text-sm" style={{ color: "rgba(255,255,255,0.88)" }}>
+                        <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" style={{ color: GOLD }} />
+                        <span>{s}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Empty state */}
+          {!claudeData && !claudeError && !claudeLoading && (
+            <div
+              className="p-6 rounded-2xl text-center"
+              style={{ background: "rgba(255,255,255,0.03)", border: "1px dashed rgba(255,255,255,0.1)" }}
+            >
+              <Route className="w-8 h-8 mx-auto mb-2" style={{ color: "rgba(212,175,55,0.5)" }} />
+              <p className="text-sm font-medium" style={{ color: "rgba(255,255,255,0.7)" }}>
+                Cliquez sur "Analyser avec Claude" pour obtenir des insights en temps reel
+              </p>
+              <p className="text-xs mt-1" style={{ color: "rgba(255,255,255,0.4)" }}>
+                Composition d'equipes, couts transport, couverture shifts et zones a risque
+              </p>
+            </div>
+          )}
+
+          {/* ===== Natural language query ===== */}
+          <div
+            className="pt-4 mt-2 border-t"
+            style={{ borderColor: "rgba(255,255,255,0.08)" }}
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <Bot className="w-4 h-4" style={{ color: GOLD }} />
+              <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: GOLD }}>
+                Question libre
+              </span>
+            </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                runClaudeQuery(nlQuery)
+              }}
+              className="flex gap-2"
+            >
+              <Input
+                value={nlQuery}
+                onChange={(e) => setNlQuery(e.target.value)}
+                placeholder="Posez une question sur vos equipes..."
+                className="flex-1 text-sm border-0 text-white placeholder:text-gray-400 h-11 rounded-xl"
+                style={{ backgroundColor: "rgba(255,255,255,0.07)" }}
+              />
+              <Button
+                type="submit"
+                disabled={nlLoading || !nlQuery.trim()}
+                className="shrink-0 h-11 rounded-xl font-semibold shadow-md"
+                style={{ backgroundColor: GOLD, color: NAVY }}
+              >
+                {nlLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              </Button>
+            </form>
+
+            {/* Suggestion chips */}
+            <div className="flex gap-2 flex-wrap mt-3">
+              {[
+                "Qui peut couvrir le shift de nuit ce soir ?",
+                "Proposez une rotation optimale pour demain",
+                "Quels employes sont a risque de fatigue ?",
+                "Quelle est la zone la moins couverte ?",
+              ].map((q) => (
+                <button
+                  key={q}
+                  type="button"
+                  onClick={() => {
+                    setNlQuery(q)
+                    runClaudeQuery(q)
+                  }}
+                  className="px-3 py-1.5 rounded-full text-[11px] font-medium transition-all hover:scale-[1.03]"
+                  style={{
+                    background: "rgba(212,175,55,0.08)",
+                    color: "rgba(255,255,255,0.75)",
+                    border: `1px solid ${GOLD}25`,
+                  }}
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+
+            {/* NL query response */}
+            {nlError && (
+              <div
+                className="mt-3 p-3 rounded-xl text-xs flex items-start gap-2"
+                style={{
+                  backgroundColor: "rgba(220, 38, 38, 0.1)",
+                  border: "1px solid rgba(220, 38, 38, 0.3)",
+                  color: "#fca5a5",
+                }}
+              >
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{nlError}</span>
+              </div>
+            )}
+
+            {nlData && !nlError && (
+              <div className="mt-4 space-y-3">
+                {nlData.insights && (
+                  <div
+                    className="p-4 rounded-2xl text-sm whitespace-pre-wrap leading-relaxed"
+                    style={{
+                      background: "rgba(255,255,255,0.04)",
+                      borderLeft: `3px solid ${GOLD}`,
+                      color: "rgba(255,255,255,0.92)",
+                    }}
+                  >
+                    {nlData.insights}
+                  </div>
+                )}
+                {nlData.metrics && Object.keys(nlData.metrics).length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(nlData.metrics).map(([key, value]) => (
+                      <Badge
+                        key={key}
+                        className="text-[10px] font-semibold"
+                        style={{
+                          backgroundColor: `${GOLD}20`,
+                          color: GOLD,
+                          border: `1px solid ${GOLD}40`,
+                        }}
+                      >
+                        {key.replace(/_/g, " ")}: {String(value)}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                {nlData.suggestions && nlData.suggestions.length > 0 && (
+                  <ul className="space-y-1.5 pl-1">
+                    {nlData.suggestions.map((s, i) => (
+                      <li
+                        key={i}
+                        className="flex items-start gap-2 text-xs"
+                        style={{ color: "rgba(255,255,255,0.82)" }}
+                      >
+                        <Lightbulb className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: GOLD }} />
+                        <span>{s}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {loading ? (
         <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-gray-400" /></div>

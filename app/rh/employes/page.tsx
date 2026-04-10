@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Search, Plus, Loader2, Users, Upload, Download, FileSpreadsheet, Pencil, ExternalLink, UserPlus, Key, User, Briefcase, Banknote, Building2 } from "lucide-react"
+import { Search, Plus, Loader2, Users, Upload, Download, FileSpreadsheet, Pencil, ExternalLink, UserPlus, Key, User, Briefcase, Banknote, Building2, Trash2, AlertTriangle } from "lucide-react"
 import { BANQUES_MAURITIUS } from "@/lib/rh/banques-mauritius"
 
 /* ── Section card for grouped form fields ── */
@@ -306,6 +306,39 @@ export default function EmployesPage() {
     setEditOpen(true)
   }
 
+  // Delete dialog state
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleteEmp, setDeleteEmp] = useState<any>(null)
+  const [deleting, setDeleting] = useState<"soft" | "hard" | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  const openDelete = (emp: any) => {
+    setDeleteEmp(emp)
+    setDeleteError(null)
+    setDeleting(null)
+    setDeleteOpen(true)
+  }
+
+  const handleDelete = async (mode: "soft" | "hard") => {
+    if (!deleteEmp) return
+    setDeleting(mode)
+    setDeleteError(null)
+    try {
+      const res = await fetch(`/api/rh/employes/${deleteEmp.id}?mode=${mode}`, { method: "DELETE" })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data.error || "Erreur lors de la suppression")
+      }
+      setDeleteOpen(false)
+      setDeleteEmp(null)
+      load()
+    } catch (e: unknown) {
+      setDeleteError(e instanceof Error ? e.message : "Erreur")
+    } finally {
+      setDeleting(null)
+    }
+  }
+
   const load = useCallback(async () => {
     setLoading(true)
     try {
@@ -463,6 +496,7 @@ export default function EmployesPage() {
                       <div className="flex flex-col gap-1 shrink-0">
                         <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(ev)=>{ev.stopPropagation();openEdit(e)}} title="Modifier"><Pencil className="w-4 h-4 text-[#D4AF37]"/></Button>
                         <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(ev)=>{ev.stopPropagation();openAccess(e)}} title="Creer acces"><Key className="w-4 h-4 text-purple-600"/></Button>
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(ev)=>{ev.stopPropagation();openDelete(e)}} title="Supprimer"><Trash2 className="w-4 h-4 text-red-600"/></Button>
                       </div>
                     </div>
                   </div>
@@ -505,6 +539,7 @@ export default function EmployesPage() {
                             <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(ev)=>{ev.stopPropagation();router.push(`/rh/employes/${e.id}`)}} title="Voir fiche"><ExternalLink className="w-4 h-4 text-[#0B0F2E]"/></Button>
                             <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(ev)=>{ev.stopPropagation();openEdit(e)}} title="Modifier"><Pencil className="w-4 h-4 text-[#D4AF37]"/></Button>
                             <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(ev)=>{ev.stopPropagation();openAccess(e)}} title="Creer acces utilisateur"><Key className="w-4 h-4 text-purple-600"/></Button>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(ev)=>{ev.stopPropagation();openDelete(e)}} title="Supprimer"><Trash2 className="w-4 h-4 text-red-600"/></Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -587,6 +622,75 @@ export default function EmployesPage() {
               </div>
               <p className="text-xs text-gray-500">Communiquez ces identifiants à l'employé de manière sécurisée.</p>
               <Button variant="outline" className="w-full" onClick={() => { setAccessOpen(false); setAccessResult(null) }}>Fermer</Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog suppression employe */}
+      <Dialog open={deleteOpen} onOpenChange={o => { setDeleteOpen(o); if (!o) { setDeleteEmp(null); setDeleteError(null); setDeleting(null) } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-[#0B0F2E]">
+              <Trash2 className="w-5 h-5 text-red-600" />
+              Supprimer l'employe
+            </DialogTitle>
+          </DialogHeader>
+          {deleteEmp && (
+            <div className="space-y-4">
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <p className="font-medium">{deleteEmp.prenom} {deleteEmp.nom}</p>
+                <p className="text-sm text-gray-500">{deleteEmp.poste || "—"}{deleteEmp.email ? ` • ${deleteEmp.email}` : ""}</p>
+              </div>
+
+              {deleteError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex gap-2 text-sm text-red-700">
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{deleteError}</span>
+                </div>
+              )}
+
+              <p className="text-sm text-gray-600">Choisissez le type de suppression :</p>
+
+              <div className="space-y-2">
+                <Button
+                  onClick={() => handleDelete("soft")}
+                  disabled={deleting !== null}
+                  className="w-full justify-start h-auto py-3 bg-orange-50 hover:bg-orange-100 text-orange-900 border border-orange-200"
+                  variant="outline"
+                >
+                  {deleting === "soft" ? (
+                    <Loader2 className="w-4 h-4 animate-spin mr-2 shrink-0" />
+                  ) : (
+                    <UserPlus className="w-4 h-4 mr-2 shrink-0 rotate-180" />
+                  )}
+                  <div className="text-left">
+                    <div className="font-semibold">Marquer comme sorti</div>
+                    <div className="text-xs text-orange-700 font-normal">Conserve l'historique et les bulletins</div>
+                  </div>
+                </Button>
+
+                <Button
+                  onClick={() => handleDelete("hard")}
+                  disabled={deleting !== null}
+                  className="w-full justify-start h-auto py-3 bg-red-50 hover:bg-red-100 text-red-900 border border-red-200"
+                  variant="outline"
+                >
+                  {deleting === "hard" ? (
+                    <Loader2 className="w-4 h-4 animate-spin mr-2 shrink-0" />
+                  ) : (
+                    <Trash2 className="w-4 h-4 mr-2 shrink-0" />
+                  )}
+                  <div className="text-left">
+                    <div className="font-semibold">Supprimer definitivement</div>
+                    <div className="text-xs text-red-700 font-normal">Impossible si des bulletins existent</div>
+                  </div>
+                </Button>
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setDeleteOpen(false)} disabled={deleting !== null}>Annuler</Button>
+              </DialogFooter>
             </div>
           )}
         </DialogContent>

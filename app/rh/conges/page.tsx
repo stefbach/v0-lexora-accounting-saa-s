@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea"
 import {
   Loader2, Plus, CheckCircle, XCircle, AlertTriangle,
   Calendar, Thermometer, Clock, ShieldAlert, Users, FileWarning,
-  Upload, ChevronLeft, ChevronRight, Eye
+  Upload, ChevronLeft, ChevronRight, Eye, Pencil, Save, X
 } from "lucide-react"
 
 // ─── Constants ───────────────────────────────────────────────────
@@ -420,6 +420,9 @@ export default function CongesPage() {
   const [balances, setBalances] = useState<BalanceRow[]>([])
   const [kpis, setKpis] = useState<KPIs>({ total_al_taken: 0, total_sl_taken: 0, pending_requests: 0, alerts: 0 })
   const [loadingBalances, setLoadingBalances] = useState(true)
+  const [editingBalId, setEditingBalId] = useState<string | null>(null)
+  const [editBalFields, setEditBalFields] = useState<{ al_droit: number; al_pris: number; sl_droit: number; sl_pris: number; date_arrivee: string }>({ al_droit: 22, al_pris: 0, sl_droit: 15, sl_pris: 0, date_arrivee: "" })
+  const [savingBal, setSavingBal] = useState(false)
 
   // Demandes tab
   const [conges, setConges] = useState<CongeRecord[]>([])
@@ -488,6 +491,42 @@ export default function CongesPage() {
     } catch (e) { console.error(e) }
     finally { setLoadingBalances(false) }
   }, [societe])
+
+  const startEditBal = (b: BalanceRow) => {
+    setEditingBalId(b.employe_id)
+    setEditBalFields({
+      al_droit: b.al_droit || 22,
+      al_pris: b.al_pris || 0,
+      sl_droit: b.sl_droit || 15,
+      sl_pris: b.sl_pris || 0,
+      date_arrivee: b.date_arrivee || "",
+    })
+  }
+
+  const saveEditBal = async () => {
+    if (!editingBalId) return
+    setSavingBal(true)
+    try {
+      const res = await fetch("/api/rh/conges", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "modifier_solde",
+          employe_id: editingBalId,
+          annee: new Date().getFullYear(),
+          al_droit: editBalFields.al_droit,
+          al_pris: editBalFields.al_pris,
+          sl_droit: editBalFields.sl_droit,
+          sl_pris: editBalFields.sl_pris,
+          date_arrivee: editBalFields.date_arrivee || null,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) { alert(data.error || "Erreur"); return }
+      setEditingBalId(null)
+      loadBalances()
+    } catch (e: any) { alert("Erreur: " + (e.message || "")) }
+    finally { setSavingBal(false) }
+  }
 
   const loadDemandes = useCallback(async () => {
     setLoadingConges(true)
@@ -856,6 +895,7 @@ export default function CongesPage() {
                         <TableHead className="w-8">Statut</TableHead>
                         <TableHead>Employe</TableHead>
                         <TableHead>Poste</TableHead>
+                        <TableHead className="text-xs">Arrivee</TableHead>
                         <TableHead className="text-center">AL Droit</TableHead>
                         <TableHead className="text-center">AL Pris</TableHead>
                         <TableHead className="text-center">AL Solde</TableHead>
@@ -863,33 +903,64 @@ export default function CongesPage() {
                         <TableHead className="text-center">SL Pris</TableHead>
                         <TableHead className="text-center">SL Solde</TableHead>
                         <TableHead>Alertes</TableHead>
+                        <TableHead className="w-24 text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredBalances.map(b => (
+                      {filteredBalances.map(b => {
+                        const isEditing = editingBalId === b.employe_id
+                        return (
                         <TableRow key={b.employe_id}>
                           <TableCell>{statusDot(b.status_color)}</TableCell>
                           <TableCell className="font-medium">{b.prenom} {b.nom}</TableCell>
                           <TableCell className="text-sm text-gray-500">{b.poste || "---"}</TableCell>
-                          <TableCell className="text-center text-sm">{b.al_droit}</TableCell>
-                          <TableCell className="text-center text-sm">{b.al_pris}</TableCell>
+                          <TableCell className="text-xs">
+                            {isEditing ? (
+                              <Input type="date" className="h-7 text-xs w-32" value={editBalFields.date_arrivee}
+                                onChange={e => setEditBalFields(f => ({ ...f, date_arrivee: e.target.value }))} />
+                            ) : (
+                              b.date_arrivee ? new Date(b.date_arrivee).toLocaleDateString("fr-FR") : "—"
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center text-sm">
+                            {isEditing ? (
+                              <Input type="number" className="h-7 text-xs w-14 text-center" value={editBalFields.al_droit}
+                                onChange={e => setEditBalFields(f => ({ ...f, al_droit: parseFloat(e.target.value) || 0 }))} />
+                            ) : b.al_droit}
+                          </TableCell>
+                          <TableCell className="text-center text-sm">
+                            {isEditing ? (
+                              <Input type="number" className="h-7 text-xs w-14 text-center" value={editBalFields.al_pris}
+                                onChange={e => setEditBalFields(f => ({ ...f, al_pris: parseFloat(e.target.value) || 0 }))} />
+                            ) : b.al_pris}
+                          </TableCell>
                           <TableCell className="text-center">
                             <span className={`font-semibold ${b.al_solde <= 0 ? "text-red-600" : b.al_solde <= 5 ? "text-orange-500" : "text-green-600"}`}>
-                              {b.al_solde}
+                              {isEditing ? (editBalFields.al_droit - editBalFields.al_pris) : b.al_solde}
                             </span>
                           </TableCell>
-                          <TableCell className="text-center text-sm">{b.sl_droit}</TableCell>
-                          <TableCell className="text-center text-sm">{b.sl_pris}</TableCell>
+                          <TableCell className="text-center text-sm">
+                            {isEditing ? (
+                              <Input type="number" className="h-7 text-xs w-14 text-center" value={editBalFields.sl_droit}
+                                onChange={e => setEditBalFields(f => ({ ...f, sl_droit: parseFloat(e.target.value) || 0 }))} />
+                            ) : b.sl_droit}
+                          </TableCell>
+                          <TableCell className="text-center text-sm">
+                            {isEditing ? (
+                              <Input type="number" className="h-7 text-xs w-14 text-center" value={editBalFields.sl_pris}
+                                onChange={e => setEditBalFields(f => ({ ...f, sl_pris: parseFloat(e.target.value) || 0 }))} />
+                            ) : b.sl_pris}
+                          </TableCell>
                           <TableCell className="text-center">
                             <span className={`font-semibold ${b.sl_solde <= 0 ? "text-red-600" : b.sl_solde <= 3 ? "text-orange-500" : "text-green-600"}`}>
-                              {b.sl_solde}
+                              {isEditing ? (editBalFields.sl_droit - editBalFields.sl_pris) : b.sl_solde}
                             </span>
                           </TableCell>
                           <TableCell>
                             {b.sick_cert_alert && (
                               <Badge variant="destructive" className="text-xs whitespace-nowrap">
                                 <FileWarning className="w-3 h-3 mr-1" />
-                                Certificat medical requis
+                                Cert. medical requis
                               </Badge>
                             )}
                             {b.al_solde <= 0 && (
@@ -903,8 +974,25 @@ export default function CongesPage() {
                               </Badge>
                             )}
                           </TableCell>
+                          <TableCell className="text-right">
+                            {isEditing ? (
+                              <div className="flex gap-1 justify-end">
+                                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-green-600" onClick={saveEditBal} disabled={savingBal}>
+                                  {savingBal ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                                </Button>
+                                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-500" onClick={() => setEditingBalId(null)}>
+                                  <X className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => startEditBal(b)}>
+                                <Pencil className="w-3 h-3" />
+                              </Button>
+                            )}
+                          </TableCell>
                         </TableRow>
-                      ))}
+                        )
+                      })}
                     </TableBody>
                   </Table>
                 </div>

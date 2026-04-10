@@ -116,31 +116,34 @@ function calculateALEntitlement(dateArrivee: string | null, year: number, today?
   const hireDate = new Date(dateArrivee + 'T00:00:00')
   const refDate = today || new Date()
 
-  // Calculate months of service
+  // Calculate months of service at refDate
   const monthsOfService = (refDate.getFullYear() - hireDate.getFullYear()) * 12 + (refDate.getMonth() - hireDate.getMonth())
 
-  // Before 6 months: 0 days (probation period)
+  // Before 6 months of service: 0 days (probation)
   if (monthsOfService < 6) return 0
 
-  // Between 6 and 12 months: 1 day per month from month 7
-  // Max 6 days in year 1
+  // 6-12 months: 1 day/month from month 7 (max 6 days in year 1)
   if (monthsOfService < 12) {
-    const eligibleMonths = monthsOfService - 6
-    return Math.min(eligibleMonths, 6)
+    return Math.min(monthsOfService - 6, 6)
   }
 
-  // 12+ months: full entitlement = 22 days (20 + 2 additional guaranteed by WRA)
-  // If hired mid-year in a PREVIOUS year but this is the first full year,
-  // check if anniversary has passed in the current year
+  // 12+ months: full entitlement 22 days
+  // Counter resets on each anniversary. Check if anniversary has passed this year.
+  // The year parameter represents the calendar year being queried.
+  // We return the entitlement FOR that year, based on anniversary-aligned reference period.
   const anniversaryThisYear = new Date(year, hireDate.getMonth(), hireDate.getDate())
+  const hasAnniversaryPassed = refDate >= anniversaryThisYear
 
-  if (hireDate.getFullYear() === year) {
-    // Hired this year — use Year 1 rules
-    if (monthsOfService < 6) return 0
-    if (monthsOfService < 12) return Math.min(monthsOfService - 6, 6)
+  // If the reference year is before the first anniversary year, use year-1 rules
+  const firstAnniversaryYear = hireDate.getFullYear() + 1
+  if (year < firstAnniversaryYear) {
+    // Still in year 1 — use partial entitlement
+    const monthsAtEndOfYear = Math.min(12, 12 - hireDate.getMonth())
+    if (monthsAtEndOfYear < 6) return 0
+    return Math.min(monthsAtEndOfYear - 6, 6)
   }
 
-  // Year 2+: 22 days available from anniversary date
+  // Year 2+: Full 22 days. Counter available from anniversary date.
   return 22
 }
 
@@ -418,6 +421,50 @@ export async function POST(request: Request) {
     const supabase = getAdminClient()
     const body = await request.json()
     const action = body.action
+
+    // ---- ACTION: modifier_solde (manually adjust employee leave balance) ----
+    if (action === 'modifier_solde') {
+      const { employe_id, annee, al_droit, al_pris, sl_droit, sl_pris, date_arrivee } = body
+      if (!employe_id) return NextResponse.json({ error: 'employe_id requis' }, { status: 400 })
+      const year = annee || new Date().getFullYear()
+
+      // Update employee date_arrivee if provided
+      if (date_arrivee !== undefined) {
+        await supabase.from('employes').update({ date_arrivee }).eq('id', employe_id)
+      }
+
+      // Upsert soldes_conges record for the year
+      const { data: existing } = await supabase.from('soldes_conges')
+        .select('id').eq('employe_id', employe_id).eq('annee', year).maybeSingle()
+
+      const updates: any = {}
+      if (al_droit !== undefined) updates.al_droit = Number(al_droit)
+      if (al_pris !== undefined) updates.al_pris = Number(al_pris)
+      if (sl_droit !== undefined) updates.sl_droit = Number(sl_droit)
+      if (sl_pris !== undefined) updates.sl_pris = Number(sl_pris)
+
+      if (Object.keys(updates).length === 0 && date_arrivee === undefined) {
+        return NextResponse.json({ error: 'Aucun champ a modifier' }, { status: 400 })
+      }
+
+      if (Object.keys(updates).length > 0) {
+        if (existing) {
+          const { error } = await supabase.from('soldes_conges').update(updates).eq('id', existing.id)
+          if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+        } else {
+          const { error } = await supabase.from('soldes_conges').insert({
+            employe_id, annee: year,
+            al_droit: updates.al_droit ?? 22,
+            al_pris: updates.al_pris ?? 0,
+            sl_droit: updates.sl_droit ?? 15,
+            sl_pris: updates.sl_pris ?? 0,
+          })
+          if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+        }
+      }
+
+      return NextResponse.json({ success: true })
+    }
 
     // ---- ACTION: creer (create leave request) ----
     if (action === 'creer' || !action) {

@@ -152,8 +152,13 @@ export async function GET(request: Request) {
     let query = supabase.from('regles_primes').select('*').order('created_at', { ascending: false })
     if (societe_id) query = query.eq('societe_id', societe_id)
 
-    const { data: regles, error } = await query
+    const { data: reglesRaw, error } = await query
     if (error) throw error
+    // Restore original_type from conditions if fallback was used
+    const regles = (reglesRaw || []).map((r: any) => ({
+      ...r,
+      type: r.conditions?.original_type || r.type,
+    }))
 
     let calculs: unknown[] = []
     if (include_calculs && periode && societe_id) {
@@ -200,7 +205,8 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'societe_id, nom et type requis' }, { status: 400 })
       }
 
-      const { data, error } = await supabase.from('regles_primes').insert({
+      // Try insert with the real type first
+      let insertPayload: any = {
         societe_id,
         nom,
         description: description || null,
@@ -209,12 +215,27 @@ export async function POST(request: Request) {
         taux: taux || 0,
         scope: scope || 'tous',
         scope_value: scope_value || null,
-        conditions: conditions || {},
+        conditions: { ...(conditions || {}), original_type: type },
         periode: periode || 'mensuel',
         plafond: plafond || null,
         actif: true,
-      }).select().single()
-      if (error) throw error
+      }
+
+      let { data, error } = await supabase.from('regles_primes').insert(insertPayload).select().single()
+
+      // If CHECK constraint fails (migration 118 not applied), fallback:
+      // store the real type in conditions.original_type and use 'fixe' as DB type
+      if (error && (error.message?.includes('check') || error.code === '23514')) {
+        insertPayload.type = 'fixe'
+        const retry = await supabase.from('regles_primes').insert(insertPayload).select().single()
+        data = retry.data
+        error = retry.error
+      }
+
+      if (error) {
+        console.error('[regles_primes] insert error:', error.message)
+        return NextResponse.json({ error: `Erreur DB: ${error.message}` }, { status: 500 })
+      }
       return NextResponse.json({ regle: data })
     }
 

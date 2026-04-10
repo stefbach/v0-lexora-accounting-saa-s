@@ -95,3 +95,60 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
+
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params
+    const supabaseAuth = await createServerClient()
+    const { data: { user } } = await supabaseAuth.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+
+    // Multi-tenant: verify user has access to this employee
+    const hasAccess = await userHasAccessToEmploye(user.id, id)
+    if (!hasAccess) return NextResponse.json({ error: 'Accès refusé à cet employé' }, { status: 403 })
+
+    const { searchParams } = new URL(request.url)
+    const mode = (searchParams.get('mode') || 'soft').toLowerCase()
+
+    const supabase = getAdminClient()
+
+    if (mode === 'hard') {
+      // Check if employee has any bulletins_paie records
+      const { count, error: countError } = await supabase
+        .from('bulletins_paie')
+        .select('*', { count: 'exact', head: true })
+        .eq('employe_id', id)
+      if (countError) throw countError
+
+      if ((count ?? 0) > 0) {
+        return NextResponse.json(
+          { error: `Impossible de supprimer: ${count} bulletin(s) existants. Utilisez la suppression soft.` },
+          { status: 409 }
+        )
+      }
+
+      // Hard delete - cascades to related tables via FK
+      const { error: delError } = await supabase
+        .from('employes')
+        .delete()
+        .eq('id', id)
+      if (delError) throw delError
+
+      return NextResponse.json({ success: true, mode: 'hard' })
+    }
+
+    // Default: soft delete - mark as departed
+    const today = new Date().toISOString().slice(0, 10)
+    const { data, error } = await supabase
+      .from('employes')
+      .update({ date_depart: today })
+      .eq('id', id)
+      .select()
+      .single()
+    if (error) throw error
+
+    return NextResponse.json({ success: true, mode: 'soft', employe: data })
+  } catch (e: unknown) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
+  }
+}
