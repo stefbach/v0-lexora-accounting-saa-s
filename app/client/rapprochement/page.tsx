@@ -297,10 +297,69 @@ Voulez-vous vraiment continuer ?`
     setAiProposals(prev => { const next = { ...prev }; delete next[key]; return next })
   }
 
+  // ── Agent déterministe (fallback sans LLM) ────────────────────────
+  const runDeterministicAgent = async (): Promise<void> => {
+    if (!societeId) return
+    setChatLoading(true)
+    try {
+      const res = await fetch('/api/comptable/rapprochement/agent/deterministic', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ societe_id: societeId }),
+      })
+      const data = await res.json()
+      const content = data.summary || data.message || data.error || 'Agent déterministe terminé.'
+      setChatMessages(prev => [...prev, { role: 'assistant', content, tool_calls: [] }])
+      if ((data.matched || 0) > 0) await load()
+    } catch (e: any) {
+      setChatMessages(prev => [...prev, { role: 'assistant', content: `❌ Erreur agent déterministe: ${e.message}` }])
+    } finally {
+      setChatLoading(false)
+    }
+  }
+
+  // ── Patterns apply ────────────────────────────────────────────────
+  const runApplyPatterns = async (): Promise<void> => {
+    if (!societeId) return
+    setChatLoading(true)
+    try {
+      const res = await fetch('/api/comptable/rapprochement/patterns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'apply', societe_id: societeId }),
+      })
+      const data = await res.json()
+      const content = data.message || data.error || 'Patterns appliqués.'
+      setChatMessages(prev => [...prev, { role: 'assistant', content, tool_calls: [] }])
+      if (res.ok) await load()
+    } catch (e: any) {
+      setChatMessages(prev => [...prev, { role: 'assistant', content: `❌ Erreur patterns: ${e.message}` }])
+    } finally {
+      setChatLoading(false)
+    }
+  }
+
   // ── Chat IA functions ──────────────────────────────────────────────
   const sendChatMessage = async (overrideText?: string) => {
     const text = overrideText || chatInput.trim()
     if (!text || !societeId || chatLoading) return
+
+    // Handle special chip actions without going through the LLM
+    if (text === 'Analyse toutes les transactions') {
+      const userMsg = { role: 'user' as const, content: text }
+      setChatMessages(prev => [...prev, userMsg])
+      setChatInput('')
+      await runDeterministicAgent()
+      return
+    }
+    if (text === 'Applique les patterns mémorisés') {
+      const userMsg = { role: 'user' as const, content: text }
+      setChatMessages(prev => [...prev, userMsg])
+      setChatInput('')
+      await runApplyPatterns()
+      return
+    }
+
     setChatInput('')
     const userMsg = { role: 'user' as const, content: text }
     const updatedMessages = [...chatMessages, userMsg]
@@ -316,11 +375,17 @@ Voulez-vous vraiment continuer ?`
         }),
       })
       const data = await res.json()
-      // Show specific error message for missing API key
-      let content = data.response || data.error || 'Erreur inconnue'
-      if (res.status === 503 || content.includes('ANTHROPIC_API_KEY')) {
-        content = '⚠️ Agent IA indisponible : la clé ANTHROPIC_API_KEY n\'est pas configurée dans les variables d\'environnement v0.app.\n\nVa dans v0.dev → Settings → Environment Variables → ajoute ANTHROPIC_API_KEY.'
+      // Fallback automatique vers agent déterministe si ANTHROPIC_API_KEY absent
+      if (res.status === 503 || (data.error || '').includes('ANTHROPIC_API_KEY')) {
+        setChatMessages(prev => [...prev, {
+          role: 'assistant',
+          content: '⚠️ ANTHROPIC_API_KEY non configurée — bascule automatique sur l\'agent déterministe…',
+          tool_calls: [],
+        }])
+        await runDeterministicAgent()
+        return
       }
+      let content = data.response || data.error || 'Erreur inconnue'
       const aiMsg = {
         role: 'assistant' as const,
         content,
@@ -1341,7 +1406,11 @@ Voulez-vous vraiment continuer ?`
               className="w-full text-white text-xs h-8"
               style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}
               disabled={chatLoading}
-              onClick={() => sendChatMessage("Lance une analyse complète du rapprochement bancaire : charge les patterns, liste les transactions non rapprochées, trouve les factures correspondantes, applique les matches certains et propose les ambigus.")}
+              onClick={() => {
+                const userMsg = { role: 'user' as const, content: '🤖 Lancer analyse complète (agent déterministe)' }
+                setChatMessages(prev => [...prev, userMsg])
+                runDeterministicAgent()
+              }}
             >
               <Sparkles className="w-3 h-3 mr-1" />
               🤖 Lancer analyse complète
