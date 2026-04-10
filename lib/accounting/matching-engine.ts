@@ -7,7 +7,7 @@
  * 3. CLOSE_AMOUNT (85%)     — amount within 2% + tiers match + date proximity
  * 4. GROUPED_SUM (85%)      — sum of N invoices = payment amount
  * 5. PARTIAL (70%)          — payment < invoice amount (acompte)
- * 6. HISTORICAL (80%)       — same tiers was matched this way before
+ * 6. HISTORICAL (80%)       — same tiers was matched this way before (learned pattern)
  */
 
 // Fallback FX rates MUR (used when taux not provided)
@@ -53,6 +53,19 @@ export type MatchStrategy =
   | 'grouped_sum'
   | 'partial'
   | 'historical'
+
+export interface HistoricalPattern {
+  id: string
+  tiers_banque: string
+  libelle_pattern: string | null
+  montant_min: number | null
+  montant_max: number | null
+  type_cible: string
+  cible_tiers: string | null
+  cible_compte: string | null
+  confidence_cumul: number
+  nb_utilisations: number
+}
 
 export interface MatchProposal {
   transaction: MatchingTransaction
@@ -232,20 +245,24 @@ function tryGroupedSum(tx: MatchingTransaction, factures: MatchingFacture[], rat
       }
       if (sum === 0) continue
       const diff = Math.abs(txAmountMUR - sum) / sum
-      if (diff > 0.05) continue // 5% tolerance for grouped (cross-currency)
+      if (diff > 0.08) continue // 8% tolerance — covers TDS/WHT deductions (5%) + bank fees
 
       const avgDelay = subset.reduce((s, f) => s + daysBetween(f.date_facture || '', tx.date), 0) / subset.length
       const maxTerms = Math.max(...subset.map(f => Number(f.conditions_paiement) || 30))
       const withinTerms = avgDelay <= maxTerms + 15
 
       const tiersName = subset[0].tiers || ''
+      // Boost confidence when diff looks like TDS/WHT (3-6% range is typical for Maurice)
+      const looksLikeTDS = diff >= 0.02 && diff <= 0.06
+      const baseConf = 0.87 - (diff * 1.5) + (withinTerms ? 0.05 : 0)
+      const conf = Math.min(0.96, looksLikeTDS ? baseConf + 0.08 : baseConf)
       return {
         transaction: tx,
         facture_ids: subset.map(f => f.id),
         factures: subset,
         strategy: 'grouped_sum',
-        confidence: 0.85 - (diff * 2) + (withinTerms ? 0.05 : 0),
-        reasoning: `${subset.length} factures de "${tiersName}" dont la somme MUR (${sum.toFixed(2)}) correspond au paiement${tx.devise !== 'MUR' ? ` [${tx.devise}→MUR]` : ''} ${diff < 0.005 ? 'exactement' : `(ecart ${(diff * 100).toFixed(1)}%)`}, delai moyen ${Math.round(avgDelay)}j`,
+        confidence: conf,
+        reasoning: `${subset.length} factures de "${tiersName}" dont la somme MUR (${sum.toFixed(2)}) correspond au paiement${tx.devise !== 'MUR' ? ` [${tx.devise}→MUR]` : ''} ${diff < 0.005 ? 'exactement' : `(ecart ${(diff * 100).toFixed(1)}%${looksLikeTDS ? ' — probable TDS/retenue' : ''})`}, delai moyen ${Math.round(avgDelay)}j`,
         amount_diff: Math.abs(txAmountMUR - sum),
         delay_days: Math.round(avgDelay),
         within_terms: withinTerms,
@@ -293,11 +310,92 @@ function tryPartial(tx: MatchingTransaction, factures: MatchingFacture[], rates?
   return best
 }
 
+// ═══ Strategy 6: Historical Pattern ═══
+function tryHistorical(
+  tx: MatchingTransaction,
+  factures: MatchingFacture[],
+  patterns: HistoricalPattern[],
+  rates?: Record<string, number>
+): MatchProposal | null {
+  if (!patterns || patterns.length === 0) return null
+
+  const txTiersNorm = normalize(tx.tiers_detecte || tx.libelle || '')
+  const txAmt = Math.max(tx.debit, tx.credit)
+
+  let bestPattern: HistoricalPattern | null = null
+  let bestScore = 0
+
+  for (const pattern of patterns) {
+    const score = tiersScore(txTiersNorm, pattern.tiers_banque)
+    if (score < 0.7) continue
+
+    // Check libelle_pattern if set
+    if (pattern.libelle_pattern) {
+      const libLower = (tx.libelle || '').toLowerCase()
+      if (!libLower.includes(pattern.libelle_pattern.toLowerCase())) continue
+    }
+
+    // Check amount range if set
+    const txAmtMUR = toMUR(txAmt, tx.devise, rates)
+    if (pattern.montant_min !== null && txAmtMUR < Number(pattern.montant_min)) continue
+    if (pattern.montant_max !== null && txAmtMUR > Number(pattern.montant_max)) continue
+
+    if (score > bestScore) {
+      bestScore = score
+      bestPattern = pattern
+    }
+  }
+
+  if (!bestPattern) return null
+
+  const txAmtMUR = toMUR(txAmt, tx.devise, rates)
+
+  // Try to find a matching facture using cible_tiers
+  if (bestPattern.cible_tiers) {
+    let bestFacture: MatchingFacture | null = null
+    let bestFactureDiff = Infinity
+
+    for (const f of factures) {
+      const tiersSim = tiersScore(normalize(f.tiers || ''), normalize(bestPattern.cible_tiers))
+      if (tiersSim < 0.6) continue
+      const fAmt = Number(f.montant_mur) || toMUR(Number(f.montant_ttc) || 0, f.devise, rates)
+      if (fAmt === 0) continue
+      const diff = Math.abs(txAmtMUR - fAmt) / fAmt
+      if (diff > 0.05) continue // 5% tolerance
+      if (diff < bestFactureDiff) {
+        bestFactureDiff = diff
+        bestFacture = f
+      }
+    }
+
+    if (bestFacture) {
+      const confidence = Math.min(0.99,
+        Number(bestPattern.confidence_cumul) + 0.01 * Math.min(Number(bestPattern.nb_utilisations), 10)
+      )
+      const delay = daysBetween(bestFacture.date_facture || '', tx.date)
+      return {
+        transaction: tx,
+        facture_ids: [bestFacture.id],
+        factures: [bestFacture],
+        strategy: 'historical',
+        confidence,
+        reasoning: `Pattern mémorisé: "${bestPattern.tiers_banque}" → "${bestPattern.cible_tiers}" (${bestPattern.nb_utilisations} util., conf. ${Math.round(Number(bestPattern.confidence_cumul) * 100)}%)`,
+        amount_diff: Math.abs(txAmtMUR - (Number(bestFacture.montant_mur) || toMUR(Number(bestFacture.montant_ttc) || 0, bestFacture.devise, rates))),
+        delay_days: delay,
+        within_terms: delay <= (Number(bestFacture.conditions_paiement) || 30) + 10,
+      }
+    }
+  }
+
+  return null
+}
+
 // ═══ Main engine ═══
 export function findBestMatch(
   tx: MatchingTransaction,
   candidateFactures: MatchingFacture[],
-  rates?: Record<string, number>
+  rates?: Record<string, number>,
+  patterns?: HistoricalPattern[]
 ): MatchProposal | null {
   // Filter by direction
   const isOutgoing = tx.debit > 0
@@ -310,8 +408,9 @@ export function findBestMatch(
   const strategies = [
     (t: MatchingTransaction, f: MatchingFacture[]) => tryExactReference(t, f, rates),
     (t: MatchingTransaction, f: MatchingFacture[]) => tryAmountAndTiers(t, f, rates),
-    tryGroupedSum,
-    tryPartial,
+    (t: MatchingTransaction, f: MatchingFacture[]) => tryGroupedSum(t, f, rates),
+    (t: MatchingTransaction, f: MatchingFacture[]) => tryPartial(t, f, rates),
+    (t: MatchingTransaction, f: MatchingFacture[]) => tryHistorical(t, f, patterns || [], rates),
   ]
 
   let best: MatchProposal | null = null
@@ -329,7 +428,8 @@ export function findBestMatch(
 export function analyzeAllTransactions(
   transactions: MatchingTransaction[],
   factures: MatchingFacture[],
-  rates?: Record<string, number>
+  rates?: Record<string, number>,
+  patterns?: HistoricalPattern[]
 ): MatchProposal[] {
   const proposals: MatchProposal[] = []
   const usedFactureIds = new Set<string>()
@@ -342,7 +442,7 @@ export function analyzeAllTransactions(
 
   for (const tx of sorted) {
     const available = factures.filter(f => !usedFactureIds.has(f.id))
-    const match = findBestMatch(tx, available, rates)
+    const match = findBestMatch(tx, available, rates, patterns)
     if (match && match.confidence >= 0.5) {
       proposals.push(match)
       for (const fid of match.facture_ids) usedFactureIds.add(fid)
