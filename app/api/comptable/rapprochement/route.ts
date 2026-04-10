@@ -351,7 +351,7 @@ export async function POST(request: Request) {
             statut: f.statut,
           }))
 
-          const proposals = analyzeAllTransactions(engineTxs, engineFactures)
+          const proposals = analyzeAllTransactions(engineTxs, engineFactures, rates)
 
           for (const proposal of proposals) {
             const i = proposal.transaction.transaction_idx

@@ -10,6 +10,17 @@
  * 6. HISTORICAL (80%)       — same tiers was matched this way before
  */
 
+// Fallback FX rates MUR (used when taux not provided)
+const FALLBACK_FX: Record<string, number> = {
+  EUR: 46.50, GBP: 54.20, USD: 44.80, MUR: 1,
+}
+
+export function toMUR(amount: number, devise: string | null, rates?: Record<string, number>): number {
+  if (!devise || devise === 'MUR') return amount
+  const r = rates || FALLBACK_FX
+  return amount * (r[devise.toUpperCase()] || FALLBACK_FX[devise.toUpperCase()] || 1)
+}
+
 export interface MatchingFacture {
   id: string
   numero_facture: string | null
@@ -94,16 +105,16 @@ function cleanRef(s: string): string {
 }
 
 // ═══ Strategy 1: Exact Reference ═══
-function tryExactReference(tx: MatchingTransaction, factures: MatchingFacture[]): MatchProposal | null {
+function tryExactReference(tx: MatchingTransaction, factures: MatchingFacture[], rates?: Record<string, number>): MatchProposal | null {
   const txRef = cleanRef(tx.libelle + ' ' + (tx.tiers_detecte || ''))
   for (const f of factures) {
     if (!f.numero_facture) continue
     const facRef = cleanRef(f.numero_facture)
     if (facRef.length < 3) continue
     if (txRef.includes(facRef)) {
-      const txAmount = Math.max(tx.debit, tx.credit)
-      const fAmount = Number(f.montant_mur) || Number(f.montant_ttc) || 0
-      const diff = fAmount > 0 ? Math.abs(txAmount - fAmount) / fAmount : 1
+      const txAmountMUR = toMUR(Math.max(tx.debit, tx.credit), tx.devise, rates)
+      const fAmount = Number(f.montant_mur) || toMUR(Number(f.montant_ttc) || 0, f.devise, rates)
+      const diff = fAmount > 0 ? Math.abs(txAmountMUR - fAmount) / fAmount : 1
       const delay = daysBetween(f.date_facture || '', tx.date)
       return {
         transaction: tx,
@@ -111,8 +122,8 @@ function tryExactReference(tx: MatchingTransaction, factures: MatchingFacture[])
         factures: [f],
         strategy: 'exact_reference',
         confidence: diff < 0.05 ? 1.0 : 0.9,
-        reasoning: `Reference "${f.numero_facture}" trouvee dans le libelle bancaire`,
-        amount_diff: Math.abs(txAmount - fAmount),
+        reasoning: `Reference "${f.numero_facture}" trouvee dans le libelle bancaire (montant ${tx.devise !== 'MUR' ? tx.devise + ' → MUR converti' : 'MUR'})`,
+        amount_diff: Math.abs(txAmountMUR - fAmount),
         delay_days: delay,
         within_terms: delay <= (Number(f.conditions_paiement) || 30) + 10,
       }
@@ -122,17 +133,20 @@ function tryExactReference(tx: MatchingTransaction, factures: MatchingFacture[])
 }
 
 // ═══ Strategy 2 & 3: Amount + Tiers ═══
-function tryAmountAndTiers(tx: MatchingTransaction, factures: MatchingFacture[]): MatchProposal | null {
-  const txAmount = Math.max(tx.debit, tx.credit)
+function tryAmountAndTiers(tx: MatchingTransaction, factures: MatchingFacture[], rates?: Record<string, number>): MatchProposal | null {
+  const txAmountMUR = toMUR(Math.max(tx.debit, tx.credit), tx.devise, rates)
   const txTiers = (tx.tiers_detecte || tx.libelle || '').toLowerCase()
-  if (txAmount === 0) return null
+  if (txAmountMUR === 0) return null
 
   let best: MatchProposal | null = null
   for (const f of factures) {
-    const fAmount = Number(f.montant_mur) || Number(f.montant_ttc) || 0
+    const fAmount = Number(f.montant_mur) || toMUR(Number(f.montant_ttc) || 0, f.devise, rates)
     if (fAmount === 0) continue
-    const diff = Math.abs(txAmount - fAmount) / fAmount
-    if (diff > 0.05) continue // > 5% difference, skip
+    const diff = Math.abs(txAmountMUR - fAmount) / fAmount
+    // Cross-currency: 5% tolerance; same currency: 1%
+    const sameCurrency = (tx.devise || 'MUR') === (f.devise || 'MUR')
+    const tolerance = sameCurrency ? 0.01 : 0.05
+    if (diff > tolerance) continue
 
     const score = tiersScore(txTiers, f.tiers || '')
     if (score < 0.4) continue
@@ -171,8 +185,8 @@ function tryAmountAndTiers(tx: MatchingTransaction, factures: MatchingFacture[])
         factures: [f],
         strategy,
         confidence: Math.min(1, Math.max(0, confidence)),
-        reasoning: `Tiers "${f.tiers}" (similarite ${Math.round(score * 100)}%), montant ${isExactAmount ? 'exact' : `ecart ${(diff * 100).toFixed(1)}%`}, delai ${delay}j ${withinTerms ? '(dans termes)' : '(hors termes)'}`,
-        amount_diff: Math.abs(txAmount - fAmount),
+        reasoning: `Tiers "${f.tiers}" (similarite ${Math.round(score * 100)}%), montant ${isExactAmount ? 'exact' : `ecart ${(diff * 100).toFixed(1)}%`}${tx.devise !== 'MUR' ? ` [${tx.devise}→MUR]` : ''}, delai ${delay}j ${withinTerms ? '(dans termes)' : '(hors termes)'}`,
+        amount_diff: Math.abs(txAmountMUR - fAmount),
         delay_days: delay,
         within_terms: withinTerms,
       }
@@ -182,10 +196,10 @@ function tryAmountAndTiers(tx: MatchingTransaction, factures: MatchingFacture[])
 }
 
 // ═══ Strategy 4: Grouped Sum ═══
-function tryGroupedSum(tx: MatchingTransaction, factures: MatchingFacture[]): MatchProposal | null {
-  const txAmount = Math.max(tx.debit, tx.credit)
+function tryGroupedSum(tx: MatchingTransaction, factures: MatchingFacture[], rates?: Record<string, number>): MatchProposal | null {
+  const txAmountMUR = toMUR(Math.max(tx.debit, tx.credit), tx.devise, rates)
   const txTiers = (tx.tiers_detecte || tx.libelle || '').toLowerCase()
-  if (txAmount === 0) return null
+  if (txAmountMUR === 0) return null
 
   // Group factures by tiers
   const byTiers = new Map<string, MatchingFacture[]>()
@@ -211,12 +225,12 @@ function tryGroupedSum(tx: MatchingTransaction, factures: MatchingFacture[]): Ma
       for (let i = 0; i < n; i++) {
         if (mask & (1 << i)) {
           subset.push(group[i])
-          sum += Number(group[i].montant_mur) || Number(group[i].montant_ttc) || 0
+          sum += Number(group[i].montant_mur) || toMUR(Number(group[i].montant_ttc) || 0, group[i].devise, rates)
         }
       }
       if (sum === 0) continue
-      const diff = Math.abs(txAmount - sum) / sum
-      if (diff > 0.03) continue // 3% tolerance for grouped
+      const diff = Math.abs(txAmountMUR - sum) / sum
+      if (diff > 0.05) continue // 5% tolerance for grouped (cross-currency)
 
       const avgDelay = subset.reduce((s, f) => s + daysBetween(f.date_facture || '', tx.date), 0) / subset.length
       const maxTerms = Math.max(...subset.map(f => Number(f.conditions_paiement) || 30))
@@ -229,8 +243,8 @@ function tryGroupedSum(tx: MatchingTransaction, factures: MatchingFacture[]): Ma
         factures: subset,
         strategy: 'grouped_sum',
         confidence: 0.85 - (diff * 2) + (withinTerms ? 0.05 : 0),
-        reasoning: `${subset.length} factures de "${tiersName}" dont la somme (${sum.toFixed(2)}) correspond au paiement ${diff < 0.005 ? 'exactement' : `(ecart ${(diff * 100).toFixed(1)}%)`}, delai moyen ${Math.round(avgDelay)}j`,
-        amount_diff: Math.abs(txAmount - sum),
+        reasoning: `${subset.length} factures de "${tiersName}" dont la somme MUR (${sum.toFixed(2)}) correspond au paiement${tx.devise !== 'MUR' ? ` [${tx.devise}→MUR]` : ''} ${diff < 0.005 ? 'exactement' : `(ecart ${(diff * 100).toFixed(1)}%)`}, delai moyen ${Math.round(avgDelay)}j`,
+        amount_diff: Math.abs(txAmountMUR - sum),
         delay_days: Math.round(avgDelay),
         within_terms: withinTerms,
       }
@@ -240,18 +254,18 @@ function tryGroupedSum(tx: MatchingTransaction, factures: MatchingFacture[]): Ma
 }
 
 // ═══ Strategy 5: Partial Payment (acompte) ═══
-function tryPartial(tx: MatchingTransaction, factures: MatchingFacture[]): MatchProposal | null {
-  const txAmount = Math.max(tx.debit, tx.credit)
+function tryPartial(tx: MatchingTransaction, factures: MatchingFacture[], rates?: Record<string, number>): MatchProposal | null {
+  const txAmountMUR = toMUR(Math.max(tx.debit, tx.credit), tx.devise, rates)
   const txTiers = (tx.tiers_detecte || tx.libelle || '').toLowerCase()
-  if (txAmount === 0) return null
+  if (txAmountMUR === 0) return null
 
   let best: MatchProposal | null = null
   for (const f of factures) {
-    const fAmount = Number(f.montant_mur) || Number(f.montant_ttc) || 0
+    const fAmount = Number(f.montant_mur) || toMUR(Number(f.montant_ttc) || 0, f.devise, rates)
     if (fAmount <= 0) continue
     // Payment must be smaller than invoice (partial) by 10-90%
-    if (txAmount >= fAmount) continue
-    const ratio = txAmount / fAmount
+    if (txAmountMUR >= fAmount) continue
+    const ratio = txAmountMUR / fAmount
     if (ratio < 0.1 || ratio > 0.9) continue
 
     const score = tiersScore(txTiers, f.tiers || '')
@@ -268,7 +282,7 @@ function tryPartial(tx: MatchingTransaction, factures: MatchingFacture[]): Match
         strategy: 'partial',
         confidence,
         reasoning: `Paiement partiel (${Math.round(ratio * 100)}% de la facture ${f.numero_facture || ''} de ${f.tiers || ''})`,
-        amount_diff: fAmount - txAmount,
+        amount_diff: fAmount - txAmountMUR,
         delay_days: delay,
         within_terms: delay <= (Number(f.conditions_paiement) || 30) + 15,
       }
@@ -280,7 +294,8 @@ function tryPartial(tx: MatchingTransaction, factures: MatchingFacture[]): Match
 // ═══ Main engine ═══
 export function findBestMatch(
   tx: MatchingTransaction,
-  candidateFactures: MatchingFacture[]
+  candidateFactures: MatchingFacture[],
+  rates?: Record<string, number>
 ): MatchProposal | null {
   // Filter by direction
   const isOutgoing = tx.debit > 0
@@ -291,8 +306,8 @@ export function findBestMatch(
 
   // Try strategies in order, return first match with confidence >= 0.5
   const strategies = [
-    tryExactReference,
-    tryAmountAndTiers,
+    (t: MatchingTransaction, f: MatchingFacture[]) => tryExactReference(t, f, rates),
+    (t: MatchingTransaction, f: MatchingFacture[]) => tryAmountAndTiers(t, f, rates),
     tryGroupedSum,
     tryPartial,
   ]
@@ -311,13 +326,12 @@ export function findBestMatch(
 
 export function analyzeAllTransactions(
   transactions: MatchingTransaction[],
-  factures: MatchingFacture[]
+  factures: MatchingFacture[],
+  rates?: Record<string, number>
 ): MatchProposal[] {
   const proposals: MatchProposal[] = []
   const usedFactureIds = new Set<string>()
 
-  // First pass: process transactions sorted by confidence potential
-  // (those with invoice refs in libelle first)
   const sorted = [...transactions].sort((a, b) => {
     const aHasRef = /[A-Z]{2,}-?\d+/.test(a.libelle || '') ? 1 : 0
     const bHasRef = /[A-Z]{2,}-?\d+/.test(b.libelle || '') ? 1 : 0
@@ -325,12 +339,10 @@ export function analyzeAllTransactions(
   })
 
   for (const tx of sorted) {
-    // Exclude already-used factures from candidates
     const available = factures.filter(f => !usedFactureIds.has(f.id))
-    const match = findBestMatch(tx, available)
+    const match = findBestMatch(tx, available, rates)
     if (match && match.confidence >= 0.5) {
       proposals.push(match)
-      // Reserve these factures
       for (const fid of match.facture_ids) usedFactureIds.add(fid)
     }
   }

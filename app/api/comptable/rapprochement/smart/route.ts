@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { analyzeAllTransactions, MatchingTransaction, MatchingFacture, MatchProposal } from '@/lib/accounting/matching-engine'
+import { getTauxChange } from '@/lib/taux-change'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 45
@@ -109,8 +110,11 @@ export async function POST(request: Request) {
       })
     }
 
-    // 3. Run the matching engine
-    const proposalsRaw: MatchProposal[] = analyzeAllTransactions(unmatchedTxs, factures)
+    // 3. Load FX rates for cross-currency matching
+    const rates = await getTauxChange()
+
+    // 4. Run the matching engine (with FX rates)
+    const proposalsRaw: MatchProposal[] = analyzeAllTransactions(unmatchedTxs, factures, rates)
 
     // 4. Format for API response
     const proposals = proposalsRaw.map(p => ({
