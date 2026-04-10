@@ -87,7 +87,7 @@ export async function POST(request: Request) {
       .eq('societe_id', societe_id)
       .in('statut', ['en_attente', 'retard', 'partiel'])
 
-    const factures: MatchingFacture[] = (facturesRaw || []).map(f => ({
+    let factures: MatchingFacture[] = (facturesRaw || []).map(f => ({
       id: f.id,
       numero_facture: f.numero_facture,
       tiers: f.tiers,
@@ -101,12 +101,52 @@ export async function POST(request: Request) {
       statut: f.statut,
     }))
 
+    // 2b. If no factures, fall back to écritures comptables 401/411 non lettrées
+    // (common when invoices are entered as journal entries, not via the factures module)
+    if (factures.length === 0) {
+      const { data: dossiers } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id)
+      const dossierIds = (dossiers || []).map((d: any) => d.id)
+      if (dossierIds.length > 0) {
+        const { data: ecritures } = await supabase
+          .from('ecritures_comptables_v2')
+          .select('id, numero_compte, description, libelle, debit_mur, credit_mur, date_ecriture, lettre, ref_folio')
+          .eq('societe_id', societe_id)
+          .is('lettre', null)
+          .or('numero_compte.like.401%,numero_compte.like.411%')
+          .order('date_ecriture', { ascending: false })
+          .limit(200)
+
+        // Convert écritures to MatchingFacture format
+        factures = (ecritures || []).map((e: any) => {
+          const isClient = e.numero_compte?.startsWith('411')
+          // Credit = facture fournisseur (401 credit), Debit = facture client (411 debit)
+          const montant = isClient
+            ? (Number(e.debit_mur) || 0)
+            : (Number(e.credit_mur) || 0)
+          const tiers = e.description || e.libelle || ''
+          return {
+            id: e.id,
+            numero_facture: e.ref_folio || null,
+            tiers: tiers.replace(/^(Facture|Paiement|Client|Fournisseur)\s*/i, '').trim() || tiers,
+            montant_ttc: montant,
+            montant_mur: montant,
+            devise: 'MUR',
+            date_facture: e.date_ecriture,
+            date_echeance: null,
+            conditions_paiement: 30,
+            type_facture: isClient ? 'client' : 'fournisseur',
+            statut: 'en_attente',
+          }
+        }).filter(f => f.montant_ttc > 0)
+      }
+    }
+
     if (factures.length === 0) {
       return NextResponse.json({
         proposals: [],
         stats: { total: unmatchedTxs.length, proposed: 0, auto_apply: 0, needs_arbitration: 0, orphans: unmatchedTxs.length },
         duration_ms: Date.now() - start,
-        message: 'Aucune facture impayee disponible',
+        message: 'Aucune facture ni écriture 401/411 non lettrée disponible',
       })
     }
 

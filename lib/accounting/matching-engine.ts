@@ -149,7 +149,9 @@ function tryAmountAndTiers(tx: MatchingTransaction, factures: MatchingFacture[],
     if (diff > tolerance) continue
 
     const score = tiersScore(txTiers, f.tiers || '')
-    if (score < 0.4) continue
+    // Lower threshold for short names (MyT, MRA, MCB...) — min 0.25 if name very short
+    const tiersSeuil = Math.min(f.tiers?.length || 99, tx.tiers_detecte?.length || 99) <= 5 ? 0.25 : 0.40
+    if (score < tiersSeuil) continue
 
     const delay = daysBetween(f.date_facture || '', tx.date)
     const terms = Number(f.conditions_paiement) || 30
