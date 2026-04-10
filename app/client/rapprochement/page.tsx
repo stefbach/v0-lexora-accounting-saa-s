@@ -9,7 +9,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Loader2, RefreshCw, Link2, Unlink, Zap, CheckCircle2, AlertCircle, ArrowRightLeft, Users, Building2, Search, ChevronDown, ChevronUp, Sparkles, Send, Bot, Wrench, X, MessageSquare } from "lucide-react"
+import { Loader2, RefreshCw, Link2, Unlink, Zap, CheckCircle2, AlertCircle, Users, Search, ChevronDown, ChevronUp, Sparkles, Send, Bot, Wrench, X, Target, BrainCircuit, BarChart3 } from "lucide-react"
+import { Progress } from "@/components/ui/progress"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import { MonthPicker } from "@/components/ui/MonthPicker"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -67,6 +69,15 @@ export default function ClientRapprochementPage() {
   const [smartResult, setSmartResult] = useState<any>(null)
   const [smartProposals, setSmartProposals] = useState<any[]>([])
   const [smartDialog, setSmartDialog] = useState<'summary' | 'list' | null>(null)
+  const [selectedSmartKeys, setSelectedSmartKeys] = useState<Set<string>>(new Set())
+  const [applyingSelection, setApplyingSelection] = useState(false)
+
+  // Toast state
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type })
+    setTimeout(() => setToast(null), 4000)
+  }
 
   const handleSmartRapprochement = async () => {
     if (!societeId) return
@@ -109,22 +120,44 @@ export default function ClientRapprochementPage() {
         }),
       })
       const data = await res.json()
-      if (!res.ok) { alert('Erreur apply: ' + (data.error || 'inconnue')); return }
-      const s = data.stats || {}
-      alert(
-        `Rapprochement Smart terminé :\n\n` +
-        `✅ ${data.applied} rapprochements appliqués\n` +
-        `⏭ ${data.skipped} ignorés (confiance insuffisante ou déjà traités)\n` +
-        (data.errors?.length > 0 ? `⚠️ ${data.errors.length} erreur(s)\n` : '') +
-        (s.consistency?.orphans > 0 ? `\n⚠️ ${s.consistency.orphans} facture(s) orpheline(s) détectée(s)` : '\n✅ Cohérence OK')
-      )
+      if (!res.ok) { showToast('Erreur apply: ' + (data.error || 'inconnue'), 'error'); return }
+      showToast(`✅ ${data.applied} rapprochements appliqués${data.skipped > 0 ? ` · ${data.skipped} ignorés` : ''}`)
       setSmartDialog(null)
       setSmartProposals([])
       setSmartResult(null)
+      setSelectedSmartKeys(new Set())
       await load()
     } catch (e: any) {
-      alert('Erreur reseau: ' + (e.message || ''))
+      showToast('Erreur reseau: ' + (e.message || ''), 'error')
     } finally { setSmartLoading(false) }
+  }
+
+  const handleSmartApplySelection = async () => {
+    if (!societeId || selectedSmartKeys.size === 0) return
+    const toApply = smartProposals.filter((_p: any, i: number) => selectedSmartKeys.has(String(i)))
+    if (toApply.length === 0) return
+    setApplyingSelection(true)
+    try {
+      const res = await fetch('/api/comptable/rapprochement/smart/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          societe_id: societeId,
+          proposals: toApply,
+          min_confidence: 0,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) { showToast('Erreur apply: ' + (data.error || 'inconnue'), 'error'); return }
+      showToast(`✅ ${data.applied} rapprochements appliqués`)
+      setSmartDialog(null)
+      setSmartProposals([])
+      setSmartResult(null)
+      setSelectedSmartKeys(new Set())
+      await load()
+    } catch (e: any) {
+      showToast('Erreur reseau: ' + (e.message || ''), 'error')
+    } finally { setApplyingSelection(false) }
   }
 
   const handleResetAll = async () => {
@@ -178,6 +211,36 @@ Voulez-vous vraiment continuer ?`
   const [rejectedProposals, setRejectedProposals] = useState<Set<string>>(new Set())
   const [applyingKey, setApplyingKey] = useState<string | null>(null)
   const [applyingBatch, setApplyingBatch] = useState(false)
+
+  // Open chat + auto-launch full analysis
+  const openAgentIA = () => {
+    if (!societeId) return
+    setChatOpen(true)
+    // Add a message immediately so the user sees activity
+    setTimeout(() => {
+      const prompt = 'Analyse toutes les transactions non rapprochées et applique les matches haute confiance'
+      setChatMessages(prev => {
+        // Avoid duplicating if already launched
+        if (prev.some(m => m.role === 'user' && m.content === prompt)) return prev
+        return [...prev, { role: 'user' as const, content: prompt }]
+      })
+      setChatLoading(true)
+      fetch('/api/comptable/rapprochement/agent/deterministic', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ societe_id: societeId }),
+      }).then(r => r.json()).then(data => {
+        const content = data.summary || data.message || data.error || 'Agent déterministe terminé.'
+        setChatMessages(prev => [...prev, { role: 'assistant' as const, content, tool_calls: [] }])
+        if ((data.matched || 0) > 0) {
+          load()
+          showToast(`✅ ${data.matched} transactions rapprochées par l'agent IA`)
+        }
+      }).catch((e: any) => {
+        setChatMessages(prev => [...prev, { role: 'assistant' as const, content: `❌ Erreur agent: ${e.message}`, tool_calls: [] }])
+      }).finally(() => setChatLoading(false))
+    }, 100)
+  }
 
   const proposalKey = (releve_id: string, idx: number) => `${releve_id}:${idx}`
 
@@ -248,14 +311,15 @@ Voulez-vous vraiment continuer ?`
       })
       const data = await res.json()
       if (!res.ok || !data.result?.success) {
-        alert("Erreur: " + (data.result?.error || data.error || "inconnue"))
+        showToast("Erreur: " + (data.result?.error || data.error || "inconnue"), 'error')
         return
       }
+      showToast("✅ Rapprochement appliqué")
       // Remove from proposals
       setAiProposals(prev => { const next = { ...prev }; delete next[key]; return next })
       await load()
     } catch (e: any) {
-      alert("Erreur reseau: " + (e.message || ""))
+      showToast("Erreur reseau: " + (e.message || ""), 'error')
     } finally { setApplyingKey(null) }
   }
 
@@ -286,9 +350,10 @@ Voulez-vous vraiment continuer ?`
         })
         setAiProposals(prev => { const next = { ...prev }; delete next[key]; return next })
       }
+      showToast(`✅ ${highConf.length} rapprochements appliqués`)
       await load()
     } catch (e: any) {
-      alert("Erreur: " + (e.message || ""))
+      showToast("Erreur: " + (e.message || ""), 'error')
     } finally { setApplyingBatch(false) }
   }
 
@@ -454,7 +519,10 @@ Voulez-vous vraiment continuer ?`
       await new Promise(r => setTimeout(r, 500))
       setAutoStep("")
       console.log('[rapprochement] auto_rapprocher response:', d)
-      setAutoResult({ matched: d.matched || 0, total: d.total || 0, interne: d.interne || 0, frais_bancaires: d.frais_bancaires || 0, salaire_bulk: d.salaire_bulk || 0, mra: d.mra || 0, not_matched: d.not_matched || 0, total_classified: d.total_classified || 0, matches: d.matches || [] })
+      const result = { matched: d.matched || 0, total: d.total || 0, interne: d.interne || 0, frais_bancaires: d.frais_bancaires || 0, salaire_bulk: d.salaire_bulk || 0, mra: d.mra || 0, not_matched: d.not_matched || 0, total_classified: d.total_classified || 0, matches: d.matches || [] }
+      setAutoResult(result)
+      const totalDone = (result.matched || 0) + (result.interne || 0) + (result.frais_bancaires || 0) + (result.salaire_bulk || 0) + (result.mra || 0)
+      if (totalDone > 0) showToast(`✅ ${totalDone} transactions classifiées (${result.frais_bancaires} frais · ${result.mra} MRA · ${result.salaire_bulk} salaires · ${result.matched} factures)`)
       load()
     } catch { setAutoStep(""); setAutoResult({ matched: 0, total: 0, interne: 0, frais_bancaires: 0, salaire_bulk: 0, mra: 0, not_matched: 0, total_classified: 0, matches: [] }) }
     finally { setAutoMatching(false) }
@@ -640,6 +708,15 @@ Voulez-vous vraiment continuer ?`
 
   return (
     <div className="p-6 space-y-6">
+      {/* Toast notification */}
+      {toast && (
+        <div className={`fixed top-4 right-4 z-[100] flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg text-sm font-medium transition-all ${toast.type === 'error' ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white'}`}>
+          {toast.type === 'error' ? <AlertCircle className="w-4 h-4 shrink-0" /> : <CheckCircle2 className="w-4 h-4 shrink-0" />}
+          <span>{toast.message}</span>
+          <button onClick={() => setToast(null)} className="ml-2 opacity-70 hover:opacity-100"><X className="w-3.5 h-3.5" /></button>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[#0B0F2E]">Rapprochement bancaire</h1>
@@ -655,33 +732,103 @@ Voulez-vous vraiment continuer ?`
             </Select>
           )}
           <Button variant="outline" onClick={load}><RefreshCw className="w-4 h-4 mr-2" />Actualiser</Button>
-          <Button onClick={handleAutoMatch} disabled={autoMatching} className="bg-[#0B0F2E]">
-            <Zap className={`w-4 h-4 mr-2 ${autoMatching ? "animate-spin" : ""}`} />
-            {autoMatching ? "Analyse..." : "Rapprochement auto"}
-          </Button>
-          <Button onClick={handleSmartRapprochement} disabled={smartLoading || !societeId} className="text-white" style={{ background: "linear-gradient(135deg, #059669, #0891b2)" }}>
-            <Search className={`w-4 h-4 mr-2 ${smartLoading ? "animate-spin" : ""}`} />
-            {smartLoading ? "Analyse..." : "🎯 Rapprochement Smart"}
-          </Button>
-          <Button onClick={runAiAnalysis} disabled={aiAnalyzing || !societeId} className="text-white" style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}>
-            <Sparkles className={`w-4 h-4 mr-2 ${aiAnalyzing ? "animate-spin" : ""}`} />
-            {aiAnalyzing ? "Analyse IA..." : "Analyser avec IA"}
-          </Button>
-          <Button
-            onClick={() => setChatOpen(true)}
-            disabled={!societeId}
-            className="text-white"
-            style={{ background: "linear-gradient(135deg, #0891b2, #0e7490)" }}
-          >
-            <MessageSquare className="w-4 h-4 mr-2" />
-            💬 Chat IA
-          </Button>
           <Button onClick={handleResetAll} disabled={resetting || !societeId} variant="outline" className="border-red-300 text-red-600 hover:bg-red-50">
             {resetting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Unlink className="w-4 h-4 mr-2" />}
-            Tout reinitialiser
+            Réinitialiser
           </Button>
         </div>
       </div>
+
+      {/* ── 3-Card Rapprochement Section ─────────────────────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {/* Card 1 — Règles auto */}
+        <button
+          disabled={autoMatching || !societeId}
+          onClick={handleAutoMatch}
+          className="group text-left rounded-xl border-2 border-gray-200 hover:border-[#0B0F2E] hover:shadow-md bg-white p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          <div className="flex items-start gap-3">
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+              {autoMatching ? <Loader2 className="w-5 h-5 text-white animate-spin" /> : <Zap className="w-5 h-5 text-white" />}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-sm text-[#0B0F2E]">⚡ Règles auto</p>
+              <p className="text-xs text-gray-500 mt-0.5">MCB, MRA, salaires, virements</p>
+              <p className="text-[11px] text-blue-600 font-medium mt-1.5">Rapide · ~2s</p>
+            </div>
+          </div>
+          {autoMatching && autoStep && (
+            <p className="text-xs text-blue-600 mt-2 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" />{autoStep}</p>
+          )}
+        </button>
+
+        {/* Card 2 — Smart IA heuristique */}
+        <button
+          disabled={smartLoading || !societeId}
+          onClick={handleSmartRapprochement}
+          className="group text-left rounded-xl border-2 border-gray-200 hover:border-emerald-500 hover:shadow-md bg-white p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          <div className="flex items-start gap-3">
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+              {smartLoading ? <Loader2 className="w-5 h-5 text-white animate-spin" /> : <Target className="w-5 h-5 text-white" />}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-sm text-[#0B0F2E]">🎯 Smart (IA heuristique)</p>
+              <p className="text-xs text-gray-500 mt-0.5">Factures + matching multi-stratégie</p>
+              <p className="text-[11px] text-emerald-600 font-medium mt-1.5">Propositions · ~5s</p>
+            </div>
+          </div>
+          {smartLoading && (
+            <p className="text-xs text-emerald-600 mt-2 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" />Analyse en cours...</p>
+          )}
+        </button>
+
+        {/* Card 3 — Agent IA */}
+        <button
+          disabled={!societeId}
+          onClick={openAgentIA}
+          className="group text-left rounded-xl border-2 border-gray-200 hover:border-violet-500 hover:shadow-md bg-white p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          <div className="flex items-start gap-3">
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+              <BrainCircuit className="w-5 h-5 text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-sm text-[#0B0F2E]">🤖 Agent IA</p>
+              <p className="text-xs text-gray-500 mt-0.5">Analyse complète + chat interactif</p>
+              <p className="text-[11px] text-violet-600 font-medium mt-1.5">Complet · ~30s</p>
+            </div>
+          </div>
+        </button>
+      </div>
+
+      {/* ── Global progress bar ───────────────────────────────────────────── */}
+      {transactions.length > 0 && (
+        <Card className="border border-gray-100 shadow-sm">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-[#0B0F2E]" />
+                <span className="text-sm font-semibold text-[#0B0F2E]">Progression du rapprochement</span>
+              </div>
+              <span className="text-sm font-bold text-[#0B0F2E]">
+                {transactions.length > 0 ? Math.round(((matched.length + interne.length) / transactions.length) * 100) : 0}%
+              </span>
+            </div>
+            <Progress
+              value={transactions.length > 0 ? Math.round(((matched.length + interne.length) / transactions.length) * 100) : 0}
+              className="h-3 bg-gray-100"
+            />
+            <div className="flex flex-wrap gap-3 mt-2 text-xs text-gray-500">
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />{matched.length} rapprochées</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block" />{interne.length} internes</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400 inline-block" />{proposed.length} à valider</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400 inline-block" />{unmatched.length} orphelines</span>
+              <span className="flex items-center gap-1 ml-auto font-medium text-[#0B0F2E]">{matched.length + interne.length} / {transactions.length} total</span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Filters row: Month + Compte + Période */}
       <div className="flex flex-wrap items-center gap-3">
@@ -1245,18 +1392,22 @@ Voulez-vous vraiment continuer ?`
           </DialogHeader>
           {smartResult && (
             <div className="space-y-4">
+              {/* 3-column breakdown */}
               <div className="grid grid-cols-3 gap-3 text-center">
-                <div className="bg-green-50 rounded-lg p-3">
+                <div className="bg-green-50 border border-green-200 rounded-xl p-3">
                   <p className="text-2xl font-bold text-green-700">{smartResult.auto_apply || 0}</p>
-                  <p className="text-xs text-green-600">Haute confiance (≥85%)</p>
+                  <p className="text-xs font-medium text-green-600 mt-0.5">✅ Auto (≥85%)</p>
+                  <p className="text-[10px] text-green-500 mt-0.5">Haute confiance</p>
                 </div>
-                <div className="bg-orange-50 rounded-lg p-3">
-                  <p className="text-2xl font-bold text-orange-700">{smartResult.needs_arbitration || 0}</p>
-                  <p className="text-xs text-orange-600">À valider manuellement</p>
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                  <p className="text-2xl font-bold text-amber-700">{smartResult.needs_arbitration || 0}</p>
+                  <p className="text-xs font-medium text-amber-600 mt-0.5">⚠️ À valider (65–85%)</p>
+                  <p className="text-[10px] text-amber-500 mt-0.5">Arbitrage manuel</p>
                 </div>
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-2xl font-bold text-gray-700">{smartResult.orphans || 0}</p>
-                  <p className="text-xs text-gray-500">Orphelins</p>
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-3">
+                  <p className="text-2xl font-bold text-gray-600">{smartResult.orphans || 0}</p>
+                  <p className="text-xs font-medium text-gray-500 mt-0.5">❌ Orphelins</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">Sans correspondance</p>
                 </div>
               </div>
               {(smartResult.pre_classified || 0) > 0 && (
@@ -1268,7 +1419,7 @@ Voulez-vous vraiment continuer ?`
                 </div>
               )}
               <p className="text-sm text-gray-500 text-center">
-                {smartResult.proposed || 0} match{smartResult.proposed !== 1 ? 'es' : ''} proposé{smartResult.proposed !== 1 ? 's' : ''} sur {smartResult.total || 0} transaction{smartResult.total !== 1 ? 's' : ''} non-rapprochée{smartResult.total !== 1 ? 's' : ''}
+                {smartResult.proposed || 0} proposition{(smartResult.proposed || 0) !== 1 ? 's' : ''} sur {smartResult.total || 0} transaction{(smartResult.total || 0) !== 1 ? 's' : ''} non-rapprochée{(smartResult.total || 0) !== 1 ? 's' : ''}
               </p>
               <div className="flex flex-col gap-2">
                 <Button
@@ -1278,16 +1429,16 @@ Voulez-vous vraiment continuer ?`
                   style={{ background: "linear-gradient(135deg, #059669, #0891b2)" }}
                 >
                   {smartLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Zap className="w-4 h-4 mr-2" />}
-                  Appliquer tout (≥85%) — {smartResult.auto_apply || 0} rapprochements
+                  Appliquer tout ≥85% — {smartResult.auto_apply || 0} rapprochements
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={() => setSmartDialog('list')}
+                  onClick={() => { setSelectedSmartKeys(new Set()); setSmartDialog('list') }}
                   disabled={(smartProposals.length || 0) === 0}
                   className="w-full"
                 >
                   <Search className="w-4 h-4 mr-2" />
-                  Voir les propositions ({smartProposals.length})
+                  Voir et sélectionner ({smartProposals.length})
                 </Button>
                 <Button variant="ghost" onClick={() => setSmartDialog(null)} className="w-full">
                   Annuler
@@ -1299,11 +1450,11 @@ Voulez-vous vraiment continuer ?`
       </Dialog>
 
       <Dialog open={smartDialog === 'list'} onOpenChange={(o) => { if (!o) setSmartDialog('summary') }}>
-        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
+          <DialogHeader className="shrink-0">
             <DialogTitle>🎯 Propositions Smart ({smartProposals.length})</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="flex-1 overflow-y-auto space-y-4 pr-1">
             {/* Section règles auto (pre_classified) */}
             {smartProposals.some((p: any) => p.pre_classified) && (
               <div>
@@ -1312,30 +1463,39 @@ Voulez-vous vraiment continuer ?`
                 </p>
                 <div className="space-y-1.5">
                   {smartProposals.filter((p: any) => p.pre_classified).map((p: any, idx: number) => {
-                    const typeConfig: Record<string, { label: string; icon: string; color: string }> = {
-                      frais_bancaires:    { label: 'Frais bancaires', icon: '🏦', color: 'bg-gray-100 text-gray-700 border-gray-200' },
-                      paiement_mra:       { label: 'MRA', icon: '🏛️', color: 'bg-red-50 text-red-700 border-red-200' },
-                      salaire_individuel: { label: 'Salaire', icon: '👤', color: 'bg-green-50 text-green-700 border-green-200' },
-                      salaire_bulk:       { label: 'Salaires bulk', icon: '👥', color: 'bg-green-50 text-green-700 border-green-200' },
-                      transfert_interne:  { label: 'Interne', icon: '🔄', color: 'bg-blue-50 text-blue-700 border-blue-200' },
-                      associe:            { label: 'Associé', icon: '🤝', color: 'bg-purple-50 text-purple-700 border-purple-200' },
+                    const globalIdx = smartProposals.indexOf(p)
+                    const key = String(globalIdx)
+                    const isSelected = selectedSmartKeys.has(key)
+                    const typeConfig: Record<string, { label: string; icon: string; color: string; badgeColor: string }> = {
+                      frais_bancaires:    { label: 'Frais bancaires', icon: '🏦', color: 'bg-gray-50 border-gray-200', badgeColor: 'bg-gray-100 text-gray-700' },
+                      paiement_mra:       { label: 'MRA', icon: '🏛️', color: 'bg-red-50 border-red-200', badgeColor: 'bg-red-100 text-red-700' },
+                      salaire_individuel: { label: 'Salaire', icon: '👤', color: 'bg-green-50 border-green-200', badgeColor: 'bg-green-100 text-green-700' },
+                      salaire_bulk:       { label: 'Salaires bulk', icon: '👥', color: 'bg-green-50 border-green-200', badgeColor: 'bg-green-100 text-green-700' },
+                      transfert_interne:  { label: 'Interne', icon: '🔄', color: 'bg-blue-50 border-blue-200', badgeColor: 'bg-blue-100 text-blue-700' },
+                      associe:            { label: 'Associé', icon: '🤝', color: 'bg-purple-50 border-purple-200', badgeColor: 'bg-purple-100 text-purple-700' },
                     }
-                    const cfg = typeConfig[p.match_type] || { label: p.match_type, icon: '🏷️', color: 'bg-gray-50 text-gray-700 border-gray-200' }
+                    const cfg = typeConfig[p.match_type] || { label: p.match_type, icon: '🏷️', color: 'bg-gray-50 border-gray-200', badgeColor: 'bg-gray-100 text-gray-700' }
                     return (
-                      <div key={`rule-${idx}`} className={`border rounded-lg p-3 text-sm ${cfg.color}`}>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-medium truncate max-w-[220px]">{p.transaction?.libelle || '—'}</span>
-                          <Badge variant="outline" className={`text-xs ${cfg.color}`}>
-                            {cfg.icon} {cfg.label}
-                          </Badge>
-                        </div>
-                        <div className="flex justify-between text-xs opacity-70">
-                          <span>{p.transaction?.date || '—'}</span>
-                          <span className="font-mono">{p.transaction?.debit ? `-${fmt(p.transaction.debit)}` : `+${fmt(p.transaction?.credit || 0)}`} MUR</span>
-                        </div>
-                        <div className="mt-1 text-xs opacity-60 italic">{p.reasoning}</div>
-                        <div className="mt-1">
-                          <span className="text-xs font-medium opacity-80">Appliquer (règle auto)</span>
+                      <div key={`rule-${idx}`}
+                        onClick={() => {
+                          const next = new Set(selectedSmartKeys)
+                          if (next.has(key)) next.delete(key); else next.add(key)
+                          setSelectedSmartKeys(next)
+                        }}
+                        className={`border rounded-lg p-3 text-sm cursor-pointer transition-all ${isSelected ? 'border-emerald-400 bg-emerald-50 ring-1 ring-emerald-300' : cfg.color}`}>
+                        <div className="flex items-start gap-2">
+                          <Checkbox checked={isSelected} className="mt-0.5 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2 mb-1">
+                              <span className="font-medium truncate max-w-[220px] text-sm">{p.transaction?.libelle || '—'}</span>
+                              <Badge className={`text-[10px] shrink-0 ${cfg.badgeColor}`}>{cfg.icon} {cfg.label}</Badge>
+                            </div>
+                            <div className="flex justify-between text-xs text-gray-500">
+                              <span>{p.transaction?.date || '—'}</span>
+                              <span className="font-mono font-semibold">{p.transaction?.debit ? `-${fmt(p.transaction.debit)}` : `+${fmt(p.transaction?.credit || 0)}`} MUR</span>
+                            </div>
+                            {p.reasoning && <p className="mt-1 text-[11px] text-gray-400 italic">{p.reasoning}</p>}
+                          </div>
                         </div>
                       </div>
                     )
@@ -1349,35 +1509,92 @@ Voulez-vous vraiment continuer ?`
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 px-1">
                   🔍 Matching heuristique ({smartProposals.filter((p: any) => !p.pre_classified).length})
                 </p>
-                <div className="space-y-1.5">
-                  {smartProposals.filter((p: any) => !p.pre_classified).map((p: any, idx: number) => (
-                    <div key={`engine-${idx}`} className={`border rounded-lg p-3 text-sm ${p.confidence >= 0.85 ? 'border-green-200 bg-green-50' : 'border-orange-200 bg-orange-50'}`}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-medium truncate max-w-[200px]">{p.transaction?.libelle || '—'}</span>
-                        <Badge className={p.confidence >= 0.85 ? 'bg-green-600' : 'bg-orange-500'}>
-                          {Math.round(p.confidence * 100)}%
-                        </Badge>
+                <div className="space-y-2">
+                  {smartProposals.filter((p: any) => !p.pre_classified).map((p: any, idx: number) => {
+                    const globalIdx = smartProposals.indexOf(p)
+                    const key = String(globalIdx)
+                    const isSelected = selectedSmartKeys.has(key)
+                    const conf = Math.round((p.confidence || 0) * 100)
+                    const isHigh = conf >= 85
+                    const isMid = conf >= 65 && conf < 85
+                    const strategyBadge: Record<string, { label: string; color: string }> = {
+                      exact_reference: { label: 'Réf. exacte', color: 'bg-emerald-100 text-emerald-700' },
+                      exact_ref:       { label: 'Réf. exacte', color: 'bg-emerald-100 text-emerald-700' },
+                      exact_amount:    { label: 'Montant exact', color: 'bg-blue-100 text-blue-700' },
+                      close_amount:    { label: 'Montant proche', color: 'bg-yellow-100 text-yellow-700' },
+                      grouped_sum:     { label: 'Paiement groupé', color: 'bg-violet-100 text-violet-700' },
+                      historical:      { label: 'Historique', color: 'bg-orange-100 text-orange-700' },
+                      rule_based:      { label: 'Règle', color: 'bg-gray-100 text-gray-700' },
+                    }
+                    const strat = strategyBadge[p.strategy || p.match_type || ''] || { label: p.strategy || '—', color: 'bg-gray-100 text-gray-600' }
+                    const txAmt = p.transaction?.debit || p.transaction?.credit || 0
+                    const facAmt = p.factures?.reduce((s: number, f: any) => s + (Number(f.montant_ttc) || 0), 0) || 0
+                    const ecart = txAmt > 0 && facAmt > 0 ? Math.abs((txAmt - facAmt) / txAmt * 100).toFixed(1) : null
+                    return (
+                      <div key={`engine-${idx}`}
+                        onClick={() => {
+                          const next = new Set(selectedSmartKeys)
+                          if (next.has(key)) next.delete(key); else next.add(key)
+                          setSelectedSmartKeys(next)
+                        }}
+                        className={`border-2 rounded-lg p-3 text-sm cursor-pointer transition-all ${isSelected ? 'border-emerald-400 bg-emerald-50 ring-1 ring-emerald-300' : isHigh ? 'border-green-200 bg-green-50/40 hover:border-green-300' : 'border-amber-200 bg-amber-50/30 hover:border-amber-300'}`}>
+                        <div className="flex items-start gap-2">
+                          <Checkbox checked={isSelected} className="mt-0.5 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            {/* Header row */}
+                            <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                              <span className="font-semibold text-sm truncate max-w-[200px]">{p.transaction?.libelle || '—'}</span>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <Badge className={`text-[10px] ${strat.color}`}>{strat.label}</Badge>
+                                <Badge className={`text-[10px] ${isHigh ? 'bg-green-600 text-white' : isMid ? 'bg-amber-500 text-white' : 'bg-gray-400 text-white'}`}>{conf}%</Badge>
+                              </div>
+                            </div>
+                            {/* Confidence bar */}
+                            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden mb-2">
+                              <div className={`h-full rounded-full transition-all ${isHigh ? 'bg-green-500' : isMid ? 'bg-amber-400' : 'bg-red-400'}`} style={{ width: `${conf}%` }} />
+                            </div>
+                            {/* Tiers matching arrow */}
+                            <div className="flex items-center gap-1.5 text-xs mb-1.5">
+                              <span className="text-gray-600 truncate max-w-[100px]">{p.transaction?.tiers_detecte || p.transaction?.libelle?.slice(0, 20) || '—'}</span>
+                              <span className="text-gray-400 shrink-0">→</span>
+                              <span className="text-gray-600 truncate max-w-[120px]">{p.factures?.map((f: any) => f.tiers || f.numero_facture).join(', ') || '—'}</span>
+                            </div>
+                            {/* Amount comparison */}
+                            <div className="flex items-center gap-2 text-xs">
+                              <span className="font-mono font-medium text-gray-700">{p.transaction?.debit ? `-${fmt(p.transaction.debit)}` : `+${fmt(p.transaction?.credit || 0)}`} MUR</span>
+                              {facAmt > 0 && <><span className="text-gray-400">vs</span><span className="font-mono text-gray-500">{fmt(facAmt)} MUR</span></>}
+                              {ecart && Number(ecart) > 0 && <Badge className={`text-[9px] ${Number(ecart) < 5 ? 'bg-blue-50 text-blue-600' : 'bg-orange-50 text-orange-600'}`}>écart {ecart}%</Badge>}
+                            </div>
+                            {/* Reasoning */}
+                            {p.reasoning && <p className="mt-1.5 text-[11px] text-gray-400 italic leading-snug">{p.reasoning}</p>}
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex justify-between text-xs text-gray-600">
-                        <span>{p.transaction?.date || '—'}</span>
-                        <span className="font-mono">{p.transaction?.debit ? `-${fmt(p.transaction.debit)}` : `+${fmt(p.transaction?.credit || 0)}`} MUR</span>
-                      </div>
-                      <div className="mt-1 text-xs text-gray-500">
-                        <span className="font-medium">Facture(s) :</span> {p.factures?.map((f: any) => f.numero_facture || f.tiers).join(', ') || '—'}
-                      </div>
-                      <div className="mt-1 text-xs text-gray-400 italic">{p.reasoning}</div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
             )}
           </div>
-          <div className="flex gap-2 pt-2 sticky bottom-0 bg-white border-t">
-            <Button onClick={handleSmartApplyAll} disabled={smartLoading || (smartResult?.auto_apply || 0) === 0} className="flex-1 text-white" style={{ background: "linear-gradient(135deg, #059669, #0891b2)" }}>
-              {smartLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Zap className="w-4 h-4 mr-2" />}
-              Appliquer (≥85%)
+          <div className="flex gap-2 pt-3 border-t shrink-0 flex-wrap">
+            <Button
+              onClick={handleSmartApplyAll}
+              disabled={smartLoading || (smartResult?.auto_apply || 0) === 0}
+              className="flex-1 text-white text-xs"
+              style={{ background: "linear-gradient(135deg, #059669, #0891b2)" }}
+            >
+              {smartLoading ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Zap className="w-3 h-3 mr-1" />}
+              Appliquer ≥85% ({smartResult?.auto_apply || 0})
             </Button>
-            <Button variant="outline" onClick={() => setSmartDialog('summary')} className="flex-1">Retour</Button>
+            <Button
+              onClick={handleSmartApplySelection}
+              disabled={applyingSelection || selectedSmartKeys.size === 0}
+              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
+            >
+              {applyingSelection ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <CheckCircle2 className="w-3 h-3 mr-1" />}
+              Appliquer sélection ({selectedSmartKeys.size})
+            </Button>
+            <Button variant="outline" onClick={() => setSmartDialog('summary')} className="flex-1 text-xs">Retour</Button>
           </div>
         </DialogContent>
       </Dialog>
