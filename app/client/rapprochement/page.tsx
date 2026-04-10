@@ -53,6 +53,52 @@ export default function ClientRapprochementPage() {
   const [selectedPeriode, setSelectedPeriode] = useState('2025-2026')
   const [associes, setAssocies] = useState<any[]>([])
 
+  // Reset state
+  const [resetting, setResetting] = useState(false)
+
+  const handleResetAll = async () => {
+    if (!societeId) return
+    const msg = `⚠️ REINITIALISATION COMPLETE du rapprochement
+
+Cette action va :
+- Supprimer TOUTES les ecritures de factures (FAC-*) et paiements (BANK-*)
+- Remettre TOUTES les factures a "en attente"
+- Effacer le lettrage de TOUTES les transactions bancaires
+- Effacer les liens rapprochement des factures
+
+Puis vous pourrez regenerer les ecritures proprement avec le bouton "Generer ecritures comptables" sur la page Fournisseurs.
+
+Voulez-vous vraiment continuer ?`
+    if (!confirm(msg)) return
+    if (!confirm("Derniere confirmation : cette action est irreversible. Continuer ?")) return
+    setResetting(true)
+    try {
+      const res = await fetch("/api/comptable/rapprochement/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ societe_id: societeId, confirm: "RESET" }),
+      })
+      const data = await res.json()
+      if (!res.ok) { alert("Erreur : " + (data.error || "inconnue")); return }
+      const s = data.stats || {}
+      alert(
+        "Reset complet effectue :\n\n" +
+        `- ${s.ecritures_factures_supprimees} ecritures de factures supprimees\n` +
+        `- ${s.ecritures_paiements_supprimees} ecritures de paiements supprimees\n` +
+        `- ${s.ecritures_legacy_supprimees} ecritures legacy supprimees\n` +
+        `- ${s.factures_reset} factures remises a en_attente\n` +
+        `- ${s.transactions_reset} transactions bancaires delettrees\n\n` +
+        "Prochaine etape : allez sur /client/fournisseurs et cliquez 'Generer ecritures comptables' pour repartir d'un etat propre."
+      )
+      await load()
+      setAiProposals({})
+      setAiStats(null)
+      setRejectedProposals(new Set())
+    } catch (e: any) {
+      alert("Erreur reseau : " + (e.message || ""))
+    } finally { setResetting(false) }
+  }
+
   // Agent IA state — inline analysis (no chat)
   const [aiAnalyzing, setAiAnalyzing] = useState(false)
   const [aiProposals, setAiProposals] = useState<Record<string, any>>({}) // keyed by releve_id:idx
@@ -433,6 +479,10 @@ export default function ClientRapprochementPage() {
           <Button onClick={runAiAnalysis} disabled={aiAnalyzing || !societeId} className="text-white" style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}>
             <Sparkles className={`w-4 h-4 mr-2 ${aiAnalyzing ? "animate-spin" : ""}`} />
             {aiAnalyzing ? "Analyse IA..." : "Analyser avec IA"}
+          </Button>
+          <Button onClick={handleResetAll} disabled={resetting || !societeId} variant="outline" className="border-red-300 text-red-600 hover:bg-red-50">
+            {resetting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Unlink className="w-4 h-4 mr-2" />}
+            Tout reinitialiser
           </Button>
         </div>
       </div>
