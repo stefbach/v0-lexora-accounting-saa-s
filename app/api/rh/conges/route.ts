@@ -467,6 +467,41 @@ export async function POST(request: Request) {
     }
 
     // ---- ACTION: creer (create leave request) ----
+    // ---- ACTION: modifier_demande (edit pending leave request) ----
+    if (action === 'modifier_demande') {
+      const { id, date_debut, date_fin, type_conge, motif, demi_journee } = body
+      if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
+
+      // Check the request exists and is pending
+      const { data: existing } = await supabase.from('demandes_conges').select('*').eq('id', id).single()
+      if (!existing) return NextResponse.json({ error: 'Demande non trouvee' }, { status: 404 })
+      if (existing.statut !== 'en_attente') {
+        return NextResponse.json({ error: 'Impossible de modifier une demande deja traitee' }, { status: 400 })
+      }
+
+      const updates: any = {}
+      if (date_debut !== undefined) updates.date_debut = date_debut
+      if (date_fin !== undefined) updates.date_fin = date_fin
+      if (type_conge !== undefined) updates.type_conge = type_conge
+      if (motif !== undefined) updates.motif = motif
+
+      // Recalculate nb_jours if dates changed
+      const newDebut = date_debut || existing.date_debut
+      const newFin = date_fin || existing.date_fin
+      if (newDebut > newFin) {
+        return NextResponse.json({ error: 'La date de fin doit etre apres la date de debut' }, { status: 400 })
+      }
+      if (demi_journee === true && newDebut === newFin) {
+        updates.nb_jours = 0.5
+      } else if (date_debut || date_fin || demi_journee !== undefined) {
+        updates.nb_jours = countWorkingDays(newDebut, newFin)
+      }
+
+      const { data, error } = await supabase.from('demandes_conges').update(updates).eq('id', id).select().single()
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json({ demande: data })
+    }
+
     if (action === 'creer' || !action) {
       if (!body.employe_id || !body.type_conge || !body.date_debut || !body.date_fin)
         return NextResponse.json({ error: 'Champs requis manquants' }, { status: 400 })
@@ -491,7 +526,14 @@ export async function POST(request: Request) {
       }
 
       // Validate Mauritius WRA 2019 rules
-      const nb_jours = countWorkingDays(body.date_debut, body.date_fin)
+      // Support half-day (demi-journee): if demi_journee=true and same date, count as 0.5
+      const isDemiJournee = body.demi_journee === true
+      let nb_jours: number
+      if (isDemiJournee && body.date_debut === body.date_fin) {
+        nb_jours = 0.5
+      } else {
+        nb_jours = countWorkingDays(body.date_debut, body.date_fin)
+      }
 
       if (nb_jours <= 0) {
         return NextResponse.json({ error: 'La période sélectionnée ne contient aucun jour ouvrable' }, { status: 400 })

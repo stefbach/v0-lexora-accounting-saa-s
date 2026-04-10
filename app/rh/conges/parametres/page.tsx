@@ -554,11 +554,22 @@ export default function CongesParametresPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const params = new URLSearchParams()
-      if (societe !== "all") params.set("societe_id", societe)
-      const data = await fetch(`/api/rh/conges/entitlements?${params}`).then(r => r.json()).catch(() => ({ rules: [] }))
-      if (data.rules && data.rules.length > 0) {
-        setRules(data.rules)
+      // If no societe selected, show defaults (API requires societe_id)
+      if (societe === "all" || !societe) {
+        setRules(DEFAULT_RULES)
+        return
+      }
+      const params = new URLSearchParams({ societe_id: societe })
+      const res = await fetch(`/api/rh/conges/entitlements?${params}`)
+      if (!res.ok) {
+        setRules(DEFAULT_RULES)
+        return
+      }
+      const data = await res.json()
+      // API returns { regles } but we also accept { rules } for compatibility
+      const loaded = data.rules || data.regles || []
+      if (loaded.length > 0) {
+        setRules(loaded)
       } else {
         setRules(DEFAULT_RULES)
       }

@@ -188,6 +188,138 @@ export async function POST(request: Request) {
       return NextResponse.json({ prime_mois: data })
     }
 
+    // ═══════════════════════════════════════════
+    // ACTION: import_excel (bulk import primes from Excel)
+    // Body: { societe_id, periode (YYYY-MM), prime_id, rows: [{ nom, prenom, montant, quantite?, notes? }] }
+    // Auto-matches employee by fuzzy name (nom + prenom)
+    // ═══════════════════════════════════════════
+    if (action === 'import_excel') {
+      const { societe_id, periode, prime_id, rows } = body
+      if (!societe_id || !periode || !prime_id || !Array.isArray(rows)) {
+        return NextResponse.json({ error: 'societe_id, periode, prime_id et rows requis' }, { status: 400 })
+      }
+
+      // Fetch all employees of the societe for matching
+      const { data: employes } = await supabase.from('employes')
+        .select('id, nom, prenom, code, common_name').eq('societe_id', societe_id)
+      if (!employes || employes.length === 0) {
+        return NextResponse.json({ error: 'Aucun employe trouve pour cette societe' }, { status: 404 })
+      }
+
+      // Normalize function: lowercase, strip accents, remove punctuation
+      const normalize = (s: string) => (s || '')
+        .toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9 ]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+
+      // Simple Levenshtein distance
+      const levenshtein = (a: string, b: string): number => {
+        if (a === b) return 0
+        if (!a.length) return b.length
+        if (!b.length) return a.length
+        const dp = Array.from({ length: a.length + 1 }, (_, i) => Array(b.length + 1).fill(0))
+        for (let i = 0; i <= a.length; i++) dp[i][0] = i
+        for (let j = 0; j <= b.length; j++) dp[0][j] = j
+        for (let i = 1; i <= a.length; i++) {
+          for (let j = 1; j <= b.length; j++) {
+            dp[i][j] = a[i-1] === b[j-1]
+              ? dp[i-1][j-1]
+              : 1 + Math.min(dp[i-1][j-1], dp[i-1][j], dp[i][j-1])
+          }
+        }
+        return dp[a.length][b.length]
+      }
+
+      // Match helper: find best employee match for a row
+      const findMatch = (searchName: string) => {
+        const normSearch = normalize(searchName)
+        if (!normSearch) return null
+        let best: any = null
+        let bestScore = Infinity
+        for (const emp of employes) {
+          const candidates = [
+            normalize(`${emp.prenom || ''} ${emp.nom || ''}`),
+            normalize(`${emp.nom || ''} ${emp.prenom || ''}`),
+            normalize(emp.common_name || ''),
+            normalize(emp.code || ''),
+          ].filter(Boolean)
+          for (const cand of candidates) {
+            // Exact match wins
+            if (cand === normSearch) return { emp, score: 0 }
+            // Contains match
+            if (cand.includes(normSearch) || normSearch.includes(cand)) {
+              if (bestScore > 1) { best = emp; bestScore = 1 }
+              continue
+            }
+            const dist = levenshtein(cand, normSearch)
+            const maxLen = Math.max(cand.length, normSearch.length)
+            const ratio = dist / maxLen
+            if (ratio < 0.3 && dist < bestScore) {
+              best = emp; bestScore = dist
+            }
+          }
+        }
+        return best ? { emp: best, score: bestScore } : null
+      }
+
+      const periodeDate = `${periode}-01`
+      const imported: any[] = []
+      const unmatched: any[] = []
+      const errors: string[] = []
+
+      for (const row of rows) {
+        const searchName = row.nom_complet || `${row.prenom || ''} ${row.nom || ''}`.trim() || row.nom || row.name || row.employee
+        if (!searchName) {
+          errors.push(`Ligne sans nom: ${JSON.stringify(row).slice(0, 80)}`)
+          continue
+        }
+        const match = findMatch(searchName)
+        if (!match) {
+          unmatched.push({ searchName, row })
+          continue
+        }
+        const montant = Number(row.montant || row.amount || row.prime || 0)
+        if (montant <= 0) {
+          errors.push(`${searchName}: montant invalide (${row.montant})`)
+          continue
+        }
+        try {
+          const { data, error } = await supabase.from('primes_variables_mois').upsert({
+            employe_id: match.emp.id,
+            prime_id,
+            periode: periodeDate,
+            quantite: row.quantite ? Number(row.quantite) : null,
+            montant: Math.round(montant * 100) / 100,
+            notes: row.notes || `Import Excel - ${new Date().toLocaleDateString('fr-FR')}`,
+            saisi_par: user.id,
+            approuve: false,
+            integre_paie: false,
+          }, { onConflict: 'employe_id,prime_id,periode' }).select().single()
+          if (error) {
+            errors.push(`${searchName}: ${error.message}`)
+          } else {
+            imported.push({ ...data, employe_nom: `${match.emp.prenom} ${match.emp.nom}`, match_score: match.score })
+          }
+        } catch (e: any) {
+          errors.push(`${searchName}: ${e.message}`)
+        }
+      }
+
+      return NextResponse.json({
+        imported,
+        unmatched,
+        errors,
+        summary: {
+          total: rows.length,
+          matched: imported.length,
+          unmatched: unmatched.length,
+          failed: errors.length,
+        }
+      })
+    }
+
     return NextResponse.json({ error: 'Action inconnue' }, { status: 400 })
   } catch (e: unknown) {
     console.error('[primes POST]', e)

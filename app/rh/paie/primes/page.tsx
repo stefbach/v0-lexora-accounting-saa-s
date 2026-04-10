@@ -7,7 +7,8 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Loader2, Plus, CheckCircle, Pencil, Trash2 } from "lucide-react"
+import { Loader2, Plus, CheckCircle, Pencil, Trash2, Upload, FileSpreadsheet, AlertTriangle, X } from "lucide-react"
+import * as XLSX from "xlsx"
 import { Switch } from "@/components/ui/switch"
 
 const TYPE_PRIME_LABELS: Record<string, string> = {
@@ -53,6 +54,15 @@ export default function PrimesPage() {
   // Dialog saisie prime
   const [saisieDialog, setSaisieDialog] = useState(false)
   const [saisieForm, setSaisieForm] = useState({ employe_id: "", prime_id: "", quantite: "", notes: "" })
+
+  // Excel import
+  const [importDialog, setImportDialog] = useState(false)
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const [importPrimeId, setImportPrimeId] = useState("")
+  const [importPreview, setImportPreview] = useState<any[]>([])
+  const [importRunning, setImportRunning] = useState(false)
+  const [importResult, setImportResult] = useState<any>(null)
+  const [importError, setImportError] = useState<string | null>(null)
   const [saisieCalc, setSaisieCalc] = useState<number | null>(null)
   const [saisieError, setSaisieError] = useState<string | null>(null)
 
@@ -190,6 +200,74 @@ export default function PrimesPage() {
     loadSaisies()
   }
 
+  // ─── Excel import ─────────────────────────────────────────────
+  const handleImportFile = async (file: File) => {
+    setImportFile(file)
+    setImportError(null)
+    setImportPreview([])
+    try {
+      const buf = await file.arrayBuffer()
+      const wb = XLSX.read(buf, { type: "array" })
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      const rowsRaw: any[] = XLSX.utils.sheet_to_json(ws, { defval: "" })
+      // Normalize column names (case insensitive match)
+      const normalized = rowsRaw.map(r => {
+        const out: any = {}
+        for (const [k, v] of Object.entries(r)) {
+          const key = String(k).toLowerCase().trim()
+          if (key.includes("nom") && !key.includes("prenom") && !key.includes("complet")) out.nom = v
+          else if (key.includes("prenom") || key === "prénom") out.prenom = v
+          else if (key.includes("complet") || key === "employe" || key === "employee" || key === "name") out.nom_complet = v
+          else if (key.includes("montant") || key === "amount" || key === "prime") out.montant = Number(v) || 0
+          else if (key.includes("quantite") || key === "qty" || key === "quantity") out.quantite = Number(v) || 0
+          else if (key.includes("note") || key.includes("motif")) out.notes = String(v)
+          else out[key] = v
+        }
+        if (!out.nom_complet && (out.nom || out.prenom)) {
+          out.nom_complet = `${out.prenom || ""} ${out.nom || ""}`.trim()
+        }
+        return out
+      }).filter((r: any) => r.nom_complet || r.nom)
+      setImportPreview(normalized)
+    } catch (e: any) {
+      setImportError("Impossible de lire le fichier: " + (e.message || ""))
+    }
+  }
+
+  const runImport = async () => {
+    if (!importPrimeId) { setImportError("Selectionnez une prime du catalogue"); return }
+    if (importPreview.length === 0) { setImportError("Aucune ligne a importer"); return }
+    if (societe === "all") { setImportError("Selectionnez une societe"); return }
+    setImportRunning(true)
+    setImportError(null)
+    try {
+      const res = await fetch("/api/rh/primes", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "import_excel",
+          societe_id: societe,
+          periode,
+          prime_id: importPrimeId,
+          rows: importPreview,
+        })
+      })
+      const data = await res.json()
+      if (!res.ok) { setImportError(data.error || "Erreur import"); return }
+      setImportResult(data)
+      loadSaisies()
+    } catch (e: any) {
+      setImportError("Erreur reseau: " + (e.message || ""))
+    } finally { setImportRunning(false) }
+  }
+
+  const resetImport = () => {
+    setImportFile(null)
+    setImportPreview([])
+    setImportResult(null)
+    setImportError(null)
+    setImportPrimeId("")
+  }
+
   const totalSaisies = saisies.filter(s => s.approuve).reduce((sum, s) => sum + Number(s.montant || 0), 0)
 
   const primeSelectionnee = catalogue.find(p => p.id === saisieForm.prime_id)
@@ -292,6 +370,9 @@ export default function PrimesPage() {
                   Total approuvé : <strong className="text-green-700">{fmt(totalSaisies)}</strong>
                 </div>
               )}
+              <Button onClick={() => setImportDialog(true)} disabled={societe === "all"} variant="outline" className="border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37]/10">
+                <Upload className="w-4 h-4 mr-2" />Import Excel
+              </Button>
               <Button onClick={() => setSaisieDialog(true)} disabled={societe === "all"} className="bg-[#0B0F2E] text-white">
                 <Plus className="w-4 h-4 mr-2" />Saisir une prime
               </Button>
@@ -542,6 +623,153 @@ export default function PrimesPage() {
       </Dialog>
 
       {/* Dialog saisie prime */}
+      {/* ═══════ Dialog IMPORT EXCEL ═══════ */}
+      <Dialog open={importDialog} onOpenChange={open => { if (!open) { setImportDialog(false); resetImport() } }}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileSpreadsheet className="w-5 h-5 text-[#D4AF37]" />
+              Import Excel des primes — {periode}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {importError && (
+              <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                {importError}
+              </div>
+            )}
+
+            {!importResult && (
+              <>
+                {/* Step 1: Select prime */}
+                <div>
+                  <Label className="text-sm font-semibold mb-1 block">1. Selectionner la prime du catalogue *</Label>
+                  <Select value={importPrimeId} onValueChange={setImportPrimeId}>
+                    <SelectTrigger><SelectValue placeholder="Choisir une prime..." /></SelectTrigger>
+                    <SelectContent>
+                      {catalogue.filter(p => p.actif !== false).map(p => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.libelle} ({TYPE_PRIME_LABELS[p.type_prime] || p.type_prime})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Step 2: File upload */}
+                <div>
+                  <Label className="text-sm font-semibold mb-1 block">2. Charger le fichier Excel *</Label>
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-5 text-center hover:border-[#D4AF37] transition-colors">
+                    <input type="file" id="import-file" accept=".xlsx,.xls,.csv" className="hidden"
+                      onChange={e => { const f = e.target.files?.[0]; if (f) handleImportFile(f) }}
+                    />
+                    <label htmlFor="import-file" className="cursor-pointer">
+                      <Upload className="w-8 h-8 mx-auto text-gray-400 mb-2" />
+                      <p className="text-sm font-medium text-gray-700">
+                        {importFile ? importFile.name : "Cliquez pour selectionner un fichier Excel"}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        Colonnes attendues : Nom, Prenom (ou Nom complet) + Montant + Quantite (optionnel)
+                      </p>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Step 3: Preview */}
+                {importPreview.length > 0 && (
+                  <div>
+                    <Label className="text-sm font-semibold mb-1 block">3. Apercu ({importPreview.length} lignes)</Label>
+                    <div className="max-h-60 overflow-y-auto border rounded-lg">
+                      <table className="w-full text-xs">
+                        <thead className="bg-gray-50 sticky top-0">
+                          <tr>
+                            <th className="p-2 text-left">Nom employe</th>
+                            <th className="p-2 text-right">Montant</th>
+                            <th className="p-2 text-right">Quantite</th>
+                            <th className="p-2 text-left">Notes</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {importPreview.map((r, i) => (
+                            <tr key={i} className="border-t">
+                              <td className="p-2 font-medium">{r.nom_complet || `${r.prenom || ""} ${r.nom || ""}`}</td>
+                              <td className="p-2 text-right">{fmt(r.montant || 0)}</td>
+                              <td className="p-2 text-right text-gray-500">{r.quantite || "—"}</td>
+                              <td className="p-2 text-gray-500 truncate max-w-xs">{r.notes || "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">Le systeme reconnaitra automatiquement les employes par leur nom (fuzzy matching).</p>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Result */}
+            {importResult && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-4 gap-2">
+                  <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-center">
+                    <p className="text-xs text-gray-500">Importes</p>
+                    <p className="text-2xl font-bold text-green-700">{importResult.summary?.matched || 0}</p>
+                  </div>
+                  <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg text-center">
+                    <p className="text-xs text-gray-500">Non reconnus</p>
+                    <p className="text-2xl font-bold text-orange-700">{importResult.summary?.unmatched || 0}</p>
+                  </div>
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-center">
+                    <p className="text-xs text-gray-500">Erreurs</p>
+                    <p className="text-2xl font-bold text-red-700">{importResult.summary?.failed || 0}</p>
+                  </div>
+                  <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg text-center">
+                    <p className="text-xs text-gray-500">Total</p>
+                    <p className="text-2xl font-bold text-gray-700">{importResult.summary?.total || 0}</p>
+                  </div>
+                </div>
+                {importResult.unmatched?.length > 0 && (
+                  <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                    <p className="text-xs font-bold text-orange-700 mb-1">Employes non reconnus :</p>
+                    <ul className="text-xs text-orange-600 space-y-0.5">
+                      {importResult.unmatched.slice(0, 10).map((u: any, i: number) => (
+                        <li key={i}>• {u.searchName}</li>
+                      ))}
+                      {importResult.unmatched.length > 10 && <li className="italic">... et {importResult.unmatched.length - 10} autres</li>}
+                    </ul>
+                  </div>
+                )}
+                {importResult.errors?.length > 0 && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <p className="text-xs font-bold text-red-700 mb-1">Erreurs :</p>
+                    <ul className="text-xs text-red-600 space-y-0.5">
+                      {importResult.errors.slice(0, 10).map((e: string, i: number) => <li key={i}>• {e}</li>)}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            {importResult ? (
+              <>
+                <Button variant="outline" onClick={resetImport}>Importer un autre fichier</Button>
+                <Button onClick={() => { setImportDialog(false); resetImport() }} className="bg-[#0B0F2E] text-white">Fermer</Button>
+              </>
+            ) : (
+              <>
+                <Button variant="outline" onClick={() => { setImportDialog(false); resetImport() }}>Annuler</Button>
+                <Button onClick={runImport} disabled={importRunning || importPreview.length === 0 || !importPrimeId} className="bg-[#D4AF37] text-white">
+                  {importRunning && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                  Lancer l'import ({importPreview.length})
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={saisieDialog} onOpenChange={open => !open && setSaisieDialog(false)}>
         <DialogContent>
           <DialogHeader><DialogTitle>Saisir une prime — {periode}</DialogTitle></DialogHeader>
