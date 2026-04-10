@@ -210,24 +210,58 @@ export default function PrimesPage() {
       const wb = XLSX.read(buf, { type: "array" })
       const ws = wb.Sheets[wb.SheetNames[0]]
       const rowsRaw: any[] = XLSX.utils.sheet_to_json(ws, { defval: "" })
-      // Normalize column names (case insensitive match)
-      const normalized = rowsRaw.map(r => {
+      // Normalize strings (remove accents, lowercase)
+      const norm = (s: string) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim()
+      // Parse amount: handle "1,500.50", "1.500,50", "1 500,50", etc.
+      const parseAmount = (v: any): number => {
+        if (typeof v === "number") return v
+        let s = String(v || "").trim()
+        if (!s) return 0
+        // Remove non-numeric except , . -
+        s = s.replace(/[^\d,.-]/g, "")
+        // If both , and . present, last one is decimal
+        if (s.includes(",") && s.includes(".")) {
+          if (s.lastIndexOf(",") > s.lastIndexOf(".")) {
+            s = s.replace(/\./g, "").replace(",", ".")
+          } else {
+            s = s.replace(/,/g, "")
+          }
+        } else if (s.includes(",")) {
+          s = s.replace(",", ".")
+        }
+        const n = parseFloat(s)
+        return isNaN(n) ? 0 : n
+      }
+      const normalized = rowsRaw.map((r: any) => {
         const out: any = {}
         for (const [k, v] of Object.entries(r)) {
-          const key = String(k).toLowerCase().trim()
-          if (key.includes("nom") && !key.includes("prenom") && !key.includes("complet")) out.nom = v
-          else if (key.includes("prenom") || key === "prénom") out.prenom = v
-          else if (key.includes("complet") || key === "employe" || key === "employee" || key === "name") out.nom_complet = v
-          else if (key.includes("montant") || key === "amount" || key === "prime") out.montant = Number(v) || 0
-          else if (key.includes("quantite") || key === "qty" || key === "quantity") out.quantite = Number(v) || 0
-          else if (key.includes("note") || key.includes("motif")) out.notes = String(v)
-          else out[key] = v
+          const key = norm(k)
+          if (!key) continue
+          if ((key.includes("nom") && key.includes("complet")) || key === "employe" || key === "employee" || key === "name" || key === "salarie" || key === "collaborateur") {
+            out.nom_complet = String(v || "")
+          } else if (key === "nom" || (key.includes("nom") && !key.includes("prenom") && !key.includes("complet"))) {
+            out.nom = String(v || "")
+          } else if (key.includes("prenom") || key === "firstname" || key === "first name") {
+            out.prenom = String(v || "")
+          } else if (key.includes("montant") || key === "amount" || key === "prime" || key === "valeur" || key === "somme" || key === "mur") {
+            out.montant = parseAmount(v)
+          } else if (key.includes("quantite") || key === "qty" || key === "quantity" || key === "nb") {
+            out.quantite = parseAmount(v)
+          } else if (key.includes("note") || key.includes("motif") || key.includes("comment") || key.includes("observation")) {
+            out.notes = String(v || "")
+          } else if (key === "code" || key === "matricule") {
+            out.nom_complet = out.nom_complet || String(v || "")
+          }
         }
         if (!out.nom_complet && (out.nom || out.prenom)) {
           out.nom_complet = `${out.prenom || ""} ${out.nom || ""}`.trim()
         }
         return out
-      }).filter((r: any) => r.nom_complet || r.nom)
+      }).filter((r: any) => (r.nom_complet || r.nom || r.prenom) && (r.montant || 0) !== 0)
+      if (normalized.length === 0) {
+        setImportError("Aucune ligne valide trouvee. Le fichier doit contenir au moins : 'Nom' (ou 'Nom complet') et 'Montant'.")
+        return
+      }
       setImportPreview(normalized)
     } catch (e: any) {
       setImportError("Impossible de lire le fichier: " + (e.message || ""))

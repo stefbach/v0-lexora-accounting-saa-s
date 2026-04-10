@@ -286,17 +286,30 @@ export async function POST(request: Request) {
           continue
         }
         try {
-          const { data, error } = await supabase.from('primes_variables_mois').upsert({
+          // Check if a row already exists (to avoid upsert conflict issues if UNIQUE constraint missing)
+          const { data: existing } = await supabase.from('primes_variables_mois')
+            .select('id').eq('employe_id', match.emp.id).eq('prime_id', prime_id).eq('periode', periodeDate).maybeSingle()
+
+          const payload: any = {
             employe_id: match.emp.id,
             prime_id,
             periode: periodeDate,
             quantite: row.quantite ? Number(row.quantite) : null,
             montant: Math.round(montant * 100) / 100,
             notes: row.notes || `Import Excel - ${new Date().toLocaleDateString('fr-FR')}`,
-            saisi_par: user.id,
             approuve: false,
             integre_paie: false,
-          }, { onConflict: 'employe_id,prime_id,periode' }).select().single()
+          }
+
+          let data: any = null, error: any = null
+          if (existing) {
+            const r = await supabase.from('primes_variables_mois').update(payload).eq('id', existing.id).select().single()
+            data = r.data; error = r.error
+          } else {
+            const r = await supabase.from('primes_variables_mois').insert(payload).select().single()
+            data = r.data; error = r.error
+          }
+
           if (error) {
             errors.push(`${searchName}: ${error.message}`)
           } else {
