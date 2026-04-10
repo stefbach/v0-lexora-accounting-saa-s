@@ -199,46 +199,30 @@ export async function GET(request: Request) {
         .in('societe_id', societeIds).order('date_fin', { ascending: false }),
     ])
 
+    // Since migration 120, ecritures_comptables is now a VIEW on ecritures_comptables_v2.
+    // All entries live in v2 as single source of truth. Both reads return the same rows.
+    // We keep reading both for backward compat during rollout, but dedupe by id.
     const ecrituresV1 = ecrituresV1Result?.data || []
-
-    // Fetch dossier_id -> societe_id mapping (needed to attach societe_id to v1 entries)
-    const dossierToSociete: Record<string, string> = {}
-    if (allDossierIds.length > 0) {
-      const { data: dossiersMap } = await supabase
-        .from('dossiers').select('id, societe_id').in('id', allDossierIds)
-      for (const d of dossiersMap || []) {
-        if (d.id && d.societe_id) dossierToSociete[d.id] = d.societe_id
-      }
+    const byId = new Map<string, any>()
+    for (const e of (ecrituresV2 || [])) {
+      byId.set(e.id, {
+        ...e,
+        compte: e.numero_compte,
+        debit: e.debit_mur,
+        credit: e.credit_mur,
+      })
     }
-
-    // Fusionner v1 + v2 avec deduplication
-    // Probleme: generer_ecritures_paie ecrit dans les deux tables; et selon les societes
-    // (avec ou sans dossier_id), les ecritures peuvent etre dans l'une OU l'autre OU les deux.
-    const ecrituresFromV2 = (ecrituresV2 || []).map((e: any) => ({
-      ...e,
-      compte: e.numero_compte,
-      debit: e.debit_mur,
-      credit: e.credit_mur,
-      _source: 'v2',
-      _key: `${e.societe_id}|${e.date_ecriture}|${e.journal}|${e.numero_compte}|${e.debit_mur || 0}|${e.credit_mur || 0}|${e.ref_folio || e.numero_piece || ''}`,
-    }))
-    const ecrituresFromV1 = (ecrituresV1 || []).map((e: any) => {
-      const socId = dossierToSociete[e.dossier_id] || null
-      return {
+    for (const e of ecrituresV1) {
+      if (byId.has(e.id)) continue
+      // v1 row with different id (pre-migration leftover) — normalize
+      byId.set(e.id, {
         ...e,
         numero_compte: e.compte,
         debit_mur: e.debit,
         credit_mur: e.credit,
-        societe_id: socId,
-        _source: 'v1',
-        _key: `${socId}|${e.date_ecriture}|${e.journal}|${e.compte}|${e.debit || 0}|${e.credit || 0}|${e.numero_piece || ''}`,
-      }
-    })
-
-    // Merge: prefer v2, add v1 entries whose key doesn't exist in v2
-    const v2Keys = new Set(ecrituresFromV2.map((e: any) => e._key))
-    const v1NotInV2 = ecrituresFromV1.filter((e: any) => !v2Keys.has(e._key))
-    const ecritures = [...ecrituresFromV2, ...v1NotInV2]
+      })
+    }
+    const ecritures = Array.from(byId.values())
 
     let facturesFromTable: any[] = []
     if (!facturesErr) facturesFromTable = facturesData || []
