@@ -236,6 +236,64 @@ export async function POST(request: Request) {
 
     if (error) throw error
 
+    // Auto-create a "documents" record so the invoice appears in "Documents numérisés"
+    // (links the invoice to the documents folder for consistency)
+    try {
+      const { data: dossier } = await supabase
+        .from('dossiers')
+        .select('id')
+        .eq('societe_id', societe_id)
+        .limit(1)
+        .maybeSingle()
+
+      if (dossier?.id) {
+        // Check if a document already exists for this invoice
+        const { data: existingDoc } = await supabase
+          .from('documents')
+          .select('id')
+          .eq('dossier_id', dossier.id)
+          .like('nom_fichier', `%${finalNumero}%`)
+          .maybeSingle()
+
+        if (!existingDoc) {
+          // Get société name for proper societe_detectee
+          const { data: socData } = await supabase
+            .from('societes')
+            .select('nom')
+            .eq('id', societe_id)
+            .maybeSingle()
+
+          await supabase.from('documents').insert({
+            dossier_id: dossier.id,
+            uploaded_by: user.id,
+            nom_fichier: `${finalNumero} - ${tiers || 'Client'}.pdf`,
+            type_fichier: 'pdf',
+            type_document: type_document === 'avoir' ? 'avoir_client' : 'facture_client',
+            statut: 'traite',
+            storage_path: null,
+            societe_detectee: socData?.nom || null,
+            n8n_result: {
+              source: 'facture_client_api',
+              facture_id: data.id,
+              numero_facture: finalNumero,
+              extraction: {
+                numero: finalNumero,
+                tiers,
+                date_facture,
+                montant_ht,
+                montant_tva,
+                montant_ttc: ttc,
+              },
+            },
+          })
+          console.log(`[factures] Document record created for invoice ${finalNumero} (société: ${socData?.nom})`)
+        }
+      }
+    } catch (docErr: any) {
+      console.warn('[factures] Failed to create document record:', docErr.message)
+      // Don't fail the invoice creation if document creation fails
+    }
+
     // Auto-create ecritures comptables when invoice is finalized
     if (statut === 'en_attente' && data) {
       await createEcrituresForFacture(supabase, {

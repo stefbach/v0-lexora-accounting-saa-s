@@ -702,10 +702,26 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
 
       if (allClientDossiers.length > 0) {
         const detected = detectedSociete.toLowerCase().replace(/ ltd| limited| sarl| sas| co\.?/gi, '').trim()
-        const matched = allClientDossiers.find((d: any) => {
+        // First: try exact match (case-insensitive)
+        let matched = allClientDossiers.find((d: any) => {
           const socName = ((d.societe as any)?.nom || '').toLowerCase().replace(/ ltd| limited| sarl| sas| co\.?/gi, '').trim()
-          return socName.includes(detected) || detected.includes(socName)
+          return socName === detected
         })
+        // Second: try tokenized match (all words of detected must be in the société name)
+        if (!matched) {
+          const detectedTokens = detected.split(/\s+/).filter(t => t.length > 2)
+          const candidates = allClientDossiers.filter((d: any) => {
+            const socName = ((d.societe as any)?.nom || '').toLowerCase().replace(/ ltd| limited| sarl| sas| co\.?/gi, '').trim()
+            return detectedTokens.length > 0 && detectedTokens.every(t => socName.includes(t))
+          })
+          // Only accept the match if there's exactly ONE candidate (avoid ambiguity)
+          if (candidates.length === 1) {
+            matched = candidates[0]
+          } else if (candidates.length > 1) {
+            console.warn(`[upload] Ambiguous match for "${detected}" — ${candidates.length} candidates found, skipping auto-match`)
+            needsSocieteConfirmation = true
+          }
+        }
         if (matched && matched.id !== resolvedDossierId) {
           finalDossierId = matched.id
           await supabase.from('documents').update({ dossier_id: matched.id }).eq('id', doc.id)
