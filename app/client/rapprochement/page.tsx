@@ -1189,6 +1189,14 @@ Voulez-vous vraiment continuer ?`
                   <p className="text-xs text-gray-500">Orphelins</p>
                 </div>
               </div>
+              {(smartResult.pre_classified || 0) > 0 && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
+                  <p className="text-sm font-medium text-blue-700">
+                    🏷️ {smartResult.pre_classified} classifiés par règles auto
+                  </p>
+                  <p className="text-xs text-blue-500 mt-0.5">Frais bancaires · MRA · Salaires · Internes · Associés</p>
+                </div>
+              )}
               <p className="text-sm text-gray-500 text-center">
                 {smartResult.proposed || 0} match{smartResult.proposed !== 1 ? 'es' : ''} proposé{smartResult.proposed !== 1 ? 's' : ''} sur {smartResult.total || 0} transaction{smartResult.total !== 1 ? 's' : ''} non-rapprochée{smartResult.total !== 1 ? 's' : ''}
               </p>
@@ -1225,25 +1233,74 @@ Voulez-vous vraiment continuer ?`
           <DialogHeader>
             <DialogTitle>🎯 Propositions Smart ({smartProposals.length})</DialogTitle>
           </DialogHeader>
-          <div className="space-y-2">
-            {smartProposals.map((p: any, idx: number) => (
-              <div key={idx} className={`border rounded-lg p-3 text-sm ${p.confidence >= 0.85 ? 'border-green-200 bg-green-50' : 'border-orange-200 bg-orange-50'}`}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-medium truncate max-w-[200px]">{p.transaction?.libelle || '—'}</span>
-                  <Badge className={p.confidence >= 0.85 ? 'bg-green-600' : 'bg-orange-500'}>
-                    {Math.round(p.confidence * 100)}%
-                  </Badge>
+          <div className="space-y-4">
+            {/* Section règles auto (pre_classified) */}
+            {smartProposals.some((p: any) => p.pre_classified) && (
+              <div>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 px-1">
+                  🏷️ Règles automatiques ({smartProposals.filter((p: any) => p.pre_classified).length})
+                </p>
+                <div className="space-y-1.5">
+                  {smartProposals.filter((p: any) => p.pre_classified).map((p: any, idx: number) => {
+                    const typeConfig: Record<string, { label: string; icon: string; color: string }> = {
+                      frais_bancaires:    { label: 'Frais bancaires', icon: '🏦', color: 'bg-gray-100 text-gray-700 border-gray-200' },
+                      paiement_mra:       { label: 'MRA', icon: '🏛️', color: 'bg-red-50 text-red-700 border-red-200' },
+                      salaire_individuel: { label: 'Salaire', icon: '👤', color: 'bg-green-50 text-green-700 border-green-200' },
+                      salaire_bulk:       { label: 'Salaires bulk', icon: '👥', color: 'bg-green-50 text-green-700 border-green-200' },
+                      transfert_interne:  { label: 'Interne', icon: '🔄', color: 'bg-blue-50 text-blue-700 border-blue-200' },
+                      associe:            { label: 'Associé', icon: '🤝', color: 'bg-purple-50 text-purple-700 border-purple-200' },
+                    }
+                    const cfg = typeConfig[p.match_type] || { label: p.match_type, icon: '🏷️', color: 'bg-gray-50 text-gray-700 border-gray-200' }
+                    return (
+                      <div key={`rule-${idx}`} className={`border rounded-lg p-3 text-sm ${cfg.color}`}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-medium truncate max-w-[220px]">{p.transaction?.libelle || '—'}</span>
+                          <Badge variant="outline" className={`text-xs ${cfg.color}`}>
+                            {cfg.icon} {cfg.label}
+                          </Badge>
+                        </div>
+                        <div className="flex justify-between text-xs opacity-70">
+                          <span>{p.transaction?.date || '—'}</span>
+                          <span className="font-mono">{p.transaction?.debit ? `-${fmt(p.transaction.debit)}` : `+${fmt(p.transaction?.credit || 0)}`} MUR</span>
+                        </div>
+                        <div className="mt-1 text-xs opacity-60 italic">{p.reasoning}</div>
+                        <div className="mt-1">
+                          <span className="text-xs font-medium opacity-80">Appliquer (règle auto)</span>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
-                <div className="flex justify-between text-xs text-gray-600">
-                  <span>{p.transaction?.date || '—'}</span>
-                  <span className="font-mono">{p.transaction?.debit ? `-${fmt(p.transaction.debit)}` : `+${fmt(p.transaction?.credit || 0)}`} MUR</span>
-                </div>
-                <div className="mt-1 text-xs text-gray-500">
-                  <span className="font-medium">Facture(s) :</span> {p.factures?.map((f: any) => f.numero_facture || f.tiers).join(', ') || '—'}
-                </div>
-                <div className="mt-1 text-xs text-gray-400 italic">{p.reasoning}</div>
               </div>
-            ))}
+            )}
+            {/* Section matching heuristique */}
+            {smartProposals.some((p: any) => !p.pre_classified) && (
+              <div>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 px-1">
+                  🔍 Matching heuristique ({smartProposals.filter((p: any) => !p.pre_classified).length})
+                </p>
+                <div className="space-y-1.5">
+                  {smartProposals.filter((p: any) => !p.pre_classified).map((p: any, idx: number) => (
+                    <div key={`engine-${idx}`} className={`border rounded-lg p-3 text-sm ${p.confidence >= 0.85 ? 'border-green-200 bg-green-50' : 'border-orange-200 bg-orange-50'}`}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-medium truncate max-w-[200px]">{p.transaction?.libelle || '—'}</span>
+                        <Badge className={p.confidence >= 0.85 ? 'bg-green-600' : 'bg-orange-500'}>
+                          {Math.round(p.confidence * 100)}%
+                        </Badge>
+                      </div>
+                      <div className="flex justify-between text-xs text-gray-600">
+                        <span>{p.transaction?.date || '—'}</span>
+                        <span className="font-mono">{p.transaction?.debit ? `-${fmt(p.transaction.debit)}` : `+${fmt(p.transaction?.credit || 0)}`} MUR</span>
+                      </div>
+                      <div className="mt-1 text-xs text-gray-500">
+                        <span className="font-medium">Facture(s) :</span> {p.factures?.map((f: any) => f.numero_facture || f.tiers).join(', ') || '—'}
+                      </div>
+                      <div className="mt-1 text-xs text-gray-400 italic">{p.reasoning}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           <div className="flex gap-2 pt-2 sticky bottom-0 bg-white border-t">
             <Button onClick={handleSmartApplyAll} disabled={smartLoading || (smartResult?.auto_apply || 0) === 0} className="flex-1 text-white" style={{ background: "linear-gradient(135deg, #059669, #0891b2)" }}>

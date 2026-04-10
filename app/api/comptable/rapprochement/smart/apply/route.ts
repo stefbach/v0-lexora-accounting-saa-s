@@ -18,6 +18,8 @@ function getAdminClient() {
  * POST /api/comptable/rapprochement/smart/apply
  *
  * Apply smart-engine proposals in batch, optionally filtered by min_confidence.
+ * Handles both heuristic proposals (with facture_ids) and rule-based pre-classified
+ * proposals (pre_classified: true, facture_ids: []).
  *
  * Body:
  *   societe_id: string
@@ -27,6 +29,9 @@ function getAdminClient() {
  *     facture_ids: string[]
  *     confidence: number
  *     reasoning: string
+ *     pre_classified?: boolean
+ *     match_type?: string
+ *     rule_statut?: string
  *   }>
  *   min_confidence?: number  (default 0.85)
  *
@@ -77,9 +82,9 @@ export async function POST(request: Request) {
     const usedFactureIds = new Set<string>()
 
     for (const proposal of toApply) {
-      const { releve_id, transaction_idx, facture_ids, reasoning, confidence } = proposal
+      const { releve_id, transaction_idx, facture_ids, reasoning, confidence, pre_classified, match_type, rule_statut } = proposal
 
-      if (!releve_id || transaction_idx === undefined || !Array.isArray(facture_ids) || facture_ids.length === 0) {
+      if (!releve_id || transaction_idx === undefined) {
         errors.push({ releve_id, transaction_idx, error: 'Parametres manquants' })
         skipped++
         continue
@@ -98,14 +103,84 @@ export async function POST(request: Request) {
         skipped++
         continue
       }
-      if (tx.statut === 'rapproche' || tx.lettre) {
+      if (tx.statut === 'rapproche' || tx.statut === 'interne' || tx.lettre) {
         errors.push({ releve_id, transaction_idx, error: 'Transaction deja rapprochee' })
         skipped++
         continue
       }
 
+      const reconcileDate = new Date().toISOString()
+      const lettre = `SM${Date.now().toString().slice(-6)}`
+
+      // ── PRE-CLASSIFIED PROPOSALS (rules A–F, no facture) ─────────────────
+      if (pre_classified || (Array.isArray(facture_ids) && facture_ids.length === 0 && match_type)) {
+        const effectiveStatut = rule_statut || (match_type === 'transfert_interne' ? 'interne' : 'rapproche')
+
+        releve.updatedTxs[transaction_idx] = {
+          ...tx,
+          statut: effectiveStatut,
+          matched_type: match_type || 'pre_classified',
+          match_confidence: `rule_${Math.round((Number(confidence) || 0) * 100)}`,
+          note: reasoning || '',
+          rapproche_at: reconcileDate,
+        }
+
+        // For MRA payments: try to find and letter the accounting entry
+        if (match_type === 'paiement_mra') {
+          try {
+            const txDebit = Number(tx.debit) || 0
+            const { data: mraEcritures } = await supabase
+              .from('ecritures_comptables_v2')
+              .select('id, numero_compte, debit_mur, credit_mur')
+              .eq('societe_id', societe_id)
+              .is('lettre', null)
+              .or('numero_compte.like.444%,numero_compte.like.431%,numero_compte.like.432%,numero_compte.like.4457%')
+
+            const mraMatch = (mraEcritures || []).find((e: any) => {
+              const eAmt = Number(e.credit_mur) || Number(e.debit_mur) || 0
+              return eAmt > 0 && txDebit > 0 && Math.abs(txDebit - eAmt) / eAmt < 0.10
+            })
+
+            if (mraMatch) {
+              await supabase
+                .from('ecritures_comptables_v2')
+                .update({ lettre: `MRA${transaction_idx}`, date_lettrage: new Date().toISOString().split('T')[0] })
+                .eq('id', mraMatch.id)
+              releve.updatedTxs[transaction_idx].ecriture_id = mraMatch.id
+            }
+          } catch { /* non-blocking */ }
+        }
+
+        // For individual salary: mark bulletin as paid
+        if (match_type === 'salaire_individuel' && proposal.employe_id) {
+          try {
+            const txMonth = (tx.date || '').substring(0, 7)
+            if (txMonth) {
+              await supabase
+                .from('bulletins_paie')
+                .update({ statut: 'paye', date_paiement: tx.date || reconcileDate.split('T')[0] })
+                .eq('societe_id', societe_id)
+                .eq('employe_id', proposal.employe_id)
+                .like('periode', `${txMonth}%`)
+                .eq('statut', 'valide')
+            }
+          } catch { /* non-blocking */ }
+        }
+
+        applied++
+        continue
+      }
+
+      // ── HEURISTIC PROPOSALS (with facture_ids) ────────────────────────────
+
+      if (!Array.isArray(facture_ids) || facture_ids.length === 0) {
+        errors.push({ releve_id, transaction_idx, error: 'Parametres manquants' })
+        skipped++
+        continue
+      }
+
       // VERIFICATION 2: Check for in-batch duplicate facture usage
-      const alreadyUsed = facture_ids.filter(fid => usedFactureIds.has(fid))
+      const alreadyUsed = facture_ids.filter((fid: string) => usedFactureIds.has(fid))
       if (alreadyUsed.length > 0) {
         errors.push({ releve_id, transaction_idx, error: `Factures deja utilisees dans ce batch: ${alreadyUsed.join(', ')}` })
         skipped++
@@ -158,9 +233,6 @@ export async function POST(request: Request) {
       }
 
       // ALL CHECKS PASSED — apply the match
-      const lettre = `SM${Date.now().toString().slice(-6)}`
-      const reconcileDate = new Date().toISOString()
-
       // Update transaction in the cached releve (will save at end)
       releve.updatedTxs[transaction_idx] = {
         ...tx,
@@ -186,7 +258,7 @@ export async function POST(request: Request) {
         usedFactureIds.add(fid)
       }
 
-      // Generate BNQ journal entries
+      // Generate BNQ journal entries (only for facture-based proposals)
       const payType: 'supplier' | 'client' = isOutgoing ? 'supplier' : 'client'
       const tiers = (factures[0]?.tiers || tx.tiers_detecte || tx.tiers || '').substring(0, 50)
       const datePayment = tx.date || new Date().toISOString().split('T')[0]
