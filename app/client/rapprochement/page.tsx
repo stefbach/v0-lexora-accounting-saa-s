@@ -739,8 +739,8 @@ Voulez-vous vraiment continuer ?`
         </div>
       </div>
 
-      {/* ── 3-Card Rapprochement Section ─────────────────────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      {/* ── 4-Card Rapprochement Section ─────────────────────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
         {/* Card 1 — Règles auto */}
         <button
           disabled={autoMatching || !societeId}
@@ -783,7 +783,25 @@ Voulez-vous vraiment continuer ?`
           )}
         </button>
 
-        {/* Card 3 — Agent IA */}
+        {/* Card 3 — Patterns mémorisés */}
+        <button
+          disabled={chatLoading || !societeId}
+          onClick={runApplyPatterns}
+          className="group text-left rounded-xl border-2 border-gray-200 hover:border-amber-500 hover:shadow-md bg-white p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          <div className="flex items-start gap-3">
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-amber-400 to-yellow-600 flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+              {chatLoading ? <Loader2 className="w-5 h-5 text-white animate-spin" /> : <Sparkles className="w-5 h-5 text-white" />}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-sm text-[#0B0F2E]">✨ Patterns mémorisés</p>
+              <p className="text-xs text-gray-500 mt-0.5">Rejoue les règles apprises</p>
+              <p className="text-[11px] text-amber-600 font-medium mt-1.5">Auto · ~3s</p>
+            </div>
+          </div>
+        </button>
+
+        {/* Card 4 — Agent IA */}
         <button
           disabled={!societeId}
           onClick={openAgentIA}

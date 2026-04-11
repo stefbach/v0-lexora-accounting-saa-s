@@ -8,6 +8,8 @@
  * 4. GROUPED_SUM (85%)      — sum of N invoices = payment amount
  * 5. PARTIAL (70%)          — payment < invoice amount (acompte)
  * 6. HISTORICAL (80%)       — same tiers was matched this way before (learned pattern)
+ * 7. ECRITURE (75%)         — fallback: unlettered 401/411 ecriture with matching amount + account
+ * 8. REFUND (80%)           — negative-flow / reversal matching (refund on a previously paid facture)
  */
 
 // Fallback FX rates MUR (used when taux not provided)
@@ -53,6 +55,19 @@ export type MatchStrategy =
   | 'grouped_sum'
   | 'partial'
   | 'historical'
+  | 'ecriture_match'
+  | 'refund'
+
+export interface MatchingEcriture {
+  id: string
+  compte: string
+  libelle: string | null
+  debit: number
+  credit: number
+  date_ecriture: string | null
+  journal: string | null
+  piece_justificative: string | null
+}
 
 export interface HistoricalPattern {
   id: string
@@ -420,6 +435,147 @@ function tryHistorical(
   return null
 }
 
+// ═══ Strategy 7: Ecriture match (fallback when no facture matches) ═══
+// Tries to match a bank transaction against unlettered ecritures 401 (supplier)
+// or 411 (client) using amount proximity and account direction. This does not
+// replace facture matching — it's a fallback for transactions where the underlying
+// invoice hasn't been entered yet or exists only in the general ledger.
+export interface EcritureMatchProposal {
+  transaction: MatchingTransaction
+  ecriture_id: string
+  ecriture: MatchingEcriture
+  strategy: 'ecriture_match'
+  confidence: number
+  reasoning: string
+  amount_diff: number
+}
+
+export function tryEcritureMatch(
+  tx: MatchingTransaction,
+  ecritures: MatchingEcriture[],
+  rates?: Record<string, number>
+): EcritureMatchProposal | null {
+  const isOutgoing = tx.debit > 0
+  // Outgoing payment → supplier invoice (credit on 401) or any payable
+  // Incoming payment → client invoice (debit on 411) or any receivable
+  const expectedAccountPrefix = isOutgoing
+    ? /^(40|41D|4451|4455)/ // fournisseurs, TVA déductible, acomptes
+    : /^(41|411|4456|419)/  // clients, TVA collectée, avances
+  const txAmount = Math.max(tx.debit, tx.credit)
+  const txAmountMUR = toMUR(txAmount, tx.devise, rates)
+  if (txAmountMUR === 0) return null
+
+  let best: EcritureMatchProposal | null = null
+
+  for (const e of ecritures) {
+    const compte = (e.compte || '').toString()
+    if (!expectedAccountPrefix.test(compte)) continue
+
+    // For outgoing: match against credit side of 401 (supplier owed)
+    // For incoming: match against debit side of 411 (client owing)
+    const eAmt = isOutgoing ? Number(e.credit) || 0 : Number(e.debit) || 0
+    if (eAmt === 0) continue
+
+    const diff = Math.abs(txAmountMUR - eAmt) / eAmt
+    if (diff > 0.08) continue // 8% tolerance for bank fees / FX
+
+    const delay = daysBetween(e.date_ecriture || '', tx.date)
+    if (delay > 180 || delay < -30) continue // within 6 months past, 1 month future
+
+    const confidence = 0.5
+      + (diff < 0.005 ? 0.25 : (diff < 0.02 ? 0.18 : 0.10))
+      + (Math.abs(delay) <= 45 ? 0.05 : 0)
+
+    if (!best || confidence > best.confidence) {
+      best = {
+        transaction: tx,
+        ecriture_id: e.id,
+        ecriture: e,
+        strategy: 'ecriture_match',
+        confidence,
+        reasoning: `Écriture ${compte} "${e.libelle || ''}" — ${eAmt.toFixed(2)} MUR ${diff < 0.005 ? 'exact' : `(écart ${(diff * 100).toFixed(1)}%)`}, délai ${delay}j`,
+        amount_diff: Math.abs(txAmountMUR - eAmt),
+      }
+    }
+  }
+
+  return best
+}
+
+// ═══ Strategy 8: Refund / Negative amount ═══
+// A refund is an incoming credit on the bank side that matches a previously paid
+// supplier invoice (or an outgoing debit that matches a previously received client
+// payment — rare but possible). We detect this when a transaction's direction is
+// the OPPOSITE of what a regular invoice payment would be, AND the amount matches
+// a facture that's already marked as paid.
+function tryRefund(
+  tx: MatchingTransaction,
+  factures: MatchingFacture[],
+  rates?: Record<string, number>
+): MatchProposal | null {
+  // Also accept transactions where ONE side is negative (bank reversals) — treat
+  // magnitude as the effective amount and flip the direction.
+  const rawDebit = tx.debit
+  const rawCredit = tx.credit
+  const hasNegative = rawDebit < 0 || rawCredit < 0
+
+  // Effective direction considering negative flows
+  const effectiveDebit = rawDebit < 0 ? Math.abs(rawDebit) : rawDebit
+  const effectiveCredit = rawCredit < 0 ? Math.abs(rawCredit) : rawCredit
+  // If a credit line is negative, it's effectively a refund OUT (debit)
+  const refundIsOut = rawCredit < 0
+  const refundIsIn  = rawDebit < 0
+
+  if (!hasNegative && effectiveDebit === 0 && effectiveCredit === 0) return null
+
+  // For a standard refund: an incoming credit matches a supplier invoice (we got money back)
+  // or an outgoing debit matches a client invoice (we refunded a customer)
+  const isRefundOfSupplier = effectiveCredit > 0 || refundIsIn
+  const amount = Math.max(effectiveDebit, effectiveCredit)
+  const amountMUR = toMUR(amount, tx.devise, rates)
+  if (amountMUR === 0) return null
+
+  const txTiers = (tx.tiers_detecte || tx.libelle || '').toLowerCase()
+  const libLower = (tx.libelle || '').toLowerCase()
+  const looksLikeReversal = /reversal|refund|chargeback|remboursement|annulation/.test(libLower)
+
+  // Only match factures of the right type (fournisseur when refunding supplier purchase)
+  const expectedType: 'client' | 'fournisseur' = isRefundOfSupplier ? 'fournisseur' : 'client'
+
+  let best: MatchProposal | null = null
+  for (const f of factures) {
+    if (f.type_facture && f.type_facture !== expectedType) continue
+    const fAmount = Number(f.montant_mur) || toMUR(Number(f.montant_ttc) || 0, f.devise, rates)
+    if (fAmount === 0) continue
+    const diff = Math.abs(amountMUR - fAmount) / fAmount
+    if (diff > 0.05) continue
+
+    const score = tiersScore(txTiers, f.tiers || '')
+    if (score < 0.4 && !looksLikeReversal) continue
+
+    const confidence = 0.55
+      + (looksLikeReversal ? 0.15 : 0)
+      + (score * 0.15)
+      + (diff < 0.005 ? 0.10 : 0)
+
+    if (!best || confidence > best.confidence) {
+      best = {
+        transaction: tx,
+        facture_ids: [f.id],
+        factures: [f],
+        strategy: 'refund',
+        confidence: Math.min(0.92, confidence),
+        reasoning: `Remboursement${looksLikeReversal ? ' (reversal détecté)' : ''} — facture ${f.numero_facture || ''} de ${f.tiers || ''} (montant ${fAmount.toFixed(2)} MUR)`,
+        amount_diff: Math.abs(amountMUR - fAmount),
+        delay_days: daysBetween(f.date_facture || '', tx.date),
+        within_terms: true,
+      }
+    }
+  }
+
+  return best
+}
+
 // ═══ Main engine ═══
 export function findBestMatch(
   tx: MatchingTransaction,
@@ -427,12 +583,17 @@ export function findBestMatch(
   rates?: Record<string, number>,
   patterns?: HistoricalPattern[]
 ): MatchProposal | null {
-  // Filter by direction
-  const isOutgoing = tx.debit > 0
+  // Filter by direction (considering negative flows)
+  const effectiveDebit = tx.debit < 0 ? Math.abs(tx.credit || 0) : tx.debit
+  const effectiveCredit = tx.credit < 0 ? Math.abs(tx.debit || 0) : tx.credit
+  const isOutgoing = effectiveDebit > 0 && tx.debit >= 0
   const expectedType: 'client' | 'fournisseur' = isOutgoing ? 'fournisseur' : 'client'
   const eligible = candidateFactures.filter(f => f.type_facture === expectedType || !f.type_facture)
 
-  if (eligible.length === 0) return null
+  // Always consider refund path — even with no eligible regular factures
+  const refund = tryRefund(tx, candidateFactures, rates)
+
+  if (eligible.length === 0) return refund
 
   // Try strategies in order, return first match with confidence >= 0.5
   const strategies = [
@@ -443,7 +604,7 @@ export function findBestMatch(
     (t: MatchingTransaction, f: MatchingFacture[]) => tryHistorical(t, f, patterns || [], rates),
   ]
 
-  let best: MatchProposal | null = null
+  let best: MatchProposal | null = refund
   for (const strategy of strategies) {
     const result = strategy(tx, eligible)
     if (result && (!best || result.confidence > best.confidence)) {

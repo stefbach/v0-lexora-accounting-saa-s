@@ -463,6 +463,31 @@ export async function POST(request: Request) {
       console.log('[rapprochement] Result:', counts)
 
       const totalClassified = counts.matched + counts.interne + counts.frais_bancaires + counts.salaire_bulk + counts.mra
+
+      // Audit log — summary entry for the auto run (best-effort)
+      try {
+        await supabase.from('rapprochement_audit_log').insert({
+          societe_id,
+          action: 'auto_rapprocher',
+          montant: counts.total,
+          reason: `Auto-rapprochement: ${counts.matched} rapprochées, ${counts.propose} proposées, ${counts.not_matched} non rapprochées sur ${counts.total}`,
+          after_state: {
+            matched: counts.matched,
+            propose: counts.propose,
+            not_matched: counts.not_matched,
+            total: counts.total,
+            interne: counts.interne,
+            frais_bancaires: counts.frais_bancaires,
+            salaire_bulk: counts.salaire_bulk,
+            mra: counts.mra,
+          },
+          user_id: user.id,
+          user_email: user.email || null,
+        })
+      } catch (auditErr) {
+        console.warn('[audit] auto_rapprocher log failed:', auditErr)
+      }
+
       return NextResponse.json({
         matched: counts.matched, interne: counts.interne, frais_bancaires: counts.frais_bancaires,
         salaire_bulk: counts.salaire_bulk, mra: counts.mra, propose: counts.propose,
@@ -486,32 +511,111 @@ export async function POST(request: Request) {
       if (txIdx >= txs.length) return NextResponse.json({ error: 'Transaction non trouvée' }, { status: 404 })
 
       const lettreCode = `M${String(Date.now()).slice(-4)}`
-
       const reconcileDate = new Date().toISOString()
-      txs[txIdx] = { ...txs[txIdx], facture_id: facture_id || null, ecriture_id: ecriture_id || null, lettre: lettreCode, statut: 'rapproche', rapproche_at: reconcileDate }
-      await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', releve_id)
+      const prevTx = { ...txs[txIdx] }
 
-      if (facture_id) {
-        await supabase.from('factures').update({
-          statut: 'paye',
-          rapproche_releve_id: releve_id,
-          rapproche_transaction_idx: txIdx,
-          rapproche_date: reconcileDate,
-          rapproche_source: 'manual',
-        }).eq('id', facture_id)
-      }
-      if (ecriture_id) {
-        await supabase.from('ecritures_comptables')
-          .update({ lettre: lettreCode, date_lettrage: new Date().toISOString().split('T')[0] })
-          .eq('id', ecriture_id)
-      }
+      // Capture le montant pour l'audit
+      const amount = Math.max(Number(prevTx.debit) || 0, Number(prevTx.credit) || 0)
 
-      return NextResponse.json({ success: true, lettre: lettreCode })
+      // ── Atomic multi-step update with rollback on any failure ──
+      // We emulate a transaction: every step records its compensating undo in `rollback`.
+      // If any step fails, we replay the rollbacks in reverse order.
+      const rollback: Array<() => Promise<any>> = []
+
+      try {
+        // Step 1: update transactions_json
+        txs[txIdx] = {
+          ...prevTx,
+          facture_id: facture_id || null,
+          ecriture_id: ecriture_id || null,
+          lettre: lettreCode,
+          statut: 'rapproche',
+          rapproche_at: reconcileDate,
+        }
+        const { error: updReleveErr } = await supabase
+          .from('releves_bancaires')
+          .update({ transactions_json: txs })
+          .eq('id', releve_id)
+        if (updReleveErr) throw new Error(`Releve update failed: ${updReleveErr.message}`)
+        rollback.unshift(async () => {
+          const revertTxs = [...txs]
+          revertTxs[txIdx] = prevTx
+          await supabase.from('releves_bancaires').update({ transactions_json: revertTxs }).eq('id', releve_id)
+        })
+
+        // Step 2: update facture if provided
+        if (facture_id) {
+          const { data: prevFacture } = await supabase
+            .from('factures').select('statut, rapproche_releve_id, rapproche_transaction_idx, rapproche_date, rapproche_source').eq('id', facture_id).single()
+          const { error: updFacErr } = await supabase.from('factures').update({
+            statut: 'paye',
+            rapproche_releve_id: releve_id,
+            rapproche_transaction_idx: txIdx,
+            rapproche_date: reconcileDate,
+            rapproche_source: 'manual',
+          }).eq('id', facture_id)
+          if (updFacErr) throw new Error(`Facture update failed: ${updFacErr.message}`)
+          rollback.unshift(async () => {
+            if (prevFacture) {
+              await supabase.from('factures').update(prevFacture).eq('id', facture_id)
+            }
+          })
+        }
+
+        // Step 3: update ecriture if provided (bidirectional link)
+        if (ecriture_id) {
+          const { data: prevEcriture } = await supabase
+            .from('ecritures_comptables').select('lettre, date_lettrage, rapproche_releve_id, rapproche_transaction_idx, rapproche_at').eq('id', ecriture_id).single()
+          const { error: updEcrErr } = await supabase.from('ecritures_comptables').update({
+            lettre: lettreCode,
+            date_lettrage: new Date().toISOString().split('T')[0],
+            rapproche_releve_id: releve_id,
+            rapproche_transaction_idx: txIdx,
+            rapproche_at: reconcileDate,
+          }).eq('id', ecriture_id)
+          if (updEcrErr) throw new Error(`Ecriture update failed: ${updEcrErr.message}`)
+          rollback.unshift(async () => {
+            if (prevEcriture) {
+              await supabase.from('ecritures_comptables').update(prevEcriture).eq('id', ecriture_id)
+            }
+          })
+        }
+
+        // Step 4: audit log (best-effort — failure doesn't rollback business data)
+        try {
+          await supabase.from('rapprochement_audit_log').insert({
+            societe_id: societe_id || null,
+            action: 'lettrer_manuel',
+            releve_id,
+            transaction_idx: txIdx,
+            facture_ids: facture_id ? [facture_id] : [],
+            ecriture_id: ecriture_id || null,
+            lettre_code: lettreCode,
+            montant: amount,
+            devise: prevTx.devise || null,
+            reason: 'Lettrage manuel simple',
+            before_state: prevTx,
+            after_state: txs[txIdx],
+            user_id: user.id,
+            user_email: user.email || null,
+          })
+        } catch (auditErr) {
+          console.warn('[audit] lettrer_manuel log failed:', auditErr)
+        }
+
+        return NextResponse.json({ success: true, lettre: lettreCode })
+      } catch (err: any) {
+        console.error('[lettrer_manuel] atomic failure, rolling back:', err.message)
+        for (const undo of rollback) {
+          try { await undo() } catch (e) { console.error('[lettrer_manuel] rollback step failed:', e) }
+        }
+        return NextResponse.json({ error: `Lettrage échoué (rollback effectué): ${err.message}` }, { status: 500 })
+      }
     }
 
     // === DELETTRER ===
     if (action === 'delettrer') {
-      const { transaction_id, releve_id, facture_id, ecriture_id } = body
+      const { transaction_id, releve_id, facture_id, ecriture_id, societe_id } = body
       if (!releve_id) return NextResponse.json({ error: 'releve_id requis' }, { status: 400 })
 
       const { data: releve } = await supabase
@@ -520,23 +624,87 @@ export async function POST(request: Request) {
 
       const txIdx = parseInt(transaction_id.split('-').pop() || '0')
       const txs = [...(releve.transactions_json || [])]
-      if (txIdx < txs.length) {
-        txs[txIdx] = { ...txs[txIdx], facture_id: null, ecriture_id: null, lettre: null, statut: 'a_verifier' }
-        await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', releve_id)
-      }
+      const prevTx = txIdx < txs.length ? { ...txs[txIdx] } : null
 
-      if (facture_id) {
-        await supabase.from('factures').update({
-          statut: 'en_attente',
-          rapproche_releve_id: null,
-          rapproche_transaction_idx: null,
-          rapproche_date: null,
-          rapproche_source: null,
-        }).eq('id', facture_id)
-      }
-      if (ecriture_id) await supabase.from('ecritures_comptables').update({ lettre: null, date_lettrage: null }).eq('id', ecriture_id)
+      // Collect all facture_ids to unlink (support multi-facture delettrage)
+      const faIds: string[] = facture_id
+        ? [facture_id]
+        : Array.isArray(prevTx?.facture_ids) ? prevTx.facture_ids : (prevTx?.facture_id ? [prevTx.facture_id] : [])
 
-      return NextResponse.json({ success: true })
+      const rollback: Array<() => Promise<any>> = []
+
+      try {
+        if (prevTx) {
+          txs[txIdx] = {
+            ...prevTx,
+            facture_id: null,
+            facture_ids: undefined,
+            ecriture_id: null,
+            lettre: null,
+            statut: 'a_verifier',
+            rapprochement_multi: undefined,
+            nb_factures: undefined,
+          }
+          const { error: updErr } = await supabase
+            .from('releves_bancaires').update({ transactions_json: txs }).eq('id', releve_id)
+          if (updErr) throw new Error(`Releve update failed: ${updErr.message}`)
+          rollback.unshift(async () => {
+            const revertTxs = [...txs]
+            revertTxs[txIdx] = prevTx
+            await supabase.from('releves_bancaires').update({ transactions_json: revertTxs }).eq('id', releve_id)
+          })
+        }
+
+        for (const fId of faIds) {
+          const { error } = await supabase.from('factures').update({
+            statut: 'en_attente',
+            rapproche_releve_id: null,
+            rapproche_transaction_idx: null,
+            rapproche_date: null,
+            rapproche_source: null,
+          }).eq('id', fId)
+          if (error) throw new Error(`Facture ${fId} update failed: ${error.message}`)
+        }
+
+        if (ecriture_id) {
+          const { error } = await supabase.from('ecritures_comptables').update({
+            lettre: null,
+            date_lettrage: null,
+            rapproche_releve_id: null,
+            rapproche_transaction_idx: null,
+            rapproche_at: null,
+          }).eq('id', ecriture_id)
+          if (error) throw new Error(`Ecriture update failed: ${error.message}`)
+        }
+
+        // Audit (best-effort)
+        try {
+          await supabase.from('rapprochement_audit_log').insert({
+            societe_id: societe_id || null,
+            action: 'delettrer',
+            releve_id,
+            transaction_idx: txIdx,
+            facture_ids: faIds,
+            ecriture_id: ecriture_id || null,
+            lettre_code: prevTx?.lettre || null,
+            reason: 'Délettrage manuel',
+            before_state: prevTx,
+            after_state: prevTx ? txs[txIdx] : null,
+            user_id: user.id,
+            user_email: user.email || null,
+          })
+        } catch (auditErr) {
+          console.warn('[audit] delettrer log failed:', auditErr)
+        }
+
+        return NextResponse.json({ success: true })
+      } catch (err: any) {
+        console.error('[delettrer] atomic failure, rolling back:', err.message)
+        for (const undo of rollback) {
+          try { await undo() } catch (e) { console.error('[delettrer] rollback step failed:', e) }
+        }
+        return NextResponse.json({ error: `Délettrage échoué (rollback effectué): ${err.message}` }, { status: 500 })
+      }
     }
 
     // === CREER RAPPROCHEMENT ===
@@ -621,6 +789,7 @@ export async function POST(request: Request) {
       }
 
       // Mettre à jour la transaction avec toutes les facture_ids
+      const prevTxMulti = { ...tx }
       txs[txIdx] = {
         ...tx,
         facture_ids: facture_ids,
@@ -633,6 +802,27 @@ export async function POST(request: Request) {
         rapproche_at: reconcileDate,
       }
       await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', releve_id)
+
+      // Audit log (best-effort)
+      try {
+        await supabase.from('rapprochement_audit_log').insert({
+          societe_id: societe_id || null,
+          action: 'lettrer_multi',
+          releve_id,
+          transaction_idx: txIdx,
+          facture_ids,
+          lettre_code: lettreCode,
+          montant: txAmount,
+          devise: prevTxMulti.devise || null,
+          reason: `Lettrage multi-facture (${facture_ids.length} factures, écart ${ecart.toFixed(2)})`,
+          before_state: prevTxMulti,
+          after_state: txs[txIdx],
+          user_id: user.id,
+          user_email: user.email || null,
+        })
+      } catch (auditErr) {
+        console.warn('[audit] lettrer_multi log failed:', auditErr)
+      }
 
       // Si écart > 0, créer écriture d'écart
       if (ecart > 1) {

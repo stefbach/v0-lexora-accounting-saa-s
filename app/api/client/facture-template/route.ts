@@ -3,11 +3,16 @@ import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 120
+export const maxDuration = 300
+export const runtime = 'nodejs'
 
 function getAdminClient() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { autoRefreshToken: false, persistSession: false } })
 }
+
+// Limits
+const MAX_FILE_SIZE = 20 * 1024 * 1024 // 20 MB
+const MAX_TOKENS = 8192
 
 export async function POST(request: Request) {
   try {
@@ -24,48 +29,101 @@ export async function POST(request: Request) {
       const societe_id = formData.get('societe_id') as string
       if (!file) return NextResponse.json({ error: 'Fichier requis' }, { status: 400 })
 
+      if (file.size > MAX_FILE_SIZE) {
+        return NextResponse.json({
+          error: `Fichier trop volumineux (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum ${MAX_FILE_SIZE / 1024 / 1024} MB.`,
+        }, { status: 413 })
+      }
+
+      if (!process.env.ANTHROPIC_API_KEY) {
+        return NextResponse.json({
+          error: 'ANTHROPIC_API_KEY manquante côté serveur. Contactez l\'administrateur.',
+        }, { status: 503 })
+      }
+
       const { default: Anthropic } = await import('@anthropic-ai/sdk')
       const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
       const buffer = await file.arrayBuffer()
       const base64 = Buffer.from(buffer).toString('base64')
       const ext = file.name.split('.').pop()?.toLowerCase() || 'pdf'
-      const isPdf = ext === 'pdf'
-      const isImage = ['jpg', 'jpeg', 'png', 'webp'].includes(ext)
+      const mimeFromHeader = (file.type || '').toLowerCase()
+
+      // Détection robuste : on privilégie le MIME type fourni par le navigateur
+      // puis on retombe sur l'extension. Les fichiers .xlsx renommés en .pdf
+      // sont rejetés avant d'atteindre Claude.
+      const isPdf = mimeFromHeader === 'application/pdf' || ext === 'pdf'
+      const isPng = mimeFromHeader === 'image/png' || ext === 'png'
+      const isJpeg = mimeFromHeader === 'image/jpeg' || mimeFromHeader === 'image/jpg' || ['jpg', 'jpeg'].includes(ext)
+      const isWebp = mimeFromHeader === 'image/webp' || ext === 'webp'
+
+      // Sanity check sur les magic bytes
+      const head = Buffer.from(buffer).subarray(0, 8)
+      const headHex = head.toString('hex')
+      const isPdfMagic = headHex.startsWith('25504446') // %PDF
+      const isPngMagic = headHex.startsWith('89504e47')
+      const isJpegMagic = headHex.startsWith('ffd8ff')
+      const isWebpMagic = head.subarray(0, 4).toString('ascii') === 'RIFF'
+
+      console.log(`[facture-template] file=${file.name} size=${file.size} mime=${mimeFromHeader} ext=${ext} magic=${headHex.substring(0, 8)}`)
 
       let content: any[]
-      if (isPdf) {
+      if (isPdf && isPdfMagic) {
         content = [
           { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
           { type: 'text', text: ANALYZE_PROMPT },
         ]
-      } else if (isImage) {
+      } else if ((isPng && isPngMagic) || (isJpeg && isJpegMagic) || (isWebp && isWebpMagic)) {
+        const media_type = isPng ? 'image/png' : isWebp ? 'image/webp' : 'image/jpeg'
         content = [
-          { type: 'image', source: { type: 'base64', media_type: ext === 'png' ? 'image/png' : 'image/jpeg', data: base64 } },
+          { type: 'image', source: { type: 'base64', media_type, data: base64 } },
           { type: 'text', text: ANALYZE_PROMPT },
         ]
+      } else if (isPdf && !isPdfMagic) {
+        return NextResponse.json({
+          error: `Le fichier porte l'extension .pdf mais n'est pas un vrai PDF (magic bytes: ${headHex.substring(0, 8)}). Est-ce un Excel/Word renommé ?`,
+        }, { status: 400 })
       } else {
-        return NextResponse.json({ error: 'Format non supporté. Utilisez PDF, JPG ou PNG.' }, { status: 400 })
+        return NextResponse.json({
+          error: `Format non supporté. Utilisez PDF, JPG, PNG ou WebP. (mime=${mimeFromHeader}, ext=${ext})`,
+        }, { status: 400 })
       }
 
-      console.log(`[facture-template] Analyzing file: ${file.name}, size: ${file.size}`)
+      console.log(`[facture-template] Calling Claude (model=claude-sonnet-4-6, max_tokens=${MAX_TOKENS})...`)
       let msg: any
+      const t0 = Date.now()
       try {
-        const stream = anthropic.messages.stream({
+        // Use create() instead of stream() — simpler, no overhead, respects timeout
+        msg = await anthropic.messages.create({
           model: 'claude-sonnet-4-6',
-          max_tokens: 8192,
+          max_tokens: MAX_TOKENS,
           temperature: 0,
           messages: [{ role: 'user', content }],
         })
-        msg = await stream.finalMessage()
       } catch (aiErr: any) {
-        console.error('[facture-template] AI call failed:', aiErr.message)
-        return NextResponse.json({ error: 'Erreur IA: ' + (aiErr.message || 'Appel Claude échoué') }, { status: 500 })
+        const dt = Date.now() - t0
+        console.error(`[facture-template] AI call failed after ${dt}ms:`, aiErr.message, aiErr.status, aiErr.error)
+        return NextResponse.json({
+          error: 'Erreur IA: ' + (aiErr.message || 'Appel Claude échoué'),
+          status: aiErr.status || null,
+          details: aiErr.error?.message || aiErr.error || null,
+          duration_ms: dt,
+        }, { status: 500 })
       }
-      const text = msg.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
+      const dt = Date.now() - t0
+      console.log(`[facture-template] Claude responded in ${dt}ms, stop_reason=${msg.stop_reason}, usage=${JSON.stringify(msg.usage)}`)
 
-      // Parser robuste : supprime les fences markdown, les commentaires JS (//, /* */)
-      // puis isole le premier objet JSON équilibré au lieu d'un .match() gourmand.
+      const text = (msg.content || []).filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
+      if (!text) {
+        return NextResponse.json({
+          error: 'Réponse IA vide (aucun bloc texte).',
+          stop_reason: msg.stop_reason,
+          content_blocks: (msg.content || []).map((b: any) => b.type),
+        }, { status: 500 })
+      }
+
+      // Parser robuste : supprime les fences markdown puis isole le premier
+      // objet JSON équilibré au lieu d'un .match() gourmand.
       const cleaned = text
         .replace(/```json\s*/gi, '')
         .replace(/```\s*/g, '')
@@ -100,10 +158,15 @@ export async function POST(request: Request) {
       } catch (parseErr: any) {
         console.error('[facture-template] JSON parse failed:', parseErr.message)
         console.error('[facture-template] Raw text (first 2000 chars):', cleaned.substring(0, 2000))
+        // Stop reason == 'max_tokens' → troncature, message spécifique
+        const truncated = msg?.stop_reason === 'max_tokens'
         return NextResponse.json({
-          error: 'Erreur analyse IA: ' + (parseErr.message || 'JSON invalide'),
+          error: truncated
+            ? `Réponse IA tronquée (max_tokens=${MAX_TOKENS} atteint). Essayez un template plus simple ou contactez l'administrateur.`
+            : 'Erreur analyse IA: ' + (parseErr.message || 'JSON invalide'),
           raw: cleaned.substring(0, 2000),
           stop_reason: msg?.stop_reason,
+          truncated,
         }, { status: 500 })
       }
 
@@ -204,23 +267,25 @@ export async function POST(request: Request) {
   }
 }
 
-const ANALYZE_PROMPT = `Analyse cette facture et extrais le TEMPLATE de mise en page (pas les données). Retourne UNIQUEMENT un JSON valide:
+const ANALYZE_PROMPT = `Analyse cette facture et extrais UNIQUEMENT les métadonnées de mise en page — PAS les données (montants, clients, lignes).
+
+Retourne UNIQUEMENT un objet JSON valide (pas de texte avant ou après, pas de markdown) avec ces champs :
 
 {
-  "nom_template": "Template basé sur [nom entreprise]",
+  "nom_template": "Template basé sur [nom entreprise détecté]",
   "couleur_primaire": "#hex",
   "couleur_secondaire": "#hex",
   "logo_position": "top-left|top-center|top-right",
   "format_numero": "INV-{YYYY}-{NNN}",
-  "devise": "MUR|EUR|USD",
+  "devise": "MUR|EUR|USD|GBP",
   "taux_tva": 15,
   "colonnes": ["description", "quantite", "prix_unitaire", "montant"],
-  "entete_html": "<div>...structure HTML de l'en-tête avec placeholders {{nom_societe}}, {{adresse}}, {{brn}}, {{tva_number}}, {{telephone}}, {{email}}...</div>",
-  "pied_page_html": "<div>...pied de page avec {{conditions_paiement}}, {{mentions_legales}}, {{coordonnees_bancaires}}...</div>",
-  "mentions_legales": "texte des mentions légales détecté",
-  "conditions_paiement": "conditions de paiement détectées (ex: Net 30 jours)",
+  "entete_html": "<div>...court template HTML <500 chars avec placeholders {{nom_societe}}, {{adresse}}, {{brn}}, {{tva_number}}, {{telephone}}, {{email}}...</div>",
+  "pied_page_html": "<div>...court <500 chars avec {{conditions_paiement}}, {{mentions_legales}}, {{coordonnees_bancaires}}</div>",
+  "mentions_legales": "texte court <300 chars",
+  "conditions_paiement": "ex: Net 30 jours",
   "style": {
-    "police": "nom de la police détectée",
+    "police": "nom de police",
     "taille_titre": "18px",
     "taille_corps": "12px",
     "bordures_tableau": true,
@@ -229,11 +294,9 @@ const ANALYZE_PROMPT = `Analyse cette facture et extrais le TEMPLATE de mise en 
   }
 }
 
-IMPORTANT:
-- Analyse la MISE EN PAGE, pas les données
-- Détecte les couleurs utilisées (en-tête, texte, bordures)
-- Détecte la structure du tableau (colonnes, alignement)
-- Détecte le format du numéro de facture
-- Extrais les mentions légales et conditions de paiement
-- Le HTML doit utiliser des placeholders {{variable}} pour les données dynamiques
-- Le template doit être réutilisable pour générer de nouvelles factures`
+CONTRAINTES STRICTES :
+- Réponse uniquement en JSON, AUCUN texte avant ou après
+- Pas de commentaires JS, pas de virgule finale, pas de markdown
+- entete_html et pied_page_html doivent rester COURTS (<500 chars chacun)
+- Utilise UNIQUEMENT des placeholders {{variable}}, pas de vraies données
+- Si une info n'est pas détectable, utilise une valeur par défaut raisonnable (pas de null)`
