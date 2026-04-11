@@ -41,6 +41,7 @@ import {
   CalendarDays,
   Target,
   ClipboardList,
+  FileSignature,
 } from "lucide-react"
 
 const NAVY = "#0B0F2E"
@@ -70,6 +71,7 @@ const CABINET_SECTIONS: NavSection[] = [
       { href: "/comptable", label: "Dashboard", labelKey: "admin.dashboard", icon: LayoutDashboard },
       { href: "/comptable/clients", label: "Mes Clients", labelKey: "comptable.my_clients", icon: Users },
       { href: "/comptable/equipe", label: "Mon Équipe", labelKey: "comptable.my_team", icon: UsersRound },
+      { href: "/comptable/contrats", label: "Contrats clients", icon: FileSignature },
     ],
   },
 ]
