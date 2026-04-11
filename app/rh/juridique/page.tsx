@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Loader2, FileText, Eye, Download, Printer, CheckCircle, XCircle, AlertCircle } from "lucide-react"
+import { Loader2, FileText, Eye, Download, Printer, CheckCircle, XCircle, AlertCircle, Link2, Copy, CheckCheck } from "lucide-react"
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -79,6 +79,11 @@ export default function JuridiquePage() {
   const [verifying, setVerifying] = useState(false)
   const [verifyResult, setVerifyResult] = useState<any[] | null>(null)
 
+  // ── Signature électronique ──
+  const [genLienLoading, setGenLienLoading] = useState<string | null>(null)
+  const [lienSignature, setLienSignature] = useState<{ id: string; lien: string } | null>(null)
+  const [copied, setCopied] = useState(false)
+
   // ── Chargement données ──
   useEffect(() => {
     fetch("/api/comptable/societes").then(r => r.json()).then(d => setSocietes(d.societes || []))
@@ -144,18 +149,11 @@ export default function JuridiquePage() {
     if (!genResult || !genForm.employe_id) return
     setSaving(true)
     try {
-      const { data } = await fetch("/api/rh/contrats", {
-        method: "GET", // On passe par Supabase direct via la route PATCH ou on crée via /api/juridique
-      }).then(() => ({ data: null })) // placeholder — voir note ci-dessous
-
-      // Créer directement via Supabase REST (ou adapter /api/rh/contrats POST)
-      const res = await fetch("/api/juridique", {
+      const res = await fetch("/api/rh/contrats", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "sauvegarder_contrat",
           employe_id: genForm.employe_id,
-          societe_id: genSociete,
           type_contrat: genForm.type,
           secteur: genForm.secteur,
           date_debut: genForm.date_debut,
@@ -166,9 +164,11 @@ export default function JuridiquePage() {
         })
       })
       const d = await res.json()
-      if (d.id || d.contrat?.id) {
-        setSavedId(d.id || d.contrat?.id)
+      if (d.contrat?.id) {
+        setSavedId(d.contrat.id)
         loadContrats()
+      } else {
+        alert("Erreur sauvegarde : " + (d.error || "Inconnue"))
       }
     } catch (e) { console.error(e) }
     finally { setSaving(false) }
@@ -209,6 +209,32 @@ export default function JuridiquePage() {
       }
     } catch { setVerifyResult([{ statut: "error", texte: "Erreur lors de l'analyse" }]) }
     finally { setVerifying(false) }
+  }
+
+  // ── Générer lien de signature ──
+  const genererLienSignature = async (id: string) => {
+    setGenLienLoading(id)
+    try {
+      const res = await fetch(`/api/rh/contrats/${id}/signer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "generer_token" }),
+      })
+      const data = await res.json()
+      if (data.lien_signature) {
+        setLienSignature({ id, lien: data.lien_signature })
+      } else {
+        alert("Erreur : " + (data.error || "Impossible de générer le lien"))
+      }
+    } catch { alert("Erreur réseau") }
+    finally { setGenLienLoading(null) }
+  }
+
+  const copierLien = () => {
+    if (!lienSignature) return
+    navigator.clipboard.writeText(lienSignature.lien)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
   // ── Mettre à jour statut contrat ──
@@ -302,19 +328,35 @@ export default function JuridiquePage() {
                         <TableCell className="text-sm font-mono">{c.date_fin ?? <span className="text-gray-400">Indéterminée</span>}</TableCell>
                         <TableCell><StatutBadge statut={c.statut} /></TableCell>
                         <TableCell>
-                          <div className="flex gap-1">
+                          <div className="flex gap-1 flex-wrap">
                             <Button size="sm" variant="outline" className="h-7 text-xs px-2" onClick={() => setViewContrat(c)}>
                               <Eye className="w-3 h-3 mr-1" />Voir
                             </Button>
+                            {c.id && (
+                              <a href={`/api/rh/contrats/${c.id}/pdf`} target="_blank" rel="noopener noreferrer">
+                                <Button size="sm" variant="outline" className="h-7 text-xs px-2">
+                                  <Download className="w-3 h-3 mr-1" />PDF
+                                </Button>
+                              </a>
+                            )}
                             {c.html_content && (
-                              <>
-                                <Button size="sm" variant="outline" className="h-7 text-xs px-2" onClick={() => imprimerContrat(c.html_content)}>
-                                  <Printer className="w-3 h-3" />
-                                </Button>
-                                <Button size="sm" variant="outline" className="h-7 text-xs px-2" onClick={() => telechargerHTML(c.html_content, `contrat_${c.employe?.nom ?? c.id}`)}>
-                                  <Download className="w-3 h-3" />
-                                </Button>
-                              </>
+                              <Button size="sm" variant="outline" className="h-7 text-xs px-2" onClick={() => imprimerContrat(c.html_content)}>
+                                <Printer className="w-3 h-3" />
+                              </Button>
+                            )}
+                            {c.statut !== "signe" && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs px-2 border-[#D4AF37] text-[#0B0F2E] hover:bg-[#D4AF37]/10"
+                                onClick={() => genererLienSignature(c.id)}
+                                disabled={genLienLoading === c.id}
+                              >
+                                {genLienLoading === c.id
+                                  ? <Loader2 className="w-3 h-3 animate-spin" />
+                                  : <><Link2 className="w-3 h-3 mr-1" />Signer</>
+                                }
+                              </Button>
                             )}
                           </div>
                         </TableCell>
@@ -485,6 +527,40 @@ export default function JuridiquePage() {
         </TabsContent>
       </Tabs>
 
+      {/* ── Dialog : lien de signature généré ── */}
+      <Dialog open={!!lienSignature} onOpenChange={open => { if (!open) { setLienSignature(null); setCopied(false) } }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-[#0B0F2E]">
+              <Link2 className="w-5 h-5 text-[#D4AF37]" />
+              Lien de signature généré
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <p className="text-sm text-gray-600">
+              Envoyez ce lien à l'employé par email ou WhatsApp. Le lien est à usage unique et sera invalidé après signature.
+            </p>
+            <div className="flex gap-2">
+              <input
+                readOnly
+                value={lienSignature?.lien || ""}
+                className="flex-1 text-xs border rounded-lg px-3 py-2 bg-gray-50 font-mono text-gray-700 focus:outline-none"
+              />
+              <Button
+                size="sm"
+                onClick={copierLien}
+                className="shrink-0 bg-[#0B0F2E] text-white hover:bg-[#0B0F2E]/80"
+              >
+                {copied ? <><CheckCheck className="w-4 h-4 mr-1" />Copié</> : <><Copy className="w-4 h-4 mr-1" />Copier</>}
+              </Button>
+            </div>
+            <div className="text-xs text-gray-400 p-3 bg-gray-50 rounded-lg">
+              ✅ Conforme Electronic Transactions Act 2000 — La signature enregistre l'IP, la date et l'heure de l'employé.
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* ── Dialog : voir contrat complet ── */}
       <Dialog open={!!viewContrat} onOpenChange={open => !open && setViewContrat(null)}>
         <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
@@ -508,16 +584,34 @@ export default function JuridiquePage() {
                 {l}
               </Button>
             ))}
-            {viewContrat?.html_content && (
-              <div className="ml-auto flex gap-2">
+            <div className="ml-auto flex gap-2">
+              {viewContrat?.id && (
+                <a href={`/api/rh/contrats/${viewContrat.id}/pdf`} target="_blank" rel="noopener noreferrer">
+                  <Button size="sm" variant="outline" className="h-7 text-xs">
+                    <Download className="w-3 h-3 mr-1" />PDF
+                  </Button>
+                </a>
+              )}
+              {viewContrat?.html_content && (
                 <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => imprimerContrat(viewContrat.html_content)}>
-                  <Printer className="w-3 h-3 mr-1" />PDF
+                  <Printer className="w-3 h-3 mr-1" />Imprimer
                 </Button>
-                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => telechargerHTML(viewContrat.html_content, `contrat_${viewContrat.employe?.nom ?? ""}`)}>
-                  <Download className="w-3 h-3 mr-1" />.html
+              )}
+              {viewContrat?.statut !== "signe" && (
+                <Button
+                  size="sm"
+                  className="h-7 text-xs bg-[#D4AF37] text-[#0B0F2E] hover:bg-[#D4AF37]/80"
+                  onClick={() => genererLienSignature(viewContrat!.id)}
+                  disabled={genLienLoading === viewContrat?.id}
+                >
+                  {genLienLoading === viewContrat?.id
+                    ? <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                    : <Link2 className="w-3 h-3 mr-1" />
+                  }
+                  Générer lien de signature
                 </Button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
           <ScrollArea className="flex-1 mt-2">
             {viewContrat?.html_content ? (
@@ -534,3 +628,4 @@ export default function JuridiquePage() {
     </div>
   )
 }
+
