@@ -14,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Search, Plus, Loader2, FileText, TrendingUp, Clock, AlertCircle,
   Eye, Trash2, RefreshCw, CalendarDays, Settings, Pencil, CheckCircle2,
-  Shield, ShieldCheck, X, Building2
+  Shield, ShieldCheck, X, Building2, Download
 } from "lucide-react"
 
 interface Facture {
@@ -423,6 +423,11 @@ export default function ClientFacturesPage() {
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
                             <Button variant="ghost" size="sm" onClick={() => handlePreview(f)} title="Apercu"><Eye className="w-4 h-4" /></Button>
+                            <a href={`/api/client/factures/${f.id}/pdf`} target="_blank" rel="noopener noreferrer" title={f.pdf_url ? "PDF stocké" : "Générer PDF"}>
+                              <Button variant="ghost" size="sm" className={f.pdf_url ? "text-green-600 hover:text-green-700" : "text-gray-500"}>
+                                <Download className="w-4 h-4" />
+                              </Button>
+                            </a>
                             <Button variant="ghost" size="sm" onClick={() => openReassign(f)} title="Changer de societe" className="text-amber-600 hover:text-amber-700"><Building2 className="w-4 h-4" /></Button>
                             <Button variant="ghost" size="sm" onClick={() => handleDelete(f)} className="text-red-500 hover:text-red-700" title="Supprimer"><Trash2 className="w-4 h-4" /></Button>
                           </div>
