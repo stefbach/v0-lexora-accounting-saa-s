@@ -26,7 +26,7 @@ interface Facture {
   lignes: unknown[] | null; client_offshore: boolean
   recurrent: boolean; recurrent_frequence: string | null
   irn?: string | null; mra_status?: string | null; type_document?: string | null
-  document_id?: string | null
+  document_id?: string | null; pdf_url?: string | null; pdf_path?: string | null
 }
 interface Societe { id: string; nom: string }
 interface RecurringTemplate {
