@@ -3,10 +3,11 @@ import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
-import { Scale, FileText, Users, ShieldCheck, Settings, LogOut } from "lucide-react"
+import { Scale, FileText, Users, ShieldCheck, Settings, LogOut, FileSignature } from "lucide-react"
 
 const LINKS = [
   { href: '/juridique', label: 'Tableau de bord', icon: Scale, exact: true },
+  { href: '/juridique/contrats', label: 'Générateur de contrats', icon: FileSignature },
   { href: '/rh/employes', label: 'Employés (lecture)', icon: Users },
 ]
 
