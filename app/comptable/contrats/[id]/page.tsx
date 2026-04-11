@@ -318,7 +318,7 @@ export default function ContratDetailPage() {
                 </span>
               </div>
             )}
-            {contrat.parametres?.periodicite_facturation && (
+            {!!contrat.parametres?.periodicite_facturation && (
               <div className="flex items-center justify-between">
                 <span className="text-xs text-gray-500">Facturation</span>
                 <span className="text-xs font-medium text-gray-800">
@@ -326,13 +326,13 @@ export default function ContratDetailPage() {
                 </span>
               </div>
             )}
-            {contrat.parametres?.services && Array.isArray(contrat.parametres.services) && (
+            {Array.isArray(contrat.parametres?.services) && (contrat.parametres.services as unknown[]).length > 0 && (
               <div>
                 <span className="text-xs text-gray-500 block mb-1">Services</span>
                 <div className="flex flex-wrap gap-1">
-                  {(contrat.parametres.services as string[]).slice(0, 3).map((s, i) => (
+                  {(contrat.parametres.services as unknown[]).slice(0, 3).map((s, i) => (
                     <span key={i} className="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">
-                      {s}
+                      {String(s)}
                     </span>
                   ))}
                 </div>
