@@ -43,7 +43,7 @@ export async function POST(request: Request, { params }: Params) {
       if (error) throw error
 
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.lexora.mu'
-      const lienSignature = `${baseUrl}/signer-contrat?token=${token}`
+      const lienSignature = `${baseUrl}/signer-contrat?id=${id}&token=${token}`
 
       return NextResponse.json({ token, lien_signature: lienSignature })
     }
