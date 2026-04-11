@@ -9,20 +9,26 @@ RÈGLES : (1) Cite toujours la section exacte (WRA s.52(3)), (2) Distingue oblig
 
 export async function genererContrat(params: {
   type: string; secteur: string; employe_nom: string; poste: string;
-  salaire: number; date_debut: string; langue?: string;
+  salaire: number; date_debut: string; date_fin?: string; langue?: string;
   societe_nom?: string; societe_brn?: string; societe_adresse?: string;
+  employe_nic?: string; employe_dob?: string;
 }): Promise<string> {
   const { remplirTemplate, getTemplate } = await import('./contratsTemplates');
   const template = getTemplate(params.type, params.secteur);
+  const parts = (params.employe_nom || '').trim().split(' ')
   return remplirTemplate(template, {
-    societe_nom: params.societe_nom || 'Société',
-    societe_brn: params.societe_brn || '______',
+    societe_nom:     params.societe_nom || 'Société',
+    societe_brn:     params.societe_brn || '______',
     societe_adresse: params.societe_adresse || 'Mauritius',
-    employe_nom: params.employe_nom.split(' ').slice(-1)[0],
-    employe_prenom: params.employe_nom.split(' ')[0],
-    employe_nic: '______', employe_dob: '______',
-    poste: params.poste, salaire_base: params.salaire,
-    date_debut: params.date_debut, lieu_travail: params.societe_adresse || 'Port Louis, Mauritius',
+    employe_nom:     parts.slice(1).join(' ') || parts[0] || '______',
+    employe_prenom:  parts[0] || '______',
+    employe_nic:     params.employe_nic || '______',
+    employe_dob:     params.employe_dob || '______',
+    poste:           params.poste || '______',
+    salaire_base:    params.salaire,
+    date_debut:      params.date_debut,
+    date_fin:        params.date_fin,
+    lieu_travail:    params.societe_adresse || 'Port Louis, Mauritius',
   });
 }
 
@@ -37,3 +43,4 @@ export async function verifierContrat(html: string): Promise<{ risques: string[]
   try { return match ? JSON.parse(match[0]) : { risques: [], score: 80, clauses_manquantes: [] }; }
   catch { return { risques: [], score: 80, clauses_manquantes: [] }; }
 }
+

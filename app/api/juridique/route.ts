@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     const { action } = body
 
     if (action === 'generer_contrat') {
-      // Récupérer les vraies infos société depuis Supabase si societe_id fourni
+      // Récupérer infos société
       let societe_info = { nom: 'Société', brn: '______', adresse: 'Mauritius' }
       if (body.societe_id) {
         const { data: soc } = await supabase
@@ -23,11 +23,28 @@ export async function POST(request: Request) {
           .select('nom, brn, adresse')
           .eq('id', body.societe_id)
           .single()
-        if (soc) {
-          societe_info = {
-            nom: soc.nom || 'Société',
-            brn: soc.brn || '______',
-            adresse: (soc as any).adresse || 'Mauritius',
+        if (soc) societe_info = { nom: soc.nom || 'Société', brn: soc.brn || '______', adresse: (soc as any).adresse || 'Mauritius' }
+      }
+
+      // Récupérer NIC et date de naissance depuis la fiche employé
+      let employe_nic = '______'
+      let employe_dob = '______'
+      if (body.employe_id) {
+        const { data: emp } = await supabase
+          .from('employes')
+          .select('nic_number, date_naissance, prenom, nom')
+          .eq('id', body.employe_id)
+          .single()
+        if (emp) {
+          if (emp.nic_number) employe_nic = emp.nic_number
+          if (emp.date_naissance) {
+            // Format DD/MM/YYYY
+            const d = new Date(emp.date_naissance)
+            employe_dob = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`
+          }
+          // Utiliser le nom réel si non fourni
+          if (!body.employe_nom && emp.prenom && emp.nom) {
+            body.employe_nom = `${emp.prenom} ${emp.nom}`
           }
         }
       }
@@ -42,9 +59,12 @@ export async function POST(request: Request) {
         societe_nom: societe_info.nom,
         societe_brn: societe_info.brn,
         societe_adresse: societe_info.adresse,
+        employe_nic,
+        employe_dob,
       })
 
-      const { data } = await supabase.from('contrats_employes').insert({
+      // Sauvegarder en base
+      const { data: contrat } = await supabase.from('contrats_employes').insert({
         employe_id: body.employe_id,
         societe_id: body.societe_id,
         type_contrat: body.type || 'CDI',
@@ -57,7 +77,7 @@ export async function POST(request: Request) {
         statut: 'brouillon',
       }).select().single()
 
-      return NextResponse.json({ contrat: data, html })
+      return NextResponse.json({ contrat, html })
     }
 
     if (action === 'verifier_contrat') {
