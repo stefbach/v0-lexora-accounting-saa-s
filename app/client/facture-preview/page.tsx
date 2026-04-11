@@ -16,6 +16,7 @@ interface InvoiceData {
   termes: string; notes_internes: string; template: string
   tiers: string; logo_url: string
   accent_color?: string
+  template_id?: string
   irn?: string; qr_code_data?: string; fiscalisation_date?: string
   mra_status?: string; type_document?: string
   facture_reference_id?: string
@@ -38,6 +39,7 @@ function FacturePreviewContent() {
   const searchParams = useSearchParams()
   const [data, setData] = useState<InvoiceData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [templateData, setTemplateData] = useState<{ entete_html?: string; pied_page_html?: string; mentions_legales?: string } | null>(null)
 
   useEffect(() => {
     const factureId = searchParams.get("facture_id")
@@ -67,6 +69,19 @@ function FacturePreviewContent() {
       setLoading(false)
     }
   }, [searchParams])
+
+  // Charger le template DB si template_id présent
+  useEffect(() => {
+    if (data?.template_id) {
+      fetch(`/api/client/facture-template?id=${data.template_id}`)
+        .then(r => r.json())
+        .then(d => {
+          const t = d.template || d.templates?.[0]
+          if (t) setTemplateData({ entete_html: t.entete_html, pied_page_html: t.pied_page_html, mentions_legales: t.mentions_legales })
+        })
+        .catch(() => {})
+    }
+  }, [data?.template_id])
 
   // Auto-print if requested
   useEffect(() => {
@@ -302,7 +317,21 @@ function FacturePreviewContent() {
           </div>
         )}
 
-        {/* Footer */}
+        {/* Pied de page template (HTML personnalisé) */}
+        {templateData?.pied_page_html && (
+          <div className="mt-6 pt-4 border-t border-gray-100"
+            dangerouslySetInnerHTML={{ __html: templateData.pied_page_html }}
+          />
+        )}
+
+        {/* Mentions légales template */}
+        {templateData?.mentions_legales && !templateData?.pied_page_html && (
+          <div className="mt-4 pt-4 border-t border-gray-100 text-xs text-gray-500 text-center">
+            {templateData.mentions_legales}
+          </div>
+        )}
+
+        {/* Footer standard */}
         <div className="mt-auto pt-8 border-t border-gray-200">
           {s.footer_text && (
             <p className="text-center text-sm text-gray-500 mb-2">{s.footer_text}</p>
@@ -323,3 +352,4 @@ export default function FacturePreviewPage() {
     </Suspense>
   )
 }
+

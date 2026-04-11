@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Plus, Trash2, Eye, Save, Lock, Download, ArrowLeft, FileText, User, ListOrdered, Calculator, CreditCard, StickyNote, Palette, Check, FileWarning, FileMinus } from "lucide-react"
+import { Plus, Trash2, Eye, Save, Lock, Download, ArrowLeft, FileText, User, ListOrdered, Calculator, CreditCard, StickyNote, Palette, Check, FileWarning, FileMinus, Wand2 } from "lucide-react"
 
 interface LigneFacture { id: string; description: string; unite: string; quantite: number; prix_unitaire: number; taux_tva: number; montant_ht: number }
 interface InvoiceClient { id: string; nom: string; entreprise: string; adresse: string; email: string; telephone: string; vat_number: string; devise: string; conditions_paiement: number; offshore: boolean }
@@ -77,6 +77,9 @@ export default function NouvelleFacturePage() {
   const [notesVisibles, setNotesVisibles] = useState("")
   const [notesInternes, setNotesInternes] = useState("")
   const [accentColor, setAccentColor] = useState("#0B0F2E")
+  const [templates, setTemplates] = useState<any[]>([])
+  const [templateId, setTemplateId] = useState("")
+  const [tvaDef, setTvaDef] = useState(15)
 
   useEffect(() => {
     try {
@@ -98,6 +101,10 @@ export default function NouvelleFacturePage() {
     fetch("/api/client/societes").then(r => r.json()).then(d => {
       setSocietes(d.societes || [])
       if (d.societes?.length > 0) setSocieteId(d.societes[0].id)
+    }).catch(() => {})
+    // Charger les templates depuis la DB
+    fetch("/api/client/facture-template").then(r => r.json()).then(d => {
+      setTemplates(d.templates || [])
     }).catch(() => {})
     // Load existing invoices for credit note references
     fetch("/api/client/factures?statut=en_attente").then(r => r.json()).then(d => {
@@ -155,6 +162,27 @@ export default function NouvelleFacturePage() {
 
   const handleEcheancePreset = (val: string) => { const n = parseInt(val); setEcheancePreset(n); if (n > 0) setDateEcheance(addDays(dateFacture, n)) }
 
+  const handleTemplateSelect = (id: string) => {
+    setTemplateId(id)
+    if (!id || id === "none") return
+    const t = templates.find(t => t.id === id)
+    if (!t) return
+    if (t.couleur_primaire) setAccentColor(t.couleur_primaire)
+    if (t.devise_defaut) setDevise(t.devise_defaut)
+    if (t.tva_defaut !== undefined) setTvaDef(t.tva_defaut)
+    if (t.conditions_paiement) { setEcheancePreset(t.conditions_paiement); setDateEcheance(addDays(dateFacture, t.conditions_paiement)) }
+    if (t.mentions_legales) setNotesVisibles(t.mentions_legales)
+    // Générer numéro selon format_numero du template
+    if (t.format_numero) {
+      const now = new Date()
+      const yyyy = now.getFullYear().toString()
+      const mm = String(now.getMonth() + 1).padStart(2, "0")
+      const nnn = String(settings?.prochain_numero || 1).padStart(3, "0")
+      const generated = t.format_numero.replace("{YYYY}", yyyy).replace("{MM}", mm).replace("{NNN}", nnn)
+      setNumeroFacture(generated)
+    }
+  }
+
   const buildInvoiceData = (statut: string) => {
     const isCredit = typeDocument === "avoir"
     const signedHT = isCredit ? -Math.abs(totalHTApresRemise) : totalHTApresRemise
@@ -169,6 +197,7 @@ export default function NouvelleFacturePage() {
       conditions_paiement: echeancePreset > 0 ? echeancePreset : (settings?.conditions_paiement || 30),
       notes_visibles: notesVisibles, notes_internes: notesInternes,
       template: localStorage.getItem("lexora_invoice_template") || "standard",
+      template_id: templateId || undefined,
       client_offshore: clientOffshore, remise_type: remiseType, remise_value: remiseValue, remise_montant: remiseMontant,
       logo_url: settings?.logo_url || "", contre_valeur_mur: contreValeurMUR,
       accent_color: accentColor,
@@ -281,6 +310,37 @@ export default function NouvelleFacturePage() {
           )}
         </CardContent>
       </Card>
+
+      {/* 0. Template selector */}
+      {templates.length > 0 && (
+        <Card className="border-t-4 border-t-[#D4AF37]">
+          <CardHeader className="pb-2"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><Wand2 className="w-4 h-4 text-[#D4AF37]" />Template de facture</CardTitle></CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="flex-1 min-w-[220px]">
+                <Sel value={templateId || "none"} onValueChange={handleTemplateSelect} placeholder="Choisir un template...">
+                  <SelectItem value="none">— Aucun template (défaut) —</SelectItem>
+                  {templates.map(t => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.nom} {t.devise_defaut ? `· ${t.devise_defaut}` : ""} {t.tva_defaut !== undefined ? `· TVA ${t.tva_defaut}%` : ""}
+                    </SelectItem>
+                  ))}
+                </Sel>
+              </div>
+              {templateId && templateId !== "none" && (() => {
+                const t = templates.find(t => t.id === templateId)
+                return t ? (
+                  <div className="flex items-center gap-3 text-sm text-gray-600">
+                    {t.couleur_primaire && <span className="flex items-center gap-1.5"><span className="w-4 h-4 rounded-full inline-block border" style={{ backgroundColor: t.couleur_primaire }} />{t.couleur_primaire}</span>}
+                    {t.format_numero && <span className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">{t.format_numero}</span>}
+                  </div>
+                ) : null
+              })()}
+            </div>
+            {templateId && templateId !== "none" && <p className="text-xs text-green-600 mt-2">✅ Template appliqué — couleurs, TVA, devise, numérotation et mentions légales chargés.</p>}
+          </CardContent>
+        </Card>
+      )}
 
       {/* 1. Invoice header fields */}
       <Card className="border-t-4 border-t-[#0B0F2E]">
@@ -526,3 +586,4 @@ export default function NouvelleFacturePage() {
     </div>
   )
 }
+
