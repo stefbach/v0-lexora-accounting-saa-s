@@ -33,7 +33,7 @@ function fmt(n: number) { return new Intl.NumberFormat("fr-FR", { maximumFractio
 function timeMauritius(): string { return new Date().toLocaleTimeString("en-GB", { timeZone: MU_TZ, hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }) }
 function todayISO(): string { const d = new Date(new Date().toLocaleString("en-US", { timeZone: MU_TZ })); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}` }
 
-type Tab = "dashboard" | "profil" | "bulletins" | "planning" | "primes" | "conges" | "documents" | "trajets" | "sante"
+type Tab = "dashboard" | "profil" | "bulletins" | "planning" | "primes" | "conges" | "documents" | "trajets" | "sante" | "contrats"
 
 // ── Ma fiche — composant isolé (pas de re-render parent) ──
 function MaFicheTab({ employe, onUpdated }: { employe: any; onUpdated: () => void }) {
@@ -647,6 +647,84 @@ function TrajetsTab({ employe }: { employe: any }) {
 }
 
 // ── Documents tab ──
+// ── Onglet Contrats ──────────────────────────────────────────────────────────
+function ContratsTab({ employe }: { employe: any }) {
+  const [contrats, setContrats] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch(`/api/rh/contrats?employe_id=${employe.id}`)
+      .then(r => r.json())
+      .then(d => setContrats(d.contrats || []))
+      .catch(() => setContrats([]))
+      .finally(() => setLoading(false))
+  }, [employe.id])
+
+  const STATUT_LABELS: Record<string, string> = {
+    brouillon:     "En préparation",
+    signe_employe: "Signé — en attente employeur",
+    signe:         "Signé ✓✓",
+    expire:        "Expiré",
+    resilie:       "Résilié",
+  }
+  const STATUT_COLORS: Record<string, string> = {
+    brouillon:     "bg-gray-100 text-gray-600",
+    signe_employe: "bg-blue-100 text-blue-700",
+    signe:         "bg-green-100 text-green-700",
+    expire:        "bg-orange-100 text-orange-700",
+    resilie:       "bg-red-100 text-red-700",
+  }
+
+  return (
+    <Card className="rounded-xl shadow-sm">
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2" style={{ color: NAVY }}>
+          <FileText className="w-4 h-4" /> Mes contrats de travail
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin" style={{ color: NAVY }} /></div>
+        ) : contrats.length === 0 ? (
+          <p className="text-gray-400 text-center py-8">Aucun contrat disponible</p>
+        ) : (
+          <div className="space-y-3">
+            {contrats.map((c: any) => (
+              <div key={c.id} className="flex items-center justify-between p-4 rounded-xl border bg-white hover:shadow-sm transition-shadow">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-sm" style={{ color: NAVY }}>{c.type_contrat}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUT_COLORS[c.statut] ?? "bg-gray-100 text-gray-600"}`}>
+                      {STATUT_LABELS[c.statut] ?? c.statut}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Début : {c.date_debut ?? "—"}
+                    {c.date_fin ? ` · Fin : ${c.date_fin}` : " · Durée indéterminée"}
+                  </p>
+                  {c.date_signature_employe && (
+                    <p className="text-xs text-green-600">✓ Signé par vous le {new Date(c.date_signature_employe).toLocaleDateString("fr-FR")}</p>
+                  )}
+                  {c.date_signature_dirigeant && (
+                    <p className="text-xs text-green-600">✓ Contresigné par l'employeur le {new Date(c.date_signature_dirigeant).toLocaleDateString("fr-FR")}</p>
+                  )}
+                </div>
+                {c.id && (
+                  <a href={`/api/rh/contrats/${c.id}/pdf`} target="_blank" rel="noopener noreferrer">
+                    <Button size="sm" variant="outline" className="shrink-0 text-xs h-8">
+                      <Download className="w-3 h-3 mr-1" /> PDF
+                    </Button>
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 function DocumentsTab({ employe }: { employe: any }) {
   const [documents, setDocuments] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -917,6 +995,7 @@ export default function EspaceEmployePage() {
             { id: "conges" as Tab, label: "Mes congés", icon: Calendar },
             { id: "sante" as Tab, label: "Mon Espace Sante TIBOK", icon: HeartPulse },
             { id: "trajets" as Tab, label: "Trajets km", icon: Car },
+            { id: "contrats" as Tab, label: "Mes contrats", icon: FileText },
             { id: "documents" as Tab, label: "Documents", icon: FolderOpen },
           ]).map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
@@ -1722,6 +1801,9 @@ export default function EspaceEmployePage() {
         })()}
 
         {/* Documents */}
+        {tab === "contrats" && employe && (
+          <ContratsTab employe={employe} />
+        )}
         {tab === "documents" && employe && (
           <DocumentsTab employe={employe} />
         )}
@@ -1800,3 +1882,4 @@ export default function EspaceEmployePage() {
     </div>
   )
 }
+
