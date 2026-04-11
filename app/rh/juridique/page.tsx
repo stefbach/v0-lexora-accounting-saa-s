@@ -26,17 +26,19 @@ const SECTEURS = [
 ]
 
 const STATUT_COLORS: Record<string, string> = {
-  brouillon: "bg-gray-100 text-gray-700",
-  signe:     "bg-green-100 text-green-700",
-  expire:    "bg-orange-100 text-orange-700",
-  resilie:   "bg-red-100 text-red-700",
+  brouillon:     "bg-gray-100 text-gray-700",
+  signe_employe: "bg-blue-100 text-blue-700",
+  signe:         "bg-green-100 text-green-700",
+  expire:        "bg-orange-100 text-orange-700",
+  resilie:       "bg-red-100 text-red-700",
 }
 
 const STATUT_LABELS: Record<string, string> = {
-  brouillon: "Brouillon",
-  signe:     "Signé",
-  expire:    "Expiré",
-  resilie:   "Résilié",
+  brouillon:     "Brouillon",
+  signe_employe: "Signé par employé",
+  signe:         "Signé ✓✓",
+  expire:        "Expiré",
+  resilie:       "Résilié",
 }
 
 function StatutBadge({ statut }: { statut: string }) {
@@ -250,6 +252,25 @@ export default function JuridiquePage() {
       loadContrats()
     } catch (e) { console.error(e) }
     finally { setUpdatingStatut(false) }
+  }
+
+  // ── Contresignature dirigeant ──
+  const [contresignant, setContresignant] = useState(false)
+  const contresigner = async (id: string) => {
+    if (!confirm("Confirmer votre contresignature ? Cette action est irréversible.")) return
+    setContresignant(true)
+    try {
+      const res = await fetch(`/api/rh/contrats/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "contresigner" })
+      })
+      const data = await res.json()
+      if (data.error) { alert("Erreur : " + data.error); return }
+      if (viewContrat?.id === id) setViewContrat((c: any) => ({ ...c, statut: "signe" }))
+      loadContrats()
+    } catch (e) { console.error(e) }
+    finally { setContresignant(false) }
   }
 
   // ── Render ───────────────────────────────────────────────────────────────
@@ -606,7 +627,7 @@ export default function JuridiquePage() {
                   <Printer className="w-3 h-3 mr-1" />Imprimer
                 </Button>
               )}
-              {viewContrat?.statut !== "signe" && (
+              {viewContrat?.statut === "brouillon" && (
                 <Button
                   size="sm"
                   className="h-7 text-xs bg-[#D4AF37] text-[#0B0F2E] hover:bg-[#D4AF37]/80"
@@ -617,7 +638,20 @@ export default function JuridiquePage() {
                     ? <Loader2 className="w-3 h-3 animate-spin mr-1" />
                     : <Link2 className="w-3 h-3 mr-1" />
                   }
-                  Générer lien de signature
+                  Envoyer à l'employé
+                </Button>
+              )}
+              {viewContrat?.statut === "signe_employe" && (
+                <Button
+                  size="sm"
+                  className="h-7 text-xs bg-green-700 text-white hover:bg-green-800"
+                  onClick={() => contresigner(viewContrat!.id)}
+                  disabled={contresignant}
+                >
+                  {contresignant
+                    ? <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                    : "✍️ Contresigner"
+                  }
                 </Button>
               )}
             </div>

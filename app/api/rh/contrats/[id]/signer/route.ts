@@ -137,10 +137,11 @@ export async function POST(request: Request, { params }: Params) {
       const { data: signed, error: updateErr } = await adminSupabase
         .from('contrats_employes')
         .update({
-          statut: 'signe',
-          date_signature: new Date().toISOString(),
-          ip_signature: ip,
-          token_signature: null,
+          statut:                  'signe_employe',
+          date_signature_employe:  new Date().toISOString(),
+          ip_signature_employe:    ip,
+          token_signature:         null,   // invalider le token
+          token_signature_employe: null,
         })
         .eq('id', id)
         .select()

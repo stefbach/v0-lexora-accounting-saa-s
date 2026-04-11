@@ -141,10 +141,13 @@ export default function SignerContratPage() {
           <p className="text-gray-600 mb-2">
             Votre signature électronique a été enregistrée avec succès.
           </p>
-          <p className="text-sm text-gray-400">
-            La date, l'heure et votre adresse IP ont été enregistrées à titre de preuve. Un exemplaire vous sera transmis par email.
+          <p className="text-sm text-gray-500 mb-4">
+            La date, l'heure et votre adresse IP ont été enregistrées à titre de preuve.
           </p>
-          <div className="mt-6 p-3 rounded-lg text-xs text-gray-500" style={{ backgroundColor: "#f9f9f7", border: "1px solid #e0e0d8" }}>
+          <div className="p-3 rounded-lg text-sm text-blue-700 bg-blue-50 border border-blue-200 mb-3">
+            ⏳ En attente de la contresignature de votre employeur. Vous recevrez une confirmation une fois le contrat pleinement exécuté.
+          </div>
+          <div className="p-3 rounded-lg text-xs text-gray-500" style={{ backgroundColor: "#f9f9f7", border: "1px solid #e0e0d8" }}>
             ✅ Signature conforme — Valeur juridique selon le droit mauricien (Electronic Transactions Act 2000)
           </div>
         </div>
