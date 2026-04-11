@@ -59,6 +59,7 @@ const MENU = [
       { href: "/client/demandes-rh", label: "Demandes RH", icon: ClipboardList },
       { href: "/rh/exports/virement", label: "Virements bancaires", icon: Banknote },
       { href: "/rh/juridique", label: "Juridique", icon: Gavel },
+      { href: "/juridique/contrats", label: "Générateur contrats IA", icon: Gavel },
       { href: "/rh/paie/edf", label: "EDF Annuel", icon: Receipt },
       { href: "/rh/paie/parametres", label: "Paramètres paie", icon: Settings },
     ]

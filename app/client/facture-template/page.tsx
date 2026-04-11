@@ -53,7 +53,25 @@ export default function FactureTemplatePage() {
       if (societe) fd.append("societe_id", societe)
       const res = await fetch("/api/client/facture-template", { method: "POST", body: fd })
       const data = await res.json()
-      if (data.error) { setError(data.error); return }
+
+      // Erreur bloquante (IA ou autre)
+      if (data.error && !data.template) {
+        setError(data.error)
+        return
+      }
+
+      // Sauvegarde en base échouée — afficher l'erreur mais montrer le template analysé
+      if (data.saved === false) {
+        setError(
+          `Le template a été analysé mais n'a PAS été sauvegardé en base de données.\n` +
+          `Raison: ${data.error || "inconnue"}` +
+          (data.hint ? `\nIndice: ${data.hint}` : "") +
+          (data.code ? `\nCode: ${data.code}` : "")
+        )
+        setTemplate(data.template)
+        return
+      }
+
       setTemplate(data.template)
       loadTemplates()
     } catch (e: any) { setError(e.message || "Erreur") }
@@ -89,7 +107,7 @@ export default function FactureTemplatePage() {
               className="flex-1 text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-[#0B0F2E] file:text-white hover:file:bg-[#2a3d66]" />
             {uploading && <div className="flex items-center gap-2"><Loader2 className="h-5 w-5 animate-spin" style={{ color: GOLD }} /><span className="text-sm text-gray-500">Analyse IA en cours...</span></div>}
           </div>
-          {error && <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{error}</div>}
+          {error && <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 whitespace-pre-line">{error}</div>}
         </CardContent>
       </Card>
 

@@ -74,31 +74,83 @@ export async function POST(request: Request) {
 
       // Sauvegarder le template
       const supabase = getAdminClient()
-      const { data, error } = await supabase.from('facture_templates').upsert({
+
+      // Nettoyage / sanitation des valeurs retournées par l'IA
+      const baseName = (template.nom_template && String(template.nom_template).trim())
+        || `Template ${file.name.replace(/\.[^.]+$/, '')}`
+
+      // Parser tva_defaut proprement (l'IA peut retourner "15", "15%", 15, null, etc.)
+      let tvaDefaut = 15
+      const rawTva = template.taux_tva
+      if (rawTva !== undefined && rawTva !== null) {
+        const n = typeof rawTva === 'number'
+          ? rawTva
+          : parseFloat(String(rawTva).replace(/[^0-9.]/g, ''))
+        if (!isNaN(n) && n >= 0 && n <= 100) tvaDefaut = n
+      }
+
+      // Générer un nom unique si un template avec ce nom existe déjà pour cette société
+      let nom = baseName
+      const existsQuery = supabase
+        .from('facture_templates')
+        .select('id, nom')
+        .eq('nom', baseName)
+        .limit(1)
+      const { data: existing } = societe_id
+        ? await existsQuery.eq('societe_id', societe_id).maybeSingle()
+        : await existsQuery.is('societe_id', null).maybeSingle()
+
+      if (existing) {
+        const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ')
+        nom = `${baseName} (${stamp})`
+      }
+
+      const payload = {
         societe_id: societe_id || null,
-        nom: template.nom_template || `Template ${file.name}`,
+        nom,
         couleur_primaire: template.couleur_primaire || '#0B0F2E',
         couleur_secondaire: template.couleur_secondaire || '#D4AF37',
         logo_position: template.logo_position || 'top-left',
         entete_html: template.entete_html || '',
         pied_page_html: template.pied_page_html || '',
-        colonnes: template.colonnes || ['description', 'quantite', 'prix_unitaire', 'montant'],
+        colonnes: Array.isArray(template.colonnes) && template.colonnes.length
+          ? template.colonnes
+          : ['description', 'quantite', 'prix_unitaire', 'montant'],
         mentions_legales: template.mentions_legales || '',
         conditions_paiement: template.conditions_paiement || '',
         devise_defaut: template.devise || 'MUR',
-        tva_defaut: template.taux_tva ?? 15,
+        tva_defaut: tvaDefaut,
         format_numero: template.format_numero || 'INV-{YYYY}-{NNN}',
-        style: template.style || {},
+        style: template.style && typeof template.style === 'object' ? template.style : {},
         source_fichier: file.name,
         created_by: user.id,
-      }, { onConflict: 'societe_id,nom' }).select().single()
-
-      if (error) {
-        // Table might not exist — return template without saving
-        return NextResponse.json({ template, saved: false, message: 'Template analysé mais non sauvegardé: ' + error.message })
+        actif: true,
       }
 
-      return NextResponse.json({ template: data || template, saved: true })
+      const { data, error } = await supabase
+        .from('facture_templates')
+        .insert(payload)
+        .select()
+        .single()
+
+      if (error) {
+        console.error('[facture-template] DB save failed:', {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+        })
+        return NextResponse.json({
+          error: 'Sauvegarde en base échouée: ' + error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+          template,
+          saved: false,
+        }, { status: 500 })
+      }
+
+      return NextResponse.json({ template: data, saved: true })
     }
 
     // JSON body — other actions

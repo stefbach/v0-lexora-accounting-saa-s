@@ -72,6 +72,7 @@ const CABINET_SECTIONS: NavSection[] = [
       { href: "/comptable/clients", label: "Mes Clients", labelKey: "comptable.my_clients", icon: Users },
       { href: "/comptable/equipe", label: "Mon Équipe", labelKey: "comptable.my_team", icon: UsersRound },
       { href: "/comptable/contrats", label: "Contrats clients", icon: FilePen },
+      { href: "/juridique/contrats", label: "Générateur IA (juridique)", icon: Gavel },
     ],
   },
 ]
