@@ -9,52 +9,40 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk'
+import type {
+  MessageConversation,
+  ParametresContrat,
+  AnalyseConversation,
+} from './constants'
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-})
+// Re-export constants & types depuis constants.ts (module safe pour le client).
+// Le SDK Anthropic ne doit JAMAIS être initialisé au niveau module car les
+// composants client qui importent des constantes tireraient sinon tout le
+// SDK dans le bundle browser et crasheraient avec « dangerouslyAllowBrowser ».
+export {
+  TYPES_CONTRATS,
+  STATUTS_CONTRATS,
+} from './constants'
+export type {
+  MessageConversation,
+  ParametresContrat,
+  AnalyseConversation,
+} from './constants'
+
+// Instance Anthropic paresseuse — créée à la première utilisation côté serveur
+// uniquement. Même si un client component tire ce module par erreur, aucun
+// `new Anthropic(...)` ne s'exécute au chargement du module.
+let _anthropic: Anthropic | null = null
+function getAnthropic(): Anthropic {
+  if (!_anthropic) {
+    _anthropic = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY,
+    })
+  }
+  return _anthropic
+}
 
 export const CLAUDE_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6'
-
-// ============================================================
-// TYPES
-// ============================================================
-
-export interface MessageConversation {
-  role: 'user' | 'assistant'
-  content: string
-  timestamp?: string
-}
-
-export interface ParametresContrat {
-  type_contrat?: string
-  titre?: string
-  nom_client?: string
-  nom_societe_client?: string
-  nom_cabinet?: string
-  services?: string[]
-  honoraires_mensuels?: number
-  honoraires_annuels?: number
-  modalites_paiement?: string
-  date_debut?: string
-  date_fin?: string
-  duree_mois?: number
-  periodicite_facturation?: string
-  delai_paiement?: number
-  clause_resiliation?: string
-  clause_confidentialite?: boolean
-  clause_propriete_intellectuelle?: boolean
-  droit_applicable?: string
-  juridiction?: string
-  [key: string]: unknown
-}
-
-export interface AnalyseConversation {
-  parametres_extraits: ParametresContrat
-  informations_manquantes: string[]
-  pret_a_generer: boolean
-  prochaine_question?: string
-}
 
 // ============================================================
 // SYSTEM PROMPT — Assistant Rédaction de Contrats
@@ -176,7 +164,7 @@ ${params.nouveau_message}`
     },
   ]
 
-  const response = await anthropic.messages.create({
+  const response = await getAnthropic().messages.create({
     model: CLAUDE_MODEL,
     max_tokens: 1024,
     system: SYSTEM_PROMPT_ASSISTANT,
@@ -215,7 +203,7 @@ ${params.nouveau_message}`
     },
   ]
 
-  const stream = anthropic.messages.stream({
+  const stream = getAnthropic().messages.stream({
     model: CLAUDE_MODEL,
     max_tokens: 1024,
     system: SYSTEM_PROMPT_ASSISTANT,
@@ -279,7 +267,7 @@ Réponds avec ce JSON exact:
 }`
 
   try {
-    const response = await anthropic.messages.create({
+    const response = await getAnthropic().messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 1500,
       system: SYSTEM_PROMPT_EXTRACTION,
@@ -337,7 +325,7 @@ ${params.instructions_specifiques ? `## INSTRUCTIONS SPÉCIFIQUES\n${params.inst
 
 Génère le HTML complet maintenant.`
 
-  const response = await anthropic.messages.create({
+  const response = await getAnthropic().messages.create({
     model: CLAUDE_MODEL,
     max_tokens: 6000,
     system: SYSTEM_PROMPT_GENERATION,
@@ -369,7 +357,7 @@ ${JSON.stringify(params.parametres, null, 2)}
 
 Retourne le contrat HTML complet modifié. Garde la même structure et les mêmes styles.`
 
-  const response = await anthropic.messages.create({
+  const response = await getAnthropic().messages.create({
     model: CLAUDE_MODEL,
     max_tokens: 6000,
     system: SYSTEM_PROMPT_GENERATION,
@@ -417,25 +405,7 @@ function getLibelleContrat(type: string): string {
   return libelles[type] || 'un contrat'
 }
 
-// ============================================================
-// TYPES CONTRATS — Labels et icônes
-// ============================================================
-
-export const TYPES_CONTRATS = [
-  { value: 'lettre_mission', label: 'Lettre de mission', description: 'Mission comptable récurrente' },
-  { value: 'convention_honoraires', label: "Convention d'honoraires", description: 'Mission ponctuelle' },
-  { value: 'prestation_service', label: 'Prestation de service', description: 'Services techniques ou consulting' },
-  { value: 'nda', label: 'NDA / Confidentialité', description: 'Protection des informations' },
-  { value: 'mandat', label: 'Mandat de représentation', description: 'Représentation MRA, ROC, FSC' },
-  { value: 'autre', label: 'Autre contrat', description: 'Format libre' },
-] as const
-
-export const STATUTS_CONTRATS = [
-  { value: 'brouillon', label: 'Brouillon', color: 'gray' },
-  { value: 'en_revision', label: 'En révision', color: 'yellow' },
-  { value: 'valide', label: 'Validé', color: 'blue' },
-  { value: 'envoye', label: 'Envoyé', color: 'purple' },
-  { value: 'signe', label: 'Signé', color: 'green' },
-  { value: 'archive', label: 'Archivé', color: 'gray' },
-  { value: 'resilie', label: 'Résilié', color: 'red' },
-] as const
+// Les constantes TYPES_CONTRATS et STATUTS_CONTRATS ont été déplacées dans
+// `./constants.ts` et sont ré-exportées en tête de ce fichier pour éviter
+// que les composants client qui les importent ne tirent le SDK Anthropic
+// dans le bundle browser.

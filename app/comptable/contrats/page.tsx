@@ -27,7 +27,7 @@ import {
   Loader2,
   FilePen,
 } from "lucide-react"
-import { TYPES_CONTRATS, STATUTS_CONTRATS } from "@/lib/contrats/assistant"
+import { TYPES_CONTRATS, STATUTS_CONTRATS } from "@/lib/contrats/constants"
 
 interface Contrat {
   id: string

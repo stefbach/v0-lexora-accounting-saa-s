@@ -53,7 +53,7 @@ export async function POST(request: Request) {
       try {
         const stream = anthropic.messages.stream({
           model: 'claude-sonnet-4-6',
-          max_tokens: 4096,
+          max_tokens: 8192,
           temperature: 0,
           messages: [{ role: 'user', content }],
         })
@@ -63,13 +63,48 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Erreur IA: ' + (aiErr.message || 'Appel Claude échoué') }, { status: 500 })
       }
       const text = msg.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
-      const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
+
+      // Parser robuste : supprime les fences markdown, les commentaires JS (//, /* */)
+      // puis isole le premier objet JSON équilibré au lieu d'un .match() gourmand.
+      const cleaned = text
+        .replace(/```json\s*/gi, '')
+        .replace(/```\s*/g, '')
+        .trim()
+
+      function extractFirstJsonObject(raw: string): string | null {
+        const start = raw.indexOf('{')
+        if (start < 0) return null
+        let depth = 0
+        let inString = false
+        let escape = false
+        for (let i = start; i < raw.length; i++) {
+          const ch = raw[i]
+          if (escape) { escape = false; continue }
+          if (ch === '\\') { escape = true; continue }
+          if (ch === '"') { inString = !inString; continue }
+          if (inString) continue
+          if (ch === '{') depth++
+          else if (ch === '}') {
+            depth--
+            if (depth === 0) return raw.slice(start, i + 1)
+          }
+        }
+        return null
+      }
 
       let template: any
       try {
-        template = JSON.parse(cleaned.match(/\{[\s\S]*\}/)?.[0] || '{}')
-      } catch {
-        return NextResponse.json({ error: 'Erreur analyse IA', raw: cleaned.substring(0, 500) }, { status: 500 })
+        const jsonStr = extractFirstJsonObject(cleaned)
+        if (!jsonStr) throw new Error('Aucun objet JSON trouvé dans la réponse IA')
+        template = JSON.parse(jsonStr)
+      } catch (parseErr: any) {
+        console.error('[facture-template] JSON parse failed:', parseErr.message)
+        console.error('[facture-template] Raw text (first 2000 chars):', cleaned.substring(0, 2000))
+        return NextResponse.json({
+          error: 'Erreur analyse IA: ' + (parseErr.message || 'JSON invalide'),
+          raw: cleaned.substring(0, 2000),
+          stop_reason: msg?.stop_reason,
+        }, { status: 500 })
       }
 
       // Sauvegarder le template

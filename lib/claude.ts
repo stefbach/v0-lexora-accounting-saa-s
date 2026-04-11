@@ -1,8 +1,18 @@
 import Anthropic from '@anthropic-ai/sdk'
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-})
+// Instance paresseuse — ne JAMAIS instancier au niveau module, sinon tout
+// import (même un simple `CLAUDE_MODEL` ou `verifyCronSecret`) depuis un
+// composant client tire le SDK Anthropic dans le bundle browser et crashe
+// avec « dangerouslyAllowBrowser ».
+let _anthropic: Anthropic | null = null
+function getAnthropic(): Anthropic {
+  if (!_anthropic) {
+    _anthropic = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY,
+    })
+  }
+  return _anthropic
+}
 
 export const CLAUDE_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6'
 
@@ -14,7 +24,7 @@ export async function callClaude(
   userPrompt: string,
   maxTokens: number = 4096
 ): Promise<string> {
-  const message = await anthropic.messages.create({
+  const message = await getAnthropic().messages.create({
     model: CLAUDE_MODEL,
     max_tokens: maxTokens,
     temperature: 0,
