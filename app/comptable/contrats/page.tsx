@@ -25,7 +25,7 @@ import {
   PenLine,
   Eye,
   Loader2,
-  FileSignature,
+  FilePen,
 } from "lucide-react"
 import { TYPES_CONTRATS, STATUTS_CONTRATS } from "@/lib/contrats/assistant"
 
@@ -120,7 +120,7 @@ export default function ContratsPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <FileSignature className="w-7 h-7 text-blue-600" />
+            <FilePen className="w-7 h-7 text-blue-600" />
             Contrats clients
           </h1>
           <p className="text-gray-500 text-sm mt-1">
@@ -223,7 +223,7 @@ export default function ContratsPage() {
         </div>
       ) : contrats.length === 0 ? (
         <div className="text-center py-16">
-          <FileSignature className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+          <FilePen className="w-12 h-12 text-gray-300 mx-auto mb-3" />
           <p className="text-gray-500">Aucun contrat trouvé</p>
           <Button
             variant="outline"
