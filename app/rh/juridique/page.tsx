@@ -81,7 +81,7 @@ export default function JuridiquePage() {
 
   // ── Signature électronique ──
   const [genLienLoading, setGenLienLoading] = useState<string | null>(null)
-  const [lienSignature, setLienSignature] = useState<{ id: string; lien: string } | null>(null)
+  const [lienSignature, setLienSignature] = useState<{ id: string; lien: string; whatsapp: boolean; telephone: string | null; employe: string } | null>(null)
   const [copied, setCopied] = useState(false)
 
   // ── Chargement données ──
@@ -222,7 +222,7 @@ export default function JuridiquePage() {
       })
       const data = await res.json()
       if (data.lien_signature) {
-        setLienSignature({ id, lien: data.lien_signature })
+        setLienSignature({ id, lien: data.lien_signature, whatsapp: data.whatsapp_envoye, telephone: data.telephone, employe: data.employe })
       } else {
         alert("Erreur : " + (data.error || "Impossible de générer le lien"))
       }
@@ -554,6 +554,15 @@ export default function JuridiquePage() {
                 {copied ? <><CheckCheck className="w-4 h-4 mr-1" />Copié</> : <><Copy className="w-4 h-4 mr-1" />Copier</>}
               </Button>
             </div>
+            {lienSignature?.whatsapp ? (
+              <div className="text-sm p-3 bg-green-50 text-green-800 rounded-lg border border-green-200">
+                ✅ WhatsApp envoyé à <strong>{lienSignature.employe}</strong> ({lienSignature.telephone})
+              </div>
+            ) : (
+              <div className="text-sm p-3 bg-amber-50 text-amber-800 rounded-lg border border-amber-200">
+                ⚠️ Aucun téléphone enregistré — envoyez le lien manuellement.
+              </div>
+            )}
             <div className="text-xs text-gray-400 p-3 bg-gray-50 rounded-lg">
               ✅ Conforme Electronic Transactions Act 2000 — La signature enregistre l'IP, la date et l'heure de l'employé.
             </div>

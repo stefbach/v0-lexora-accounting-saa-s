@@ -15,12 +15,38 @@ function getAdminClient() {
 
 type Params = { params: Promise<{ id: string }> }
 
-// ── POST /api/rh/contrats/[id]/signer ────────────────────────────────────────
-// Action : "generer_token" | "signer"
-//
-// generer_token → génère un token de signature unique et retourne le lien
-// signer        → valide la signature avec le token + IP + timestamp
+// ── Envoi WhatsApp via WATI ──────────────────────────────────────────────────
+async function envoyerWhatsApp(telephone: string, message: string): Promise<void> {
+  const watiUrl = process.env.WATI_API_URL
+  const watiKey = process.env.WATI_API_KEY
+  if (!watiUrl || !watiKey) {
+    console.warn('[signer] WATI non configuré — WhatsApp non envoyé')
+    return
+  }
 
+  // Normaliser le numéro : retirer +, espaces, tirets
+  const numero = telephone.replace(/[\s\-\+]/g, '')
+
+  try {
+    const res = await fetch(`${watiUrl}/api/v1/sendSessionMessage/${numero}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': watiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ messageText: message }),
+    })
+    if (!res.ok) {
+      const err = await res.text()
+      console.error('[signer] WATI erreur:', res.status, err)
+    }
+  } catch (err) {
+    console.error('[signer] WATI exception:', err)
+  }
+}
+
+// ── POST /api/rh/contrats/[id]/signer ────────────────────────────────────────
+// action: "generer_token" | "signer"
 export async function POST(request: Request, { params }: Params) {
   try {
     const supabase = await createClient()
@@ -30,32 +56,71 @@ export async function POST(request: Request, { params }: Params) {
     const body = await request.json()
     const action: string = body.action || 'signer'
 
-    // ── 1. Générer un token de signature (RH uniquement, auth requise) ──────
+    // ── 1. Générer token + envoyer WhatsApp ───────────────────────────────
     if (action === 'generer_token') {
       if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
       const token = randomUUID()
-      const { error } = await supabase
+
+      // Récupérer contrat + employé + société
+      const adminSupabase = getAdminClient()
+      const { data: contrat, error: contratErr } = await adminSupabase
+        .from('contrats_employes')
+        .select(`
+          id, type_contrat,
+          employe:employes ( prenom, nom, telephone, email ),
+          societe:societes ( nom )
+        `)
+        .eq('id', id)
+        .single()
+
+      if (contratErr || !contrat) return NextResponse.json({ error: 'Contrat introuvable' }, { status: 404 })
+
+      // Sauvegarder le token
+      const { error: updateErr } = await adminSupabase
         .from('contrats_employes')
         .update({ token_signature: token })
         .eq('id', id)
 
-      if (error) throw error
+      if (updateErr) throw updateErr
 
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.lexora.mu'
       const lienSignature = `${baseUrl}/signer-contrat?id=${id}&token=${token}`
 
-      return NextResponse.json({ token, lien_signature: lienSignature })
+      const emp = contrat.employe as any
+      const soc = contrat.societe as any
+      const prenomNom = `${emp?.prenom || ''} ${emp?.nom || ''}`.trim()
+
+      // Envoi WhatsApp si téléphone disponible
+      let whatsappEnvoye = false
+      if (emp?.telephone) {
+        const message =
+          `Bonjour ${emp.prenom || ''},\n\n` +
+          `*${soc?.nom || 'Votre employeur'}* vous invite à signer votre contrat de travail (${contrat.type_contrat || 'CDI'}) via *Lexora RH*.\n\n` +
+          `👉 Consultez et signez ici :\n${lienSignature}\n\n` +
+          `_Ce lien est à usage unique et sécurisé. Votre signature a valeur juridique conformément à l'Electronic Transactions Act 2000 de Maurice._\n\n` +
+          `— Lexora RH (envoyé au nom de ${soc?.nom || 'votre employeur'})`
+
+        await envoyerWhatsApp(emp.telephone, message)
+        whatsappEnvoye = true
+      }
+
+      return NextResponse.json({
+        token,
+        lien_signature: lienSignature,
+        whatsapp_envoye: whatsappEnvoye,
+        telephone: emp?.telephone || null,
+        employe: prenomNom,
+      })
     }
 
-    // ── 2. Signer avec le token (pas d'auth requise — accès public par lien) ─
+    // ── 2. Signer avec le token ───────────────────────────────────────────
     if (action === 'signer') {
       const { token } = body
       if (!token) return NextResponse.json({ error: 'Token manquant' }, { status: 400 })
 
       const adminSupabase = getAdminClient()
 
-      // Vérifier le token
       const { data: contrat, error: fetchErr } = await adminSupabase
         .from('contrats_employes')
         .select('id, statut, token_signature, date_signature')
@@ -63,10 +128,9 @@ export async function POST(request: Request, { params }: Params) {
         .single()
 
       if (fetchErr || !contrat) return NextResponse.json({ error: 'Contrat introuvable' }, { status: 404 })
-      if (contrat.token_signature !== token) return NextResponse.json({ error: 'Token invalide' }, { status: 403 })
+      if (contrat.token_signature !== token) return NextResponse.json({ error: 'Token invalide ou expiré' }, { status: 403 })
       if (contrat.statut === 'signe') return NextResponse.json({ error: 'Contrat déjà signé' }, { status: 409 })
 
-      // Extraire IP
       const forwarded = request.headers.get('x-forwarded-for')
       const ip = forwarded ? forwarded.split(',')[0].trim() : 'inconnue'
 
@@ -76,7 +140,7 @@ export async function POST(request: Request, { params }: Params) {
           statut: 'signe',
           date_signature: new Date().toISOString(),
           ip_signature: ip,
-          token_signature: null, // invalider le token après signature
+          token_signature: null,
         })
         .eq('id', id)
         .select()
@@ -92,8 +156,7 @@ export async function POST(request: Request, { params }: Params) {
   }
 }
 
-// ── GET /api/rh/contrats/[id]/signer ─────────────────────────────────────────
-// Vérifie qu'un token est valide (avant d'afficher la page de signature)
+// ── GET /api/rh/contrats/[id]/signer — vérifie token ─────────────────────────
 export async function GET(request: Request, { params }: Params) {
   try {
     const { id } = await params
@@ -116,7 +179,6 @@ export async function GET(request: Request, { params }: Params) {
     if (contrat.token_signature !== token) return NextResponse.json({ error: 'Token invalide ou expiré' }, { status: 403 })
     if (contrat.statut === 'signe') return NextResponse.json({ error: 'Contrat déjà signé' }, { status: 409 })
 
-    // Retourner info sans données sensibles
     const { token_signature: _, ...safe } = contrat as any
     return NextResponse.json({ contrat: safe, valide: true })
   } catch (e: unknown) {
