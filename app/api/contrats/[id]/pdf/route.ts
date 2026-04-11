@@ -5,9 +5,10 @@ import { createClient } from '@/lib/supabase/server'
 // Note: Pour la génération PDF réelle, intégrer une lib comme Puppeteer ou wkhtmltopdf
 export async function POST(
   _request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
@@ -15,7 +16,7 @@ export async function POST(
     const { data: contrat, error } = await supabase
       .from('contrats_clients')
       .select('contenu_html, titre, reference')
-      .eq('id', params.id)
+      .eq('id', id)
       .single()
 
     if (error || !contrat?.contenu_html) {

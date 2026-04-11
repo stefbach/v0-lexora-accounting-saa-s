@@ -4,9 +4,10 @@ import { createClient } from '@/lib/supabase/server'
 // GET /api/contrats/[id]
 export async function GET(
   _request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
@@ -20,7 +21,7 @@ export async function GET(
         comptable:profiles!comptable_id(id, full_name, email),
         versions:contrat_versions(id, version, raison_modification, created_at, modifie_par)
       `)
-      .eq('id', params.id)
+      .eq('id', id)
       .single()
 
     if (error) return NextResponse.json({ error: 'Contrat introuvable' }, { status: 404 })
@@ -35,9 +36,10 @@ export async function GET(
 // PATCH /api/contrats/[id]
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
@@ -64,21 +66,21 @@ export async function PATCH(
       const { data: contratActuel } = await supabase
         .from('contrats_clients')
         .select('contenu_html')
-        .eq('id', params.id)
+        .eq('id', id)
         .single()
 
       if (contratActuel?.contenu_html) {
         const { data: versions } = await supabase
           .from('contrat_versions')
           .select('version')
-          .eq('contrat_id', params.id)
+          .eq('contrat_id', id)
           .order('version', { ascending: false })
           .limit(1)
 
         const nouvelleVersion = (versions?.[0]?.version || 0) + 1
 
         await supabase.from('contrat_versions').insert({
-          contrat_id: params.id,
+          contrat_id: id,
           version: nouvelleVersion,
           contenu_html: contratActuel.contenu_html,
           raison_modification: raison_modification || `Version ${nouvelleVersion}`,
@@ -107,7 +109,7 @@ export async function PATCH(
     const { data, error } = await supabase
       .from('contrats_clients')
       .update(updates)
-      .eq('id', params.id)
+      .eq('id', id)
       .select()
       .single()
 
@@ -123,9 +125,10 @@ export async function PATCH(
 // DELETE /api/contrats/[id] — Archive seulement
 export async function DELETE(
   _request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
@@ -133,7 +136,7 @@ export async function DELETE(
     const { error } = await supabase
       .from('contrats_clients')
       .update({ statut: 'archive' })
-      .eq('id', params.id)
+      .eq('id', id)
 
     if (error) throw error
 

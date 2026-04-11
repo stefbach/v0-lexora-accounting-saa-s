@@ -9,9 +9,10 @@ import {
 // POST /api/contrats/[id]/chat — Envoyer un message à l'IA (streaming SSE)
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
@@ -29,7 +30,7 @@ export async function POST(
         societe:societes(nom),
         client:profiles!client_id(full_name, email)
       `)
-      .eq('id', params.id)
+      .eq('id', id)
       .single()
 
     if (contratError || !contrat) {
@@ -85,7 +86,7 @@ export async function POST(
                 ...analyse.parametres_extraits,
               },
             })
-            .eq('id', params.id)
+            .eq('id', id)
 
           // Envoyer le signal de fin avec métadonnées
           controller.enqueue(

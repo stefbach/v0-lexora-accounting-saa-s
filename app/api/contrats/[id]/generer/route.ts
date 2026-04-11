@@ -9,9 +9,10 @@ import {
 // POST /api/contrats/[id]/generer — Générer ou régénérer le contrat HTML
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
@@ -27,7 +28,7 @@ export async function POST(
         societe:societes(nom, adresse, numero_registrar),
         client:profiles!client_id(full_name, email, phone)
       `)
-      .eq('id', params.id)
+      .eq('id', id)
       .single()
 
     if (error || !contrat) {
@@ -72,14 +73,14 @@ export async function POST(
       const { data: versions } = await supabase
         .from('contrat_versions')
         .select('version')
-        .eq('contrat_id', params.id)
+        .eq('contrat_id', id)
         .order('version', { ascending: false })
         .limit(1)
 
       const nouvelleVersion = (versions?.[0]?.version || 0) + 1
 
       await supabase.from('contrat_versions').insert({
-        contrat_id: params.id,
+        contrat_id: id,
         version: nouvelleVersion,
         contenu_html: contrat.contenu_html,
         raison_modification: instructions_modification || 'Nouvelle génération',
@@ -94,7 +95,7 @@ export async function POST(
         contenu_html,
         statut: contrat.statut === 'brouillon' ? 'en_revision' : contrat.statut,
       })
-      .eq('id', params.id)
+      .eq('id', id)
       .select()
       .single()
 
