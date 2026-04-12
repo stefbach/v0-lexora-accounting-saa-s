@@ -455,15 +455,24 @@ export async function POST(request: Request) {
             }
             entry.changed = true
 
+            let facturesUpdated = 0
             for (const fId of match.factureIds) {
-              await supabase.from('factures').update({
+              const { error: updErr } = await supabase.from('factures').update({
                 statut: 'paye',
                 rapproche_releve_id: releveId,
                 rapproche_transaction_idx: txIdx,
                 rapproche_date: reconcileDate,
                 rapproche_source: 'auto_intelligent',
               }).eq('id', fId)
+              if (updErr) {
+                console.error(`[rapprochement] Failed to update facture ${fId}:`, updErr.message)
+              } else {
+                facturesUpdated++
+              }
               factures = factures.filter((ff: any) => ff.id !== fId)
+            }
+            if (facturesUpdated > 0) {
+              console.log(`[rapprochement] ${facturesUpdated} facture(s) → paye for ${match.supplierName}`)
             }
 
             // Generate BNQ journal entries
@@ -588,9 +597,54 @@ export async function POST(request: Request) {
           const { error: saveErr } = await supabase.from('releves_bancaires')
             .update({ transactions_json: entry.updatedTxs })
             .eq('id', releveId)
-          const modCount = entry.updatedTxs.filter((t: any, j: number) => JSON.stringify(t) !== JSON.stringify(entry.txs[j])).length
-          console.log(`[rapprochement] Saved releve ${releveId}: ${modCount} transactions modified${saveErr ? ' ERROR: ' + saveErr.message : ''}`)
+          if (saveErr) console.error(`[rapprochement] Save releve ${releveId} ERROR:`, saveErr.message)
         }
+      }
+
+      // ═══════════════════════════════════════════════════════════════
+      // POST-RAPPROCHEMENT: Consistency repair
+      // Scan all transactions with facture_id/facture_ids and ensure
+      // the corresponding factures are marked paye. This catches any
+      // factures that were missed during the matching loop.
+      // ═══════════════════════════════════════════════════════════════
+      let repaired = 0
+      try {
+        const allFacIdsToMark = new Set<string>()
+
+        for (const [releveId, entry] of releveMap) {
+          for (let i = 0; i < entry.updatedTxs.length; i++) {
+            const tx = entry.updatedTxs[i]
+            if (tx.statut !== 'rapproche') continue
+            // Collect all facture IDs from matched transactions
+            if (tx.facture_id) allFacIdsToMark.add(tx.facture_id)
+            if (Array.isArray(tx.facture_ids)) {
+              for (const fId of tx.facture_ids) allFacIdsToMark.add(fId)
+            }
+          }
+        }
+
+        if (allFacIdsToMark.size > 0) {
+          // Find factures that should be paye but aren't
+          const { data: notPayeYet } = await supabase
+            .from('factures')
+            .select('id')
+            .in('id', [...allFacIdsToMark])
+            .neq('statut', 'paye')
+
+          if (notPayeYet && notPayeYet.length > 0) {
+            const idsToFix = notPayeYet.map((f: any) => f.id)
+            const { error: repairErr } = await supabase
+              .from('factures')
+              .update({ statut: 'paye', rapproche_source: 'auto_repair' })
+              .in('id', idsToFix)
+            if (!repairErr) {
+              repaired = idsToFix.length
+              console.log(`[rapprochement] Consistency repair: ${repaired} factures fixed to paye`)
+            }
+          }
+        }
+      } catch (repairErr) {
+        console.warn('[rapprochement] Consistency repair failed:', repairErr)
       }
 
       // ═══════════════════════════════════════════════════════════════
@@ -738,6 +792,7 @@ export async function POST(request: Request) {
         not_matched: counts.not_matched, total: counts.total,
         total_classified: totalClassified,
         ecritures_lettrees: ecrituresLettrees,
+        factures_reparees: repaired,
         matches: matchesList.slice(0, 10),
         _debug: {
           version: '2026-04-12-v5-intelligent',

@@ -831,6 +831,54 @@ Voulez-vous vraiment continuer ?`
         </button>
       </div>
 
+      {/* ── Comment ça marche ─────────────────────────────────────────────── */}
+      <details className="group">
+        <summary className="cursor-pointer flex items-center gap-2 text-sm font-medium text-[#0B0F2E] hover:text-[#D4AF37] transition-colors py-2">
+          <ChevronDown className="w-4 h-4 group-open:rotate-180 transition-transform" />
+          Comment fonctionne le rapprochement intelligent ?
+        </summary>
+        <Card className="mt-2 border border-blue-100 bg-blue-50/30">
+          <CardContent className="p-4 space-y-3 text-sm text-gray-700">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <p className="font-semibold text-[#0B0F2E] mb-1">Phase 1 — Identification des tiers</p>
+                <p className="text-xs text-gray-500">Le système construit un registre de tous vos fournisseurs et clients à partir de vos factures, puis identifie chaque transaction bancaire à un tiers connu via matching intelligent (similarité de nom, alias configurés).</p>
+              </div>
+              <div>
+                <p className="font-semibold text-[#0B0F2E] mb-1">Phase 2 — Rapprochement par fournisseur</p>
+                <p className="text-xs text-gray-500">Pour chaque fournisseur, le moteur met face à face tous ses paiements bancaires et toutes ses factures impayées. Il tente : 1 paiement → 1 facture, 1 paiement → N factures, ou N paiements → 1 facture (acomptes). Tolère les écarts TDS (2-6%) et les délais de paiement.</p>
+              </div>
+              <div>
+                <p className="font-semibold text-[#0B0F2E] mb-1">Phase 3 — Classifications automatiques</p>
+                <p className="text-xs text-gray-500">Sans pièce comptable nécessaire : virements internes (entre vos comptes), frais bancaires (MCB fees), salaires (bulk payment vérifié contre bulletins de paie), charges sociales (MRA, CSG, NSF, PAYE).</p>
+              </div>
+              <div>
+                <p className="font-semibold text-[#0B0F2E] mb-1">Phase 4 — Lettrage des écritures 401</p>
+                <p className="text-xs text-gray-500">Les écritures de paiement (BNQ) sont automatiquement lettrées avec les écritures de facture (ACH) du même fournisseur. Cela garantit la cohérence entre le grand livre et le rapprochement bancaire.</p>
+              </div>
+            </div>
+            <div className="pt-2 border-t border-blue-200">
+              <p className="font-semibold text-[#0B0F2E] mb-1">Alias fournisseurs</p>
+              <p className="text-xs text-gray-500 mb-2">Le système reconnaît qu'un même fournisseur peut apparaître sous différents noms dans la banque vs les factures. Des alias globaux sont pré-configurés (MyT = Mauritius Telecom = Cellplus, etc.) et le système apprend de nouveaux alias automatiquement à chaque rapprochement validé.</p>
+              <div className="flex flex-wrap gap-1">
+                {['MyT → Mauritius Telecom', 'MCB → Mauritius Commercial Bank', 'MRA → Mauritius Revenue Authority', 'CEB → Central Electricity Board', 'CWA → Central Water Authority'].map(a => (
+                  <span key={a} className="px-2 py-0.5 bg-white border border-blue-200 rounded text-[11px] text-blue-700">{a}</span>
+                ))}
+                <span className="px-2 py-0.5 bg-amber-50 border border-amber-200 rounded text-[11px] text-amber-700">+ alias appris automatiquement</span>
+              </div>
+            </div>
+            <div className="pt-2 border-t border-blue-200">
+              <p className="font-semibold text-[#0B0F2E] mb-1">Niveaux de confiance</p>
+              <div className="flex gap-3 text-xs">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" /> ≥80% → appliqué automatiquement</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400" /> 55-79% → proposé (à valider)</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400" /> &lt;55% → non rapproché</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </details>
+
       {/* ── Global progress bar ───────────────────────────────────────────── */}
       {transactions.length > 0 && (
         <Card className="border border-gray-100 shadow-sm">
