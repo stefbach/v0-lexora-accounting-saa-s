@@ -648,6 +648,94 @@ export async function POST(request: Request) {
       }
 
       // ═══════════════════════════════════════════════════════════════
+      // PHASE 4b — Auto-génération des écritures BNQ
+      // Pour chaque transaction rapprochée, créer les écritures comptables
+      // (401/411 ↔ 512) si elles n'existent pas encore. Ceci est
+      // nécessaire AVANT la Phase 5 (lettrage BNQ↔ACH).
+      // ═══════════════════════════════════════════════════════════════
+      let ecrituresCreees = 0
+      try {
+        const { data: dossier } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
+        if (dossier) {
+          for (const [releveId, entry] of releveMap) {
+            for (let i = 0; i < entry.updatedTxs.length; i++) {
+              const tx = entry.updatedTxs[i]
+              const txDebit = Number(tx.debit) || 0
+              const txCredit = Number(tx.credit) || 0
+              const txAmount = txDebit > 0 ? txDebit : txCredit
+              if (txAmount === 0) continue
+              const txAmountMUR = Math.round(toMUR(txAmount, entry.releveDevise) * 100) / 100
+              const txDate = tx.date || new Date().toISOString().split('T')[0]
+
+              // Internal transfers → 581 journal entries
+              if (tx.statut === 'interne' || tx.matched_type === 'transfert_interne') {
+                const { data: existing581 } = await supabase.from('ecritures_comptables')
+                  .select('id').eq('dossier_id', dossier.id).eq('journal', 'BNQ')
+                  .eq('compte', '581').eq('date_ecriture', txDate)
+                  .or(`debit.eq.${txAmountMUR},credit.eq.${txAmountMUR}`)
+                  .limit(1)
+                if (existing581 && existing581.length > 0) continue
+
+                const lettre581 = `VI${String(ecrituresCreees + 1).padStart(3, '0')}`
+                const isOutgoing = txDebit > 0
+                const libelle = `Virement interne ${(tx.libelle || '').substring(0, 30)}`
+                await supabase.from('ecritures_comptables').insert([
+                  { dossier_id: dossier.id, date_ecriture: txDate, journal: 'BNQ', compte: '512',
+                    libelle, debit: isOutgoing ? 0 : txAmountMUR, credit: isOutgoing ? txAmountMUR : 0, lettre: lettre581 },
+                  { dossier_id: dossier.id, date_ecriture: txDate, journal: 'BNQ', compte: '581',
+                    libelle, debit: isOutgoing ? txAmountMUR : 0, credit: isOutgoing ? 0 : txAmountMUR, lettre: lettre581 },
+                ])
+                ecrituresCreees++
+                continue
+              }
+
+              // Regular matched transactions → 401/411 ↔ 512
+              if (tx.statut !== 'rapproche' || !tx.facture_id) continue
+
+              const { data: existingBnq } = await supabase.from('ecritures_comptables')
+                .select('id').eq('dossier_id', dossier.id).eq('journal', 'BNQ')
+                .eq('date_ecriture', txDate)
+                .or(`debit.eq.${txAmountMUR},credit.eq.${txAmountMUR}`)
+                .limit(1)
+              if (existingBnq && existingBnq.length > 0) continue
+
+              const { data: facture } = await supabase.from('factures')
+                .select('numero_facture, tiers, type_facture, montant_mur')
+                .eq('id', tx.facture_id).maybeSingle()
+              if (!facture) continue
+
+              const lettre = tx.lettre || `BNQ${String(ecrituresCreees + 1).padStart(3, '0')}`
+              const compte401 = facture.type_facture === 'fournisseur' ? '401' : '411'
+              const isPayment = txDebit > 0
+
+              await supabase.from('ecritures_comptables').insert([
+                { dossier_id: dossier.id, date_ecriture: txDate, journal: 'BNQ', compte: compte401,
+                  libelle: `Paiement ${(facture.tiers || '').substring(0, 30)} — ${facture.numero_facture || ''}`,
+                  debit: isPayment ? txAmountMUR : 0, credit: isPayment ? 0 : txAmountMUR, lettre },
+                { dossier_id: dossier.id, date_ecriture: txDate, journal: 'BNQ', compte: '512',
+                  libelle: `Virement ${(facture.tiers || '').substring(0, 30)}`,
+                  debit: isPayment ? 0 : txAmountMUR, credit: isPayment ? txAmountMUR : 0, lettre },
+              ])
+
+              // Letter existing ACH entry with the same code
+              const factureMUR = Math.round(Number(facture.montant_mur || 0) * 100) / 100
+              if (factureMUR > 0) {
+                await supabase.from('ecritures_comptables')
+                  .update({ lettre })
+                  .eq('dossier_id', dossier.id).eq('compte', compte401).is('lettre', null)
+                  .eq('credit', factureMUR).limit(1)
+              }
+
+              ecrituresCreees++
+            }
+          }
+          console.log(`[rapprochement] Phase 4b: ${ecrituresCreees} écritures BNQ générées`)
+        }
+      } catch (genErr) {
+        console.warn('[rapprochement] Phase 4b écritures generation failed:', genErr)
+      }
+
+      // ═══════════════════════════════════════════════════════════════
       // PHASE 5 — Auto-lettrage écritures 401 (BNQ ↔ ACH)
       // Un vrai comptable lettre aussi les écritures comptables :
       // - BNQ (paiement, débit 401) ↔ ACH (facture, crédit 401) par tiers + montant
@@ -793,6 +881,7 @@ export async function POST(request: Request) {
         total_classified: totalClassified,
         ecritures_lettrees: ecrituresLettrees,
         factures_reparees: repaired,
+        ecritures_creees: ecrituresCreees,
         matches: matchesList.slice(0, 10),
         _debug: {
           version: '2026-04-12-v5-intelligent',
