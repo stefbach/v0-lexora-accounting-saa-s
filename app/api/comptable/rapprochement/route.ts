@@ -682,11 +682,17 @@ export async function POST(request: Request) {
             .or('compte.like.401%,compte.like.411%')
 
           // Charger aussi depuis v2 pour avoir ref_folio
-          const { data: allEcr401v2 } = await supabase
+          // Charger toutes les écritures BNQ + ACH/OD sur 401/411 pour lettrage
+          // ET toutes les BNQ pour la dedup des CLS
+          const { data: allEcrV2 } = await supabase
             .from('ecritures_comptables_v2')
             .select('id, numero_compte, libelle, debit_mur, credit_mur, journal, lettre, ref_folio')
-            .eq('dossier_id', dossier.id)
-            .or('numero_compte.like.401%,numero_compte.like.411%')
+            .eq('societe_id', societe_id)
+            .or('journal.eq.BNQ,journal.eq.ACH,journal.eq.OD')
+
+          const allEcr401v2 = (allEcrV2 || []).filter((e: any) =>
+            (e.numero_compte || '').match(/^(401|411)/) || e.journal === 'BNQ'
+          )
 
           const achNonLettrees = (allEcr401v2 || []).filter((e: any) =>
             (e.journal === 'ACH' || e.journal === 'OD') && Number(e.credit_mur) > 0 && !e.lettre
@@ -826,8 +832,64 @@ export async function POST(request: Request) {
                 if (idx >= 0) achNonLettrees.splice(idx, 1)
                 ecrituresLettrees++
               }
+            // ── Handled above via continue ──
             }
           }
+
+          // ── SECOND PASS: Transactions SANS facture mais classifiées → BNQ ──
+          for (const [releveId2, entry2] of releveMap) {
+            for (let i2 = 0; i2 < entry2.updatedTxs.length; i2++) {
+              const tx = entry2.updatedTxs[i2]
+              const txDebit2 = Number(tx.debit) || 0
+              const txCredit2 = Number(tx.credit) || 0
+              const txAmount2 = txDebit2 > 0 ? txDebit2 : txCredit2
+              if (txAmount2 === 0) continue
+              const txAmountMUR2 = Math.round(toMUR(txAmount2, entry2.releveDevise) * 100) / 100
+              const txDate2 = tx.date || new Date().toISOString().split('T')[0]
+
+            // ── Transactions classifiées SANS facture → BNQ avec le bon compte ──
+            // MRA → D 444 / C 512, Frais bancaires → D 627 / C 512,
+            // Salaires → D 421 / C 512, Particuliers → D 467 / C 512
+            if (tx.statut === 'rapproche' && !tx.facture_id && tx.matched_type) {
+              const classRef = `CLS-${releveId2}-${i2}`
+              const classExists = (allEcr401v2 || []).some((e: any) => e.ref_folio === classRef)
+              if (!classExists) {
+                let compteCharge = '471'
+                let libellePrefix = 'Opération bancaire'
+
+                if (tx.matched_type === 'paiement_mra' || tx.matched_type === 'paiement_mra_non_verifie') {
+                  compteCharge = '444'; libellePrefix = 'Paiement MRA'
+                } else if (tx.matched_type === 'charges_sociales') {
+                  compteCharge = '431'; libellePrefix = 'Charges sociales'
+                } else if (tx.matched_type === 'frais_bancaires') {
+                  compteCharge = '627'; libellePrefix = 'Frais bancaires'
+                } else if (tx.matched_type === 'salaire_bulk' || tx.matched_type === 'salaire_bulk_non_verifie') {
+                  compteCharge = '421'; libellePrefix = 'Masse salariale'
+                } else if (tx.matched_type === 'salaire_individuel') {
+                  compteCharge = '421'; libellePrefix = 'Salaire'
+                } else if (tx.matched_type === 'reversal_salaire') {
+                  compteCharge = '421'; libellePrefix = 'Reversal salaire'
+                }
+
+                const classLettre = tx.lettre || `CLS${String(ecrituresCreees + 1).padStart(3, '0')}`
+                const classLib = `${libellePrefix} — ${(tx.tiers_detecte || tx.libelle || '').substring(0, 30)}`
+                const isOut = txDebit2 > 0
+
+                await supabase.from('ecritures_comptables_v2').insert([
+                  { dossier_id: dossier.id, societe_id: societe_id, date_ecriture: txDate2, journal: 'BNQ',
+                    numero_compte: compteCharge, libelle: classLib,
+                    debit_mur: isOut ? txAmountMUR2 : 0, credit_mur: isOut ? 0 : txAmountMUR2,
+                    lettre: classLettre, ref_folio: classRef },
+                  { dossier_id: dossier.id, societe_id: societe_id, date_ecriture: txDate2, journal: 'BNQ',
+                    numero_compte: '512', libelle: `Banque — ${(tx.tiers_detecte || '').substring(0, 25)}`,
+                    debit_mur: isOut ? 0 : txAmountMUR2, credit_mur: isOut ? txAmountMUR2 : 0,
+                    lettre: classLettre, ref_folio: classRef },
+                ])
+                ecrituresCreees++
+              }
+            }
+          }
+          } // close for (releveId2)
           console.log(`[rapprochement] Phase finale: ${ecrituresCreees} BNQ créées, ${ecrituresLettrees} ACH lettrées`)
         }
       } catch (genErr) {
