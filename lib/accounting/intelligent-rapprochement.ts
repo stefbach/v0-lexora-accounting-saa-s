@@ -482,9 +482,7 @@ export function matchBySupplier(
       }
     }
 
-    // ── Strategy B: 1 paiement → N factures (somme par période) ──
-    // Un vrai comptable sait qu'un paiement MyT de 8172 MUR couvre les
-    // 3-4 factures Cellplus du même mois. On groupe par période.
+    // ── Strategy B: 1 paiement → N factures ──
     for (const tx of unmatchedTxs) {
       if (usedTxKeys.has(txKey(tx))) continue
       const txRawB = Math.max(tx.debit, tx.credit)
@@ -495,28 +493,10 @@ export function matchBySupplier(
       const available = unpaidFactures.filter(f => !usedFactureIds.has(f.id))
       if (available.length < 2) continue
 
-      const txMonth = (tx.date || '').substring(0, 7) // ex: "2025-10"
+      // Trier par date
+      const sortedFacs = [...available].sort((a, b) => (a.date_facture || '').localeCompare(b.date_facture || ''))
 
-      // Approche 1: factures du MÊME MOIS que le paiement (± 1 mois)
-      // Approche 2: si pas trouvé, essayer les 2-3 mois précédents
-      // Approche 3: fallback toutes factures triées par date
-      const byProximity = [...available].sort((a, b) => {
-        const da = daysBetween(a.date_facture || '', tx.date)
-        const db = daysBetween(b.date_facture || '', tx.date)
-        return da - db
-      })
-
-      // Essayer d'abord les factures proches en date (même mois ± 2 mois)
-      const nearbyFacs = byProximity.filter(f => {
-        const delay = daysBetween(f.date_facture || '', tx.date)
-        return delay <= 90 // 3 mois max
-      })
-
-      // Si pas assez de factures proches, prendre toutes
-      const candidatesB = nearbyFacs.length >= 2 ? nearbyFacs : byProximity
-
-      // Essayer des combinaisons de 2 à 5 factures (fenêtre 10 max)
-      const n = Math.min(candidatesB.length, 10)
+      const n = Math.min(sortedFacs.length, 8)
       let bestCombo: MatchingFacture[] | null = null
       let bestComboDiff = Infinity
 
@@ -530,7 +510,7 @@ export function matchBySupplier(
         let allSameCcy = true
         for (let i = 0; i < n; i++) {
           if (mask & (1 << i)) {
-            const f = candidatesB[i]
+            const f = sortedFacs[i]
             const fDevise = (f.devise || 'MUR').toUpperCase()
             // Same-currency sum when all factures share the tx currency
             if (fDevise === txDeviseB && Number(f.montant_ttc) > 0) {
