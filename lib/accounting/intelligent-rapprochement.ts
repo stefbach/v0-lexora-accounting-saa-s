@@ -322,15 +322,15 @@ export function buildSupplierRegistry(
       }
 
       if (bestKey) {
-        registry.get(bestKey)!.transactions.push({ ...tx, releveIdx: tx.transaction_idx })
+        const prof = registry.get(bestKey)!
+        prof.transactions.push({ ...tx, releveIdx: tx.transaction_idx })
+        if (!prof.rawNames.includes(bankTiers)) prof.rawNames.push(bankTiers)
       } else {
         // Tiers inconnu — créer un profil orphelin
         const isOutgoing = tx.debit > 0
         const profile = getOrCreateProfile(bankTiers, isOutgoing ? 'fournisseur' : 'client')
+        profile.transactions.push({ ...tx, releveIdx: tx.transaction_idx })
       }
-      const prof = registry.get(bankKey)!
-      if (!prof.rawNames.includes(bankTiers)) prof.rawNames.push(bankTiers)
-      prof.transactions.push({ ...tx, releveIdx: tx.transaction_idx })
     }
   }
 
