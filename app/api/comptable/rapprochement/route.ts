@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createEcrituresForPayment } from '@/lib/accounting/ecritures-factures'
 import { analyzeAllTransactions, MatchingTransaction, MatchingFacture } from '@/lib/accounting/matching-engine'
+import { runIntelligentRapprochement } from '@/lib/accounting/intelligent-rapprochement'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getTauxChange } from '@/lib/taux-change'
@@ -136,7 +137,7 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { action } = body
 
-    // === AUTO-RAPPROCHEMENT ===
+    // === AUTO-RAPPROCHEMENT INTELLIGENT (4 phases) ===
     if (action === 'auto_rapprocher') {
       const { societe_id, date_debut, date_fin } = body
       if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
@@ -229,6 +230,11 @@ export async function POST(request: Request) {
 
       console.log('[rapprochement] Starting:', { societe_id, releves: releves.length, ecritures: ecritures.length, factures: factures.length, societeNames, date_debut, date_fin })
 
+      // Collect all unclassified transactions across ALL relevés for the intelligent engine
+      const globalUnclassified: Array<{ releveId: string; txIdx: number; tx: MatchingTransaction }> = []
+      // Map releve_id → { txs, updatedTxs, changed } for applying results
+      const releveMap = new Map<string, { txs: any[]; updatedTxs: any[]; changed: boolean; releveDevise: string }>()
+
       for (const releve of releves) {
         const txs: any[] = releve.transactions_json || []
         const releveDevise = compteDeviseMap[releve.compte_bancaire_id] || 'MUR'
@@ -314,149 +320,209 @@ export async function POST(request: Request) {
 
           if (classified) continue
 
-          // === STANDARD MATCHING via matching-engine ===
-          // Collect this transaction for batch engine processing below (after rules loop)
-          // We use a deferred approach: accumulate unclassified transactions per releve,
-          // then run analyzeAllTransactions once per releve for efficiency.
+          // Collect for global intelligent matching after all rules
           unclassifiedTxIndices.push(i)
         }
 
-        // Run the matching engine on all unclassified transactions for this releve
+        // Collect all unclassified transactions for this relevé (Phase 2 runs globally below)
         if (unclassifiedTxIndices.length > 0) {
-          const engineTxs: MatchingTransaction[] = unclassifiedTxIndices.map(i => {
-            const tx = updatedTxs[i]
-            return {
-              releve_id: releve.id,
-              transaction_idx: i,
-              date: tx.date || '',
-              libelle: tx.libelle || '',
-              tiers_detecte: tx.tiers_detecte || tx.tiers || null,
-              debit: Number(tx.debit) || 0,
-              credit: Number(tx.credit) || 0,
-              devise: releveDevise,
-            }
-          })
-
-          const engineFactures: MatchingFacture[] = factures.map((f: any) => ({
-            id: f.id,
-            numero_facture: f.numero_facture,
-            tiers: f.tiers,
-            montant_ttc: Number(f.montant_ttc) || 0,
-            montant_mur: f.montant_mur != null ? Number(f.montant_mur) : null,
-            devise: f.devise,
-            date_facture: f.date_facture,
-            date_echeance: f.date_echeance,
-            conditions_paiement: f.conditions_paiement != null ? Number(f.conditions_paiement) : null,
-            type_facture: (f.type_facture === 'fournisseur' ? 'fournisseur' : 'client') as 'client' | 'fournisseur',
-            statut: f.statut,
-          }))
-
-          const proposals = analyzeAllTransactions(engineTxs, engineFactures, rates)
-
-          for (const proposal of proposals) {
-            const i = proposal.transaction.transaction_idx
-            const tx = updatedTxs[i]
-            const conf = proposal.confidence
-
-            if (conf >= 0.85) {
-              // High confidence: auto-apply
-              const matchedFactures = proposal.factures
-              const isGroup = matchedFactures.length > 1
-              const code = `R${String(counts.matched + 1).padStart(3, '0')}`
-              const reconcileDate = new Date().toISOString()
-
-              updatedTxs[i] = {
-                ...tx,
-                facture_ids: proposal.facture_ids,
-                facture_id: proposal.facture_ids[0],
-                lettre: code,
-                statut: 'rapproche',
-                matched_type: isGroup ? 'facture_groupee' : 'facture_unique',
-                match_confidence: `engine_${Math.round(conf * 100)}`,
-                note: proposal.reasoning,
-                rapproche_at: reconcileDate,
-              }
-
-              // Update factures
-              for (const f of matchedFactures) {
-                await supabase.from('factures').update({
-                  statut: 'paye',
-                  rapproche_releve_id: releve.id,
-                  rapproche_transaction_idx: i,
-                  rapproche_date: reconcileDate,
-                  rapproche_source: 'auto',
-                }).eq('id', f.id)
-                factures = factures.filter((ff: any) => ff.id !== f.id)
-              }
-
-              // Generate BNQ journal entries
-              const txAmount = Math.max(Number(tx.debit) || 0, Number(tx.credit) || 0)
-              const payAmountMUR = toMUR(txAmount, releveDevise)
-              const isOutgoing = (Number(tx.debit) || 0) > 0
-              const payType: 'supplier' | 'client' = isOutgoing ? 'supplier' : 'client'
-              const tiers = (matchedFactures[0]?.tiers || tx.tiers_detecte || tx.tiers || '').substring(0, 50)
-              const numFactures = isGroup
-                ? `${matchedFactures.length} factures (${matchedFactures.map(f => f.numero_facture).join(', ')})`
-                : (matchedFactures[0]?.numero_facture || '')
-
-              await createEcrituresForPayment(supabase, {
-                societe_id,
-                date_payment: tx.date || new Date().toISOString().split('T')[0],
-                amount_mur: Math.round(payAmountMUR * 100) / 100,
-                type: payType,
-                tiers,
-                ref_folio: `BANK-${releve.id}-${i}`,
-                description: `Paiement ${numFactures} — ${tiers}`,
-              })
-
-              matchesList.push({
-                type: isGroup ? 'facture_groupee' : 'facture',
-                transaction: tx.libelle,
-                facture: isGroup ? `${matchedFactures.length} factures` : matchedFactures[0]?.numero_facture,
-                montant: txAmount,
-                strategy: proposal.strategy,
-                confidence: conf,
-              })
-              changed = true
-              counts.matched++
-            } else if (conf >= 0.65) {
-              // Medium confidence: propose for manual review
-              const code = `P${String(counts.propose + 1).padStart(3, '0')}`
-              updatedTxs[i] = {
-                ...tx,
-                facture_ids: proposal.facture_ids,
-                facture_id: proposal.facture_ids[0],
-                lettre: code,
-                statut: 'propose',
-                matched_type: 'propose',
-                match_confidence: `engine_${Math.round(conf * 100)}`,
-                note: proposal.reasoning,
-              }
-              changed = true
-              counts.propose++
-            } else {
-              counts.not_matched++
-            }
-          }
-
-          // Count unmatched: transactions that had no proposal
-          const matchedIndices = new Set(proposals.map(p => p.transaction.transaction_idx))
           for (const i of unclassifiedTxIndices) {
-            if (!matchedIndices.has(i)) counts.not_matched++
+            const tx = updatedTxs[i]
+            globalUnclassified.push({
+              releveId: releve.id, txIdx: i,
+              tx: {
+                releve_id: releve.id,
+                transaction_idx: i,
+                date: tx.date || '',
+                libelle: tx.libelle || '',
+                tiers_detecte: tx.tiers_detecte || tx.tiers || null,
+                debit: Number(tx.debit) || 0,
+                credit: Number(tx.credit) || 0,
+                devise: releveDevise,
+              }
+            })
           }
         }
 
-        // (end of per-releve processing)
+        // Save rule-based classifications from Phase 3 (internal, fees, salary, MRA)
+        releveMap.set(releve.id, { txs, updatedTxs, changed, releveDevise })
+      }
 
-        console.log(`[rapprochement] Releve ${releve.id}: ${txs.length} txs, ${skippedCount} skipped, changed=${changed}`)
+      // ═══════════════════════════════════════════════════════════════
+      // INTELLIGENT ENGINE — Phase 2 (supplier-centric matching)
+      // Runs GLOBALLY across all relevés, not per-relevé
+      // ═══════════════════════════════════════════════════════════════
 
-        // Always save if any transaction was modified
-        if (changed) {
+      if (globalUnclassified.length > 0) {
+        const engineFactures: MatchingFacture[] = factures.map((f: any) => ({
+          id: f.id,
+          numero_facture: f.numero_facture,
+          tiers: f.tiers,
+          montant_ttc: Number(f.montant_ttc) || 0,
+          montant_mur: f.montant_mur != null ? Number(f.montant_mur) : null,
+          devise: f.devise,
+          date_facture: f.date_facture,
+          date_echeance: f.date_echeance,
+          conditions_paiement: f.conditions_paiement != null ? Number(f.conditions_paiement) : null,
+          type_facture: (f.type_facture === 'fournisseur' ? 'fournisseur' : 'client') as 'client' | 'fournisseur',
+          statut: f.statut,
+        }))
+
+        const allTxs = globalUnclassified.map(g => g.tx)
+
+        console.log(`[rapprochement] Running intelligent engine on ${allTxs.length} unclassified tx, ${engineFactures.length} factures`)
+
+        const intelligentResult = runIntelligentRapprochement(allTxs, engineFactures, {
+          societeNames,
+          bulletins: (allBulletins || []).map((b: any) => ({ periode: b.periode, salaire_net: Number(b.salaire_net) || 0 })),
+          ecritures: ecritures.map((e: any) => ({ id: e.id, compte: e.compte, debit: Number(e.debit) || 0, credit: Number(e.credit) || 0, libelle: e.libelle || '' })),
+          rates,
+        })
+
+        console.log(`[rapprochement] Intelligent engine results:`, intelligentResult.stats)
+
+        // Apply supplier matches
+        for (const match of intelligentResult.matches) {
+          const releveId = match.transaction.releve_id
+          const txIdx = match.transaction.transaction_idx
+          const entry = releveMap.get(releveId)
+          if (!entry) continue
+
+          const conf = match.confidence
+          const isGroup = match.factureIds.length > 1
+          const reconcileDate = new Date().toISOString()
+
+          if (conf >= 0.80) {
+            // High confidence → auto-apply
+            const code = `R${String(counts.matched + 1).padStart(3, '0')}`
+            entry.updatedTxs[txIdx] = {
+              ...entry.updatedTxs[txIdx],
+              facture_ids: match.factureIds,
+              facture_id: match.factureIds[0],
+              lettre: code,
+              statut: 'rapproche',
+              matched_type: match.strategy,
+              match_confidence: `intelligent_${Math.round(conf * 100)}`,
+              note: match.reasoning,
+              rapproche_at: reconcileDate,
+            }
+            entry.changed = true
+
+            for (const fId of match.factureIds) {
+              await supabase.from('factures').update({
+                statut: 'paye',
+                rapproche_releve_id: releveId,
+                rapproche_transaction_idx: txIdx,
+                rapproche_date: reconcileDate,
+                rapproche_source: 'auto_intelligent',
+              }).eq('id', fId)
+              factures = factures.filter((ff: any) => ff.id !== fId)
+            }
+
+            // Generate BNQ journal entries
+            const txRaw = entry.updatedTxs[txIdx]
+            const txAmount = Math.max(Number(txRaw.debit) || 0, Number(txRaw.credit) || 0)
+            const payAmountMUR = toMUR(txAmount, entry.releveDevise)
+            const isOutgoing = (Number(txRaw.debit) || 0) > 0
+            const payType: 'supplier' | 'client' = isOutgoing ? 'supplier' : 'client'
+            const tiers = (match.supplierName || txRaw.tiers_detecte || '').substring(0, 50)
+
+            await createEcrituresForPayment(supabase, {
+              societe_id,
+              date_payment: txRaw.date || new Date().toISOString().split('T')[0],
+              amount_mur: Math.round(payAmountMUR * 100) / 100,
+              type: payType,
+              tiers,
+              ref_folio: `BANK-${releveId}-${txIdx}`,
+              description: `Paiement ${isGroup ? match.factureIds.length + ' factures' : match.factures[0]?.numero_facture || ''} — ${tiers}`,
+            })
+
+            matchesList.push({
+              type: match.strategy,
+              transaction: txRaw.libelle,
+              facture: isGroup ? `${match.factureIds.length} factures` : match.factures[0]?.numero_facture,
+              montant: txAmount,
+              strategy: match.strategy,
+              confidence: conf,
+              supplier: match.supplierName,
+            })
+            counts.matched++
+          } else if (conf >= 0.55) {
+            // Medium confidence → propose
+            const code = `P${String(counts.propose + 1).padStart(3, '0')}`
+            entry.updatedTxs[txIdx] = {
+              ...entry.updatedTxs[txIdx],
+              facture_ids: match.factureIds,
+              facture_id: match.factureIds[0],
+              lettre: code,
+              statut: 'propose',
+              matched_type: 'propose',
+              match_confidence: `intelligent_${Math.round(conf * 100)}`,
+              note: match.reasoning,
+            }
+            entry.changed = true
+            counts.propose++
+          } else {
+            counts.not_matched++
+          }
+        }
+
+        // Apply auto-classifications from Phase 3 of the intelligent engine
+        for (const cls of intelligentResult.classifications) {
+          const releveId = cls.transaction.releve_id
+          const txIdx = cls.transaction.transaction_idx
+          const entry = releveMap.get(releveId)
+          if (!entry) continue
+
+          // Skip if already handled by the per-relevé rules above
+          const existingTx = entry.updatedTxs[txIdx]
+          if (existingTx.statut === 'rapproche' || existingTx.statut === 'interne' || existingTx.matched_type) continue
+
+          const code = `A${String(counts.matched + 1).padStart(3, '0')}`
+          entry.updatedTxs[txIdx] = {
+            ...existingTx,
+            statut: cls.type === 'transfert_interne' ? 'interne' : 'rapproche',
+            matched_type: cls.type,
+            note: cls.note,
+            lettre: cls.type === 'transfert_interne' ? undefined : code,
+            ecriture_id: cls.ecritureId || null,
+            match_confidence: `intelligent_${Math.round(cls.confidence * 100)}`,
+          }
+          entry.changed = true
+
+          if (cls.type === 'transfert_interne') counts.interne++
+          else if (cls.type === 'frais_bancaires') { counts.frais_bancaires++; counts.matched++ }
+          else if (cls.type === 'salaire_bulk' || cls.type === 'salaire_individuel') { counts.salaire_bulk++; counts.matched++ }
+          else if (cls.type === 'paiement_mra' || cls.type === 'charges_sociales') { counts.mra++; counts.matched++ }
+          else { counts.matched++ }
+
+          // Letter the ecriture if found
+          if (cls.ecritureId) {
+            await supabase.from('ecritures_comptables').update({
+              lettre: code,
+              date_lettrage: new Date().toISOString().split('T')[0],
+            }).eq('id', cls.ecritureId)
+          }
+        }
+
+        // Count remaining unmatched
+        const matchedKeys = new Set([
+          ...intelligentResult.matches.map(m => `${m.transaction.releve_id}:${m.transaction.transaction_idx}`),
+          ...intelligentResult.classifications.map(c => `${c.transaction.releve_id}:${c.transaction.transaction_idx}`),
+        ])
+        for (const g of globalUnclassified) {
+          if (!matchedKeys.has(`${g.releveId}:${g.txIdx}`)) counts.not_matched++
+        }
+      }
+
+      // Save all modified relevés
+      for (const [releveId, entry] of releveMap) {
+        if (entry.changed) {
           const { error: saveErr } = await supabase.from('releves_bancaires')
-            .update({ transactions_json: updatedTxs })
-            .eq('id', releve.id)
-          const modCount = updatedTxs.filter((t: any, j: number) => JSON.stringify(t) !== JSON.stringify(txs[j])).length
-          console.log(`[rapprochement] Saved releve ${releve.id}: ${modCount} transactions modified${saveErr ? ' ERROR: ' + saveErr.message : ''}`)
+            .update({ transactions_json: entry.updatedTxs })
+            .eq('id', releveId)
+          const modCount = entry.updatedTxs.filter((t: any, j: number) => JSON.stringify(t) !== JSON.stringify(entry.txs[j])).length
+          console.log(`[rapprochement] Saved releve ${releveId}: ${modCount} transactions modified${saveErr ? ' ERROR: ' + saveErr.message : ''}`)
         }
       }
 
