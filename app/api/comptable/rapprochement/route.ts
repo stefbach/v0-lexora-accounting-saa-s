@@ -648,15 +648,34 @@ export async function POST(request: Request) {
       }
 
       // ═══════════════════════════════════════════════════════════════
-      // PHASE 4b — Auto-génération des écritures BNQ
-      // Pour chaque transaction rapprochée, créer les écritures comptables
-      // (401/411 ↔ 512) si elles n'existent pas encore. Ceci est
-      // nécessaire AVANT la Phase 5 (lettrage BNQ↔ACH).
+      // PHASE FINALE — Écritures BNQ + lettrage 401 (tout en un)
+      //
+      // Pour chaque transaction rapprochée avec facture_id:
+      // 1. Créer l'écriture BNQ (D 401 / C 512) si elle n'existe pas
+      // 2. Trouver l'écriture ACH correspondante (C 401) et la lettrer
+      //    avec le même code
+      // 3. Le BNQ et le ACH reçoivent le même lettre → dette soldée
+      //
+      // Pour les virements internes: créer les écritures 581
       // ═══════════════════════════════════════════════════════════════
       let ecrituresCreees = 0
+      let ecrituresLettrees = 0
       try {
         const { data: dossier } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
         if (dossier) {
+          // Charger TOUTES les écritures 401/411 du dossier (y compris lettrées)
+          const { data: allEcr401 } = await supabase
+            .from('ecritures_comptables')
+            .select('id, compte, libelle, debit, credit, journal, lettre, ref_folio')
+            .eq('dossier_id', dossier.id)
+            .or('compte.like.401%,compte.like.411%')
+
+          const achNonLettrees = (allEcr401 || []).filter((e: any) =>
+            (e.journal === 'ACH' || e.journal === 'OD') && Number(e.credit) > 0 && !e.lettre
+          )
+
+          console.log(`[rapprochement] Phase finale: ${achNonLettrees.length} ACH non lettrées à traiter`)
+
           for (const [releveId, entry] of releveMap) {
             for (let i = 0; i < entry.updatedTxs.length; i++) {
               const tx = entry.updatedTxs[i]
@@ -667,13 +686,11 @@ export async function POST(request: Request) {
               const txAmountMUR = Math.round(toMUR(txAmount, entry.releveDevise) * 100) / 100
               const txDate = tx.date || new Date().toISOString().split('T')[0]
 
-              // Internal transfers → 581 journal entries
+              // ── Virements internes → 581 ──
               if (tx.statut === 'interne' || tx.matched_type === 'transfert_interne') {
                 const intRef = `VI-${releveId}-${i}`
-                const { data: existing581 } = await supabase.from('ecritures_comptables')
-                  .select('id').eq('dossier_id', dossier.id).eq('journal', 'BNQ')
-                  .eq('ref_folio', intRef).limit(1)
-                if (existing581 && existing581.length > 0) continue
+                const alreadyExists = (allEcr401 || []).some((e: any) => e.ref_folio === intRef)
+                if (alreadyExists) continue
 
                 const lettre581 = `VI${String(ecrituresCreees + 1).padStart(3, '0')}`
                 const isOutgoing = txDebit > 0
@@ -688,160 +705,81 @@ export async function POST(request: Request) {
                 continue
               }
 
-              // Regular matched transactions → 401/411 ↔ 512
+              // ── Transactions rapprochées avec facture → BNQ 401↔512 + lettrage ACH ──
               if (tx.statut !== 'rapproche' || !tx.facture_id) continue
 
               const refFolio = `BANK-${releveId}-${i}`
-              const { data: existingBnq } = await supabase.from('ecritures_comptables')
-                .select('id').eq('dossier_id', dossier.id).eq('journal', 'BNQ')
-                .eq('ref_folio', refFolio)
-                .limit(1)
-              if (existingBnq && existingBnq.length > 0) continue
+              const alreadyExists = (allEcr401 || []).some((e: any) => e.ref_folio === refFolio)
+              if (alreadyExists) continue
 
               const { data: facture } = await supabase.from('factures')
-                .select('numero_facture, tiers, type_facture, montant_mur')
+                .select('numero_facture, tiers, type_facture, montant_mur, montant_ttc')
                 .eq('id', tx.facture_id).maybeSingle()
               if (!facture) continue
 
-              const lettre = tx.lettre || `BNQ${String(ecrituresCreees + 1).padStart(3, '0')}`
+              const lettreCode = tx.lettre || `BNQ${String(ecrituresCreees + 1).padStart(3, '0')}`
               const compte401 = facture.type_facture === 'fournisseur' ? '401' : '411'
               const isPayment = txDebit > 0
 
+              // 1. Créer l'écriture BNQ (D 401 / C 512)
               await supabase.from('ecritures_comptables').insert([
                 { dossier_id: dossier.id, date_ecriture: txDate, journal: 'BNQ', compte: compte401,
                   libelle: `Paiement ${(facture.tiers || '').substring(0, 30)} — ${facture.numero_facture || ''}`,
-                  debit: isPayment ? txAmountMUR : 0, credit: isPayment ? 0 : txAmountMUR, lettre, ref_folio: refFolio },
+                  debit: isPayment ? txAmountMUR : 0, credit: isPayment ? 0 : txAmountMUR, lettre: lettreCode, ref_folio: refFolio },
                 { dossier_id: dossier.id, date_ecriture: txDate, journal: 'BNQ', compte: '512',
                   libelle: `Virement ${(facture.tiers || '').substring(0, 30)}`,
-                  debit: isPayment ? 0 : txAmountMUR, credit: isPayment ? txAmountMUR : 0, lettre, ref_folio: refFolio },
+                  debit: isPayment ? 0 : txAmountMUR, credit: isPayment ? txAmountMUR : 0, lettre: lettreCode, ref_folio: refFolio },
               ])
+              ecrituresCreees++
 
-              // Letter existing ACH entry with the same code
-              const factureMUR = Math.round(Number(facture.montant_mur || 0) * 100) / 100
-              if (factureMUR > 0) {
-                await supabase.from('ecritures_comptables')
-                  .update({ lettre })
-                  .eq('dossier_id', dossier.id).eq('compte', compte401).is('lettre', null)
-                  .eq('credit', factureMUR).limit(1)
+              // 2. Lettrer l'écriture ACH correspondante avec le MÊME code
+              // Chercher par: même compte (401/411) + crédit + tiers similaire + non lettrée
+              const factureTiers = (facture.tiers || '').toLowerCase().substring(0, 20)
+              const factureMUR = Math.round(Number(facture.montant_mur || facture.montant_ttc || 0) * 100) / 100
+
+              // Stratégie 1: trouver par montant exact + tiers dans le libellé
+              let achFound = achNonLettrees.find((e: any) => {
+                const eAmt = Math.round((Number(e.credit) || 0) * 100) / 100
+                if (eAmt === 0) return false
+                const diff = Math.abs(eAmt - factureMUR) / factureMUR
+                if (diff > 0.02) return false // 2% tolerance
+                const eLib = (e.libelle || '').toLowerCase()
+                return factureTiers.length >= 3 && eLib.includes(factureTiers.substring(0, 8))
+              })
+
+              // Stratégie 2: trouver par montant exact seul (si tiers ne matche pas)
+              if (!achFound) {
+                achFound = achNonLettrees.find((e: any) => {
+                  const eAmt = Math.round((Number(e.credit) || 0) * 100) / 100
+                  return eAmt === factureMUR
+                })
               }
 
-              ecrituresCreees++
+              // Stratégie 3: montant proche (5% tolérance)
+              if (!achFound) {
+                achFound = achNonLettrees.find((e: any) => {
+                  const eAmt = Math.round((Number(e.credit) || 0) * 100) / 100
+                  if (eAmt === 0) return false
+                  const diff = Math.abs(eAmt - factureMUR) / factureMUR
+                  return diff <= 0.05
+                })
+              }
+
+              if (achFound) {
+                await supabase.from('ecritures_comptables')
+                  .update({ lettre: lettreCode })
+                  .eq('id', achFound.id)
+                // Remove from pool to avoid double-lettrage
+                const idx = achNonLettrees.indexOf(achFound)
+                if (idx >= 0) achNonLettrees.splice(idx, 1)
+                ecrituresLettrees++
+              }
             }
           }
-          console.log(`[rapprochement] Phase 4b: ${ecrituresCreees} écritures BNQ générées`)
+          console.log(`[rapprochement] Phase finale: ${ecrituresCreees} BNQ créées, ${ecrituresLettrees} ACH lettrées`)
         }
       } catch (genErr) {
-        console.warn('[rapprochement] Phase 4b écritures generation failed:', genErr)
-      }
-
-      // ═══════════════════════════════════════════════════════════════
-      // PHASE 5 — Auto-lettrage écritures 401 (BNQ ↔ ACH)
-      // Un vrai comptable lettre aussi les écritures comptables :
-      // - BNQ (paiement, débit 401) ↔ ACH (facture, crédit 401) par tiers + montant
-      // - Quand un paiement bancaire est rapproché à une facture,
-      //   lettrer aussi l'écriture 401 correspondante
-      // ═══════════════════════════════════════════════════════════════
-
-      let ecrituresLettrees = 0
-      if (dossierIds.length > 0) {
-        // Reload ecritures 401 non lettrées (ACH = factures, BNQ = paiements)
-        const { data: ecr401 } = await supabase
-          .from('ecritures_comptables')
-          .select('id, compte, libelle, debit, credit, journal, date_ecriture, lettre, piece_justificative')
-          .in('dossier_id', dossierIds)
-          .like('compte', '401%')
-          .is('lettre', null)
-
-        if (ecr401 && ecr401.length > 0) {
-          // Séparer BNQ (paiements = débit) et ACH (factures = crédit)
-          const bnqEntries = ecr401.filter((e: any) => e.journal === 'BNQ' && Number(e.debit) > 0)
-          const achEntries = ecr401.filter((e: any) => e.journal === 'ACH' && Number(e.credit) > 0)
-
-          console.log(`[rapprochement] Phase 5: ${bnqEntries.length} BNQ paiements, ${achEntries.length} ACH factures à lettrer`)
-
-          const usedAchIds = new Set<string>()
-          const usedBnqIds = new Set<string>()
-
-          // Pour chaque BNQ (paiement), chercher une ou plusieurs ACH (factures) du même tiers
-          for (const bnq of bnqEntries) {
-            if (usedBnqIds.has(bnq.id)) continue
-            const bnqAmt = Number(bnq.debit) || 0
-            if (bnqAmt === 0) continue
-            const bnqLib = (bnq.libelle || '').toLowerCase()
-            const bnqTiers = bnqLib.replace(/^paiement\s+/i, '').replace(/\s*—.*$/, '').trim()
-
-            // Stratégie 1: match exact montant + même tiers
-            let matched = false
-            for (const ach of achEntries) {
-              if (usedAchIds.has(ach.id)) continue
-              const achAmt = Number(ach.credit) || 0
-              if (achAmt === 0) continue
-              const diff = Math.abs(bnqAmt - achAmt) / achAmt
-              if (diff > 0.02) continue // 2% tolerance
-
-              // Check tiers similarity
-              const achLib = (ach.libelle || '').toLowerCase()
-              const achTiers = achLib.replace(/^fournisseur\s+/i, '').replace(/\s*—.*$/, '').trim()
-              const score = advancedTiersScoreForRoute(bnqTiers, achTiers)
-              if (score < 0.35) continue
-
-              // Match found — letter both with same code
-              const code = `L${String(ecrituresLettrees + 1).padStart(3, '0')}`
-              const today = new Date().toISOString().split('T')[0]
-              await supabase.from('ecritures_comptables').update({ lettre: code, date_lettrage: today }).eq('id', bnq.id)
-              await supabase.from('ecritures_comptables').update({ lettre: code, date_lettrage: today }).eq('id', ach.id)
-              usedBnqIds.add(bnq.id)
-              usedAchIds.add(ach.id)
-              ecrituresLettrees += 2
-              matched = true
-              break
-            }
-
-            if (matched) continue
-
-            // Stratégie 2: 1 BNQ → N ACH (paiement couvre plusieurs factures)
-            const availableAch = achEntries.filter(a => !usedAchIds.has(a.id))
-            const tiersAch = availableAch.filter(a => {
-              const achLib = (a.libelle || '').toLowerCase()
-              const achTiers = achLib.replace(/^fournisseur\s+/i, '').replace(/\s*—.*$/, '').trim()
-              return advancedTiersScoreForRoute(bnqTiers, achTiers) >= 0.35
-            })
-
-            if (tiersAch.length >= 2) {
-              const m = Math.min(tiersAch.length, 6)
-              for (let mask = 3; mask < (1 << m); mask++) {
-                let bits = 0
-                for (let i = 0; i < m; i++) if (mask & (1 << i)) bits++
-                if (bits < 2 || bits > 5) continue
-
-                let sum = 0
-                const subset: any[] = []
-                for (let i = 0; i < m; i++) {
-                  if (mask & (1 << i)) {
-                    subset.push(tiersAch[i])
-                    sum += Number(tiersAch[i].credit) || 0
-                  }
-                }
-                const diff = Math.abs(bnqAmt - sum) / sum
-                if (diff > 0.05) continue
-
-                // Match! Letter all
-                const code = `L${String(ecrituresLettrees + 1).padStart(3, '0')}`
-                const today = new Date().toISOString().split('T')[0]
-                await supabase.from('ecritures_comptables').update({ lettre: code, date_lettrage: today }).eq('id', bnq.id)
-                for (const ach of subset) {
-                  await supabase.from('ecritures_comptables').update({ lettre: code, date_lettrage: today }).eq('id', ach.id)
-                  usedAchIds.add(ach.id)
-                }
-                usedBnqIds.add(bnq.id)
-                ecrituresLettrees += 1 + subset.length
-                break
-              }
-            }
-          }
-
-          console.log(`[rapprochement] Phase 5: ${ecrituresLettrees} écritures 401 lettrées`)
-        }
+        console.warn('[rapprochement] Phase finale failed:', genErr)
       }
 
       console.log('[rapprochement] Result:', counts, 'ecritures_lettrees:', ecrituresLettrees)
