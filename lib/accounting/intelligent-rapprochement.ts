@@ -27,11 +27,12 @@ import { normalize, tiersScore, toMUR } from './matching-engine'
 import type { MatchingFacture, MatchingTransaction } from './matching-engine'
 
 // ═══════════════════════════════════════════════════════════════
-// ALIAS FOURNISSEURS — DYNAMIQUES (chargés depuis la DB)
+// ALIAS FOURNISSEURS — DB + FALLBACK GLOBAL
 //
-// Plus aucun alias hardcodé. L'appelant charge les alias depuis
-// la table supplier_aliases et les passe au moteur. Des alias
-// globaux (seed) sont pré-insérés en DB par la migration 127.
+// Les alias sont chargés depuis supplier_aliases (migration 127).
+// Si la table n'existe pas ou est vide, un jeu de fallback global
+// (commun à Maurice) est utilisé automatiquement. Ceci garantit
+// que le moteur fonctionne même sans la migration appliquée.
 // ═══════════════════════════════════════════════════════════════
 
 export interface SupplierAlias {
@@ -39,10 +40,50 @@ export interface SupplierAlias {
   alias: string
 }
 
-/** Build a lookup map from alias → canonical, from DB-loaded alias records */
+/** Alias globaux fallback — utilisés quand la table supplier_aliases est vide */
+const GLOBAL_FALLBACK_ALIASES: SupplierAlias[] = [
+  // Telecom
+  { canonical: 'mauritius telecom', alias: 'myt' },
+  { canonical: 'mauritius telecom', alias: 'my.t' },
+  { canonical: 'mauritius telecom', alias: 'mauritius telecom' },
+  { canonical: 'mauritius telecom', alias: 'mauritius telecom ltd' },
+  { canonical: 'mauritius telecom', alias: 'cellplus' },
+  { canonical: 'mauritius telecom', alias: 'cellplus mobile' },
+  { canonical: 'mauritius telecom', alias: 'cellplus mobile communications' },
+  { canonical: 'mauritius telecom', alias: 'cellplus mobile communications ltd' },
+  { canonical: 'mauritius telecom', alias: 'myt mauritius telecom' },
+  { canonical: 'emtel', alias: 'emtel' },
+  { canonical: 'emtel', alias: 'emtel ltd' },
+  { canonical: 'emtel', alias: 'emtel limited' },
+  // Banques
+  { canonical: 'mcb', alias: 'mcb' },
+  { canonical: 'mcb', alias: 'mauritius commercial bank' },
+  { canonical: 'sbm', alias: 'sbm' },
+  { canonical: 'sbm', alias: 'state bank of mauritius' },
+  { canonical: 'sbm', alias: 'sbm bank' },
+  // Services publics
+  { canonical: 'ceb', alias: 'ceb' },
+  { canonical: 'ceb', alias: 'central electricity board' },
+  { canonical: 'cwa', alias: 'cwa' },
+  { canonical: 'cwa', alias: 'central water authority' },
+  // Gouvernement
+  { canonical: 'mra', alias: 'mra' },
+  { canonical: 'mra', alias: 'mauritius revenue authority' },
+  { canonical: 'mra', alias: 'mauritius revenue' },
+  // Cloud
+  { canonical: 'google cloud', alias: 'google' },
+  { canonical: 'google cloud', alias: 'google cloud' },
+  { canonical: 'google cloud', alias: 'google cloud emea' },
+  { canonical: 'google cloud', alias: 'google cloud emea limited' },
+]
+
+/** Build a lookup map from alias → canonical, from DB-loaded alias records.
+ *  If the input is empty, uses GLOBAL_FALLBACK_ALIASES automatically. */
 export function buildAliasMap(aliases: SupplierAlias[]): Map<string, string> {
+  // Use DB aliases if available, otherwise fall back to globals
+  const source = aliases.length > 0 ? aliases : GLOBAL_FALLBACK_ALIASES
   const map = new Map<string, string>()
-  for (const { canonical, alias } of aliases) {
+  for (const { canonical, alias } of source) {
     const norm = (alias || '').toLowerCase().replace(/[^a-z0-9\s.]/g, '').trim()
     const canon = (canonical || '').toLowerCase().replace(/[^a-z0-9\s.]/g, '').trim()
     if (!norm || !canon) continue
@@ -50,10 +91,14 @@ export function buildAliasMap(aliases: SupplierAlias[]): Map<string, string> {
     // Also add without spaces for tight matching (e.g. "myt" matches "my.t")
     map.set(norm.replace(/[\s.]+/g, ''), canon)
   }
+  if (aliases.length === 0) {
+    console.log(`[intelligent] Using ${GLOBAL_FALLBACK_ALIASES.length} fallback aliases (supplier_aliases table empty or not applied)`)
+  }
   return map
 }
 
-/** Resolve a name to its canonical supplier key via the alias map */
+/** Resolve a name to its canonical supplier key via the alias map.
+ *  Checks the full name, then without spaces, then each individual word. */
 function resolveAlias(name: string, aliasMap: Map<string, string>): string | null {
   if (aliasMap.size === 0) return null
   const norm = (name || '').toLowerCase().replace(/[^a-z0-9\s.]/g, '').trim()
@@ -649,14 +694,22 @@ export function autoClassify(
     const isInternalByPattern = INTERNAL_PATTERNS.some(p => lib.includes(p))
     const isInternalByName = context.societeNames.some(n => n.length > 3 && (tiers.includes(n) || lib.includes(n)))
     const isInternalByAlias = (() => {
-      // Check if the bank tiers resolves to the same alias as any société name
+      // Check if the bank tiers OR libelle resolves to the same alias as any société name
       const am = context.aliasMap || new Map()
-      const bankAlias = resolveAlias(tx.tiers_detecte || tx.libelle || '', am)
-      if (!bankAlias) return false
-      return context.societeNames.some(socName => {
-        const socAlias = resolveAlias(socName, am)
-        return socAlias === bankAlias
-      })
+      // Try tiers_detecte first, then individual words from the libelle
+      const candidates = [
+        tx.tiers_detecte || '',
+        ...(tx.libelle || '').split(/\s+/).filter((w: string) => w.length >= 3),
+      ]
+      for (const candidate of candidates) {
+        const bankAlias = resolveAlias(candidate, am)
+        if (!bankAlias) continue
+        if (context.societeNames.some(socName => {
+          const socAlias = resolveAlias(socName, am)
+          return socAlias === bankAlias
+        })) return true
+      }
+      return false
     })()
 
     if (isInternalByPattern || isInternalByName || isInternalByAlias) {
