@@ -244,10 +244,9 @@ export async function POST(request: Request) {
 
         for (let i = 0; i < updatedTxs.length; i++) {
           const tx = updatedTxs[i]
-          // Skip only if fully processed: has matched_type AND (rapproche or interne)
-          if (tx.matched_type && (tx.statut === 'rapproche' || tx.statut === 'interne')) { skippedCount++; continue }
-          // Skip manually lettered transactions
-          if (tx.lettre && tx.facture_id) { skippedCount++; continue }
+          // Skip only FULLY reconciled or internal transactions
+          // DO NOT skip 'propose' or 'a_verifier' — they need reprocessing
+          if (tx.statut === 'rapproche' || tx.statut === 'interne') { skippedCount++; continue }
 
           // Period filter
           if (date_debut && tx.date && tx.date < date_debut) continue
@@ -710,6 +709,7 @@ export async function POST(request: Request) {
         console.warn('[audit] auto_rapprocher log failed:', auditErr)
       }
 
+      const durationMs = Date.now() - t0
       return NextResponse.json({
         matched: counts.matched, interne: counts.interne, frais_bancaires: counts.frais_bancaires,
         salaire_bulk: counts.salaire_bulk, mra: counts.mra, propose: counts.propose,
@@ -717,6 +717,15 @@ export async function POST(request: Request) {
         total_classified: totalClassified,
         ecritures_lettrees: ecrituresLettrees,
         matches: matchesList.slice(0, 10),
+        _debug: {
+          version: '2026-04-12-v5-intelligent',
+          duration_ms: durationMs,
+          releves_count: releves.length,
+          factures_count: factures.length,
+          ecritures_count: ecritures.length,
+          global_unclassified: globalUnclassified.length,
+          aliases_loaded: 'see logs',
+        },
       })
     }
 

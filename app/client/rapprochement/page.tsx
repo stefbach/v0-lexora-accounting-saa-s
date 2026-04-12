@@ -519,10 +519,19 @@ Voulez-vous vraiment continuer ?`
       await new Promise(r => setTimeout(r, 500))
       setAutoStep("")
       console.log('[rapprochement] auto_rapprocher response:', d)
+      if (!res.ok) {
+        showToast(`Erreur serveur: ${d.error || res.status}`, 'error')
+        return
+      }
       const result = { matched: d.matched || 0, total: d.total || 0, interne: d.interne || 0, frais_bancaires: d.frais_bancaires || 0, salaire_bulk: d.salaire_bulk || 0, mra: d.mra || 0, not_matched: d.not_matched || 0, total_classified: d.total_classified || 0, matches: d.matches || [] }
       setAutoResult(result)
       const totalDone = (result.matched || 0) + (result.interne || 0) + (result.frais_bancaires || 0) + (result.salaire_bulk || 0) + (result.mra || 0)
-      if (totalDone > 0) showToast(`✅ ${totalDone} transactions classifiées (${result.frais_bancaires} frais · ${result.mra} MRA · ${result.salaire_bulk} salaires · ${result.matched} factures)`)
+      const dbg = d._debug || {}
+      if (totalDone > 0) {
+        showToast(`✅ ${totalDone} transactions classifiées (${result.frais_bancaires} frais · ${result.mra} MRA · ${result.salaire_bulk} salaires · ${result.matched} factures) — ${dbg.duration_ms || '?'}ms`)
+      } else {
+        showToast(`⚠️ 0 résultat — total=${result.total}, factures=${dbg.factures_count || '?'}, non-classifiées=${dbg.global_unclassified || '?'}, version=${dbg.version || 'inconnue'}`, 'error')
+      }
       load()
     } catch { setAutoStep(""); setAutoResult({ matched: 0, total: 0, interne: 0, frais_bancaires: 0, salaire_bulk: 0, mra: 0, not_matched: 0, total_classified: 0, matches: [] }) }
     finally { setAutoMatching(false) }
