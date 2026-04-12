@@ -1507,7 +1507,13 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ error: 'Action inconnue' }, { status: 400 })
   } catch (e: unknown) {
-    console.error('[rapprochement POST]', e)
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
+    const msg = e instanceof Error ? e.message : String(e)
+    const stack = e instanceof Error ? e.stack?.split('\n').slice(0, 5).join('\n') : ''
+    console.error('[rapprochement POST] CRASH:', msg, stack)
+    return NextResponse.json({
+      error: msg,
+      stack_preview: stack,
+      _phase: 'uncaught',
+    }, { status: 500 })
   }
 }

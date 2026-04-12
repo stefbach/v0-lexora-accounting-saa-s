@@ -520,7 +520,9 @@ Voulez-vous vraiment continuer ?`
       setAutoStep("")
       console.log('[rapprochement] auto_rapprocher response:', d)
       if (!res.ok) {
-        showToast(`Erreur serveur: ${d.error || res.status}`, 'error')
+        const errMsg = d.error || d.message || JSON.stringify(d).substring(0, 300)
+        alert(`ERREUR RAPPROCHEMENT (${res.status}):\n\n${errMsg}\n\nPhase: ${d._phase || 'inconnue'}`)
+        showToast(`Erreur serveur: ${errMsg}`, 'error')
         return
       }
       const result = { matched: d.matched || 0, total: d.total || 0, interne: d.interne || 0, frais_bancaires: d.frais_bancaires || 0, salaire_bulk: d.salaire_bulk || 0, mra: d.mra || 0, not_matched: d.not_matched || 0, total_classified: d.total_classified || 0, matches: d.matches || [] }
