@@ -421,6 +421,9 @@ export async function POST(request: Request) {
         const allTxs = globalUnclassified.map(g => g.tx)
 
         // Load supplier aliases from DB (société-specific + global)
+        // selfNames = uniquement la société courante (pas le groupe)
+        const selfNamesForEngine = (socData || []).flatMap((s: any) => [s.nom, ...(s.aliases || [])]).map((n: string) => (n || '').toLowerCase()).filter((n: string) => n.length > 3)
+
         let aliasMap = new Map<string, string>()
         try {
           const { data: aliasRows } = await supabase
@@ -435,9 +438,9 @@ export async function POST(request: Request) {
           console.warn('[rapprochement] supplier_aliases table not found, running without aliases')
         }
 
-        // Also auto-register the current société's own name as an alias
-        // so internal transfers are detected for ANY company
-        for (const socName of societeNames) {
+        // Auto-register ONLY the current société's own name as __self_ alias
+        // NOT the other companies in the group (those are interco, not internal)
+        for (const socName of selfNamesForEngine) {
           const norm = socName.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim()
           if (norm.length >= 3) {
             aliasMap.set(norm, `__self_${societe_id}`)
@@ -448,9 +451,6 @@ export async function POST(request: Request) {
         }
 
         console.log(`[rapprochement] Running intelligent engine on ${allTxs.length} unclassified tx, ${engineFactures.length} factures, ${aliasMap.size} aliases`)
-
-        // selfNames = uniquement la société courante (pas le groupe)
-        const selfNamesForEngine = (socData || []).flatMap((s: any) => [s.nom, ...(s.aliases || [])]).map((n: string) => (n || '').toLowerCase()).filter((n: string) => n.length > 3)
 
         const intelligentResult = runIntelligentRapprochement(allTxs, engineFactures, {
           societeNames,
