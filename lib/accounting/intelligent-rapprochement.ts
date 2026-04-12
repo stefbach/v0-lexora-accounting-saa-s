@@ -27,59 +27,45 @@ import { normalize, tiersScore, toMUR } from './matching-engine'
 import type { MatchingFacture, MatchingTransaction } from './matching-engine'
 
 // ═══════════════════════════════════════════════════════════════
-// ALIAS FOURNISSEURS MAURICIENS
-// Un même fournisseur peut apparaître sous différents noms dans
-// la banque vs les factures. Cette table permet au moteur de
-// les reconnaître comme le même tiers.
+// ALIAS FOURNISSEURS — DYNAMIQUES (chargés depuis la DB)
+//
+// Plus aucun alias hardcodé. L'appelant charge les alias depuis
+// la table supplier_aliases et les passe au moteur. Des alias
+// globaux (seed) sont pré-insérés en DB par la migration 127.
 // ═══════════════════════════════════════════════════════════════
 
-const SUPPLIER_ALIASES: string[][] = [
-  // Chaque sous-array = un même fournisseur (tous les alias connus)
-  ['myt', 'mauritius telecom', 'cellplus', 'cellplus mobile', 'cellplus mobile communications', 'myt mauritius telecom', 'my.t'],
-  ['emtel', 'emtel ltd', 'emtel limited'],
-  ['mcb', 'mauritius commercial bank', 'mcb ltd'],
-  ['sbm', 'state bank of mauritius', 'sbm bank'],
-  ['mra', 'mauritius revenue authority', 'mauritius revenue'],
-  ['ceb', 'central electricity board'],
-  ['cwa', 'central water authority'],
-  ['dds', 'digital data solutions', 'digital data solutions ltd'],
-  ['google', 'google cloud', 'google cloud emea', 'google cloud emea limited'],
-  ['e-payroll', 'e-payroll mauritius', 'epayroll'],
-  ['pierrick', 'pierrik', 'pierrik properties', 'pierrik properties ltd', 'pierrick properties', 'pierrick properties ltd'],
-  ['serviqual', 'servi qual'],
-  ['nimerik', 'nimerik cloud', 'nimerik cloud ltd', 'nimerik cloud limited'],
-  ['mipsit', 'mipsit digital', 'mipsit digital ltd'],
-]
+export interface SupplierAlias {
+  canonical: string
+  alias: string
+}
 
-/** Build a lookup: normalized alias → canonical key (first element of the alias group) */
-function buildAliasMap(): Map<string, string> {
+/** Build a lookup map from alias → canonical, from DB-loaded alias records */
+export function buildAliasMap(aliases: SupplierAlias[]): Map<string, string> {
   const map = new Map<string, string>()
-  for (const group of SUPPLIER_ALIASES) {
-    const canonical = group[0]
-    for (const alias of group) {
-      const norm = alias.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim()
-      map.set(norm, canonical)
-      // Also add without spaces for tight matching
-      map.set(norm.replace(/\s+/g, ''), canonical)
-    }
+  for (const { canonical, alias } of aliases) {
+    const norm = (alias || '').toLowerCase().replace(/[^a-z0-9\s.]/g, '').trim()
+    const canon = (canonical || '').toLowerCase().replace(/[^a-z0-9\s.]/g, '').trim()
+    if (!norm || !canon) continue
+    map.set(norm, canon)
+    // Also add without spaces for tight matching (e.g. "myt" matches "my.t")
+    map.set(norm.replace(/[\s.]+/g, ''), canon)
   }
   return map
 }
 
-const ALIAS_MAP = buildAliasMap()
-
-/** Resolve a name to its canonical supplier key via aliases */
-function resolveAlias(name: string): string | null {
-  const norm = (name || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim()
+/** Resolve a name to its canonical supplier key via the alias map */
+function resolveAlias(name: string, aliasMap: Map<string, string>): string | null {
+  if (aliasMap.size === 0) return null
+  const norm = (name || '').toLowerCase().replace(/[^a-z0-9\s.]/g, '').trim()
   // Direct hit
-  if (ALIAS_MAP.has(norm)) return ALIAS_MAP.get(norm)!
-  // Without spaces
-  const nospace = norm.replace(/\s+/g, '')
-  if (ALIAS_MAP.has(nospace)) return ALIAS_MAP.get(nospace)!
-  // Try each word as a standalone lookup (for cases like "MyT" in a long libellé)
+  if (aliasMap.has(norm)) return aliasMap.get(norm)!
+  // Without spaces/dots
+  const nospace = norm.replace(/[\s.]+/g, '')
+  if (aliasMap.has(nospace)) return aliasMap.get(nospace)!
+  // Try each word as a standalone lookup (for "MyT" in a long libellé)
   const words = norm.split(/\s+/)
   for (const w of words) {
-    if (w.length >= 3 && ALIAS_MAP.has(w)) return ALIAS_MAP.get(w)!
+    if (w.length >= 3 && aliasMap.has(w)) return aliasMap.get(w)!
   }
   return null
 }
@@ -176,15 +162,16 @@ function normalizeAdvanced(name: string): string {
 }
 
 /** Score de similarité avancé (combine Jaccard + sous-chaîne + initiales + alias) */
-function advancedTiersScore(bankName: string, factureName: string): number {
+function advancedTiersScore(bankName: string, factureName: string, aliasMap?: Map<string, string>): number {
   const a = normalizeAdvanced(bankName)
   const b = normalizeAdvanced(factureName)
   if (!a || !b) return 0
   if (a === b) return 1.0
 
   // Alias check — si les deux résolvent au même canonical, c'est le même fournisseur
-  const aliasA = resolveAlias(bankName)
-  const aliasB = resolveAlias(factureName)
+  const am = aliasMap || new Map()
+  const aliasA = resolveAlias(bankName, am)
+  const aliasB = resolveAlias(factureName, am)
   if (aliasA && aliasB && aliasA === aliasB) return 0.96
   // Un seul résout mais le canonical apparaît dans l'autre nom
   if (aliasA && b.includes(aliasA)) return 0.93
@@ -250,21 +237,23 @@ function monthDiff(d1: string, d2: string): number {
 export function buildSupplierRegistry(
   factures: MatchingFacture[],
   transactions: MatchingTransaction[],
+  aliasMap?: Map<string, string>,
 ): Map<string, SupplierProfile> {
   const registry = new Map<string, SupplierProfile>()
+  const am = aliasMap || new Map()
 
   // Helper: find or create profile, merging by alias
   function getOrCreateProfile(name: string, type: 'fournisseur' | 'client' | 'mixte'): SupplierProfile {
     const key = normalizeAdvanced(name)
     // Check if this name resolves to a known alias
-    const canonical = resolveAlias(name)
+    const canonical = resolveAlias(name, am)
 
     // Try to find existing profile by key, canonical alias, or fuzzy match
     if (registry.has(key)) return registry.get(key)!
     if (canonical) {
       // Look for a profile whose key or rawNames resolve to the same canonical
       for (const [k, profile] of registry) {
-        const profileCanonical = resolveAlias(k) || resolveAlias(profile.rawNames[0])
+        const profileCanonical = resolveAlias(k, am) || resolveAlias(profile.rawNames[0], am)
         if (profileCanonical === canonical) {
           if (!profile.rawNames.includes(name)) profile.rawNames.push(name)
           return profile
@@ -301,11 +290,11 @@ export function buildSupplierRegistry(
     if (!bankKey || bankKey.length < 2) continue
 
     // First try alias resolution — if bank tiers resolves to same canonical as a profile, instant match
-    const bankCanonical = resolveAlias(bankTiers)
+    const bankCanonical = resolveAlias(bankTiers, am)
     let matched = false
     if (bankCanonical) {
       for (const [, profile] of registry) {
-        const profileCanonical = resolveAlias(profile.key) || resolveAlias(profile.rawNames[0])
+        const profileCanonical = resolveAlias(profile.key, am) || resolveAlias(profile.rawNames[0], am)
         if (profileCanonical === bankCanonical) {
           profile.transactions.push({ ...tx, releveIdx: tx.transaction_idx })
           if (!profile.rawNames.includes(bankTiers)) profile.rawNames.push(bankTiers)
@@ -321,9 +310,9 @@ export function buildSupplierRegistry(
       let bestScore = 0
 
       for (const [key, profile] of registry) {
-        let score = advancedTiersScore(bankTiers, key)
+        let score = advancedTiersScore(bankTiers, key, am)
         for (const rawName of profile.rawNames) {
-          const s = advancedTiersScore(bankTiers, rawName)
+          const s = advancedTiersScore(bankTiers, rawName, am)
           if (s > score) score = s
         }
         if (score > bestScore && score >= 0.35) {
@@ -355,6 +344,7 @@ export function buildSupplierRegistry(
 export function matchBySupplier(
   registry: Map<string, SupplierProfile>,
   rates?: Record<string, number>,
+  _aliasMap?: Map<string, string>,
 ): IntermediateMatch[] {
   const allMatches: IntermediateMatch[] = []
   const usedFactureIds = new Set<string>()
@@ -605,6 +595,7 @@ export function autoClassify(
     societeNames: string[]
     bulletins?: Array<{ periode: string; salaire_net: number }>
     ecritures?: Array<{ id: string; compte: string; debit: number; credit: number; libelle: string }>
+    aliasMap?: Map<string, string>
   }
 ): AutoClassification[] {
   const results: AutoClassification[] = []
@@ -618,15 +609,16 @@ export function autoClassify(
     const tiers = (tx.tiers_detecte || '').toLowerCase()
 
     // ── Virements internes ──
-    // Check patterns + société names + alias resolution (DDS = Digital Data Solutions)
+    // Check patterns + société names + alias resolution (e.g. abbreviation → full name)
     const isInternalByPattern = INTERNAL_PATTERNS.some(p => lib.includes(p))
     const isInternalByName = context.societeNames.some(n => n.length > 3 && (tiers.includes(n) || lib.includes(n)))
     const isInternalByAlias = (() => {
       // Check if the bank tiers resolves to the same alias as any société name
-      const bankAlias = resolveAlias(tx.tiers_detecte || tx.libelle || '')
+      const am = context.aliasMap || new Map()
+      const bankAlias = resolveAlias(tx.tiers_detecte || tx.libelle || '', am)
       if (!bankAlias) return false
       return context.societeNames.some(socName => {
-        const socAlias = resolveAlias(socName)
+        const socAlias = resolveAlias(socName, am)
         return socAlias === bankAlias
       })
     })()
@@ -749,17 +741,24 @@ export function runIntelligentRapprochement(
     bulletins?: Array<{ periode: string; salaire_net: number }>
     ecritures?: Array<{ id: string; compte: string; debit: number; credit: number; libelle: string }>
     rates?: Record<string, number>
+    /** Loaded from supplier_aliases table — alias→canonical map */
+    aliasMap?: Map<string, string>
   }
 ): IntelligentResult {
-  // Phase 1: Build supplier registry
-  const registry = buildSupplierRegistry(factures, transactions)
+  const aliasMap = context.aliasMap || new Map()
+
+  // Phase 1: Build supplier registry (with alias-aware grouping)
+  const registry = buildSupplierRegistry(factures, transactions, aliasMap)
 
   // Phase 2: Match by supplier
-  const supplierMatches = matchBySupplier(registry, context.rates)
+  const supplierMatches = matchBySupplier(registry, context.rates, aliasMap)
   const matchedTxKeys = new Set(supplierMatches.map(m => m.transactionKey))
 
-  // Phase 3: Auto-classify remaining
-  const classifications = autoClassify(transactions, matchedTxKeys, context)
+  // Phase 3: Auto-classify remaining (with alias-aware internal detection)
+  const classifications = autoClassify(transactions, matchedTxKeys, {
+    ...context,
+    aliasMap,
+  })
 
   // Stats
   const byStrategy: Record<string, number> = {}

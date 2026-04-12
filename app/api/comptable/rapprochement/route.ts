@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createEcrituresForPayment } from '@/lib/accounting/ecritures-factures'
 import { analyzeAllTransactions, MatchingTransaction, MatchingFacture } from '@/lib/accounting/matching-engine'
-import { runIntelligentRapprochement } from '@/lib/accounting/intelligent-rapprochement'
+import { runIntelligentRapprochement, buildAliasMap } from '@/lib/accounting/intelligent-rapprochement'
+import type { SupplierAlias } from '@/lib/accounting/intelligent-rapprochement'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getTauxChange } from '@/lib/taux-change'
@@ -384,13 +385,41 @@ export async function POST(request: Request) {
 
         const allTxs = globalUnclassified.map(g => g.tx)
 
-        console.log(`[rapprochement] Running intelligent engine on ${allTxs.length} unclassified tx, ${engineFactures.length} factures`)
+        // Load supplier aliases from DB (société-specific + global)
+        let aliasMap = new Map<string, string>()
+        try {
+          const { data: aliasRows } = await supabase
+            .from('supplier_aliases')
+            .select('canonical, alias')
+            .or(`societe_id.eq.${societe_id},societe_id.is.null`)
+          if (aliasRows && aliasRows.length > 0) {
+            aliasMap = buildAliasMap(aliasRows as SupplierAlias[])
+            console.log(`[rapprochement] Loaded ${aliasRows.length} supplier aliases`)
+          }
+        } catch (aliasErr) {
+          console.warn('[rapprochement] supplier_aliases table not found, running without aliases')
+        }
+
+        // Also auto-register the current société's own name as an alias
+        // so internal transfers are detected for ANY company
+        for (const socName of societeNames) {
+          const norm = socName.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim()
+          if (norm.length >= 3) {
+            aliasMap.set(norm, `__self_${societe_id}`)
+            // Also add abbreviation (first letters of each word)
+            const abbr = norm.split(/\s+/).map((w: string) => w[0]).join('')
+            if (abbr.length >= 2) aliasMap.set(abbr, `__self_${societe_id}`)
+          }
+        }
+
+        console.log(`[rapprochement] Running intelligent engine on ${allTxs.length} unclassified tx, ${engineFactures.length} factures, ${aliasMap.size} aliases`)
 
         const intelligentResult = runIntelligentRapprochement(allTxs, engineFactures, {
           societeNames,
           bulletins: (allBulletins || []).map((b: any) => ({ periode: b.periode, salaire_net: Number(b.salaire_net) || 0 })),
           ecritures: ecritures.map((e: any) => ({ id: e.id, compte: e.compte, debit: Number(e.debit) || 0, credit: Number(e.credit) || 0, libelle: e.libelle || '' })),
           rates,
+          aliasMap,
         })
 
         console.log(`[rapprochement] Intelligent engine results:`, intelligentResult.stats)
@@ -461,6 +490,26 @@ export async function POST(request: Request) {
               supplier: match.supplierName,
             })
             counts.matched++
+
+            // Auto-learn alias: if the bank tiers differs from the facture tiers,
+            // save it for future matching (best-effort, non-blocking)
+            if (match.factures[0]?.tiers) {
+              const bankTiers = match.transaction.tiers_detecte || ''
+              const facTiers = match.factures[0].tiers || ''
+              if (bankTiers && facTiers && bankTiers.toLowerCase() !== facTiers.toLowerCase()) {
+                try {
+                  await supabase.from('supplier_aliases').upsert({
+                    societe_id,
+                    canonical: facTiers.toLowerCase().replace(/[^a-z0-9\s.]/g, '').trim(),
+                    alias: bankTiers.toLowerCase().replace(/[^a-z0-9\s.]/g, '').trim(),
+                    source: 'auto_learned',
+                    confidence: Math.min(0.95, conf),
+                    nb_used: 1,
+                    created_by: user.id,
+                  }, { onConflict: 'societe_id,alias' })
+                } catch { /* best effort */ }
+              }
+            }
           } else if (conf >= 0.55) {
             // Medium confidence → propose
             const code = `P${String(counts.propose + 1).padStart(3, '0')}`
