@@ -650,10 +650,31 @@ Voulez-vous vraiment continuer ?`
     if ((periodDebut || periodFin) && !t.date) return false
     return true
   })
-  const matched = transactions.filter((t: any) => t.statut === 'rapproche' || t.facture_id || t.ecriture_id || t.lettre)
+  // ── 4 catégories claires ──────────────────────────────────────
+  // 1. VERT: Rapproché AVEC pièce comptable (facture matchée)
+  const matchedWithInvoice = transactions.filter((t: any) =>
+    (t.statut === 'rapproche') && (t.facture_id || (Array.isArray(t.facture_ids) && t.facture_ids.length > 0))
+  )
+  // 2. BLEU: Classifié SANS pièce (frais bancaires, salaires, MRA, charges)
+  const classifiedAuto = transactions.filter((t: any) =>
+    t.statut === 'rapproche' && !t.facture_id && !(Array.isArray(t.facture_ids) && t.facture_ids.length > 0) &&
+    ['frais_bancaires', 'salaire_bulk', 'salaire_bulk_non_verifie', 'salaire_individuel', 'paiement_mra', 'paiement_mra_non_verifie', 'charges_sociales', 'reversal_salaire'].includes(t.matched_type)
+  )
+  // 3. GRIS: Virements internes
   const interne = transactions.filter((t: any) => t.statut === 'interne' || t.matched_type === 'transfert_interne')
+  // 4. ORANGE: Payé sans pièce comptable (rapproché mais ni facture ni classification reconnue)
+  const paidNoInvoice = transactions.filter((t: any) =>
+    t.statut === 'rapproche' && !t.facture_id && !(Array.isArray(t.facture_ids) && t.facture_ids.length > 0) &&
+    !['frais_bancaires', 'salaire_bulk', 'salaire_bulk_non_verifie', 'salaire_individuel', 'paiement_mra', 'paiement_mra_non_verifie', 'charges_sociales', 'reversal_salaire'].includes(t.matched_type)
+  )
+  // 5. JAUNE: Propositions à valider
   const proposed = transactions.filter((t: any) => t.statut === 'propose' || t.statut === 'a_verifier')
-  const unmatched = transactions.filter((t: any) => !t.facture_id && !t.ecriture_id && !t.lettre && t.statut !== 'rapproche' && t.statut !== 'interne' && t.statut !== 'propose' && t.statut !== 'a_verifier')
+  // 6. ROUGE: Non rapproché
+  const unmatched = transactions.filter((t: any) =>
+    t.statut !== 'rapproche' && t.statut !== 'interne' && t.statut !== 'propose' && t.statut !== 'a_verifier'
+  )
+  // Legacy compatibility
+  const matched = [...matchedWithInvoice, ...classifiedAuto, ...paidNoInvoice]
 
   // Sort unmatched
   const sortedUnmatched = [...unmatched].sort((a, b) => {
@@ -897,11 +918,13 @@ Voulez-vous vraiment continuer ?`
               className="h-3 bg-gray-100"
             />
             <div className="flex flex-wrap gap-3 mt-2 text-xs text-gray-500">
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />{matched.length} rapprochées</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />{matchedWithInvoice.length} avec facture</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400 inline-block" />{classifiedAuto.length} classifiées (frais/salaires/MRA)</span>
               <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block" />{interne.length} internes</span>
+              {paidNoInvoice.length > 0 && <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />{paidNoInvoice.length} payées sans pièce ⚠️</span>}
               <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400 inline-block" />{proposed.length} à valider</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400 inline-block" />{unmatched.length} orphelines</span>
-              <span className="flex items-center gap-1 ml-auto font-medium text-[#0B0F2E]">{matched.length + interne.length} / {transactions.length} total</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400 inline-block" />{unmatched.length} non rapprochées</span>
+              <span className="flex items-center gap-1 ml-auto font-medium text-[#0B0F2E]">{matchedWithInvoice.length + classifiedAuto.length + interne.length} / {transactions.length} total</span>
             </div>
           </CardContent>
         </Card>
@@ -930,13 +953,16 @@ Voulez-vous vraiment continuer ?`
         </div>
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      {/* KPIs — 6 catégories claires */}
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
         <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Transactions</p><p className="text-2xl font-bold text-[#0B0F2E]">{transactions.length}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Rapprochées</p><p className="text-2xl font-bold text-green-600">{matched.length}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Internes</p><p className="text-2xl font-bold text-gray-400">{interne.length}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-gray-500">À valider</p><p className="text-2xl font-bold text-orange-600">{proposed.length}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Non rapprochées</p><p className="text-2xl font-bold text-red-600">{unmatched.length}</p></CardContent></Card>
+        <Card className="border-green-200"><CardContent className="p-4"><p className="text-xs text-green-700 font-medium">✅ Avec facture</p><p className="text-2xl font-bold text-green-600">{matchedWithInvoice.length}</p></CardContent></Card>
+        <Card className="border-blue-200"><CardContent className="p-4"><p className="text-xs text-blue-700 font-medium">📋 Classifiées auto</p><p className="text-2xl font-bold text-blue-600">{classifiedAuto.length}</p><p className="text-[10px] text-gray-400">Frais, salaires, MRA</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-gray-500">↔ Internes</p><p className="text-2xl font-bold text-gray-400">{interne.length}</p></CardContent></Card>
+        {paidNoInvoice.length > 0 && (
+          <Card className="border-amber-300 bg-amber-50"><CardContent className="p-4"><p className="text-xs text-amber-700 font-medium">⚠️ Sans pièce</p><p className="text-2xl font-bold text-amber-600">{paidNoInvoice.length}</p><p className="text-[10px] text-amber-500">À vérifier</p></CardContent></Card>
+        )}
+        <Card className={unmatched.length > 0 ? "border-red-200" : ""}><CardContent className="p-4"><p className="text-xs text-red-600 font-medium">❌ Non rapprochées</p><p className="text-2xl font-bold text-red-600">{unmatched.length}</p></CardContent></Card>
       </div>
 
       {/* Auto-rapprochement progress */}
@@ -973,26 +999,27 @@ Voulez-vous vraiment continuer ?`
         </Card>
       )}
 
-      {/* SECTION 3 — Rapprochées (collapsible) */}
-      {matched.length > 0 && (
-        <Card>
+      {/* SECTION 3a — Rapprochées AVEC facture (vert) */}
+      {matchedWithInvoice.length > 0 && (
+        <Card className="border-green-200">
           <CardHeader className="cursor-pointer" onClick={() => setMatchedOpen(!matchedOpen)}>
             <CardTitle className="text-[#0B0F2E] flex items-center justify-between">
-              <span className="flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-green-600" />Rapprochées ({matched.length})</span>
+              <span className="flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-green-600" />✅ Rapprochées avec facture ({matchedWithInvoice.length})</span>
               {matchedOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
             </CardTitle>
           </CardHeader>
           {matchedOpen && (
             <CardContent className="p-0 overflow-x-auto">
               <Table>
-                <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Libellé</TableHead><TableHead className="text-right">Montant</TableHead><TableHead>Tiers</TableHead><TableHead>Lettre</TableHead><TableHead>Action</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Libellé</TableHead><TableHead className="text-right">Montant</TableHead><TableHead>Tiers</TableHead><TableHead>Type</TableHead><TableHead>Lettre</TableHead><TableHead>Action</TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {matched.map((tx: any) => (
+                  {matchedWithInvoice.map((tx: any) => (
                     <TableRow key={tx.id} className="bg-green-50/50">
                       <TableCell className="text-sm">{formatDate(tx.date)}</TableCell>
                       <TableCell className="text-sm"><TruncatedCell text={tx.libelle} /></TableCell>
-                      <TableCell className="text-right font-medium">{tx.debit > 0 ? <span className="text-red-600">-{fmt(tx.debit)} {tx.devise}</span> : <span className="text-green-600">+{fmt(tx.credit)} {tx.devise}</span>}</TableCell>
+                      <TableCell className="text-right font-medium">{Number(tx.debit) > 0 ? <span className="text-red-600">-{fmt(Number(tx.debit))} {tx.devise}</span> : <span className="text-green-600">+{fmt(Number(tx.credit))} {tx.devise}</span>}</TableCell>
                       <TableCell className="text-sm">{tx.tiers_detecte || "—"}</TableCell>
+                      <TableCell><Badge className="bg-green-100 text-green-700 text-[10px]">{tx.matched_type || 'facture'}</Badge></TableCell>
                       <TableCell><Badge className="bg-green-100 text-green-700">{tx.lettre || "OK"}</Badge></TableCell>
                       <TableCell><Button variant="ghost" size="sm" onClick={() => handleUnlink(tx)}><Unlink className="w-4 h-4 text-red-500" /></Button></TableCell>
                     </TableRow>
@@ -1001,6 +1028,65 @@ Voulez-vous vraiment continuer ?`
               </Table>
             </CardContent>
           )}
+        </Card>
+      )}
+
+      {/* SECTION 3b — Classifiées auto SANS facture (bleu) */}
+      {classifiedAuto.length > 0 && (
+        <Card className="border-blue-200">
+          <CardHeader>
+            <CardTitle className="text-[#0B0F2E] flex items-center gap-2 text-base">
+              📋 Classifiées automatiquement — sans pièce comptable ({classifiedAuto.length})
+            </CardTitle>
+            <p className="text-xs text-gray-500">Frais bancaires, salaires, charges sociales, paiements MRA — lettrées automatiquement</p>
+          </CardHeader>
+          <CardContent className="p-0 overflow-x-auto">
+            <Table>
+              <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Libellé</TableHead><TableHead className="text-right">Montant</TableHead><TableHead>Tiers</TableHead><TableHead>Type</TableHead><TableHead>Lettre</TableHead></TableRow></TableHeader>
+              <TableBody>
+                {classifiedAuto.map((tx: any) => (
+                  <TableRow key={tx.id} className="bg-blue-50/30">
+                    <TableCell className="text-sm">{formatDate(tx.date)}</TableCell>
+                    <TableCell className="text-sm"><TruncatedCell text={tx.libelle} /></TableCell>
+                    <TableCell className="text-right font-medium">{Number(tx.debit) > 0 ? <span className="text-red-600">-{fmt(Number(tx.debit))} {tx.devise}</span> : <span className="text-green-600">+{fmt(Number(tx.credit))} {tx.devise}</span>}</TableCell>
+                    <TableCell className="text-sm">{tx.tiers_detecte || "—"}</TableCell>
+                    <TableCell><Badge className="bg-blue-100 text-blue-700 text-[10px]">{tx.matched_type?.replace(/_/g, ' ') || '—'}</Badge></TableCell>
+                    <TableCell><Badge className="bg-blue-100 text-blue-700">{tx.lettre || "OK"}</Badge></TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* SECTION 3c — Payées SANS pièce comptable (orange/amber) */}
+      {paidNoInvoice.length > 0 && (
+        <Card className="border-amber-300 bg-amber-50/30">
+          <CardHeader>
+            <CardTitle className="text-amber-800 flex items-center gap-2 text-base">
+              ⚠️ Payées sans pièce comptable — à vérifier ({paidNoInvoice.length})
+            </CardTitle>
+            <p className="text-xs text-amber-600">Ces transactions ont été rapprochées mais ne correspondent à aucune facture ni classification reconnue. Vérifiez manuellement.</p>
+          </CardHeader>
+          <CardContent className="p-0 overflow-x-auto">
+            <Table>
+              <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Libellé</TableHead><TableHead className="text-right">Débit</TableHead><TableHead className="text-right">Crédit</TableHead><TableHead>Tiers</TableHead><TableHead>Type détecté</TableHead><TableHead>Action</TableHead></TableRow></TableHeader>
+              <TableBody>
+                {paidNoInvoice.map((tx: any) => (
+                  <TableRow key={tx.id} className="bg-amber-50/50">
+                    <TableCell className="text-sm">{formatDate(tx.date)}</TableCell>
+                    <TableCell className="text-sm"><TruncatedCell text={tx.libelle} /></TableCell>
+                    <TableCell className="text-right text-sm text-red-600">{Number(tx.debit) > 0 ? fmt(Number(tx.debit)) + ' ' + tx.devise : "—"}</TableCell>
+                    <TableCell className="text-right text-sm text-green-600">{Number(tx.credit) > 0 ? fmt(Number(tx.credit)) + ' ' + tx.devise : "—"}</TableCell>
+                    <TableCell className="text-sm font-medium">{tx.tiers_detecte || "—"}</TableCell>
+                    <TableCell><Badge className="bg-amber-100 text-amber-700 text-[10px]">{tx.matched_type?.replace(/_/g, ' ') || 'inconnu'}</Badge></TableCell>
+                    <TableCell><Button variant="ghost" size="sm" onClick={() => handleUnlink(tx)} title="Délettrer"><Unlink className="w-4 h-4 text-amber-600" /></Button></TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
         </Card>
       )}
 
