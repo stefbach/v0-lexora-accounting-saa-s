@@ -8,6 +8,7 @@ import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getTauxChange } from '@/lib/taux-change'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 300
 
 // ── Advanced tiers scoring for Phase 5 (BNQ↔ACH lettrage) ──
 function advancedTiersScoreForRoute(a: string, b: string): number {
@@ -157,74 +158,65 @@ export async function POST(request: Request) {
       const { societe_id, date_debut, date_fin } = body
       if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
 
-      // Get bank transactions
-      const { data: releves } = await supabase
-        .from('releves_bancaires')
-        .select('id, compte_bancaire_id, transactions_json')
-        .eq('societe_id', societe_id)
+      // ── Load ALL data in parallel (critical for Vercel timeout) ──
+      const t0 = Date.now()
+
+      const [
+        { data: releves },
+        { data: socData },
+        { data: dossiers },
+        { data: facturesData, error: factErr },
+        rates,
+        { data: comptesBancaires },
+        { data: allBulletins },
+      ] = await Promise.all([
+        supabase.from('releves_bancaires').select('id, compte_bancaire_id, transactions_json').eq('societe_id', societe_id),
+        supabase.from('societes').select('nom, aliases').eq('id', societe_id),
+        supabase.from('dossiers').select('id, client_id').eq('societe_id', societe_id),
+        supabase.from('factures').select('id, numero_facture, tiers, montant_ttc, montant_mur, type_facture, devise, taux_change, date_facture, date_echeance, conditions_paiement, statut').eq('societe_id', societe_id).in('statut', ['en_attente', 'retard', 'partiel']),
+        getTauxChange(),
+        supabase.from('comptes_bancaires').select('id, devise').eq('societe_id', societe_id),
+        supabase.from('bulletins_paie').select('id, employe_id, salaire_net, periode, statut').eq('societe_id', societe_id).eq('statut', 'valide'),
+      ])
+
+      console.log(`[rapprochement] Parallel load done in ${Date.now() - t0}ms`)
 
       if (!releves || releves.length === 0) {
         return NextResponse.json({ matched: 0, total: 0, message: 'Aucun relevé bancaire' })
       }
 
-      // Société names for internal transfer detection
-      const { data: socData } = await supabase.from('societes').select('nom, aliases').eq('id', societe_id)
-      const societeNames = (socData || []).flatMap(s => [s.nom, ...(s.aliases || [])]).map(n => (n || '').toLowerCase()).filter(Boolean)
-
-      // Get écritures comptables (v1) for matching
-      const { data: dossiers } = await supabase
-        .from('dossiers').select('id').eq('societe_id', societe_id)
+      const societeNames = (socData || []).flatMap((s: any) => [s.nom, ...(s.aliases || [])]).map((n: string) => (n || '').toLowerCase()).filter(Boolean)
       const dossierIds = (dossiers || []).map((d: any) => d.id)
+      let factures: any[] = (!factErr && facturesData) ? facturesData : []
 
-      let ecritures: any[] = []
-      if (dossierIds.length > 0) {
-        const { data } = await supabase
-          .from('ecritures_comptables')
-          .select('id, compte, libelle, debit, credit, date_ecriture, lettre')
-          .in('dossier_id', dossierIds)
-          .is('lettre', null)
-        ecritures = data || []
-      }
-
-      // Get factures
-      let factures: any[] = []
-      const { data: facturesData, error: factErr } = await supabase
-        .from('factures')
-        .select('id, numero_facture, tiers, montant_ttc, montant_mur, type_facture, devise, taux_change')
-        .eq('societe_id', societe_id)
-        .in('statut', ['en_attente', 'retard', 'partiel'])
-      if (!factErr) factures = facturesData || []
-
-      // FX rates
-      const rates = await getTauxChange()
       const toMUR = (amount: number, devise: string): number => {
         if (!devise || devise === 'MUR') return amount
         return amount * (rates[devise.toUpperCase()] || 1)
       }
 
-      // Bank account currencies
-      const { data: comptesBancaires } = await supabase
-        .from('comptes_bancaires').select('id, devise').eq('societe_id', societe_id)
       const compteDeviseMap: Record<string, string> = {}
       ;(comptesBancaires || []).forEach((c: any) => { compteDeviseMap[c.id] = c.devise || 'MUR' })
 
-      // All bulletins for salary matching
-      const { data: allBulletins } = await supabase
-        .from('bulletins_paie').select('id, employe_id, salaire_net, periode, statut')
-        .eq('societe_id', societe_id).eq('statut', 'valide')
-      const empIds = [...new Set((allBulletins || []).map(b => b.employe_id).filter(Boolean))]
-      let empMap: Record<string, any> = {}
-      if (empIds.length > 0) {
-        const { data: emps } = await supabase.from('employes').select('id, nom, prenom').in('id', empIds)
-        for (const e of emps || []) empMap[e.id] = e
-      }
+      // Second parallel batch: écritures + other société names
+      const clientId = dossiers?.[0]?.client_id
+      const [ecrituresResult, allUserSocResult] = await Promise.all([
+        dossierIds.length > 0
+          ? supabase.from('ecritures_comptables').select('id, compte, libelle, debit, credit, date_ecriture, lettre').in('dossier_id', dossierIds).is('lettre', null)
+          : Promise.resolve({ data: [] }),
+        clientId
+          ? supabase.from('dossiers').select('societe_id').eq('client_id', clientId)
+          : Promise.resolve({ data: [] }),
+      ])
 
-      // Compte courant associés
-      const { data: ccComptes } = await supabase
-        .from('comptes_courants_associes').select('id, nom').eq('societe_id', societe_id)
-      const { data: ccMouvements } = await supabase
-        .from('mouvements_compte_courant').select('id, montant, description, compte_courant_id, date_mouvement, type')
-        .eq('societe_id', societe_id).limit(200)
+      let ecritures: any[] = ecrituresResult.data || []
+
+      // Extend société names with all related companies
+      const allSocIds = [...new Set([societe_id, ...((allUserSocResult.data || []) as any[]).map((d: any) => d.societe_id)])].filter(Boolean)
+      if (allSocIds.length > 1) {
+        const { data: otherSocs } = await supabase.from('societes').select('nom, aliases').in('id', allSocIds)
+        const otherNames = (otherSocs || []).flatMap((s: any) => [s.nom, ...(s.aliases || [])]).map((n: string) => (n || '').toLowerCase()).filter(Boolean)
+        societeNames.push(...otherNames.filter((n: string) => !societeNames.includes(n)))
+      }
 
       // Pre-classification patterns
       const BANK_FEE_PATTERNS = ['service fee', 'banking subs fee', 'merchant monthly fee', 'payment fee',
@@ -234,16 +226,7 @@ export async function POST(request: Request) {
       let counts = { matched: 0, interne: 0, frais_bancaires: 0, salaire_bulk: 0, mra: 0, salaire_individuel: 0, propose: 0, not_matched: 0, total: 0 }
       const matchesList: any[] = []
 
-      // Also get ALL société names (not just current) for internal transfer detection
-      const { data: allUserSocData } = await supabase.from('dossiers').select('societe_id').eq('client_id', (await supabase.from('dossiers').select('client_id').eq('societe_id', societe_id).limit(1).maybeSingle()).data?.client_id || '')
-      const allSocIds = [...new Set([societe_id, ...(allUserSocData || []).map((d: any) => d.societe_id)])].filter(Boolean)
-      if (allSocIds.length > 1) {
-        const { data: otherSocs } = await supabase.from('societes').select('nom, aliases').in('id', allSocIds)
-        const otherNames = (otherSocs || []).flatMap(s => [s.nom, ...(s.aliases || [])]).map(n => (n || '').toLowerCase()).filter(Boolean)
-        societeNames.push(...otherNames.filter(n => !societeNames.includes(n)))
-      }
-
-      console.log('[rapprochement] Starting:', { societe_id, releves: releves.length, ecritures: ecritures.length, factures: factures.length, societeNames, date_debut, date_fin })
+      console.log(`[rapprochement] Starting: ${releves.length} releves, ${ecritures.length} ecritures, ${factures.length} factures, loaded in ${Date.now() - t0}ms`)
 
       // Collect all unclassified transactions across ALL relevés for the intelligent engine
       const globalUnclassified: Array<{ releveId: string; txIdx: number; tx: MatchingTransaction }> = []
