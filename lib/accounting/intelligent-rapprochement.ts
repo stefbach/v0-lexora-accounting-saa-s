@@ -731,6 +731,7 @@ export function autoClassify(
     })()
 
     if (isInternalByPattern || isInternalByName || isInternalByAlias) {
+      console.log(`[autoClassify] INTERNE: tiers="${tiers}" lib="${lib.substring(0,40)}" pattern=${isInternalByPattern} name=${isInternalByName} alias=${isInternalByAlias} selfNames=[${selfNamesNorm.join(',')}]`)
       results.push({
         transactionKey: txKey(tx), transaction: tx,
         type: 'transfert_interne',

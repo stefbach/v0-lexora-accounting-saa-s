@@ -965,7 +965,7 @@ export async function POST(request: Request) {
         ecritures_creees: ecrituresCreees,
         matches: matchesList.slice(0, 10),
         _debug: {
-          version: '2026-04-12-v5-intelligent',
+          version: '2026-04-13-v8-selfnames-strict',
           duration_ms: durationMs,
           releves_count: releves.length,
           factures_count: factures.length,
