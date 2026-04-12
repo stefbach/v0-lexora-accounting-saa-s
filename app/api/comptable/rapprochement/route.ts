@@ -287,8 +287,15 @@ export async function POST(request: Request) {
           // RULE A — Internal transfers (ULTRA-STRICT)
           // Un virement interne = UNIQUEMENT "Own Account Transfer" vers la société elle-même
           // Le NOM de la société courante doit apparaître dans le TIERS (pas les sociétés liées)
-          const selfNames = (socData || []).flatMap((s: any) => [s.nom, ...(s.aliases || [])]).map((n: string) => (n || '').toLowerCase()).filter((n: string) => n.length > 3)
-          const isTiersSelf = selfNames.some(n => txTiers.includes(n))
+          // Noms de la société courante (normalisés sans Ltd/SARL/SA)
+          const selfNamesNorm = (socData || []).flatMap((s: any) => [s.nom, ...(s.aliases || [])]).map((n: string) => (n || '').toLowerCase().replace(/\b(ltd|limited|sarl|sa|co)\b\.?/gi, '').replace(/\s+/g, ' ').trim()).filter((n: string) => n.length > 3)
+          // Le tiers normalisé (sans Ltd)
+          const txTiersNorm = txTiers.replace(/\b(ltd|limited|sarl|sa|co)\b\.?/gi, '').replace(/\s+/g, ' ').trim()
+          // Match STRICT: le tiers normalisé doit EXACTEMENT correspondre au nom de la société
+          // "obesity care clinic" === "obesity care clinic" ✅
+          // "obesity care clinic malta" !== "obesity care clinic" ❌
+          // "digital data sol" !== "obesity care clinic" ❌
+          const isTiersSelf = selfNamesNorm.some(n => txTiersNorm === n)
           const isOwnAccountTransfer = txLib.includes('own account transfer') && isTiersSelf
           const isExplicitInterne = txLib.includes('virement interne') || txLib.includes('internal transfer')
           // "Salary Proceeds" = retour de bulk payment → interne

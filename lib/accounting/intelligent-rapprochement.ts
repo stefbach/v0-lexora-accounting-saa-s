@@ -699,8 +699,12 @@ export function autoClassify(
     // ── Virements internes ──
     // ULTRA-STRICT: un virement interne = UNIQUEMENT quand le TIERS est la société ELLE-MÊME
     // PAS les sociétés liées du même groupe (interco = paiement, pas interne)
-    const selfNames = context.selfNames || context.societeNames
-    const isInternalByPattern = INTERNAL_PATTERNS.some(p => lib.includes(p)) && selfNames.some(n => n.length > 3 && tiers.includes(n))
+    const selfNamesRaw = context.selfNames || context.societeNames
+    // Normaliser pour match exact (sans Ltd/SARL)
+    const selfNamesNorm = selfNamesRaw.map(n => n.replace(/\b(ltd|limited|sarl|sa|co)\b\.?/gi, '').replace(/\s+/g, ' ').trim()).filter(n => n.length > 3)
+    const tiersNorm = tiers.replace(/\b(ltd|limited|sarl|sa|co)\b\.?/gi, '').replace(/\s+/g, ' ').trim()
+    // Match STRICT: le tiers normalisé doit EXACTEMENT correspondre
+    const isInternalByPattern = INTERNAL_PATTERNS.some(p => lib.includes(p)) && selfNamesNorm.some(n => tiersNorm === n)
     const isInternalByName = false // Désactivé — trop de faux positifs avec societeNames du groupe
     const isInternalByAlias = (() => {
       const am = context.aliasMap || new Map()
@@ -708,7 +712,7 @@ export function autoClassify(
       for (const candidate of candidates) {
         const bankAlias = resolveAlias(candidate, am)
         if (!bankAlias) continue
-        if (selfNames.some((socName: string) => {
+        if (selfNamesNorm.some((socName: string) => {
           const socAlias = resolveAlias(socName, am)
           return socAlias === bankAlias
         })) return true
