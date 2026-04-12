@@ -161,25 +161,43 @@ export async function POST(request: Request) {
       // ── Load ALL data in parallel (critical for Vercel timeout) ──
       const t0 = Date.now()
 
-      const [
-        { data: releves },
-        { data: socData },
-        { data: dossiers },
-        { data: facturesData, error: factErr },
-        rates,
-        { data: comptesBancaires },
-        { data: allBulletins },
-      ] = await Promise.all([
-        supabase.from('releves_bancaires').select('id, compte_bancaire_id, transactions_json').eq('societe_id', societe_id),
-        supabase.from('societes').select('nom, aliases').eq('id', societe_id),
-        supabase.from('dossiers').select('id, client_id').eq('societe_id', societe_id),
-        supabase.from('factures').select('id, numero_facture, tiers, montant_ttc, montant_mur, type_facture, devise, taux_change, date_facture, date_echeance, conditions_paiement, statut').eq('societe_id', societe_id).in('statut', ['en_attente', 'retard', 'partiel']),
-        getTauxChange(),
-        supabase.from('comptes_bancaires').select('id, devise').eq('societe_id', societe_id),
-        supabase.from('bulletins_paie').select('id, employe_id, salaire_net, periode, statut').eq('societe_id', societe_id).eq('statut', 'valide'),
-      ])
+      let releves: any[] = []
+      let socData: any[] = []
+      let dossiers: any[] = []
+      let facturesData: any[] | null = null
+      let factErr: any = null
+      let rates: Record<string, number> = { MUR: 1, EUR: 46.50, USD: 44.80, GBP: 54.20 }
+      let comptesBancaires: any[] = []
+      let allBulletins: any[] = []
 
-      console.log(`[rapprochement] Parallel load done in ${Date.now() - t0}ms`)
+      try {
+        const results = await Promise.all([
+          supabase.from('releves_bancaires').select('id, compte_bancaire_id, transactions_json').eq('societe_id', societe_id),
+          supabase.from('societes').select('nom, aliases').eq('id', societe_id),
+          supabase.from('dossiers').select('id, client_id').eq('societe_id', societe_id),
+          supabase.from('factures').select('id, numero_facture, tiers, montant_ttc, montant_mur, type_facture, devise, date_facture, date_echeance, conditions_paiement, statut').eq('societe_id', societe_id).in('statut', ['en_attente', 'retard', 'partiel']),
+          getTauxChange().catch(() => ({ MUR: 1, EUR: 46.50, USD: 44.80, GBP: 54.20 })),
+          supabase.from('comptes_bancaires').select('id, devise').eq('societe_id', societe_id),
+          supabase.from('bulletins_paie').select('id, employe_id, salaire_net, periode, statut').eq('societe_id', societe_id).eq('statut', 'valide'),
+        ])
+
+        releves = results[0].data || []
+        socData = results[1].data || []
+        dossiers = results[2].data || []
+        facturesData = results[3].data
+        factErr = results[3].error
+        rates = results[4] as Record<string, number>
+        comptesBancaires = results[5].data || []
+        allBulletins = results[6].data || []
+      } catch (loadErr: any) {
+        console.error('[rapprochement] CRITICAL: parallel load failed:', loadErr)
+        return NextResponse.json({
+          error: `Chargement des données échoué: ${loadErr.message || loadErr}`,
+          _phase: 'data_loading',
+        }, { status: 500 })
+      }
+
+      console.log(`[rapprochement] Parallel load done in ${Date.now() - t0}ms: ${releves.length} releves, ${(facturesData || []).length} factures`)
 
       if (!releves || releves.length === 0) {
         return NextResponse.json({ matched: 0, total: 0, message: 'Aucun relevé bancaire' })
@@ -187,7 +205,7 @@ export async function POST(request: Request) {
 
       const societeNames = (socData || []).flatMap((s: any) => [s.nom, ...(s.aliases || [])]).map((n: string) => (n || '').toLowerCase()).filter(Boolean)
       const dossierIds = (dossiers || []).map((d: any) => d.id)
-      let factures: any[] = (!factErr && facturesData) ? facturesData : []
+      let factures: any[] = factErr ? [] : (facturesData || [])
 
       const toMUR = (amount: number, devise: string): number => {
         if (!devise || devise === 'MUR') return amount
@@ -197,25 +215,29 @@ export async function POST(request: Request) {
       const compteDeviseMap: Record<string, string> = {}
       ;(comptesBancaires || []).forEach((c: any) => { compteDeviseMap[c.id] = c.devise || 'MUR' })
 
-      // Second parallel batch: écritures + other société names
-      const clientId = dossiers?.[0]?.client_id
-      const [ecrituresResult, allUserSocResult] = await Promise.all([
-        dossierIds.length > 0
-          ? supabase.from('ecritures_comptables').select('id, compte, libelle, debit, credit, date_ecriture, lettre').in('dossier_id', dossierIds).is('lettre', null)
-          : Promise.resolve({ data: [] }),
-        clientId
-          ? supabase.from('dossiers').select('societe_id').eq('client_id', clientId)
-          : Promise.resolve({ data: [] }),
-      ])
+      // Second batch: écritures + other société names
+      let ecritures: any[] = []
+      try {
+        const clientId = dossiers?.[0]?.client_id
+        const [ecrituresResult, allUserSocResult] = await Promise.all([
+          dossierIds.length > 0
+            ? supabase.from('ecritures_comptables').select('id, compte, libelle, debit, credit, date_ecriture, lettre').in('dossier_id', dossierIds).is('lettre', null)
+            : Promise.resolve({ data: [] as any[] }),
+          clientId
+            ? supabase.from('dossiers').select('societe_id').eq('client_id', clientId)
+            : Promise.resolve({ data: [] as any[] }),
+        ])
 
-      let ecritures: any[] = ecrituresResult.data || []
+        ecritures = (ecrituresResult as any).data || []
 
-      // Extend société names with all related companies
-      const allSocIds = [...new Set([societe_id, ...((allUserSocResult.data || []) as any[]).map((d: any) => d.societe_id)])].filter(Boolean)
-      if (allSocIds.length > 1) {
-        const { data: otherSocs } = await supabase.from('societes').select('nom, aliases').in('id', allSocIds)
-        const otherNames = (otherSocs || []).flatMap((s: any) => [s.nom, ...(s.aliases || [])]).map((n: string) => (n || '').toLowerCase()).filter(Boolean)
-        societeNames.push(...otherNames.filter((n: string) => !societeNames.includes(n)))
+        const allSocIds = [...new Set([societe_id, ...((allUserSocResult as any).data || []).map((d: any) => d.societe_id)])].filter(Boolean)
+        if (allSocIds.length > 1) {
+          const { data: otherSocs } = await supabase.from('societes').select('nom, aliases').in('id', allSocIds)
+          const otherNames = (otherSocs || []).flatMap((s: any) => [s.nom, ...(s.aliases || [])]).map((n: string) => (n || '').toLowerCase()).filter(Boolean)
+          societeNames.push(...otherNames.filter((n: string) => !societeNames.includes(n)))
+        }
+      } catch (batchErr: any) {
+        console.warn('[rapprochement] Second batch partially failed:', batchErr.message)
       }
 
       // Pre-classification patterns
