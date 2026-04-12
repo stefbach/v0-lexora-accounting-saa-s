@@ -1275,6 +1275,137 @@ Voulez-vous vraiment continuer ?`
         </CardContent>
       </Card>
 
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* SECTION — Espace de suivi : factures sans paiement + anomalies */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {data && (
+        <Card className="border-2 border-purple-200">
+          <CardHeader>
+            <CardTitle className="text-[#0B0F2E] flex items-center gap-2">
+              <Target className="w-5 h-5 text-purple-600" />
+              Suivi comptable — Factures & Anomalies
+            </CardTitle>
+            <p className="text-xs text-gray-500">Factures sans paiement, factures en retard, paiements sans pièce comptable</p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Sub-section A: Factures fournisseur sans paiement */}
+            {(() => {
+              const unpaidFactures = (data?.factures || []).filter((f: any) =>
+                f.statut === 'en_attente' || f.statut === 'retard' || f.statut === 'partiel'
+              )
+              const overdue = unpaidFactures.filter((f: any) => {
+                if (!f.date_echeance) return false
+                return new Date(f.date_echeance) < new Date()
+              })
+              const recent = unpaidFactures.filter((f: any) => {
+                if (!f.date_echeance) return true
+                return new Date(f.date_echeance) >= new Date()
+              })
+
+              if (unpaidFactures.length === 0) return (
+                <div className="p-4 bg-green-50 rounded-lg text-center text-sm text-green-700">
+                  Toutes les factures sont payées ou rapprochées
+                </div>
+              )
+
+              return (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold text-purple-800">
+                      📄 Factures sans paiement ({unpaidFactures.length})
+                      {overdue.length > 0 && <span className="ml-2 text-red-600">dont {overdue.length} en retard</span>}
+                    </p>
+                  </div>
+
+                  {overdue.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-red-700">🔴 En retard :</p>
+                      {overdue.slice(0, 10).map((f: any) => (
+                        <div key={f.id} className="flex items-center justify-between p-2 bg-red-50 border border-red-200 rounded text-sm">
+                          <div className="flex-1">
+                            <span className="font-medium">{f.tiers || '—'}</span>
+                            <span className="text-xs text-gray-500 ml-2">{f.numero_facture || '—'}</span>
+                            <span className="text-xs text-red-600 ml-2">échéance: {formatDate(f.date_echeance)}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-sm">{fmt(Number(f.montant_ttc) || 0)} {f.devise || 'MUR'}</span>
+                            <Button variant="ghost" size="sm" className="h-6 text-xs text-red-600 hover:bg-red-100"
+                              onClick={async () => {
+                                await fetch('/api/comptable/rapprochement', {
+                                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ action: 'update_facture_statut', facture_id: f.id, statut: 'retard' }),
+                                })
+                                load()
+                              }}>Marquer retard</Button>
+                          </div>
+                        </div>
+                      ))}
+                      {overdue.length > 10 && <p className="text-xs text-gray-400">... et {overdue.length - 10} autres</p>}
+                    </div>
+                  )}
+
+                  {recent.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-orange-700">🟠 En attente (non échues) :</p>
+                      {recent.slice(0, 5).map((f: any) => (
+                        <div key={f.id} className="flex items-center justify-between p-2 bg-orange-50 border border-orange-200 rounded text-sm">
+                          <div className="flex-1">
+                            <span className="font-medium">{f.tiers || '—'}</span>
+                            <span className="text-xs text-gray-500 ml-2">{f.numero_facture || '—'}</span>
+                            {f.date_echeance && <span className="text-xs text-orange-600 ml-2">échéance: {formatDate(f.date_echeance)}</span>}
+                          </div>
+                          <span className="font-bold text-sm">{fmt(Number(f.montant_ttc) || 0)} {f.devise || 'MUR'}</span>
+                        </div>
+                      ))}
+                      {recent.length > 5 && <p className="text-xs text-gray-400">... et {recent.length - 5} autres en attente</p>}
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+
+            {/* Sub-section B: Paiements sans facture (non rapprochées) */}
+            {unmatched.length > 0 && (
+              <div className="space-y-2 pt-3 border-t">
+                <p className="text-sm font-semibold text-amber-800">
+                  💳 Paiements bancaires sans facture ({unmatched.length})
+                </p>
+                <p className="text-xs text-gray-500">Ces transactions n'ont aucune facture correspondante en base. Vous pouvez les lettrer manuellement ou les classer.</p>
+                {unmatched.slice(0, 5).map((tx: any) => (
+                  <div key={tx.id} className="flex items-center justify-between p-2 bg-amber-50 border border-amber-200 rounded text-sm">
+                    <div className="flex-1">
+                      <span className="font-medium">{tx.tiers_detecte || tx.libelle?.substring(0, 40) || '—'}</span>
+                      <span className="text-xs text-gray-500 ml-2">{formatDate(tx.date)}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold">{Number(tx.debit) > 0 ? `-${fmt(Number(tx.debit))}` : `+${fmt(Number(tx.credit))}`} {tx.devise}</span>
+                      <Button variant="outline" size="sm" className="h-6 text-xs" onClick={() => { setDialogTab("factures"); setLinkDialog(tx) }}>Lettrer</Button>
+                    </div>
+                  </div>
+                ))}
+                {unmatched.length > 5 && <p className="text-xs text-gray-400">... voir la section "Non rapprochées" ci-dessus pour la liste complète</p>}
+              </div>
+            )}
+
+            {/* Sub-section C: Résumé écritures 401 */}
+            {(() => {
+              const ecr401 = (data?.ecritures || []).filter((e: any) => (e.compte || '').startsWith('401') && !e.lettre)
+              if (ecr401.length === 0) return null
+              return (
+                <div className="space-y-2 pt-3 border-t">
+                  <p className="text-sm font-semibold text-gray-700">
+                    📒 Écritures 401 non lettrées ({ecr401.length})
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    Ces écritures fournisseur n'ont pas encore été lettrées avec leur paiement. Cliquez "Règles auto" pour tenter le lettrage automatique, ou utilisez la section lettrage ci-dessous.
+                  </p>
+                </div>
+              )
+            })()}
+          </CardContent>
+        </Card>
+      )}
+
       {/* SECTION 5 — Lettrage écritures 401/411 */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">

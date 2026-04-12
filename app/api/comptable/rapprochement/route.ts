@@ -669,11 +669,10 @@ export async function POST(request: Request) {
 
               // Internal transfers → 581 journal entries
               if (tx.statut === 'interne' || tx.matched_type === 'transfert_interne') {
+                const intRef = `VI-${releveId}-${i}`
                 const { data: existing581 } = await supabase.from('ecritures_comptables')
                   .select('id').eq('dossier_id', dossier.id).eq('journal', 'BNQ')
-                  .eq('compte', '581').eq('date_ecriture', txDate)
-                  .or(`debit.eq.${txAmountMUR},credit.eq.${txAmountMUR}`)
-                  .limit(1)
+                  .eq('ref_folio', intRef).limit(1)
                 if (existing581 && existing581.length > 0) continue
 
                 const lettre581 = `VI${String(ecrituresCreees + 1).padStart(3, '0')}`
@@ -681,9 +680,9 @@ export async function POST(request: Request) {
                 const libelle = `Virement interne ${(tx.libelle || '').substring(0, 30)}`
                 await supabase.from('ecritures_comptables').insert([
                   { dossier_id: dossier.id, date_ecriture: txDate, journal: 'BNQ', compte: '512',
-                    libelle, debit: isOutgoing ? 0 : txAmountMUR, credit: isOutgoing ? txAmountMUR : 0, lettre: lettre581 },
+                    libelle, debit: isOutgoing ? 0 : txAmountMUR, credit: isOutgoing ? txAmountMUR : 0, lettre: lettre581, ref_folio: intRef },
                   { dossier_id: dossier.id, date_ecriture: txDate, journal: 'BNQ', compte: '581',
-                    libelle, debit: isOutgoing ? txAmountMUR : 0, credit: isOutgoing ? 0 : txAmountMUR, lettre: lettre581 },
+                    libelle, debit: isOutgoing ? txAmountMUR : 0, credit: isOutgoing ? 0 : txAmountMUR, lettre: lettre581, ref_folio: intRef },
                 ])
                 ecrituresCreees++
                 continue
@@ -692,10 +691,10 @@ export async function POST(request: Request) {
               // Regular matched transactions → 401/411 ↔ 512
               if (tx.statut !== 'rapproche' || !tx.facture_id) continue
 
+              const refFolio = `BANK-${releveId}-${i}`
               const { data: existingBnq } = await supabase.from('ecritures_comptables')
                 .select('id').eq('dossier_id', dossier.id).eq('journal', 'BNQ')
-                .eq('date_ecriture', txDate)
-                .or(`debit.eq.${txAmountMUR},credit.eq.${txAmountMUR}`)
+                .eq('ref_folio', refFolio)
                 .limit(1)
               if (existingBnq && existingBnq.length > 0) continue
 
@@ -711,10 +710,10 @@ export async function POST(request: Request) {
               await supabase.from('ecritures_comptables').insert([
                 { dossier_id: dossier.id, date_ecriture: txDate, journal: 'BNQ', compte: compte401,
                   libelle: `Paiement ${(facture.tiers || '').substring(0, 30)} — ${facture.numero_facture || ''}`,
-                  debit: isPayment ? txAmountMUR : 0, credit: isPayment ? 0 : txAmountMUR, lettre },
+                  debit: isPayment ? txAmountMUR : 0, credit: isPayment ? 0 : txAmountMUR, lettre, ref_folio: refFolio },
                 { dossier_id: dossier.id, date_ecriture: txDate, journal: 'BNQ', compte: '512',
                   libelle: `Virement ${(facture.tiers || '').substring(0, 30)}`,
-                  debit: isPayment ? 0 : txAmountMUR, credit: isPayment ? txAmountMUR : 0, lettre },
+                  debit: isPayment ? 0 : txAmountMUR, credit: isPayment ? txAmountMUR : 0, lettre, ref_folio: refFolio },
               ])
 
               // Letter existing ACH entry with the same code
