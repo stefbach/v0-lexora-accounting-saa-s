@@ -364,8 +364,10 @@ export function matchBySupplier(
     // ── Strategy A: 1 paiement → 1 facture (exact ou proche, délai décalé OK) ──
     for (const tx of unmatchedTxs) {
       if (usedTxKeys.has(txKey(tx))) continue
-      const txAmt = toMUR(Math.max(tx.debit, tx.credit), tx.devise, rates)
-      if (txAmt === 0) continue
+      const txRaw = Math.max(tx.debit, tx.credit)
+      const txDevise = (tx.devise || 'MUR').toUpperCase()
+      const txAmtMUR = toMUR(txRaw, tx.devise, rates)
+      if (txRaw === 0) continue
 
       let bestFac: MatchingFacture | null = null
       let bestDiff = Infinity
@@ -373,10 +375,27 @@ export function matchBySupplier(
 
       for (const f of unpaidFactures) {
         if (usedFactureIds.has(f.id)) continue
-        const fAmt = Number(f.montant_mur) || toMUR(Number(f.montant_ttc) || 0, f.devise, rates)
-        if (fAmt === 0) continue
+        const fTTC = Number(f.montant_ttc) || 0
+        const fMUR = Number(f.montant_mur) || 0
+        const fDevise = (f.devise || 'MUR').toUpperCase()
+        if (fTTC === 0 && fMUR === 0) continue
 
-        const diff = Math.abs(txAmt - fAmt) / fAmt
+        // Smart comparison: same currency → compare raw amounts directly
+        // Cross-currency → compare in MUR
+        let diff: number
+        if (txDevise === fDevise && fTTC > 0) {
+          // Same currency (EUR vs EUR, MUR vs MUR) → compare directly
+          diff = Math.abs(txRaw - fTTC) / fTTC
+        } else if (fMUR > 0) {
+          // Facture has MUR amount → compare in MUR
+          diff = Math.abs(txAmtMUR - fMUR) / fMUR
+        } else {
+          // Cross-currency fallback → convert both to MUR
+          const fAmtMUR = toMUR(fTTC, f.devise, rates)
+          if (fAmtMUR === 0) continue
+          diff = Math.abs(txAmtMUR - fAmtMUR) / fAmtMUR
+        }
+
         if (diff > 0.08) continue // 8% tolerance (TDS + bank fees)
 
         const delay = daysBetween(f.date_facture || '', tx.date)
@@ -410,7 +429,7 @@ export function matchBySupplier(
           strategy: isExact ? 'supplier_exact' : looksLikeTDS ? 'supplier_tds' : 'supplier_close',
           confidence: Math.min(0.98, Math.max(0, confidence)),
           reasoning: `Fournisseur "${profile.rawNames[0]}" — facture ${bestFac.numero_facture || ''} montant ${isExact ? 'exact' : `écart ${(bestDiff * 100).toFixed(1)}%`}${looksLikeTDS ? ' (probable TDS)' : ''}, délai ${bestDelay}j`,
-          amountDiff: bestDiff * txAmt,
+          amountDiff: bestDiff * txRaw,
           phase: 'supplier_match',
         })
         usedFactureIds.add(bestFac.id)
@@ -421,8 +440,10 @@ export function matchBySupplier(
     // ── Strategy B: 1 paiement → N factures (somme sur même période) ──
     for (const tx of unmatchedTxs) {
       if (usedTxKeys.has(txKey(tx))) continue
-      const txAmt = toMUR(Math.max(tx.debit, tx.credit), tx.devise, rates)
-      if (txAmt === 0) continue
+      const txRawB = Math.max(tx.debit, tx.credit)
+      const txDeviseB = (tx.devise || 'MUR').toUpperCase()
+      const txAmtMURb = toMUR(txRawB, tx.devise, rates)
+      if (txRawB === 0) continue
 
       const available = unpaidFactures.filter(f => !usedFactureIds.has(f.id))
       if (available.length < 2) continue
@@ -442,16 +463,24 @@ export function matchBySupplier(
 
         const subset: MatchingFacture[] = []
         let sum = 0
+        let allSameCcy = true
         for (let i = 0; i < n; i++) {
           if (mask & (1 << i)) {
             const f = sortedFacs[i]
-            const fAmt = Number(f.montant_mur) || toMUR(Number(f.montant_ttc) || 0, f.devise, rates)
+            const fDevise = (f.devise || 'MUR').toUpperCase()
+            // Same-currency sum when all factures share the tx currency
+            if (fDevise === txDeviseB && Number(f.montant_ttc) > 0) {
+              sum += Number(f.montant_ttc)
+            } else {
+              allSameCcy = false
+              sum += Number(f.montant_mur) || toMUR(Number(f.montant_ttc) || 0, f.devise, rates)
+            }
             subset.push(f)
-            sum += fAmt
           }
         }
         if (sum === 0) continue
-        const diff = Math.abs(txAmt - sum) / sum
+        const compareAmt = allSameCcy ? txRawB : txAmtMURb
+        const diff = Math.abs(compareAmt - sum) / sum
         if (diff > 0.08) continue
 
         // Vérifier que les factures sont dans une période raisonnable (même trimestre)
@@ -489,7 +518,7 @@ export function matchBySupplier(
           strategy: 'supplier_multi_facture',
           confidence: Math.min(0.96, confidence),
           reasoning: `${bestCombo.length} factures de "${profile.rawNames[0]}" → total ${bestComboDiff < 0.005 ? 'exact' : `écart ${(bestComboDiff * 100).toFixed(1)}%`}${looksLikeTDS ? ' (probable TDS)' : ''}`,
-          amountDiff: bestComboDiff * txAmt,
+          amountDiff: bestComboDiff * txRawB,
           phase: 'supplier_match',
         })
         for (const f of bestCombo) usedFactureIds.add(f.id)
@@ -500,19 +529,26 @@ export function matchBySupplier(
     // ── Strategy C: N paiements → 1 facture (acomptes successifs) ──
     for (const f of unpaidFactures) {
       if (usedFactureIds.has(f.id)) continue
-      const fAmt = Number(f.montant_mur) || toMUR(Number(f.montant_ttc) || 0, f.devise, rates)
-      if (fAmt === 0) continue
+      const fDeviseC = (f.devise || 'MUR').toUpperCase()
+      const fRaw = Number(f.montant_ttc) || 0
+      const fAmt = Number(f.montant_mur) || toMUR(fRaw, f.devise, rates)
+      if (fAmt === 0 && fRaw === 0) continue
 
       const availableTxs = unmatchedTxs.filter(t => !usedTxKeys.has(txKey(t)))
       if (availableTxs.length < 2) continue
 
       // Chercher des paiements dont la somme ≈ montant facture
-      const txsWithAmounts = availableTxs.map(t => ({
-        tx: t,
-        amt: toMUR(Math.max(t.debit, t.credit), t.devise, rates),
-      })).filter(t => t.amt > 0 && t.amt < fAmt)
+      // Use same-currency when all transactions share the facture's currency
+      const txsWithAmounts = availableTxs.map(t => {
+        const tDevise = (t.devise || 'MUR').toUpperCase()
+        const tRaw = Math.max(t.debit, t.credit)
+        const amt = (tDevise === fDeviseC && fRaw > 0) ? tRaw : toMUR(tRaw, t.devise, rates)
+        return { tx: t, amt }
+      })
+      const compareBase = txsWithAmounts.some(t => (t.tx.devise || 'MUR').toUpperCase() === fDeviseC) && fRaw > 0 ? fRaw : fAmt
+      const filtered = txsWithAmounts.filter(t => t.amt > 0 && t.amt < compareBase)
 
-      const m = Math.min(txsWithAmounts.length, 6)
+      const m = Math.min(filtered.length, 6)
       let bestCombo: typeof txsWithAmounts | null = null
       let bestDiff = Infinity
 
@@ -525,11 +561,11 @@ export function matchBySupplier(
         let sum = 0
         for (let i = 0; i < m; i++) {
           if (mask & (1 << i)) {
-            subset.push(txsWithAmounts[i])
-            sum += txsWithAmounts[i].amt
+            subset.push(filtered[i])
+            sum += filtered[i].amt
           }
         }
-        const diff = Math.abs(fAmt - sum) / fAmt
+        const diff = Math.abs(compareBase - sum) / compareBase
         if (diff > 0.05 || diff >= bestDiff) continue
         bestDiff = diff
         bestCombo = subset
@@ -749,6 +785,15 @@ export function runIntelligentRapprochement(
 
   // Phase 1: Build supplier registry (with alias-aware grouping)
   const registry = buildSupplierRegistry(factures, transactions, aliasMap)
+
+  // Debug: log supplier profiles with both factures AND transactions
+  for (const [key, profile] of registry) {
+    if (profile.factures.length > 0 && profile.transactions.length > 0) {
+      console.log(`[intelligent] Supplier "${key}" (${profile.rawNames.join(', ')}): ${profile.factures.length} factures, ${profile.transactions.length} transactions`)
+    } else if (profile.transactions.length > 0 && profile.factures.length === 0) {
+      console.log(`[intelligent] Supplier "${key}" has ${profile.transactions.length} bank tx but 0 factures — no match possible`)
+    }
+  }
 
   // Phase 2: Match by supplier
   const supplierMatches = matchBySupplier(registry, context.rates, aliasMap)
