@@ -680,6 +680,7 @@ export function autoClassify(
   matchedTxKeys: Set<string>,
   context: {
     societeNames: string[]
+    selfNames?: string[]
     bulletins?: Array<{ periode: string; salaire_net: number }>
     ecritures?: Array<{ id: string; compte: string; debit: number; credit: number; libelle: string }>
     aliasMap?: Map<string, string>
@@ -696,21 +697,18 @@ export function autoClassify(
     const tiers = (tx.tiers_detecte || '').toLowerCase()
 
     // ── Virements internes ──
-    // Check patterns + société names + alias resolution (e.g. abbreviation → full name)
-    const isInternalByPattern = INTERNAL_PATTERNS.some(p => lib.includes(p))
-    const isInternalByName = context.societeNames.some(n => n.length > 3 && (tiers.includes(n) || lib.includes(n)))
+    // ULTRA-STRICT: un virement interne = UNIQUEMENT quand le TIERS est la société ELLE-MÊME
+    // PAS les sociétés liées du même groupe (interco = paiement, pas interne)
+    const selfNames = context.selfNames || context.societeNames
+    const isInternalByPattern = INTERNAL_PATTERNS.some(p => lib.includes(p)) && selfNames.some(n => n.length > 3 && tiers.includes(n))
+    const isInternalByName = false // Désactivé — trop de faux positifs avec societeNames du groupe
     const isInternalByAlias = (() => {
-      // Check if the bank tiers OR libelle resolves to the same alias as any société name
       const am = context.aliasMap || new Map()
-      // Try tiers_detecte first, then individual words from the libelle
-      const candidates = [
-        tx.tiers_detecte || '',
-        ...(tx.libelle || '').split(/\s+/).filter((w: string) => w.length >= 3),
-      ]
+      const candidates = [tx.tiers_detecte || '']
       for (const candidate of candidates) {
         const bankAlias = resolveAlias(candidate, am)
         if (!bankAlias) continue
-        if (context.societeNames.some(socName => {
+        if (selfNames.some((socName: string) => {
           const socAlias = resolveAlias(socName, am)
           return socAlias === bankAlias
         })) return true
@@ -837,6 +835,7 @@ export function runIntelligentRapprochement(
   factures: MatchingFacture[],
   context: {
     societeNames: string[]
+    selfNames?: string[]
     bulletins?: Array<{ periode: string; salaire_net: number }>
     ecritures?: Array<{ id: string; compte: string; debit: number; credit: number; libelle: string }>
     rates?: Record<string, number>

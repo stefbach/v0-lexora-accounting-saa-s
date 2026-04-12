@@ -425,8 +425,12 @@ export async function POST(request: Request) {
 
         console.log(`[rapprochement] Running intelligent engine on ${allTxs.length} unclassified tx, ${engineFactures.length} factures, ${aliasMap.size} aliases`)
 
+        // selfNames = uniquement la société courante (pas le groupe)
+        const selfNamesForEngine = (socData || []).flatMap((s: any) => [s.nom, ...(s.aliases || [])]).map((n: string) => (n || '').toLowerCase()).filter((n: string) => n.length > 3)
+
         const intelligentResult = runIntelligentRapprochement(allTxs, engineFactures, {
           societeNames,
+          selfNames: selfNamesForEngine,
           bulletins: (allBulletins || []).map((b: any) => ({ periode: b.periode, salaire_net: Number(b.salaire_net) || 0 })),
           ecritures: ecritures.map((e: any) => ({ id: e.id, compte: e.compte, debit: Number(e.debit) || 0, credit: Number(e.credit) || 0, libelle: e.libelle || '' })),
           rates,
