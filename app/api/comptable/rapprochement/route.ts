@@ -289,13 +289,30 @@ export async function POST(request: Request) {
           // Le NOM de la société courante doit apparaître dans le TIERS (pas les sociétés liées)
           // Noms de la société courante (normalisés sans Ltd/SARL/SA)
           const selfNamesNorm = (socData || []).flatMap((s: any) => [s.nom, ...(s.aliases || [])]).map((n: string) => (n || '').toLowerCase().replace(/\b(ltd|limited|sarl|sa|co)\b\.?/gi, '').replace(/\s+/g, ' ').trim()).filter((n: string) => n.length > 3)
-          // Le tiers normalisé (sans Ltd)
           const txTiersNorm = txTiers.replace(/\b(ltd|limited|sarl|sa|co)\b\.?/gi, '').replace(/\s+/g, ' ').trim()
-          // Match STRICT: le tiers normalisé doit EXACTEMENT correspondre au nom de la société
-          // "obesity care clinic" === "obesity care clinic" ✅
-          // "obesity care clinic malta" !== "obesity care clinic" ❌
-          // "digital data sol" !== "obesity care clinic" ❌
-          const isTiersSelf = selfNamesNorm.some(n => txTiersNorm === n)
+
+          // Match intelligent: le tiers est SOI-MÊME si:
+          // - Les mots du nom de la société sont TOUS dans le tiers
+          // - ET le tiers n'a pas plus de 1 mot supplémentaire (tolère "SOL" pour "SOLUTIONS")
+          // Exemples pour société "Digital Data Solutions":
+          //   "digital data sol" → mots société [digital,data,solutions] vs tiers [digital,data,sol]
+          //   → "digital" ✓, "data" ✓, "solutions" → tiers has "sol" which starts solutions ✓ → MATCH
+          //   "digital data solutions malta" → 1 mot extra "malta" → NO MATCH
+          //   "obesity care clinic" → 0 mots en commun → NO MATCH
+          function isSelfMatch(selfName: string, tiersName: string): boolean {
+            const selfWords = selfName.split(/\s+/).filter((w: string) => w.length > 2)
+            const tiersWords = tiersName.split(/\s+/).filter((w: string) => w.length > 2)
+            if (selfWords.length === 0 || tiersWords.length === 0) return false
+            // Chaque mot de self doit être trouvé (ou début de mot) dans tiers
+            const matchedSelf = selfWords.filter((sw: string) => tiersWords.some((tw: string) => tw.startsWith(sw.substring(0, 3)) || sw.startsWith(tw.substring(0, 3))))
+            if (matchedSelf.length < selfWords.length * 0.7) return false
+            // Le tiers ne doit pas avoir beaucoup de mots non-matchés
+            const unmatchedTiers = tiersWords.filter((tw: string) => !selfWords.some((sw: string) => tw.startsWith(sw.substring(0, 3)) || sw.startsWith(tw.substring(0, 3))))
+            return unmatchedTiers.length === 0 // Aucun mot extra dans le tiers
+          }
+
+          const isTiersSelf = selfNamesNorm.some(n => isSelfMatch(n, txTiersNorm))
+          // Un virement interne = "Own Account Transfer" vers soi-même UNIQUEMENT
           const isOwnAccountTransfer = txLib.includes('own account transfer') && isTiersSelf
           const isExplicitInterne = txLib.includes('virement interne') || txLib.includes('internal transfer')
           // "Salary Proceeds" = retour de bulk payment → interne

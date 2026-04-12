@@ -700,11 +700,21 @@ export function autoClassify(
     // ULTRA-STRICT: un virement interne = UNIQUEMENT quand le TIERS est la société ELLE-MÊME
     // PAS les sociétés liées du même groupe (interco = paiement, pas interne)
     const selfNamesRaw = context.selfNames || context.societeNames
-    // Normaliser pour match exact (sans Ltd/SARL)
     const selfNamesNorm = selfNamesRaw.map(n => n.replace(/\b(ltd|limited|sarl|sa|co)\b\.?/gi, '').replace(/\s+/g, ' ').trim()).filter(n => n.length > 3)
     const tiersNorm = tiers.replace(/\b(ltd|limited|sarl|sa|co)\b\.?/gi, '').replace(/\s+/g, ' ').trim()
-    // Match STRICT: le tiers normalisé doit EXACTEMENT correspondre
-    const isInternalByPattern = INTERNAL_PATTERNS.some(p => lib.includes(p)) && selfNamesNorm.some(n => tiersNorm === n)
+
+    // Match intelligent: tous les mots de self dans tiers, aucun mot extra dans tiers
+    function isSelfMatchEngine(selfName: string, tiersName: string): boolean {
+      const selfWords = selfName.split(/\s+/).filter(w => w.length > 2)
+      const tiersWords = tiersName.split(/\s+/).filter(w => w.length > 2)
+      if (selfWords.length === 0 || tiersWords.length === 0) return false
+      const matchedSelf = selfWords.filter(sw => tiersWords.some(tw => tw.startsWith(sw.substring(0, 3)) || sw.startsWith(tw.substring(0, 3))))
+      if (matchedSelf.length < selfWords.length * 0.7) return false
+      const unmatchedTiers = tiersWords.filter(tw => !selfWords.some(sw => tw.startsWith(sw.substring(0, 3)) || sw.startsWith(tw.substring(0, 3))))
+      return unmatchedTiers.length === 0
+    }
+
+    const isInternalByPattern = INTERNAL_PATTERNS.some(p => lib.includes(p)) && selfNamesNorm.some(n => isSelfMatchEngine(n, tiersNorm))
     const isInternalByName = false // Désactivé — trop de faux positifs avec societeNames du groupe
     const isInternalByAlias = (() => {
       const am = context.aliasMap || new Map()
