@@ -670,8 +670,15 @@ export async function POST(request: Request) {
             .eq('dossier_id', dossier.id)
             .or('compte.like.401%,compte.like.411%')
 
-          const achNonLettrees = (allEcr401 || []).filter((e: any) =>
-            (e.journal === 'ACH' || e.journal === 'OD') && Number(e.credit) > 0 && !e.lettre
+          // Charger aussi depuis v2 pour avoir ref_folio
+          const { data: allEcr401v2 } = await supabase
+            .from('ecritures_comptables_v2')
+            .select('id, numero_compte, libelle, debit_mur, credit_mur, journal, lettre, ref_folio')
+            .eq('dossier_id', dossier.id)
+            .or('numero_compte.like.401%,numero_compte.like.411%')
+
+          const achNonLettrees = (allEcr401v2 || []).filter((e: any) =>
+            (e.journal === 'ACH' || e.journal === 'OD') && Number(e.credit_mur) > 0 && !e.lettre
           )
 
           console.log(`[rapprochement] Phase finale: ${achNonLettrees.length} ACH non lettrées à traiter`)
@@ -689,17 +696,22 @@ export async function POST(request: Request) {
               // ── Virements internes → 581 ──
               if (tx.statut === 'interne' || tx.matched_type === 'transfert_interne') {
                 const intRef = `VI-${releveId}-${i}`
-                const alreadyExists = (allEcr401 || []).some((e: any) => e.ref_folio === intRef)
+                const alreadyExists = (allEcr401v2 || []).some((e: any) => e.ref_folio === intRef)
                 if (alreadyExists) continue
 
                 const lettre581 = `VI${String(ecrituresCreees + 1).padStart(3, '0')}`
                 const isOutgoing = txDebit > 0
                 const libelle = `Virement interne ${(tx.libelle || '').substring(0, 30)}`
-                await supabase.from('ecritures_comptables').insert([
-                  { dossier_id: dossier.id, date_ecriture: txDate, journal: 'BNQ', compte: '512',
-                    libelle, debit: isOutgoing ? 0 : txAmountMUR, credit: isOutgoing ? txAmountMUR : 0, lettre: lettre581, ref_folio: intRef },
-                  { dossier_id: dossier.id, date_ecriture: txDate, journal: 'BNQ', compte: '581',
-                    libelle, debit: isOutgoing ? txAmountMUR : 0, credit: isOutgoing ? 0 : txAmountMUR, lettre: lettre581, ref_folio: intRef },
+                const socIdForInt = (dossiers || []).find((d: any) => d.id === dossier.id)?.societe_id || societe_id
+                await supabase.from('ecritures_comptables_v2').insert([
+                  { dossier_id: dossier.id, societe_id: socIdForInt, date_ecriture: txDate, journal: 'BNQ',
+                    numero_compte: '512', libelle,
+                    debit_mur: isOutgoing ? 0 : txAmountMUR, credit_mur: isOutgoing ? txAmountMUR : 0,
+                    lettre: lettre581, ref_folio: intRef },
+                  { dossier_id: dossier.id, societe_id: socIdForInt, date_ecriture: txDate, journal: 'BNQ',
+                    numero_compte: '581', libelle,
+                    debit_mur: isOutgoing ? txAmountMUR : 0, credit_mur: isOutgoing ? 0 : txAmountMUR,
+                    lettre: lettre581, ref_folio: intRef },
                 ])
                 ecrituresCreees++
                 continue
@@ -709,7 +721,7 @@ export async function POST(request: Request) {
               if (tx.statut !== 'rapproche' || !tx.facture_id) continue
 
               const refFolio = `BANK-${releveId}-${i}`
-              const alreadyExists = (allEcr401 || []).some((e: any) => e.ref_folio === refFolio)
+              const alreadyExists = (allEcr401v2 || []).some((e: any) => e.ref_folio === refFolio)
               if (alreadyExists) continue
 
               const { data: facture } = await supabase.from('factures')
@@ -722,13 +734,19 @@ export async function POST(request: Request) {
               const isPayment = txDebit > 0
 
               // 1. Créer l'écriture BNQ (D 401 / C 512)
-              await supabase.from('ecritures_comptables').insert([
-                { dossier_id: dossier.id, date_ecriture: txDate, journal: 'BNQ', compte: compte401,
+              // 1. Créer l'écriture BNQ (D 401 / C 512) — INSERT DIRECT dans v2
+              const societeIdForInsert = (dossiers || []).find((d: any) => d.id === dossier.id)?.societe_id || societe_id
+              await supabase.from('ecritures_comptables_v2').insert([
+                { dossier_id: dossier.id, societe_id: societeIdForInsert, date_ecriture: txDate, journal: 'BNQ',
+                  numero_compte: compte401,
                   libelle: `Paiement ${(facture.tiers || '').substring(0, 30)} — ${facture.numero_facture || ''}`,
-                  debit: isPayment ? txAmountMUR : 0, credit: isPayment ? 0 : txAmountMUR, lettre: lettreCode, ref_folio: refFolio },
-                { dossier_id: dossier.id, date_ecriture: txDate, journal: 'BNQ', compte: '512',
+                  debit_mur: isPayment ? txAmountMUR : 0, credit_mur: isPayment ? 0 : txAmountMUR,
+                  lettre: lettreCode, ref_folio: refFolio },
+                { dossier_id: dossier.id, societe_id: societeIdForInsert, date_ecriture: txDate, journal: 'BNQ',
+                  numero_compte: '512',
                   libelle: `Virement ${(facture.tiers || '').substring(0, 30)}`,
-                  debit: isPayment ? 0 : txAmountMUR, credit: isPayment ? txAmountMUR : 0, lettre: lettreCode, ref_folio: refFolio },
+                  debit_mur: isPayment ? 0 : txAmountMUR, credit_mur: isPayment ? txAmountMUR : 0,
+                  lettre: lettreCode, ref_folio: refFolio },
               ])
               ecrituresCreees++
 
@@ -739,35 +757,39 @@ export async function POST(request: Request) {
 
               // Stratégie 1: trouver par montant exact + tiers dans le libellé
               let achFound = achNonLettrees.find((e: any) => {
-                const eAmt = Math.round((Number(e.credit) || 0) * 100) / 100
+                const eAmt = Math.round((Number(e.credit_mur) || 0) * 100) / 100
                 if (eAmt === 0) return false
-                const diff = Math.abs(eAmt - factureMUR) / factureMUR
-                if (diff > 0.02) return false // 2% tolerance
+                const diff = Math.abs(eAmt - factureMUR) / Math.max(factureMUR, 1)
+                if (diff > 0.02) return false
                 const eLib = (e.libelle || '').toLowerCase()
                 return factureTiers.length >= 3 && eLib.includes(factureTiers.substring(0, 8))
               })
 
-              // Stratégie 2: trouver par montant exact seul (si tiers ne matche pas)
+              // Stratégie 2: trouver par montant exact seul
               if (!achFound) {
                 achFound = achNonLettrees.find((e: any) => {
-                  const eAmt = Math.round((Number(e.credit) || 0) * 100) / 100
+                  const eAmt = Math.round((Number(e.credit_mur) || 0) * 100) / 100
                   return eAmt === factureMUR
                 })
               }
 
-              // Stratégie 3: montant proche (5% tolérance)
-              if (!achFound) {
+              // Stratégie 3: montant proche (8% tolérance — couvre TDS + change)
+              if (!achFound && factureMUR > 0) {
                 achFound = achNonLettrees.find((e: any) => {
-                  const eAmt = Math.round((Number(e.credit) || 0) * 100) / 100
+                  const eAmt = Math.round((Number(e.credit_mur) || 0) * 100) / 100
                   if (eAmt === 0) return false
                   const diff = Math.abs(eAmt - factureMUR) / factureMUR
-                  return diff <= 0.05
+                  if (diff > 0.08) return false
+                  // Bonus: tiers match
+                  const eLib = (e.libelle || '').toLowerCase()
+                  return factureTiers.length >= 3 && eLib.includes(factureTiers.substring(0, 5))
                 })
               }
 
               if (achFound) {
-                await supabase.from('ecritures_comptables')
-                  .update({ lettre: lettreCode })
+                // UPDATE directement sur v2 pour être sûr que lettre est écrit
+                await supabase.from('ecritures_comptables_v2')
+                  .update({ lettre: lettreCode, date_lettrage: new Date().toISOString().split('T')[0] })
                   .eq('id', achFound.id)
                 // Remove from pool to avoid double-lettrage
                 const idx = achNonLettrees.indexOf(achFound)
