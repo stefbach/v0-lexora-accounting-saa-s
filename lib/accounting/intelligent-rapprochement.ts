@@ -515,15 +515,15 @@ export function matchBySupplier(
       // Si pas assez de factures proches, prendre toutes
       const candidatesB = nearbyFacs.length >= 2 ? nearbyFacs : byProximity
 
-      // Essayer des combinaisons de 2 à 8 factures (fenêtre élargie à 12)
-      const n = Math.min(candidatesB.length, 12)
+      // Essayer des combinaisons de 2 à 5 factures (fenêtre 10 max)
+      const n = Math.min(candidatesB.length, 10)
       let bestCombo: MatchingFacture[] | null = null
       let bestComboDiff = Infinity
 
       for (let mask = 3; mask < (1 << n); mask++) {
         let bits = 0
         for (let i = 0; i < n; i++) if (mask & (1 << i)) bits++
-        if (bits < 2 || bits > 8) continue
+        if (bits < 2 || bits > 5) continue
 
         const subset: MatchingFacture[] = []
         let sum = 0
