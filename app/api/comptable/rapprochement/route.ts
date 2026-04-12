@@ -8,6 +8,20 @@ import { getTauxChange } from '@/lib/taux-change'
 
 export const dynamic = 'force-dynamic'
 
+// ── Advanced tiers scoring for Phase 5 (BNQ↔ACH lettrage) ──
+function advancedTiersScoreForRoute(a: string, b: string): number {
+  const na = (a || '').toLowerCase().replace(/\b(ltd|limited|sarl|sa|co|inc|pvt)\b/gi, '').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim()
+  const nb = (b || '').toLowerCase().replace(/\b(ltd|limited|sarl|sa|co|inc|pvt)\b/gi, '').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim()
+  if (!na || !nb) return 0
+  if (na === nb) return 1
+  if (na.includes(nb) || nb.includes(na)) return 0.9
+  const wA = new Set(na.split(' ').filter(w => w.length > 2))
+  const wB = new Set(nb.split(' ').filter(w => w.length > 2))
+  if (wA.size === 0 || wB.size === 0) return 0
+  const inter = [...wA].filter(w => wB.has(w)).length
+  return inter / new Set([...wA, ...wB]).size
+}
+
 // Normalize tiers name for matching
 function normalizeTiers(name: string): string {
   return (name || '')
@@ -526,7 +540,117 @@ export async function POST(request: Request) {
         }
       }
 
-      console.log('[rapprochement] Result:', counts)
+      // ═══════════════════════════════════════════════════════════════
+      // PHASE 5 — Auto-lettrage écritures 401 (BNQ ↔ ACH)
+      // Un vrai comptable lettre aussi les écritures comptables :
+      // - BNQ (paiement, débit 401) ↔ ACH (facture, crédit 401) par tiers + montant
+      // - Quand un paiement bancaire est rapproché à une facture,
+      //   lettrer aussi l'écriture 401 correspondante
+      // ═══════════════════════════════════════════════════════════════
+
+      let ecrituresLettrees = 0
+      if (dossierIds.length > 0) {
+        // Reload ecritures 401 non lettrées (ACH = factures, BNQ = paiements)
+        const { data: ecr401 } = await supabase
+          .from('ecritures_comptables')
+          .select('id, compte, libelle, debit, credit, journal, date_ecriture, lettre, piece_justificative')
+          .in('dossier_id', dossierIds)
+          .like('compte', '401%')
+          .is('lettre', null)
+
+        if (ecr401 && ecr401.length > 0) {
+          // Séparer BNQ (paiements = débit) et ACH (factures = crédit)
+          const bnqEntries = ecr401.filter((e: any) => e.journal === 'BNQ' && Number(e.debit) > 0)
+          const achEntries = ecr401.filter((e: any) => e.journal === 'ACH' && Number(e.credit) > 0)
+
+          console.log(`[rapprochement] Phase 5: ${bnqEntries.length} BNQ paiements, ${achEntries.length} ACH factures à lettrer`)
+
+          const usedAchIds = new Set<string>()
+          const usedBnqIds = new Set<string>()
+
+          // Pour chaque BNQ (paiement), chercher une ou plusieurs ACH (factures) du même tiers
+          for (const bnq of bnqEntries) {
+            if (usedBnqIds.has(bnq.id)) continue
+            const bnqAmt = Number(bnq.debit) || 0
+            if (bnqAmt === 0) continue
+            const bnqLib = (bnq.libelle || '').toLowerCase()
+            const bnqTiers = bnqLib.replace(/^paiement\s+/i, '').replace(/\s*—.*$/, '').trim()
+
+            // Stratégie 1: match exact montant + même tiers
+            let matched = false
+            for (const ach of achEntries) {
+              if (usedAchIds.has(ach.id)) continue
+              const achAmt = Number(ach.credit) || 0
+              if (achAmt === 0) continue
+              const diff = Math.abs(bnqAmt - achAmt) / achAmt
+              if (diff > 0.02) continue // 2% tolerance
+
+              // Check tiers similarity
+              const achLib = (ach.libelle || '').toLowerCase()
+              const achTiers = achLib.replace(/^fournisseur\s+/i, '').replace(/\s*—.*$/, '').trim()
+              const score = advancedTiersScoreForRoute(bnqTiers, achTiers)
+              if (score < 0.35) continue
+
+              // Match found — letter both with same code
+              const code = `L${String(ecrituresLettrees + 1).padStart(3, '0')}`
+              const today = new Date().toISOString().split('T')[0]
+              await supabase.from('ecritures_comptables').update({ lettre: code, date_lettrage: today }).eq('id', bnq.id)
+              await supabase.from('ecritures_comptables').update({ lettre: code, date_lettrage: today }).eq('id', ach.id)
+              usedBnqIds.add(bnq.id)
+              usedAchIds.add(ach.id)
+              ecrituresLettrees += 2
+              matched = true
+              break
+            }
+
+            if (matched) continue
+
+            // Stratégie 2: 1 BNQ → N ACH (paiement couvre plusieurs factures)
+            const availableAch = achEntries.filter(a => !usedAchIds.has(a.id))
+            const tiersAch = availableAch.filter(a => {
+              const achLib = (a.libelle || '').toLowerCase()
+              const achTiers = achLib.replace(/^fournisseur\s+/i, '').replace(/\s*—.*$/, '').trim()
+              return advancedTiersScoreForRoute(bnqTiers, achTiers) >= 0.35
+            })
+
+            if (tiersAch.length >= 2) {
+              const m = Math.min(tiersAch.length, 6)
+              for (let mask = 3; mask < (1 << m); mask++) {
+                let bits = 0
+                for (let i = 0; i < m; i++) if (mask & (1 << i)) bits++
+                if (bits < 2 || bits > 5) continue
+
+                let sum = 0
+                const subset: any[] = []
+                for (let i = 0; i < m; i++) {
+                  if (mask & (1 << i)) {
+                    subset.push(tiersAch[i])
+                    sum += Number(tiersAch[i].credit) || 0
+                  }
+                }
+                const diff = Math.abs(bnqAmt - sum) / sum
+                if (diff > 0.05) continue
+
+                // Match! Letter all
+                const code = `L${String(ecrituresLettrees + 1).padStart(3, '0')}`
+                const today = new Date().toISOString().split('T')[0]
+                await supabase.from('ecritures_comptables').update({ lettre: code, date_lettrage: today }).eq('id', bnq.id)
+                for (const ach of subset) {
+                  await supabase.from('ecritures_comptables').update({ lettre: code, date_lettrage: today }).eq('id', ach.id)
+                  usedAchIds.add(ach.id)
+                }
+                usedBnqIds.add(bnq.id)
+                ecrituresLettrees += 1 + subset.length
+                break
+              }
+            }
+          }
+
+          console.log(`[rapprochement] Phase 5: ${ecrituresLettrees} écritures 401 lettrées`)
+        }
+      }
+
+      console.log('[rapprochement] Result:', counts, 'ecritures_lettrees:', ecrituresLettrees)
 
       const totalClassified = counts.matched + counts.interne + counts.frais_bancaires + counts.salaire_bulk + counts.mra
 
@@ -559,6 +683,7 @@ export async function POST(request: Request) {
         salaire_bulk: counts.salaire_bulk, mra: counts.mra, propose: counts.propose,
         not_matched: counts.not_matched, total: counts.total,
         total_classified: totalClassified,
+        ecritures_lettrees: ecrituresLettrees,
         matches: matchesList.slice(0, 10),
       })
     }

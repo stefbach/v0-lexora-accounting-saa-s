@@ -27,6 +27,64 @@ import { normalize, tiersScore, toMUR } from './matching-engine'
 import type { MatchingFacture, MatchingTransaction } from './matching-engine'
 
 // ═══════════════════════════════════════════════════════════════
+// ALIAS FOURNISSEURS MAURICIENS
+// Un même fournisseur peut apparaître sous différents noms dans
+// la banque vs les factures. Cette table permet au moteur de
+// les reconnaître comme le même tiers.
+// ═══════════════════════════════════════════════════════════════
+
+const SUPPLIER_ALIASES: string[][] = [
+  // Chaque sous-array = un même fournisseur (tous les alias connus)
+  ['myt', 'mauritius telecom', 'cellplus', 'cellplus mobile', 'cellplus mobile communications', 'myt mauritius telecom', 'my.t'],
+  ['emtel', 'emtel ltd', 'emtel limited'],
+  ['mcb', 'mauritius commercial bank', 'mcb ltd'],
+  ['sbm', 'state bank of mauritius', 'sbm bank'],
+  ['mra', 'mauritius revenue authority', 'mauritius revenue'],
+  ['ceb', 'central electricity board'],
+  ['cwa', 'central water authority'],
+  ['dds', 'digital data solutions', 'digital data solutions ltd'],
+  ['google', 'google cloud', 'google cloud emea', 'google cloud emea limited'],
+  ['e-payroll', 'e-payroll mauritius', 'epayroll'],
+  ['pierrick', 'pierrik', 'pierrik properties', 'pierrik properties ltd', 'pierrick properties', 'pierrick properties ltd'],
+  ['serviqual', 'servi qual'],
+  ['nimerik', 'nimerik cloud', 'nimerik cloud ltd', 'nimerik cloud limited'],
+  ['mipsit', 'mipsit digital', 'mipsit digital ltd'],
+]
+
+/** Build a lookup: normalized alias → canonical key (first element of the alias group) */
+function buildAliasMap(): Map<string, string> {
+  const map = new Map<string, string>()
+  for (const group of SUPPLIER_ALIASES) {
+    const canonical = group[0]
+    for (const alias of group) {
+      const norm = alias.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim()
+      map.set(norm, canonical)
+      // Also add without spaces for tight matching
+      map.set(norm.replace(/\s+/g, ''), canonical)
+    }
+  }
+  return map
+}
+
+const ALIAS_MAP = buildAliasMap()
+
+/** Resolve a name to its canonical supplier key via aliases */
+function resolveAlias(name: string): string | null {
+  const norm = (name || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim()
+  // Direct hit
+  if (ALIAS_MAP.has(norm)) return ALIAS_MAP.get(norm)!
+  // Without spaces
+  const nospace = norm.replace(/\s+/g, '')
+  if (ALIAS_MAP.has(nospace)) return ALIAS_MAP.get(nospace)!
+  // Try each word as a standalone lookup (for cases like "MyT" in a long libellé)
+  const words = norm.split(/\s+/)
+  for (const w of words) {
+    if (w.length >= 3 && ALIAS_MAP.has(w)) return ALIAS_MAP.get(w)!
+  }
+  return null
+}
+
+// ═══════════════════════════════════════════════════════════════
 // Types
 // ═══════════════════════════════════════════════════════════════
 
@@ -117,12 +175,20 @@ function normalizeAdvanced(name: string): string {
     .trim()
 }
 
-/** Score de similarité avancé (combine Jaccard + sous-chaîne + initiales) */
+/** Score de similarité avancé (combine Jaccard + sous-chaîne + initiales + alias) */
 function advancedTiersScore(bankName: string, factureName: string): number {
   const a = normalizeAdvanced(bankName)
   const b = normalizeAdvanced(factureName)
   if (!a || !b) return 0
   if (a === b) return 1.0
+
+  // Alias check — si les deux résolvent au même canonical, c'est le même fournisseur
+  const aliasA = resolveAlias(bankName)
+  const aliasB = resolveAlias(factureName)
+  if (aliasA && aliasB && aliasA === aliasB) return 0.96
+  // Un seul résout mais le canonical apparaît dans l'autre nom
+  if (aliasA && b.includes(aliasA)) return 0.93
+  if (aliasB && a.includes(aliasB)) return 0.93
 
   // Sous-chaîne complète
   if (a.includes(b) || b.includes(a)) return 0.92
@@ -187,22 +253,43 @@ export function buildSupplierRegistry(
 ): Map<string, SupplierProfile> {
   const registry = new Map<string, SupplierProfile>()
 
+  // Helper: find or create profile, merging by alias
+  function getOrCreateProfile(name: string, type: 'fournisseur' | 'client' | 'mixte'): SupplierProfile {
+    const key = normalizeAdvanced(name)
+    // Check if this name resolves to a known alias
+    const canonical = resolveAlias(name)
+
+    // Try to find existing profile by key, canonical alias, or fuzzy match
+    if (registry.has(key)) return registry.get(key)!
+    if (canonical) {
+      // Look for a profile whose key or rawNames resolve to the same canonical
+      for (const [k, profile] of registry) {
+        const profileCanonical = resolveAlias(k) || resolveAlias(profile.rawNames[0])
+        if (profileCanonical === canonical) {
+          if (!profile.rawNames.includes(name)) profile.rawNames.push(name)
+          return profile
+        }
+      }
+    }
+    // Create new profile
+    const profile: SupplierProfile = {
+      key: canonical || key,
+      rawNames: [name],
+      type,
+      factures: [],
+      transactions: [],
+    }
+    registry.set(canonical || key, profile)
+    return profile
+  }
+
   // Seed from factures — chaque tiers de facture est un profil
   for (const f of factures) {
     if (!f.tiers) continue
     const key = normalizeAdvanced(f.tiers)
     if (!key || key.length < 2) continue
 
-    if (!registry.has(key)) {
-      registry.set(key, {
-        key,
-        rawNames: [f.tiers],
-        type: f.type_facture || 'fournisseur',
-        factures: [],
-        transactions: [],
-      })
-    }
-    const profile = registry.get(key)!
+    const profile = getOrCreateProfile(f.tiers, f.type_facture || 'fournisseur')
     if (!profile.rawNames.includes(f.tiers)) profile.rawNames.push(f.tiers)
     profile.factures.push(f)
   }
@@ -213,36 +300,44 @@ export function buildSupplierRegistry(
     const bankKey = normalizeAdvanced(bankTiers)
     if (!bankKey || bankKey.length < 2) continue
 
-    // Find best matching supplier in registry
-    let bestKey: string | null = null
-    let bestScore = 0
-
-    for (const [key, profile] of registry) {
-      // Try all known raw names for this supplier
-      let score = advancedTiersScore(bankTiers, key)
-      for (const rawName of profile.rawNames) {
-        const s = advancedTiersScore(bankTiers, rawName)
-        if (s > score) score = s
-      }
-      if (score > bestScore && score >= 0.35) {
-        bestScore = score
-        bestKey = key
+    // First try alias resolution — if bank tiers resolves to same canonical as a profile, instant match
+    const bankCanonical = resolveAlias(bankTiers)
+    let matched = false
+    if (bankCanonical) {
+      for (const [, profile] of registry) {
+        const profileCanonical = resolveAlias(profile.key) || resolveAlias(profile.rawNames[0])
+        if (profileCanonical === bankCanonical) {
+          profile.transactions.push({ ...tx, releveIdx: tx.transaction_idx })
+          if (!profile.rawNames.includes(bankTiers)) profile.rawNames.push(bankTiers)
+          matched = true
+          break
+        }
       }
     }
 
-    if (bestKey) {
-      registry.get(bestKey)!.transactions.push({ ...tx, releveIdx: tx.transaction_idx })
-    } else {
-      // Tiers inconnu — créer un profil orphelin (peut être apparié plus tard)
-      if (!registry.has(bankKey)) {
+    if (!matched) {
+      // Fallback: fuzzy score matching against all profiles
+      let bestKey: string | null = null
+      let bestScore = 0
+
+      for (const [key, profile] of registry) {
+        let score = advancedTiersScore(bankTiers, key)
+        for (const rawName of profile.rawNames) {
+          const s = advancedTiersScore(bankTiers, rawName)
+          if (s > score) score = s
+        }
+        if (score > bestScore && score >= 0.35) {
+          bestScore = score
+          bestKey = key
+        }
+      }
+
+      if (bestKey) {
+        registry.get(bestKey)!.transactions.push({ ...tx, releveIdx: tx.transaction_idx })
+      } else {
+        // Tiers inconnu — créer un profil orphelin
         const isOutgoing = tx.debit > 0
-        registry.set(bankKey, {
-          key: bankKey,
-          rawNames: [bankTiers],
-          type: isOutgoing ? 'fournisseur' : 'client',
-          factures: [],
-          transactions: [],
-        })
+        const profile = getOrCreateProfile(bankTiers, isOutgoing ? 'fournisseur' : 'client')
       }
       const prof = registry.get(bankKey)!
       if (!prof.rawNames.includes(bankTiers)) prof.rawNames.push(bankTiers)
@@ -523,11 +618,24 @@ export function autoClassify(
     const tiers = (tx.tiers_detecte || '').toLowerCase()
 
     // ── Virements internes ──
-    if (INTERNAL_PATTERNS.some(p => lib.includes(p)) ||
-        context.societeNames.some(n => n.length > 3 && (tiers.includes(n) || lib.includes(n)))) {
+    // Check patterns + société names + alias resolution (DDS = Digital Data Solutions)
+    const isInternalByPattern = INTERNAL_PATTERNS.some(p => lib.includes(p))
+    const isInternalByName = context.societeNames.some(n => n.length > 3 && (tiers.includes(n) || lib.includes(n)))
+    const isInternalByAlias = (() => {
+      // Check if the bank tiers resolves to the same alias as any société name
+      const bankAlias = resolveAlias(tx.tiers_detecte || tx.libelle || '')
+      if (!bankAlias) return false
+      return context.societeNames.some(socName => {
+        const socAlias = resolveAlias(socName)
+        return socAlias === bankAlias
+      })
+    })()
+
+    if (isInternalByPattern || isInternalByName || isInternalByAlias) {
       results.push({
         transactionKey: txKey(tx), transaction: tx,
-        type: 'transfert_interne', note: 'Virement interne détecté',
+        type: 'transfert_interne',
+        note: `Virement interne détecté${isInternalByAlias ? ' (alias)' : ''}`,
         confidence: 0.95,
       })
       matchedTxKeys.add(txKey(tx))
