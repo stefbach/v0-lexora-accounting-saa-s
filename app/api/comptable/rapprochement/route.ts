@@ -284,15 +284,17 @@ export async function POST(request: Request) {
           const txTiers = (tx.tiers_detecte || tx.tiers || '').toLowerCase()
           let classified = false
 
-          // RULE A — Internal transfers (STRICT)
-          // "IB Account Transfer" à la MCB = virement interbancaire, PAS interne !
-          // Seuls les "Own Account Transfer" vers la société elle-même sont internes.
-          // On vérifie que le TIERS est la société elle-même, pas juste le libellé.
-          const isOwnAccountTransfer = txLib.includes('own account transfer') || txLib.includes('ib own account')
-          const isTiersIsSelf = societeNames.some(n => n.length > 3 && txTiers.includes(n))
+          // RULE A — Internal transfers (ULTRA-STRICT)
+          // Un virement interne = UNIQUEMENT "Own Account Transfer" vers la société elle-même
+          // Le NOM de la société courante doit apparaître dans le TIERS (pas les sociétés liées)
+          const selfNames = (socData || []).flatMap((s: any) => [s.nom, ...(s.aliases || [])]).map((n: string) => (n || '').toLowerCase()).filter((n: string) => n.length > 3)
+          const isTiersSelf = selfNames.some(n => txTiers.includes(n))
+          const isOwnAccountTransfer = txLib.includes('own account transfer') && isTiersSelf
           const isExplicitInterne = txLib.includes('virement interne') || txLib.includes('internal transfer')
+          // "Salary Proceeds" = retour de bulk payment → interne
+          const isSalaryProceeds = txLib.includes('salary proceeds')
 
-          if (isOwnAccountTransfer || (isTiersIsSelf && !txLib.includes('standard payment')) || isExplicitInterne) {
+          if ((isOwnAccountTransfer || isExplicitInterne || isSalaryProceeds) && !txLib.includes('standard payment')) {
             updatedTxs[i] = { ...tx, statut: 'interne', matched_type: 'transfert_interne', note: 'Virement interne' }
             counts.interne++; changed = true; classified = true
           }
