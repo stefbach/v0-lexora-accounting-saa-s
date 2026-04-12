@@ -439,7 +439,7 @@ export async function POST(request: Request) {
           const isGroup = match.factureIds.length > 1
           const reconcileDate = new Date().toISOString()
 
-          if (conf >= 0.80) {
+          if (conf >= 0.60) {
             // High confidence → auto-apply
             const code = `R${String(counts.matched + 1).padStart(3, '0')}`
             entry.updatedTxs[txIdx] = {
@@ -523,7 +523,7 @@ export async function POST(request: Request) {
                 } catch { /* best effort */ }
               }
             }
-          } else if (conf >= 0.55) {
+          } else if (conf >= 0.40) {
             // Medium confidence → propose
             const code = `P${String(counts.propose + 1).padStart(3, '0')}`
             entry.updatedTxs[txIdx] = {
@@ -614,6 +614,12 @@ export async function POST(request: Request) {
         for (const [releveId, entry] of releveMap) {
           for (let i = 0; i < entry.updatedTxs.length; i++) {
             const tx = entry.updatedTxs[i]
+            // Upgrade: propose with facture_id → rapproche
+            if (tx.statut === 'propose' && tx.facture_id) {
+              entry.updatedTxs[i] = { ...tx, statut: 'rapproche', matched_type: tx.matched_type === 'propose' ? 'supplier_upgraded' : tx.matched_type }
+              entry.changed = true
+              counts.matched++
+            }
             if (tx.statut !== 'rapproche') continue
             // Collect all facture IDs from matched transactions
             if (tx.facture_id) allFacIdsToMark.add(tx.facture_id)

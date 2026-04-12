@@ -660,8 +660,13 @@ const SALARY_PATTERNS = [
 ]
 
 const MRA_PATTERNS = [
-  'mauritius revenue', 'mra', 'income tax', 'paye', 'csg', 'nsf', 'nps',
-  'national savings', 'national pension',
+  'mauritius revenue', 'mauritius revenue authority',
+]
+
+// Separate pattern for CSG/NSF — only match on TIERS, not libellé
+const CSG_TIERS_PATTERNS = [
+  'csg', 'nsf', 'nps', 'national savings', 'national pension',
+  'income tax', 'paye',
 ]
 
 const INTERNAL_PATTERNS = [
@@ -788,7 +793,11 @@ export function autoClassify(
     }
 
     // ── MRA / Charges sociales ──
-    if (MRA_PATTERNS.some(p => tiers.includes(p) || lib.includes(p))) {
+    // STRICT: MRA only matches on tiers containing "mauritius revenue"
+    // CSG/NSF only matches on tiers (not libellé — too many false positives)
+    const isMRA = MRA_PATTERNS.some(p => tiers.includes(p))
+    const isCSG = CSG_TIERS_PATTERNS.some(p => tiers.includes(p))
+    if (isMRA || isCSG) {
       let ecritureId: string | undefined
       let note = 'Paiement MRA / charges sociales'
 
