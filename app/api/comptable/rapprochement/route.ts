@@ -727,8 +727,7 @@ export async function POST(request: Request) {
               if (tx.statut !== 'rapproche' || !tx.facture_id) continue
 
               const refFolio = `BANK-${releveId}-${i}`
-              const alreadyExists = (allEcr401v2 || []).some((e: any) => e.ref_folio === refFolio)
-              if (alreadyExists) continue
+              const existingEntry = (allEcr401v2 || []).find((e: any) => e.ref_folio === refFolio)
 
               const { data: facture } = await supabase.from('factures')
                 .select('numero_facture, tiers, type_facture, montant_mur, montant_ttc')
@@ -739,21 +738,32 @@ export async function POST(request: Request) {
               const compte401 = facture.type_facture === 'fournisseur' ? '401' : '411'
               const isPayment = txDebit > 0
 
-              // 1. Créer l'écriture BNQ (D 401 / C 512)
-              // 1. Créer l'écriture BNQ (D 401 / C 512) — INSERT DIRECT dans v2
-              const societeIdForInsert = (dossiers || []).find((d: any) => d.id === dossier.id)?.societe_id || societe_id
-              await supabase.from('ecritures_comptables_v2').insert([
-                { dossier_id: dossier.id, societe_id: societeIdForInsert, date_ecriture: txDate, journal: 'BNQ',
-                  numero_compte: compte401,
-                  libelle: `Paiement ${(facture.tiers || '').substring(0, 30)} — ${facture.numero_facture || ''}`,
-                  debit_mur: isPayment ? txAmountMUR : 0, credit_mur: isPayment ? 0 : txAmountMUR,
-                  lettre: lettreCode, ref_folio: refFolio },
-                { dossier_id: dossier.id, societe_id: societeIdForInsert, date_ecriture: txDate, journal: 'BNQ',
-                  numero_compte: '512',
-                  libelle: `Virement ${(facture.tiers || '').substring(0, 30)}`,
-                  debit_mur: isPayment ? 0 : txAmountMUR, credit_mur: isPayment ? txAmountMUR : 0,
-                  lettre: lettreCode, ref_folio: refFolio },
-              ])
+              if (existingEntry) {
+                // Entry already exists (from createEcrituresForPayment) → UPDATE with lettre
+                if (!existingEntry.lettre) {
+                  await supabase.from('ecritures_comptables_v2')
+                    .update({ lettre: lettreCode, date_lettrage: new Date().toISOString().split('T')[0] })
+                    .eq('ref_folio', refFolio)
+                    .eq('societe_id', societe_id)
+                    .eq('journal', 'BNQ')
+                  console.log(`[rapprochement] Updated lettre ${lettreCode} on existing BNQ ${refFolio}`)
+                }
+              } else {
+                // Create new BNQ entries
+                const societeIdForInsert = societe_id
+                await supabase.from('ecritures_comptables_v2').insert([
+                  { dossier_id: dossier.id, societe_id: societeIdForInsert, date_ecriture: txDate, journal: 'BNQ',
+                    numero_compte: compte401,
+                    libelle: `Paiement ${(facture.tiers || '').substring(0, 30)} — ${facture.numero_facture || ''}`,
+                    debit_mur: isPayment ? txAmountMUR : 0, credit_mur: isPayment ? 0 : txAmountMUR,
+                    lettre: lettreCode, ref_folio: refFolio },
+                  { dossier_id: dossier.id, societe_id: societeIdForInsert, date_ecriture: txDate, journal: 'BNQ',
+                    numero_compte: '512',
+                    libelle: `Virement ${(facture.tiers || '').substring(0, 30)}`,
+                    debit_mur: isPayment ? 0 : txAmountMUR, credit_mur: isPayment ? txAmountMUR : 0,
+                    lettre: lettreCode, ref_folio: refFolio },
+                ])
+              }
               ecrituresCreees++
 
               // 2. Lettrer l'écriture ACH correspondante avec le MÊME code
@@ -761,17 +771,27 @@ export async function POST(request: Request) {
               const factureTiers = (facture.tiers || '').toLowerCase().substring(0, 20)
               const factureMUR = Math.round(Number(facture.montant_mur || facture.montant_ttc || 0) * 100) / 100
 
-              // Stratégie 1: trouver par montant exact + tiers dans le libellé
+              // Stratégie 1: montant exact (2%) + 5 premiers chars du tiers
+              const tiersShort = factureTiers.length >= 5 ? factureTiers.substring(0, 5) : factureTiers
               let achFound = achNonLettrees.find((e: any) => {
                 const eAmt = Math.round((Number(e.credit_mur) || 0) * 100) / 100
                 if (eAmt === 0) return false
                 const diff = Math.abs(eAmt - factureMUR) / Math.max(factureMUR, 1)
                 if (diff > 0.02) return false
                 const eLib = (e.libelle || '').toLowerCase()
-                return factureTiers.length >= 3 && eLib.includes(factureTiers.substring(0, 8))
+                return tiersShort.length >= 3 && eLib.includes(tiersShort)
               })
 
-              // Stratégie 2: trouver par montant exact seul
+              // Stratégie 2: montant exact (2%) sans filtre tiers
+              if (!achFound) {
+                achFound = achNonLettrees.find((e: any) => {
+                  const eAmt = Math.round((Number(e.credit_mur) || 0) * 100) / 100
+                  if (eAmt === 0) return false
+                  return Math.abs(eAmt - factureMUR) / Math.max(factureMUR, 1) < 0.02
+                })
+              }
+
+              // Stratégie 3: montant exact absolu
               if (!achFound) {
                 achFound = achNonLettrees.find((e: any) => {
                   const eAmt = Math.round((Number(e.credit_mur) || 0) * 100) / 100
@@ -779,16 +799,15 @@ export async function POST(request: Request) {
                 })
               }
 
-              // Stratégie 3: montant proche (8% tolérance — couvre TDS + change)
+              // Stratégie 4: montant proche (10%) + tiers 5 chars
               if (!achFound && factureMUR > 0) {
                 achFound = achNonLettrees.find((e: any) => {
                   const eAmt = Math.round((Number(e.credit_mur) || 0) * 100) / 100
                   if (eAmt === 0) return false
                   const diff = Math.abs(eAmt - factureMUR) / factureMUR
-                  if (diff > 0.08) return false
-                  // Bonus: tiers match
+                  if (diff > 0.10) return false
                   const eLib = (e.libelle || '').toLowerCase()
-                  return factureTiers.length >= 3 && eLib.includes(factureTiers.substring(0, 5))
+                  return tiersShort.length >= 3 && eLib.includes(tiersShort)
                 })
               }
 
