@@ -284,10 +284,15 @@ export async function POST(request: Request) {
           const txTiers = (tx.tiers_detecte || tx.tiers || '').toLowerCase()
           let classified = false
 
-          // RULE A — Internal transfers
-          if (txLib.includes('own account transfer') || txLib.includes('ib account transfer ft') ||
-              txLib.includes('ib own account') || txLib.includes('virement interne') ||
-              societeNames.some(n => n.length > 3 && (txTiers.includes(n) || txLib.includes(n)))) {
+          // RULE A — Internal transfers (STRICT)
+          // "IB Account Transfer" à la MCB = virement interbancaire, PAS interne !
+          // Seuls les "Own Account Transfer" vers la société elle-même sont internes.
+          // On vérifie que le TIERS est la société elle-même, pas juste le libellé.
+          const isOwnAccountTransfer = txLib.includes('own account transfer') || txLib.includes('ib own account')
+          const isTiersIsSelf = societeNames.some(n => n.length > 3 && txTiers.includes(n))
+          const isExplicitInterne = txLib.includes('virement interne') || txLib.includes('internal transfer')
+
+          if (isOwnAccountTransfer || (isTiersIsSelf && !txLib.includes('standard payment')) || isExplicitInterne) {
             updatedTxs[i] = { ...tx, statut: 'interne', matched_type: 'transfert_interne', note: 'Virement interne' }
             counts.interne++; changed = true; classified = true
           }

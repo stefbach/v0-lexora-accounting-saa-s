@@ -670,9 +670,11 @@ const CSG_TIERS_PATTERNS = [
 ]
 
 const INTERNAL_PATTERNS = [
-  'own account transfer', 'ib account transfer', 'ib own account',
-  'virement interne', 'internal transfer', 'inter account',
+  'own account transfer', 'ib own account',
+  'virement interne', 'internal transfer',
 ]
+// NOTE: 'ib account transfer' REMOVED — at MCB it means inter-bank transfer
+// (payment to another company), NOT internal transfer between own accounts.
 
 export function autoClassify(
   transactions: MatchingTransaction[],
