@@ -948,8 +948,50 @@ export async function POST(request: Request) {
 
     // === LETTRAGE MANUEL ===
     if (action === 'lettrer_manuel') {
-      const { transaction_id, releve_id, facture_id, ecriture_id, societe_id } = body
+      const { transaction_id, releve_id, facture_id, ecriture_id, societe_id, classification } = body
       if (!releve_id) return NextResponse.json({ error: 'releve_id requis' }, { status: 400 })
+
+      // Classification manuelle sans facture (MRA, frais, associé, etc.)
+      if (classification && !facture_id && !ecriture_id) {
+        const { data: releve } = await supabase
+          .from('releves_bancaires').select('id, transactions_json').eq('id', releve_id).single()
+        if (!releve) return NextResponse.json({ error: 'Relevé non trouvé' }, { status: 404 })
+
+        const txIdx = parseInt(transaction_id.split('-').pop() || '0')
+        const txs = [...(releve.transactions_json || [])]
+        if (txIdx >= txs.length) return NextResponse.json({ error: 'Transaction non trouvée' }, { status: 404 })
+
+        const code = `MC${String(Date.now()).slice(-4)}`
+        txs[txIdx] = { ...txs[txIdx], statut: 'rapproche', matched_type: classification, lettre: code, note: `Classification manuelle: ${classification}` }
+        await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', releve_id)
+
+        // Créer l'écriture BNQ avec le bon compte
+        const CLASSE_COMPTES: Record<string, string> = {
+          compte_courant_associe: '455',
+          avance_personnel: '425',
+          charge_diverse: '658',
+          paiement_mra: '444',
+          frais_bancaires: '627',
+        }
+        const compteCharge = CLASSE_COMPTES[classification] || '471'
+
+        const { data: dossier } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
+        if (dossier) {
+          const tx = txs[txIdx]
+          const txAmt = Math.max(Number(tx.debit) || 0, Number(tx.credit) || 0)
+          const isOut = (Number(tx.debit) || 0) > 0
+          await supabase.from('ecritures_comptables_v2').insert([
+            { dossier_id: dossier.id, societe_id, date_ecriture: tx.date || new Date().toISOString().split('T')[0],
+              journal: 'BNQ', numero_compte: compteCharge, libelle: `${classification} — ${(tx.tiers_detecte || tx.libelle || '').substring(0, 30)}`,
+              debit_mur: isOut ? txAmt : 0, credit_mur: isOut ? 0 : txAmt, lettre: code, ref_folio: `MC-${releve_id}-${txIdx}` },
+            { dossier_id: dossier.id, societe_id, date_ecriture: tx.date || new Date().toISOString().split('T')[0],
+              journal: 'BNQ', numero_compte: '512', libelle: `Banque — ${(tx.tiers_detecte || '').substring(0, 25)}`,
+              debit_mur: isOut ? 0 : txAmt, credit_mur: isOut ? txAmt : 0, lettre: code, ref_folio: `MC-${releve_id}-${txIdx}` },
+          ])
+        }
+
+        return NextResponse.json({ success: true, lettre: code, classification })
+      }
 
       const { data: releve } = await supabase
         .from('releves_bancaires').select('id, transactions_json').eq('id', releve_id).single()

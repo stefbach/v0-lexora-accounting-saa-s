@@ -1157,6 +1157,42 @@ Voulez-vous vraiment continuer ?`
         </Card>
       )}
 
+      {/* SECTION 3d — Virements internes (dépliable) */}
+      {interne.length > 0 && (
+        <details className="group">
+          <summary className="cursor-pointer">
+            <Card className="border-gray-200">
+              <CardHeader className="py-3">
+                <CardTitle className="text-gray-500 flex items-center gap-2 text-base">
+                  ↔ Virements internes ({interne.length})
+                  <ChevronDown className="w-4 h-4 group-open:rotate-180 transition-transform ml-auto" />
+                </CardTitle>
+              </CardHeader>
+            </Card>
+          </summary>
+          <Card className="border-gray-200 border-t-0 rounded-t-none">
+            <CardContent className="p-0 overflow-x-auto">
+              <Table>
+                <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Libellé</TableHead><TableHead className="text-right">Débit</TableHead><TableHead className="text-right">Crédit</TableHead><TableHead>Tiers</TableHead><TableHead>Devise</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {interne.slice(0, 30).map((tx: any) => (
+                    <TableRow key={tx.id} className="bg-gray-50/30">
+                      <TableCell className="text-sm text-gray-500">{formatDate(tx.date)}</TableCell>
+                      <TableCell className="text-sm text-gray-500"><TruncatedCell text={tx.libelle} /></TableCell>
+                      <TableCell className="text-right text-sm text-red-400">{Number(tx.debit) > 0 ? fmt(Number(tx.debit)) : "—"}</TableCell>
+                      <TableCell className="text-right text-sm text-green-400">{Number(tx.credit) > 0 ? fmt(Number(tx.credit)) : "—"}</TableCell>
+                      <TableCell className="text-sm text-gray-400">{tx.tiers_detecte || "—"}</TableCell>
+                      <TableCell className="text-xs text-gray-400">{tx.devise}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {interne.length > 30 && <p className="text-xs text-gray-400 p-3">... et {interne.length - 30} autres virements internes</p>}
+            </CardContent>
+          </Card>
+        </details>
+      )}
+
       {/* SECTION 4 — Non rapprochées (main focus) */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
@@ -1199,11 +1235,42 @@ Voulez-vous vraiment continuer ?`
                       <TableCell className="text-right text-sm text-green-600 font-medium">{tx.credit > 0 ? fmt(tx.credit) + " " + tx.devise : "—"}</TableCell>
                       <TableCell className="text-sm">{tx.tiers_detecte || "—"}</TableCell>
                       <TableCell>
-                        <div className="flex gap-1">
+                        <div className="flex gap-1 flex-wrap">
                           <Button variant="outline" size="sm" onClick={() => { setDialogTab("factures"); setLinkDialog(tx) }} className="gap-1"><Link2 className="w-3 h-3" />Lettrer</Button>
                           {associes.length > 0 && (
                             <Button variant="outline" size="sm" onClick={() => { setPayeParNom(associes[0]?.nom || ""); setPayeParType("associe"); setDialogTab("bach"); setLinkDialog(tx) }} className="gap-1 text-purple-600 border-purple-200 hover:bg-purple-50"><Users className="w-3 h-3" />Associé</Button>
                           )}
+                          {/* Classification manuelle sans facture */}
+                          <select
+                            className="text-xs border rounded px-1 py-1 bg-white text-gray-600 cursor-pointer"
+                            defaultValue=""
+                            onChange={async (e) => {
+                              const classType = e.target.value
+                              if (!classType || !societeId) return
+                              try {
+                                await fetch('/api/comptable/rapprochement', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    action: 'lettrer_manuel',
+                                    transaction_id: tx.id,
+                                    releve_id: tx.releve_id,
+                                    societe_id: societeId,
+                                    classification: classType,
+                                  }),
+                                })
+                                showToast(`Classifié: ${classType}`)
+                                load()
+                              } catch { showToast('Erreur classification', 'error') }
+                            }}
+                          >
+                            <option value="">Classer...</option>
+                            <option value="compte_courant_associe">Compte courant associé</option>
+                            <option value="avance_personnel">Avance personnel</option>
+                            <option value="charge_diverse">Charge diverse</option>
+                            <option value="paiement_mra">Paiement MRA</option>
+                            <option value="frais_bancaires">Frais bancaires</option>
+                          </select>
                         </div>
                       </TableCell>
                     </TableRow>
