@@ -633,9 +633,10 @@ export default function ClientDocumentsPage() {
               className="h-8 text-xs bg-[#0B0F2E]"
               disabled={bulkReprocessing}
               onClick={async () => {
-                const candidates = allCurrentDocs.filter(docNeedsReprocess)
+                // Reanalyze ALL documents currently shown in the filtered list
+                const candidates = allCurrentDocs
                 if (candidates.length === 0) {
-                  alert('Aucun document à retraiter dans la sélection courante')
+                  alert('Aucun document dans la sélection courante')
                   return
                 }
                 if (!confirm(`Retraiter ${candidates.length} document(s) ?\n\nLe traitement est séquentiel et peut prendre plusieurs minutes.`)) return
@@ -658,7 +659,7 @@ export default function ClientDocumentsPage() {
             >
               {bulkReprocessing && bulkProgress
                 ? `Retraitement... ${bulkProgress.done}/${bulkProgress.total}`
-                : `Tout retraiter (${allCurrentDocs.filter(docNeedsReprocess).length})`}
+                : `Tout retraiter (${allCurrentDocs.length})`}
             </Button>
           )}
           {(docSearch || statusFilter !== "all" || typeFilter !== "all" || filterSociete !== "all" || sansFactureOnly) && (
