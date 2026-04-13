@@ -16,13 +16,14 @@ const COL = StyleSheet.create({
 
 const S = StyleSheet.create({
   page:         { paddingTop: 30, paddingBottom: 45, paddingLeft: 30, paddingRight: 30, fontFamily: 'Helvetica', fontSize: 7, color: '#000', flexDirection: 'column' },
-  title:        { fontSize: 14, textAlign: 'center', fontWeight: 'bold', marginBottom: 4 },
-  sub:          { fontSize: 9, textAlign: 'center', color: '#555', marginBottom: 14 },
+  title:        { fontSize: 16, textAlign: 'center', fontWeight: 'bold' },
+  sub:          { fontSize: 10, textAlign: 'center', color: '#555', marginTop: 6, marginBottom: 18 },
   headerWrap:   { flexDirection: 'column' },
-  infoRow:      { flexDirection: 'row', gap: 8, marginBottom: 14 },
-  infoBox:      { flex: 1, flexDirection: 'column', borderWidth: 1, borderColor: '#ccc', padding: 6, backgroundColor: '#fafafa' },
-  infoLbl:      { fontSize: 7, color: '#666', marginBottom: 2 },
-  infoVal:      { fontSize: 9, color: '#111', fontWeight: 'bold' },
+  infoRow:      { flexDirection: 'row', borderTopWidth: 0.5, borderBottomWidth: 0.5, borderColor: '#ccc', paddingTop: 10, paddingBottom: 10, marginBottom: 14 },
+  infoCol:      { width: '33.33%', flexDirection: 'column', paddingLeft: 6, paddingRight: 6 },
+  infoLbl:      { fontSize: 7, color: '#888888', marginBottom: 3 },
+  infoVal:      { fontSize: 10, color: '#111', fontWeight: 'bold', marginBottom: 6 },
+  infoVal2:     { fontSize: 8, color: '#444', marginBottom: 6 },
   secHdr:       { backgroundColor: '#2c3e50', paddingTop: 3, paddingBottom: 3, paddingLeft: 5, marginTop: 10 },
   secTxt:       { color: '#ffffff', fontSize: 7.5 },
   table:        { borderWidth: 0.5, borderColor: '#999', marginBottom: 4 },
@@ -168,23 +169,23 @@ export function GrandLivrePDF({ societe, dateDebut, dateFin, ecritures, compteNa
               <Text style={S.title}>GRAND LIVRE</Text>
               <Text style={S.sub}>General Ledger — {societe?.nom || '—'}</Text>
               <View style={S.infoRow}>
-                <View style={S.infoBox}>
-                  <Text style={S.infoLbl}>Société</Text>
+                <View style={S.infoCol}>
+                  <Text style={S.infoLbl}>SOCIÉTÉ</Text>
                   <Text style={S.infoVal}>{societe?.nom || '—'}</Text>
-                  <Text style={[S.infoLbl, { marginTop: 3 }]}>BRN</Text>
-                  <Text style={S.infoVal}>{societe?.brn || '—'}</Text>
+                  <Text style={S.infoLbl}>BRN</Text>
+                  <Text style={S.infoVal2}>{societe?.brn || '—'}</Text>
                 </View>
-                <View style={S.infoBox}>
-                  <Text style={S.infoLbl}>Période</Text>
+                <View style={S.infoCol}>
+                  <Text style={S.infoLbl}>PÉRIODE</Text>
                   <Text style={S.infoVal}>{periode}</Text>
-                  <Text style={[S.infoLbl, { marginTop: 3 }]}>Généré le</Text>
-                  <Text style={S.infoVal}>{today}</Text>
+                  <Text style={S.infoLbl}>GÉNÉRÉ LE</Text>
+                  <Text style={S.infoVal2}>{today}</Text>
                 </View>
-                <View style={S.infoBox}>
-                  <Text style={S.infoLbl}>Comptes</Text>
+                <View style={S.infoCol}>
+                  <Text style={S.infoLbl}>COMPTES</Text>
                   <Text style={S.infoVal}>{groups.length}</Text>
-                  <Text style={[S.infoLbl, { marginTop: 3 }]}>Écritures</Text>
-                  <Text style={S.infoVal}>{ecritures.length}</Text>
+                  <Text style={S.infoLbl}>ÉCRITURES</Text>
+                  <Text style={S.infoVal2}>{ecritures.length}</Text>
                 </View>
               </View>
             </View>
