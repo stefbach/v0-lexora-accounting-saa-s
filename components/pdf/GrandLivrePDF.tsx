@@ -15,19 +15,14 @@ const COL = StyleSheet.create({
 })
 
 const S = StyleSheet.create({
-  page:         { paddingTop: 30, paddingBottom: 45, paddingLeft: 30, paddingRight: 30, fontFamily: 'Helvetica', fontSize: 7, color: '#000' },
-  title:        { fontSize: 13, textAlign: 'center' },
-  sub:          { fontSize: 8, textAlign: 'center', color: '#555' },
-  gap4:         { height: 4 },
-  gap6:         { height: 6 },
-  gap8:         { height: 8 },
-  gap12:        { height: 12 },
-  gap16:        { height: 16 },
-  hline:        { height: 0.5, backgroundColor: '#aaaaaa' },
-  infoRow:      { flexDirection: 'row', gap: 8, marginTop: 12, marginBottom: 12 },
-  infoBox:      { flex: 1, borderWidth: 1, borderColor: '#ccc', padding: 6, backgroundColor: '#fafafa' },
+  page:         { paddingTop: 30, paddingBottom: 45, paddingLeft: 30, paddingRight: 30, fontFamily: 'Helvetica', fontSize: 7, color: '#000', flexDirection: 'column' },
+  title:        { fontSize: 14, textAlign: 'center', fontWeight: 'bold', marginBottom: 4 },
+  sub:          { fontSize: 9, textAlign: 'center', color: '#555', marginBottom: 14 },
+  headerWrap:   { flexDirection: 'column' },
+  infoRow:      { flexDirection: 'row', gap: 8, marginBottom: 14 },
+  infoBox:      { flex: 1, flexDirection: 'column', borderWidth: 1, borderColor: '#ccc', padding: 6, backgroundColor: '#fafafa' },
   infoLbl:      { fontSize: 7, color: '#666', marginBottom: 2 },
-  infoVal:      { fontSize: 9, color: '#111' },
+  infoVal:      { fontSize: 9, color: '#111', fontWeight: 'bold' },
   secHdr:       { backgroundColor: '#2c3e50', paddingTop: 3, paddingBottom: 3, paddingLeft: 5, marginTop: 10 },
   secTxt:       { color: '#ffffff', fontSize: 7.5 },
   table:        { borderWidth: 0.5, borderColor: '#999', marginBottom: 4 },
@@ -169,9 +164,9 @@ export function GrandLivrePDF({ societe, dateDebut, dateFin, ecritures, compteNa
         <Page key={pi} size="A4" style={S.page}>
 
           {pi === 0 && (
-            <View>
+            <View style={S.headerWrap}>
               <Text style={S.title}>GRAND LIVRE</Text>
-              <Text style={[S.sub, { marginBottom: 6 }]}>General Ledger — {societe?.nom || '—'}</Text>
+              <Text style={S.sub}>General Ledger — {societe?.nom || '—'}</Text>
               <View style={S.infoRow}>
                 <View style={S.infoBox}>
                   <Text style={S.infoLbl}>Société</Text>
