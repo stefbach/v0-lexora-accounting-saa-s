@@ -44,6 +44,7 @@ interface Folder {
 }
 
 const FOLDERS: Folder[] = [
+  { key: "all", label: "Tous les Documents", readOnly: true },
   { key: "recent", label: "Envois Récents", readOnly: false },
   { key: "facture_fournisseur", label: "Factures Fournisseurs", readOnly: false },
   { key: "facture_client", label: "Factures Clients", readOnly: false },
@@ -103,6 +104,9 @@ function confianceBadge(confiance: number | undefined | null) {
 }
 
 function getDocsForFolder(docs: Document[], folderKey: string): Document[] {
+  if (folderKey === "all") {
+    return docs
+  }
   if (folderKey === "recent") {
     // Show recent uploads (last 7 days) or unclassified docs
     const sevenDaysAgo = new Date()
