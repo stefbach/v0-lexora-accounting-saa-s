@@ -11,7 +11,8 @@ import {
 } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Search, Loader2, FileText, AlertTriangle, Download, User, Trash2, Building2, AlertCircle, RefreshCw, Wrench, CheckCircle2 } from "lucide-react"
+import { Search, Loader2, FileText, AlertTriangle, Download, User, Trash2, Building2, AlertCircle, RefreshCw, Wrench, CheckCircle2, Globe, MapPin } from "lucide-react"
+import { toast } from "sonner"
 import * as XLSX from "xlsx"
 import { MonthPicker } from "@/components/ui/MonthPicker"
 
@@ -85,6 +86,39 @@ export default function ClientFournisseursPage() {
       if (res.ok) load()
       else { const d = await res.json().catch(() => ({})); alert(d.error || "Erreur") }
     } catch (e: any) { alert("Erreur: " + (e.message || "")) }
+  }
+
+  // Toggle client_offshore for all invoices of this tiers + societe_id
+  const [togglingOffshore, setTogglingOffshore] = useState<string | null>(null)
+  const handleToggleOffshore = async (f: any) => {
+    if (!f.tiers || !f.societe_id) return
+    const newValue = !f.client_offshore
+    const label = newValue ? 'fournisseur étranger (reverse charge)' : 'fournisseur local (Maurice)'
+    if (!confirm(`Marquer "${f.tiers}" comme ${label} ?\n\nToutes les factures de ce fournisseur seront mises à jour.`)) return
+    setTogglingOffshore(f.id)
+    try {
+      const res = await fetch('/api/client/tiers-offshore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tiers: f.tiers,
+          societe_id: f.societe_id,
+          est_offshore: newValue,
+          type_tiers: 'fournisseur',
+        }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        toast.success(`${data.factures_updated || 0} facture(s) mise(s) à jour — "${f.tiers}" est maintenant ${label}`)
+        load()
+      } else {
+        toast.error(data.error || 'Erreur')
+      }
+    } catch (e: any) {
+      toast.error('Erreur: ' + (e.message || ''))
+    } finally {
+      setTogglingOffshore(null)
+    }
   }
 
   // Reassign
@@ -429,6 +463,18 @@ export default function ClientFournisseursPage() {
                     <TableCell>{row.devise || "MUR"}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleToggleOffshore(row)}
+                          disabled={togglingOffshore === row.id}
+                          title={row.client_offshore ? "Fournisseur étranger (reverse charge) — cliquer pour marquer local" : "Fournisseur local (Maurice) — cliquer pour marquer étranger"}
+                          className={`h-7 w-7 p-0 ${row.client_offshore ? 'text-purple-600' : 'text-emerald-600'}`}
+                        >
+                          {togglingOffshore === row.id
+                            ? <Loader2 className="w-4 h-4 animate-spin" />
+                            : (row.client_offshore ? <Globe className="w-4 h-4" /> : <MapPin className="w-4 h-4" />)}
+                        </Button>
                         <Button variant="ghost" size="sm" onClick={() => openReassign(row)} title="Changer de societe" className="h-7 w-7 p-0 text-amber-600">
                           <Building2 className="w-4 h-4" />
                         </Button>

@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { getSystemPrompt, injectTauxChange, injectSocietes, CLAUDE_CONFIG, SYSTEM_PROMPT_GENERIC_EXTRACTION } from '@/lib/ai/prompts'
+import { findTiersInAnnuaire, incrementTiersUsage, createTiersFromOcr } from '@/lib/tiers-annuaire'
 import { createHash } from 'crypto'
 import { isBankName, validateAndCleanExtraction, computeConfidence } from '@/lib/utils/bank-utils'
 
@@ -1130,14 +1131,45 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
 
         console.log(`[upload] Facture TVA: applicable=${tvaApplicable}, taux=${tauxTva}%, HT=${montantHT}, TVA=${montantTVAFinal}, TTC=${montantTTCFinal}, devise=${devise}, analyse="${extraction.analyse_tva || 'non fournie'}"`)
 
+        // ── Tiers annuaire lookup — auto-classify offshore/reverse_charge ──
+        const tiersName = typeDocument === 'facture_client'
+          ? (extraction.destinataire || extraction.client || null)
+          : (extraction.emetteur || extraction.fournisseur || null)
+        const factureTypeForTiers = typeDocument === 'facture_client' ? 'client' : 'fournisseur'
+        let clientOffshoreFlag = false
+        let reverseChargeFlag = false
+        if (tiersName) {
+          try {
+            const existingTiers = await findTiersInAnnuaire(supabase, tiersName)
+            if (existingTiers) {
+              clientOffshoreFlag = existingTiers.est_offshore
+              reverseChargeFlag = existingTiers.reverse_charge
+              await incrementTiersUsage(supabase, existingTiers.id)
+              console.log(`[upload] Tiers annuaire HIT: "${tiersName}" → offshore=${clientOffshoreFlag}, reverse_charge=${reverseChargeFlag} (verifie=${existingTiers.verifie})`)
+            } else {
+              const created = await createTiersFromOcr(supabase, {
+                nom: tiersName,
+                type_tiers: factureTypeForTiers as 'client' | 'fournisseur',
+                confiance: Number(extraction.confidence) || 50,
+                brn: extraction.brn || null,
+              })
+              if (created) {
+                console.log(`[upload] Tiers annuaire NEW: "${tiersName}" created (id=${created.id})`)
+              }
+            }
+          } catch (e) {
+            console.warn('[upload] Tiers annuaire lookup error (non-blocking):', e)
+          }
+        }
+
         const factureData: Record<string, unknown> = {
           societe_id: factureSocieteId,
           dossier_id: finalDossierId,
           numero_facture: extraction.numero_reference || extraction.numero_facture || null,
           type_facture: typeDocument === 'facture_client' ? 'client' : 'fournisseur',
-          tiers: typeDocument === 'facture_client'
-            ? (extraction.destinataire || extraction.client || null)
-            : (extraction.emetteur || extraction.fournisseur || null),
+          tiers: tiersName,
+          client_offshore: clientOffshoreFlag,
+          reverse_charge: reverseChargeFlag,
           description: extraction.description || extraction.objet || file.name,
           date_facture: extraction.date_document || extraction.date_facture || new Date().toISOString().split('T')[0],
           date_echeance: extraction.date_echeance || null,
