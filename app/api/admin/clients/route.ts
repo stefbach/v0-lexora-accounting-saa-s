@@ -8,11 +8,19 @@ function getAdminClient() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
+async function requireAdmin() {
+  const supabaseAuth = await createServerClient()
+  const { data: { user }, error: authError } = await supabaseAuth.auth.getUser()
+  if (!user || authError) return null
+  const { data: profile } = await supabaseAuth.from('profiles').select('role').eq('id', user.id).single()
+  if (!profile || !['admin', 'super_admin'].includes(profile.role)) return null
+  return user
+}
+
 export async function GET(request: NextRequest) {
   try {
-    const supabaseAuth = await createServerClient()
-    const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    const adminUser = await requireAdmin()
+    if (!adminUser) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     const supabase = getAdminClient()
     const { searchParams } = new URL(request.url)
@@ -49,9 +57,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabaseAuth = await createServerClient()
-    const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    const adminUser = await requireAdmin()
+    if (!adminUser) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     const supabase = getAdminClient()
     const body = await request.json()

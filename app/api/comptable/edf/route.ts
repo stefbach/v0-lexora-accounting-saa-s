@@ -3,11 +3,21 @@ import { createClient } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
 
+async function requireAllowedRole() {
+  const supabase = await createClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (!user || authError) return null
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (!profile || !['admin', 'super_admin', 'comptable', 'comptable_dedie', 'client_admin'].includes(profile.role)) return null
+  return user
+}
+
 export async function GET(request: Request) {
   try {
+    const user = await requireAllowedRole()
+    if (!user) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
     const { searchParams } = new URL(request.url)
     const societe_id = searchParams.get('societe_id')
@@ -30,9 +40,10 @@ export async function GET(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
+    const user = await requireAllowedRole()
+    if (!user) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')

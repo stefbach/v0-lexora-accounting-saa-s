@@ -5,12 +5,22 @@ export const dynamic = 'force-dynamic'
 
 const TABLE = 'parametres_plateforme'
 
+async function requireAdmin() {
+  const supabase = await createClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (!user || authError) return null
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (!profile || !['admin', 'super_admin'].includes(profile.role)) return null
+  return user
+}
+
 // ── GET /api/admin/parametres ─────────────────────────────────────────────────
 export async function GET() {
   try {
+    const adminUser = await requireAdmin()
+    if (!adminUser) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
     const { data, error } = await supabase
       .from(TABLE)
@@ -33,9 +43,10 @@ export async function GET() {
 // ── POST /api/admin/parametres ────────────────────────────────────────────────
 export async function POST(request: Request) {
   try {
+    const adminUser = await requireAdmin()
+    if (!adminUser) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
     const body = await request.json()
 
@@ -44,9 +55,9 @@ export async function POST(request: Request) {
 
     let result
     if (existing?.id) {
-      result = await supabase.from(TABLE).update({ ...body, updated_at: new Date().toISOString(), updated_by: user.id }).eq('id', existing.id).select().single()
+      result = await supabase.from(TABLE).update({ ...body, updated_at: new Date().toISOString(), updated_by: adminUser.id }).eq('id', existing.id).select().single()
     } else {
-      result = await supabase.from(TABLE).insert({ ...body, created_by: user.id }).select().single()
+      result = await supabase.from(TABLE).insert({ ...body, created_by: adminUser.id }).select().single()
     }
 
     if (result.error) throw result.error

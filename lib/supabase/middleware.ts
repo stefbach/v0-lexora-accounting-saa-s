@@ -84,8 +84,9 @@ export async function updateSession(request: NextRequest) {
     const isRhRoute = rhRoutes.some(r => pathname.startsWith(r))
     const isAdminRoute = adminRoutes.some(r => pathname.startsWith(r))
     const isJuridiqueRoute = pathname.startsWith('/juridique')
+    const isClientRoute = pathname.startsWith('/client')
 
-    if (isDirectionRoute || isRhRoute || isAdminRoute || isJuridiqueRoute) {
+    if (isDirectionRoute || isRhRoute || isAdminRoute || isJuridiqueRoute || isClientRoute) {
       const { data: profile } = await supabase
         .from('profiles')
         .select('role')
@@ -113,6 +114,12 @@ export async function updateSession(request: NextRequest) {
       }
 
       if (isJuridiqueRoute && !['admin', 'super_admin', 'comptable', 'comptable_dedie', 'juridique', 'client_admin', 'client_user'].includes(role)) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/redirect'
+        return NextResponse.redirect(url)
+      }
+
+      if (isClientRoute && !['admin', 'super_admin', 'comptable', 'comptable_dedie', 'client_admin', 'client_user', 'client_assistant'].includes(role)) {
         const url = request.nextUrl.clone()
         url.pathname = '/redirect'
         return NextResponse.redirect(url)

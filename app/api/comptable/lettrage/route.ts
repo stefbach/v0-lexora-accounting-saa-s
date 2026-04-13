@@ -12,11 +12,19 @@ function getAdminClient() {
   )
 }
 
+async function requireAllowedRole() {
+  const supabaseAuth = await createServerClient()
+  const { data: { user }, error: authError } = await supabaseAuth.auth.getUser()
+  if (!user || authError) return null
+  const { data: profile } = await supabaseAuth.from('profiles').select('role').eq('id', user.id).single()
+  if (!profile || !['admin', 'super_admin', 'comptable', 'comptable_dedie', 'client_admin'].includes(profile.role)) return null
+  return user
+}
+
 export async function GET(request: Request) {
   try {
-    const supabaseAuth = await createServerClient()
-    const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    const user = await requireAllowedRole()
+    if (!user) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     const supabase = getAdminClient()
     const { searchParams } = new URL(request.url)
@@ -87,9 +95,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const supabaseAuth = await createServerClient()
-    const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    const user = await requireAllowedRole()
+    if (!user) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     const supabase = getAdminClient()
     const body = await request.json()
