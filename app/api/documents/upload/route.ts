@@ -1190,29 +1190,58 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
         factureSkipReason = `no_societe_id (dossier=${finalDossierId} has no societe_id and no fallback)`
       }
       if (factureSocieteId) {
-        const montantHT =
-          Number(extraction.montant_ht) ||
-          Number(extraction.totaux?.montant_ht_mur) ||
-          Number(extraction.montant_ht_mur) ||
-          Number(extraction.total_ht) ||
-          Number(extraction.subtotal) ||
-          0
-        const montantTVA =
-          Number(extraction.montant_tva) ||
-          Number(extraction.totaux?.tva_mur) ||
-          Number(extraction.tva_mur) ||
-          Number(extraction.tva) ||
-          0
-        const montantTTC =
-          Number(extraction.montant_ttc) ||
-          Number(extraction.totaux?.total_ttc_mur) ||
-          Number(extraction.totaux?.net_a_payer_mur) ||
-          Number(extraction.total_ttc) ||
-          Number(extraction.total) ||
-          Number(extraction.amount) ||
-          (montantHT + montantTVA)
-        const devise = extraction.devise || extraction.currency || 'MUR'
-        const fxRate = (devise !== 'MUR') ? (tauxChange[devise] || 1) : 1
+        // Detect devise: explicit field → totaux EUR presence → default MUR
+        const totaux = extraction.totaux || {}
+        const devise =
+          extraction.devise ||
+          extraction.currency ||
+          (Number(totaux.total_ttc_eur) > 0 ? 'EUR' : null) ||
+          'MUR'
+        // Prefer explicit taux_change from totaux when available
+        const fxRate =
+          devise !== 'MUR'
+            ? (Number(totaux.taux_change?.EUR_to_MUR) ||
+               Number(totaux.taux_change?.[`${devise}_to_MUR`]) ||
+               tauxChange[devise] ||
+               1)
+            : 1
+        const montantHT = devise === 'EUR'
+          ? (Number(totaux.montant_ht_eur) ||
+             Number(extraction.montant_ht) ||
+             Number(extraction.total_ht) ||
+             Number(extraction.subtotal) ||
+             0)
+          : (Number(extraction.montant_ht) ||
+             Number(totaux.montant_ht_mur) ||
+             Number(extraction.montant_ht_mur) ||
+             Number(extraction.total_ht) ||
+             Number(extraction.subtotal) ||
+             0)
+        const montantTVA = devise === 'EUR'
+          ? (Number(totaux.tva_eur) ||
+             Number(extraction.montant_tva) ||
+             Number(extraction.tva) ||
+             0)
+          : (Number(extraction.montant_tva) ||
+             Number(totaux.tva_mur) ||
+             Number(extraction.tva_mur) ||
+             Number(extraction.tva) ||
+             0)
+        const montantTTC = devise === 'EUR'
+          ? (Number(totaux.total_ttc_eur) ||
+             Number(totaux.net_a_payer_eur) ||
+             Number(extraction.montant_ttc) ||
+             Number(extraction.total_ttc) ||
+             Number(extraction.total) ||
+             Number(extraction.amount) ||
+             (montantHT + montantTVA))
+          : (Number(extraction.montant_ttc) ||
+             Number(totaux.total_ttc_mur) ||
+             Number(totaux.net_a_payer_mur) ||
+             Number(extraction.total_ttc) ||
+             Number(extraction.total) ||
+             Number(extraction.amount) ||
+             (montantHT + montantTVA))
 
         // Vérification TVA
         const tvaApplicable = extraction.tva_applicable !== false && !extraction.tva_exonere
