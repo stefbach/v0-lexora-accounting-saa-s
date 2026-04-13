@@ -15,7 +15,7 @@ const COL = StyleSheet.create({
 })
 
 const S = StyleSheet.create({
-  page:         { paddingTop: 30, paddingBottom: 55, paddingLeft: 30, paddingRight: 30, fontFamily: 'Helvetica', fontSize: 7, color: '#000', flexDirection: 'column' },
+  page:         { paddingTop: 30, paddingBottom: 60, paddingLeft: 30, paddingRight: 30, fontFamily: 'Helvetica', fontSize: 7, color: '#000', flexDirection: 'column' },
   title:        { fontSize: 16, textAlign: 'center', fontWeight: 'bold' },
   sub:          { fontSize: 10, textAlign: 'center', color: '#555', marginTop: 6, marginBottom: 18 },
   headerWrap:   { flexDirection: 'column' },
@@ -140,7 +140,9 @@ export function GrandLivrePDF({ societe, dateDebut, dateFin, ecritures, compteNa
   let rows = 0
   for (const g of groups) {
     const n = g.entries.length + 2
-    if (rows + n > 38 && cur.length > 0) { pages.push(cur); cur = []; rows = 0 }
+    // Page 1 has a ~8-row tall header, so cap at 30; subsequent pages cap at 38
+    const maxRows = pages.length === 0 ? 30 : 38
+    if (rows + n > maxRows && cur.length > 0) { pages.push(cur); cur = []; rows = 0 }
     cur.push(g); rows += n
   }
   if (cur.length > 0) pages.push(cur)
@@ -167,38 +169,38 @@ export function GrandLivrePDF({ societe, dateDebut, dateFin, ecritures, compteNa
           {pi === 0 && (
             <>
               {/* Title block — fully isolated with explicit height */}
-              <View style={{ height: 60, alignItems: 'center', justifyContent: 'center' }}>
+              <View style={{ height: 50, alignItems: 'center', justifyContent: 'center' }}>
                 <Text style={{ fontSize: 16, fontWeight: 'bold' }}>GRAND LIVRE</Text>
               </View>
-              <View style={{ height: 20, alignItems: 'center', justifyContent: 'center' }}>
+              <View style={{ height: 18, alignItems: 'center', justifyContent: 'center' }}>
                 <Text style={{ fontSize: 10, color: '#555' }}>General Ledger — {societe?.nom || '—'}</Text>
               </View>
-              {/* Info band — single row 4 columns */}
-              <View style={{ flexDirection: 'row', paddingTop: 10, paddingBottom: 10, marginTop: 8, marginBottom: 16, borderTopWidth: 0.5, borderTopColor: '#cccccc', borderBottomWidth: 0.5, borderBottomColor: '#cccccc' }}>
-                <View style={{ width: '33.33%', paddingLeft: 6, paddingRight: 6 }}>
-                  <Text style={{ fontSize: 7, color: '#888888' }}>SOCIÉTÉ</Text>
-                  <Text style={{ fontSize: 10, fontWeight: 'bold', marginTop: 3 }}>{societe?.nom || '—'}</Text>
-                  <Text style={{ fontSize: 7, color: '#888888', marginTop: 6 }}>BRN</Text>
-                  <Text style={{ fontSize: 9, marginTop: 2 }}>{societe?.brn || '—'}</Text>
+              {/* Info band — 3 fixed-width columns with View-wrapped rows */}
+              <View style={{ flexDirection: 'row', paddingTop: 12, paddingBottom: 12, marginTop: 10, marginBottom: 18, borderTopWidth: 0.5, borderTopColor: '#cccccc', borderBottomWidth: 0.5, borderBottomColor: '#cccccc' }}>
+                <View style={{ width: '33.33%', paddingLeft: 8, paddingRight: 8 }}>
+                  <View style={{ marginBottom: 4 }}><Text style={{ fontSize: 7, color: '#888' }}>SOCIÉTÉ</Text></View>
+                  <View style={{ marginBottom: 10 }}><Text style={{ fontSize: 10, fontWeight: 'bold' }}>{societe?.nom || '—'}</Text></View>
+                  <View style={{ marginBottom: 4 }}><Text style={{ fontSize: 7, color: '#888' }}>BRN</Text></View>
+                  <View><Text style={{ fontSize: 9 }}>{societe?.brn || '—'}</Text></View>
                 </View>
-                <View style={{ width: '33.33%', paddingLeft: 6, paddingRight: 6 }}>
-                  <Text style={{ fontSize: 7, color: '#888888' }}>PÉRIODE</Text>
-                  <Text style={{ fontSize: 10, fontWeight: 'bold', marginTop: 3 }}>{periode}</Text>
-                  <Text style={{ fontSize: 7, color: '#888888', marginTop: 6 }}>GÉNÉRÉ LE</Text>
-                  <Text style={{ fontSize: 9, marginTop: 2 }}>{today}</Text>
+                <View style={{ width: '33.33%', paddingLeft: 8, paddingRight: 8 }}>
+                  <View style={{ marginBottom: 4 }}><Text style={{ fontSize: 7, color: '#888' }}>PÉRIODE</Text></View>
+                  <View style={{ marginBottom: 10 }}><Text style={{ fontSize: 10, fontWeight: 'bold' }}>{periode}</Text></View>
+                  <View style={{ marginBottom: 4 }}><Text style={{ fontSize: 7, color: '#888' }}>GÉNÉRÉ LE</Text></View>
+                  <View><Text style={{ fontSize: 9 }}>{today}</Text></View>
                 </View>
-                <View style={{ width: '33.33%', paddingLeft: 6, paddingRight: 6 }}>
-                  <Text style={{ fontSize: 7, color: '#888888' }}>COMPTES</Text>
-                  <Text style={{ fontSize: 10, fontWeight: 'bold', marginTop: 3 }}>{groups.length}</Text>
-                  <Text style={{ fontSize: 7, color: '#888888', marginTop: 6 }}>ÉCRITURES</Text>
-                  <Text style={{ fontSize: 9, marginTop: 2 }}>{ecritures.length}</Text>
+                <View style={{ width: '33.33%', paddingLeft: 8, paddingRight: 8 }}>
+                  <View style={{ marginBottom: 4 }}><Text style={{ fontSize: 7, color: '#888' }}>COMPTES</Text></View>
+                  <View style={{ marginBottom: 10 }}><Text style={{ fontSize: 10, fontWeight: 'bold' }}>{groups.length}</Text></View>
+                  <View style={{ marginBottom: 4 }}><Text style={{ fontSize: 7, color: '#888' }}>ÉCRITURES</Text></View>
+                  <View><Text style={{ fontSize: 9 }}>{ecritures.length}</Text></View>
                 </View>
               </View>
             </>
           )}
 
           {pg.map((g) => (
-            <View key={g.compte} wrap={false}>
+            <View key={g.compte}>
               <View style={S.secHdr}>
                 <Text style={S.secTxt}>{g.compte}{g.nom ? ` — ${g.nom}` : ''}</Text>
               </View>
