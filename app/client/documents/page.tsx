@@ -34,7 +34,7 @@ interface Document {
   created_at: string
   societe_detectee: string | null
   confiance_type?: number | null
-  n8n_result?: { error?: string; routing?: any; extraction?: any } | null
+  n8n_result?: { error?: string; routing?: any; extraction?: any; facture_status?: string; facture_error?: string; facture_skip_reason?: string } | null
 }
 
 interface Folder {
@@ -149,6 +149,13 @@ export default function ClientDocumentsPage() {
   const [confirmSocSaving, setConfirmSocSaving] = useState(false)
   // Société filter
   const [filterSociete, setFilterSociete] = useState("all")
+  // Type document filter
+  const [typeFilter, setTypeFilter] = useState("all")
+  // "Sans facture" toggle — show only docs needing reprocess or invoices without linked facture
+  const [sansFactureOnly, setSansFactureOnly] = useState(false)
+  // Bulk reprocess state
+  const [bulkReprocessing, setBulkReprocessing] = useState(false)
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null)
   // Pagination
   const [pageSize] = useState(20)
   const [visibleCount, setVisibleCount] = useState(20)
@@ -404,12 +411,27 @@ export default function ClientDocumentsPage() {
         return matchSociete || matchDossier || !d.societe_detectee
       })
 
+  // Helper — does this doc need reprocessing (sans facture)?
+  const docNeedsReprocess = (d: Document) => {
+    const facStatus = d.n8n_result?.facture_status
+    if (facStatus === 'needs_reprocess' || facStatus === 'error' || facStatus === 'skipped') return true
+    // Invoice document with no facture row created
+    if ((d.type_document === 'facture_client' || d.type_document === 'facture_fournisseur') && !facStatus) {
+      // Heuristic: invoice processed but n8n_result has no facture_status field at all
+      // Means it was uploaded BEFORE the BUG 1 fix or facture creation silently failed
+      if (d.statut === 'traite') return true
+    }
+    return false
+  }
+
   const folderDocs = getDocsForFolder(filteredDocuments, selectedFolder)
   const allCurrentDocs = folderDocs.filter(d => {
     if (docSearch) {
       if (!d.nom_fichier.toLowerCase().includes(docSearch.toLowerCase())) return false
     }
     if (statusFilter !== "all" && d.statut !== statusFilter) return false
+    if (typeFilter !== "all" && d.type_document !== typeFilter) return false
+    if (sansFactureOnly && !docNeedsReprocess(d)) return false
     if (filterSociete !== "all") {
       const socName = societes.find(s => s.societe_id === filterSociete)?.nom
       if (socName && d.societe_detectee) {
@@ -571,6 +593,17 @@ export default function ClientDocumentsPage() {
               <SelectItem value="erreur">Erreur</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <SelectTrigger className="w-[170px] h-8 text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tous types</SelectItem>
+              <SelectItem value="facture_client">Facture client</SelectItem>
+              <SelectItem value="facture_fournisseur">Facture fournisseur</SelectItem>
+              <SelectItem value="releve_bancaire">Relevé bancaire</SelectItem>
+              <SelectItem value="fiche_paie">Fiche paie</SelectItem>
+              <SelectItem value="autre">Autre</SelectItem>
+            </SelectContent>
+          </Select>
           {societes.length > 0 && (
             <Select value={filterSociete} onValueChange={setFilterSociete}>
               <SelectTrigger className="w-[180px] h-8 text-sm"><SelectValue /></SelectTrigger>
@@ -580,8 +613,52 @@ export default function ClientDocumentsPage() {
               </SelectContent>
             </Select>
           )}
-          {(docSearch || statusFilter !== "all" || filterSociete !== "all") && (
-            <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setDocSearch(""); setStatusFilter("all"); setFilterSociete("all") }}>Effacer</Button>
+          <Button
+            variant={sansFactureOnly ? "default" : "outline"}
+            size="sm"
+            className="h-8 text-xs"
+            onClick={() => setSansFactureOnly(v => !v)}
+            title="Afficher uniquement les documents sans facture créée"
+          >
+            Sans facture {sansFactureOnly ? "✓" : ""}
+          </Button>
+          {profile?.role === 'client_admin' && (
+            <Button
+              variant="default"
+              size="sm"
+              className="h-8 text-xs bg-[#0B0F2E]"
+              disabled={bulkReprocessing}
+              onClick={async () => {
+                const candidates = allCurrentDocs.filter(docNeedsReprocess)
+                if (candidates.length === 0) {
+                  alert('Aucun document à retraiter dans la sélection courante')
+                  return
+                }
+                if (!confirm(`Retraiter ${candidates.length} document(s) ?\n\nLe traitement est séquentiel et peut prendre plusieurs minutes.`)) return
+                setBulkReprocessing(true)
+                setBulkProgress({ done: 0, total: candidates.length })
+                for (let i = 0; i < candidates.length; i++) {
+                  try {
+                    await fetch(`/api/documents/${candidates[i].id}/reanalyze`, {
+                      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}),
+                    })
+                  } catch (e) {
+                    console.error('[bulk-reprocess]', candidates[i].id, e)
+                  }
+                  setBulkProgress({ done: i + 1, total: candidates.length })
+                }
+                await fetchDocuments()
+                setBulkReprocessing(false)
+                setBulkProgress(null)
+              }}
+            >
+              {bulkReprocessing && bulkProgress
+                ? `Retraitement... ${bulkProgress.done}/${bulkProgress.total}`
+                : `Tout retraiter (${allCurrentDocs.filter(docNeedsReprocess).length})`}
+            </Button>
+          )}
+          {(docSearch || statusFilter !== "all" || typeFilter !== "all" || filterSociete !== "all" || sansFactureOnly) && (
+            <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setDocSearch(""); setStatusFilter("all"); setTypeFilter("all"); setFilterSociete("all"); setSansFactureOnly(false) }}>Effacer</Button>
           )}
         </div>
         <CardContent className="p-0">
