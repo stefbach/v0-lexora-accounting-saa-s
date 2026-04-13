@@ -155,13 +155,20 @@ export default function ClientFournisseursPage() {
   const [consistency, setConsistency] = useState<any>(null)
   const [consistencyLoading, setConsistencyLoading] = useState(false)
   const [consistencyFixing, setConsistencyFixing] = useState<string | null>(null)
+  const [showIncoherences, setShowIncoherences] = useState(false)
 
-  const loadConsistency = useCallback(async () => {
+  const loadConsistency = useCallback(async (openList = false) => {
     if (!societe) return
     setConsistencyLoading(true)
     try {
       const res = await fetch(`/api/comptable/rapprochement/consistency?societe_id=${societe}`)
-      if (res.ok) setConsistency(await res.json())
+      if (res.ok) {
+        const data = await res.json()
+        setConsistency(data)
+        if (openList && (data?.inconsistencies?.length || 0) > 0) {
+          setShowIncoherences(true)
+        }
+      }
     } catch {} finally { setConsistencyLoading(false) }
   }, [societe])
 
@@ -340,9 +347,14 @@ export default function ClientFournisseursPage() {
                   </div>
                   <div>
                     <p className="text-gray-500">Incoherences</p>
-                    <p className={`font-bold text-base ${(consistency.inconsistencies?.length || 0) > 0 ? 'text-red-600' : 'text-gray-400'}`}>
-                      {consistency.inconsistencies?.length || 0}
-                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setShowIncoherences(v => !v)}
+                      disabled={(consistency.inconsistencies?.length || 0) === 0}
+                      className={`font-bold text-base text-left ${(consistency.inconsistencies?.length || 0) > 0 ? 'text-red-600 hover:underline cursor-pointer' : 'text-gray-400'}`}
+                    >
+                      {consistency.inconsistencies?.length || 0} {(consistency.inconsistencies?.length || 0) > 0 && (showIncoherences ? '▲' : '▼')}
+                    </button>
                   </div>
                 </div>
                 {(consistency.stats.paye_sans_rapprochement > 0 || (consistency.inconsistencies?.length || 0) > 0) && (
@@ -355,7 +367,7 @@ export default function ClientFournisseursPage() {
                 )}
               </div>
               <div className="flex gap-2 shrink-0 flex-wrap">
-                <Button variant="outline" size="sm" onClick={loadConsistency} disabled={consistencyLoading}>
+                <Button variant="outline" size="sm" onClick={() => loadConsistency(true)} disabled={consistencyLoading}>
                   {consistencyLoading ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <RefreshCw className="w-3 h-3 mr-1" />}
                   Verifier
                 </Button>
@@ -382,6 +394,38 @@ export default function ClientFournisseursPage() {
                 )}
               </div>
             </div>
+
+            {/* Expandable list of inconsistencies */}
+            {showIncoherences && (consistency.inconsistencies?.length || 0) > 0 && (
+              <div className="mt-4 border-t pt-3">
+                <p className="text-sm font-semibold text-red-700 mb-2">
+                  {consistency.inconsistencies.length} incohérence(s) détectée(s) :
+                </p>
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {consistency.inconsistencies.map((inc: any, i: number) => (
+                    <div key={i} className="bg-white border border-red-200 rounded p-2 text-xs">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-red-700">
+                            <Badge variant="outline" className="text-[10px] mr-1">{inc.type || '—'}</Badge>
+                            {inc.facture?.numero || inc.facture?.id?.substring(0, 8) || '—'}
+                            {inc.facture?.tiers ? ` · ${inc.facture.tiers}` : ''}
+                          </p>
+                          <p className="text-gray-600 mt-1">{inc.message || '—'}</p>
+                          {Array.isArray(inc.claims) && inc.claims.length > 0 && (
+                            <ul className="text-gray-500 mt-1 list-disc list-inside">
+                              {inc.claims.slice(0, 3).map((c: any, j: number) => (
+                                <li key={j} className="truncate">{c.libelle || c.releve_id?.substring(0, 8)}</li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
