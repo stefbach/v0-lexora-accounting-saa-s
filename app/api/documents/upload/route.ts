@@ -1190,10 +1190,28 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
         factureSkipReason = `no_societe_id (dossier=${finalDossierId} has no societe_id and no fallback)`
       }
       if (factureSocieteId) {
-        const montantHT = Number(extraction.montant_ht) || 0
-        const montantTVA = Number(extraction.montant_tva) || 0
-        const montantTTC = Number(extraction.montant_ttc) || montantHT + montantTVA
-        const devise = extraction.devise || 'MUR'
+        const montantHT =
+          Number(extraction.montant_ht) ||
+          Number(extraction.totaux?.montant_ht_mur) ||
+          Number(extraction.montant_ht_mur) ||
+          Number(extraction.total_ht) ||
+          Number(extraction.subtotal) ||
+          0
+        const montantTVA =
+          Number(extraction.montant_tva) ||
+          Number(extraction.totaux?.tva_mur) ||
+          Number(extraction.tva_mur) ||
+          Number(extraction.tva) ||
+          0
+        const montantTTC =
+          Number(extraction.montant_ttc) ||
+          Number(extraction.totaux?.total_ttc_mur) ||
+          Number(extraction.totaux?.net_a_payer_mur) ||
+          Number(extraction.total_ttc) ||
+          Number(extraction.total) ||
+          Number(extraction.amount) ||
+          (montantHT + montantTVA)
+        const devise = extraction.devise || extraction.currency || 'MUR'
         const fxRate = (devise !== 'MUR') ? (tauxChange[devise] || 1) : 1
 
         // Vérification TVA
@@ -1217,10 +1235,10 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
 
         // ── Tiers annuaire lookup — auto-classify offshore/reverse_charge ──
         // Normalize tiers: extraction may return an object {nom, brn, vat_number}
-        // instead of a plain string — handle both shapes.
+        // or a nested structure — handle all shapes.
         const rawTiers = typeDocument === 'facture_client'
-          ? (extraction.destinataire || extraction.client || null)
-          : (extraction.emetteur || extraction.fournisseur || null)
+          ? (extraction.destinataire?.nom || extraction.destinataire || extraction.client?.nom || extraction.client || null)
+          : (extraction.emetteur?.nom || extraction.emetteur || extraction.fournisseur || null)
         const tiersName: string | null = rawTiers
           ? (typeof rawTiers === 'object'
               ? (rawTiers.nom || rawTiers.name || JSON.stringify(rawTiers))

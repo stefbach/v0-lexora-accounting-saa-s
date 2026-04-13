@@ -339,11 +339,29 @@ export async function POST(
         .from('dossiers').select('societe_id').eq('id', finalDossierId).maybeSingle()
       const factureSocieteId = dossierForFacture?.societe_id || dossier?.societe_id || null
       if (factureSocieteId) {
-        const devise = finalExtraction.devise || 'MUR'
+        const devise = finalExtraction.devise || finalExtraction.currency || 'MUR'
         const fxRate = devise !== 'MUR' ? (tauxChange[devise] || 1) : 1
-        const montantHT = Number(finalExtraction.montant_ht) || Number(finalExtraction.total_ht) || 0
-        const montantTVA = Number(finalExtraction.montant_tva) || Number(finalExtraction.tva) || 0
-        let montantTTC = Number(finalExtraction.montant_ttc) || Number(finalExtraction.total_ttc) || Number(finalExtraction.total) || Number(finalExtraction.amount) || 0
+        const montantHT =
+          Number(finalExtraction.montant_ht) ||
+          Number(finalExtraction.totaux?.montant_ht_mur) ||
+          Number(finalExtraction.montant_ht_mur) ||
+          Number(finalExtraction.total_ht) ||
+          Number(finalExtraction.subtotal) ||
+          0
+        const montantTVA =
+          Number(finalExtraction.montant_tva) ||
+          Number(finalExtraction.totaux?.tva_mur) ||
+          Number(finalExtraction.tva_mur) ||
+          Number(finalExtraction.tva) ||
+          0
+        let montantTTC =
+          Number(finalExtraction.montant_ttc) ||
+          Number(finalExtraction.totaux?.total_ttc_mur) ||
+          Number(finalExtraction.totaux?.net_a_payer_mur) ||
+          Number(finalExtraction.total_ttc) ||
+          Number(finalExtraction.total) ||
+          Number(finalExtraction.amount) ||
+          0
         if (montantTTC === 0 && montantHT > 0) montantTTC = montantHT + montantTVA
 
         const tvaApplicable = finalExtraction.tva_applicable !== false && !finalExtraction.tva_exonere
@@ -357,7 +375,9 @@ export async function POST(
         const rawTiers =
           finalExtraction.emetteur ||
           finalExtraction.fournisseur ||
+          finalExtraction.client?.nom ||
           finalExtraction.client ||
+          finalExtraction.destinataire?.nom ||
           finalExtraction.destinataire ||
           finalExtraction.tiers ||
           ''
