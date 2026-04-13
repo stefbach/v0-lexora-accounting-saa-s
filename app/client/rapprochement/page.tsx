@@ -815,41 +815,6 @@ Voulez-vous vraiment continuer ?`
           )}
         </button>
 
-        {/* Card 3 — Patterns mémorisés */}
-        <button
-          disabled={chatLoading || !societeId}
-          onClick={runApplyPatterns}
-          className="group text-left rounded-xl border-2 border-gray-200 hover:border-amber-500 hover:shadow-md bg-white p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-        >
-          <div className="flex items-start gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-amber-400 to-yellow-600 flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
-              {chatLoading ? <Loader2 className="w-5 h-5 text-white animate-spin" /> : <Sparkles className="w-5 h-5 text-white" />}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-bold text-sm text-[#0B0F2E]">✨ Patterns mémorisés</p>
-              <p className="text-xs text-gray-500 mt-0.5">Rejoue les règles apprises</p>
-              <p className="text-[11px] text-amber-600 font-medium mt-1.5">Auto · ~3s</p>
-            </div>
-          </div>
-        </button>
-
-        {/* Card 4 — Agent IA */}
-        <button
-          disabled={!societeId}
-          onClick={openAgentIA}
-          className="group text-left rounded-xl border-2 border-gray-200 hover:border-violet-500 hover:shadow-md bg-white p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-        >
-          <div className="flex items-start gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
-              <BrainCircuit className="w-5 h-5 text-white" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-bold text-sm text-[#0B0F2E]">🤖 Agent IA</p>
-              <p className="text-xs text-gray-500 mt-0.5">Analyse complète + chat interactif</p>
-              <p className="text-[11px] text-violet-600 font-medium mt-1.5">Complet · ~30s</p>
-            </div>
-          </div>
-        </button>
       </div>
 
       {/* ── Comment ça marche ─────────────────────────────────────────────── */}
