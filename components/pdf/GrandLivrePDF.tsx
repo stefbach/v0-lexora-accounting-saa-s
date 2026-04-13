@@ -24,13 +24,10 @@ const S = StyleSheet.create({
   gap12:        { height: 12 },
   gap16:        { height: 16 },
   hline:        { height: 0.5, backgroundColor: '#aaaaaa' },
-  infoRow:      { flexDirection: 'row', paddingTop: 10, paddingBottom: 10 },
-  infoCol1:     { width: '38%', paddingRight: 8 },
-  infoCol2:     { width: '34%', paddingRight: 8 },
-  infoCol3:     { width: '28%' },
-  infoLabel:    { fontSize: 6, color: '#999999', marginBottom: 3 },
-  infoValue:    { fontSize: 9, color: '#111111', marginBottom: 3 },
-  infoValue2:   { fontSize: 7, color: '#555555' },
+  infoRow:      { flexDirection: 'row', gap: 8, marginTop: 12, marginBottom: 12 },
+  infoBox:      { flex: 1, borderWidth: 1, borderColor: '#ccc', padding: 6, backgroundColor: '#fafafa' },
+  infoLbl:      { fontSize: 7, color: '#666', marginBottom: 2 },
+  infoVal:      { fontSize: 9, color: '#111' },
   secHdr:       { backgroundColor: '#2c3e50', paddingTop: 3, paddingBottom: 3, paddingLeft: 5, marginTop: 10 },
   secTxt:       { color: '#ffffff', fontSize: 7.5 },
   table:        { borderWidth: 0.5, borderColor: '#999', marginBottom: 4 },
@@ -155,14 +152,14 @@ export function GrandLivrePDF({ societe, dateDebut, dateFin, ecritures, compteNa
 
   const TH = () => (
     <View style={S.hdrRow}>
-      <View style={COL.date}>   <Text style={S.hdrTxt}>Date</Text></View>
-      <View style={COL.jnl}>    <Text style={S.hdrTxt}>Jnl</Text></View>
-      <View style={COL.piece}>  <Text style={S.hdrTxt}>N° Pièce</Text></View>
+      <View style={COL.date}><Text style={S.hdrTxt}>Date</Text></View>
+      <View style={COL.jnl}><Text style={S.hdrTxt}>Jnl</Text></View>
+      <View style={COL.piece}><Text style={S.hdrTxt}>N° Pièce</Text></View>
       <View style={COL.libelle}><Text style={S.hdrTxt}>Libellé</Text></View>
-      <View style={COL.lettre}> <Text style={S.hdrTxt}>Lettre</Text></View>
-      <View style={COL.debit}>  <Text style={S.hdrTxt}>Débit</Text></View>
-      <View style={COL.credit}> <Text style={S.hdrTxt}>Crédit</Text></View>
-      <View style={COL.solde}>  <Text style={S.hdrTxt}>Solde</Text></View>
+      <View style={COL.lettre}><Text style={S.hdrTxt}>Lettre</Text></View>
+      <View style={COL.debit}><Text style={S.hdrTxt}>Débit</Text></View>
+      <View style={COL.credit}><Text style={S.hdrTxt}>Crédit</Text></View>
+      <View style={COL.solde}><Text style={S.hdrTxt}>Solde</Text></View>
     </View>
   )
 
@@ -174,27 +171,27 @@ export function GrandLivrePDF({ societe, dateDebut, dateFin, ecritures, compteNa
           {pi === 0 && (
             <View>
               <Text style={S.title}>GRAND LIVRE</Text>
-              <Text style={[S.sub, { marginTop: 4, marginBottom: 14 }]}>General Ledger — {societe?.nom || '—'}</Text>
-              <View style={S.hline} />
+              <Text style={[S.sub, { marginBottom: 6 }]}>General Ledger — {societe?.nom || '—'}</Text>
               <View style={S.infoRow}>
-                <View style={S.infoCol1}>
-                  <Text style={S.infoLabel}>SOCIÉTÉ</Text>
-                  <Text style={S.infoValue}>{societe?.nom || '—'}</Text>
-                  <Text style={S.infoValue2}>{societe?.brn || '—'}</Text>
+                <View style={S.infoBox}>
+                  <Text style={S.infoLbl}>Société</Text>
+                  <Text style={S.infoVal}>{societe?.nom || '—'}</Text>
+                  <Text style={[S.infoLbl, { marginTop: 3 }]}>BRN</Text>
+                  <Text style={S.infoVal}>{societe?.brn || '—'}</Text>
                 </View>
-                <View style={S.infoCol2}>
-                  <Text style={S.infoLabel}>PÉRIODE</Text>
-                  <Text style={S.infoValue}>{periode}</Text>
-                  <Text style={S.infoValue2}>{today}</Text>
+                <View style={S.infoBox}>
+                  <Text style={S.infoLbl}>Période</Text>
+                  <Text style={S.infoVal}>{periode}</Text>
+                  <Text style={[S.infoLbl, { marginTop: 3 }]}>Généré le</Text>
+                  <Text style={S.infoVal}>{today}</Text>
                 </View>
-                <View style={S.infoCol3}>
-                  <Text style={S.infoLabel}>COMPTES</Text>
-                  <Text style={S.infoValue}>{groups.length}</Text>
-                  <Text style={[S.infoLabel, { marginTop: 6 }]}>ÉCRITURES</Text>
-                  <Text style={S.infoValue}>{ecritures.length}</Text>
+                <View style={S.infoBox}>
+                  <Text style={S.infoLbl}>Comptes</Text>
+                  <Text style={S.infoVal}>{groups.length}</Text>
+                  <Text style={[S.infoLbl, { marginTop: 3 }]}>Écritures</Text>
+                  <Text style={S.infoVal}>{ecritures.length}</Text>
                 </View>
               </View>
-              <View style={S.hline} />
             </View>
           )}
 
@@ -207,25 +204,25 @@ export function GrandLivrePDF({ societe, dateDebut, dateFin, ecritures, compteNa
                 <TH />
                 {g.entries.map((e, i) => (
                   <View key={e.id} style={i % 2 === 0 ? S.row : S.rowAlt}>
-                    <View style={COL.date}>   <Text style={S.txt}>{fmtDate(e.date_ecriture)}</Text></View>
-                    <View style={COL.jnl}>    <Text style={S.txt}>{e.journal || '—'}</Text></View>
-                    <View style={COL.piece}>  <Text style={S.txt}>{(e.ref_folio || '—').substring(0, 22)}</Text></View>
+                    <View style={COL.date}><Text style={S.txt}>{fmtDate(e.date_ecriture)}</Text></View>
+                    <View style={COL.jnl}><Text style={S.txt}>{e.journal || '—'}</Text></View>
+                    <View style={COL.piece}><Text style={S.txt}>{(e.ref_folio || '—').substring(0, 22)}</Text></View>
                     <View style={COL.libelle}><Text style={S.txt}>{(e.description || e.nom_compte || '—').substring(0, 50)}</Text></View>
-                    <View style={COL.lettre}> <Text style={S.txt}>{e.lettre || ''}</Text></View>
-                    <View style={COL.debit}>  <Text style={S.txtR}>{(Number(e.debit_mur)  || 0) > 0 ? fmt(e.debit_mur)  : ''}</Text></View>
-                    <View style={COL.credit}> <Text style={S.txtR}>{(Number(e.credit_mur) || 0) > 0 ? fmt(e.credit_mur) : ''}</Text></View>
-                    <View style={COL.solde}>  <Text style={[S.txtR, { color: e.solde_progressif < 0 ? '#c0392b' : '#000' }]}>{fmt(e.solde_progressif)}</Text></View>
+                    <View style={COL.lettre}><Text style={S.txt}>{e.lettre || ''}</Text></View>
+                    <View style={COL.debit}><Text style={S.txtR}>{(Number(e.debit_mur) || 0) > 0 ? fmt(e.debit_mur) : ''}</Text></View>
+                    <View style={COL.credit}><Text style={S.txtR}>{(Number(e.credit_mur) || 0) > 0 ? fmt(e.credit_mur) : ''}</Text></View>
+                    <View style={COL.solde}><Text style={[S.txtR, { color: e.solde_progressif < 0 ? '#c0392b' : '#000' }]}>{fmt(e.solde_progressif)}</Text></View>
                   </View>
                 ))}
                 <View style={S.rowTotal}>
-                  <View style={COL.date}>   <Text style={S.totalTxt}></Text></View>
-                  <View style={COL.jnl}>    <Text style={S.totalTxt}></Text></View>
-                  <View style={COL.piece}>  <Text style={S.totalTxt}></Text></View>
+                  <View style={COL.date}><Text style={S.totalTxt}> </Text></View>
+                  <View style={COL.jnl}><Text style={S.totalTxt}> </Text></View>
+                  <View style={COL.piece}><Text style={S.totalTxt}> </Text></View>
                   <View style={COL.libelle}><Text style={S.totalTxt}>Total {g.compte}</Text></View>
-                  <View style={COL.lettre}> <Text style={S.totalTxt}></Text></View>
-                  <View style={COL.debit}>  <Text style={S.totalTxt}>{fmt(g.totalDebit)}</Text></View>
-                  <View style={COL.credit}> <Text style={S.totalTxt}>{fmt(g.totalCredit)}</Text></View>
-                  <View style={COL.solde}>  <Text style={[S.totalTxt, { color: g.soldeFinal < 0 ? '#e74c3c' : '#2ecc71' }]}>{fmt(g.soldeFinal)}</Text></View>
+                  <View style={COL.lettre}><Text style={S.totalTxt}> </Text></View>
+                  <View style={COL.debit}><Text style={S.totalTxt}>{fmt(g.totalDebit)}</Text></View>
+                  <View style={COL.credit}><Text style={S.totalTxt}>{fmt(g.totalCredit)}</Text></View>
+                  <View style={COL.solde}><Text style={[S.totalTxt, { color: g.soldeFinal < 0 ? '#e74c3c' : '#2ecc71' }]}>{fmt(g.soldeFinal)}</Text></View>
                 </View>
               </View>
             </View>
@@ -234,14 +231,14 @@ export function GrandLivrePDF({ societe, dateDebut, dateFin, ecritures, compteNa
           {pi === pages.length - 1 && (
             <View style={[S.table, { marginTop: 6 }]}>
               <View style={S.rowGrandTotal}>
-                <View style={COL.date}>   <Text style={S.grandTxt}></Text></View>
-                <View style={COL.jnl}>    <Text style={S.grandTxt}></Text></View>
-                <View style={COL.piece}>  <Text style={S.grandTxt}></Text></View>
+                <View style={COL.date}><Text style={S.grandTxt}> </Text></View>
+                <View style={COL.jnl}><Text style={S.grandTxt}> </Text></View>
+                <View style={COL.piece}><Text style={S.grandTxt}> </Text></View>
                 <View style={COL.libelle}><Text style={S.grandTxt}>TOTAL GÉNÉRAL — {groups.length} comptes</Text></View>
-                <View style={COL.lettre}> <Text style={S.grandTxt}></Text></View>
-                <View style={COL.debit}>  <Text style={S.grandTxt}>{fmt(grandDebit)}</Text></View>
-                <View style={COL.credit}> <Text style={S.grandTxt}>{fmt(grandCredit)}</Text></View>
-                <View style={COL.solde}>  <Text style={[S.grandTxt, { color: grandSolde < 0 ? '#e74c3c' : '#2ecc71' }]}>{fmt(grandSolde)}</Text></View>
+                <View style={COL.lettre}><Text style={S.grandTxt}> </Text></View>
+                <View style={COL.debit}><Text style={S.grandTxt}>{fmt(grandDebit)}</Text></View>
+                <View style={COL.credit}><Text style={S.grandTxt}>{fmt(grandCredit)}</Text></View>
+                <View style={COL.solde}><Text style={[S.grandTxt, { color: grandSolde < 0 ? '#e74c3c' : '#2ecc71' }]}>{fmt(grandSolde)}</Text></View>
               </View>
             </View>
           )}
