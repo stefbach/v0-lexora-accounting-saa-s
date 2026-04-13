@@ -408,6 +408,79 @@ export async function POST(request: Request) {
       }
 
       // ═══════════════════════════════════════════════════════════════
+      // INTERNAL TRANSFER COUNTERPART MATCHING
+      // For each 'interne' transaction, find its counterpart on OTHER
+      // comptes_bancaires of the same société. If found → share VI code
+      // + mark both 'interne'. If not found → mark 'interne_en_attente'.
+      // ═══════════════════════════════════════════════════════════════
+      {
+        // Collect all internal transfer candidates across all relevés
+        type VICandidate = { releveId: string; txIdx: number; compteBancaireId: string; amount: number; date: string; isDebit: boolean; tx: any }
+        const candidates: VICandidate[] = []
+        for (const [releveId, entry] of releveMap) {
+          const rel = releves.find((r: any) => r.id === releveId)
+          if (!rel) continue
+          const compteBancaireId = rel.compte_bancaire_id
+          for (let i = 0; i < entry.updatedTxs.length; i++) {
+            const tx = entry.updatedTxs[i]
+            if (tx.statut === 'interne' && tx.matched_type === 'transfert_interne') {
+              const amt = Math.abs(Number(tx.debit) || Number(tx.credit) || 0)
+              const dateStr = tx.date || ''
+              if (amt > 0 && dateStr) {
+                candidates.push({
+                  releveId, txIdx: i, compteBancaireId,
+                  amount: amt, date: dateStr,
+                  isDebit: (Number(tx.debit) || 0) > 0,
+                  tx,
+                })
+              }
+            }
+          }
+        }
+
+        const dateDiffDays = (a: string, b: string): number => {
+          const da = new Date(a).getTime(), db = new Date(b).getTime()
+          if (isNaN(da) || isNaN(db)) return 999
+          return Math.abs(da - db) / (1000 * 60 * 60 * 24)
+        }
+
+        const paired = new Set<string>() // key: releveId:txIdx
+        let viCounter = 1
+        for (let i = 0; i < candidates.length; i++) {
+          const a = candidates[i]
+          const keyA = `${a.releveId}:${a.txIdx}`
+          if (paired.has(keyA)) continue
+
+          // Find counterpart: different compte_bancaire, same amount ±0.01, date ±2 days, opposite direction
+          const match = candidates.find((b, j) =>
+            j !== i &&
+            !paired.has(`${b.releveId}:${b.txIdx}`) &&
+            b.compteBancaireId !== a.compteBancaireId &&
+            Math.abs(b.amount - a.amount) < 0.01 &&
+            dateDiffDays(a.date, b.date) <= 2 &&
+            b.isDebit !== a.isDebit
+          )
+
+          if (match) {
+            const viCode = `VI${String(viCounter++).padStart(3, '0')}`
+            const entryA = releveMap.get(a.releveId)!
+            const entryB = releveMap.get(match.releveId)!
+            entryA.updatedTxs[a.txIdx] = { ...entryA.updatedTxs[a.txIdx], statut: 'interne', matched_type: 'transfert_interne', vi_pair_code: viCode, vi_pair_releve: match.releveId }
+            entryB.updatedTxs[match.txIdx] = { ...entryB.updatedTxs[match.txIdx], statut: 'interne', matched_type: 'transfert_interne', vi_pair_code: viCode, vi_pair_releve: a.releveId }
+            entryA.changed = true; entryB.changed = true
+            paired.add(keyA); paired.add(`${match.releveId}:${match.txIdx}`)
+            console.log(`[rapprochement] VI pair ${viCode}: ${a.amount} ${a.isDebit ? '→' : '←'} counterpart on ${match.compteBancaireId}`)
+          } else {
+            // No counterpart found — mark as waiting
+            const entry = releveMap.get(a.releveId)!
+            entry.updatedTxs[a.txIdx] = { ...entry.updatedTxs[a.txIdx], statut: 'interne_en_attente', note: 'Virement interne — contrepartie introuvable' }
+            entry.changed = true
+            console.log(`[rapprochement] VI unpaired: ${a.amount} on ${a.compteBancaireId} ${a.date} — marked interne_en_attente`)
+          }
+        }
+      }
+
+      // ═══════════════════════════════════════════════════════════════
       // INTELLIGENT ENGINE — Phase 2 (supplier-centric matching)
       // Runs GLOBALLY across all relevés, not per-relevé
       // ═══════════════════════════════════════════════════════════════
@@ -749,13 +822,19 @@ export async function POST(request: Request) {
               const txAmountMUR = Math.round(toMUR(txAmount, entry.releveDevise) * 100) / 100
               const txDate = tx.date || new Date().toISOString().split('T')[0]
 
+              // ── Skip unmatched internal transfers (waiting for counterpart) ──
+              if (tx.statut === 'interne_en_attente') {
+                continue
+              }
+
               // ── Virements internes → 581 ──
               if (tx.statut === 'interne' || tx.matched_type === 'transfert_interne') {
                 const intRef = `VI-${releveId}-${i}`
                 const alreadyExists = (allEcr401v2 || []).some((e: any) => e.ref_folio === intRef)
                 if (alreadyExists) continue
 
-                const lettre581 = `VI${String(ecrituresCreees + 1).padStart(3, '0')}`
+                // Use shared VI code from counterpart matching if available
+                const lettre581 = tx.vi_pair_code || `VI${String(ecrituresCreees + 1).padStart(3, '0')}`
                 const isOutgoing = txDebit > 0
                 const libelle = `Virement interne ${(tx.libelle || '').substring(0, 30)}`
                 const socIdForInt = (dossiers || []).find((d: any) => d.id === dossier.id)?.societe_id || societe_id
