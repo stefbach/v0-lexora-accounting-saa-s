@@ -118,6 +118,18 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url)
     const societe_id = searchParams.get('societe_id')
+
+    // Tenant isolation — verify user has access to the requested societe_id
+    if (societe_id) {
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+      if (!['admin', 'super_admin'].includes(profile?.role || '')) {
+        const { data: userSocietes } = await supabase.from('user_societes').select('societe_id').eq('user_id', user.id)
+        const allowedIds = userSocietes?.map(s => s.societe_id) || []
+        if (!allowedIds.includes(societe_id)) {
+          return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+        }
+      }
+    }
     const statut = searchParams.get('statut')
     const client = searchParams.get('client')
     const date_debut = searchParams.get('date_debut')

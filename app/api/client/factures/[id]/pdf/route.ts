@@ -87,6 +87,16 @@ export async function GET(_request: Request, { params }: Params) {
 
     if (error || !facture) return NextResponse.json({ error: 'Facture introuvable' }, { status: 404 })
 
+    // Tenant isolation — verify user has access to this facture's société
+    const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single()
+    if (!['admin', 'super_admin'].includes(profile?.role || '')) {
+      const { data: userSocietes } = await admin.from('user_societes').select('societe_id').eq('user_id', user.id)
+      const allowedIds = userSocietes?.map((s: any) => s.societe_id) || []
+      if (!facture.societe_id || !allowedIds.includes(facture.societe_id)) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+    }
+
     // Si PDF déjà stocké → signed URL
     if (facture.pdf_url) {
       const { data: signed } = await admin.storage.from(BUCKET).createSignedUrl(facture.pdf_url, 3600)

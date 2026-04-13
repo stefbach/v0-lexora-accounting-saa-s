@@ -153,6 +153,15 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { action } = body
 
+    // Tenant isolation — verify user has access to the requested societe_id
+    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+    const { data: userSocietes } = await supabase.from('user_societes').select('societe_id').eq('user_id', user.id)
+    const allowedIds = userSocietes?.map(s => s.societe_id) || []
+    const requestedId = body.societe_id || body.societeId
+    if (requestedId && !allowedIds.includes(requestedId) && !['admin', 'super_admin'].includes(profile?.role || '')) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     // === AUTO-RAPPROCHEMENT INTELLIGENT (4 phases) ===
     if (action === 'auto_rapprocher') {
       const { societe_id, date_debut, date_fin } = body
