@@ -40,7 +40,7 @@ export async function POST(
       .from('documents')
       .select(`
         id, nom_fichier, type_fichier, type_document, statut,
-        storage_path, dossier_id, uploaded_by,
+        storage_path, dossier_id, uploaded_by, n8n_result,
         dossiers(client_id, comptable_id, societe_id)
       `)
       .eq('id', id)
@@ -72,26 +72,28 @@ export async function POST(
     const typeForce: string = body.type_force || doc.type_document || 'autre'
     const maxTokensOverride: number = body.max_tokens || (typeForce === 'releve_bancaire' ? CLAUDE_CONFIG.max_tokens_releve_bancaire : CLAUDE_CONFIG.max_tokens)
 
+    // Fast-path: check if saved extraction already has usable data.
+    // If yes → skip Claude call and reuse cached data (saves API costs).
+    // If no → force a fresh OCR call from the file in Storage.
+    // Override with body.force_ocr = true to always re-run OCR.
+    const forceOcr: boolean = body.force_ocr === true || !!hint || !!body.type_force
+    const savedN8n = (doc as any).n8n_result || {}
+    const savedExtraction = savedN8n.extraction || {}
+    const hasUsableData = (
+      (Number(savedExtraction.montant_ttc) > 0 || Number(savedExtraction.montant_ht) > 0) &&
+      (savedExtraction.emetteur || savedExtraction.fournisseur || savedExtraction.client || savedExtraction.destinataire)
+    )
+    const useSaved = !forceOcr && hasUsableData
+    if (useSaved) {
+      console.log(`[reanalyze] Using saved extraction for doc ${id} — tiers/montant present`)
+    } else {
+      console.log(`[reanalyze] Forcing fresh Claude OCR for doc ${id} — saved data empty or force_ocr=true`)
+    }
+
     // Mark document as processing
     await supabase.from('documents').update({ statut: 'en_cours' }).eq('id', id)
 
-    // Download file from Supabase Storage
-    const { data: fileData, error: downloadError } = await supabase.storage
-      .from('documents')
-      .download(doc.storage_path)
-
-    if (downloadError || !fileData) {
-      await supabase.from('documents').update({ statut: 'erreur' }).eq('id', id)
-      return NextResponse.json({ error: `Erreur téléchargement: ${downloadError?.message}` }, { status: 500 })
-    }
-
-    const fileArrayBuffer = await fileData.arrayBuffer()
-    const base64 = Buffer.from(fileArrayBuffer).toString('base64')
-    const ext = doc.nom_fichier.split('.').pop()?.toLowerCase() || 'pdf'
-    const isPdf = ext === 'pdf'
-    const isImage = ['jpg', 'jpeg', 'png', 'webp'].includes(ext)
-
-    // Fetch live exchange rates
+    // Fetch live exchange rates (needed by both paths for currency conversion in facture creation)
     let tauxChange: Record<string, number> = { EUR: 46.50, GBP: 54.20, USD: 44.80 }
     try {
       const tauxRes = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/taux-change`)
@@ -101,74 +103,97 @@ export async function POST(
       }
     } catch { /* use defaults */ }
 
-    // Fetch user's sociétés for dynamic prompt injection
-    let societeDetailsForPrompt: { id: string; nom: string; brn?: string | null; aliases?: string[] | null }[] = []
-    try {
-      const { data: ownedSoc } = await supabase.from('societes').select('id, nom, brn, aliases').eq('created_by', user.id)
-      const { data: dossierSoc } = await supabase.from('dossiers').select('societe_id').eq('client_id', user.id)
-      const dossierSocIds = (dossierSoc || []).map(d => d.societe_id).filter(Boolean)
-      if (dossierSocIds.length > 0) {
-        const { data: fromDossiers } = await supabase.from('societes').select('id, nom, brn, aliases').in('id', dossierSocIds)
-        const all = [...(ownedSoc || []), ...(fromDossiers || [])]
-        societeDetailsForPrompt = Array.from(new Map(all.map(s => [s.id, s])).values())
-      } else {
-        societeDetailsForPrompt = ownedSoc || []
+    let parsed: any
+
+    if (useSaved) {
+      // FAST PATH: use saved extraction — no Claude call needed
+      parsed = {
+        routing: savedN8n.routing || { type_document: typeForce, societe: savedExtraction.emetteur?.nom || savedExtraction.fournisseur || 'INCONNU', confiance_type: 90 },
+        extraction: savedExtraction,
       }
-    } catch { /* use empty list */ }
-
-    // Build system prompt: use specialized prompt if available
-    const promptId = TYPE_TO_PROMPT_ID[typeForce]
-    let systemPrompt: string
-
-    if (promptId) {
-      systemPrompt = injectSocietes(getSystemPrompt(promptId, tauxChange), societeDetailsForPrompt)
     } else {
-      // Use full generic extraction prompt (same as upload route)
-      systemPrompt = injectSocietes(injectTauxChange(SYSTEM_PROMPT_GENERIC_EXTRACTION, tauxChange), societeDetailsForPrompt)
-    }
+      // SLOW PATH: fresh OCR call to Claude
 
-    // Inject hint into system prompt if provided
-    if (hint) {
-      systemPrompt = `CONTEXTE ADDITIONNEL FOURNI PAR L'UTILISATEUR: ${hint}\n\n${systemPrompt}`
-    }
+      // Download file from Supabase Storage
+      const { data: fileData, error: downloadError } = await supabase.storage
+        .from('documents')
+        .download(doc.storage_path)
 
-    // Build message content
-    let messageContent: any
-    if (isPdf) {
-      messageContent = [
-        { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
-        { type: 'text', text: hint ? `Analyse ce document. Contexte: ${hint}` : 'Analyse ce document comptable.' },
-      ]
-    } else if (isImage) {
-      const mt = ext === 'png' ? 'image/png' : 'image/jpeg'
-      messageContent = [
-        { type: 'image', source: { type: 'base64', media_type: mt, data: base64 } },
-        { type: 'text', text: hint ? `Analyse ce document. Contexte: ${hint}` : 'Analyse ce document comptable.' },
-      ]
-    } else {
-      messageContent = `Analyse ce document:\n${Buffer.from(fileArrayBuffer).toString('utf-8').substring(0, 5000)}`
-    }
+      if (downloadError || !fileData) {
+        await supabase.from('documents').update({ statut: 'erreur' }).eq('id', id)
+        return NextResponse.json({ error: `Erreur téléchargement: ${downloadError?.message}` }, { status: 500 })
+      }
 
-    // Call Claude
-    const { default: Anthropic } = await import('@anthropic-ai/sdk')
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
+      const fileArrayBuffer = await fileData.arrayBuffer()
+      const base64 = Buffer.from(fileArrayBuffer).toString('base64')
+      const ext = doc.nom_fichier.split('.').pop()?.toLowerCase() || 'pdf'
+      const isPdf = ext === 'pdf'
+      const isImage = ['jpg', 'jpeg', 'png', 'webp'].includes(ext)
 
-    const stream = anthropic.messages.stream({
-      model: CLAUDE_CONFIG.model,
-      max_tokens: maxTokensOverride,
-      temperature: CLAUDE_CONFIG.temperature,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: messageContent }],
-    })
-    const aiResponse = await stream.finalMessage()
+      // Fetch user's sociétés for dynamic prompt injection
+      let societeDetailsForPrompt: { id: string; nom: string; brn?: string | null; aliases?: string[] | null }[] = []
+      try {
+        const { data: ownedSoc } = await supabase.from('societes').select('id, nom, brn, aliases').eq('created_by', user.id)
+        const { data: dossierSoc } = await supabase.from('dossiers').select('societe_id').eq('client_id', user.id)
+        const dossierSocIds = (dossierSoc || []).map(d => d.societe_id).filter(Boolean)
+        if (dossierSocIds.length > 0) {
+          const { data: fromDossiers } = await supabase.from('societes').select('id, nom, brn, aliases').in('id', dossierSocIds)
+          const all = [...(ownedSoc || []), ...(fromDossiers || [])]
+          societeDetailsForPrompt = Array.from(new Map(all.map(s => [s.id, s])).values())
+        } else {
+          societeDetailsForPrompt = ownedSoc || []
+        }
+      } catch { /* use empty list */ }
 
-    const text = aiResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
-    const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
+      // Build system prompt: use specialized prompt if available
+      const promptId = TYPE_TO_PROMPT_ID[typeForce]
+      let systemPrompt: string
 
-    let parsed: any = repairBankJSON(text)
-    if (!parsed || typeof parsed !== 'object') {
-      console.warn('[reanalyze] All JSON parse strategies failed for doc', id)
-      parsed = { routing: { type_document: typeForce, societe: 'INCONNU', confiance_type: 30 }, extraction: {} }
+      if (promptId) {
+        systemPrompt = injectSocietes(getSystemPrompt(promptId, tauxChange), societeDetailsForPrompt)
+      } else {
+        systemPrompt = injectSocietes(injectTauxChange(SYSTEM_PROMPT_GENERIC_EXTRACTION, tauxChange), societeDetailsForPrompt)
+      }
+
+      if (hint) {
+        systemPrompt = `CONTEXTE ADDITIONNEL FOURNI PAR L'UTILISATEUR: ${hint}\n\n${systemPrompt}`
+      }
+
+      let messageContent: any
+      if (isPdf) {
+        messageContent = [
+          { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
+          { type: 'text', text: hint ? `Analyse ce document. Contexte: ${hint}` : 'Analyse ce document comptable.' },
+        ]
+      } else if (isImage) {
+        const mt = ext === 'png' ? 'image/png' : 'image/jpeg'
+        messageContent = [
+          { type: 'image', source: { type: 'base64', media_type: mt, data: base64 } },
+          { type: 'text', text: hint ? `Analyse ce document. Contexte: ${hint}` : 'Analyse ce document comptable.' },
+        ]
+      } else {
+        messageContent = `Analyse ce document:\n${Buffer.from(fileArrayBuffer).toString('utf-8').substring(0, 5000)}`
+      }
+
+      const { default: Anthropic } = await import('@anthropic-ai/sdk')
+      const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
+
+      const stream = anthropic.messages.stream({
+        model: CLAUDE_CONFIG.model,
+        max_tokens: maxTokensOverride,
+        temperature: CLAUDE_CONFIG.temperature,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: messageContent }],
+      })
+      const aiResponse = await stream.finalMessage()
+
+      const text = aiResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
+
+      parsed = repairBankJSON(text)
+      if (!parsed || typeof parsed !== 'object') {
+        console.warn('[reanalyze] All JSON parse strategies failed for doc', id)
+        parsed = { routing: { type_document: typeForce, societe: 'INCONNU', confiance_type: 30 }, extraction: {} }
+      }
     }
 
     // For bank statements, wrap the result in routing/extraction structure
