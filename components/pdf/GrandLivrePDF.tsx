@@ -24,10 +24,12 @@ const S = StyleSheet.create({
   gap12:        { height: 12 },
   gap16:        { height: 16 },
   hline:        { height: 0.5, backgroundColor: '#aaaaaa' },
-  infoRow:      { flexDirection: 'row' },
-  infoCol:      { flex: 1, paddingTop: 10, paddingBottom: 10, paddingRight: 10 },
-  infoLabel:    { fontSize: 5.5, color: '#999999' },
-  infoValue:    { fontSize: 8.5, color: '#111111' },
+  infoRow:      { flexDirection: 'row', paddingTop: 10, paddingBottom: 10 },
+  infoCol1:     { width: '38%', paddingRight: 8 },
+  infoCol2:     { width: '34%', paddingRight: 8 },
+  infoCol3:     { width: '28%' },
+  infoLabel:    { fontSize: 6, color: '#999999', marginBottom: 3 },
+  infoValue:    { fontSize: 9, color: '#111111', marginBottom: 3 },
   infoValue2:   { fontSize: 7, color: '#555555' },
   secHdr:       { backgroundColor: '#2c3e50', paddingTop: 3, paddingBottom: 3, paddingLeft: 5, marginTop: 10 },
   secTxt:       { color: '#ffffff', fontSize: 7.5 },
@@ -172,30 +174,27 @@ export function GrandLivrePDF({ societe, dateDebut, dateFin, ecritures, compteNa
           {pi === 0 && (
             <View>
               <Text style={S.title}>GRAND LIVRE</Text>
-              <View style={{ marginTop: 10 }}>
-                <Text style={S.sub}>General Ledger — {societe?.nom || '—'}</Text>
-              </View>
-              <View style={{ marginTop: 16, height: 0.5, backgroundColor: '#aaaaaa' }} />
+              <Text style={[S.sub, { marginTop: 4, marginBottom: 14 }]}>General Ledger — {societe?.nom || '—'}</Text>
+              <View style={S.hline} />
               <View style={S.infoRow}>
-                <View style={S.infoCol}>
+                <View style={S.infoCol1}>
                   <Text style={S.infoLabel}>SOCIÉTÉ</Text>
-                  <View style={{ marginTop: 5 }}><Text style={S.infoValue}>{societe?.nom || '—'}</Text></View>
-                  <View style={{ marginTop: 5 }}><Text style={S.infoValue2}>{societe?.brn || '—'}</Text></View>
+                  <Text style={S.infoValue}>{societe?.nom || '—'}</Text>
+                  <Text style={S.infoValue2}>{societe?.brn || '—'}</Text>
                 </View>
-                <View style={S.infoCol}>
+                <View style={S.infoCol2}>
                   <Text style={S.infoLabel}>PÉRIODE</Text>
-                  <View style={{ marginTop: 5 }}><Text style={S.infoValue}>{periode}</Text></View>
-                  <View style={{ marginTop: 5 }}><Text style={S.infoValue2}>{today}</Text></View>
+                  <Text style={S.infoValue}>{periode}</Text>
+                  <Text style={S.infoValue2}>{today}</Text>
                 </View>
-                <View style={S.infoCol}>
+                <View style={S.infoCol3}>
                   <Text style={S.infoLabel}>COMPTES</Text>
-                  <View style={{ marginTop: 5 }}><Text style={S.infoValue}>{groups.length}</Text></View>
-                  <View style={{ marginTop: 12 }}><Text style={S.infoLabel}>ÉCRITURES</Text></View>
-                  <View style={{ marginTop: 5 }}><Text style={S.infoValue}>{ecritures.length}</Text></View>
+                  <Text style={S.infoValue}>{groups.length}</Text>
+                  <Text style={[S.infoLabel, { marginTop: 6 }]}>ÉCRITURES</Text>
+                  <Text style={S.infoValue}>{ecritures.length}</Text>
                 </View>
               </View>
-              <View style={{ height: 0.5, backgroundColor: '#aaaaaa' }} />
-              <View style={{ marginTop: 10 }} />
+              <View style={S.hline} />
             </View>
           )}
 
