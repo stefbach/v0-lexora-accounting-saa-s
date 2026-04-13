@@ -13,7 +13,7 @@ import {
   Users, Clock, CreditCard, Gavel, Scale, Bell,
   Settings, LogOut, ChevronDown, ChevronRight, FileSpreadsheet,
   Globe, Lightbulb, ClipboardList, Download, Upload, Calendar,
-  CalendarDays, FilePlus2, SlidersHorizontal, Menu, X
+  CalendarDays, FilePlus2, SlidersHorizontal, Menu, X, FilePen
 } from "lucide-react"
 
 /* ------------------------------------------------------------------ */
@@ -100,6 +100,7 @@ const MENU: MenuSection[] = [
     items: [
       { href: "/client/factures", label: "Mes Factures", labelKey: "inv.my_invoices", icon: Receipt },
       { href: "/client/nouvelle-facture", label: "Nouvelle Facture", labelKey: "inv.new_invoice", icon: FilePlus2 },
+      { href: "/comptable/contrats", label: "Contrats Clients", icon: FileText, visibleForRoles: ["client_admin", "direction"] } as any,
       { href: "/client/facturation-settings", label: "Paramètres Facturation", labelKey: "inv.settings", icon: SlidersHorizontal },
     ]
   },
@@ -138,6 +139,7 @@ const MENU: MenuSection[] = [
     requiredModule: "rh",
     items: [
       { href: "/rh/employes", label: "Employés", icon: Users },
+      { href: "/rh/juridique", label: "Contrats Travail", icon: FilePen, visibleForRoles: ["client_admin", "direction", "rh", "rh_manager"] } as any,
       { href: "/rh/groupes", label: "Groupes / Équipes", icon: Users },
       { href: "/rh/planning", label: "Planning", icon: CalendarDays },
       { href: "/rh/pointage", label: "Pointage", icon: Clock },
