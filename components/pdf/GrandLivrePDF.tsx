@@ -1,26 +1,31 @@
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
 
 const COL = StyleSheet.create({
-  date:    { width: 55,  padding: 2, borderRightWidth: 0.3, borderRightColor: '#ddd', justifyContent: 'center' },
-  jnl:     { width: 28,  padding: 2, borderRightWidth: 0.3, borderRightColor: '#ddd', justifyContent: 'center' },
-  piece:   { width: 90,  padding: 2, borderRightWidth: 0.3, borderRightColor: '#ddd', justifyContent: 'center' },
-  libelle: { width: 210, padding: 2, borderRightWidth: 0.3, borderRightColor: '#ddd', justifyContent: 'center' },
-  lettre:  { width: 35,  padding: 2, borderRightWidth: 0.3, borderRightColor: '#ddd', justifyContent: 'center' },
-  debit:   { width: 68,  padding: 2, borderRightWidth: 0.3, borderRightColor: '#ddd', justifyContent: 'center', alignItems: 'flex-end' },
-  credit:  { width: 68,  padding: 2, borderRightWidth: 0.3, borderRightColor: '#ddd', justifyContent: 'center', alignItems: 'flex-end' },
-  solde:   { width: 62,  padding: 2, justifyContent: 'center', alignItems: 'flex-end' },
+  // A4 width 595pt - left/right padding 60pt = 535pt available
+  // Total widths below MUST sum to 535
+  date:    { width: 48,  padding: 2, borderRightWidth: 0.3, borderRightColor: '#ddd', justifyContent: 'center' },
+  jnl:     { width: 24,  padding: 2, borderRightWidth: 0.3, borderRightColor: '#ddd', justifyContent: 'center' },
+  piece:   { width: 78,  padding: 2, borderRightWidth: 0.3, borderRightColor: '#ddd', justifyContent: 'center' },
+  libelle: { width: 175, padding: 2, borderRightWidth: 0.3, borderRightColor: '#ddd', justifyContent: 'center' },
+  lettre:  { width: 28,  padding: 2, borderRightWidth: 0.3, borderRightColor: '#ddd', justifyContent: 'center' },
+  debit:   { width: 56,  padding: 2, borderRightWidth: 0.3, borderRightColor: '#ddd', justifyContent: 'center', alignItems: 'flex-end' },
+  credit:  { width: 56,  padding: 2, borderRightWidth: 0.3, borderRightColor: '#ddd', justifyContent: 'center', alignItems: 'flex-end' },
+  solde:   { width: 70,  padding: 2, justifyContent: 'center', alignItems: 'flex-end' },
+  // 48+24+78+175+28+56+56+70 = 535 ✓
 })
 
 const S = StyleSheet.create({
-  page:         { paddingTop: 30, paddingBottom: 40, paddingLeft: 30, paddingRight: 30, fontFamily: 'Helvetica', fontSize: 7, color: '#000' },
+  page:         { paddingTop: 30, paddingBottom: 45, paddingLeft: 30, paddingRight: 30, fontFamily: 'Helvetica', fontSize: 7, color: '#000' },
   title:        { fontSize: 13, textAlign: 'center' },
   sub:          { fontSize: 8, textAlign: 'center', color: '#555' },
   gap4:         { height: 4 },
+  gap6:         { height: 6 },
   gap8:         { height: 8 },
+  gap12:        { height: 12 },
   gap16:        { height: 16 },
   hline:        { height: 0.5, backgroundColor: '#aaaaaa' },
   infoRow:      { flexDirection: 'row' },
-  infoCol:      { flex: 1, paddingTop: 8, paddingBottom: 8, paddingRight: 12 },
+  infoCol:      { flex: 1, paddingTop: 10, paddingBottom: 10, paddingRight: 10 },
   infoLabel:    { fontSize: 5.5, color: '#999999' },
   infoValue:    { fontSize: 8.5, color: '#111111' },
   infoValue2:   { fontSize: 7, color: '#555555' },
@@ -167,36 +172,37 @@ export function GrandLivrePDF({ societe, dateDebut, dateFin, ecritures, compteNa
           {pi === 0 && (
             <View>
               <Text style={S.title}>GRAND LIVRE</Text>
-              <View style={S.gap4} />
-              <Text style={S.sub}>General Ledger — {societe?.nom || '—'}</Text>
               <View style={S.gap8} />
+              <Text style={S.sub}>General Ledger — {societe?.nom || '—'}</Text>
+              <View style={S.gap12} />
               <View style={S.hline} />
               <View style={S.infoRow}>
                 <View style={S.infoCol}>
                   <Text style={S.infoLabel}>SOCIÉTÉ</Text>
-                  <View style={S.gap4} />
+                  <View style={S.gap6} />
                   <Text style={S.infoValue}>{societe?.nom || '—'}</Text>
-                  <View style={S.gap4} />
+                  <View style={S.gap6} />
                   <Text style={S.infoValue2}>{societe?.brn || '—'}</Text>
                 </View>
                 <View style={S.infoCol}>
                   <Text style={S.infoLabel}>PÉRIODE</Text>
-                  <View style={S.gap4} />
+                  <View style={S.gap6} />
                   <Text style={S.infoValue}>{periode}</Text>
-                  <View style={S.gap4} />
+                  <View style={S.gap6} />
                   <Text style={S.infoValue2}>{today}</Text>
                 </View>
                 <View style={S.infoCol}>
                   <Text style={S.infoLabel}>COMPTES</Text>
-                  <View style={S.gap4} />
+                  <View style={S.gap6} />
                   <Text style={S.infoValue}>{groups.length}</Text>
-                  <View style={S.gap8} />
+                  <View style={S.gap12} />
                   <Text style={S.infoLabel}>ÉCRITURES</Text>
-                  <View style={S.gap4} />
+                  <View style={S.gap6} />
                   <Text style={S.infoValue}>{ecritures.length}</Text>
                 </View>
               </View>
               <View style={S.hline} />
+              <View style={S.gap8} />
             </View>
           )}
 
