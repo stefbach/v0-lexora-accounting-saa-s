@@ -51,7 +51,7 @@ export default function NouvelleFacturePage() {
   const [societeId, setSocieteId] = useState("")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [typeDocument, setTypeDocument] = useState<"facture" | "avoir" | "note_debit">("facture")
+  const [typeDocument, setTypeDocument] = useState<"facture" | "avoir" | "note_debit" | "devis">("facture")
   const [factureReferenceId, setFactureReferenceId] = useState("")
   const [existingFactures, setExistingFactures] = useState<Array<{ id: string; numero_facture: string; tiers: string; montant_ttc: number; devise: string }>>([])
   const [numeroFacture, setNumeroFacture] = useState("")
@@ -240,7 +240,7 @@ export default function NouvelleFacturePage() {
           <Button variant="ghost" size="sm" onClick={() => router.push("/client/factures")}><ArrowLeft className="w-4 h-4 mr-1" />Retour</Button>
           <div>
             <h1 className="text-2xl font-bold" style={{ color: typeDocument === "avoir" ? "#DC2626" : "#0B0F2E" }}>
-              {typeDocument === "avoir" ? "Nouvel Avoir" : typeDocument === "note_debit" ? "Nouvelle Note de Debit" : "Nouvelle Facture"}
+              {typeDocument === "avoir" ? "Nouvel Avoir" : typeDocument === "note_debit" ? "Nouvelle Note de Debit" : typeDocument === "devis" ? "Nouveau Devis" : "Nouvelle Facture"}
             </h1>
             <p className="text-sm text-gray-500">Conforme MRA - Maurice</p>
           </div>
@@ -286,6 +286,17 @@ export default function NouvelleFacturePage() {
               <div className="text-left">
                 <p className={`font-medium text-sm ${typeDocument === "note_debit" ? "text-orange-700" : "text-gray-700"}`}>Note de debit</p>
                 <p className="text-xs text-gray-400">Debit Note (code 03)</p>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setTypeDocument("devis"); setFactureReferenceId("") }}
+              className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all ${typeDocument === "devis" ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-gray-300"}`}
+            >
+              <FileText className={`w-5 h-5 ${typeDocument === "devis" ? "text-blue-600" : "text-gray-400"}`} />
+              <div className="text-left">
+                <p className={`font-medium text-sm ${typeDocument === "devis" ? "text-blue-700" : "text-gray-700"}`}>Devis</p>
+                <p className="text-xs text-gray-400">Quote — pas de comptabilité</p>
               </div>
             </button>
           </div>

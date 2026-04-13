@@ -180,7 +180,7 @@ export async function POST(request: Request) {
       societe_id, numero_facture, tiers, description,
       date_facture, date_echeance, devise = 'MUR', taux_change = 1,
       montant_ht = 0, montant_tva = 0, montant_ttc,
-      taux_tva = 0, statut = 'brouillon', notes, notes_internes,
+      taux_tva = 0, statut: statutIn = 'brouillon', notes, notes_internes,
       lignes = [], conditions_paiement = 30, termes, template = 'standard',
       client_offshore = false, remise_pct = 0, remise_montant = 0,
       recurrent = false, recurrent_frequence, logo_url,
@@ -192,10 +192,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'societe_id et date_facture requis' }, { status: 400 })
     }
 
+    // For devis: force statut='devis' (not en_attente) — no GL entries
+    const statut: string = type_document === 'devis'
+      ? (statutIn === 'converti' ? 'converti' : 'devis')
+      : statutIn
+
     // Generate sequential invoice number if not provided
     let finalNumero = numero_facture
     if (!finalNumero) {
-      const prefix = type_document === 'avoir' ? 'AV-' : type_document === 'note_debit' ? 'ND-' : 'INV-'
+      const prefix = type_document === 'avoir' ? 'AV-' : type_document === 'note_debit' ? 'ND-' : type_document === 'devis' ? 'DEV-' : 'INV-'
       const filterDoc = type_document || 'facture'
 
       let query = supabase
@@ -308,7 +313,8 @@ export async function POST(request: Request) {
     }
 
     // Auto-create ecritures comptables when invoice is finalized
-    if (statut === 'en_attente' && data) {
+    // Skip for devis — quotes don't hit the GL until converted to facture
+    if (statut === 'en_attente' && type_document !== 'devis' && data) {
       await createEcrituresShared(supabase, {
         id: data.id,
         societe_id,
@@ -404,11 +410,13 @@ export async function PATCH(request: Request) {
     if (error) throw error
 
     // Auto-create ecritures when transitioning from brouillon to en_attente
+    // Skip for devis — quotes don't hit the GL until converted
     if (
       existing &&
       existing.statut === 'brouillon' &&
       updates.statut === 'en_attente' &&
-      data
+      data &&
+      data.type_document !== 'devis'
     ) {
       await createEcrituresShared(supabase, {
         id: data.id,
