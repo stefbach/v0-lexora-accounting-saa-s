@@ -15,7 +15,7 @@ const COL = StyleSheet.create({
 })
 
 const S = StyleSheet.create({
-  page:         { paddingTop: 30, paddingBottom: 45, paddingLeft: 30, paddingRight: 30, fontFamily: 'Helvetica', fontSize: 7, color: '#000', flexDirection: 'column' },
+  page:         { paddingTop: 30, paddingBottom: 55, paddingLeft: 30, paddingRight: 30, fontFamily: 'Helvetica', fontSize: 7, color: '#000', flexDirection: 'column' },
   title:        { fontSize: 16, textAlign: 'center', fontWeight: 'bold' },
   sub:          { fontSize: 10, textAlign: 'center', color: '#555', marginTop: 6, marginBottom: 18 },
   headerWrap:   { flexDirection: 'column' },
@@ -165,30 +165,36 @@ export function GrandLivrePDF({ societe, dateDebut, dateFin, ecritures, compteNa
         <Page key={pi} size="A4" style={S.page}>
 
           {pi === 0 && (
-            <View style={S.headerWrap}>
-              <Text style={S.title}>GRAND LIVRE</Text>
-              <Text style={S.sub}>General Ledger — {societe?.nom || '—'}</Text>
-              <View style={S.infoRow}>
-                <View style={S.infoCol}>
-                  <Text style={S.infoLbl}>SOCIÉTÉ</Text>
-                  <Text style={S.infoVal}>{societe?.nom || '—'}</Text>
-                  <Text style={S.infoLbl}>BRN</Text>
-                  <Text style={S.infoVal2}>{societe?.brn || '—'}</Text>
+            <>
+              {/* Title block — fully isolated with explicit height */}
+              <View style={{ height: 60, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 16, fontWeight: 'bold' }}>GRAND LIVRE</Text>
+              </View>
+              <View style={{ height: 20, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 10, color: '#555' }}>General Ledger — {societe?.nom || '—'}</Text>
+              </View>
+              {/* Info band — single row 4 columns */}
+              <View style={{ flexDirection: 'row', paddingTop: 10, paddingBottom: 10, marginTop: 8, marginBottom: 16, borderTopWidth: 0.5, borderTopColor: '#cccccc', borderBottomWidth: 0.5, borderBottomColor: '#cccccc' }}>
+                <View style={{ width: '33.33%', paddingLeft: 6, paddingRight: 6 }}>
+                  <Text style={{ fontSize: 7, color: '#888888' }}>SOCIÉTÉ</Text>
+                  <Text style={{ fontSize: 10, fontWeight: 'bold', marginTop: 3 }}>{societe?.nom || '—'}</Text>
+                  <Text style={{ fontSize: 7, color: '#888888', marginTop: 6 }}>BRN</Text>
+                  <Text style={{ fontSize: 9, marginTop: 2 }}>{societe?.brn || '—'}</Text>
                 </View>
-                <View style={S.infoCol}>
-                  <Text style={S.infoLbl}>PÉRIODE</Text>
-                  <Text style={S.infoVal}>{periode}</Text>
-                  <Text style={S.infoLbl}>GÉNÉRÉ LE</Text>
-                  <Text style={S.infoVal2}>{today}</Text>
+                <View style={{ width: '33.33%', paddingLeft: 6, paddingRight: 6 }}>
+                  <Text style={{ fontSize: 7, color: '#888888' }}>PÉRIODE</Text>
+                  <Text style={{ fontSize: 10, fontWeight: 'bold', marginTop: 3 }}>{periode}</Text>
+                  <Text style={{ fontSize: 7, color: '#888888', marginTop: 6 }}>GÉNÉRÉ LE</Text>
+                  <Text style={{ fontSize: 9, marginTop: 2 }}>{today}</Text>
                 </View>
-                <View style={S.infoCol}>
-                  <Text style={S.infoLbl}>COMPTES</Text>
-                  <Text style={S.infoVal}>{groups.length}</Text>
-                  <Text style={S.infoLbl}>ÉCRITURES</Text>
-                  <Text style={S.infoVal2}>{ecritures.length}</Text>
+                <View style={{ width: '33.33%', paddingLeft: 6, paddingRight: 6 }}>
+                  <Text style={{ fontSize: 7, color: '#888888' }}>COMPTES</Text>
+                  <Text style={{ fontSize: 10, fontWeight: 'bold', marginTop: 3 }}>{groups.length}</Text>
+                  <Text style={{ fontSize: 7, color: '#888888', marginTop: 6 }}>ÉCRITURES</Text>
+                  <Text style={{ fontSize: 9, marginTop: 2 }}>{ecritures.length}</Text>
                 </View>
               </View>
-            </View>
+            </>
           )}
 
           {pg.map((g) => (
