@@ -35,68 +35,100 @@ export default function HomePage() {
   const features = [
     {
       icon: FileSearch,
-      title: t('home.feat.ocr_title', locale),
-      items: [
-        t('home.feat.ocr_1', locale),
-        t('home.feat.ocr_2', locale),
+      title: locale === 'fr' ? 'OCR & Documents IA' : 'AI OCR & Documents',
+      items: locale === 'fr' ? [
+        'Extraction automatique des factures, reçus, relevés bancaires',
+        'Classification intelligente par type de document',
+      ] : [
+        'Automatic extraction of invoices, receipts, bank statements',
+        'Smart classification by document type',
       ],
     },
     {
       icon: BookOpen,
-      title: t('home.feat.accounting_title', locale),
-      items: [
-        t('home.feat.accounting_1', locale),
-        t('home.feat.accounting_2', locale),
-        t('home.feat.accounting_3', locale),
+      title: locale === 'fr' ? 'Comptabilité intelligente' : 'Smart Accounting',
+      items: locale === 'fr' ? [
+        'Plan comptable mauricien natif (IFRS/IAS)',
+        'Grand livre, balance, bilan & P&L automatiques',
+        'Rapprochement bancaire intelligent multi-stratégies',
+      ] : [
+        'Native Mauritian chart of accounts (IFRS/IAS)',
+        'Automatic ledger, trial balance, P&L',
+        'Intelligent multi-strategy bank reconciliation',
       ],
     },
     {
       icon: FileText,
-      title: t('home.feat.invoicing_title', locale),
-      items: [
-        t('home.feat.invoicing_1', locale),
-        t('home.feat.invoicing_2', locale),
-        t('home.feat.invoicing_3', locale),
+      title: locale === 'fr' ? 'Facturation & Templates IA' : 'Invoicing & AI Templates',
+      items: locale === 'fr' ? [
+        'Factures conformes MRA avec QR Code & IRN',
+        "Templates IA : importez une ancienne facture, l'IA crée votre modèle",
+        'Multi-devises (MUR, EUR, USD, GBP) avec taux de change automatiques',
+      ] : [
+        'MRA-compliant invoices with QR Code & IRN',
+        'AI Templates: import an old invoice, AI creates your template',
+        'Multi-currency (MUR, EUR, USD, GBP) with automatic FX rates',
       ],
     },
     {
       icon: Users,
-      title: t('home.feat.hr_title', locale),
-      items: [
-        t('home.feat.hr_1', locale),
-        t('home.feat.hr_2', locale),
-        t('home.feat.hr_3', locale),
+      title: locale === 'fr' ? 'RH & Paie complète' : 'Full HR & Payroll',
+      items: locale === 'fr' ? [
+        'Bulletins de paie conformes WRA 2019',
+        'Gestion congés, pointage, planning automatisé par IA',
+        'Exports MRA (PAYE, CSG, NSF) en un clic',
+      ] : [
+        'WRA 2019 compliant payslips',
+        'Leave management, attendance, AI-automated scheduling',
+        'One-click MRA exports (PAYE, CSG, NSF)',
+      ],
+    },
+    {
+      icon: Scale,
+      title: locale === 'fr' ? 'Juridique & Contrats IA' : 'Legal & AI Contracts',
+      items: locale === 'fr' ? [
+        'Générateur de contrats de travail (CDI, CDD, temps partiel) conformes WRA 2019',
+        'Contrats commerciaux : prestataire, NDA, SaaS, sous-traitance',
+        "Rédaction guidée par IA avec clauses légales mauriciennes",
+        'Signature électronique et suivi des versions',
+      ] : [
+        'Employment contract generator (CDI, CDD, part-time) WRA 2019 compliant',
+        'Commercial contracts: service, NDA, SaaS, subcontracting',
+        'AI-guided drafting with Mauritian legal clauses',
+        'E-signature and version tracking',
       ],
     },
     {
       icon: Landmark,
-      title: t('home.feat.fiscal_title', locale),
-      items: [
-        t('home.feat.fiscal_1', locale),
-        t('home.feat.fiscal_2', locale),
-        t('home.feat.fiscal_3', locale),
-        t('home.feat.fiscal_4', locale),
-      ],
-    },
-    {
-      icon: BellRing,
-      title: t('home.feat.alerts_title', locale),
-      items: [
-        t('home.feat.alerts_1', locale),
-        t('home.feat.alerts_2', locale),
-        t('home.feat.alerts_3', locale),
-        t('home.feat.alerts_4', locale),
+      title: locale === 'fr' ? 'Fiscal MRA' : 'MRA Tax',
+      items: locale === 'fr' ? [
+        'TVA : calcul automatique, déclaration pré-remplie',
+        'IT Form 3 / IS : génération automatique',
+        'Annual Return ROC : pré-remplissage intelligent',
+        'FAR (Fixed Asset Register) avec amortissement automatique',
+      ] : [
+        'VAT: automatic calculation, pre-filled return',
+        'IT Form 3 / IS: automatic generation',
+        'ROC Annual Return: intelligent pre-filling',
+        'FAR with automatic depreciation',
       ],
     },
   ]
 
-  const aiCapabilities = [
-    { icon: Brain, text: t('home.ai.ocr', locale) },
-    { icon: MessageSquare, text: t('home.ai.clara', locale) },
-    { icon: GitCompareArrows, text: t('home.ai.reconciliation', locale) },
-    { icon: Sparkles, text: t('home.ai.bonuses', locale) },
-    { icon: CalendarClock, text: t('home.ai.planning', locale) },
-    { icon: Bot, text: t('home.ai.alerts', locale) },
+  const aiCapabilities = locale === 'fr' ? [
+    { icon: Brain, text: "Agent OCR — Analyse vos documents, extrait les données et crée automatiquement les écritures comptables. Factures, relevés bancaires, reçus : tout est digitalisé en secondes." },
+    { icon: GitCompareArrows, text: "Agent Rapprochement — Identifie chaque fournisseur, croise les paiements et les factures, détecte les TDS, et lettre automatiquement les écritures 401. Pense comme un vrai expert-comptable." },
+    { icon: Scale, text: "Agent Juridique — Génère des contrats de travail et commerciaux conformes au droit mauricien (WRA 2019, DPA 2017, Contract Act). CDI, CDD, NDA, prestation de services — en un clic." },
+    { icon: MessageSquare, text: "Agent RH — Calcule les bulletins de paie, gère les congés selon la WRA, optimise le planning et prépare les exports MRA automatiquement." },
+    { icon: Sparkles, text: "Agent Fiscal — Pré-remplit vos déclarations TVA, IT Form 3, Annual Return ROC. Anticipe les échéances et vous alerte avant les pénalités." },
+    { icon: Bot, text: "Agent Facturation — Crée vos factures avec le template extrait par IA de vos anciennes factures. Multi-devises, QR Code MRA, envoi automatique." },
+  ] : [
+    { icon: Brain, text: "OCR Agent — Analyzes your documents, extracts data and automatically creates journal entries. Invoices, bank statements, receipts: everything digitized in seconds." },
+    { icon: GitCompareArrows, text: "Reconciliation Agent — Identifies each supplier, cross-references payments and invoices, detects TDS, and automatically letters 401 entries. Thinks like a real accountant." },
+    { icon: Scale, text: "Legal Agent — Generates employment and commercial contracts compliant with Mauritian law (WRA 2019, DPA 2017, Contract Act). CDI, CDD, NDA, service agreements — in one click." },
+    { icon: MessageSquare, text: "HR Agent — Calculates payslips, manages leave per WRA, optimizes scheduling and prepares MRA exports automatically." },
+    { icon: Sparkles, text: "Tax Agent — Pre-fills your VAT returns, IT Form 3, ROC Annual Return. Anticipates deadlines and alerts you before penalties." },
+    { icon: Bot, text: "Invoicing Agent — Creates invoices with AI-extracted templates from your old invoices. Multi-currency, MRA QR Code, automatic sending." },
   ]
 
   const compliance = [
@@ -168,10 +200,16 @@ export default function HomePage() {
               className="mb-6 text-4xl font-bold tracking-tight md:text-6xl"
               style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif" }}
             >
-              <span style={{ letterSpacing: "0.04em" }}>LE<span style={{ color: "#D4AF37" }}>X</span>ORA</span> — {locale === "fr" ? "La comptabilité intelligente pour Maurice" : "Smart Accounting for Mauritius"}
+              <span style={{ letterSpacing: "0.04em" }}>LE<span style={{ color: "#D4AF37" }}>X</span>ORA</span>
+              <br />
+              <span className="text-2xl md:text-4xl" style={{ fontWeight: 400 }}>
+                {locale === "fr" ? "L'ERP piloté par l'IA pour Maurice" : "The AI-powered ERP for Mauritius"}
+              </span>
             </h1>
             <p className="mx-auto mb-10 max-w-2xl text-lg" style={{ color: "#8B90B8", fontFamily: "'Poppins', sans-serif", fontWeight: 300, lineHeight: 1.7 }}>
-              {t('home.hero_subtitle', locale)}
+              {locale === "fr"
+                ? "Avec Lexora, ce n'est pas un simple logiciel que vous prenez — c'est toute une équipe d'agents IA qui va vous accompagner à chaque étape. Comptabilité, RH, juridique, fiscal : chaque module est piloté par l'intelligence artificielle, paramétrable selon vos besoins, et greffé aux services experts de Lexora. Construisez plus grand, plus vite."
+                : "With Lexora, you're not just getting software — you're getting an entire team of AI agents that will support you at every step. Accounting, HR, legal, tax: every module is AI-powered, fully configurable to your needs, and connected to Lexora's expert services. Build bigger, faster."}
             </p>
             <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
               <Link href="/auth/login">
@@ -246,10 +284,12 @@ export default function HomePage() {
           <div className="mx-auto max-w-7xl px-6">
             <div className="mb-16 text-center">
               <h2 className="mb-4 text-3xl font-bold md:text-4xl" style={{ color: "#0B0F2E", fontFamily: "'Poppins', sans-serif", fontWeight: 700 }}>
-                {t('home.ai_at_core', locale)}
+                {locale === 'fr' ? "6 agents IA qui travaillent pour vous" : "6 AI agents working for you"}
               </h2>
               <p className="mx-auto max-w-2xl" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif", fontWeight: 300, lineHeight: 1.7 }}>
-                {t('home.ai_at_core_desc', locale)}
+                {locale === 'fr'
+                  ? "Chaque module de Lexora est piloté par un agent IA spécialisé. Pas de saisie manuelle, pas de configuration complexe — vos agents comprennent votre entreprise et s'adaptent à vos besoins. C'est comme avoir une équipe complète d'experts qui travaille 24h/24."
+                  : "Every Lexora module is powered by a specialized AI agent. No manual entry, no complex setup — your agents understand your business and adapt to your needs. It's like having a full team of experts working 24/7."}
               </p>
             </div>
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
