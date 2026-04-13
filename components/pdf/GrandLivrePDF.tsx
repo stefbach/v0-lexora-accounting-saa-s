@@ -172,37 +172,30 @@ export function GrandLivrePDF({ societe, dateDebut, dateFin, ecritures, compteNa
           {pi === 0 && (
             <View>
               <Text style={S.title}>GRAND LIVRE</Text>
-              <View style={S.gap8} />
-              <Text style={S.sub}>General Ledger — {societe?.nom || '—'}</Text>
-              <View style={S.gap12} />
-              <View style={S.hline} />
+              <View style={{ marginTop: 10 }}>
+                <Text style={S.sub}>General Ledger — {societe?.nom || '—'}</Text>
+              </View>
+              <View style={{ marginTop: 16, height: 0.5, backgroundColor: '#aaaaaa' }} />
               <View style={S.infoRow}>
                 <View style={S.infoCol}>
                   <Text style={S.infoLabel}>SOCIÉTÉ</Text>
-                  <View style={S.gap6} />
-                  <Text style={S.infoValue}>{societe?.nom || '—'}</Text>
-                  <View style={S.gap6} />
-                  <Text style={S.infoValue2}>{societe?.brn || '—'}</Text>
+                  <View style={{ marginTop: 5 }}><Text style={S.infoValue}>{societe?.nom || '—'}</Text></View>
+                  <View style={{ marginTop: 5 }}><Text style={S.infoValue2}>{societe?.brn || '—'}</Text></View>
                 </View>
                 <View style={S.infoCol}>
                   <Text style={S.infoLabel}>PÉRIODE</Text>
-                  <View style={S.gap6} />
-                  <Text style={S.infoValue}>{periode}</Text>
-                  <View style={S.gap6} />
-                  <Text style={S.infoValue2}>{today}</Text>
+                  <View style={{ marginTop: 5 }}><Text style={S.infoValue}>{periode}</Text></View>
+                  <View style={{ marginTop: 5 }}><Text style={S.infoValue2}>{today}</Text></View>
                 </View>
                 <View style={S.infoCol}>
                   <Text style={S.infoLabel}>COMPTES</Text>
-                  <View style={S.gap6} />
-                  <Text style={S.infoValue}>{groups.length}</Text>
-                  <View style={S.gap12} />
-                  <Text style={S.infoLabel}>ÉCRITURES</Text>
-                  <View style={S.gap6} />
-                  <Text style={S.infoValue}>{ecritures.length}</Text>
+                  <View style={{ marginTop: 5 }}><Text style={S.infoValue}>{groups.length}</Text></View>
+                  <View style={{ marginTop: 12 }}><Text style={S.infoLabel}>ÉCRITURES</Text></View>
+                  <View style={{ marginTop: 5 }}><Text style={S.infoValue}>{ecritures.length}</Text></View>
                 </View>
               </View>
-              <View style={S.hline} />
-              <View style={S.gap8} />
+              <View style={{ height: 0.5, backgroundColor: '#aaaaaa' }} />
+              <View style={{ marginTop: 10 }} />
             </View>
           )}
 
