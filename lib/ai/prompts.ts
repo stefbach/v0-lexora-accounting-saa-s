@@ -255,6 +255,18 @@ CHAMP OBLIGATOIRE — date_echeance:
 Cherche dans la facture: 'Due Date', 'Date d echeance', 'Date limite de paiement', 'Payment Due', 'A payer avant', 'Due By', 'Payable le', toute mention de date de paiement.
 Si trouve → retourner au format YYYY-MM-DD. Si pas trouve → retourner null.
 
+EMTEL / MAURITIUS TELECOM — STATEMENT OF ACCOUNT (regle speciale):
+Si le titre du document contient "Statement of Account" ET que le document a un champ "Amount Due" ou "TOTAL AMOUNT DUE":
+- type_document = "facture_fournisseur" (JAMAIS "autre")
+- emetteur = "Emtel Ltd." ou "Mauritius Telecom" selon le logo/en-tete
+- montant_ttc = la valeur de "Amount Due" ou "TOTAL AMOUNT DUE" (PAS "Current Charges")
+- montant_ht = montant_ttc / 1.15 (Emtel/MT = TVA 15%)
+- montant_tva = montant_ttc - montant_ht
+- taux_tva = 15, tva_applicable = true
+- Format du releve: Previous Balance - Payments + Adjustments + Current Charges = Amount Due
+- IMPORTANT: "Current Charges" peut etre 0.00 — ne JAMAIS utiliser cette valeur comme montant_ttc
+- Compte: 626 (Telecommunications)
+
 REPONSE en JSON strict selon le format FactureFournisseurResult.`
 
 export const SYSTEM_PROMPT_FACTURE_CLIENT = `Tu es un expert-comptable mauricien specialise dans la facturation clients.
@@ -816,6 +828,18 @@ Generer EXACTEMENT 2 ecritures (ou 3 si TVA):
 - Si TVA applicable: 1 ecriture debit 4456 = montant_tva TOTAL
 - 1 ecriture credit 401 = montant_ttc TOTAL
 NE PAS generer une ecriture par ligne de detail de la facture.
+
+EMTEL / MAURITIUS TELECOM — STATEMENT OF ACCOUNT (regle speciale):
+Si le titre du document contient "Statement of Account" ET a un champ "Amount Due" ou "TOTAL AMOUNT DUE":
+- type_document = "facture_fournisseur" (JAMAIS "autre")
+- emetteur = "Emtel Ltd." ou "Mauritius Telecom"
+- montant_ttc = valeur de "Amount Due" / "TOTAL AMOUNT DUE" (PAS "Current Charges")
+- montant_ht = montant_ttc / 1.15 (TVA 15%)
+- montant_tva = montant_ttc - montant_ht
+- taux_tva = 15, tva_applicable = true
+- Format: Previous Balance - Payments + Adjustments + Current Charges = Amount Due
+- IMPORTANT: "Current Charges" peut etre 0.00 — ne JAMAIS l'utiliser comme montant
+- Compte: 626 (Telecommunications)
 
 --- FACTURE CLIENT ---
 Format: {"routing":{"societe":"<nom>","type_document":"facture_client","confiance_type":0-100},"extraction":{"emetteur":"","destinataire":"","date_document":"YYYY-MM-DD","numero_reference":"","devise":"EUR|USD|GBP|MUR|AUD","montant_ht":0,"montant_tva":0,"montant_ttc":0,"taux_tva":15,"tva_applicable":true,"tva_exonere":false,"type_client":"B2B|B2C","analyse_tva":"","lignes":[{"description":"","montant":0}],"ecritures_comptables":[{"compte":"7xx","libelle":"","debit":0,"credit":0}]}}
