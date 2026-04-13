@@ -34,6 +34,16 @@ export async function POST(request: NextRequest) {
 
     if (!file) return NextResponse.json({ error: 'Aucun fichier fourni' }, { status: 400 })
 
+    // Fetch user profile early — needed for role-scoping (BUG 3) + name validation (BUG 2)
+    const { data: userProfile } = await supabaseAuth
+      .from('profiles')
+      .select('role, full_name, email, societe_id')
+      .eq('id', user.id)
+      .maybeSingle()
+    const userRole: string = userProfile?.role || ''
+    const uploaderName: string = (userProfile?.full_name || '').trim()
+    const uploaderEmail: string = (userProfile?.email || '').trim()
+
     const allowedTypes = [
       'application/pdf',
       'image/jpeg', 'image/png', 'image/webp',
@@ -80,6 +90,28 @@ export async function POST(request: NextRequest) {
     // Resolve dossier_id — PRIORITY 1: explicit societe_id from FormData
     let resolvedDossierId = dossierId
     let needsSocieteConfirmation = false
+
+    // BUG 3 FIX — client_assistant must only upload to their explicitly-assigned sociétés.
+    // Build allowed societe_id set for client_assistant (from profile + user_societes only)
+    let allowedSocieteIds: Set<string> | null = null
+    if (userRole === 'client_assistant') {
+      const ids = new Set<string>()
+      if (userProfile?.societe_id) ids.add(userProfile.societe_id)
+      const { data: links } = await supabaseAuth.from('user_societes').select('societe_id').eq('user_id', user.id)
+      for (const l of links || []) if (l.societe_id) ids.add(l.societe_id)
+      allowedSocieteIds = ids
+      // If client_assistant supplied societe_id/dossier_id, validate it belongs to allowed set
+      if (societeId && !ids.has(societeId)) {
+        return NextResponse.json({ error: 'Société non autorisée pour cet assistant' }, { status: 403 })
+      }
+      if (dossierId) {
+        const { data: dosCheck } = await supabaseAuth.from('dossiers').select('societe_id').eq('id', dossierId).maybeSingle()
+        if (!dosCheck?.societe_id || !ids.has(dosCheck.societe_id)) {
+          return NextResponse.json({ error: 'Dossier non autorisé pour cet assistant' }, { status: 403 })
+        }
+      }
+    }
+
     if (!resolvedDossierId && societeId) {
       const { data: d } = await supabase.from('dossiers').select('id').eq('societe_id', societeId).limit(1).maybeSingle()
       if (d) { resolvedDossierId = d.id }
@@ -100,8 +132,13 @@ export async function POST(request: NextRequest) {
       }
     }
     // PRIORITY 3: any dossier owned by user (as client or comptable)
-    if (!resolvedDossierId) {
+    // BUG 3 — for client_assistant: restrict to allowed sociétés only (no broad fallback)
+    if (!resolvedDossierId && userRole !== 'client_assistant') {
       const { data: d } = await supabase.from('dossiers').select('id').eq('client_id', user.id).limit(1).maybeSingle()
+      if (d) { resolvedDossierId = d.id }
+    }
+    if (!resolvedDossierId && userRole === 'client_assistant' && allowedSocieteIds && allowedSocieteIds.size > 0) {
+      const { data: d } = await supabase.from('dossiers').select('id').in('societe_id', [...allowedSocieteIds]).limit(1).maybeSingle()
       if (d) { resolvedDossierId = d.id }
     }
     if (!resolvedDossierId) {
@@ -666,6 +703,43 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
     const validation = validateAndCleanExtraction(extraction, typeDocument, uniqueUserSocietes)
     console.log(`[upload] Extraction validation: société_id=${validation.societe_id}, confidence=${validation.confidence}, needs_confirmation=${validation.needs_confirmation}`)
 
+    // BUG 2 FIX — reject detectedSociete if it equals the uploader's name (OCR confused
+    // the document signer/uploader with the actual société). Same for email local-part.
+    const norm = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '').trim()
+    const detectedNorm = norm(detectedSociete)
+    const uploaderNorm = norm(uploaderName)
+    const emailLocalNorm = norm(uploaderEmail.split('@')[0] || '')
+    if (detectedNorm && (detectedNorm === uploaderNorm || (emailLocalNorm.length > 3 && detectedNorm === emailLocalNorm))) {
+      console.warn(`[upload] BUG 2 GUARD — detectedSociete "${detectedSociete}" matches uploader name/email — rejecting`)
+      detectedSociete = 'INCONNU'
+    }
+
+    // BUG 2 FIX — also reject if detectedSociete doesn't match ANY of the user's known
+    // sociétés (after fuzzy matching). Fall back to the dossier's société name.
+    if (detectedSociete && detectedSociete !== 'INCONNU' && uniqueUserSocietes.length > 0) {
+      const detectedClean = norm(detectedSociete)
+      const hasFuzzyMatch = uniqueUserSocietes.some(s => {
+        const n = norm(s.nom)
+        return n === detectedClean || n.includes(detectedClean) || detectedClean.includes(n)
+      })
+      if (!hasFuzzyMatch && resolvedDossierId) {
+        // Try to resolve from the dossier
+        const { data: dossierSoc } = await supabase
+          .from('dossiers')
+          .select('societe:societes(nom)')
+          .eq('id', resolvedDossierId)
+          .maybeSingle()
+        const dossierNom = (dossierSoc?.societe as any)?.nom
+        if (dossierNom) {
+          console.warn(`[upload] BUG 2 GUARD — "${detectedSociete}" not in user sociétés; falling back to dossier société "${dossierNom}"`)
+          detectedSociete = dossierNom
+        } else {
+          console.warn(`[upload] BUG 2 GUARD — "${detectedSociete}" not in user sociétés; clearing`)
+          detectedSociete = 'INCONNU'
+        }
+      }
+    }
+
     // If validation found a better société match, use it
     if (validation.societe_id && !validation.needs_confirmation) {
       const matchedSociete = uniqueUserSocietes.find(s => s.id === validation.societe_id)
@@ -1100,11 +1174,18 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
     }
 
     // Auto-create facture record for client/fournisseur invoices
+    // BUG 1 FIX — track skip reasons so they appear in document.n8n_result
+    let factureSkipReason: string | null = null
+    let factureCreated = false
+    let factureCreateError: string | null = null
     if ((typeDocument === 'facture_client' || typeDocument === 'facture_fournisseur') && finalDossierId) {
       const { data: dossierForFacture } = await supabase
         .from('dossiers').select('societe_id').eq('id', finalDossierId).maybeSingle()
       const factureSocieteId = dossierForFacture?.societe_id || societeId
 
+      if (!factureSocieteId) {
+        factureSkipReason = `no_societe_id (dossier=${finalDossierId} has no societe_id and no fallback)`
+      }
       if (factureSocieteId) {
         const montantHT = Number(extraction.montant_ht) || 0
         const montantTVA = Number(extraction.montant_tva) || 0
@@ -1187,10 +1268,33 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
 
         const { error: factureError } = await supabase.from('factures').insert(factureData)
         if (factureError) {
+          factureCreateError = factureError.message
           console.error('[upload] facture insert error:', factureError.message)
         } else {
+          factureCreated = true
           console.log(`[upload] Facture ${typeDocument} created: ${extraction.numero_reference || 'sans numéro'} — ${montantTTC} ${devise}`)
         }
+      }
+    } else if (typeDocument === 'facture_client' || typeDocument === 'facture_fournisseur') {
+      factureSkipReason = `no_finalDossierId (typeDocument=${typeDocument})`
+    } else if (finalDossierId) {
+      factureSkipReason = `wrong_typeDocument (${typeDocument})`
+    }
+
+    // BUG 1 FIX — surface facture creation status into document.n8n_result so the user
+    // can see WHY a facture was not created even though the document is marked traite.
+    if (factureCreateError || factureSkipReason || factureCreated) {
+      try {
+        await supabase.from('documents').update({
+          n8n_result: {
+            ...(updateData.n8n_result || {}),
+            facture_status: factureCreated ? 'created' : (factureCreateError ? 'error' : 'skipped'),
+            facture_error: factureCreateError,
+            facture_skip_reason: factureSkipReason,
+          },
+        }).eq('id', docId)
+      } catch (e) {
+        console.warn('[upload] failed to update document with facture_status:', e)
       }
     }
 
