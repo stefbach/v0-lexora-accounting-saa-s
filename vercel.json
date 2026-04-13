@@ -55,6 +55,10 @@
     {
       "path": "/api/cron/alerte-aps",
       "schedule": "0 8 1 1,4,7,10 *"
+    },
+    {
+      "path": "/api/cron/db-health-check",
+      "schedule": "0 6 * * *"
     }
   ]
 }
