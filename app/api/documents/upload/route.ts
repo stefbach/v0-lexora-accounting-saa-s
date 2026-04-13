@@ -811,7 +811,10 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
     // ──── AFFECTATION COMPTABLE AUTOMATIQUE (facture fournisseur) ────
     // If this is a supplier invoice, look up automatic accounting assignment
     if (typeDocument === 'facture_fournisseur') {
-      const fournisseurName = extraction.emetteur || extraction.fournisseur || ''
+      const rawFournisseur = extraction.emetteur || extraction.fournisseur || ''
+      const fournisseurName: string = typeof rawFournisseur === 'object' && rawFournisseur !== null
+        ? (rawFournisseur.nom || rawFournisseur.name || JSON.stringify(rawFournisseur))
+        : String(rawFournisseur || '')
       // Resolve societe_id for affectation lookup
       let affSocieteId = societeId
       if (!affSocieteId && finalDossierId) {
@@ -1213,9 +1216,16 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
         console.log(`[upload] Facture TVA: applicable=${tvaApplicable}, taux=${tauxTva}%, HT=${montantHT}, TVA=${montantTVAFinal}, TTC=${montantTTCFinal}, devise=${devise}, analyse="${extraction.analyse_tva || 'non fournie'}"`)
 
         // ── Tiers annuaire lookup — auto-classify offshore/reverse_charge ──
-        const tiersName = typeDocument === 'facture_client'
+        // Normalize tiers: extraction may return an object {nom, brn, vat_number}
+        // instead of a plain string — handle both shapes.
+        const rawTiers = typeDocument === 'facture_client'
           ? (extraction.destinataire || extraction.client || null)
           : (extraction.emetteur || extraction.fournisseur || null)
+        const tiersName: string | null = rawTiers
+          ? (typeof rawTiers === 'object'
+              ? (rawTiers.nom || rawTiers.name || JSON.stringify(rawTiers))
+              : String(rawTiers))
+          : null
         const factureTypeForTiers = typeDocument === 'facture_client' ? 'client' : 'fournisseur'
         let clientOffshoreFlag = false
         let reverseChargeFlag = false

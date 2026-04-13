@@ -329,14 +329,16 @@ export async function POST(
         }
         if (!tvaApplicable) finalTVA = 0
 
-        const factureTiers =
-          finalExtraction.emetteur?.nom ||
+        const rawTiers =
           finalExtraction.emetteur ||
+          finalExtraction.fournisseur ||
           finalExtraction.client ||
           finalExtraction.destinataire ||
           finalExtraction.tiers ||
-          finalExtraction.fournisseur ||
           ''
+        const factureTiers = typeof rawTiers === 'object' && rawTiers !== null
+          ? (rawTiers.nom || rawTiers.name || JSON.stringify(rawTiers))
+          : String(rawTiers || '')
         const typeFact = finalTypeDocument === 'facture_fournisseur' ? 'fournisseur' : 'client'
 
         // Skip facture creation if amounts are empty AND no existing facture to update
@@ -353,7 +355,7 @@ export async function POST(
             dossier_id: finalDossierId,
             numero_facture: finalExtraction.numero_reference || finalExtraction.numero_facture || null,
             type_facture: typeFact,
-            tiers: typeof factureTiers === 'string' ? factureTiers : JSON.stringify(factureTiers),
+            tiers: factureTiers,
             description: finalExtraction.description || doc.nom_fichier,
             date_facture: finalExtraction.date_document || new Date().toISOString().split('T')[0],
             date_echeance: finalExtraction.date_echeance || null,
