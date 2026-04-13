@@ -316,9 +316,9 @@ export async function POST(
       if (factureSocieteId) {
         const devise = finalExtraction.devise || 'MUR'
         const fxRate = devise !== 'MUR' ? (tauxChange[devise] || 1) : 1
-        const montantHT = Number(finalExtraction.montant_ht) || 0
-        const montantTVA = Number(finalExtraction.montant_tva) || 0
-        let montantTTC = Number(finalExtraction.montant_ttc) || 0
+        const montantHT = Number(finalExtraction.montant_ht) || Number(finalExtraction.total_ht) || 0
+        const montantTVA = Number(finalExtraction.montant_tva) || Number(finalExtraction.tva) || 0
+        let montantTTC = Number(finalExtraction.montant_ttc) || Number(finalExtraction.total_ttc) || Number(finalExtraction.total) || Number(finalExtraction.amount) || 0
         if (montantTTC === 0 && montantHT > 0) montantTTC = montantHT + montantTVA
 
         const tvaApplicable = finalExtraction.tva_applicable !== false && !finalExtraction.tva_exonere
@@ -329,41 +329,54 @@ export async function POST(
         }
         if (!tvaApplicable) finalTVA = 0
 
-        const factureTiers = finalExtraction.emetteur?.nom || finalExtraction.emetteur || finalExtraction.fournisseur || ''
+        const factureTiers =
+          finalExtraction.emetteur?.nom ||
+          finalExtraction.emetteur ||
+          finalExtraction.client ||
+          finalExtraction.destinataire ||
+          finalExtraction.tiers ||
+          finalExtraction.fournisseur ||
+          ''
         const typeFact = finalTypeDocument === 'facture_fournisseur' ? 'fournisseur' : 'client'
 
-        // Check if facture already exists for this document
-        const { data: existingFacture } = await supabase
-          .from('factures').select('id').eq('document_id', id).maybeSingle()
-
-        const factureData = {
-          societe_id: factureSocieteId,
-          dossier_id: finalDossierId,
-          numero_facture: finalExtraction.numero_reference || finalExtraction.numero_facture || null,
-          type_facture: typeFact,
-          tiers: typeof factureTiers === 'string' ? factureTiers : JSON.stringify(factureTiers),
-          description: finalExtraction.description || doc.nom_fichier,
-          date_facture: finalExtraction.date_document || new Date().toISOString().split('T')[0],
-          date_echeance: finalExtraction.date_echeance || null,
-          devise,
-          taux_change: fxRate,
-          montant_ht: montantHT,
-          montant_tva: finalTVA,
-          montant_ttc: montantTTC || montantHT + finalTVA,
-          taux_tva: tauxTva,
-          montant_mur: Math.round((montantTTC || montantHT + finalTVA) * fxRate * 100) / 100,
-          statut: 'en_attente',
-          document_id: id,
-          notes: finalExtraction.analyse_tva || null,
-        }
-
-        if (existingFacture) {
-          await supabase.from('factures').update(factureData).eq('id', existingFacture.id)
-          console.log(`[reanalyze] Updated facture ${existingFacture.id}`)
+        // Skip facture creation if amounts are empty AND no existing facture to update
+        // Prevents empty factures (tiers="" or montant=0) from polluting the DB
+        if (montantTTC <= 0 && montantHT <= 0) {
+          console.warn(`[reanalyze] Skipping facture creation for document ${id} — both montant_ttc and montant_ht are 0 (extraction may have failed; tiers="${factureTiers}")`)
         } else {
-          const { error: factErr } = await supabase.from('factures').insert(factureData)
-          if (factErr) console.error('[reanalyze] facture insert error:', factErr.message)
-          else console.log(`[reanalyze] Created facture for document ${id}`)
+          // Check if facture already exists for this document
+          const { data: existingFacture } = await supabase
+            .from('factures').select('id').eq('document_id', id).maybeSingle()
+
+          const factureData = {
+            societe_id: factureSocieteId,
+            dossier_id: finalDossierId,
+            numero_facture: finalExtraction.numero_reference || finalExtraction.numero_facture || null,
+            type_facture: typeFact,
+            tiers: typeof factureTiers === 'string' ? factureTiers : JSON.stringify(factureTiers),
+            description: finalExtraction.description || doc.nom_fichier,
+            date_facture: finalExtraction.date_document || new Date().toISOString().split('T')[0],
+            date_echeance: finalExtraction.date_echeance || null,
+            devise,
+            taux_change: fxRate,
+            montant_ht: montantHT,
+            montant_tva: finalTVA,
+            montant_ttc: montantTTC || montantHT + finalTVA,
+            taux_tva: tauxTva,
+            montant_mur: Math.round((montantTTC || montantHT + finalTVA) * fxRate * 100) / 100,
+            statut: 'en_attente',
+            document_id: id,
+            notes: finalExtraction.analyse_tva || null,
+          }
+
+          if (existingFacture) {
+            await supabase.from('factures').update(factureData).eq('id', existingFacture.id)
+            console.log(`[reanalyze] Updated facture ${existingFacture.id}`)
+          } else {
+            const { error: factErr } = await supabase.from('factures').insert(factureData)
+            if (factErr) console.error('[reanalyze] facture insert error:', factErr.message)
+            else console.log(`[reanalyze] Created facture for document ${id} — tiers="${factureTiers}", ttc=${montantTTC} ${devise}`)
+          }
         }
       }
     }
