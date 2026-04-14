@@ -30,6 +30,11 @@ const ALLOWED_ROLES = new Set([
   "super_admin",
   "direction",
   "client_admin",
+  // client_assistant is admitted too — a client's assistant (e.g. Daril) may
+  // also be a regular employee (Daril has an employes row linked via
+  // profiles.employe_id). She/he keeps the client_assistant role for
+  // /client/* access while the hasEmployeLink fallback grants /salarie.
+  "client_assistant",
 ])
 
 export default async function SalarieLayout({ children }: { children: React.ReactNode }) {

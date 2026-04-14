@@ -136,7 +136,7 @@ export async function updateSession(request: NextRequest) {
           'employe', 'salarie',
           'rh', 'rh_manager', 'manager',
           'admin', 'super_admin',
-          'direction', 'client_admin',
+          'direction', 'client_admin', 'client_assistant',
         ]
         if (!salarieAllowed.includes(role) && !hasEmployeLink) {
           const url = request.nextUrl.clone()

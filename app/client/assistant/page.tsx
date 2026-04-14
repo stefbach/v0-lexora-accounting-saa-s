@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input"
 import {
   Upload, FolderOpen, Loader2, FileText, CheckCircle, Search, X,
   Clock, Download, ChevronRight, Lock, AlertTriangle, Building2, RefreshCw, Camera, Pencil,
+  User,
 } from "lucide-react"
 
 const NAVY = "#0B0F2E"
@@ -425,11 +426,28 @@ export default function AssistantPage() {
 
   return (
     <div className="flex-1 overflow-auto p-4 pt-14 md:pt-6 md:p-6 lg:p-8 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Espace Assistant</h1>
-        <p className="text-sm text-muted-foreground">
-          Numérisation et envoi de documents
-        </p>
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Espace Assistant</h1>
+          <p className="text-sm text-muted-foreground">
+            Numérisation et envoi de documents
+          </p>
+        </div>
+        {/* Double-access link — takes client-assistants who also have an
+            employe record to their personal salarié portal (pointage,
+            congés, bulletins). Middleware (/salarie gate in
+            lib/supabase/middleware.ts) handles the final check: users
+            without an employe link are redirected back to /redirect. */}
+        <Link href="/salarie" className="shrink-0">
+          <Button
+            variant="outline"
+            className="gap-2 border-[#0B0F2E] text-[#0B0F2E] hover:bg-[#0B0F2E] hover:text-white"
+          >
+            <User className="h-4 w-4" />
+            Mon espace salarié
+            <ChevronRight className="h-3.5 w-3.5 opacity-60" />
+          </Button>
+        </Link>
       </div>
 
       {/* Société selector — optional */}
