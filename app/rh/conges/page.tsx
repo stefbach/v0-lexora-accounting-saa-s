@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import {
   Loader2, Plus, CheckCircle, XCircle, AlertTriangle,
@@ -241,6 +241,11 @@ export default function CongesPage() {
     else if (tab === "absents") loadAbsentsToday()
     else if (tab === "historique") loadHistorique()
   }, [tab, societe, loadBalances, loadDemandes, loadAbsentsToday, loadHistorique])
+
+  // Temporary diagnostic: confirms the dialog open/close state cycles.
+  useEffect(() => {
+    console.log("[preview_nb_jours] dialog toggled →", dialogOpen)
+  }, [dialogOpen])
 
   // Real-time nb_jours preview (uses employee's working_days + jours_feries)
   useEffect(() => {
@@ -923,11 +928,19 @@ export default function CongesPage() {
 
       {/* ═══ DIALOG: Nouvelle demande ═══ */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-lg" aria-describedby="nouvelle-demande-desc">
           <DialogHeader>
             <DialogTitle>Nouvelle demande de conge</DialogTitle>
+            <DialogDescription id="nouvelle-demande-desc">
+              Renseignez l'employé, le type de congé et les dates. Le nombre
+              de jours ouvrables s'affiche automatiquement.
+            </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3 py-2">
+            {/* Diagnostic: shows current parent-state values live. Remove once confirmed working. */}
+            <div className="text-[10px] font-mono bg-gray-100 text-gray-600 rounded p-2 border border-gray-300">
+              DEBUG state — employe_id: <code>{form.employe_id || "∅"}</code> · date_debut: <code>{form.date_debut || "∅"}</code> · date_fin: <code>{form.date_fin || "∅"}</code> · dialogOpen: <code>{String(dialogOpen)}</code>
+            </div>
             {formError && (
               <div className="bg-red-50 border border-red-200 rounded-md p-3">
                 <p className="text-sm text-red-600">{formError}</p>
