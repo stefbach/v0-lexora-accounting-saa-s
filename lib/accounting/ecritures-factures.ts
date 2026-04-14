@@ -193,12 +193,27 @@ export async function createEcrituresForFacture(
  * This creates the offsetting 401 debit / 411 credit entries, NOT new 401/411 entries.
  *
  * For supplier payment (debit bancaire):
- *   Debit  401 Fournisseurs  = amount  (cancels the original credit)
- *   Credit 512 Banque        = amount
+ *   Debit  401 Fournisseurs     = amount  (cancels the original credit)
+ *   Credit 512xxx Banque         = amount  (on the specific bank account)
  *
  * For client payment (credit bancaire):
- *   Debit  512 Banque        = amount
- *   Credit 411 Clients       = amount  (cancels the original debit)
+ *   Debit  512xxx Banque         = amount
+ *   Credit 411 Clients           = amount  (cancels the original debit)
+ *
+ * FIX 1 — params :
+ *   • compte_banque : ex. '512100' (DDS MUR), '512200' (DDS EUR), …
+ *     Résolu par l'appelant depuis comptes_bancaires.compte_comptable.
+ *     Fallback '512' si non fourni (rétrocompat).
+ *   • facture_id   : propagé sur les 2 écritures BNQ pour permettre le
+ *     lettrage direct par facture_id plus tard.
+ *   • lettre_code  : si fourni, pose la lettre sur les 2 BNQ + sur
+ *     l'écriture ACH 401/411 qui porte le même facture_id (ou ref_folio
+ *     FAC-<id> en fallback).
+ *   • numero_piece : texte de référence (ex. libellé de la transaction
+ *     bancaire « Règlement FT… »).
+ *
+ * Retourne aussi les IDs des écritures BNQ créées pour que l'appelant
+ * puisse faire des mises à jour (lettrage group à 3, etc.).
  */
 export async function createEcrituresForPayment(
   supabase: SupabaseClient,
@@ -210,8 +225,12 @@ export async function createEcrituresForPayment(
     tiers: string
     ref_folio: string // e.g. 'BANK-<releve_id>-<tx_idx>'
     description?: string
+    compte_banque?: string // FIX 1 — '512100' etc., from comptes_bancaires.compte_comptable
+    facture_id?: string | null
+    lettre_code?: string | null
+    numero_piece?: string | null
   }
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; bnq_ids?: string[] }> {
   try {
     const { data: dossier } = await supabase
       .from('dossiers')
@@ -230,72 +249,86 @@ export async function createEcrituresForPayment(
     const isSupplier = payment.type === 'supplier'
     const libelle = payment.description || `Paiement ${isSupplier ? 'fournisseur' : 'client'} ${payment.tiers}`
     const exercice = new Date(payment.date_payment).getFullYear().toString()
+    const compteBanque = (payment.compte_banque || '512').trim() || '512'
+    const nomBanque = compteBanque.startsWith('512') ? `Banque ${compteBanque.slice(3) || ''}`.trim() : 'Banque'
 
-    const entries: Array<Record<string, unknown>> = isSupplier
-      ? [
-          {
-            societe_id: payment.societe_id,
-            dossier_id: dossier?.id || null,
-            date_ecriture: payment.date_payment,
-            journal: 'BNQ',
-            ref_folio: payment.ref_folio,
-            numero_compte: '401',
-            nom_compte: 'Fournisseurs',
-            libelle,
-            description: libelle,
-            debit_mur: payment.amount_mur,
-            credit_mur: 0,
-            exercice,
-          },
-          {
-            societe_id: payment.societe_id,
-            dossier_id: dossier?.id || null,
-            date_ecriture: payment.date_payment,
-            journal: 'BNQ',
-            ref_folio: payment.ref_folio,
-            numero_compte: '512',
-            nom_compte: 'Banque',
-            libelle,
-            description: libelle,
-            debit_mur: 0,
-            credit_mur: payment.amount_mur,
-            exercice,
-          },
-        ]
-      : [
-          {
-            societe_id: payment.societe_id,
-            dossier_id: dossier?.id || null,
-            date_ecriture: payment.date_payment,
-            journal: 'BNQ',
-            ref_folio: payment.ref_folio,
-            numero_compte: '512',
-            nom_compte: 'Banque',
-            libelle,
-            description: libelle,
-            debit_mur: payment.amount_mur,
-            credit_mur: 0,
-            exercice,
-          },
-          {
-            societe_id: payment.societe_id,
-            dossier_id: dossier?.id || null,
-            date_ecriture: payment.date_payment,
-            journal: 'BNQ',
-            ref_folio: payment.ref_folio,
-            numero_compte: '411',
-            nom_compte: 'Clients',
-            libelle,
-            description: libelle,
-            debit_mur: 0,
-            credit_mur: payment.amount_mur,
-            exercice,
-          },
-        ]
+    // Base fields shared by both sides of the écriture
+    const base = {
+      societe_id: payment.societe_id,
+      dossier_id: dossier?.id || null,
+      date_ecriture: payment.date_payment,
+      journal: 'BNQ',
+      ref_folio: payment.ref_folio,
+      numero_piece: payment.numero_piece || null,
+      libelle,
+      description: libelle,
+      exercice,
+      // FIX 1 — facture_id propagé sur les 2 lignes BNQ (mig 133)
+      facture_id: payment.facture_id || null,
+      // FIX 1 — lettre apposée dès la création quand un code est fourni
+      lettre: payment.lettre_code || null,
+      date_lettrage: payment.lettre_code ? payment.date_payment : null,
+    }
 
-    const { error } = await supabase.from('ecritures_comptables_v2').insert(entries)
+    const tierSide = {
+      ...base,
+      numero_compte: isSupplier ? '401' : '411',
+      nom_compte: isSupplier ? 'Fournisseurs' : 'Clients',
+      debit_mur: isSupplier ? payment.amount_mur : 0,
+      credit_mur: isSupplier ? 0 : payment.amount_mur,
+    }
+    const bankSide = {
+      ...base,
+      numero_compte: compteBanque,
+      nom_compte: nomBanque,
+      debit_mur: isSupplier ? 0 : payment.amount_mur,
+      credit_mur: isSupplier ? payment.amount_mur : 0,
+    }
+
+    const { data: inserted, error } = await supabase
+      .from('ecritures_comptables_v2')
+      .insert([tierSide, bankSide])
+      .select('id')
     if (error) return { ok: false, error: error.message }
-    return { ok: true }
+
+    // FIX 1 — si une lettre est posée, rattacher l'ACH/VTE 401|411 de
+    // la facture au même groupe de lettrage. Tentative par facture_id
+    // (le plus fiable), fallback par ref_folio FAC-<id>.
+    if (payment.lettre_code && payment.facture_id) {
+      const tierAccount = isSupplier ? '401' : '411'
+      const tierFilter = isSupplier
+        ? { credit_gt: 0 } // ACH credit 401 → lettrer
+        : { debit_gt: 0 }  // VTE debit 411 → lettrer
+      // On cible uniquement les écritures non encore lettrées pour ne
+      // pas écraser un lettrage antérieur (R2).
+      let q = supabase
+        .from('ecritures_comptables_v2')
+        .update({ lettre: payment.lettre_code, date_lettrage: payment.date_payment })
+        .eq('societe_id', payment.societe_id)
+        .eq('facture_id', payment.facture_id)
+        .eq('numero_compte', tierAccount)
+        .is('lettre', null)
+      if ('credit_gt' in tierFilter) q = q.gt('credit_mur', 0)
+      if ('debit_gt' in tierFilter)  q = q.gt('debit_mur', 0)
+      const achUpd = await q
+      if (achUpd.error) {
+        console.warn('[createEcrituresForPayment] ACH letter by facture_id failed:', achUpd.error.message)
+        // Fallback ref_folio FAC-<id>
+        const fac = payment.facture_id
+        const fallback = await supabase
+          .from('ecritures_comptables_v2')
+          .update({ lettre: payment.lettre_code, date_lettrage: payment.date_payment })
+          .eq('societe_id', payment.societe_id)
+          .eq('ref_folio', `FAC-${fac}`)
+          .eq('numero_compte', tierAccount)
+          .is('lettre', null)
+        if (fallback.error) {
+          console.warn('[createEcrituresForPayment] ACH letter by ref_folio failed:', fallback.error.message)
+        }
+      }
+    }
+
+    return { ok: true, bnq_ids: (inserted || []).map((r: any) => r.id) }
   } catch (e: any) {
     return { ok: false, error: e.message || 'Erreur' }
   }

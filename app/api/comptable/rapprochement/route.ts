@@ -242,7 +242,9 @@ export async function POST(request: Request) {
           supabase.from('dossiers').select('id, client_id').eq('societe_id', societe_id),
           supabase.from('factures').select('id, numero_facture, tiers, montant_ttc, montant_mur, type_facture, devise, date_facture, date_echeance, conditions_paiement, statut').eq('societe_id', societe_id).in('statut', ['en_attente', 'retard', 'partiel']),
           getTauxChange().catch(() => ({ MUR: 1, EUR: 46.50, USD: 44.80, GBP: 54.20 })),
-          supabase.from('comptes_bancaires').select('id, devise').eq('societe_id', societe_id),
+          // FIX 1 — compte_comptable est nécessaire pour router la 2e ligne
+          // BNQ sur le bon 512xxx (ex: 512100 DDS MUR, 512200 DDS EUR).
+          supabase.from('comptes_bancaires').select('id, devise, compte_comptable, banque, numero_compte').eq('societe_id', societe_id),
           supabase.from('bulletins_paie').select('id, employe_id, salaire_net, periode, statut').eq('societe_id', societe_id).eq('statut', 'valide'),
         ])
 
@@ -278,7 +280,13 @@ export async function POST(request: Request) {
       }
 
       const compteDeviseMap: Record<string, string> = {}
-      ;(comptesBancaires || []).forEach((c: any) => { compteDeviseMap[c.id] = c.devise || 'MUR' })
+      // FIX 1 — map compte_bancaire_id → compte_comptable (512xxx) pour
+      // que la ligne BNQ crédite la bonne sous-classe 512.
+      const cbToCompteComptable: Record<string, string> = {}
+      ;(comptesBancaires || []).forEach((c: any) => {
+        compteDeviseMap[c.id] = c.devise || 'MUR'
+        if (c.compte_comptable) cbToCompteComptable[c.id] = String(c.compte_comptable)
+      })
 
       // Second batch: écritures + other société names
       let ecritures: any[] = []
@@ -654,23 +662,65 @@ export async function POST(request: Request) {
               console.log(`[rapprochement] ${facturesUpdated} facture(s) → paye for ${match.supplierName}`)
             }
 
-            // Generate BNQ journal entries
+            // FIX 1 — Generate BNQ journal entries + lettrer ACH/BNQ ensemble.
+            // On émet un jeu d'écritures par facture du groupe pour que
+            // chacune porte son propre facture_id (le lettrage peut
+            // ensuite solder tiers par tiers). Le 2e compte BNQ est
+            // routé vers le bon 512xxx via cbToCompteComptable.
             const txRaw = entry.updatedTxs[txIdx]
             const txAmount = Math.max(Number(txRaw.debit) || 0, Number(txRaw.credit) || 0)
             const payAmountMUR = toMUR(txAmount, entry.releveDevise)
             const isOutgoing = (Number(txRaw.debit) || 0) > 0
             const payType: 'supplier' | 'client' = isOutgoing ? 'supplier' : 'client'
             const tiers = (match.supplierName || txRaw.tiers_detecte || '').substring(0, 50)
+            // Résoudre le compte bancaire comptable à partir du relevé
+            const releveRef = releves.find((r: any) => r.id === releveId)
+            const compteBanque = (releveRef && cbToCompteComptable[releveRef.compte_bancaire_id]) || '512'
+            const datePayment = txRaw.date || new Date().toISOString().split('T')[0]
+            const txLibelle = String(txRaw.libelle || '').substring(0, 100)
 
-            await createEcrituresForPayment(supabase, {
-              societe_id,
-              date_payment: txRaw.date || new Date().toISOString().split('T')[0],
-              amount_mur: Math.round(payAmountMUR * 100) / 100,
-              type: payType,
-              tiers,
-              ref_folio: `BANK-${releveId}-${txIdx}`,
-              description: `Paiement ${isGroup ? match.factureIds.length + ' factures' : match.factures[0]?.numero_facture || ''} — ${tiers}`,
+            // Montant par facture : réparti au prorata du montant_ttc,
+            // fallback équi-split. Arrondi à 2 décimales, reste sur la
+            // dernière facture pour équilibrer centime par centime.
+            const totalFactures = (match.factures || []).reduce(
+              (s: number, f: any) => s + (Number(f.montant_ttc) || 0), 0
+            )
+            const amountMurRounded = Math.round(payAmountMUR * 100) / 100
+            const perFactureAmounts: number[] = (match.factures || []).map((f: any, i: number) => {
+              const base = match.factures.length === 1
+                ? amountMurRounded
+                : (totalFactures > 0
+                    ? Math.round((Number(f.montant_ttc) || 0) / totalFactures * amountMurRounded * 100) / 100
+                    : Math.round((amountMurRounded / match.factures.length) * 100) / 100)
+              return base
             })
+            const summed = perFactureAmounts.reduce((s, n) => s + n, 0)
+            const residual = Math.round((amountMurRounded - summed) * 100) / 100
+            if (perFactureAmounts.length > 0 && Math.abs(residual) >= 0.01) {
+              perFactureAmounts[perFactureAmounts.length - 1] += residual
+            }
+
+            for (let i = 0; i < (match.factures || []).length; i++) {
+              const fac = match.factures[i]
+              const amountPerFacture = perFactureAmounts[i] || 0
+              if (amountPerFacture <= 0) continue
+              const { error: payErr } = await createEcrituresForPayment(supabase, {
+                societe_id,
+                date_payment: datePayment,
+                amount_mur: amountPerFacture,
+                type: payType,
+                tiers,
+                ref_folio: `BANK-${releveId}-${txIdx}-${fac.id}`,
+                description: `Règlement ${fac.numero_facture || ''} — ${tiers}`.trim(),
+                compte_banque: compteBanque,
+                facture_id: fac.id,
+                lettre_code: code,
+                numero_piece: txLibelle,
+              })
+              if (payErr) {
+                console.warn(`[rapprochement] BNQ insert failed for facture ${fac.id}:`, payErr)
+              }
+            }
 
             matchesList.push({
               type: match.strategy,
