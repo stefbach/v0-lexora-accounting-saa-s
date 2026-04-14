@@ -110,6 +110,14 @@ export async function GET(request: Request) {
           banque: compte.banque || '—', devise: compte.devise || 'MUR',
           lettre: tx.lettre || null, facture_id: tx.facture_id || null,
           ecriture_id: tx.ecriture_id || null,
+          // Champs cles pour le filtrage UI (onglets 'A verifier' / 'Classees')
+          matched_type: tx.matched_type || null,
+          note: tx.note || null,
+          classification_rule: tx.classification_rule || null,
+          classification_compte: tx.classification_compte || null,
+          director_id: tx.director_id || null,
+          director_name: tx.director_name || null,
+          qualification_status: tx.qualification_status || null,
         })
       })
     })
