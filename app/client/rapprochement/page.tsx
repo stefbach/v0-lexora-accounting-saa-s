@@ -881,209 +881,6 @@ Voulez-vous vraiment continuer ?`
           }
         </Button>
       </div>
-      {/* ── Section "💳 Factures fournisseurs" ─────────────────────────────
-          Statut calculé par facture, tenant compte de la présence d'un
-          relevé pour le mois de paiement. Ne montre JAMAIS "En retard"
-          quand le relevé du mois n'est pas disponible. */}
-      {(() => {
-        const allFactures = (data?.factures || []) as any[]
-        const releves = (data?.releves || []) as any[]
-        if (allFactures.length === 0 && !selectedMois) return null
-
-        // Helper: is there a releve for a given YYYY-MM on this société?
-        const monthHasReleve = (ym: string | null | undefined): boolean => {
-          if (!ym) return false
-          return releves.some((r: any) => {
-            const p = String(r.periode || '').slice(0, 7)
-            if (p === ym) return true
-            if (r.date_debut && r.date_fin) {
-              return String(r.date_debut).slice(0, 7) <= ym && ym <= String(r.date_fin).slice(0, 7)
-            }
-            return false
-          })
-        }
-
-        // Filter factures by selectedMois (date_facture) + selectedPeriode.
-        // Fallbacks: keep 'paye' and 'en_attente'/'partiel'/'retard'.
-        const factureMois = (f: any): string | null =>
-          f.date_facture ? String(f.date_facture).slice(0, 7) : null
-        const fournFactures = allFactures
-          .filter((f: any) => f.type_facture !== 'client') // suppliers only
-          .filter((f: any) => !selectedMois || factureMois(f) === selectedMois)
-
-        if (fournFactures.length === 0) return null
-
-        // Compute display status per facture.
-        type FactureRow = {
-          f: any
-          status: 'paye' | 'releve_manquant' | 'en_attente' | 'en_retard'
-          label: string
-          badgeCls: string
-          payDate?: string | null
-        }
-        const today = new Date().toISOString().slice(0, 10)
-        const rows: FactureRow[] = fournFactures.map((f: any) => {
-          const isPaye = f.statut === 'paye'
-          const echeance = f.date_echeance ? String(f.date_echeance).slice(0, 10) : null
-          const payMonth = isPaye && f.rapproche_date
-            ? String(f.rapproche_date).slice(0, 7)
-            : (factureMois(f))
-          const releveExists = monthHasReleve(payMonth)
-
-          if (isPaye) {
-            return {
-              f, status: 'paye',
-              label: '✅ Payé',
-              badgeCls: 'bg-green-100 text-green-700 border-green-200',
-              payDate: f.rapproche_date || null,
-            }
-          }
-          // Not paid yet — decide based on releve availability
-          if (!releveExists) {
-            return {
-              f, status: 'releve_manquant',
-              label: '📋 Relevé manquant',
-              badgeCls: 'bg-orange-100 text-orange-700 border-orange-200',
-            }
-          }
-          if (echeance && echeance < today) {
-            return {
-              f, status: 'en_retard',
-              label: '🔴 En retard',
-              badgeCls: 'bg-red-100 text-red-700 border-red-200',
-            }
-          }
-          return {
-            f, status: 'en_attente',
-            label: '⏳ En attente',
-            badgeCls: 'bg-amber-100 text-amber-700 border-amber-200',
-          }
-        })
-
-        const counts = {
-          paye: rows.filter(r => r.status === 'paye').length,
-          missingReleve: rows.filter(r => r.status === 'releve_manquant').length,
-          attente: rows.filter(r => r.status === 'en_attente').length,
-          retard: rows.filter(r => r.status === 'en_retard').length,
-        }
-
-        return (
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-[#0B0F2E] flex items-center gap-2">
-                <span>💳</span> Factures fournisseurs
-                <span className="text-xs font-normal text-gray-500 ml-2">
-                  {rows.length} facture{rows.length > 1 ? 's' : ''}{selectedMois ? ` pour ${selectedMois}` : ''}
-                </span>
-              </CardTitle>
-              <div className="flex flex-wrap gap-3 text-xs text-gray-500 pt-1">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" />{counts.paye} payées</span>
-                {counts.missingReleve > 0 && <span className="flex items-center gap-1 text-orange-700"><span className="w-2 h-2 rounded-full bg-orange-500" />{counts.missingReleve} relevé manquant</span>}
-                {counts.attente > 0 && <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" />{counts.attente} en attente</span>}
-                {counts.retard > 0 && <span className="flex items-center gap-1 text-red-700"><span className="w-2 h-2 rounded-full bg-red-500" />{counts.retard} en retard</span>}
-              </div>
-            </CardHeader>
-            <CardContent className="p-0 overflow-x-auto">
-              {(() => {
-                // Pagination — clamp page if the rows length shrinks.
-                const totalPages = Math.max(1, Math.ceil(rows.length / FACTURES_PAGE_SIZE))
-                const safePage = Math.min(Math.max(1, facturesPage), totalPages)
-                const start = (safePage - 1) * FACTURES_PAGE_SIZE
-                const pageRows = rows.slice(start, start + FACTURES_PAGE_SIZE)
-                return (
-              <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Fournisseur</TableHead>
-                    <TableHead>N° Facture</TableHead>
-                    <TableHead className="text-right">Montant</TableHead>
-                    <TableHead>Statut</TableHead>
-                    <TableHead>Paiement</TableHead>
-                    <TableHead>Action</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {pageRows.map(({ f, label, badgeCls, payDate, status }) => (
-                    <TableRow key={f.id}>
-                      <TableCell className="text-sm font-medium">
-                        <TruncatedCell text={f.tiers || '—'} />
-                      </TableCell>
-                      <TableCell className="text-sm font-mono text-gray-600">
-                        {f.numero_facture || '—'}
-                      </TableCell>
-                      <TableCell className="text-right font-medium">
-                        {fmt(Number(f.montant_ttc) || Number(f.montant_mur) || 0)}{' '}
-                        <span className="text-xs text-gray-400">{f.devise || 'MUR'}</span>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={`border ${badgeCls} font-medium`}>
-                          {label}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-xs text-gray-500">
-                        {status === 'paye' && payDate ? `Virement du ${formatDate(payDate)}` : '—'}
-                      </TableCell>
-                      <TableCell>
-                        {status !== 'paye' && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 text-xs"
-                            onClick={() => {
-                              // Pre-open manual lettrage dialog on the unmatched side
-                              setDialogTab('factures')
-                              // Find a matching unmatched transaction to pre-fill
-                              const prefill = unmatched.find((t: any) =>
-                                Number(t.debit) > 0 &&
-                                Math.abs(Number(t.debit) - (Number(f.montant_ttc) || 0)) < (Number(f.montant_ttc) || 1) * 0.05
-                              )
-                              setLinkDialog(prefill || { preselected_facture_id: f.id })
-                            }}
-                          >
-                            Lettrer
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between border-t bg-gray-50/50 px-4 py-2 text-sm">
-                  <span className="text-gray-600">
-                    Page <strong>{safePage}</strong> sur {totalPages}{" "}
-                    <span className="text-gray-400">· {rows.length} facture{rows.length > 1 ? "s" : ""}</span>
-                  </span>
-                  <div className="flex gap-1">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={safePage <= 1}
-                      onClick={() => setFacturesPage(p => Math.max(1, p - 1))}
-                      className="h-7 text-xs"
-                    >
-                      ← Précédent
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={safePage >= totalPages}
-                      onClick={() => setFacturesPage(p => Math.min(totalPages, p + 1))}
-                      className="h-7 text-xs"
-                    >
-                      Suivant →
-                    </Button>
-                  </div>
-                </div>
-              )}
-              </>
-                )
-              })()}
-            </CardContent>
-          </Card>
-        )
-      })()}
 
       {/* Filters row: Month nav (← Mois Année →) + Compte + Période */}
       <div className="flex flex-wrap items-center gap-3">
@@ -1215,6 +1012,217 @@ Voulez-vous vraiment continuer ?`
           </CardContent>
         </Card>
       )}
+      {/* ── Section "💳 Factures fournisseurs" ─────────────────────────────
+          Statut calculé par facture, tenant compte de la présence d'un
+          relevé pour le mois de paiement. Ne montre JAMAIS "En retard"
+          quand le relevé du mois n'est pas disponible. */}
+      {(() => {
+        const allFactures = (data?.factures || []) as any[]
+        const releves = (data?.releves || []) as any[]
+        if (allFactures.length === 0 && !selectedMois) return null
+
+        // Helper: is there a releve for a given YYYY-MM on this société?
+        const monthHasReleve = (ym: string | null | undefined): boolean => {
+          if (!ym) return false
+          return releves.some((r: any) => {
+            const p = String(r.periode || '').slice(0, 7)
+            if (p === ym) return true
+            if (r.date_debut && r.date_fin) {
+              return String(r.date_debut).slice(0, 7) <= ym && ym <= String(r.date_fin).slice(0, 7)
+            }
+            return false
+          })
+        }
+
+        // Filter factures by selectedMois (date_facture) + selectedPeriode.
+        // Fallbacks: keep 'paye' and 'en_attente'/'partiel'/'retard'.
+        const factureMois = (f: any): string | null =>
+          f.date_facture ? String(f.date_facture).slice(0, 7) : null
+        const fournFactures = allFactures
+          .filter((f: any) => f.type_facture !== 'client') // suppliers only
+          .filter((f: any) => !selectedMois || factureMois(f) === selectedMois)
+
+        if (fournFactures.length === 0) return null
+
+        // Compute display status per facture.
+        type FactureRow = {
+          f: any
+          status: 'paye' | 'releve_manquant' | 'en_attente' | 'en_retard'
+          label: string
+          badgeCls: string
+          payDate?: string | null
+        }
+        const today = new Date().toISOString().slice(0, 10)
+        const rows: FactureRow[] = fournFactures.map((f: any) => {
+          const isPaye = f.statut === 'paye'
+          const echeance = f.date_echeance ? String(f.date_echeance).slice(0, 10) : null
+          const payMonth = isPaye && f.rapproche_date
+            ? String(f.rapproche_date).slice(0, 7)
+            : (factureMois(f))
+          const releveExists = monthHasReleve(payMonth)
+
+          if (isPaye) {
+            return {
+              f, status: 'paye',
+              label: '✅ Payé',
+              badgeCls: 'bg-green-100 text-green-700 border-green-200',
+              payDate: f.rapproche_date || null,
+            }
+          }
+          // Not paid yet — decide based on releve availability
+          if (!releveExists) {
+            return {
+              f, status: 'releve_manquant',
+              label: '📋 Relevé manquant',
+              badgeCls: 'bg-orange-100 text-orange-700 border-orange-200',
+            }
+          }
+          if (echeance && echeance < today) {
+            return {
+              f, status: 'en_retard',
+              label: '🔴 En retard',
+              badgeCls: 'bg-red-100 text-red-700 border-red-200',
+            }
+          }
+          return {
+            f, status: 'en_attente',
+            label: '⏳ En attente',
+            badgeCls: 'bg-amber-100 text-amber-700 border-amber-200',
+          }
+        })
+
+        const counts = {
+          paye: rows.filter(r => r.status === 'paye').length,
+          missingReleve: rows.filter(r => r.status === 'releve_manquant').length,
+          attente: rows.filter(r => r.status === 'en_attente').length,
+          retard: rows.filter(r => r.status === 'en_retard').length,
+        }
+
+        return (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-[#0B0F2E] flex items-center gap-2 flex-wrap">
+                <span>💳</span>
+                <span>Factures fournisseurs</span>
+                {selectedMois ? (() => {
+                  const MOIS_FR = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
+                  const [yy, mm] = selectedMois.split('-').map(Number)
+                  return <span className="text-sm font-medium text-gray-500">— {MOIS_FR[(mm || 1) - 1]} {yy}</span>
+                })() : (
+                  <span className="text-sm font-medium text-gray-500">— Toutes périodes</span>
+                )}
+                <span className="text-xs font-normal text-gray-400 ml-auto">
+                  {rows.length} facture{rows.length > 1 ? 's' : ''}
+                </span>
+              </CardTitle>
+              <div className="flex flex-wrap gap-3 text-xs text-gray-500 pt-1">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" />{counts.paye} payées</span>
+                {counts.missingReleve > 0 && <span className="flex items-center gap-1 text-orange-700"><span className="w-2 h-2 rounded-full bg-orange-500" />{counts.missingReleve} relevé manquant</span>}
+                {counts.attente > 0 && <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" />{counts.attente} en attente</span>}
+                {counts.retard > 0 && <span className="flex items-center gap-1 text-red-700"><span className="w-2 h-2 rounded-full bg-red-500" />{counts.retard} en retard</span>}
+              </div>
+            </CardHeader>
+            <CardContent className="p-0 overflow-x-auto">
+              {(() => {
+                // Pagination — clamp page if the rows length shrinks.
+                const totalPages = Math.max(1, Math.ceil(rows.length / FACTURES_PAGE_SIZE))
+                const safePage = Math.min(Math.max(1, facturesPage), totalPages)
+                const start = (safePage - 1) * FACTURES_PAGE_SIZE
+                const pageRows = rows.slice(start, start + FACTURES_PAGE_SIZE)
+                return (
+              <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Fournisseur</TableHead>
+                    <TableHead>N° Facture</TableHead>
+                    <TableHead className="text-right">Montant</TableHead>
+                    <TableHead>Statut</TableHead>
+                    <TableHead>Paiement</TableHead>
+                    <TableHead>Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {pageRows.map(({ f, label, badgeCls, payDate, status }) => (
+                    <TableRow key={f.id}>
+                      <TableCell className="text-sm font-medium">
+                        <TruncatedCell text={f.tiers || '—'} />
+                      </TableCell>
+                      <TableCell className="text-sm font-mono text-gray-600">
+                        {f.numero_facture || '—'}
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        {fmt(Number(f.montant_ttc) || Number(f.montant_mur) || 0)}{' '}
+                        <span className="text-xs text-gray-400">{f.devise || 'MUR'}</span>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={`border ${badgeCls} font-medium`}>
+                          {label}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs text-gray-500">
+                        {status === 'paye' && payDate ? `Virement du ${formatDate(payDate)}` : '—'}
+                      </TableCell>
+                      <TableCell>
+                        {status !== 'paye' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() => {
+                              // Pre-open manual lettrage dialog on the unmatched side
+                              setDialogTab('factures')
+                              // Find a matching unmatched transaction to pre-fill
+                              const prefill = unmatched.find((t: any) =>
+                                Number(t.debit) > 0 &&
+                                Math.abs(Number(t.debit) - (Number(f.montant_ttc) || 0)) < (Number(f.montant_ttc) || 1) * 0.05
+                              )
+                              setLinkDialog(prefill || { preselected_facture_id: f.id })
+                            }}
+                          >
+                            Lettrer
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between border-t bg-gray-50/50 px-4 py-2 text-sm">
+                  <span className="text-gray-600">
+                    Page <strong>{safePage}</strong> sur {totalPages}{" "}
+                    <span className="text-gray-400">· {rows.length} facture{rows.length > 1 ? "s" : ""}</span>
+                  </span>
+                  <div className="flex gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={safePage <= 1}
+                      onClick={() => setFacturesPage(p => Math.max(1, p - 1))}
+                      className="h-7 text-xs"
+                    >
+                      ← Précédent
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={safePage >= totalPages}
+                      onClick={() => setFacturesPage(p => Math.min(totalPages, p + 1))}
+                      className="h-7 text-xs"
+                    >
+                      Suivant →
+                    </Button>
+                  </div>
+                </div>
+              )}
+              </>
+                )
+              })()}
+            </CardContent>
+          </Card>
+        )
+      })()}
 
       {/* ════════════════════════════════════════════════════════════════
           Transactions bancaires — 3 onglets (À classer / Classées / À vérifier)
@@ -1695,7 +1703,16 @@ Voulez-vous vraiment continuer ?`
         <div className="mt-2 space-y-4">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
-          <CardTitle className="text-[#0B0F2E]">Lettrage fournisseurs/clients — {ecrituresLettrage.length} non lettrées</CardTitle>
+          <div>
+            <CardTitle className="text-[#0B0F2E]">
+              Écritures comptables à lettrer <span className="text-xs text-gray-400 font-normal">(technique)</span>
+              {ecrituresLettrage.length > 0 && <span className="text-xs text-gray-500 font-normal ml-2">— {ecrituresLettrage.length} non lettrées</span>}
+            </CardTitle>
+            <p className="text-xs text-gray-500 italic mt-1">
+              Ces écritures sont générées automatiquement lors du rapprochement.
+              Elles sont utilisées pour la clôture comptable.
+            </p>
+          </div>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={handleGenerateEcritures} disabled={generatingEcritures}>
               {generatingEcritures ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : null}
