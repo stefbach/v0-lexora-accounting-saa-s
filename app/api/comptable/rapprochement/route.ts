@@ -9,6 +9,7 @@ import { getTauxChange } from '@/lib/taux-change'
 import { accountClass } from '@/lib/accounting/classification-rules'
 import { validateLettrageGroup } from '@/lib/accounting/accounting-rules'
 import { classifyTransaction, detectDirector, getComplianceSeverity, type ClassificationRule } from '@/lib/accounting/classification-engine'
+import { checkPeriodLock } from '@/lib/accounting/period-lock'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -1473,6 +1474,18 @@ export async function POST(request: Request) {
         const txs = [...(releve.transactions_json || [])]
         if (txIdx >= txs.length) return NextResponse.json({ error: 'Transaction non trouvée' }, { status: 404 })
 
+        // B3 — Bloquer si la période de la transaction est verrouillée
+        const txDate = txs[txIdx]?.date
+        if (txDate && societe_id) {
+          const lockStatus = await checkPeriodLock(supabase, societe_id, txDate)
+          if (lockStatus.locked) {
+            return NextResponse.json({
+              error: `Période verrouillée — ${lockStatus.reason}. Modification interdite sur transaction du ${txDate}.`,
+              period_end: lockStatus.period_end,
+            }, { status: 403 })
+          }
+        }
+
         const code = `MC${String(Date.now()).slice(-4)}`
         txs[txIdx] = { ...txs[txIdx], statut: 'rapproche', matched_type: classification, lettre: code, note: `Classification manuelle: ${classification}` }
         await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', releve_id)
@@ -1636,6 +1649,17 @@ export async function POST(request: Request) {
       const txIdx = parseInt(transaction_id.split('-').pop() || '0')
       const txs = [...(releve.transactions_json || [])]
       const prevTx = txIdx < txs.length ? { ...txs[txIdx] } : null
+
+      // B3 — Bloquer si la période de la transaction est verrouillée
+      if (prevTx?.date && societe_id) {
+        const lockStatus = await checkPeriodLock(supabase, societe_id, prevTx.date)
+        if (lockStatus.locked) {
+          return NextResponse.json({
+            error: `Période verrouillée — ${lockStatus.reason}. Délettrage interdit sur transaction du ${prevTx.date}.`,
+            period_end: lockStatus.period_end,
+          }, { status: 403 })
+        }
+      }
 
       // Collect all facture_ids to unlink (support multi-facture delettrage)
       const faIds: string[] = facture_id

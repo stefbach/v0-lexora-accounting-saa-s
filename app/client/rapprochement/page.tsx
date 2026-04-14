@@ -15,6 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { bucketizeTransactions, type BucketItem } from "@/lib/accounting/classification-rules"
+import { RapprochementKpiDashboard } from "@/components/rapprochement/KpiDashboard"
 
 function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 function formatDate(d: string) { return d ? new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" }) : "—" }
@@ -1026,6 +1027,9 @@ Voulez-vous vraiment continuer ?`
           </div>
         </div>
       )}
+
+      {/* B4 — Dashboard KPIs rapprochement */}
+      <RapprochementKpiDashboard societeId={societeId} />
 
       {/* ── Bouton unique: Rapprocher automatiquement ─────────────────── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
