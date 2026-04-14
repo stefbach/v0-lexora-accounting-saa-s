@@ -169,6 +169,29 @@ export async function GET(request: Request) {
       societeIds = await getUserSocieteIds(supabase, user.id)
     }
 
+    // ---- ACTION: preview_nb_jours (real-time nb_jours calc for UI) ----
+    // Handled early, before empty-societes early returns, so the preview
+    // endpoint always returns { nb_jours } when inputs are valid.
+    if (action === 'preview_nb_jours') {
+      const previewEmployeId = searchParams.get('employe_id')
+      const previewDateDebut = searchParams.get('date_debut')
+      const previewDateFin = searchParams.get('date_fin')
+      if (!previewEmployeId || !previewDateDebut || !previewDateFin) {
+        return NextResponse.json({ error: 'employe_id, date_debut, date_fin requis' }, { status: 400 })
+      }
+      // Verify the employee belongs to a societe the user has access to
+      const { data: empAccess } = await supabase
+        .from('employes')
+        .select('id, societe_id')
+        .eq('id', previewEmployeId)
+        .maybeSingle()
+      if (!empAccess || !societeIds.includes(empAccess.societe_id)) {
+        return NextResponse.json({ error: 'Employe non accessible' }, { status: 403 })
+      }
+      const nb_jours = await computeNbJours(supabase, previewEmployeId, previewDateDebut, previewDateFin)
+      return NextResponse.json({ nb_jours })
+    }
+
     if (societeIds.length === 0) {
       return NextResponse.json({ conges: [], balances: [], employes: [], kpis: { total_al_taken: 0, total_sl_taken: 0, pending_requests: 0, alerts: 0 } })
     }
@@ -263,21 +286,6 @@ export async function GET(request: Request) {
           alerts: alertCount,
         },
       })
-    }
-
-    // ---- ACTION: preview_nb_jours (real-time nb_jours calc for UI) ----
-    if (action === 'preview_nb_jours') {
-      const previewEmployeId = searchParams.get('employe_id')
-      const previewDateDebut = searchParams.get('date_debut')
-      const previewDateFin = searchParams.get('date_fin')
-      if (!previewEmployeId || !previewDateDebut || !previewDateFin) {
-        return NextResponse.json({ error: 'employe_id, date_debut, date_fin requis' }, { status: 400 })
-      }
-      if (!employeeIds.includes(previewEmployeId)) {
-        return NextResponse.json({ error: 'Employe non accessible' }, { status: 403 })
-      }
-      const nb_jours = await computeNbJours(supabase, previewEmployeId, previewDateDebut, previewDateFin)
-      return NextResponse.json({ nb_jours })
     }
 
     // ---- ACTION: absents_today ----

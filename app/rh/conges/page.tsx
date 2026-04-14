@@ -152,6 +152,7 @@ export default function CongesPage() {
   const [formError, setFormError] = useState<string | null>(null)
   const [previewNbJours, setPreviewNbJours] = useState<number | null>(null)
   const [loadingPreview, setLoadingPreview] = useState(false)
+  const [previewError, setPreviewError] = useState<string | null>(null)
   const [refusDialog, setRefusDialog] = useState<string | null>(null)
   const [refusMotif, setRefusMotif] = useState("")
   const [actionLoading, setActionLoading] = useState<string | null>(null)
@@ -243,12 +244,22 @@ export default function CongesPage() {
 
   // Real-time nb_jours preview (uses employee's working_days + jours_feries)
   useEffect(() => {
-    if (!form.employe_id || !form.date_debut || !form.date_fin || form.date_fin < form.date_debut) {
+    // Reset when inputs are incomplete
+    if (!form.employe_id || !form.date_debut || !form.date_fin) {
       setPreviewNbJours(null)
+      setPreviewError(null)
+      setLoadingPreview(false)
+      return
+    }
+    if (form.date_fin < form.date_debut) {
+      setPreviewNbJours(null)
+      setPreviewError("La date de fin doit être après la date de début")
+      setLoadingPreview(false)
       return
     }
     let cancelled = false
     setLoadingPreview(true)
+    setPreviewError(null)
     const params = new URLSearchParams({
       action: "preview_nb_jours",
       employe_id: form.employe_id,
@@ -256,13 +267,30 @@ export default function CongesPage() {
       date_fin: form.date_fin,
     })
     fetch(`/api/rh/conges?${params}`)
-      .then(r => r.json())
-      .then(data => {
+      .then(async r => {
+        const data = await r.json().catch(() => ({}))
         if (cancelled) return
-        if (typeof data.nb_jours === "number") setPreviewNbJours(data.nb_jours)
-        else setPreviewNbJours(null)
+        if (!r.ok) {
+          console.error("[preview_nb_jours] API error:", r.status, data)
+          setPreviewError(data?.error || `Erreur serveur (${r.status})`)
+          setPreviewNbJours(null)
+          return
+        }
+        if (typeof data.nb_jours === "number") {
+          setPreviewNbJours(data.nb_jours)
+          setPreviewError(null)
+        } else {
+          console.error("[preview_nb_jours] Unexpected response:", data)
+          setPreviewError("Réponse inattendue du serveur")
+          setPreviewNbJours(null)
+        }
       })
-      .catch(() => { if (!cancelled) setPreviewNbJours(null) })
+      .catch(err => {
+        if (cancelled) return
+        console.error("[preview_nb_jours] Fetch failed:", err)
+        setPreviewError("Erreur réseau")
+        setPreviewNbJours(null)
+      })
       .finally(() => { if (!cancelled) setLoadingPreview(false) })
     return () => { cancelled = true }
   }, [form.employe_id, form.date_debut, form.date_fin])
@@ -947,15 +975,27 @@ export default function CongesPage() {
               </div>
             </div>
             {/* Real-time nb_jours preview (using working_days + jours fériés) */}
-            {form.employe_id && form.date_debut && form.date_fin && form.date_fin >= form.date_debut && (
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm">
+            {form.employe_id && form.date_debut && form.date_fin && (
+              <div className={`p-3 border rounded-lg text-sm ${
+                previewError
+                  ? "bg-red-50 border-red-200 text-red-800"
+                  : "bg-blue-50 border-blue-200 text-blue-800"
+              }`}>
                 {loadingPreview ? (
-                  <span className="text-gray-500 flex items-center gap-2"><Loader2 className="w-3 h-3 animate-spin" /> Calcul…</span>
-                ) : previewNbJours !== null ? (
-                  <span className="text-blue-800">
-                    <strong>{previewNbJours}</strong> jour{previewNbJours > 1 ? "s" : ""} ouvré{previewNbJours > 1 ? "s" : ""}
-                    <span className="text-gray-500 ml-2">(selon planning de l'employé et jours fériés)</span>
+                  <span className="text-gray-600 flex items-center gap-2">
+                    <Loader2 className="w-3 h-3 animate-spin" /> Calcul du nombre de jours…
                   </span>
+                ) : previewError ? (
+                  <span>⚠️ {previewError}</span>
+                ) : previewNbJours !== null ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-base">
+                      📅 <strong>{previewNbJours}</strong> jour{previewNbJours > 1 ? "s" : ""} ouvrable{previewNbJours > 1 ? "s" : ""}
+                    </span>
+                    <span className="text-xs text-gray-600">
+                      (selon planning de l'employé et jours fériés)
+                    </span>
+                  </div>
                 ) : null}
               </div>
             )}
