@@ -767,6 +767,78 @@ export async function POST(request: Request) {
       return NextResponse.json({ conge: data })
     }
 
+    // ---- ACTION: annuler (soft-delete + balance restore) ----
+    //
+    // Semantics: the leave row is kept (statut='annule') so audit history
+    // and the UI's historique tab still see it. If the leave was
+    // previously approved, the solde is re-credited via the same
+    // recompute-from-scratch strategy as the refusal path.
+    //
+    // Access control:
+    //   - admin / rh / client_admin / direction / comptable with access to
+    //     the employee's societe: can annuler any leave in that scope.
+    //   - The employee herself: can annuler only her OWN leave and only
+    //     while it's still en_attente (you can't walk back an already
+    //     approved leave without a manager's decision).
+    if (action === 'annuler') {
+      if (!body.id) return NextResponse.json({ error: 'ID requis' }, { status: 400 })
+
+      const { data: conge } = await supabase.from('demandes_conges').select('*').eq('id', body.id).maybeSingle()
+      if (!conge) return NextResponse.json({ error: 'Demande non trouvee' }, { status: 404 })
+      if (conge.statut === 'annule') {
+        return NextResponse.json({ error: 'Demande deja annulee' }, { status: 400 })
+      }
+      if (conge.statut === 'refuse') {
+        return NextResponse.json({ error: 'Demande deja refusee (aucune annulation possible)' }, { status: 400 })
+      }
+
+      const { data: emp } = await supabase.from('employes').select('id, societe_id, auth_user_id').eq('id', conge.employe_id).maybeSingle()
+      if (!emp) return NextResponse.json({ error: 'Employe non trouve' }, { status: 404 })
+
+      // Authorization: either the requester is a manager with access to
+      // this societe, or she is the employee herself cancelling her own
+      // pending request.
+      const accessibleIds = await getUserSocieteIds(user.id)
+      const isManager = accessibleIds.includes(emp.societe_id)
+      const isSelf = emp.auth_user_id === user.id
+      if (!isManager && !isSelf) {
+        return NextResponse.json({ error: 'Acces non autorise' }, { status: 403 })
+      }
+      if (isSelf && !isManager && conge.statut !== 'en_attente') {
+        return NextResponse.json({
+          error: 'Un employe ne peut annuler que ses demandes en attente. Demandez a votre manager.',
+        }, { status: 403 })
+      }
+
+      const wasApproved = conge.statut === 'approuve'
+
+      const { data: canceller } = await supabase.from('employes').select('id').eq('auth_user_id', user.id).maybeSingle()
+
+      const { data, error } = await supabase
+        .from('demandes_conges')
+        .update({
+          statut: 'annule',
+          date_decision: new Date().toISOString(),
+          approuve_par: canceller?.id || null,
+          notes_manager: body.motif_annulation || body.notes_manager || null,
+        })
+        .eq('id', body.id)
+        .select()
+        .single()
+      if (error) {
+        console.error('[conges] annuler error:', error.message)
+        return NextResponse.json({ error: 'Erreur annulation: ' + error.message }, { status: 500 })
+      }
+
+      // Restore the solde when cancelling an already-approved leave.
+      if (wasApproved && (conge.type_conge === 'AL' || conge.type_conge === 'SL')) {
+        const annee = new Date(conge.date_debut).getFullYear()
+        await recomputeSoldeConges(supabase, conge.employe_id, conge.type_conge, annee)
+      }
+
+      return NextResponse.json({ conge: data })
+    }
+
     // ---- ACTION: sick_retroactif ----
     if (action === 'sick_retroactif') {
       if (!body.employe_id || !body.date_debut)
