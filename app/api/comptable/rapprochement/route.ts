@@ -573,13 +573,31 @@ export async function POST(request: Request) {
             entry.changed = true
 
             let facturesUpdated = 0
+            // Calculer le montant total des factures pour détecter paiement partiel / TDS
+            const totalFactures = match.factures.reduce((s: number, f: any) => s + (Number(f.montant_mur) || Number(f.montant_ttc) || 0), 0)
+            const txPayAmtMUR = toMUR(Math.max(Number(match.transaction.debit) || 0, Number(match.transaction.credit) || 0), match.transaction.devise || 'MUR')
+            const isPartial = totalFactures > 0 && txPayAmtMUR < totalFactures * 0.90 // < 90% = partiel
+            const diffForTds = totalFactures > 0 ? (totalFactures - txPayAmtMUR) / totalFactures : 0
+            const isTds = diffForTds >= 0.02 && diffForTds <= 0.06 // 2-6% = TDS
+
             for (const fId of match.factureIds) {
+              const f = match.factures.find((x: any) => x.id === fId)
+              const fAmt = Number(f?.montant_mur) || Number(f?.montant_ttc) || 0
+
+              // Part de ce paiement couvrant cette facture (proportionnel)
+              const partCouverte = totalFactures > 0 ? (fAmt / totalFactures) * txPayAmtMUR : fAmt
+              const soldeRestant = isPartial ? Math.round((fAmt - partCouverte) * 100) / 100 : 0
+              const tdsRetenu = isTds ? Math.round((fAmt - partCouverte) * 100) / 100 : 0
+
+              const newStatut = isPartial && soldeRestant > 1 ? 'partiel' : 'paye'
               const { error: updErr } = await supabase.from('factures').update({
-                statut: 'paye',
+                statut: newStatut,
                 rapproche_releve_id: releveId,
                 rapproche_transaction_idx: txIdx,
                 rapproche_date: reconcileDate,
                 rapproche_source: 'auto_intelligent',
+                solde_non_paye: soldeRestant > 1 ? soldeRestant : 0,
+                tds_retenu: tdsRetenu,
               }).eq('id', fId)
               if (updErr) {
                 console.error(`[rapprochement] Failed to update facture ${fId}:`, updErr.message)
@@ -609,6 +627,27 @@ export async function POST(request: Request) {
               ref_folio: `BANK-${releveId}-${txIdx}`,
               description: `Paiement ${isGroup ? match.factureIds.length + ' factures' : match.factures[0]?.numero_facture || ''} — ${tiers}`,
             })
+
+            // Si TDS détecté → enregistrer la retenue (D 401 / C 443 - TVA retenue à source)
+            if (isTds && diffForTds > 0) {
+              const tdsAmount = Math.round((totalFactures - txPayAmtMUR) * 100) / 100
+              const tdsRefFolio = `TDS-${releveId}-${txIdx}`
+              try {
+                const { data: dossierTds } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
+                if (dossierTds) {
+                  await supabase.from('ecritures_comptables_v2').insert([
+                    { dossier_id: dossierTds.id, societe_id, date_ecriture: txRaw.date,
+                      journal: 'OD', numero_compte: payType === 'supplier' ? '401' : '411',
+                      libelle: `TDS retenue à source — ${tiers} — ${(tdsAmount).toFixed(2)} MUR (${(diffForTds * 100).toFixed(1)}%)`,
+                      debit_mur: tdsAmount, credit_mur: 0, lettre: code, ref_folio: tdsRefFolio },
+                    { dossier_id: dossierTds.id, societe_id, date_ecriture: txRaw.date,
+                      journal: 'OD', numero_compte: '4457',
+                      libelle: `TDS — ${tiers}`,
+                      debit_mur: 0, credit_mur: tdsAmount, lettre: code, ref_folio: tdsRefFolio },
+                  ])
+                }
+              } catch (tdsErr) { console.warn('[TDS] Failed to create TDS entry:', tdsErr) }
+            }
 
             matchesList.push({
               type: match.strategy,
@@ -900,7 +939,9 @@ export async function POST(request: Request) {
               const factureTiers = (facture.tiers || '').toLowerCase().substring(0, 20)
               const factureMUR = Math.round(Number(facture.montant_mur || facture.montant_ttc || 0) * 100) / 100
 
-              // Stratégie 1: montant exact (2%) + 5 premiers chars du tiers
+              // Stratégie 1: montant exact (2%) + 5 premiers chars du tiers OBLIGATOIRE
+              // Le filtre tiers est OBLIGATOIRE pour éviter le lettrage croisé
+              // (2 factures du même montant peuvent venir de fournisseurs différents)
               const tiersShort = factureTiers.length >= 5 ? factureTiers.substring(0, 5) : factureTiers
               let achFound = achNonLettrees.find((e: any) => {
                 const eAmt = Math.round((Number(e.credit_mur) || 0) * 100) / 100
@@ -911,24 +952,17 @@ export async function POST(request: Request) {
                 return tiersShort.length >= 3 && eLib.includes(tiersShort)
               })
 
-              // Stratégie 2: montant exact (2%) sans filtre tiers
-              if (!achFound) {
+              // Stratégie 2: par numéro de facture dans le libellé ACH
+              if (!achFound && facture.numero_facture && String(facture.numero_facture).length >= 4) {
+                const numFac = String(facture.numero_facture).toLowerCase()
                 achFound = achNonLettrees.find((e: any) => {
-                  const eAmt = Math.round((Number(e.credit_mur) || 0) * 100) / 100
-                  if (eAmt === 0) return false
-                  return Math.abs(eAmt - factureMUR) / Math.max(factureMUR, 1) < 0.02
+                  const eLib = (e.libelle || '').toLowerCase()
+                  return eLib.includes(numFac)
                 })
               }
 
-              // Stratégie 3: montant exact absolu
-              if (!achFound) {
-                achFound = achNonLettrees.find((e: any) => {
-                  const eAmt = Math.round((Number(e.credit_mur) || 0) * 100) / 100
-                  return eAmt === factureMUR
-                })
-              }
-
-              // Stratégie 4: montant proche (10%) + tiers 5 chars
+              // Stratégie 3: montant proche (10%) + tiers OBLIGATOIRE (TDS possible)
+              // Le filtre tiers reste obligatoire pour éviter les lettrages croisés
               if (!achFound && factureMUR > 0) {
                 achFound = achNonLettrees.find((e: any) => {
                   const eAmt = Math.round((Number(e.credit_mur) || 0) * 100) / 100
@@ -1286,6 +1320,26 @@ export async function POST(request: Request) {
           if (error) throw new Error(`Ecriture update failed: ${error.message}`)
         }
 
+        // Supprimer les écritures BNQ créées par le rapprochement (BANK-, TDS-, CLS-, MC-)
+        // pour éviter les écritures orphelines après délettrage
+        try {
+          const refPatterns = [`BANK-${releve_id}-${txIdx}`, `TDS-${releve_id}-${txIdx}`, `CLS-${releve_id}-${txIdx}`, `MC-${releve_id}-${txIdx}`]
+          await supabase.from('ecritures_comptables_v2')
+            .delete()
+            .eq('societe_id', societe_id)
+            .in('ref_folio', refPatterns)
+          // Délettrer aussi les ACH/OD qui avaient le même code lettre
+          if (prevTx?.lettre) {
+            await supabase.from('ecritures_comptables_v2')
+              .update({ lettre: null, date_lettrage: null })
+              .eq('societe_id', societe_id)
+              .eq('lettre', prevTx.lettre)
+              .neq('journal', 'BNQ')
+          }
+        } catch (clenupErr) {
+          console.warn('[delettrer] cleanup BNQ failed:', clenupErr)
+        }
+
         // Audit (best-effort)
         try {
           await supabase.from('rapprochement_audit_log').insert({
@@ -1437,11 +1491,14 @@ export async function POST(request: Request) {
       if (ecart > 1) {
         const { data: dossier } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
         if (dossier) {
+          // Comptes Maurice valides:
+          // - 673 = Pertes sur créances (paiement < facture) - charge
+          // - 773 = Reprises sur créances irrécouvrables (paiement > facture) - produit
           await supabase.from('ecritures_comptables').insert({
             dossier_id: dossier.id,
             date_ecriture: new Date().toISOString().split('T')[0],
             journal: 'OD',
-            compte: txAmount > facturesTotal ? '758' : '658',
+            compte: txAmount > facturesTotal ? '773' : '673',
             libelle: `Écart rapprochement multi-factures — ${lettreCode}`,
             debit: txAmount > facturesTotal ? Math.round(ecart * 100) / 100 : 0,
             credit: txAmount < facturesTotal ? Math.round(ecart * 100) / 100 : 0,
