@@ -900,13 +900,18 @@ Voulez-vous vraiment continuer ?`
   const STATUT_INTERNE_LIKE = new Set(['interne', 'interne_en_attente', 'virement_interne'])
   const STATUT_AUTO_LIKE = new Set([
     'frais_bancaires',
-    'salaire_bulk', 'salaire_bulk_non_verifie', 'salaire_individuel',
+    'salaire', 'salaire_bulk', 'salaire_bulk_non_verifie', 'salaire_individuel',
     'paiement_mra', 'paiement_mra_non_verifie',
     'remboursement_personnel', 'remboursement_test',
     'paiement_fournisseur',           // explicit fournisseur classification (no facture matched)
     'prestation_contracteur',
     'charges_sociales', 'reversal_salaire',
     'identifie',                       // generic "classified" without a sub-type
+    // === Classifications du dropdown "Classer..." de l onglet À vérifier ===
+    'compte_courant_associe',
+    'avance_personnel',
+    'charge_diverse',
+    'autre',
   ])
   const STATUT_PROPOSED = new Set(['propose', 'a_verifier'])
 
