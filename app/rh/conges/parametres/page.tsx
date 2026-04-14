@@ -174,11 +174,15 @@ const DEFAULT_RULES: LeaveRule[] = [
   { id: "default_sans_solde", type_conge: "SANS_SOLDE", jours_par_an: 0, prorata: false, max_report: 0, anciennete_min_mois: 0, genre: null, description: "Conge sans solde, sur accord de l'employeur." },
 ]
 
+// Per-type flag map: { AL: { demi_journee_autorisee: true, ... }, ... }
+type TypeFlags = Record<string, { demi_journee_autorisee: boolean; imposable_par_societe: boolean }>
+
 // ─── Main Page ───────────────────────────────────────────────────
 export default function CongesParametresPage() {
   const [societes, setSocietes] = useState<any[]>([])
   const [societe, setSociete] = useState("all")
   const [rules, setRules] = useState<LeaveRule[]>(DEFAULT_RULES)
+  const [typeFlags, setTypeFlags] = useState<TypeFlags>({})
   const [loading, setLoading] = useState(false)
 
   const [editOpen, setEditOpen] = useState(false)
@@ -188,7 +192,10 @@ export default function CongesParametresPage() {
   const [formMaxReport, setFormMaxReport] = useState("")
   const [formAnciennete, setFormAnciennete] = useState("")
   const [formGenre, setFormGenre] = useState("")
+  const [formDemiJournee, setFormDemiJournee] = useState(true)
+  const [formImposable, setFormImposable] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [saveFeedback, setSaveFeedback] = useState<string | null>(null)
 
   useEffect(() => {
     fetch("/api/comptable/societes")
@@ -200,17 +207,20 @@ export default function CongesParametresPage() {
   const load = useCallback(async () => {
     if (societe === "all" || !societe) {
       setRules(DEFAULT_RULES)
+      setTypeFlags({})
       return
     }
     setLoading(true)
     try {
       const res = await fetch(`/api/rh/conges/entitlements?societe_id=${societe}`)
-      if (!res.ok) { setRules(DEFAULT_RULES); return }
+      if (!res.ok) { setRules(DEFAULT_RULES); setTypeFlags({}); return }
       const data = await res.json()
       const loaded = data.rules || data.regles || []
       setRules(loaded.length > 0 ? loaded : DEFAULT_RULES)
+      setTypeFlags(data.type_flags || {})
     } catch {
       setRules(DEFAULT_RULES)
+      setTypeFlags({})
     } finally {
       setLoading(false)
     }
@@ -225,12 +235,19 @@ export default function CongesParametresPage() {
     setFormMaxReport(String(rule.max_report))
     setFormAnciennete(String(rule.anciennete_min_mois))
     setFormGenre(rule.genre || "")
+    // Flag defaults: AL allows demi-journée and is imposable; the rest are
+    // conservative defaults until the RH team explicitly opts in.
+    const cur = typeFlags[rule.type_conge]
+    setFormDemiJournee(cur?.demi_journee_autorisee ?? (rule.type_conge === 'AL' || rule.type_conge === 'SL'))
+    setFormImposable(cur?.imposable_par_societe ?? (rule.type_conge === 'AL'))
+    setSaveFeedback(null)
     setEditOpen(true)
   }
 
   const saveRule = async () => {
     if (!editRule) return
     setSaving(true)
+    setSaveFeedback(null)
     try {
       const updated: LeaveRule = {
         ...editRule,
@@ -241,16 +258,49 @@ export default function CongesParametresPage() {
         genre: formGenre || null,
       }
       if (societe !== "all") {
+        // 1) Persist the WRA-style rule fields via the legacy POST action.
         await fetch("/api/rh/conges/entitlements", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "update_rule", societe_id: societe, rule: updated }),
         }).catch(() => {})
+
+        // 2) Persist the two per-type flags across conges_employes for every
+        //    active employee of the société (new PUT endpoint).
+        const putRes = await fetch("/api/rh/conges/entitlements", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            societe_id: societe,
+            type_conge: editRule.type_conge,
+            demi_journee_autorisee: formDemiJournee,
+            imposable_par_societe: formImposable,
+          }),
+        })
+        if (putRes.ok) {
+          const r = await putRes.json().catch(() => ({}))
+          const u = r.updated || 0
+          const c = r.created || 0
+          setSaveFeedback(`Paramètres appliqués: ${u} employé(s) mis à jour, ${c} créé(s).`)
+          // Update local type_flags so the UI reflects the change immediately.
+          setTypeFlags(prev => ({
+            ...prev,
+            [editRule.type_conge]: {
+              demi_journee_autorisee: formDemiJournee,
+              imposable_par_societe: formImposable,
+            },
+          }))
+        } else {
+          const err = await putRes.json().catch(() => ({}))
+          setSaveFeedback(`⚠ Flags non enregistrés: ${err?.error || putRes.status}`)
+        }
       }
       setRules(prev => prev.map(r => r.type_conge === editRule.type_conge ? updated : r))
-      setEditOpen(false)
+      // Keep dialog open briefly so user sees the feedback, then close.
+      setTimeout(() => { setEditOpen(false); setSaveFeedback(null) }, 1200)
     } catch (e) {
       console.error(e)
+      setSaveFeedback("Erreur lors de l'enregistrement")
     } finally {
       setSaving(false)
     }
@@ -400,6 +450,17 @@ export default function CongesParametresPage() {
                           <Badge variant="outline" className="text-xs">{GENRE_LABELS[rule.genre] || rule.genre}</Badge>
                         </div>
                       )}
+                      {/* Per-type flags — visible only when a société is selected */}
+                      {societe !== "all" && (
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {typeFlags[rule.type_conge]?.demi_journee_autorisee && (
+                            <Badge className="bg-purple-100 text-purple-700 text-[10px] font-medium">Demi-journée OK</Badge>
+                          )}
+                          {typeFlags[rule.type_conge]?.imposable_par_societe && (
+                            <Badge className="bg-amber-100 text-amber-700 text-[10px] font-medium">Imposable</Badge>
+                          )}
+                        </div>
+                      )}
                       <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => openEdit(rule)} style={{ borderColor: GOLD, color: GOLD }}>
                         <Edit2 className="h-3 w-3 mr-1" /> Modifier
                       </Button>
@@ -448,6 +509,42 @@ export default function CongesParametresPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Commit 11 — Paramètres toggles (persist to conges_employes) */}
+            <div className="rounded-lg border p-3 bg-gray-50 space-y-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                Règles de fonctionnement
+              </p>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <Label className="text-sm">Demi-journée autorisée</Label>
+                  <p className="text-[10px] text-gray-500">
+                    Les employés peuvent demander ½ journée (matin ou après-midi) pour ce type de congé.
+                  </p>
+                </div>
+                <Switch checked={formDemiJournee} onCheckedChange={setFormDemiJournee} />
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <Label className="text-sm">Imposable par la société</Label>
+                  <p className="text-[10px] text-gray-500">
+                    La RH peut imposer ce type de congé (fermeture, pont, …) via « Imposer congé collectif ».
+                  </p>
+                </div>
+                <Switch checked={formImposable} onCheckedChange={setFormImposable} />
+              </div>
+              {societe === "all" && (
+                <p className="text-[10px] text-amber-700">
+                  Choisissez une société dans le sélecteur en haut pour enregistrer ces paramètres.
+                </p>
+              )}
+            </div>
+
+            {saveFeedback && (
+              <div className={`rounded-md p-2 text-sm ${saveFeedback.startsWith('⚠') ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-green-50 text-green-800 border border-green-200'}`}>
+                {saveFeedback}
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditOpen(false)}>Annuler</Button>

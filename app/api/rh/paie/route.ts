@@ -347,21 +347,44 @@ export async function POST(request: Request) {
       } catch {}
       if (joursFeriesSetSingle.size === 0) joursFeriesSetSingle = getMauritiusPublicHolidays(periodeYearSingle)
 
-      // UL days intersected with this month — used below to deduct from net.
+      // Leave-type counters intersected with this month — used below for
+      // UL deduction AND for the conges_details object returned with the
+      // response (Commit 11).
+      let joursAlEmploye = 0
+      let joursAlImpose = 0
+      let joursSickLeaveSingle = 0
       let joursUnpaidLeaveSingle = 0
       for (const c of congesApprouves || []) {
-        if (c.type_conge !== 'UL') continue
-        joursUnpaidLeaveSingle += countLeaveDaysInPeriod(
+        const n = countLeaveDaysInPeriod(
           c.date_debut, c.date_fin, periodeStartSingle, periodeEndSingle,
           emp, joursFeriesSetSingle
         )
+        if (n <= 0) continue
+        if (c.type_conge === 'AL') {
+          if (c.impose_par_societe === true) joursAlImpose += n
+          else joursAlEmploye += n
+        } else if (c.type_conge === 'SL') {
+          joursSickLeaveSingle += n
+        } else if (c.type_conge === 'UL') {
+          joursUnpaidLeaveSingle += n
+        }
       }
 
+      // Pointage anomalies the operator should see at a glance in the
+      // bulletin preview.
+      const anomaliesPointage: string[] = []
       let jours_absence_injust = 0
       for (const pt of pointagesMois || []) {
         if (isWeekend(pt.date_pointage)) continue
         const enConge = (congesApprouves || []).some(c => pt.date_pointage >= c.date_debut && pt.date_pointage <= c.date_fin)
-        if (!pt.heure_entree && !enConge && pt.absent_justifie !== true) jours_absence_injust++
+        if (!pt.heure_entree && !enConge && pt.absent_justifie !== true) {
+          jours_absence_injust++
+          anomaliesPointage.push(`Absence non justifiée le ${pt.date_pointage}`)
+        } else if (pt.heure_entree && !pt.heure_sortie) {
+          anomaliesPointage.push(`Oubli de pointage sortie le ${pt.date_pointage}`)
+        } else if (pt.heure_entree && enConge) {
+          anomaliesPointage.push(`Pointage enregistré le ${pt.date_pointage} alors que l'employé était en congé (le congé prévaut)`)
+        }
       }
       const montant_absence = Math.round(jours_absence_injust * (Number(emp.salaire_base) / 26) * 100) / 100
 
@@ -458,6 +481,16 @@ export async function POST(request: Request) {
           montant_ul: montant_ul_single,
           jours_ul: joursUnpaidLeaveSingle,
           jours_travailles,
+        },
+        // Commit 11 — bulletin leave breakdown for the UI and PDF.
+        conges_details: {
+          al_jours: Math.round((joursAlEmploye + joursAlImpose) * 100) / 100,
+          al_impose_jours: Math.round(joursAlImpose * 100) / 100,
+          al_employe_jours: Math.round(joursAlEmploye * 100) / 100,
+          sl_jours: Math.round(joursSickLeaveSingle * 100) / 100,
+          ul_jours: Math.round(joursUnpaidLeaveSingle * 100) / 100,
+          ul_deduction_mur: montant_ul_single,
+          anomalies_pointage: anomaliesPointage,
         },
       })
     }
@@ -682,6 +715,8 @@ export async function POST(request: Request) {
         // on the net; MAT/PAT are tracked for reporting (no deduction).
         let joursSickLeave = 0
         let joursLocalLeave = 0
+        let joursAlImposeBatch = 0     // subset of joursLocalLeave
+        let joursAlEmployeBatch = 0    // complement of joursAlImposeBatch
         let joursUnpaidLeave = 0
         let joursMatPat = 0
         for (const c of congesApprouves || []) {
@@ -691,7 +726,11 @@ export async function POST(request: Request) {
           )
           if (n <= 0) continue
           if (c.type_conge === 'SL') joursSickLeave += n
-          else if (c.type_conge === 'AL') joursLocalLeave += n
+          else if (c.type_conge === 'AL') {
+            joursLocalLeave += n
+            if (c.impose_par_societe === true) joursAlImposeBatch += n
+            else joursAlEmployeBatch += n
+          }
           else if (c.type_conge === 'UL') joursUnpaidLeave += n
           else if (c.type_conge === 'MAT' || c.type_conge === 'PAT') joursMatPat += n
         }
@@ -726,13 +765,20 @@ export async function POST(request: Request) {
         const otScaleFactor = dailyOtSum > 0 && otMensuelBrut < dailyOtSum ? otMensuelBrut / dailyOtSum : 1
         total_ot_montant = Math.round(total_ot_montant * otScaleFactor)
 
-        // 4. Absences injustifiées
-
+        // 4. Absences injustifiées + pointage anomalies for conges_details
         let jours_absence_injust = 0
+        const anomaliesPointageBatch: string[] = []
         for (const pt of pointagesMois || []) {
           if (isWeekend(pt.date_pointage)) continue
           const enConge = (congesApprouves || []).some(c => pt.date_pointage >= c.date_debut && pt.date_pointage <= c.date_fin)
-          if (!pt.heure_entree && !enConge && pt.absent_justifie !== true) jours_absence_injust++
+          if (!pt.heure_entree && !enConge && pt.absent_justifie !== true) {
+            jours_absence_injust++
+            anomaliesPointageBatch.push(`Absence non justifiée le ${pt.date_pointage}`)
+          } else if (pt.heure_entree && !pt.heure_sortie) {
+            anomaliesPointageBatch.push(`Oubli de pointage sortie le ${pt.date_pointage}`)
+          } else if (pt.heure_entree && enConge) {
+            anomaliesPointageBatch.push(`Pointage le ${pt.date_pointage} alors que l'employé était en congé`)
+          }
         }
         // 4. Override with request variables if provided
         const reqVar = requestVariables[emp.id]
@@ -917,7 +963,26 @@ export async function POST(request: Request) {
           erreurs.push(errMsg)
         }
         if (!error && saved) {
-          bulletinsSauvegardes.push({ ...saved, nom: emp.nom, prenom: emp.prenom, employe: { id: emp.id, code: emp.code_employe, nom: emp.nom, prenom: emp.prenom, poste: emp.poste } })
+          // Commit 11 — attach conges_details so the UI can show a
+          // "Congés du mois" section in the bulletin preview without
+          // re-fetching demandes_conges client-side.
+          const congesDetailsForBulletin = {
+            al_jours: Math.round(joursLocalLeave * 100) / 100,
+            al_impose_jours: Math.round(joursAlImposeBatch * 100) / 100,
+            al_employe_jours: Math.round(joursAlEmployeBatch * 100) / 100,
+            sl_jours: Math.round(joursSickLeave * 100) / 100,
+            ul_jours: Math.round(joursUnpaidLeave * 100) / 100,
+            ul_deduction_mur: Math.round(montant_ul * 100) / 100,
+            mat_pat_jours: Math.round(joursMatPat * 100) / 100,
+            anomalies_pointage: anomaliesPointageBatch,
+          }
+          bulletinsSauvegardes.push({
+            ...saved,
+            nom: emp.nom,
+            prenom: emp.prenom,
+            employe: { id: emp.id, code: emp.code_employe, nom: emp.nom, prenom: emp.prenom, poste: emp.poste },
+            conges_details: congesDetailsForBulletin,
+          })
           // Marquer primes intégrées (colonne integre_paie + date_integration ajoutées en migration 028)
           if (primesMois && primesMois.length > 0) {
             await supabase.from('primes_variables_mois')
