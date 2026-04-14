@@ -207,47 +207,70 @@ function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () => void
   const [motif, setMotif] = useState("")
   const [file, setFile] = useState<File | null>(null)
   const [dragOver, setDragOver] = useState(false)
+  // Fix 4 — demi-journée state for the self-service form
+  const [demiJournee, setDemiJournee] = useState(false)
+  const [matinOuApresMidi, setMatinOuApresMidi] = useState<'matin' | 'apres_midi'>('matin')
+  // Fix 4 — cancel-own-pending-request state
+  const [cancellingId, setCancellingId] = useState<string | null>(null)
 
   const needsCertificat = typeConge === "SL" && dateDebut && dateFin && (() => {
     const d1 = new Date(dateDebut), d2 = new Date(dateFin)
     return (d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24) > 3
   })()
 
+  // Leave types where half-day makes sense — mirrors the RH page's allowlist.
+  const DEMI_JOURNEE_ALLOWED = new Set(['AL', 'SL', 'SANS_SOLDE'])
+
+  const refreshData = async () => {
+    const [balRes, histRes] = await Promise.all([
+      fetch(`/api/rh/conges?action=balances&employe_id=${employe.id}`).then(r => r.json()).catch(() => ({})),
+      fetch(`/api/rh/conges?employe_id=${employe.id}`).then(r => r.json()).catch(() => ({ conges: [] })),
+    ])
+    setBalances(balRes.balances?.[0] || null)
+    setHistory(histRes.conges || histRes.demandes || [])
+  }
+
   useEffect(() => {
     const load = async () => {
       setLoadingH(true)
-      try {
-        const [balRes, histRes] = await Promise.all([
-          fetch(`/api/rh/conges?action=balances&employe_id=${employe.id}`).then(r => r.json()).catch(() => ({})),
-          fetch(`/api/rh/conges?employe_id=${employe.id}`).then(r => r.json()).catch(() => ({ conges: [] })),
-        ])
-        setBalances(balRes.balances?.[0] || null)
-        setHistory(histRes.conges || histRes.demandes || [])
-      } catch {}
+      try { await refreshData() } catch {}
       setLoadingH(false)
     }
     load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [employe.id])
 
   const handleSubmit = async () => {
-    if (!dateDebut || !dateFin) { setError("Veuillez renseigner les dates"); return }
-    if (dateFin < dateDebut) { setError("La date de fin doit être après la date de début"); return }
+    if (!dateDebut) { setError("Veuillez renseigner la date"); return }
+    const effectiveDateFin = demiJournee ? dateDebut : dateFin
+    if (!effectiveDateFin) { setError("Veuillez renseigner la date de fin"); return }
+    if (!demiJournee && dateFin < dateDebut) { setError("La date de fin doit être après la date de début"); return }
+    if (demiJournee && !DEMI_JOURNEE_ALLOWED.has(typeConge)) {
+      setError("Les demi-journées ne sont pas autorisées pour ce type de congé")
+      return
+    }
     setSubmitting(true); setError(""); setSuccess("")
     try {
       const res = await fetch("/api/rh/conges", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "creer", employe_id: employe.id, type_conge: typeConge, date_debut: dateDebut, date_fin: dateFin, motif }),
+        body: JSON.stringify({
+          action: "creer",
+          employe_id: employe.id,
+          type_conge: typeConge,
+          date_debut: dateDebut,
+          date_fin: effectiveDateFin,
+          motif,
+          demi_journee: demiJournee,
+          matin_ou_apres_midi: demiJournee ? matinOuApresMidi : null,
+        }),
       })
       const data = await res.json()
       if (data.error) setError(data.error)
       else {
-        setSuccess("Demande soumise avec succès")
+        setSuccess(demiJournee ? "Demi-journée soumise avec succès" : "Demande soumise avec succès")
         setDateDebut(""); setDateFin(""); setMotif(""); setFile(null)
-        // Refresh history
-        const histRes = await fetch(`/api/rh/conges?employe_id=${employe.id}`).then(r => r.json()).catch(() => ({ conges: [] }))
-        setHistory(histRes.conges || histRes.demandes || [])
-        const balRes = await fetch(`/api/rh/conges?action=balances&employe_id=${employe.id}`).then(r => r.json()).catch(() => ({}))
-        setBalances(balRes.balances?.[0] || null)
+        setDemiJournee(false); setMatinOuApresMidi('matin')
+        await refreshData()
         onRefresh()
         setTimeout(() => setSuccess(""), 4000)
       }
@@ -255,9 +278,36 @@ function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () => void
     setSubmitting(false)
   }
 
+  // Fix 4 — cancel one of her own en_attente requests.
+  // The API enforces: an employee can only annuler her own leave while it's
+  // still en_attente (see app/api/rh/conges/route.ts action=annuler).
+  const cancelDemande = async (id: string) => {
+    if (!window.confirm("Annuler cette demande de congé en attente ?")) return
+    setCancellingId(id)
+    setError(""); setSuccess("")
+    try {
+      const res = await fetch("/api/rh/conges", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "annuler", id }),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) setError(data.error || `Erreur HTTP ${res.status}`)
+      else {
+        setSuccess("Demande annulée")
+        await refreshData()
+        onRefresh()
+        setTimeout(() => setSuccess(""), 3000)
+      }
+    } catch { setError("Erreur réseau") }
+    setCancellingId(null)
+  }
+
   const alDroit = Number(balances?.al_droit) || 22
   const slDroit = Number(balances?.sl_droit) || 15
-  const alRemaining = Number(balances?.al_solde) || (alDroit - (Number(balances?.al_pris) || 0))
+  const alPris = Number(balances?.al_pris) || 0
+  const alImposeSociete = Number(balances?.al_impose_societe) || 0
+  const alImposeEmploye = Number(balances?.al_impose_employe) || (alPris - alImposeSociete)
+  const alRemaining = Number(balances?.al_solde) || (alDroit - alPris)
   const slRemaining = Number(balances?.sl_solde) || (slDroit - (Number(balances?.sl_pris) || 0))
   const alPct = alDroit > 0 ? Math.round((alRemaining / alDroit) * 100) : 0
   const slPct = slDroit > 0 ? Math.round((slRemaining / slDroit) * 100) : 0
@@ -287,6 +337,16 @@ function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () => void
               <p className="text-xs text-gray-500 mt-0.5">Local Leave restants / {alDroit}j</p>
             </div>
             <Progress value={alPct} className="h-2 rounded-full" style={{ backgroundColor: `${GREEN}20` }} />
+            {/* Fix 4 — AL split (employé / société) when at least one day has been imposed */}
+            {(alImposeSociete > 0 || alPris > 0) && (
+              <div className="flex items-center justify-between text-[10px] text-gray-500 pt-1 border-t border-gray-100">
+                <span>Pris: <strong className="text-gray-700">{alPris}j</strong></span>
+                <span>· Moi: <strong className="text-gray-700">{alImposeEmploye}j</strong></span>
+                {alImposeSociete > 0 && (
+                  <span>· <span className="text-amber-700">Imposé: <strong>{alImposeSociete}j</strong></span></span>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
         <Card className="rounded-xl shadow-sm">
@@ -335,14 +395,71 @@ function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () => void
             </div>
           </div>
 
+          {/* Fix 4 — demi-journée toggle (only for types that allow it) */}
+          {DEMI_JOURNEE_ALLOWED.has(typeConge) && (
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer text-sm font-medium" style={{ color: NAVY }}>
+                <input
+                  type="checkbox"
+                  checked={demiJournee}
+                  onChange={e => {
+                    setDemiJournee(e.target.checked)
+                    if (e.target.checked && dateDebut) setDateFin(dateDebut)
+                  }}
+                  className="h-4 w-4 rounded"
+                />
+                Demi-journée (0,5 jour)
+              </label>
+              {demiJournee && (
+                <div className="pl-6 flex items-center gap-4">
+                  <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                    <input
+                      type="radio"
+                      name="demi-moment"
+                      value="matin"
+                      checked={matinOuApresMidi === 'matin'}
+                      onChange={() => setMatinOuApresMidi('matin')}
+                    />
+                    Matin (AM)
+                  </label>
+                  <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                    <input
+                      type="radio"
+                      name="demi-moment"
+                      value="apres_midi"
+                      checked={matinOuApresMidi === 'apres_midi'}
+                      onChange={() => setMatinOuApresMidi('apres_midi')}
+                    />
+                    Après-midi (PM)
+                  </label>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label>Date debut</Label>
-              <Input type="date" value={dateDebut} onChange={e => setDateDebut(e.target.value)} className="h-12 md:h-10 rounded-xl" />
+              <Input
+                type="date"
+                value={dateDebut}
+                onChange={e => {
+                  setDateDebut(e.target.value)
+                  // Half day: keep date_fin aligned with date_debut.
+                  if (demiJournee) setDateFin(e.target.value)
+                }}
+                className="h-12 md:h-10 rounded-xl"
+              />
             </div>
             <div>
-              <Label>Date fin</Label>
-              <Input type="date" value={dateFin} onChange={e => setDateFin(e.target.value)} className="h-12 md:h-10 rounded-xl" />
+              <Label>Date fin {demiJournee && <span className="text-[10px] text-gray-400">(même date que début)</span>}</Label>
+              <Input
+                type="date"
+                value={demiJournee ? dateDebut : dateFin}
+                disabled={demiJournee}
+                onChange={e => setDateFin(e.target.value)}
+                className="h-12 md:h-10 rounded-xl"
+              />
             </div>
           </div>
 
@@ -402,7 +519,8 @@ function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () => void
                       <th className="pb-2 pr-3">Dates</th>
                       <th className="pb-2 pr-3">Jours</th>
                       <th className="pb-2 pr-3">Statut</th>
-                      <th className="pb-2">Motif</th>
+                      <th className="pb-2 pr-3">Motif</th>
+                      <th className="pb-2 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -411,13 +529,45 @@ function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () => void
                       const d1 = c.date_debut ? new Date(c.date_debut).toLocaleDateString("fr-FR") : "—"
                       const d2 = c.date_fin ? new Date(c.date_fin).toLocaleDateString("fr-FR") : "—"
                       const days = Number(c.nb_jours) || "—"
+                      const isMine = !c.employe_id || c.employe_id === employe.id
+                      const canCancel = isMine && c.statut === "en_attente"
                       return (
                         <tr key={c.id || i} className="border-b last:border-0">
-                          <td className="py-2.5 pr-3"><Badge style={{ backgroundColor: `${typeColor[t] || BLUE}20`, color: typeColor[t] || BLUE }}>{typeLabel[t] || t}</Badge></td>
-                          <td className="py-2.5 pr-3 whitespace-nowrap">{d1} — {d2}</td>
+                          <td className="py-2.5 pr-3">
+                            <div className="flex items-center gap-1 flex-wrap">
+                              <Badge style={{ backgroundColor: `${typeColor[t] || BLUE}20`, color: typeColor[t] || BLUE }}>{typeLabel[t] || t}</Badge>
+                              {c.demi_journee && (
+                                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-purple-100 text-purple-800 border border-purple-200">
+                                  {c.matin_ou_apres_midi === 'apres_midi' ? '½ PM' : '½ AM'}
+                                </span>
+                              )}
+                              {c.impose_par_societe && (
+                                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200" title="Imposé par la société">
+                                  Imposé
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-2.5 pr-3 whitespace-nowrap">
+                            {c.demi_journee ? d1 : <>{d1} — {d2}</>}
+                          </td>
                           <td className="py-2.5 pr-3 font-mono">{days}</td>
                           <td className="py-2.5 pr-3">{statutBadge(c.statut || c.status || "en_attente")}</td>
-                          <td className="py-2.5 text-gray-500 truncate max-w-[200px]">{c.motif || "—"}</td>
+                          <td className="py-2.5 pr-3 text-gray-500 truncate max-w-[200px]">{c.motif || "—"}</td>
+                          <td className="py-2.5 text-right">
+                            {canCancel && (
+                              <button
+                                onClick={() => cancelDemande(c.id)}
+                                disabled={cancellingId === c.id}
+                                className="inline-flex items-center gap-1 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded disabled:opacity-50"
+                              >
+                                {cancellingId === c.id
+                                  ? <Loader2 className="h-3 w-3 animate-spin" />
+                                  : <X className="h-3 w-3" />}
+                                Annuler
+                              </button>
+                            )}
+                          </td>
                         </tr>
                       )
                     })}
@@ -431,18 +581,42 @@ function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () => void
                   const d1 = c.date_debut ? new Date(c.date_debut).toLocaleDateString("fr-FR") : "—"
                   const d2 = c.date_fin ? new Date(c.date_fin).toLocaleDateString("fr-FR") : "—"
                   const days = c.nb_jours || (c.date_debut && c.date_fin ? Math.ceil((new Date(c.date_fin).getTime() - new Date(c.date_debut).getTime()) / (1000 * 60 * 60 * 24)) + 1 : "—")
+                  const isMine = !c.employe_id || c.employe_id === employe.id
+                  const canCancel = isMine && c.statut === "en_attente"
                   return (
                     <div key={c.id || i} className="p-4 border rounded-xl space-y-2 transition-all duration-200" style={{ borderLeft: `3px solid ${typeColor[t] || BLUE}` }}>
                       <div className="flex items-center justify-between">
-                        <Badge className="text-xs" style={{ backgroundColor: `${typeColor[t] || BLUE}20`, color: typeColor[t] || BLUE }}>{typeLabel[t] || t}</Badge>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <Badge className="text-xs" style={{ backgroundColor: `${typeColor[t] || BLUE}20`, color: typeColor[t] || BLUE }}>{typeLabel[t] || t}</Badge>
+                          {c.demi_journee && (
+                            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-purple-100 text-purple-800">
+                              {c.matin_ou_apres_midi === 'apres_midi' ? '½ PM' : '½ AM'}
+                            </span>
+                          )}
+                          {c.impose_par_societe && (
+                            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800">Imposé</span>
+                          )}
+                        </div>
                         {statutBadge(c.statut || c.status || "en_attente")}
                       </div>
                       <div className="flex items-center gap-2 text-sm">
                         <Calendar className="h-4 w-4 text-gray-400" />
-                        <span style={{ color: NAVY }}>{d1} — {d2}</span>
+                        <span style={{ color: NAVY }}>{c.demi_journee ? d1 : <>{d1} — {d2}</>}</span>
                         <span className="font-mono text-xs text-gray-400">({days}j)</span>
                       </div>
                       {c.motif && <p className="text-xs text-gray-500">{c.motif}</p>}
+                      {canCancel && (
+                        <button
+                          onClick={() => cancelDemande(c.id)}
+                          disabled={cancellingId === c.id}
+                          className="mt-1 inline-flex items-center gap-1 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded disabled:opacity-50"
+                        >
+                          {cancellingId === c.id
+                            ? <Loader2 className="h-3 w-3 animate-spin" />
+                            : <X className="h-3 w-3" />}
+                          Annuler
+                        </button>
+                      )}
                     </div>
                   )
                 })}
