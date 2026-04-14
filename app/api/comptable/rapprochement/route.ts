@@ -1885,6 +1885,44 @@ export async function POST(request: Request) {
       }
       console.log(`[sync_lettrage] ${(paidFactures || []).length} paid facture(s) found`)
 
+      // FIX 2 — Charger comptes bancaires + relevés pour router la 2e
+      // ligne BNQ sur le bon 512xxx. Map : releve_id → compte_comptable.
+      // Fallback par devise si le facture n'a pas de rapproche_releve_id
+      // (factures historiques antérieures au tracking).
+      const { data: cbRows } = await supabase
+        .from('comptes_bancaires')
+        .select('id, devise, compte_comptable')
+        .eq('societe_id', socId)
+      const { data: releveRows } = await supabase
+        .from('releves_bancaires')
+        .select('id, compte_bancaire_id')
+        .eq('societe_id', socId)
+      const cbByDevise = new Map<string, string>()
+      const cbById = new Map<string, string>()
+      ;(cbRows || []).forEach((c: any) => {
+        if (c.compte_comptable) {
+          cbById.set(c.id, String(c.compte_comptable))
+          if (!cbByDevise.has(c.devise || 'MUR')) {
+            cbByDevise.set(c.devise || 'MUR', String(c.compte_comptable))
+          }
+        }
+      })
+      const releveToCbId = new Map<string, string>()
+      ;(releveRows || []).forEach((r: any) => releveToCbId.set(r.id, r.compte_bancaire_id))
+      const resolveCompteBanque = (facture: any): string => {
+        // Priorité 1 : via rapproche_releve_id → cb → compte_comptable
+        if (facture.rapproche_releve_id) {
+          const cbId = releveToCbId.get(facture.rapproche_releve_id)
+          if (cbId && cbById.has(cbId)) return cbById.get(cbId)!
+        }
+        // Priorité 2 : premier 512xxx de la société de la bonne devise
+        const byDev = cbByDevise.get(String(facture.devise || 'MUR').toUpperCase())
+        if (byDev) return byDev
+        // Priorité 3 : n'importe quel 512xxx configuré
+        const first = cbRows?.find((c: any) => c.compte_comptable)?.compte_comptable
+        return first ? String(first) : '512'
+      }
+
       // Probe whether the facture_id column exists on the view (migration 133).
       // If it's missing in this environment, we skip the by-facture_id lookup
       // and rely solely on numero_piece matching — the operator can still
@@ -1998,13 +2036,17 @@ export async function POST(request: Request) {
             bnqRow = linked || unletteredAny || null
           }
 
-          // 3. If no BNQ counterpart exists, create one from the facture's
-          //    known paiement info. This is the "synchronise" part — we
-          //    generate the ledger entry that should have existed after
-          //    rapprochement.
+          // 3. If no BNQ counterpart exists, create TWO balanced BNQ
+          //    entries (tier side + banque side) so Σdébit = Σcrédit.
+          // FIX 2 — auparavant sync_lettrage n'insérait qu'une ligne 401
+          // débit sans contrepartie 512 : le journal BNQ n'était pas
+          // équilibré (R1 violée) et le compte 512xxx ne reflétait pas
+          // le paiement. On insère maintenant les deux lignes ensemble,
+          // on les lettre avec le même code, et on lettre aussi l'ACH.
           // FIX 1 — never block on a missing rapproche_date. Fallback to
           //    date_echeance, then date_facture, then today, and back-fill
           //    factures.rapproche_date so the invariant holds going forward.
+          let bnqBanqueRow: any = null
           if (!bnqRow && montant > 0) {
             const payDate: string =
               (f as any).rapproche_date
@@ -2012,25 +2054,46 @@ export async function POST(request: Request) {
               || (f as any).date_facture
               || new Date().toISOString().split('T')[0]
             const montantMur = Number(f.montant_mur) || montant
-            const newBnq = {
+            const compteBanque = resolveCompteBanque(f)
+            const isSupplier = achCredit > 0 // ACH 401 credit → supplier
+            const libelleBase = `Règlement ${f.numero_facture || ''} — ${(f.tiers || '').substring(0, 40)}`.trim()
+
+            const tierSide = {
               dossier_id: dossierId,
               date_ecriture: payDate,
               journal: 'BNQ',
               numero_piece: f.numero_facture || null,
-              compte: achRow.compte, // 401 or 411, same side as ACH
-              libelle: `Paiement ${f.tiers || ''} ${f.numero_facture || ''}`.trim(),
-              debit: achDebit > 0 ? 0 : montantMur,
-              credit: achDebit > 0 ? montantMur : 0,
+              compte: achRow.compte, // 401 ou 411
+              libelle: libelleBase,
+              debit: isSupplier ? montantMur : 0,
+              credit: isSupplier ? 0 : montantMur,
               piece_justificative: f.id,
               facture_id: f.id,
             }
-            const { data: created, error: createErr } = await supabase
-              .from('ecritures_comptables').insert(newBnq).select('id, lettre, debit, credit').maybeSingle()
+            const bankSide = {
+              dossier_id: dossierId,
+              date_ecriture: payDate,
+              journal: 'BNQ',
+              numero_piece: f.numero_facture || null,
+              compte: compteBanque,
+              libelle: libelleBase,
+              debit: isSupplier ? 0 : montantMur,
+              credit: isSupplier ? montantMur : 0,
+              piece_justificative: f.id,
+              facture_id: f.id,
+            }
+            const { data: createdRows, error: createErr } = await supabase
+              .from('ecritures_comptables')
+              .insert([tierSide, bankSide])
+              .select('id, lettre, debit, credit, compte')
             if (createErr) {
               errors.push({ facture_id: f.id, reason: `BNQ insert failed: ${createErr.message}` })
               continue
             }
-            bnqRow = created
+            const createdTier = (createdRows || []).find((r: any) => r.compte === achRow.compte) || createdRows?.[0]
+            const createdBank = (createdRows || []).find((r: any) => r.compte === compteBanque) || createdRows?.[1]
+            bnqRow = createdTier
+            bnqBanqueRow = createdBank
             pairsCreatedBnq++
 
             // Back-fill factures.rapproche_date if it was missing so the
@@ -2048,21 +2111,26 @@ export async function POST(request: Request) {
             continue
           }
 
-          // 4. Letter both entries. Skip if both already lettered with the same code.
+          // 4. Letter the triplet (ACH + BNQ tier + BNQ banque si créée).
+          // FIX 2 — le bank side de la BNQ est inclus dans le groupe
+          // pour que le rapprochement 512 ↔ 401 soit explicite.
           if (achRow.lettre && bnqRow.lettre && achRow.lettre === bnqRow.lettre) {
             alreadyLettered++
             continue
           }
           const code = achRow.lettre || bnqRow.lettre || nextCode()
           const now = new Date().toISOString().slice(0, 10)
+          const lettrageIds: string[] = [achRow.id, bnqRow.id]
+          if (bnqBanqueRow?.id) lettrageIds.push(bnqBanqueRow.id)
+
           await supabase.from('ecritures_comptables')
             .update({ lettre: code, date_lettrage: now })
-            .in('id', [achRow.id, bnqRow.id])
+            .in('id', lettrageIds)
             .is('lettre', null)
-          // If one was already lettered, ensure both share the code.
+          // If one was already lettered, ensure all share the code.
           await supabase.from('ecritures_comptables')
             .update({ lettre: code, date_lettrage: now })
-            .in('id', [achRow.id, bnqRow.id])
+            .in('id', lettrageIds)
             .neq('lettre', code)
           // Backfill facture_id on the BNQ if it wasn't set.
           await supabase.from('ecritures_comptables')
