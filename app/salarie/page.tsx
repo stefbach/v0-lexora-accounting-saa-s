@@ -899,87 +899,34 @@ function ContratsTab({ employe }: { employe: any }) {
   )
 }
 
-function DocumentsTab({ employe }: { employe: any }) {
-  const [documents, setDocuments] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [uploading, setUploading] = useState(false)
-
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true)
-      try {
-        const res = await fetch(`/api/rh/employes/${employe.id}`).then(r => r.json()).catch(() => ({}))
-        setDocuments(res.documents || res.employe?.documents || [])
-      } catch {}
-      setLoading(false)
-    }
-    load()
-  }, [employe.id])
-
-  const handleUpload = async (file: File) => {
-    setUploading(true)
-    try {
-      const formData = new FormData()
-      formData.append("file", file)
-      formData.append("employe_id", employe.id)
-      const res = await fetch("/api/rh/documents", { method: "POST", body: formData })
-      const data = await res.json()
-      if (!data.error) {
-        setDocuments(prev => [data.document || { nom: file.name, created_at: new Date().toISOString() }, ...prev])
-      }
-    } catch {}
-    setUploading(false)
-  }
-
-  const catColor: Record<string, string> = { identite: BLUE, contrat: NAVY, medical: "#f97316", formation: "#8b5cf6", autre: "#6b7280" }
-
+// Stubbed — Fix 5: /api/rh/documents does not yet exist. Earlier code was
+// fetching /api/rh/employes/<id> as a fallback (wrong endpoint) and POSTing
+// multipart to a route that is not implemented. Replaced with a clean
+// "coming soon" placeholder so the sidebar link doesn't look broken.
+// The original implementation remains in git history and can be restored
+// once the API is built.
+function DocumentsTab({ employe: _employe }: { employe: any }) {
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-base" style={{ color: NAVY }}>Mes documents</CardTitle>
-        <label>
-          <Button variant="outline" size="sm" disabled={uploading} asChild>
-            <span className="cursor-pointer">
-              {uploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
-              Ajouter un document
-            </span>
-          </Button>
-          <input type="file" className="hidden" onChange={e => { if (e.target.files?.[0]) handleUpload(e.target.files[0]) }} />
-        </label>
+    <Card className="rounded-xl shadow-sm">
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2" style={{ color: NAVY }}>
+          <FolderOpen className="h-4 w-4" style={{ color: GOLD }} />
+          Mes documents
+        </CardTitle>
       </CardHeader>
       <CardContent>
-        {loading ? (
-          <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div>
-        ) : documents.length === 0 ? (
-          <p className="text-gray-400 text-center py-8">Aucun document</p>
-        ) : (
-          <div className="space-y-2">
-            {documents.map((doc: any, i: number) => {
-              const cat = doc.categorie || doc.category || "autre"
-              return (
-                <div key={doc.id || i} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="h-10 w-10 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: `${NAVY}10` }}>
-                      <FileText className="h-5 w-5" style={{ color: NAVY }} />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-medium text-sm truncate" style={{ color: NAVY }}>{doc.nom || doc.name || "Document"}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <Badge className="text-[10px] px-1.5 py-0" style={{ backgroundColor: `${catColor[cat] || "#6b7280"}20`, color: catColor[cat] || "#6b7280" }}>{cat}</Badge>
-                        {doc.created_at && <span className="text-xs text-gray-400">{new Date(doc.created_at).toLocaleDateString("fr-FR")}</span>}
-                      </div>
-                    </div>
-                  </div>
-                  {(doc.url || doc.file_url) && (
-                    <Button variant="outline" size="sm" className="h-8 px-2 shrink-0" onClick={() => window.open(doc.url || doc.file_url, "_blank")}>
-                      <Download className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                </div>
-              )
-            })}
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <div className="h-16 w-16 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: `${GOLD}15` }}>
+            <FolderOpen className="h-7 w-7" style={{ color: GOLD }} />
           </div>
-        )}
+          <p className="text-base font-semibold mb-1" style={{ color: NAVY }}>
+            Fonctionnalité à venir 🚧
+          </p>
+          <p className="text-sm text-gray-500 max-w-sm">
+            L'espace de gestion de vos documents personnels
+            (contrats, certificats, fiches d'identité…) arrive bientôt.
+          </p>
+        </div>
       </CardContent>
     </Card>
   )
