@@ -244,6 +244,13 @@ export default function CongesPage() {
 
   // Real-time nb_jours preview (uses employee's working_days + jours_feries)
   useEffect(() => {
+    // Temporary diagnostic: confirms the effect runs on every form field change
+    console.log("[preview_nb_jours] effect triggered", {
+      employe_id: form.employe_id,
+      date_debut: form.date_debut,
+      date_fin: form.date_fin,
+      dialogOpen,
+    })
     // Reset when inputs are incomplete
     if (!form.employe_id || !form.date_debut || !form.date_fin) {
       setPreviewNbJours(null)
@@ -266,9 +273,12 @@ export default function CongesPage() {
       date_debut: form.date_debut,
       date_fin: form.date_fin,
     })
-    fetch(`/api/rh/conges?${params}`)
+    const url = `/api/rh/conges?${params}`
+    console.log("[preview_nb_jours] fetching", url)
+    fetch(url)
       .then(async r => {
         const data = await r.json().catch(() => ({}))
+        console.log("[preview_nb_jours] response", r.status, data)
         if (cancelled) return
         if (!r.ok) {
           console.error("[preview_nb_jours] API error:", r.status, data)
@@ -293,7 +303,7 @@ export default function CongesPage() {
       })
       .finally(() => { if (!cancelled) setLoadingPreview(false) })
     return () => { cancelled = true }
-  }, [form.employe_id, form.date_debut, form.date_fin])
+  }, [form.employe_id, form.date_debut, form.date_fin, dialogOpen])
 
   // ─── Societe map ──────────────────────────────────────────────
   const societeMap = new Map(societes.map((s: any) => [s.id, s.nom]))
@@ -974,31 +984,51 @@ export default function CongesPage() {
                 />
               </div>
             </div>
-            {/* Real-time nb_jours preview (using working_days + jours fériés) */}
-            {form.employe_id && form.date_debut && form.date_fin && (
-              <div className={`p-3 border rounded-lg text-sm ${
-                previewError
-                  ? "bg-red-50 border-red-200 text-red-800"
+            {/* Real-time nb_jours preview (using working_days + jours fériés).
+                Always rendered once the dialog is open so there is visible
+                feedback in every state (missing input / loading / value /
+                error). Log on render to aid debugging. */}
+            {(() => {
+              const missingFields: string[] = []
+              if (!form.employe_id) missingFields.push("employé")
+              if (!form.date_debut) missingFields.push("date début")
+              if (!form.date_fin) missingFields.push("date fin")
+              const isComplete = missingFields.length === 0
+              const bgClass = previewError
+                ? "bg-red-50 border-red-200 text-red-800"
+                : !isComplete
+                  ? "bg-gray-50 border-gray-200 text-gray-600"
                   : "bg-blue-50 border-blue-200 text-blue-800"
-              }`}>
-                {loadingPreview ? (
-                  <span className="text-gray-600 flex items-center gap-2">
-                    <Loader2 className="w-3 h-3 animate-spin" /> Calcul du nombre de jours…
-                  </span>
-                ) : previewError ? (
-                  <span>⚠️ {previewError}</span>
-                ) : previewNbJours !== null ? (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-base">
-                      📅 <strong>{previewNbJours}</strong> jour{previewNbJours > 1 ? "s" : ""} ouvrable{previewNbJours > 1 ? "s" : ""}
+              if (typeof window !== "undefined") {
+                console.log("[preview_nb_jours] render", {
+                  isComplete, loadingPreview, previewNbJours, previewError, missingFields,
+                })
+              }
+              return (
+                <div className={`p-3 border rounded-lg text-sm ${bgClass}`}>
+                  {!isComplete ? (
+                    <span>📅 Renseignez {missingFields.join(", ")} pour voir le nombre de jours ouvrables.</span>
+                  ) : loadingPreview ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="w-3 h-3 animate-spin" /> Calcul du nombre de jours…
                     </span>
-                    <span className="text-xs text-gray-600">
-                      (selon planning de l'employé et jours fériés)
-                    </span>
-                  </div>
-                ) : null}
-              </div>
-            )}
+                  ) : previewError ? (
+                    <span>⚠️ {previewError}</span>
+                  ) : previewNbJours !== null ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-base">
+                        📅 <strong>{previewNbJours}</strong> jour{previewNbJours > 1 ? "s" : ""} ouvrable{previewNbJours > 1 ? "s" : ""}
+                      </span>
+                      <span className="text-xs text-gray-600">
+                        (selon planning de l'employé et jours fériés)
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-gray-600">📅 En attente du calcul…</span>
+                  )}
+                </div>
+              )
+            })()}
             <div>
               <Label>Motif</Label>
               <Input
