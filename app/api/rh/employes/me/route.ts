@@ -22,7 +22,6 @@ const EMPLOYEE_EDITABLE_FIELDS = [
 ]
 
 export async function GET() {
-  const DEBUG = true // temporary — flip to false once Gavena-style issues are diagnosed
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -30,82 +29,35 @@ export async function GET() {
 
     const adminClient = getAdminClient()
 
-    if (DEBUG) {
-      console.log('[employes/me] user.id=%s email=%s', user.id, user.email)
-    }
-
     // ── Étape 1 : chercher par auth_user_id (lien direct le plus fiable) ─────
-    const step1 = await adminClient
+    const { data: byAuthId } = await adminClient
       .from('employes')
       .select('*')
       .eq('auth_user_id', user.id)
       .is('date_depart', null)
       .maybeSingle()
-    const byAuthId = step1.data
-
-    if (DEBUG) {
-      console.log('[employes/me] step1 (auth_user_id=%s) hit=%s error=%s',
-        user.id,
-        byAuthId ? `${byAuthId.id} (${byAuthId.prenom} ${byAuthId.nom})` : 'null',
-        step1.error?.message || 'none')
-    }
 
     if (byAuthId) return NextResponse.json({ employe: byAuthId })
 
-    // Step 1 bis: same query WITHOUT the date_depart filter — if this matches
-    // while step 1 didn't, date_depart is the culprit and we report it so the
-    // RH team can fix the data.
-    if (DEBUG) {
-      const step1bis = await adminClient
-        .from('employes').select('id, nom, prenom, date_depart, auth_user_id')
-        .eq('auth_user_id', user.id).maybeSingle()
-      if (step1bis.data) {
-        console.log('[employes/me] step1-bis: employe exists but EXCLUDED by date_depart filter → id=%s date_depart=%s',
-          step1bis.data.id, step1bis.data.date_depart)
-      }
-    }
-
     // ── Étape 2 : chercher via profiles.employe_id ──────────────────────────
-    const profileRes = await adminClient
+    const { data: profile } = await adminClient
       .from('profiles')
-      .select('employe_id, role')
+      .select('employe_id')
       .eq('id', user.id)
       .maybeSingle()
-    const profile = profileRes.data
-
-    if (DEBUG) {
-      console.log('[employes/me] step2 profile lookup: employe_id=%s role=%s error=%s',
-        profile?.employe_id || 'null',
-        profile?.role || 'null',
-        profileRes.error?.message || 'none')
-    }
 
     if (profile?.employe_id) {
-      const byProfileRes = await adminClient
+      const { data: byProfile } = await adminClient
         .from('employes')
         .select('*')
         .eq('id', profile.employe_id)
         .is('date_depart', null)
         .maybeSingle()
-      const byProfile = byProfileRes.data
-
-      if (DEBUG) {
-        console.log('[employes/me] step2 employe via profile.employe_id=%s hit=%s auth_user_id_on_row=%s',
-          profile.employe_id,
-          byProfile ? `${byProfile.id} (${byProfile.prenom} ${byProfile.nom})` : 'null',
-          byProfile?.auth_user_id || 'null')
-      }
 
       if (byProfile) {
         // Auto-link auth_user_id for future lookups
         if (!byProfile.auth_user_id) {
           await adminClient.from('employes').update({ auth_user_id: user.id }).eq('id', byProfile.id)
-          if (DEBUG) console.log('[employes/me] auto-linked auth_user_id on employe %s', byProfile.id)
-        } else if (byProfile.auth_user_id !== user.id) {
-          // Known bad case: employes row linked to ANOTHER auth id (duplicate
-          // auth user or stale link). Surface it loudly.
-          console.warn('[employes/me] MISMATCH: employe.auth_user_id=%s ≠ session user.id=%s — employe %s',
-            byProfile.auth_user_id, user.id, byProfile.id)
         }
         return NextResponse.json({ employe: byProfile })
       }
@@ -125,30 +77,12 @@ export async function GET() {
         e.email && e.email.toLowerCase().trim() === emailLower
       )
 
-      if (DEBUG) {
-        console.log('[employes/me] step3 email=%s matches_unlinked=%d',
-          emailLower, matches.length)
-      }
-
       if (matches.length === 1) {
         // Auto-link auth_user_id for future lookups
         await adminClient.from('employes').update({ auth_user_id: user.id }).eq('id', matches[0].id)
         // Also link profiles.employe_id
         await adminClient.from('profiles').update({ employe_id: matches[0].id }).eq('id', user.id)
-        if (DEBUG) console.log('[employes/me] step3 auto-linked employe %s to user %s', matches[0].id, user.id)
         return NextResponse.json({ employe: matches[0] })
-      }
-    }
-
-    if (DEBUG) {
-      // Last-resort diagnostic: is there an employes row with THIS email at
-      // all, even linked to another user?
-      if (user.email) {
-        const { data: bySameEmail } = await adminClient
-          .from('employes').select('id, nom, prenom, email, auth_user_id, date_depart')
-          .ilike('email', user.email.trim())
-          .limit(5)
-        console.log('[employes/me] step4 email-match diagnostic (any link state): %j', bySameEmail)
       }
     }
 
