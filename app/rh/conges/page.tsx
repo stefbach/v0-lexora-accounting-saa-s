@@ -478,6 +478,11 @@ export default function CongesPage() {
   const [refusMotif, setRefusMotif] = useState("")
   const [actionLoading, setActionLoading] = useState<string | null>(null)
 
+  // Fix 2 — cancel-imposed-leave dialog state
+  const [annulerTarget, setAnnulerTarget] = useState<CongeRecord | null>(null)
+  const [annulerMotif, setAnnulerMotif] = useState("")
+  const [toast, setToast] = useState<string | null>(null)
+
   // ── Collectif (Commit 10) ─────────────────────────────────────
   const [userRole, setUserRole] = useState<string>("")
   const [groupes, setGroupes] = useState<Array<{ id: string; nom: string }>>([])
@@ -791,6 +796,42 @@ export default function CongesPage() {
       loadBalances()
     } catch (e) { console.error(e) }
     finally { setActionLoading(null) }
+  }
+
+  // Fix 2 — cancel an imposed (or any approved) leave with balance restore.
+  // Uses POST /api/rh/conges with action='annuler' — endpoint was added in
+  // Commit 4. On success the API recomputes soldes_conges from scratch for
+  // the affected (employe, year, type), so the AL impose_societe counter
+  // drops by nb_jours.
+  const annulerImpose = async () => {
+    if (!annulerTarget) return
+    setActionLoading(annulerTarget.id)
+    try {
+      const res = await fetch("/api/rh/conges", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "annuler",
+          id: annulerTarget.id,
+          motif_annulation: annulerMotif || null,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`)
+      const nb = annulerTarget.nb_jours
+      setToast(`Congé annulé — ${nb}j re-crédité${nb > 1 ? 's' : ''} sur le solde AL.`)
+      setAnnulerTarget(null)
+      setAnnulerMotif("")
+      loadDemandes()
+      loadBalances()
+      if (tab === "historique") loadHistorique()
+      setTimeout(() => setToast(null), 4500)
+    } catch (e: any) {
+      setToast(`⚠ Échec de l'annulation: ${e?.message || 'erreur'}`)
+      setTimeout(() => setToast(null), 6000)
+    } finally {
+      setActionLoading(null)
+    }
   }
 
   const sickRetroactif = async (empId: string) => {
@@ -1456,6 +1497,7 @@ export default function CongesPage() {
                         <TableHead>Approbation</TableHead>
                         <TableHead>Motif</TableHead>
                         <TableHead>Commentaire</TableHead>
+                        {canImposeCollectif && <TableHead className="text-right">Actions</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1503,6 +1545,29 @@ export default function CongesPage() {
                           <TableCell className="text-sm text-gray-500 max-w-32 truncate">
                             {c.commentaire_manager || "---"}
                           </TableCell>
+                          {canImposeCollectif && (
+                            <TableCell className="text-right">
+                              {/* Annuler button — visible only on approved imposed leaves
+                                  (the original spec). We still gate by role for defence in
+                                  depth, even though the API also gates. */}
+                              {c.statut === "approuve" && c.impose_par_societe && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 text-xs text-red-600 hover:bg-red-50"
+                                  disabled={actionLoading === c.id}
+                                  onClick={() => { setAnnulerTarget(c); setAnnulerMotif("") }}
+                                >
+                                  {actionLoading === c.id ? (
+                                    <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                                  ) : (
+                                    <XCircle className="w-3 h-3 mr-1" />
+                                  )}
+                                  Annuler
+                                </Button>
+                              )}
+                            </TableCell>
+                          )}
                         </TableRow>
                       ))}
                     </TableBody>
@@ -1874,6 +1939,76 @@ export default function CongesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ═══ DIALOG: Annuler un congé imposé (Fix 2) ═══ */}
+      <Dialog open={!!annulerTarget} onOpenChange={open => { if (!open) { setAnnulerTarget(null); setAnnulerMotif("") } }}>
+        <DialogContent aria-describedby="annuler-desc">
+          <DialogHeader>
+            <DialogTitle className="text-red-700 flex items-center gap-2">
+              <XCircle className="w-5 h-5" />
+              Annuler ce congé imposé
+            </DialogTitle>
+            <DialogDescription id="annuler-desc">
+              Le congé sera marqué "annulé" (soft-delete) et les jours seront re-crédités sur le solde AL de l'employé.
+            </DialogDescription>
+          </DialogHeader>
+          {annulerTarget && (
+            <div className="py-2 space-y-3">
+              <div className="rounded-md bg-amber-50 border border-amber-200 p-3 text-sm">
+                <p className="font-medium text-amber-900">
+                  Annuler ce congé imposé pour <strong>{annulerTarget.employe?.prenom} {annulerTarget.employe?.nom}</strong> ?
+                </p>
+                <p className="text-amber-800 mt-1">
+                  <strong>{annulerTarget.nb_jours}</strong> jour{annulerTarget.nb_jours > 1 ? 's' : ''} seront re-crédité{annulerTarget.nb_jours > 1 ? 's' : ''} sur son solde AL.
+                </p>
+                <p className="text-xs text-amber-700 mt-1">
+                  {formatDate(annulerTarget.date_debut)}
+                  {annulerTarget.date_debut !== annulerTarget.date_fin && <> &rarr; {formatDate(annulerTarget.date_fin)}</>}
+                  {" · "}{TYPE_LABELS[annulerTarget.type_conge] || annulerTarget.type_conge}
+                </p>
+              </div>
+              <div>
+                <Label>Motif de l'annulation (optionnel)</Label>
+                <Textarea
+                  value={annulerMotif}
+                  onChange={e => setAnnulerMotif(e.target.value)}
+                  placeholder="Ex: Fermeture reportée, erreur de saisie…"
+                  rows={2}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setAnnulerTarget(null); setAnnulerMotif("") }}>
+              Fermer
+            </Button>
+            <Button
+              onClick={annulerImpose}
+              disabled={actionLoading === annulerTarget?.id}
+              className="bg-red-600 text-white hover:bg-red-700"
+            >
+              {actionLoading === annulerTarget?.id && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+              <XCircle className="w-4 h-4 mr-2" />Confirmer l'annulation
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Toast — Fix 2 success feedback */}
+      {toast && (
+        <div className="fixed bottom-5 right-5 z-50 max-w-sm">
+          <div className={`rounded-lg shadow-lg border px-4 py-3 flex items-start gap-2 text-sm ${
+            toast.startsWith('⚠')
+              ? 'bg-red-50 border-red-300 text-red-800'
+              : 'bg-green-50 border-green-300 text-green-800'
+          }`}>
+            {toast.startsWith('⚠')
+              ? <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+              : <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />}
+            <span className="flex-1">{toast}</span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
