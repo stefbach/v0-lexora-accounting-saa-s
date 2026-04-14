@@ -82,7 +82,11 @@ async function safeQuery(supabase: any, table: string, query: any) {
 // refuse de générer / lettrer une BNQ plutôt que de propager l'erreur.
 // ─────────────────────────────────────────────────────────────────────────────
 const LETTRABLE_PREFIXES = ['401', '411', '421', '425', '431', '455', '467', '409', '486', '580']
-const SKIP_LETTRAGE_PREFIXES = ['627', '444']
+// FIX 8 — 422 « Personnel – avances et acomptes permanents » est un compte
+// de tiers mais NE DOIT PAS être lettré : il représente une avance qui
+// tourne en permanence (caisse, avance de frais standing), pas une dette
+// qui s'éteint. Inclusion dans SKIP_LETTRAGE_PREFIXES.
+const SKIP_LETTRAGE_PREFIXES = ['627', '444', '422']
 
 function accountClass(compte: string | null | undefined): 'lettrable' | 'skip' | 'charge' | 'produit' | 'autre' {
   const c = String(compte || '').trim()

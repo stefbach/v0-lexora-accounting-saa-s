@@ -36,6 +36,7 @@ export type ClassificationCategory =
   | 'salaire_bulk'
   | 'salaire_individuel'
   | 'remboursement_personnel'
+  | 'remboursement_frais' // FIX 8 — note de frais salarié (421) ou tiers (467)
   | 'inconnu'
 
 export interface TransactionLike {
@@ -133,6 +134,41 @@ export const PATTERNS_REMBOURSEMENT_PERSONNEL = [
   'current account',
   'personal refund',
   'refund associate',
+] as const
+
+/**
+ * FIX 8 — Notes de frais / remboursement de frais au personnel.
+ *
+ * Comptes Mauritius visés :
+ *   • 421 Personnel — rémunération due (si l'employé est salarié)
+ *   • 467 Autres débiteurs/créditeurs (si prestataire externe ou cas isolé)
+ *   • 422 Personnel — avances permanentes (JAMAIS lettré — skip)
+ *
+ * La catégorisation fine 421 vs 467 requiert de connaître le statut du
+ * tiers (salarié / externe) — on renvoie juste « remboursement_frais »
+ * et on laisse le workflow aval (popup de validation) décider du compte.
+ */
+export const PATTERNS_REMBOURSEMENT_FRAIS = [
+  'note de frais',
+  'notes de frais',
+  'expense claim',
+  'expense report',
+  'refund expense',
+  'petrol',
+  'carburant',
+  'fuel',
+  'parking',
+  'taxi',
+  'meal',
+  'lunch',
+  'dinner',
+  'restaurant',
+  'hotel',
+  'toll',
+  'péage',
+  'mileage',
+  'kilométrique',
+  'remboursement frais',
 ] as const
 
 /** IB Own Account Transfer (between the société's own accounts). */
@@ -253,7 +289,24 @@ export function classifyTransaction(tx: TransactionLike): Classification {
     }
   }
 
-  // 5. Remboursement personnel (CCA associé)
+  // 5. Remboursement de frais (note de frais salarié ou tiers)
+  //    FIX 8 — avant la règle CCA associé : un « petrol » n'est
+  //    presque jamais un remboursement au titre de CCA.
+  const fraisPattern = anyIn(PATTERNS_REMBOURSEMENT_FRAIS, libelle) ||
+                       anyIn(PATTERNS_REMBOURSEMENT_FRAIS, tiers)
+  if (fraisPattern) {
+    matched.push(fraisPattern)
+    return {
+      category: 'remboursement_frais',
+      confidence: 'medium',
+      matchedPatterns: matched,
+      note: 'Note de frais (compte 421 salarié ou 467 externe — sélection requise). ATTENTION : compte 422 avances permanentes est NON lettrable.',
+      compte_default: '421',
+      skip_lettrage: false,
+    }
+  }
+
+  // 6. Remboursement personnel (CCA associé)
   const rbtPattern = anyIn(PATTERNS_REMBOURSEMENT_PERSONNEL, libelle) ||
                      anyIn(PATTERNS_REMBOURSEMENT_PERSONNEL, tiers)
   if (rbtPattern) {
@@ -303,6 +356,7 @@ export interface CategorizedBuckets {
   frais: BucketSummary
   internes: BucketSummary
   remboursements: BucketSummary
+  notes_frais: BucketSummary
   inconnus: BucketSummary
 }
 
@@ -315,6 +369,7 @@ export function bucketizeTransactions(txs: Array<TransactionLike & { id?: unknow
     frais: mk(),
     internes: mk(),
     remboursements: mk(),
+    notes_frais: mk(),
     inconnus: mk(),
   }
 
@@ -346,6 +401,7 @@ export function bucketizeTransactions(txs: Array<TransactionLike & { id?: unknow
       case 'frais_bancaires': pushTo(buckets.frais); break
       case 'transfert_interne': pushTo(buckets.internes); break
       case 'remboursement_personnel': pushTo(buckets.remboursements); break
+      case 'remboursement_frais': pushTo(buckets.notes_frais); break
       case 'inconnu': pushTo(buckets.inconnus); break
     }
   }

@@ -93,6 +93,7 @@ export default function ClientRapprochementPage() {
     frais: AutoBucket
     internes: AutoBucket
     remboursements: AutoBucket
+    notes_frais: AutoBucket
     inconnus: AutoBucket
   }>(null)
 
@@ -1959,12 +1960,12 @@ Voulez-vous vraiment continuer ?`
             </DialogTitle>
           </DialogHeader>
           {autoPreview && (() => {
-            const { salaires, mra, frais, internes, remboursements, inconnus } = autoPreview
+            const { salaires, mra, frais, internes, remboursements, notes_frais, inconnus } = autoPreview
             // "inconnus" ne sont PAS auto-classés (pas de règle déclenchée) —
             // on les affiche pour transparence mais on ne les compte pas
             // dans le "Total à classer" ni dans le bouton de confirmation.
-            const total = salaires.count + mra.count + frais.count + internes.count + remboursements.count
-            const totalMontant = salaires.total + mra.total + frais.total + internes.total + remboursements.total
+            const total = salaires.count + mra.count + frais.count + internes.count + remboursements.count + notes_frais.count
+            const totalMontant = salaires.total + mra.total + frais.total + internes.total + remboursements.total + notes_frais.total
             if (total === 0 && inconnus.count === 0) {
               return (
                 <div className="py-6 text-center text-sm text-gray-500">
@@ -2008,6 +2009,12 @@ Voulez-vous vraiment continuer ?`
                     <div className="flex items-center justify-between p-2.5 bg-indigo-50 border border-indigo-200 rounded">
                       <span className="text-sm"><span className="mr-2">💼</span>{remboursements.count} remboursement{remboursements.count > 1 ? 's' : ''} personnel{remboursements.count > 1 ? 's' : ''}</span>
                       <span className="font-mono text-sm font-semibold text-indigo-900">{fmt(remboursements.total)} MUR</span>
+                    </div>
+                  )}
+                  {notes_frais.count > 0 && (
+                    <div className="flex items-center justify-between p-2.5 bg-teal-50 border border-teal-200 rounded">
+                      <span className="text-sm"><span className="mr-2">🧾</span>{notes_frais.count} note{notes_frais.count > 1 ? 's' : ''} de frais (421/467)</span>
+                      <span className="font-mono text-sm font-semibold text-teal-900">{fmt(notes_frais.total)} MUR</span>
                     </div>
                   )}
                   {inconnus.count > 0 && (
