@@ -795,30 +795,80 @@ Voulez-vous vraiment continuer ?`
     if ((periodDebut || periodFin) && !t.date) return false
     return true
   })
-  // ── 4 catégories claires ──────────────────────────────────────
-  // 1. VERT: Rapproché AVEC pièce comptable (facture matchée)
+  // ── Catégorisation des transactions ──────────────────────────────
+  // Production carries many distinct `statut` values that all mean
+  // "this transaction has been classified" — not just 'rapproche'.
+  // The bucket logic above missed paiement_mra, frais_bancaires,
+  // virement_interne, salaire_bulk_non_verifie, etc. and dropped all
+  // of them into `unmatched`, which is why the À classer tab was
+  // showing 60+ items the operator had already triaged.
+  //
+  // Canonical sets:
+  //   STATUT_INTERNE_LIKE → goes to the "Internes" sub-bucket of Classées
+  //   STATUT_AUTO_LIKE    → goes to the "Classifiées auto" sub-bucket
+  //   Otherwise any non-empty statut not equal to 'non_identifie' is
+  //   considered classified (we don't know the exact bucket but it's
+  //   not "À classer").
+  const STATUT_INTERNE_LIKE = new Set(['interne', 'interne_en_attente', 'virement_interne'])
+  const STATUT_AUTO_LIKE = new Set([
+    'frais_bancaires',
+    'salaire_bulk', 'salaire_bulk_non_verifie', 'salaire_individuel',
+    'paiement_mra', 'paiement_mra_non_verifie',
+    'remboursement_personnel', 'remboursement_test',
+    'paiement_fournisseur',           // explicit fournisseur classification (no facture matched)
+    'prestation_contracteur',
+    'charges_sociales', 'reversal_salaire',
+    'identifie',                       // generic "classified" without a sub-type
+  ])
+  const STATUT_PROPOSED = new Set(['propose', 'a_verifier'])
+
+  const hasFacture = (t: any) =>
+    !!t.facture_id || (Array.isArray(t.facture_ids) && t.facture_ids.length > 0)
+  const matchedTypeOf = (t: any) => String(t.matched_type || '').toLowerCase()
+  const statutOf = (t: any) => String(t.statut || '').toLowerCase()
+
+  // 1. VERT: Rapproché AVEC pièce comptable
   const matchedWithInvoice = transactions.filter((t: any) =>
-    (t.statut === 'rapproche') && (t.facture_id || (Array.isArray(t.facture_ids) && t.facture_ids.length > 0))
+    statutOf(t) === 'rapproche' && hasFacture(t)
   )
-  // 2. BLEU: Classifié SANS pièce (frais bancaires, salaires, MRA, charges)
-  const classifiedAuto = transactions.filter((t: any) =>
-    t.statut === 'rapproche' && !t.facture_id && !(Array.isArray(t.facture_ids) && t.facture_ids.length > 0) &&
-    ['frais_bancaires', 'salaire_bulk', 'salaire_bulk_non_verifie', 'salaire_individuel', 'paiement_mra', 'paiement_mra_non_verifie', 'charges_sociales', 'reversal_salaire'].includes(t.matched_type)
+  // 2. BLEU: Classifié auto sans facture (statut OU matched_type recognise)
+  const classifiedAuto = transactions.filter((t: any) => {
+    if (hasFacture(t)) return false
+    if (STATUT_INTERNE_LIKE.has(statutOf(t))) return false // → goes to "interne"
+    const s = statutOf(t)
+    const m = matchedTypeOf(t)
+    return STATUT_AUTO_LIKE.has(s) || STATUT_AUTO_LIKE.has(m)
+  })
+  // 3. GRIS: Virements internes (statut OU matched_type)
+  const interne = transactions.filter((t: any) =>
+    STATUT_INTERNE_LIKE.has(statutOf(t)) || matchedTypeOf(t) === 'transfert_interne'
   )
-  // 3. GRIS: Virements internes
-  const interne = transactions.filter((t: any) => t.statut === 'interne' || t.matched_type === 'transfert_interne')
-  // 4. ORANGE: Payé sans pièce comptable (rapproché mais ni facture ni classification reconnue)
+  // 4. ORANGE: À VÉRIFIER — rapproché mais ni facture ni classification reconnue.
   const paidNoInvoice = transactions.filter((t: any) =>
-    t.statut === 'rapproche' && !t.facture_id && !(Array.isArray(t.facture_ids) && t.facture_ids.length > 0) &&
-    !['frais_bancaires', 'salaire_bulk', 'salaire_bulk_non_verifie', 'salaire_individuel', 'paiement_mra', 'paiement_mra_non_verifie', 'charges_sociales', 'reversal_salaire'].includes(t.matched_type)
+    statutOf(t) === 'rapproche'
+    && !hasFacture(t)
+    && !STATUT_AUTO_LIKE.has(matchedTypeOf(t))
   )
   // 5. JAUNE: Propositions à valider
-  const proposed = transactions.filter((t: any) => t.statut === 'propose' || t.statut === 'a_verifier')
-  // 6. ROUGE: Non rapproché
-  const unmatched = transactions.filter((t: any) =>
-    t.statut !== 'rapproche' && t.statut !== 'interne' && t.statut !== 'propose' && t.statut !== 'a_verifier'
-  )
-  // Legacy compatibility
+  const proposed = transactions.filter((t: any) => STATUT_PROPOSED.has(statutOf(t)))
+
+  // 6. À CLASSER — true unknowns: empty statut, 'non_identifie', or any statut
+  // that doesn't match any of the recognised sets above.
+  const isClassifiedAnywhere = (t: any): boolean => {
+    if (hasFacture(t)) return true
+    const s = statutOf(t)
+    if (!s || s === 'non_identifie') return false
+    if (s === 'rapproche') return true               // matchedWithInvoice OR paidNoInvoice
+    if (STATUT_INTERNE_LIKE.has(s)) return true
+    if (STATUT_AUTO_LIKE.has(s)) return true
+    if (STATUT_PROPOSED.has(s)) return true
+    if (STATUT_AUTO_LIKE.has(matchedTypeOf(t))) return true
+    if (matchedTypeOf(t) === 'transfert_interne') return true
+    return false
+  }
+  const unmatched = transactions.filter((t: any) => !isClassifiedAnywhere(t))
+
+  // Legacy alias kept for the few read sites using `matched`.
   const matched = [...matchedWithInvoice, ...classifiedAuto, ...paidNoInvoice]
 
   // Sort unmatched
