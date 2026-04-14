@@ -1855,9 +1855,12 @@ export async function POST(request: Request) {
       const dossierId = dossierRow.id
 
       // Fetch paid factures for this société.
+      // FIX 7 — on récupère aussi type_document et facture_origine_id pour
+      // pouvoir grouper un avoir avec sa facture d'origine dans le même
+      // lettrage.
       const { data: paidFactures, error: facturesErr } = await supabase
         .from('factures')
-        .select('id, numero_facture, montant_ttc, montant_mur, devise, date_facture, date_echeance, rapproche_date, rapproche_releve_id, rapproche_transaction_idx, tiers, type_facture')
+        .select('id, numero_facture, montant_ttc, montant_mur, devise, date_facture, date_echeance, rapproche_date, rapproche_releve_id, rapproche_transaction_idx, tiers, type_facture, type_document, facture_origine_id')
         .eq('societe_id', socId)
         .eq('statut', 'paye')
       if (facturesErr) {
@@ -2050,6 +2053,37 @@ export async function POST(request: Request) {
             .update({ facture_id: f.id })
             .eq('id', bnqRow.id)
             .is('facture_id', null)
+
+          // FIX 7 — Rattacher les avoirs au même groupe de lettrage.
+          // Si la facture courante est une facture (pas un avoir) avec
+          // des avoirs liés, on récupère leurs écritures 401/411 et on
+          // leur applique la même lettre. Inversement si on traite un
+          // avoir, on inclut ses écritures dans le groupe.
+          try {
+            const isAvoir = (f as any).type_document === 'avoir'
+            const avoirLinks: string[] = []
+            if (isAvoir && (f as any).facture_origine_id) {
+              avoirLinks.push((f as any).facture_origine_id)
+            } else if (!isAvoir && hasFactureIdColumn) {
+              const { data: avoirs } = await supabase
+                .from('factures')
+                .select('id')
+                .eq('facture_origine_id', f.id)
+                .eq('type_document', 'avoir')
+              for (const a of avoirs || []) avoirLinks.push((a as any).id)
+            }
+            if (avoirLinks.length > 0 && hasFactureIdColumn) {
+              // Lettrer toutes les écritures 401/411 liées aux factures du groupe
+              await supabase.from('ecritures_comptables')
+                .update({ lettre: code, date_lettrage: now })
+                .in('facture_id', avoirLinks)
+                .or('compte.like.401%,compte.like.411%')
+                .is('lettre', null)
+            }
+          } catch (linkErr) {
+            console.warn('[sync_lettrage] avoir link step failed for facture', f.id, linkErr)
+          }
+
           pairsLettered++
         } catch (err: any) {
           errors.push({ facture_id: f.id, reason: err?.message || 'unknown error' })
