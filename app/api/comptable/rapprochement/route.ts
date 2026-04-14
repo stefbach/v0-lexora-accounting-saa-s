@@ -3070,14 +3070,18 @@ export async function POST(request: Request) {
       }
       const compte = CLASSE_COMPTES[classification] || '471'
 
-      const { data: dossier } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
+      const { data: dossier, error: dossierErr } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
       let nbEcritures = 0
-      if (dossier) {
+      let ecrituresError: string | null = null
+      if (!dossier) {
+        ecrituresError = `Aucun dossier comptable trouve pour societe ${societe_id}${dossierErr ? ' : ' + dossierErr.message : ''}`
+        console.warn('[classer_transaction]', ecrituresError)
+      } else {
         const tx = txs[txIdx]
         const txAmt = Math.max(Number(tx.debit) || 0, Number(tx.credit) || 0)
         const isOut = (Number(tx.debit) || 0) > 0
         const refFolio = `CL-${String(releve_id).substring(0, 8)}-${txIdx}`
-        const { error: insEcrErr } = await supabase.from('ecritures_comptables_v2').insert([
+        const { error: insEcrErr, data: insEcrData } = await supabase.from('ecritures_comptables_v2').insert([
           {
             dossier_id: dossier.id, societe_id, date_ecriture: tx.date || new Date().toISOString().split('T')[0],
             journal: 'BNQ', numero_compte: compte,
@@ -3092,35 +3096,38 @@ export async function POST(request: Request) {
             debit_mur: isOut ? 0 : txAmt, credit_mur: isOut ? txAmt : 0,
             lettre: code, ref_folio: refFolio,
           },
-        ])
+        ]).select('id')
         if (insEcrErr) {
-          console.error('[classer_transaction] insertion écritures échouée:', insEcrErr.message)
-          // Ne pas bloquer la réponse — la tx est classée dans le relevé
-          // mais signaler que les écritures n'ont pas été créées
+          ecrituresError = insEcrErr.message
+          console.error('[classer_transaction] insertion ecritures FAILED:', insEcrErr.message, insEcrErr)
         } else {
-          nbEcritures = 2
+          nbEcritures = insEcrData?.length || 2
+          console.log('[classer_transaction] ecritures inserees:', nbEcritures)
         }
       }
 
       // === AUTO-LEARN : sauvegarder le pattern comme règle de classification ===
-      // Quand l'utilisateur classe manuellement, on crée une règle spécifique
-      // à la société pour que les prochaines transactions similaires (même tiers)
-      // soient auto-classifiées. Priority = 100 + (ordre insertion) pour passer
-      // APRÈS les règles globales R01-R07 (priority 10-60).
       let patternSaved = false
+      let learnError: string | null = null
       try {
         const tx = txs[txIdx]
         const patternTiers = (learn_pattern?.tiers || tx.tiers_detecte || '').trim()
-        if (patternTiers && patternTiers.length >= 3) {
-          // Check if rule already exists for this tiers+classification
-          const { data: existing } = await supabase
+        if (!patternTiers || patternTiers.length < 3) {
+          learnError = 'Pattern tiers trop court ou absent'
+        } else {
+          const { data: existing, error: existErr } = await supabase
             .from('classification_rules')
             .select('id')
             .eq('societe_id', societe_id)
             .eq('pattern_tiers', patternTiers)
             .eq('classification', classification)
             .maybeSingle()
-          if (!existing) {
+          if (existErr && /does not exist/i.test(String(existErr.message || ''))) {
+            learnError = 'Table classification_rules absente (migration 135 non appliquee)'
+          } else if (existing) {
+            patternSaved = true // Règle déjà présente = OK
+            console.log(`[classer_transaction] regle existe deja pour "${patternTiers}" -> ${classification}`)
+          } else {
             const ruleCode = `LEARN_${societe_id.substring(0, 8)}_${Date.now().toString(36)}`
             const { error: ruleErr } = await supabase.from('classification_rules').insert({
               rule_code: ruleCode,
@@ -3135,17 +3142,17 @@ export async function POST(request: Request) {
               libelle_template: `${classification} — {{tiers}}`,
               requires_validation: false,
             })
-            if (!ruleErr) {
-              patternSaved = true
-              console.log(`[classer_transaction] auto-learn: règle ${ruleCode} créée pour tiers="${patternTiers}" → ${classification}`)
+            if (ruleErr) {
+              learnError = ruleErr.message
+              console.error('[classer_transaction] auto-learn insert FAILED:', ruleErr.message, ruleErr)
             } else {
-              console.warn('[classer_transaction] auto-learn échoué (migration 135 non appliquée?):', ruleErr.message)
+              patternSaved = true
+              console.log(`[classer_transaction] auto-learn: regle ${ruleCode} creee pour tiers="${patternTiers}" -> ${classification}`)
             }
-          } else {
-            console.log(`[classer_transaction] règle existe déjà pour "${patternTiers}" → ${classification}`)
           }
         }
       } catch (e: any) {
+        learnError = e.message
         console.warn('[classer_transaction] auto-learn exception:', e.message)
       }
 
@@ -3155,6 +3162,10 @@ export async function POST(request: Request) {
         classification,
         nb_ecritures: nbEcritures,
         pattern_saved: patternSaved,
+        warnings: {
+          ecritures: ecrituresError,
+          learn: learnError,
+        },
       })
     }
 

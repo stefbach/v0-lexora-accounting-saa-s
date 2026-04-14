@@ -763,8 +763,16 @@ Voulez-vous vraiment continuer ?`
         setToast({ type: 'error', message: `❌ ${data.error || `HTTP ${res.status}`}` })
         return
       }
-      const learnMsg = data.pattern_saved ? ' · règle enregistrée pour auto-classification future' : ''
-      setToast({ type: 'success', message: `✓ Classée en "${classification}"${learnMsg}` })
+      // Construire un message détaillé qui inclut les warnings (écritures non créées, auto-learn KO)
+      const parts: string[] = [`✓ Classée en "${classification}"`]
+      if (data.nb_ecritures > 0) parts.push(`${data.nb_ecritures} écritures créées`)
+      else if (data.warnings?.ecritures) parts.push(`⚠ écritures: ${data.warnings.ecritures}`)
+      if (data.pattern_saved) parts.push('règle auto-apprise')
+      else if (data.warnings?.learn) parts.push(`⚠ auto-learn: ${data.warnings.learn}`)
+      setToast({
+        type: (data.warnings?.ecritures || data.warnings?.learn) ? 'error' : 'success',
+        message: parts.join(' · '),
+      })
       await load()
     } catch (e: any) {
       console.error('[classer_transaction] fetch error', e)
