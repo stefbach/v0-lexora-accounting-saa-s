@@ -904,6 +904,99 @@ export async function POST(request: Request) {
       }
 
       // ═══════════════════════════════════════════════════════════════
+      // FIX 4 — facture_id backfill dans transactions_json
+      //
+      // Problème prod : 21 tx statut='rapproche' sans facture_id dans le
+      // JSON. L'absence de ce lien empêche la colonne « Paiement » de la
+      // section Factures de retrouver la date/le libellé du virement.
+      //
+      // Stratégie de récupération (par ordre de fiabilité) :
+      //   a) tx.ecriture_id → ecriture.facture_id (lien direct mig. 133)
+      //   b) tx.lettre      → recherche d'une ACH/VTE même lettre + facture_id
+      //   c) match libellé/montant contre les factures 'paye' de la période
+      //
+      // Idempotent : n'écrase jamais un facture_id existant.
+      // ═══════════════════════════════════════════════════════════════
+      let backfilled = 0
+      try {
+        // Prépare la liste des factures payées pour la stratégie (c).
+        const { data: paidForBackfill } = await supabase
+          .from('factures')
+          .select('id, numero_facture, tiers, montant_ttc, rapproche_releve_id, rapproche_transaction_idx')
+          .eq('societe_id', societe_id)
+          .eq('statut', 'paye')
+        const paidList = paidForBackfill || []
+
+        for (const [releveId, entry] of releveMap) {
+          let entryChanged = false
+          for (let i = 0; i < entry.updatedTxs.length; i++) {
+            const tx = entry.updatedTxs[i]
+            if (tx.statut !== 'rapproche') continue
+            if (tx.facture_id || (Array.isArray(tx.facture_ids) && tx.facture_ids.length > 0)) continue
+
+            let foundFactureId: string | null = null
+
+            // (a) via ecriture_id
+            if (tx.ecriture_id) {
+              try {
+                const { data: ecr } = await supabase
+                  .from('ecritures_comptables')
+                  .select('facture_id')
+                  .eq('id', tx.ecriture_id)
+                  .maybeSingle()
+                if (ecr && (ecr as any).facture_id) foundFactureId = String((ecr as any).facture_id)
+              } catch { /* best-effort */ }
+            }
+
+            // (b) via tx.lettre
+            if (!foundFactureId && tx.lettre) {
+              try {
+                const { data: lettred } = await supabase
+                  .from('ecritures_comptables')
+                  .select('facture_id')
+                  .eq('lettre', tx.lettre)
+                  .not('facture_id', 'is', null)
+                  .limit(1)
+                if (lettred && lettred.length > 0) foundFactureId = String((lettred[0] as any).facture_id)
+              } catch { /* best-effort */ }
+            }
+
+            // (c) via rapproche_releve_id + transaction_idx côté facture
+            if (!foundFactureId) {
+              const m = paidList.find((f: any) =>
+                f.rapproche_releve_id === releveId && f.rapproche_transaction_idx === i
+              )
+              if (m) foundFactureId = String(m.id)
+            }
+
+            if (foundFactureId) {
+              entry.updatedTxs[i] = {
+                ...tx,
+                facture_id: foundFactureId,
+                facture_ids: [foundFactureId],
+              }
+              entryChanged = true
+              backfilled++
+            }
+          }
+          if (entryChanged) entry.changed = true
+        }
+        if (backfilled > 0) {
+          console.log(`[rapprochement] FIX 4 backfill: ${backfilled} tx rapproche ← facture_id inféré`)
+          // Persiste uniquement les relevés effectivement touchés.
+          for (const [releveId, entry] of releveMap) {
+            if (entry.changed) {
+              await supabase.from('releves_bancaires')
+                .update({ transactions_json: entry.updatedTxs })
+                .eq('id', releveId)
+            }
+          }
+        }
+      } catch (backfillErr) {
+        console.warn('[rapprochement] FIX 4 backfill failed:', backfillErr)
+      }
+
+      // ═══════════════════════════════════════════════════════════════
       // PHASE FINALE — Écritures BNQ + lettrage 401 (tout en un)
       //
       // Pour chaque transaction rapprochée avec facture_id:
@@ -2355,7 +2448,16 @@ export async function POST(request: Request) {
           const txIdx = parseInt(transaction_id.split('-').pop() || '0')
           const txs = [...(releve.transactions_json || [])]
           if (txIdx < txs.length) {
-            txs[txIdx] = { ...txs[txIdx], lettre: `CCA${String(Date.now()).slice(-4)}`, statut: 'rapproche', paye_par_associe: associe_nom }
+            // FIX 4 — stocker facture_id(s) pour que la transaction reste
+            // traçable jusqu'aux factures payées via CCA.
+            txs[txIdx] = {
+              ...txs[txIdx],
+              lettre: `CCA${String(Date.now()).slice(-4)}`,
+              statut: 'rapproche',
+              paye_par_associe: associe_nom,
+              facture_id: facture_ids[0] || null,
+              facture_ids,
+            }
             await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', releve_id)
           }
         }
