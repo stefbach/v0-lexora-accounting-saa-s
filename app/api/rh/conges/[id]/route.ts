@@ -14,9 +14,15 @@ function getAdminClient() {
 }
 
 /**
- * Sum approved leaves for an employee/year/type and write the total to
- * soldes_conges. Shared copy of the helper in ../route.ts — kept local
- * so this file stays self-contained.
+ * Sum approved leaves for an employee/year/type and write the result
+ * to the correct balance table. Local copy of the helper in ../route.ts
+ * — kept here so this file stays self-contained.
+ *
+ *   AL  → soldes_conges.{al_pris, al_impose_societe, al_impose_employe}
+ *   SL  → soldes_conges.sl_pris
+ *   MAT → conges_employes row (jours_pris, default jours_droit=112)
+ *   PAT → conges_employes row (jours_pris, default jours_droit=28)
+ *   Others → no-op
  */
 async function recomputeSoldeConges(
   supabase: ReturnType<typeof getAdminClient>,
@@ -24,40 +30,83 @@ async function recomputeSoldeConges(
   typeConge: string,
   annee: number
 ): Promise<void> {
-  if (typeConge !== 'AL' && typeConge !== 'SL') return
   try {
-    const { data: approved } = await supabase
-      .from('demandes_conges')
-      .select('nb_jours')
-      .eq('employe_id', employeId)
-      .eq('type_conge', typeConge)
-      .eq('statut', 'approuve')
-      .gte('date_debut', `${annee}-01-01`)
-      .lte('date_debut', `${annee}-12-31`)
+    if (typeConge === 'AL') {
+      const { data: approved } = await supabase
+        .from('demandes_conges')
+        .select('nb_jours, impose_par_societe')
+        .eq('employe_id', employeId).eq('type_conge', 'AL').eq('statut', 'approuve')
+        .gte('date_debut', `${annee}-01-01`).lte('date_debut', `${annee}-12-31`)
 
-    const totalPris = (approved || []).reduce(
-      (s: number, c: any) => s + (Number(c.nb_jours) || 0), 0
-    )
-    const field = typeConge === 'AL' ? 'al_pris' : 'sl_pris'
+      let imposeSociete = 0, imposeEmploye = 0
+      for (const c of approved || []) {
+        const n = Number(c.nb_jours) || 0
+        if (c.impose_par_societe === true) imposeSociete += n; else imposeEmploye += n
+      }
+      const totalPris = Math.round((imposeSociete + imposeEmploye) * 100) / 100
+      imposeSociete = Math.round(imposeSociete * 100) / 100
+      imposeEmploye = Math.round(imposeEmploye * 100) / 100
 
-    const { data: existing } = await supabase
-      .from('soldes_conges')
-      .select('id')
-      .eq('employe_id', employeId)
-      .eq('annee', annee)
-      .maybeSingle()
+      const { data: existing } = await supabase.from('soldes_conges')
+        .select('id').eq('employe_id', employeId).eq('annee', annee).maybeSingle()
+      if (existing) {
+        await supabase.from('soldes_conges').update({
+          al_pris: totalPris, al_impose_societe: imposeSociete, al_impose_employe: imposeEmploye,
+        }).eq('id', existing.id)
+      } else {
+        await supabase.from('soldes_conges').insert({
+          employe_id: employeId, annee,
+          al_droit: 22, al_pris: totalPris,
+          al_impose_societe: imposeSociete, al_impose_employe: imposeEmploye,
+          sl_droit: 15, sl_pris: 0,
+        })
+      }
+      return
+    }
 
-    if (existing) {
-      await supabase.from('soldes_conges').update({ [field]: totalPris }).eq('id', existing.id)
-    } else {
-      await supabase.from('soldes_conges').insert({
-        employe_id: employeId,
-        annee,
-        al_droit: 22,
-        al_pris: typeConge === 'AL' ? totalPris : 0,
-        sl_droit: 15,
-        sl_pris: typeConge === 'SL' ? totalPris : 0,
-      })
+    if (typeConge === 'SL') {
+      const { data: approved } = await supabase
+        .from('demandes_conges').select('nb_jours')
+        .eq('employe_id', employeId).eq('type_conge', 'SL').eq('statut', 'approuve')
+        .gte('date_debut', `${annee}-01-01`).lte('date_debut', `${annee}-12-31`)
+      const totalPris = Math.round(
+        (approved || []).reduce((s: number, c: any) => s + (Number(c.nb_jours) || 0), 0) * 100
+      ) / 100
+      const { data: existing } = await supabase.from('soldes_conges')
+        .select('id').eq('employe_id', employeId).eq('annee', annee).maybeSingle()
+      if (existing) {
+        await supabase.from('soldes_conges').update({ sl_pris: totalPris }).eq('id', existing.id)
+      } else {
+        await supabase.from('soldes_conges').insert({
+          employe_id: employeId, annee,
+          al_droit: 22, al_pris: 0, al_impose_societe: 0, al_impose_employe: 0,
+          sl_droit: 15, sl_pris: totalPris,
+        })
+      }
+      return
+    }
+
+    if (typeConge === 'MAT' || typeConge === 'PAT') {
+      const { data: approved } = await supabase
+        .from('demandes_conges').select('nb_jours')
+        .eq('employe_id', employeId).eq('type_conge', typeConge).eq('statut', 'approuve')
+        .gte('date_debut', `${annee}-01-01`).lte('date_debut', `${annee}-12-31`)
+      const totalPris = Math.round(
+        (approved || []).reduce((s: number, c: any) => s + (Number(c.nb_jours) || 0), 0) * 100
+      ) / 100
+      const defaultDroit = typeConge === 'MAT' ? 112 : 28
+      const { data: existing } = await supabase.from('conges_employes')
+        .select('id').eq('employe_id', employeId).eq('annee', annee).eq('type_conge', typeConge).maybeSingle()
+      if (existing) {
+        await supabase.from('conges_employes').update({
+          jours_pris: totalPris, updated_at: new Date().toISOString(),
+        }).eq('id', existing.id)
+      } else {
+        await supabase.from('conges_employes').insert({
+          employe_id: employeId, annee, type_conge: typeConge,
+          jours_droit: defaultDroit, jours_pris: totalPris,
+        })
+      }
     }
   } catch (err: any) {
     console.warn(`[conges/[id]] recomputeSoldeConges failed (non-blocking):`, err?.message)
@@ -131,7 +180,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
       .single()
     if (error) throw error
 
-    if (wasApproved && (conge.type_conge === 'AL' || conge.type_conge === 'SL')) {
+    if (wasApproved) {
       const annee = new Date(conge.date_debut).getFullYear()
       await recomputeSoldeConges(supabase, conge.employe_id, conge.type_conge, annee)
     }
