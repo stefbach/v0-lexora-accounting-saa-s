@@ -73,7 +73,13 @@ export async function GET(request: Request) {
       .order('periode', { ascending: false })
 
     if (employe_id) query = query.eq('employe_id', employe_id)
-    if (periode) query = query.gte('periode', `${periode}-01`).lte('periode', `${periode}-31`)
+    // periode is stored as TEXT — either 'YYYY-MM' (per migration 015) or
+    // 'YYYY-MM-DD' (per current POST handler). Use a LIKE prefix match to
+    // catch both formats. Previously we used .lte('periode', `${periode}-31`)
+    // which silently excluded rows stored as 'YYYY-MM' (lexicographic: the
+    // 7-char 'YYYY-MM' is less than '${periode}-01'), causing empty results
+    // or 500s depending on the driver.
+    if (periode) query = query.like('periode', `${periode}%`)
     if (societe_id) query = query.eq('societe_id', societe_id)
 
     const { data, error } = await query
