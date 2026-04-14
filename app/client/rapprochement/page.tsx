@@ -13,7 +13,6 @@ import { Loader2, RefreshCw, Link2, Unlink, Zap, CheckCircle2, AlertCircle, User
 import { Progress } from "@/components/ui/progress"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
-import { MonthPicker } from "@/components/ui/MonthPicker"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { ScrollArea } from "@/components/ui/scroll-area"
 
@@ -46,7 +45,11 @@ export default function ClientRapprochementPage() {
   const [payeParAssocie, setPayeParAssocie] = useState(false)
   const [payeParType, setPayeParType] = useState("associe")
   const [payeParNom, setPayeParNom] = useState("")
-  const [selectedMois, setSelectedMois] = useState<string | null>(null)
+  const [selectedMois, setSelectedMois] = useState<string | null>(() => {
+    // Default to the current month so the ← Mois → arrows make sense.
+    // The "Tous les mois" link below clears it back to null.
+    return new Date().toISOString().slice(0, 7)
+  })
   const [selectedCompte, setSelectedCompte] = useState("all")
   const [matchedOpen, setMatchedOpen] = useState(false)
   const [txSearch, setTxSearch] = useState("")
@@ -82,6 +85,16 @@ export default function ClientRapprochementPage() {
   // Pagination — Factures fournisseurs table (Part 1: 20/page).
   const [facturesPage, setFacturesPage] = useState(1)
   const FACTURES_PAGE_SIZE = 20
+
+  // Part 2: Transactions section is split in 3 tabs.
+  //   'aclasser' → unmatched (à traiter)
+  //   'classees' → confirmées + auto-classées + virements internes
+  //   'verifier' → rapprochées sans pièce comptable (paidNoInvoice)
+  const [transactionTab, setTransactionTab] = useState<'aclasser' | 'classees' | 'verifier'>('aclasser')
+
+  // Pagination for the "À classer" tab list.
+  const [unmatchedPage, setUnmatchedPage] = useState(1)
+  const UNMATCHED_PAGE_SIZE = 20
   const [selectedSmartKeys, setSelectedSmartKeys] = useState<Set<string>>(new Set())
   const [applyingSelection, setApplyingSelection] = useState(false)
 
@@ -579,6 +592,7 @@ Voulez-vous vraiment continuer ?`
   // lands on a stale empty page (e.g. change month → fewer rows → old page
   // is out of bounds until our clamp logic kicks in).
   useEffect(() => { setFacturesPage(1) }, [societeId, selectedMois, selectedPeriode])
+  useEffect(() => { setUnmatchedPage(1) }, [societeId, selectedMois, selectedPeriode, selectedCompte, transactionTab])
 
   const handleAutoMatch = async () => {
     if (!societeId) return
@@ -1071,9 +1085,44 @@ Voulez-vous vraiment continuer ?`
         )
       })()}
 
-      {/* Filters row: Month + Compte + Période */}
+      {/* Filters row: Month nav (← Mois Année →) + Compte + Période */}
       <div className="flex flex-wrap items-center gap-3">
-        <MonthPicker value={selectedMois} onChange={setSelectedMois} />
+        {(() => {
+          const MOIS_FR_FULL = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
+          const todayYM = new Date().toISOString().slice(0, 7)
+          const current = selectedMois || todayYM
+          const [yy, mm] = current.split('-').map(Number)
+          const label = `${MOIS_FR_FULL[(mm || 1) - 1]} ${yy}`
+          const shift = (delta: number) => {
+            const d = new Date(yy, (mm || 1) - 1 + delta, 1)
+            const ny = d.getFullYear()
+            const nm = String(d.getMonth() + 1).padStart(2, '0')
+            setSelectedMois(`${ny}-${nm}`)
+          }
+          return (
+            <div className="inline-flex items-center gap-1 rounded-lg border bg-white px-1 py-1">
+              <button
+                type="button"
+                onClick={() => shift(-1)}
+                className="h-7 w-7 flex items-center justify-center rounded hover:bg-gray-100 text-gray-600"
+                aria-label="Mois précédent"
+              >
+                ←
+              </button>
+              <span className="px-3 text-sm font-medium text-[#0B0F2E] min-w-[140px] text-center">
+                {label}
+              </span>
+              <button
+                type="button"
+                onClick={() => shift(1)}
+                className="h-7 w-7 flex items-center justify-center rounded hover:bg-gray-100 text-gray-600"
+                aria-label="Mois suivant"
+              >
+                →
+              </button>
+            </div>
+          )
+        })()}
         <Select value={selectedCompte} onValueChange={setSelectedCompte}>
           <SelectTrigger className="w-[220px] h-8"><SelectValue placeholder="Tous les comptes" /></SelectTrigger>
           <SelectContent>
@@ -1133,6 +1182,30 @@ Voulez-vous vraiment continuer ?`
         )
       })()}
 
+      {/* Discreet link: switch to "Tous les mois" view (clears selectedMois) */}
+      {selectedMois && (
+        <div className="text-right">
+          <button
+            type="button"
+            onClick={() => setSelectedMois(null)}
+            className="text-xs text-gray-400 hover:text-gray-600 underline-offset-2 hover:underline"
+          >
+            Voir tous les mois
+          </button>
+        </div>
+      )}
+      {!selectedMois && (
+        <div className="text-right">
+          <button
+            type="button"
+            onClick={() => setSelectedMois(new Date().toISOString().slice(0, 7))}
+            className="text-xs text-gray-400 hover:text-gray-600 underline-offset-2 hover:underline"
+          >
+            Revenir à un mois précis
+          </button>
+        </div>
+      )}
+
       {/* Auto-rapprochement progress */}
       {autoStep && (
         <Card className="border-blue-200 bg-blue-50">
@@ -1143,8 +1216,39 @@ Voulez-vous vraiment continuer ?`
         </Card>
       )}
 
+      {/* ════════════════════════════════════════════════════════════════
+          Transactions bancaires — 3 onglets (À classer / Classées / À vérifier)
+          ════════════════════════════════════════════════════════════════ */}
+      <div className="flex gap-1 border-b border-gray-200">
+        {([
+          { id: 'aclasser' as const, icon: '📋', label: 'À classer', count: unmatched.length, color: 'border-orange-500 text-orange-700' },
+          { id: 'classees' as const, icon: '✅', label: 'Classées', count: matchedWithInvoice.length + classifiedAuto.length + interne.length, color: 'border-green-500 text-green-700' },
+          { id: 'verifier' as const, icon: '⚠️', label: 'À vérifier', count: paidNoInvoice.length, color: 'border-amber-500 text-amber-700' },
+        ]).map(tab => {
+          const isActive = transactionTab === tab.id
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setTransactionTab(tab.id)}
+              className={`px-4 py-2 -mb-px border-b-2 text-sm transition-colors ${
+                isActive
+                  ? `${tab.color} font-semibold`
+                  : 'border-transparent text-gray-500 hover:text-[#0B0F2E]'
+              }`}
+            >
+              <span className="mr-1.5">{tab.icon}</span>
+              {tab.label}
+              <span className={`ml-1.5 text-xs font-medium ${isActive ? 'opacity-100' : 'opacity-60'}`}>
+                ({tab.count})
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
       {/* SECTION 3a — Rapprochées AVEC facture (vert) */}
-      {matchedWithInvoice.length > 0 && (
+      {transactionTab === 'classees' && matchedWithInvoice.length > 0 && (
         <Card className="border-green-200">
           <CardHeader className="cursor-pointer" onClick={() => setMatchedOpen(!matchedOpen)}>
             <CardTitle className="text-[#0B0F2E] flex items-center justify-between">
@@ -1176,7 +1280,7 @@ Voulez-vous vraiment continuer ?`
       )}
 
       {/* SECTION 3b — Classifiées auto SANS facture (bleu) */}
-      {classifiedAuto.length > 0 && (
+      {transactionTab === 'classees' && classifiedAuto.length > 0 && (
         <Card className="border-blue-200">
           <CardHeader>
             <CardTitle className="text-[#0B0F2E] flex items-center gap-2 text-base">
@@ -1204,14 +1308,10 @@ Voulez-vous vraiment continuer ?`
         </Card>
       )}
 
-      {/* SECTION 3c — Payées SANS pièce comptable — collapsed by default (Avancé) */}
-      {paidNoInvoice.length > 0 && (
-        <details className="group">
-          <summary className="cursor-pointer flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-[#0B0F2E] py-2 px-2 rounded-md hover:bg-gray-50">
-            <ChevronDown className="w-4 h-4 group-open:rotate-180 transition-transform" />
-            🔧 Avancé — Payées sans pièce comptable à vérifier ({paidNoInvoice.length})
-          </summary>
-          <Card className="border-amber-300 bg-amber-50/30 mt-2">
+      {/* SECTION 3c — Payées SANS pièce comptable — onglet "À vérifier" */}
+      {transactionTab === 'verifier' && paidNoInvoice.length > 0 && (
+        <div>
+          <Card className="border-amber-300 bg-amber-50/30">
             <CardHeader>
               <CardTitle className="text-amber-800 flex items-center gap-2 text-base">
                 ⚠️ Payées sans pièce comptable — à vérifier ({paidNoInvoice.length})
@@ -1237,7 +1337,7 @@ Voulez-vous vraiment continuer ?`
               </Table>
             </CardContent>
           </Card>
-        </details>
+        </div>
       )}
 
       {/* AI Analysis banner */}
@@ -1308,7 +1408,7 @@ Voulez-vous vraiment continuer ?`
       )}
 
       {/* SECTION 3d — Virements internes (dépliable) */}
-      {interne.length > 0 && (
+      {transactionTab === 'classees' && interne.length > 0 && (
         <details className="group">
           <summary className="cursor-pointer">
             <Card className="border-gray-200">
@@ -1343,7 +1443,8 @@ Voulez-vous vraiment continuer ?`
         </details>
       )}
 
-      {/* SECTION 4 — Transactions à classer (main focus) */}
+      {/* SECTION 4 — Transactions à classer — onglet "À classer" */}
+      {transactionTab === 'aclasser' && (
       <Card className={unmatched.length > 0 ? "border-orange-200" : ""}>
         <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
           <CardTitle className="text-[#0B0F2E] flex items-center gap-2">
@@ -1388,16 +1489,23 @@ Voulez-vous vraiment continuer ?`
         <CardContent className="p-0 overflow-x-auto">
           {unmatched.length === 0 ? (
             <div className="p-8 text-center text-gray-400">Toutes les transactions sont classées ✅</div>
-          ) : (
+          ) : (() => {
+            // Pagination — apply search first, then page-slice (20/page).
+            const filtered = sortedUnmatched.filter(tx => {
+              if (!txSearch) return true
+              const s = txSearch.toLowerCase()
+              return tx.libelle?.toLowerCase().includes(s) || (tx.tiers_detecte || "").toLowerCase().includes(s) || String(tx.debit).includes(s) || String(tx.credit).includes(s)
+            })
+            const totalPagesU = Math.max(1, Math.ceil(filtered.length / UNMATCHED_PAGE_SIZE))
+            const safePageU = Math.min(Math.max(1, unmatchedPage), totalPagesU)
+            const startU = (safePageU - 1) * UNMATCHED_PAGE_SIZE
+            const pageItems = filtered.slice(startU, startU + UNMATCHED_PAGE_SIZE)
+            return (
+            <>
             <Table>
               <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Libellé</TableHead><TableHead className="text-right">Débit</TableHead><TableHead className="text-right">Crédit</TableHead><TableHead>Tiers</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
               <TableBody>
-                {sortedUnmatched
-                  .filter(tx => {
-                    if (!txSearch) return true
-                    const s = txSearch.toLowerCase()
-                    return tx.libelle?.toLowerCase().includes(s) || (tx.tiers_detecte || "").toLowerCase().includes(s) || String(tx.debit).includes(s) || String(tx.credit).includes(s)
-                  })
+                {pageItems
                   .map((tx: any) => {
                     // Find AI proposal for this transaction
                     const txKey = proposalKey(tx.releve_id, tx.transaction_idx ?? tx.idx ?? -1)
@@ -1424,6 +1532,20 @@ Voulez-vous vraiment continuer ?`
                             onChange={async (e) => {
                               const classType = e.target.value
                               if (!classType || !societeId) return
+                              // "fournisseur" reuses the existing manual-link dialog
+                              // since the user needs to pick which facture to attach.
+                              if (classType === 'fournisseur') {
+                                setDialogTab('factures')
+                                setLinkDialog(tx)
+                                e.target.value = ''
+                                return
+                              }
+                              // "autre" → ask the user for a free-form label.
+                              let extraLabel: string | null = null
+                              if (classType === 'autre') {
+                                extraLabel = window.prompt('Décrivez cette transaction (champ libre):', '')
+                                if (!extraLabel) { e.target.value = ''; return }
+                              }
                               try {
                                 await fetch('/api/comptable/rapprochement', {
                                   method: 'POST',
@@ -1434,19 +1556,34 @@ Voulez-vous vraiment continuer ?`
                                     releve_id: tx.releve_id,
                                     societe_id: societeId,
                                     classification: classType,
+                                    libelle: extraLabel || undefined,
                                   }),
                                 })
-                                showToast(`Classifié: ${classType}`)
+                                const labels: Record<string, string> = {
+                                  salaire: 'Salaire / charge personnel',
+                                  frais_bancaires: 'Frais bancaires',
+                                  virement_interne: 'Virement interne',
+                                  remboursement_personnel: 'Remboursement personnel',
+                                  paiement_mra: 'Paiement MRA',
+                                  compte_courant_associe: 'Compte courant associé',
+                                  avance_personnel: 'Avance personnel',
+                                  charge_diverse: 'Charge diverse',
+                                  autre: extraLabel || 'Autre',
+                                }
+                                showToast(`✅ Classifié comme : ${labels[classType] || classType}`)
                                 load()
                               } catch { showToast('Erreur classification', 'error') }
                             }}
                           >
-                            <option value="">Classer...</option>
-                            <option value="compte_courant_associe">Compte courant associé</option>
-                            <option value="avance_personnel">Avance personnel</option>
-                            <option value="charge_diverse">Charge diverse</option>
-                            <option value="paiement_mra">Paiement MRA</option>
+                            <option value="">Classer…</option>
+                            <option value="fournisseur">Paiement fournisseur (lettrer)</option>
+                            <option value="salaire">Salaire / charge personnel</option>
                             <option value="frais_bancaires">Frais bancaires</option>
+                            <option value="virement_interne">Virement interne DDS↔OCC</option>
+                            <option value="remboursement_personnel">Remboursement personnel</option>
+                            <option value="paiement_mra">Paiement MRA</option>
+                            <option value="compte_courant_associe">Compte courant associé</option>
+                            <option value="autre">Autre (champ libre…)</option>
                           </select>
                         </div>
                       </TableCell>
@@ -1515,112 +1652,45 @@ Voulez-vous vraiment continuer ?`
                   })}
               </TableBody>
             </Table>
-          )}
+            {totalPagesU > 1 && (
+              <div className="flex items-center justify-between border-t bg-gray-50/50 px-4 py-2 text-sm">
+                <span className="text-gray-600">
+                  Page <strong>{safePageU}</strong> sur {totalPagesU}{" "}
+                  <span className="text-gray-400">· {filtered.length} transaction{filtered.length > 1 ? "s" : ""}</span>
+                </span>
+                <div className="flex gap-1">
+                  <Button
+                    variant="outline" size="sm"
+                    disabled={safePageU <= 1}
+                    onClick={() => setUnmatchedPage(p => Math.max(1, p - 1))}
+                    className="h-7 text-xs"
+                  >
+                    ← Précédent
+                  </Button>
+                  <Button
+                    variant="outline" size="sm"
+                    disabled={safePageU >= totalPagesU}
+                    onClick={() => setUnmatchedPage(p => Math.min(totalPagesU, p + 1))}
+                    className="h-7 text-xs"
+                  >
+                    Suivant →
+                  </Button>
+                </div>
+              </div>
+            )}
+            </>
+            )
+          })()}
         </CardContent>
       </Card>
-
-      {/* ══════════════════════════════════════════════════════════════ */}
-      {/* SECTION — Espace de suivi : factures sans paiement + anomalies */}
-      {/* ══════════════════════════════════════════════════════════════ */}
-      {data && (
-        <Card className="border-2 border-purple-200">
-          <CardHeader>
-            <CardTitle className="text-[#0B0F2E] flex items-center gap-2">
-              <Target className="w-5 h-5 text-purple-600" />
-              Suivi comptable — Factures & Anomalies
-            </CardTitle>
-            <p className="text-xs text-gray-500">Factures sans paiement, factures en retard, paiements sans pièce comptable</p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Sub-section A: Factures fournisseur sans paiement */}
-            {(() => {
-              const unpaidFactures = (data?.factures || []).filter((f: any) =>
-                f.statut === 'en_attente' || f.statut === 'retard' || f.statut === 'partiel'
-              )
-              const overdue = unpaidFactures.filter((f: any) => {
-                if (!f.date_echeance) return false
-                return new Date(f.date_echeance) < new Date()
-              })
-              const recent = unpaidFactures.filter((f: any) => {
-                if (!f.date_echeance) return true
-                return new Date(f.date_echeance) >= new Date()
-              })
-
-              if (unpaidFactures.length === 0) return (
-                <div className="p-4 bg-green-50 rounded-lg text-center text-sm text-green-700">
-                  Toutes les factures sont payées ou rapprochées
-                </div>
-              )
-
-              return (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold text-purple-800">
-                      📄 Factures sans paiement ({unpaidFactures.length})
-                      {overdue.length > 0 && <span className="ml-2 text-red-600">dont {overdue.length} en retard</span>}
-                    </p>
-                  </div>
-
-                  {overdue.length > 0 && (
-                    <div className="space-y-1">
-                      <p className="text-xs font-medium text-red-700">🔴 En retard :</p>
-                      {overdue.slice(0, 10).map((f: any) => (
-                        <div key={f.id} className="flex items-center justify-between p-2 bg-red-50 border border-red-200 rounded text-sm">
-                          <div className="flex-1">
-                            <span className="font-medium">{f.tiers || '—'}</span>
-                            <span className="text-xs text-gray-500 ml-2">{f.numero_facture || '—'}</span>
-                            <span className="text-xs text-red-600 ml-2">échéance: {formatDate(f.date_echeance)}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-sm">{fmt(Number(f.montant_ttc) || 0)} {f.devise || 'MUR'}</span>
-                            <Button variant="ghost" size="sm" className="h-6 text-xs text-red-600 hover:bg-red-100"
-                              onClick={async () => {
-                                await fetch('/api/comptable/rapprochement', {
-                                  method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ action: 'update_facture_statut', facture_id: f.id, statut: 'retard' }),
-                                })
-                                load()
-                              }}>Marquer retard</Button>
-                          </div>
-                        </div>
-                      ))}
-                      {overdue.length > 10 && <p className="text-xs text-gray-400">... et {overdue.length - 10} autres</p>}
-                    </div>
-                  )}
-
-                  {recent.length > 0 && (
-                    <div className="space-y-1">
-                      <p className="text-xs font-medium text-orange-700">🟠 En attente (non échues) :</p>
-                      {recent.slice(0, 5).map((f: any) => (
-                        <div key={f.id} className="flex items-center justify-between p-2 bg-orange-50 border border-orange-200 rounded text-sm">
-                          <div className="flex-1">
-                            <span className="font-medium">{f.tiers || '—'}</span>
-                            <span className="text-xs text-gray-500 ml-2">{f.numero_facture || '—'}</span>
-                            {f.date_echeance && <span className="text-xs text-orange-600 ml-2">échéance: {formatDate(f.date_echeance)}</span>}
-                          </div>
-                          <span className="font-bold text-sm">{fmt(Number(f.montant_ttc) || 0)} {f.devise || 'MUR'}</span>
-                        </div>
-                      ))}
-                      {recent.length > 5 && <p className="text-xs text-gray-400">... et {recent.length - 5} autres en attente</p>}
-                    </div>
-                  )}
-                </div>
-              )
-            })()}
-
-            {/* Sub-sections B & C removed — the "Paiements bancaires sans facture"
-                list was a duplicate of the main "À classer" section above, and
-                the "Écritures 401 non lettrées" summary now lives in the
-                Avancé accordion below. */}
-          </CardContent>
-        </Card>
       )}
+
 
       {/* SECTION 5 — Lettrage écritures 401/411 — advanced, collapsed by default */}
       <details className="group">
         <summary className="cursor-pointer flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-[#0B0F2E] py-2 px-2 rounded-md hover:bg-gray-50">
           <ChevronDown className="w-4 h-4 group-open:rotate-180 transition-transform" />
-          🔧 Avancé — Lettrage comptable (écritures 401/411) {ecrituresLettrage.length > 0 && <span className="text-xs text-gray-400">— {ecrituresLettrage.length} non lettrées</span>}
+          🔧 Comptabilité avancée {ecrituresLettrage.length > 0 && <span className="text-xs text-gray-400">— {ecrituresLettrage.length} écritures 401/411 non lettrées</span>}
         </summary>
         <div className="mt-2 space-y-4">
       <Card>
