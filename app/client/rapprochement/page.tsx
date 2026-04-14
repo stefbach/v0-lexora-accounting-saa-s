@@ -763,6 +763,8 @@ Voulez-vous vraiment continuer ?`
       console.log('[classer_transaction] response', res.status, data)
       console.log('[classer_transaction] warnings.ecritures =', data.warnings?.ecritures)
       console.log('[classer_transaction] warnings.learn =', data.warnings?.learn)
+      console.log('[classer_transaction] warnings.propagation =', data.warnings?.propagation)
+      console.log('[classer_transaction] propagation_stats =', data.propagation_stats)
       console.log('[classer_transaction] FULL JSON =', JSON.stringify(data, null, 2))
       if (!res.ok) {
         setToast({ type: 'error', message: `❌ ${data.error || `HTTP ${res.status}`}` })
@@ -1675,12 +1677,21 @@ Voulez-vous vraiment continuer ?`
                       <TableCell>
                         <div className="flex items-center gap-1">
                           {(() => {
-                            // Compte combien d autres tx ont le meme tiers (pour UI "+N similaires")
-                            const myTiers = (tx.tiers_detecte || '').trim().toLowerCase()
+                            // Compte toutes les tx non classifiees avec meme tiers (dans a_verifier + a_classer)
+                            // Normalisation identique au backend : lowercase, suppression MR/MRS, ponctuation
+                            const norm = (s: string) => (s || '')
+                              .trim()
+                              .toLowerCase()
+                              .replace(/\b(mr|mrs|ms|mme|monsieur|madame|m\.|sir)\b/g, '')
+                              .replace(/[^a-z0-9\s]/g, ' ')
+                              .replace(/\s+/g, ' ')
+                              .trim()
+                            const myTiers = norm(tx.tiers_detecte || (tx as any).tiers || '')
+                            const candidates = [...paidNoInvoice, ...unmatched]
                             const nbSimilaires = myTiers.length >= 3
-                              ? paidNoInvoice.filter((o: any) =>
+                              ? candidates.filter((o: any) =>
                                   o.id !== tx.id
-                                  && ((o.tiers_detecte || '').trim().toLowerCase() === myTiers)
+                                  && norm(o.tiers_detecte || o.tiers || '') === myTiers
                                 ).length
                               : 0
                             const classifications = [

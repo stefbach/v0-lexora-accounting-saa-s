@@ -3269,18 +3269,27 @@ export async function POST(request: Request) {
       }
 
       // === PROPAGATION : appliquer la classification à toutes les tx similaires ===
-      // Trouve toutes les autres tx de la société avec le même tiers et les
-      // classifie identiquement (non_identifie + a_verifier + rapproche sans facture).
+      // Avec compteurs diagnostiques detaillés pour identifier pourquoi une tx
+      // serait ecartee du lot. Match sur tiers_detecte OR tiers (fallback).
       let nbPropagated = 0
       let propagationError: string | null = null
+      const propStats = { scanned: 0, skip_facture: 0, skip_already: 0, skip_tiers_vide: 0, skip_tiers_diff: 0, matched: 0 }
+      const normalize = (s: string) => (s || '')
+        .trim()
+        .toLowerCase()
+        .replace(/\b(mr|mrs|ms|mme|monsieur|madame|m\.|sir)\b/g, '')
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
       if (apply_to_similar) {
         try {
           const currentTx = txs[txIdx]
-          const targetTiers = (currentTx.tiers_detecte || '').trim().toLowerCase()
+          const rawTiers = currentTx.tiers_detecte || currentTx.tiers || ''
+          const targetTiers = normalize(rawTiers)
+          console.log(`[classer_transaction] propagation demarree - raw="${rawTiers}" normalized="${targetTiers}"`)
           if (!targetTiers || targetTiers.length < 3) {
-            propagationError = 'Tiers trop court pour propager'
+            propagationError = `Tiers trop court pour propager (raw="${rawTiers}", normalized="${targetTiers}")`
           } else {
-            // Fetch all releves of this société
             const { data: allReleves } = await supabase
               .from('releves_bancaires')
               .select('id, transactions_json')
@@ -3290,38 +3299,38 @@ export async function POST(request: Request) {
               let changed = false
               for (let i = 0; i < relTxs.length; i++) {
                 const t = relTxs[i]
-                // Skip current tx (deja traitee)
                 if (rel.id === releve_id && i === txIdx) continue
-                // Skip si deja classifiee par regle ou facture
-                if (t.facture_id) continue
-                if (t.matched_type?.startsWith('rule_')) continue
-                if (t.matched_type === classification) continue // deja meme classification
-                // Match sur tiers
-                const txTiers = (t.tiers_detecte || '').trim().toLowerCase()
-                if (txTiers !== targetTiers) continue
-                // Classifier cette tx
+                propStats.scanned++
+                if (t.facture_id) { propStats.skip_facture++; continue }
+                if (t.matched_type === classification) { propStats.skip_already++; continue }
+                const rawTxTiers = t.tiers_detecte || t.tiers || ''
+                const txTiers = normalize(rawTxTiers)
+                if (!txTiers || txTiers.length < 3) { propStats.skip_tiers_vide++; continue }
+                if (txTiers !== targetTiers) { propStats.skip_tiers_diff++; continue }
+                // Match trouve - on classifie meme si matched_type commence par rule_
+                // (l utilisateur a explicitement demande la propagation)
+                propStats.matched++
                 const propCode = `CL${String(Date.now()).slice(-6)}${i}`
                 relTxs[i] = {
                   ...t,
                   statut: 'rapproche',
                   matched_type: classification,
                   lettre: propCode,
-                  note: `Propage depuis ${transaction_id} (classifie manuellement)`,
+                  note: `Propage depuis ${transaction_id} (classifie manuellement en ${classification})`,
                 }
                 changed = true
                 nbPropagated++
-                // Creer ecritures BNQ pour cette tx
                 if (dossier) {
                   const txAmt = Math.max(Number(t.debit) || 0, Number(t.credit) || 0)
                   const isOut = (Number(t.debit) || 0) > 0
                   const propRef = `CL-${rel.id}-${i}`
                   try {
-                    await supabase.from('ecritures_comptables_v2').insert([
+                    const { error: insErr } = await supabase.from('ecritures_comptables_v2').insert([
                       {
                         dossier_id: dossier.id, societe_id,
                         date_ecriture: t.date || new Date().toISOString().split('T')[0],
                         journal: 'BNQ', numero_compte: compte,
-                        libelle: `${classification} — ${(t.tiers_detecte || t.libelle || '').substring(0, 60)}`,
+                        libelle: `${classification} — ${(rawTxTiers || t.libelle || '').substring(0, 60)}`,
                         debit_mur: isOut ? txAmt : 0, credit_mur: isOut ? 0 : txAmt,
                         lettre: propCode, ref_folio: propRef,
                       },
@@ -3329,19 +3338,62 @@ export async function POST(request: Request) {
                         dossier_id: dossier.id, societe_id,
                         date_ecriture: t.date || new Date().toISOString().split('T')[0],
                         journal: 'BNQ', numero_compte: '512',
-                        libelle: `Banque — ${(t.tiers_detecte || '').substring(0, 25)}`,
+                        libelle: `Banque — ${(rawTxTiers || '').substring(0, 25)}`,
                         debit_mur: isOut ? 0 : txAmt, credit_mur: isOut ? txAmt : 0,
                         lettre: propCode, ref_folio: propRef,
                       },
                     ])
-                  } catch { /* doublon possible, best effort */ }
+                    if (insErr && !/duplicate key|unique constraint/i.test(String(insErr.message))) {
+                      console.warn(`[propagation] ecritures insert failed for tx=${rel.id}-${i}:`, insErr.message)
+                    }
+                  } catch (e: any) {
+                    console.warn(`[propagation] ecritures exception for tx=${rel.id}-${i}:`, e.message)
+                  }
+
+                  // CCA sync pour les tx propagees aussi
+                  if (classification === 'compte_courant_associe' && rawTxTiers) {
+                    try {
+                      const { data: existingCcaProp } = await supabase
+                        .from('comptes_courants_associes')
+                        .select('id, solde')
+                        .eq('societe_id', societe_id)
+                        .ilike('nom', rawTxTiers.trim())
+                        .limit(1)
+                        .maybeSingle()
+                      let ccaId = existingCcaProp?.id
+                      let solde = Number(existingCcaProp?.solde || 0)
+                      if (!ccaId) {
+                        const { data: newCca } = await supabase
+                          .from('comptes_courants_associes')
+                          .insert({ societe_id, nom: rawTxTiers.trim(), type: 'associe', solde: 0 })
+                          .select('id, solde')
+                          .single()
+                        ccaId = newCca?.id
+                      }
+                      if (ccaId) {
+                        const delta = isOut ? -txAmt : txAmt
+                        await supabase.from('mouvements_compte_courant').insert({
+                          compte_courant_id: ccaId, societe_id,
+                          date_mouvement: t.date || new Date().toISOString().split('T')[0],
+                          type: isOut ? 'avance' : 'apport',
+                          montant: txAmt,
+                          description: `Propage (${classification}) — ${(t.libelle || '').substring(0, 60)}`,
+                        })
+                        await supabase.from('comptes_courants_associes')
+                          .update({ solde: solde + delta, updated_at: new Date().toISOString() })
+                          .eq('id', ccaId)
+                      }
+                    } catch (e: any) {
+                      console.warn(`[propagation] CCA sync exception:`, e.message)
+                    }
+                  }
                 }
               }
               if (changed) {
                 await supabase.from('releves_bancaires').update({ transactions_json: relTxs }).eq('id', rel.id)
               }
             }
-            console.log(`[classer_transaction] propagation: ${nbPropagated} tx classees avec tiers "${targetTiers}" = ${classification}`)
+            console.log(`[classer_transaction] propagation: ${nbPropagated} tx classees avec tiers "${targetTiers}" = ${classification}. Stats=`, propStats)
           }
         } catch (e: any) {
           propagationError = e.message
@@ -3358,6 +3410,7 @@ export async function POST(request: Request) {
         pattern_saved: patternSaved,
         cca_synced: ccaSynced,
         nb_propagated: nbPropagated,
+        propagation_stats: apply_to_similar ? propStats : undefined,
         warnings: {
           ecritures: ecrituresError,
           learn: learnError,
