@@ -145,6 +145,15 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'reconciliation_id, side, amount requis' }, { status: 400 })
       }
 
+      // B3 — bloquer si le rapprochement est verrouillé/validé
+      const { data: reconStatus } = await supabase.from('bank_reconciliations')
+        .select('status').eq('id', reconciliation_id).single()
+      if (reconStatus && (reconStatus.status === 'locked' || reconStatus.status === 'validated')) {
+        return NextResponse.json({
+          error: `Rapprochement ${reconStatus.status === 'locked' ? 'verrouillé' : 'validé'} — modification interdite. Contactez un administrateur pour déverrouiller.`,
+        }, { status: 403 })
+      }
+
       const { data, error } = await supabase.from('reconciliation_items').insert({
         reconciliation_id, side, nature, amount: Number(amount), category,
         date_operation, description,
@@ -158,6 +167,18 @@ export async function POST(request: Request) {
     // ── REMOVE_ITEM: Supprimer un élément ──
     if (action === 'remove_item') {
       const { item_id, reconciliation_id } = body
+
+      // B3 — bloquer si le rapprochement est verrouillé/validé
+      if (reconciliation_id) {
+        const { data: reconStatus } = await supabase.from('bank_reconciliations')
+          .select('status').eq('id', reconciliation_id).single()
+        if (reconStatus && (reconStatus.status === 'locked' || reconStatus.status === 'validated')) {
+          return NextResponse.json({
+            error: `Rapprochement ${reconStatus.status === 'locked' ? 'verrouillé' : 'validé'} — suppression interdite.`,
+          }, { status: 403 })
+        }
+      }
+
       const { error } = await supabase.from('reconciliation_items').delete().eq('id', item_id)
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
       if (reconciliation_id) await recalculateBalance(supabase, reconciliation_id)
