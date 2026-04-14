@@ -10,13 +10,15 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import {
   Loader2, Plus, CheckCircle, XCircle, AlertTriangle,
   Calendar, Thermometer, Clock, ShieldAlert, Users, FileWarning,
-  Upload, ChevronLeft, ChevronRight, Eye, Pencil, Save, X
+  Upload, ChevronLeft, ChevronRight, Eye, Pencil, Save, X,
+  Megaphone
 } from "lucide-react"
+import { createClient } from "@/lib/supabase/client"
 
 // ─── Constants ───────────────────────────────────────────────────
 const TYPE_LABELS: Record<string, string> = {
@@ -94,6 +96,10 @@ interface BalanceRow {
   date_arrivee: string | null
   al_droit: number
   al_pris: number
+  /** Subset of al_pris consumed by company-imposed leaves (Commit 10). */
+  al_impose_societe?: number
+  /** Subset of al_pris chosen by the employee. */
+  al_impose_employe?: number
   al_solde: number
   sl_droit: number
   sl_pris: number
@@ -472,6 +478,30 @@ export default function CongesPage() {
   const [refusMotif, setRefusMotif] = useState("")
   const [actionLoading, setActionLoading] = useState<string | null>(null)
 
+  // ── Collectif (Commit 10) ─────────────────────────────────────
+  const [userRole, setUserRole] = useState<string>("")
+  const [groupes, setGroupes] = useState<Array<{ id: string; nom: string }>>([])
+  const [collectifOpen, setCollectifOpen] = useState(false)
+  const [collectifForm, setCollectifForm] = useState<{
+    titre: string
+    societe_id: string
+    type_conge: string
+    date_debut: string
+    date_fin: string
+    applique_a: 'all' | 'groupe'
+    groupe_id: string
+    motif: string
+  }>({
+    titre: "", societe_id: "", type_conge: "AL",
+    date_debut: "", date_fin: "", applique_a: 'all', groupe_id: "", motif: "",
+  })
+  const [collectifError, setCollectifError] = useState<string | null>(null)
+  const [collectifSaving, setCollectifSaving] = useState(false)
+  const [collectifFeedback, setCollectifFeedback] = useState<{ nb: number; jours: number } | null>(null)
+
+  // Roles allowed to impose collective leave (matches the API gate).
+  const canImposeCollectif = ['admin', 'super_admin', 'client_admin', 'rh', 'rh_manager', 'direction'].includes(userRole)
+
   // Calendar tab
   const [calendarConges, setCalendarConges] = useState<CongeRecord[]>([])
   const [loadingCalendar, setLoadingCalendar] = useState(true)
@@ -602,6 +632,73 @@ export default function CongesPage() {
 
   // Initial load
   useEffect(() => { loadSocietes() }, [loadSocietes])
+
+  // Fetch current user's role so we can gate the "Imposer collectif" button.
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return
+      supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+        .then(({ data }) => { if (data?.role) setUserRole(String(data.role)) })
+    })
+  }, [])
+
+  // Fetch groupes for the target société (lazy — only when the modal is open
+  // and applique_a='groupe').
+  useEffect(() => {
+    if (!collectifOpen) return
+    if (!collectifForm.societe_id) { setGroupes([]); return }
+    let cancelled = false
+    fetch(`/api/rh/groupes?societe_id=${collectifForm.societe_id}`)
+      .then(r => r.json())
+      .then(d => { if (!cancelled) setGroupes(d.groupes || []) })
+      .catch(() => { if (!cancelled) setGroupes([]) })
+    return () => { cancelled = true }
+  }, [collectifOpen, collectifForm.societe_id])
+
+  const openCollectifModal = () => {
+    setCollectifError(null)
+    setCollectifFeedback(null)
+    // Pre-fill societe_id with the current filter if one is selected.
+    const preSociete = societe !== 'all' ? societe : (societes[0]?.id || '')
+    setCollectifForm(f => ({
+      ...f,
+      titre: "", type_conge: 'AL', date_debut: "", date_fin: "",
+      applique_a: 'all', groupe_id: "", motif: "",
+      societe_id: preSociete,
+    }))
+    setCollectifOpen(true)
+  }
+
+  const submitCollectif = async () => {
+    setCollectifError(null)
+    if (!collectifForm.titre.trim()) return setCollectifError("Titre requis")
+    if (!collectifForm.societe_id) return setCollectifError("Société requise")
+    if (!collectifForm.date_debut || !collectifForm.date_fin) return setCollectifError("Dates requises")
+    if (collectifForm.date_fin < collectifForm.date_debut) return setCollectifError("date_fin doit être ≥ date_debut")
+    if (collectifForm.applique_a === 'groupe' && !collectifForm.groupe_id) return setCollectifError("Groupe requis")
+    setCollectifSaving(true)
+    try {
+      const res = await fetch("/api/rh/conges/collectif", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(collectifForm),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Erreur")
+      setCollectifFeedback({ nb: data.nb_employes || 0, jours: data.total_jours_imposes || 0 })
+      // Refresh the current tab — new approved leaves may appear + balances change.
+      if (tab === "dashboard") loadBalances()
+      if (tab === "demandes") loadDemandes()
+      if (tab === "historique") loadHistorique()
+      // Auto-close after 2s.
+      setTimeout(() => { setCollectifOpen(false); setCollectifFeedback(null) }, 2500)
+    } catch (e: unknown) {
+      setCollectifError(e instanceof Error ? e.message : "Erreur")
+    } finally {
+      setCollectifSaving(false)
+    }
+  }
   useEffect(() => { loadEmployes() }, [loadEmployes])
 
   // Always load balances for KPI display (needed across all tabs)
@@ -801,6 +898,16 @@ export default function CongesPage() {
           <Button onClick={() => { setDialogOpen(true); setFormError(null) }} className="bg-[#0B0F2E] text-white">
             <Plus className="w-4 h-4 mr-2" />Nouvelle demande
           </Button>
+          {canImposeCollectif && (
+            <Button
+              onClick={openCollectifModal}
+              variant="outline"
+              className="border-amber-500 text-amber-700 hover:bg-amber-50"
+              title="Imposer une période de congé à tous les employés (ou à un groupe)"
+            >
+              <Megaphone className="w-4 h-4 mr-2" />Imposer congé collectif
+            </Button>
+          )}
         </div>
       </div>
 
@@ -967,7 +1074,18 @@ export default function CongesPage() {
                             {isEditing ? (
                               <Input type="number" className="h-7 text-xs w-14 text-center" value={editBalFields.al_pris}
                                 onChange={e => setEditBalFields(f => ({ ...f, al_pris: parseFloat(e.target.value) || 0 }))} />
-                            ) : b.al_pris}
+                            ) : (
+                              <div className="flex flex-col items-center leading-tight">
+                                <span className="font-semibold">{b.al_pris}</span>
+                                {((b.al_impose_societe || 0) > 0 || (b.al_impose_employe || 0) > 0) && (
+                                  <span className="text-[9px] text-gray-500 mt-0.5">
+                                    <span title="Choisi par l'employé">emp: {b.al_impose_employe ?? b.al_pris}</span>
+                                    <span className="mx-1">·</span>
+                                    <span title="Imposé par la société" className={b.al_impose_societe && b.al_impose_societe > 0 ? "text-amber-700 font-medium" : ""}>soc: {b.al_impose_societe ?? 0}</span>
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </TableCell>
                           <TableCell className="text-center">
                             <span className={`font-semibold ${b.al_solde <= 0 ? "text-red-600" : b.al_solde <= 5 ? "text-orange-500" : "text-green-600"}`}>
@@ -1611,6 +1729,147 @@ export default function CongesPage() {
             >
               {actionLoading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
               <XCircle className="w-4 h-4 mr-2" />Confirmer le refus
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══ DIALOG: Imposer congé collectif ═══ */}
+      <Dialog open={collectifOpen} onOpenChange={setCollectifOpen}>
+        <DialogContent className="sm:max-w-lg" aria-describedby="collectif-desc">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Megaphone className="w-4 h-4 text-amber-600" />
+              Imposer un congé collectif
+            </DialogTitle>
+            <DialogDescription id="collectif-desc">
+              Crée une période de congé imposée pour tous les employés actifs (ou un groupe).
+              Les demandes sont créées automatiquement en statut "approuvé" et le solde AL
+              est décompté côté "imposé par la société".
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 py-2">
+            {collectifError && (
+              <div className="bg-red-50 border border-red-200 rounded-md p-3">
+                <p className="text-sm text-red-700">{collectifError}</p>
+              </div>
+            )}
+            {collectifFeedback && (
+              <div className="bg-green-50 border border-green-200 rounded-md p-3 text-sm text-green-800">
+                <CheckCircle className="w-4 h-4 inline-block mr-1" />
+                Congé collectif créé : <strong>{collectifFeedback.nb}</strong> employé(s) · <strong>{collectifFeedback.jours}</strong> jour(s) imposé(s) au total.
+              </div>
+            )}
+            <div>
+              <Label>Titre *</Label>
+              <Input
+                value={collectifForm.titre}
+                onChange={e => setCollectifForm(f => ({ ...f, titre: e.target.value }))}
+                placeholder="Ex: Fermeture annuelle — décembre 2026"
+              />
+            </div>
+            <div>
+              <Label>Société *</Label>
+              <Select
+                value={collectifForm.societe_id}
+                onValueChange={v => setCollectifForm(f => ({ ...f, societe_id: v, groupe_id: "" }))}
+              >
+                <SelectTrigger><SelectValue placeholder="Choisir une société…" /></SelectTrigger>
+                <SelectContent>
+                  {societes.map((s: any) => (
+                    <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Type de congé *</Label>
+                <Select
+                  value={collectifForm.type_conge}
+                  onValueChange={v => setCollectifForm(f => ({ ...f, type_conge: v }))}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="AL">Congé annuel (AL)</SelectItem>
+                    <SelectItem value="UL">Sans solde (UL)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-gray-500 mt-1">
+                  Seul AL décompte le solde au titre "imposé société".
+                </p>
+              </div>
+              <div>
+                <Label>Appliquer à *</Label>
+                <Select
+                  value={collectifForm.applique_a}
+                  onValueChange={(v: string) => setCollectifForm(f => ({
+                    ...f,
+                    applique_a: (v === 'groupe' ? 'groupe' : 'all') as 'all' | 'groupe',
+                    groupe_id: v === 'groupe' ? f.groupe_id : "",
+                  }))}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tous les employés actifs</SelectItem>
+                    <SelectItem value="groupe">Un groupe</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {collectifForm.applique_a === 'groupe' && (
+              <div>
+                <Label>Groupe *</Label>
+                <Select
+                  value={collectifForm.groupe_id}
+                  onValueChange={v => setCollectifForm(f => ({ ...f, groupe_id: v }))}
+                >
+                  <SelectTrigger><SelectValue placeholder={groupes.length ? "Choisir un groupe…" : "Aucun groupe défini pour cette société"} /></SelectTrigger>
+                  <SelectContent>
+                    {groupes.map(g => (
+                      <SelectItem key={g.id} value={g.id}>{g.nom}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Date début *</Label>
+                <Input
+                  type="date"
+                  value={collectifForm.date_debut}
+                  onChange={e => setCollectifForm(f => ({ ...f, date_debut: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label>Date fin *</Label>
+                <Input
+                  type="date"
+                  value={collectifForm.date_fin}
+                  onChange={e => setCollectifForm(f => ({ ...f, date_fin: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Motif</Label>
+              <Textarea
+                rows={2}
+                value={collectifForm.motif}
+                onChange={e => setCollectifForm(f => ({ ...f, motif: e.target.value }))}
+                placeholder="Raison de l'imposition (optionnel)"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCollectifOpen(false)}>Fermer</Button>
+            <Button
+              onClick={submitCollectif}
+              disabled={collectifSaving || !!collectifFeedback}
+              className="bg-amber-600 text-white hover:bg-amber-700"
+            >
+              {collectifSaving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+              <Megaphone className="w-4 h-4 mr-2" />Imposer
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -424,7 +424,13 @@ export async function GET(request: Request) {
       // Build balances per employee
       const balances = employees.map((emp: any) => {
         const empConges = conges.filter((c: any) => c.employe_id === emp.id)
-        const alTaken = empConges.filter((c: any) => c.type_conge === 'AL').reduce((sum: number, c: any) => sum + (c.nb_jours || 0), 0)
+        const empAlConges = empConges.filter((c: any) => c.type_conge === 'AL')
+        const alTaken = empAlConges.reduce((sum: number, c: any) => sum + (c.nb_jours || 0), 0)
+        // Split AL days between company-imposed and employee-chosen.
+        const alImposeSociete = empAlConges
+          .filter((c: any) => c.impose_par_societe === true)
+          .reduce((sum: number, c: any) => sum + (c.nb_jours || 0), 0)
+        const alImposeEmploye = alTaken - alImposeSociete
         const slTaken = empConges.filter((c: any) => c.type_conge === 'SL').reduce((sum: number, c: any) => sum + (c.nb_jours || 0), 0)
         const alEntitled = calculateALEntitlement(emp.date_arrivee, currentYear)
         const slEntitled = calculateSLEntitlement(emp.date_arrivee, currentYear)
@@ -450,6 +456,8 @@ export async function GET(request: Request) {
           date_arrivee: emp.date_arrivee,
           al_droit: alEntitled,
           al_pris: alTaken,
+          al_impose_societe: Math.round(alImposeSociete * 100) / 100,
+          al_impose_employe: Math.round(alImposeEmploye * 100) / 100,
           al_solde: alBalance,
           sl_droit: slEntitled,
           sl_pris: slTaken,
