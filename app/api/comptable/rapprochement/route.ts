@@ -3143,6 +3143,81 @@ export async function POST(request: Request) {
         }
       }
 
+      // === SYNC CCA : si classification = compte_courant_associe, creer/maj
+      // le compte courant + le mouvement pour que la page CCA le voie ===
+      let ccaSynced = false
+      let ccaError: string | null = null
+      if (classification === 'compte_courant_associe') {
+        try {
+          const tx = txs[txIdx]
+          const nomAssocie = (tx.tiers_detecte || '').trim()
+          if (!nomAssocie || nomAssocie.length < 3) {
+            ccaError = 'Tiers absent ou trop court pour creer le CCA'
+          } else {
+            // Trouver ou creer le compte courant associe
+            const { data: existingCompte } = await supabase
+              .from('comptes_courants_associes')
+              .select('id, solde')
+              .eq('societe_id', societe_id)
+              .ilike('nom', nomAssocie)
+              .limit(1)
+              .maybeSingle()
+
+            let compteId: string | null = existingCompte?.id || null
+            let currentSolde = Number(existingCompte?.solde || 0)
+
+            if (!compteId) {
+              const { data: newCompte, error: createErr } = await supabase
+                .from('comptes_courants_associes')
+                .insert({ societe_id, nom: nomAssocie, type: 'associe', solde: 0 })
+                .select('id, solde')
+                .single()
+              if (createErr) {
+                ccaError = `Impossible de creer le compte courant: ${createErr.message}`
+              } else {
+                compteId = newCompte.id
+                currentSolde = 0
+              }
+            }
+
+            if (compteId) {
+              const montant = Math.max(Number(tx.debit) || 0, Number(tx.credit) || 0)
+              const isOut = (Number(tx.debit) || 0) > 0
+              // Si sortie banque vers associe = avance de la societe a l associe (solde devient negatif)
+              // Si entree banque depuis associe = apport de l associe a la societe (solde devient positif)
+              const type = isOut ? 'avance' : 'apport'
+              const deltaSolde = isOut ? -montant : montant
+              const description = `${isOut ? 'Avance societe a associe' : 'Apport associe a societe'} — ${(tx.libelle || '').substring(0, 60)}`
+
+              const { error: mvtErr } = await supabase
+                .from('mouvements_compte_courant')
+                .insert({
+                  compte_courant_id: compteId,
+                  societe_id,
+                  date_mouvement: tx.date || new Date().toISOString().split('T')[0],
+                  type,
+                  montant,
+                  description,
+                })
+              if (mvtErr) {
+                ccaError = `Mouvement CCA non cree: ${mvtErr.message}`
+              } else {
+                // Mettre a jour le solde
+                await supabase
+                  .from('comptes_courants_associes')
+                  .update({ solde: currentSolde + deltaSolde, updated_at: new Date().toISOString() })
+                  .eq('id', compteId)
+                ccaSynced = true
+                console.log(`[classer_transaction] CCA synced: ${nomAssocie} type=${type} montant=${montant} nouveau_solde=${currentSolde + deltaSolde}`)
+              }
+            }
+          }
+        } catch (e: any) {
+          ccaError = e.message
+          console.error('[classer_transaction] CCA sync exception:', e)
+        }
+      }
+
       // === AUTO-LEARN : sauvegarder le pattern comme règle de classification ===
       let patternSaved = false
       let learnError: string | null = null
@@ -3281,11 +3356,13 @@ export async function POST(request: Request) {
         nb_ecritures: nbEcritures,
         ecritures_already_existed: ecrituresAlreadyExisted,
         pattern_saved: patternSaved,
+        cca_synced: ccaSynced,
         nb_propagated: nbPropagated,
         warnings: {
           ecritures: ecrituresError,
           learn: learnError,
           propagation: propagationError,
+          cca: ccaError,
         },
       })
     }

@@ -774,6 +774,8 @@ Voulez-vous vraiment continuer ?`
       else if (data.warnings?.ecritures) parts.push(`⚠ écritures: ${data.warnings.ecritures}`)
       if (data.pattern_saved) parts.push('règle auto-apprise')
       else if (data.warnings?.learn) parts.push(`⚠ auto-learn: ${data.warnings.learn}`)
+      if (data.cca_synced) parts.push('compte courant mis à jour')
+      else if (data.warnings?.cca) parts.push(`⚠ CCA: ${data.warnings.cca}`)
       if (data.nb_propagated > 0) parts.push(`⚡ ${data.nb_propagated} tx similaires classées automatiquement`)
       else if (data.warnings?.propagation) parts.push(`⚠ propagation: ${data.warnings.propagation}`)
       setToast({
