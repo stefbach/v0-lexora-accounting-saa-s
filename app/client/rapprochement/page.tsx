@@ -759,6 +759,9 @@ Voulez-vous vraiment continuer ?`
       })
       const data = await res.json().catch(() => ({}))
       console.log('[classer_transaction] response', res.status, data)
+      console.log('[classer_transaction] warnings.ecritures =', data.warnings?.ecritures)
+      console.log('[classer_transaction] warnings.learn =', data.warnings?.learn)
+      console.log('[classer_transaction] FULL JSON =', JSON.stringify(data, null, 2))
       if (!res.ok) {
         setToast({ type: 'error', message: `❌ ${data.error || `HTTP ${res.status}`}` })
         return
