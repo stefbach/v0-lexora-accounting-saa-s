@@ -14,6 +14,7 @@ import { Progress } from "@/components/ui/progress"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { bucketizeTransactions, type BucketItem } from "@/lib/accounting/classification-rules"
 
 function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 function formatDate(d: string) { return d ? new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" }) : "—" }
@@ -72,8 +73,12 @@ export default function ClientRapprochementPage() {
   const [smartProposals, setSmartProposals] = useState<any[]>([])
   const [smartDialog, setSmartDialog] = useState<'summary' | 'list' | null>(null)
 
-  // Auto-classer preview dialog (shown before running the deterministic agent)
-  type AutoBucketItem = { id: string; date: string; libelle: string; tiers: string; amount: number; devise: string }
+  // Auto-classer preview dialog (shown before running the deterministic agent).
+  // FIX 10 — Buckets come from the shared lib so the preview counts here
+  // match exactly what the server will reconcile. Previously the client
+  // ran its own keyword matchers that drifted from the server rules and
+  // led to "5 détectés mais 2 rapprochés" user complaints.
+  type AutoBucketItem = BucketItem
   type AutoBucket = { count: number; total: number; items: AutoBucketItem[] }
   const [autoPreview, setAutoPreview] = useState<null | {
     salaires: AutoBucket
@@ -81,6 +86,7 @@ export default function ClientRapprochementPage() {
     frais: AutoBucket
     internes: AutoBucket
     remboursements: AutoBucket
+    inconnus: AutoBucket
   }>(null)
 
   // Pagination — Factures fournisseurs table (Part 1: 20/page).
@@ -245,63 +251,13 @@ Voulez-vous vraiment continuer ?`
    * server applies. Values here are indicative; the server remains the
    * source of truth when actually applying.
    */
+  // FIX 10 — Delegates to lib/accounting/classification-rules so client
+  // preview and server deterministic agent share the EXACT same matchers.
   const computeAutoPreview = () => {
     const u = (transactions as any[]).filter((t: any) =>
       t.statut !== 'rapproche' && t.statut !== 'interne' && t.statut !== 'propose' && t.statut !== 'a_verifier'
     )
-    const amtOf = (t: any) => Math.max(Number(t.debit) || 0, Number(t.credit) || 0)
-    const lib = (t: any) => String(t.libelle || '').toLowerCase()
-    const tiers = (t: any) => String(t.tiers_detecte || '').toLowerCase()
-
-    const mkBucket = (): AutoBucket => ({ count: 0, total: 0, items: [] })
-    const salaires = mkBucket()
-    const mra = mkBucket()
-    const frais = mkBucket()
-    const internes = mkBucket()
-    const remboursements = mkBucket()
-
-    const push = (b: AutoBucket, t: any, a: number) => {
-      b.count++
-      b.total += a
-      b.items.push({
-        id: String(t.id),
-        date: String(t.date || ''),
-        libelle: String(t.libelle || ''),
-        tiers: String(t.tiers_detecte || ''),
-        amount: a,
-        devise: String(t.devise || 'MUR'),
-      })
-    }
-
-    for (const t of u) {
-      const a = amtOf(t)
-      const L = lib(t)
-      const T = tiers(t)
-
-      // Remboursement perso (RBT CC STEPHANE HENRI BACH)
-      if (L.includes('rbt cc') || T.includes('stephane henri bach')) {
-        push(remboursements, t, a); continue
-      }
-      // Virement interne (IB Own Account Transfer, DDS↔OCC)
-      if (L.includes('ib own account') || L.includes('own account transfer') || L.includes('virement interne')) {
-        push(internes, t, a); continue
-      }
-      // MRA
-      if (T.includes('mauritius revenue') || L.includes('direct debit') && L.includes('mra')) {
-        push(mra, t, a); continue
-      }
-      // Salaires (bulk ou individuels marqués PERSONNEL/SALARY)
-      if (L.includes('salary') || L.includes('salaire') || (L.includes('bulk payment') && (L.includes('personnel') || L.includes('salary')))
-          || T === 'personnel' || T === 'salary') {
-        push(salaires, t, a); continue
-      }
-      // Frais bancaires (MCB/MASTERCARD, petits montants)
-      const feeKeywords = ['fee', 'subs', 'interest', 'penalty', 'service charge', 'commission', 'frais']
-      if ((T.includes('mcb') || T.includes('mastercard') || feeKeywords.some(k => L.includes(k))) && a > 0 && a < 2000) {
-        push(frais, t, a); continue
-      }
-    }
-    return { salaires, mra, frais, internes, remboursements }
+    return bucketizeTransactions(u)
   }
 
   const openAutoClasserPreview = () => {
@@ -1940,10 +1896,13 @@ Voulez-vous vraiment continuer ?`
             </DialogTitle>
           </DialogHeader>
           {autoPreview && (() => {
-            const { salaires, mra, frais, internes, remboursements } = autoPreview
+            const { salaires, mra, frais, internes, remboursements, inconnus } = autoPreview
+            // "inconnus" ne sont PAS auto-classés (pas de règle déclenchée) —
+            // on les affiche pour transparence mais on ne les compte pas
+            // dans le "Total à classer" ni dans le bouton de confirmation.
             const total = salaires.count + mra.count + frais.count + internes.count + remboursements.count
             const totalMontant = salaires.total + mra.total + frais.total + internes.total + remboursements.total
-            if (total === 0) {
+            if (total === 0 && inconnus.count === 0) {
               return (
                 <div className="py-6 text-center text-sm text-gray-500">
                   <CheckCircle2 className="w-8 h-8 mx-auto mb-2 text-green-500" />
@@ -1988,6 +1947,15 @@ Voulez-vous vraiment continuer ?`
                       <span className="font-mono text-sm font-semibold text-indigo-900">{fmt(remboursements.total)} MUR</span>
                     </div>
                   )}
+                  {inconnus.count > 0 && (
+                    <div className="flex items-center justify-between p-2.5 bg-orange-50 border border-orange-200 rounded">
+                      <span className="text-sm">
+                        <span className="mr-2">⚠️</span>
+                        {inconnus.count} transaction{inconnus.count > 1 ? 's' : ''} sans règle — <em>à traiter manuellement</em>
+                      </span>
+                      <span className="font-mono text-sm font-semibold text-orange-900">{fmt(inconnus.total)} MUR</span>
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center justify-between pt-2 border-t">
                   <span className="text-sm font-semibold text-[#0B0F2E]">Total à classer : {total}</span>
@@ -1998,7 +1966,7 @@ Voulez-vous vraiment continuer ?`
                   <Button
                     className="bg-[#D4AF37] text-[#0B0F2E] hover:bg-[#C9A82E]"
                     onClick={confirmAutoClasser}
-                    disabled={chatLoading}
+                    disabled={chatLoading || total === 0}
                   >
                     <span className="mr-2">✨</span>
                     Confirmer — classer {total} transaction{total > 1 ? 's' : ''}
