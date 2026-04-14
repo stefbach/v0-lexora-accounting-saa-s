@@ -3073,6 +3073,7 @@ export async function POST(request: Request) {
       const { data: dossier, error: dossierErr } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
       let nbEcritures = 0
       let ecrituresError: string | null = null
+      let ecrituresAlreadyExisted = false
       if (!dossier) {
         ecrituresError = `Aucun dossier comptable trouve pour societe ${societe_id}${dossierErr ? ' : ' + dossierErr.message : ''}`
         console.warn('[classer_transaction]', ecrituresError)
@@ -3080,8 +3081,10 @@ export async function POST(request: Request) {
         const tx = txs[txIdx]
         const txAmt = Math.max(Number(tx.debit) || 0, Number(tx.credit) || 0)
         const isOut = (Number(tx.debit) || 0) > 0
-        const refFolio = `CL-${String(releve_id).substring(0, 8)}-${txIdx}`
-        const { error: insEcrErr, data: insEcrData } = await supabase.from('ecritures_comptables_v2').insert([
+        // ref_folio determinISTE pour cette tx specifique (releve_id complet + txIdx)
+        // Permet la detection idempotente du doublon = re-click sur la meme tx.
+        const refFolio = `CL-${releve_id}-${txIdx}`
+        const ecrituresPayload = [
           {
             dossier_id: dossier.id, societe_id, date_ecriture: tx.date || new Date().toISOString().split('T')[0],
             journal: 'BNQ', numero_compte: compte,
@@ -3096,10 +3099,34 @@ export async function POST(request: Request) {
             debit_mur: isOut ? 0 : txAmt, credit_mur: isOut ? txAmt : 0,
             lettre: code, ref_folio: refFolio,
           },
-        ]).select('id')
+        ]
+        const { error: insEcrErr, data: insEcrData } = await supabase
+          .from('ecritures_comptables_v2')
+          .insert(ecrituresPayload)
+          .select('id')
         if (insEcrErr) {
-          ecrituresError = insEcrErr.message
-          console.error('[classer_transaction] insertion ecritures FAILED:', insEcrErr.message, insEcrErr)
+          // Cas idempotent : ecritures deja inserees pour ce ref_folio (re-click)
+          if (/duplicate key value|unique constraint/i.test(String(insEcrErr.message || ''))) {
+            ecrituresAlreadyExisted = true
+            // Mettre a jour la classification sur les ecritures existantes (compte + lettre + classification)
+            const { data: existing } = await supabase
+              .from('ecritures_comptables_v2')
+              .update({ lettre: code, numero_compte: compte })
+              .eq('ref_folio', refFolio)
+              .neq('numero_compte', '512')
+              .select('id')
+            // Update libelle pour refleter la nouvelle classification choisie
+            await supabase
+              .from('ecritures_comptables_v2')
+              .update({ libelle: `${classification} — ${(tx.tiers_detecte || tx.libelle || '').substring(0, 60)}` })
+              .eq('ref_folio', refFolio)
+              .neq('numero_compte', '512')
+            nbEcritures = (existing?.length || 0) + 1
+            console.log(`[classer_transaction] ecritures deja existantes (re-click) pour ref_folio=${refFolio}, mises a jour avec nouvelle classif=${classification}`)
+          } else {
+            ecrituresError = insEcrErr.message
+            console.error('[classer_transaction] insertion ecritures FAILED:', insEcrErr.message, insEcrErr)
+          }
         } else {
           nbEcritures = insEcrData?.length || 2
           console.log('[classer_transaction] ecritures inserees:', nbEcritures)
@@ -3161,6 +3188,7 @@ export async function POST(request: Request) {
         lettre: code,
         classification,
         nb_ecritures: nbEcritures,
+        ecritures_already_existed: ecrituresAlreadyExisted,
         pattern_saved: patternSaved,
         warnings: {
           ecritures: ecrituresError,
