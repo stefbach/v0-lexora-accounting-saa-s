@@ -686,6 +686,25 @@ export async function POST(request: Request) {
             error: 'Précisez si la demi-journée est le matin ou l\'après-midi',
           }, { status: 400 })
         }
+        // Type-level gate: conges_employes.demi_journee_autorisee is the
+        // per-(employe, annee, type) config flag. If a row exists for this
+        // type and the flag is explicitly false, refuse the request with a
+        // clear message. If no row exists yet we allow — the default
+        // declared in the schema is true and Commit 10's paramètres page
+        // will let the RH team flip it per type.
+        const anneeDemi = new Date(body.date_debut).getFullYear()
+        const { data: typeCfg } = await supabase
+          .from('conges_employes')
+          .select('demi_journee_autorisee')
+          .eq('employe_id', body.employe_id)
+          .eq('annee', anneeDemi)
+          .eq('type_conge', body.type_conge)
+          .maybeSingle()
+        if (typeCfg && typeCfg.demi_journee_autorisee === false) {
+          return NextResponse.json({
+            error: `Les demi-journées ne sont pas autorisées pour ce type de congé (${body.type_conge}). Contactez votre manager RH pour modifier le paramétrage.`,
+          }, { status: 400 })
+        }
       }
 
       let nb_jours: number

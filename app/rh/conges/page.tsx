@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -121,6 +123,9 @@ interface CongeRecord {
   date_debut: string
   date_fin: string
   nb_jours: number
+  demi_journee?: boolean
+  matin_ou_apres_midi?: 'matin' | 'apres_midi' | null
+  impose_par_societe?: boolean
   statut: string
   motif: string | null
   document_url: string | null
@@ -137,6 +142,15 @@ interface CongeRecord {
     societe_id: string
   } | null
 }
+
+/**
+ * Leave types that CAN be requested as a half day. Most company policies
+ * only allow AL / SL / CAR / UL half-days — statutory leaves (MAT/PAT)
+ * and accident leave (WI/PH) are always full days. The API additionally
+ * checks conges_employes.demi_journee_autorisee before accepting the
+ * request.
+ */
+const DEMI_JOURNEE_ALLOWED_TYPES = new Set(['AL', 'SL', 'CAR', 'UL'])
 
 // ─── Helper ──────────────────────────────────────────────────────
 function formatDate(d: string) {
@@ -441,8 +455,17 @@ export default function CongesPage() {
   // Dialogs
   const [dialogOpen, setDialogOpen] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({
-    employe_id: "", type_conge: "AL", date_debut: "", date_fin: "", motif: ""
+  const [form, setForm] = useState<{
+    employe_id: string
+    type_conge: string
+    date_debut: string
+    date_fin: string
+    motif: string
+    demi_journee: boolean
+    matin_ou_apres_midi: 'matin' | 'apres_midi'
+  }>({
+    employe_id: "", type_conge: "AL", date_debut: "", date_fin: "", motif: "",
+    demi_journee: false, matin_ou_apres_midi: 'matin',
   })
   const [formError, setFormError] = useState<string | null>(null)
   const [refusDialog, setRefusDialog] = useState<string | null>(null)
@@ -603,22 +626,34 @@ export default function CongesPage() {
       setFormError("Champs requis manquants")
       return
     }
-    if (form.date_fin < form.date_debut) {
-      setFormError("La date de fin doit etre apres la date de debut")
+    if (!form.demi_journee && form.date_fin < form.date_debut) {
+      setFormError("La date de fin doit être après la date de début")
+      return
+    }
+    if (form.demi_journee && !DEMI_JOURNEE_ALLOWED_TYPES.has(form.type_conge)) {
+      setFormError(`Ce type de congé (${TYPE_LABELS[form.type_conge] || form.type_conge}) ne permet pas les demi-journées.`)
       return
     }
     setSaving(true)
     setFormError(null)
     try {
+      // On a half day we send the same date for debut/fin; the API
+      // re-validates and sets nb_jours=0.5.
+      const payload = form.demi_journee
+        ? { ...form, date_fin: form.date_debut }
+        : form
       const res = await fetch("/api/rh/conges", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "creer", ...form }),
+        body: JSON.stringify({ action: "creer", ...payload }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Erreur")
       setDialogOpen(false)
-      setForm({ employe_id: "", type_conge: "AL", date_debut: "", date_fin: "", motif: "" })
+      setForm({
+        employe_id: "", type_conge: "AL", date_debut: "", date_fin: "", motif: "",
+        demi_journee: false, matin_ou_apres_midi: 'matin',
+      })
       // Reload current tab data
       if (tab === "dashboard") loadBalances()
       if (tab === "demandes") loadDemandes()
@@ -1041,12 +1076,26 @@ export default function CongesPage() {
                             {c.employe?.societe_id ? societeMap.get(c.employe.societe_id) || "---" : "---"}
                           </TableCell>
                           <TableCell>
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${TYPE_COLORS[c.type_conge] || "bg-gray-100 text-gray-800"}`}>
-                              {TYPE_LABELS[c.type_conge] || c.type_conge}
-                            </span>
+                            <div className="flex items-center gap-1 flex-wrap">
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${TYPE_COLORS[c.type_conge] || "bg-gray-100 text-gray-800"}`}>
+                                {TYPE_LABELS[c.type_conge] || c.type_conge}
+                              </span>
+                              {c.demi_journee && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-100 text-purple-800 border border-purple-200">
+                                  {c.matin_ou_apres_midi === 'apres_midi' ? '½ PM' : '½ AM'}
+                                </span>
+                              )}
+                              {c.impose_par_societe && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200" title="Imposé par la société">
+                                  Imposé
+                                </span>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className="text-sm">
-                            {formatDate(c.date_debut)} &rarr; {formatDate(c.date_fin)}
+                            {c.demi_journee
+                              ? formatDate(c.date_debut)
+                              : <>{formatDate(c.date_debut)} &rarr; {formatDate(c.date_fin)}</>}
                           </TableCell>
                           <TableCell>
                             <span className="font-semibold">{c.nb_jours}j</span>
@@ -1298,12 +1347,26 @@ export default function CongesPage() {
                             {c.employe?.prenom} {c.employe?.nom}
                           </TableCell>
                           <TableCell>
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${TYPE_COLORS[c.type_conge] || "bg-gray-100 text-gray-800"}`}>
-                              {TYPE_LABELS[c.type_conge] || c.type_conge}
-                            </span>
+                            <div className="flex items-center gap-1 flex-wrap">
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${TYPE_COLORS[c.type_conge] || "bg-gray-100 text-gray-800"}`}>
+                                {TYPE_LABELS[c.type_conge] || c.type_conge}
+                              </span>
+                              {c.demi_journee && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-100 text-purple-800 border border-purple-200">
+                                  {c.matin_ou_apres_midi === 'apres_midi' ? '½ PM' : '½ AM'}
+                                </span>
+                              )}
+                              {c.impose_par_societe && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200" title="Imposé par la société">
+                                  Imposé
+                                </span>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className="text-sm">
-                            {formatDate(c.date_debut)} &rarr; {formatDate(c.date_fin)}
+                            {c.demi_journee
+                              ? formatDate(c.date_debut)
+                              : <>{formatDate(c.date_debut)} &rarr; {formatDate(c.date_fin)}</>}
                           </TableCell>
                           <TableCell>
                             <span className="font-semibold">{c.nb_jours}j</span>
@@ -1378,22 +1441,76 @@ export default function CongesPage() {
                 {form.type_conge === "PAT" && "Paternite: 5 jours ouvrables. Reserves aux hommes."}
               </p>
             </div>
+
+            {/* Demi-journée — only offered for leave types where it makes sense */}
+            {DEMI_JOURNEE_ALLOWED_TYPES.has(form.type_conge) && (
+              <div className="border rounded-lg p-3 bg-gray-50 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="demi-journee-toggle"
+                    checked={form.demi_journee}
+                    onCheckedChange={(checked) => setForm(f => ({
+                      ...f,
+                      demi_journee: checked === true,
+                      // When toggling ON: collapse the range to a single day.
+                      // When toggling OFF: keep whatever the user had.
+                      date_fin: checked === true ? (f.date_debut || f.date_fin) : f.date_fin,
+                    }))}
+                  />
+                  <Label htmlFor="demi-journee-toggle" className="cursor-pointer text-sm font-medium">
+                    Demi-journée (0,5 jour)
+                  </Label>
+                </div>
+                {form.demi_journee && (
+                  <div className="pl-6">
+                    <Label className="text-xs text-gray-600">Moment de la journée</Label>
+                    <RadioGroup
+                      value={form.matin_ou_apres_midi}
+                      onValueChange={(v: string) => setForm(f => ({
+                        ...f,
+                        matin_ou_apres_midi: (v === 'apres_midi' ? 'apres_midi' : 'matin') as 'matin' | 'apres_midi',
+                      }))}
+                      className="flex gap-6 mt-1"
+                    >
+                      <div className="flex items-center gap-2">
+                        <RadioGroupItem value="matin" id="demi-matin" />
+                        <Label htmlFor="demi-matin" className="cursor-pointer text-sm">Matin (AM)</Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <RadioGroupItem value="apres_midi" id="demi-apresmidi" />
+                        <Label htmlFor="demi-apresmidi" className="cursor-pointer text-sm">Après-midi (PM)</Label>
+                      </div>
+                    </RadioGroup>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Date debut *</Label>
                 <Input
                   type="date"
                   value={form.date_debut}
-                  onChange={e => setForm(f => ({ ...f, date_debut: e.target.value }))}
+                  onChange={e => setForm(f => ({
+                    ...f,
+                    date_debut: e.target.value,
+                    // Half day: keep date_fin aligned with date_debut.
+                    date_fin: f.demi_journee ? e.target.value : f.date_fin,
+                  }))}
                 />
               </div>
               <div>
                 <Label>Date fin *</Label>
                 <Input
                   type="date"
-                  value={form.date_fin}
+                  value={form.demi_journee ? form.date_debut : form.date_fin}
+                  disabled={form.demi_journee}
                   onChange={e => setForm(f => ({ ...f, date_fin: e.target.value }))}
                 />
+                {form.demi_journee && (
+                  <p className="text-[10px] text-gray-500 mt-1">Désactivé pour une demi-journée (même date que le début).</p>
+                )}
               </div>
             </div>
             <div>
