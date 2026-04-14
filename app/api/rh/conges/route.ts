@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { calculateWorkingDays } from '@/lib/rh/calculateWorkingDays'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,7 +23,69 @@ async function getUserSocieteIds(supabase: ReturnType<typeof getAdminClient>, us
   return [...new Set([...(dossiers || []).map((d: any) => d.societe_id), ...(owned || []).map((s: any) => s.id)])]
 }
 
-/** Count working days between two dates (exclude Sat/Sun) */
+/** Default working days pattern (Mon-Fri) */
+const DEFAULT_WORKING_DAYS = { mon: true, tue: true, wed: true, thu: true, fri: true, sat: false, sun: false }
+
+/** Get an employee's working_days pattern, falling back to Mon-Fri */
+function getWorkingDaysForEmploye(emp: any) {
+  const wd = emp?.working_days
+  if (wd && typeof wd === 'object') {
+    return {
+      mon: wd.mon !== false,
+      tue: wd.tue !== false,
+      wed: wd.wed !== false,
+      thu: wd.thu !== false,
+      fri: wd.fri !== false,
+      sat: wd.sat === true,
+      sun: wd.sun === true,
+    }
+  }
+  return { ...DEFAULT_WORKING_DAYS }
+}
+
+/** Fetch jours fériés applicable to a société over a date range */
+async function fetchJoursFeries(
+  supabase: ReturnType<typeof getAdminClient>,
+  societeId: string | null,
+  dateDebut: string,
+  dateFin: string
+): Promise<Date[]> {
+  const minDate = `${dateDebut.slice(0, 4)}-01-01`
+  const maxDate = `${dateFin.slice(0, 4)}-12-31`
+
+  let query = supabase.from('jours_feries').select('date').gte('date', minDate).lte('date', maxDate)
+  if (societeId) {
+    query = query.or(`societe_id.eq.${societeId},societe_id.is.null`)
+  } else {
+    query = query.is('societe_id', null)
+  }
+  const { data } = await query
+  return (data || []).map((r: any) => new Date(r.date + 'T12:00:00'))
+}
+
+/** Compute nb_jours ouvrés for an employee using working_days + jours_feries */
+async function computeNbJours(
+  supabase: ReturnType<typeof getAdminClient>,
+  employeId: string,
+  dateDebut: string,
+  dateFin: string
+): Promise<number> {
+  const { data: emp } = await supabase
+    .from('employes')
+    .select('societe_id, working_days')
+    .eq('id', employeId)
+    .maybeSingle()
+  const workingDays = getWorkingDaysForEmploye(emp)
+  const feries = await fetchJoursFeries(supabase, emp?.societe_id || null, dateDebut, dateFin)
+  return calculateWorkingDays(
+    new Date(dateDebut + 'T12:00:00'),
+    new Date(dateFin + 'T12:00:00'),
+    workingDays,
+    feries
+  )
+}
+
+/** Simple working-day count (Mon-Fri) — used only for sick-cert alert pattern analysis */
 function countWorkingDays(dateDebut: string, dateFin: string): number {
   let count = 0
   const d = new Date(dateDebut + 'T12:00:00')
@@ -202,6 +265,21 @@ export async function GET(request: Request) {
       })
     }
 
+    // ---- ACTION: preview_nb_jours (real-time nb_jours calc for UI) ----
+    if (action === 'preview_nb_jours') {
+      const previewEmployeId = searchParams.get('employe_id')
+      const previewDateDebut = searchParams.get('date_debut')
+      const previewDateFin = searchParams.get('date_fin')
+      if (!previewEmployeId || !previewDateDebut || !previewDateFin) {
+        return NextResponse.json({ error: 'employe_id, date_debut, date_fin requis' }, { status: 400 })
+      }
+      if (!employeeIds.includes(previewEmployeId)) {
+        return NextResponse.json({ error: 'Employe non accessible' }, { status: 403 })
+      }
+      const nb_jours = await computeNbJours(supabase, previewEmployeId, previewDateDebut, previewDateFin)
+      return NextResponse.json({ nb_jours })
+    }
+
     // ---- ACTION: absents_today ----
     if (action === 'absents_today') {
       const today = new Date().toISOString().split('T')[0]
@@ -289,7 +367,8 @@ export async function POST(request: Request) {
       }
 
       // Validate Mauritius WRA 2019 rules
-      const nb_jours = countWorkingDays(body.date_debut, body.date_fin)
+      // nb_jours computed using employee's working_days pattern + jours fériés
+      const nb_jours = await computeNbJours(supabase, body.employe_id, body.date_debut, body.date_fin)
 
       if (body.type_conge === 'MAT' && emp.sexe === 'M') {
         return NextResponse.json({ error: 'Conge maternite reserve aux femmes (WRA 2019)' }, { status: 400 })
@@ -422,7 +501,7 @@ export async function POST(request: Request) {
       }
 
       const dateFin = body.date_fin || body.date_debut
-      const nb_jours = countWorkingDays(body.date_debut, dateFin)
+      const nb_jours = await computeNbJours(supabase, body.employe_id, body.date_debut, dateFin)
 
       const { data, error } = await supabase.from('demandes_conges').insert({
         employe_id: body.employe_id,
@@ -450,7 +529,7 @@ export async function POST(request: Request) {
       }
 
       const dateFin = body.date_fin || body.date_debut
-      const nb_jours = countWorkingDays(body.date_debut, dateFin)
+      const nb_jours = await computeNbJours(supabase, body.employe_id, body.date_debut, dateFin)
 
       const { data, error } = await supabase.from('demandes_conges').insert({
         employe_id: body.employe_id,

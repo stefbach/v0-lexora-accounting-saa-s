@@ -150,6 +150,8 @@ export default function CongesPage() {
     employe_id: "", type_conge: "AL", date_debut: "", date_fin: "", motif: ""
   })
   const [formError, setFormError] = useState<string | null>(null)
+  const [previewNbJours, setPreviewNbJours] = useState<number | null>(null)
+  const [loadingPreview, setLoadingPreview] = useState(false)
   const [refusDialog, setRefusDialog] = useState<string | null>(null)
   const [refusMotif, setRefusMotif] = useState("")
   const [actionLoading, setActionLoading] = useState<string | null>(null)
@@ -239,6 +241,32 @@ export default function CongesPage() {
     else if (tab === "historique") loadHistorique()
   }, [tab, societe, loadBalances, loadDemandes, loadAbsentsToday, loadHistorique])
 
+  // Real-time nb_jours preview (uses employee's working_days + jours_feries)
+  useEffect(() => {
+    if (!form.employe_id || !form.date_debut || !form.date_fin || form.date_fin < form.date_debut) {
+      setPreviewNbJours(null)
+      return
+    }
+    let cancelled = false
+    setLoadingPreview(true)
+    const params = new URLSearchParams({
+      action: "preview_nb_jours",
+      employe_id: form.employe_id,
+      date_debut: form.date_debut,
+      date_fin: form.date_fin,
+    })
+    fetch(`/api/rh/conges?${params}`)
+      .then(r => r.json())
+      .then(data => {
+        if (cancelled) return
+        if (typeof data.nb_jours === "number") setPreviewNbJours(data.nb_jours)
+        else setPreviewNbJours(null)
+      })
+      .catch(() => { if (!cancelled) setPreviewNbJours(null) })
+      .finally(() => { if (!cancelled) setLoadingPreview(false) })
+    return () => { cancelled = true }
+  }, [form.employe_id, form.date_debut, form.date_fin])
+
   // ─── Societe map ──────────────────────────────────────────────
   const societeMap = new Map(societes.map((s: any) => [s.id, s.nom]))
 
@@ -264,6 +292,7 @@ export default function CongesPage() {
       if (!res.ok) throw new Error(data.error || "Erreur")
       setDialogOpen(false)
       setForm({ employe_id: "", type_conge: "AL", date_debut: "", date_fin: "", motif: "" })
+      setPreviewNbJours(null)
       // Reload current tab data
       if (tab === "dashboard") loadBalances()
       if (tab === "demandes") loadDemandes()
@@ -917,6 +946,19 @@ export default function CongesPage() {
                 />
               </div>
             </div>
+            {/* Real-time nb_jours preview (using working_days + jours fériés) */}
+            {form.employe_id && form.date_debut && form.date_fin && form.date_fin >= form.date_debut && (
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm">
+                {loadingPreview ? (
+                  <span className="text-gray-500 flex items-center gap-2"><Loader2 className="w-3 h-3 animate-spin" /> Calcul…</span>
+                ) : previewNbJours !== null ? (
+                  <span className="text-blue-800">
+                    <strong>{previewNbJours}</strong> jour{previewNbJours > 1 ? "s" : ""} ouvré{previewNbJours > 1 ? "s" : ""}
+                    <span className="text-gray-500 ml-2">(selon planning de l'employé et jours fériés)</span>
+                  </span>
+                ) : null}
+              </div>
+            )}
             <div>
               <Label>Motif</Label>
               <Input
