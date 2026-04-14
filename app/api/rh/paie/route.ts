@@ -3,8 +3,46 @@ import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { calculerBulletin, PARAMS_MRA_DEFAUT } from '@/lib/rh/paie'
 import { getUserSocieteIds, userHasAccessToSociete, userHasAccessToEmploye } from '@/lib/rh/access'
+import { calculateWorkingDays, getWorkingDaysForEmploye, getMauritiusPublicHolidays } from '@/lib/rh/calculateWorkingDays'
 
 export const dynamic = 'force-dynamic'
+
+/**
+ * Last calendar day of a given YYYY-MM period (handles 28/29/30/31 correctly).
+ * `new Date(year, month, 0)` gives the last day of the PREVIOUS month,
+ * so passing (year, month) where month is 1-indexed gives us what we want.
+ */
+function lastDayOfMonth(periodeStr: string): string {
+  const [y, m] = periodeStr.split('-').map(n => parseInt(n, 10))
+  const last = new Date(y, m, 0).getDate()
+  return `${periodeStr}-${String(last).padStart(2, '0')}`
+}
+
+/**
+ * Count working days (using the employee's working_days pattern + MU
+ * public holidays) in the intersection of a leave range and the current
+ * pay period. Crucial for leaves that span a month boundary — Sheetal
+ * SEKELY's UL from 2026-02-06 to 2026-03-06 must contribute only its
+ * March portion when the March 2026 bulletin is computed.
+ *
+ * `employe.working_days` is consulted (null → Mon-Fri default).
+ */
+function countLeaveDaysInPeriod(
+  leaveStart: string,
+  leaveEnd: string,
+  periodeStart: string,
+  periodeEnd: string,
+  emp: { working_days?: any } | null | undefined,
+  joursFeries: Set<string>
+): number {
+  const start = leaveStart > periodeStart ? leaveStart : periodeStart
+  const end = leaveEnd < periodeEnd ? leaveEnd : periodeEnd
+  if (start > end) return 0
+  return calculateWorkingDays(start, end, {
+    workingDays: getWorkingDaysForEmploye(emp),
+    joursFeries: joursFeries,
+  })
+}
 
 function getAdminClient() {
   return createClient(
@@ -292,10 +330,32 @@ export async function POST(request: Request) {
 
       const total_primes = (primesMois || []).reduce((s, p) => s + Number(p.montant || 0), 0)
 
-      // 3. Récupérer absences injustifiées
+      // 3. Congés approuvés qui CHEVAUCHENT le mois (cf. fix de calculer_batch).
+      const periodeStartSingle = `${periodeStr}-01`
+      const periodeEndSingle = lastDayOfMonth(periodeStr)
       const { data: congesApprouves } = await supabase.from('demandes_conges')
         .select('*').eq('employe_id', employe_id).eq('statut', 'approuve')
-        .gte('date_debut', `${periodeStr}-01`).lte('date_fin', `${periodeStr}-31`)
+        .lte('date_debut', periodeEndSingle).gte('date_fin', periodeStartSingle)
+
+      // Build holiday set for working-days math.
+      const periodeYearSingle = parseInt(periodeStr.slice(0, 4), 10)
+      let joursFeriesSetSingle = new Set<string>()
+      try {
+        const { data: feriesRowsSingle } = await supabase.from('jours_feries')
+          .select('date').gte('date', `${periodeYearSingle}-01-01`).lte('date', `${periodeYearSingle}-12-31`)
+        joursFeriesSetSingle = new Set((feriesRowsSingle || []).map((r: any) => String(r.date).slice(0, 10)))
+      } catch {}
+      if (joursFeriesSetSingle.size === 0) joursFeriesSetSingle = getMauritiusPublicHolidays(periodeYearSingle)
+
+      // UL days intersected with this month — used below to deduct from net.
+      let joursUnpaidLeaveSingle = 0
+      for (const c of congesApprouves || []) {
+        if (c.type_conge !== 'UL') continue
+        joursUnpaidLeaveSingle += countLeaveDaysInPeriod(
+          c.date_debut, c.date_fin, periodeStartSingle, periodeEndSingle,
+          emp, joursFeriesSetSingle
+        )
+      }
 
       let jours_absence_injust = 0
       for (const pt of pointagesMois || []) {
@@ -329,8 +389,27 @@ export async function POST(request: Request) {
       const joursTravailles = jours_travailles > 0 ? jours_travailles : (body.jours_travailles || 26)
       const resultat = calculerBulletin(elements, params as any, joursTravailles, Number(emp.pct_refacturation) || 0)
 
-      // Déduire absences injustifiées du net
-      const salaire_net_final = Math.round((resultat.salaire_net - montant_absence) * 100) / 100
+      // UL deduction: days in-period × salaire_brut / nb_jours_ouvres_mois.
+      let montant_ul_single = 0
+      if (joursUnpaidLeaveSingle > 0) {
+        const nbJoursOuvresMoisSingle = calculateWorkingDays(periodeStartSingle, periodeEndSingle, {
+          workingDays: getWorkingDaysForEmploye(emp),
+          joursFeries: joursFeriesSetSingle,
+        })
+        const salaireBrutSingle = Number(resultat.salaire_brut ?? 0)
+          || (salaire_base_mur
+            + (Number(elements.transport_allowance) || 0)
+            + (Number(elements.petrol_allowance) || 0)
+            + (Number(elements.heures_sup_montant) || 0)
+            + (Number(elements.special_allowance_1) || 0))
+        if (nbJoursOuvresMoisSingle > 0 && salaireBrutSingle > 0) {
+          montant_ul_single = Math.round(joursUnpaidLeaveSingle * (salaireBrutSingle / nbJoursOuvresMoisSingle) * 100) / 100
+        }
+      }
+
+      // Déduire absences injustifiées + UL du net
+      const totalDeductionAbsence = montant_absence + montant_ul_single
+      const salaire_net_final = Math.round((resultat.salaire_net - totalDeductionAbsence) * 100) / 100
 
       const bulletin: Record<string, any> = {
         employe_id, societe_id: societe_id || emp.societe_id,
@@ -345,13 +424,14 @@ export async function POST(request: Request) {
         paye: resultat.paye,
         training_levy: resultat.training_levy,
         prgf: resultat.prgf,
-        total_deductions: Math.round((resultat.total_deductions + montant_absence) * 100) / 100,
+        total_deductions: Math.round((resultat.total_deductions + totalDeductionAbsence) * 100) / 100,
         total_charges_patronales: resultat.total_charges_patronales,
         heures_sup_montant: elements.heures_sup_montant || 0,
         special_allowance_1: elements.special_allowance_1 || 0,
         transport_allowance: elements.transport_allowance || 0,
         petrol_allowance: elements.petrol_allowance || 0,
-        montant_absence: montant_absence,
+        // montant_absence = unjustified absence + UL deduction (merged).
+        montant_absence: Math.round(totalDeductionAbsence * 100) / 100,
         statut: 'brouillon',
       }
 
@@ -368,7 +448,18 @@ export async function POST(request: Request) {
           .in('id', primesMois.map(p => p.id))
       }
 
-      return NextResponse.json({ bulletin: data, simulation: { ...resultat, total_ot_montant, total_primes, montant_absence, jours_travailles } })
+      return NextResponse.json({
+        bulletin: data,
+        simulation: {
+          ...resultat,
+          total_ot_montant,
+          total_primes,
+          montant_absence,
+          montant_ul: montant_ul_single,
+          jours_ul: joursUnpaidLeaveSingle,
+          jours_travailles,
+        },
+      })
     }
 
     // ══════════════════════════════════════════════════════
@@ -563,23 +654,46 @@ export async function POST(request: Request) {
         }
         total_primes += totalAutoRules
 
-        // 3. Congés approuvés du mois — distinguer SL (réduit seuil OT) vs AL (ne réduit pas)
+        // 3. Congés approuvés qui CHEVAUCHENT le mois.
+        // Previously the filter was .gte(date_debut, periodeStart).lte(date_fin, periodeEnd)
+        // which silently missed leaves that started before the month and
+        // extended into it (e.g. Sheetal SEKELY UL 2026-02-06 → 2026-03-06
+        // was invisible when computing the March 2026 bulletin). Correct
+        // "overlaps" filter: leave.date_debut <= periodeEnd AND
+        // leave.date_fin >= periodeStart.
+        const periodeStart = `${periodeStr}-01`
+        const periodeEnd = lastDayOfMonth(periodeStr)
         const { data: congesApprouves } = await supabase.from('demandes_conges')
           .select('*').eq('employe_id', emp.id).eq('statut', 'approuve')
-          .gte('date_debut', `${periodeStr}-01`).lte('date_fin', `${periodeStr}-31`)
+          .lte('date_debut', periodeEnd).gte('date_fin', periodeStart)
 
-        // Count sick leave days (SL) — reduces the monthly OT threshold
+        // Build the holiday set once for the period's year (DB → fallback to hardcoded MU).
+        const periodeYear = parseInt(periodeStr.slice(0, 4), 10)
+        let joursFeriesSet = new Set<string>()
+        try {
+          const { data: feriesRows } = await supabase.from('jours_feries')
+            .select('date').gte('date', `${periodeYear}-01-01`).lte('date', `${periodeYear}-12-31`)
+          joursFeriesSet = new Set((feriesRows || []).map((r: any) => String(r.date).slice(0, 10)))
+        } catch {}
+        if (joursFeriesSet.size === 0) joursFeriesSet = getMauritiusPublicHolidays(periodeYear)
+
+        // Count leave days (working-days only) intersected with the period.
+        // SL reduces the OT threshold; AL does not; UL triggers a deduction
+        // on the net; MAT/PAT are tracked for reporting (no deduction).
         let joursSickLeave = 0
         let joursLocalLeave = 0
+        let joursUnpaidLeave = 0
+        let joursMatPat = 0
         for (const c of congesApprouves || []) {
-          const start = new Date(c.date_debut + 'T12:00:00')
-          const end = new Date(c.date_fin + 'T12:00:00')
-          for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-            if (d.getDay() !== 0 && d.getDay() !== 6) { // exclude weekends
-              if (c.type_conge === 'SL') joursSickLeave++
-              else if (c.type_conge === 'AL') joursLocalLeave++
-            }
-          }
+          const n = countLeaveDaysInPeriod(
+            c.date_debut, c.date_fin, periodeStart, periodeEnd,
+            emp, joursFeriesSet
+          )
+          if (n <= 0) continue
+          if (c.type_conge === 'SL') joursSickLeave += n
+          else if (c.type_conge === 'AL') joursLocalLeave += n
+          else if (c.type_conge === 'UL') joursUnpaidLeave += n
+          else if (c.type_conge === 'MAT' || c.type_conge === 'PAT') joursMatPat += n
         }
 
         // Monthly OT threshold: standard hours minus sick leave hours
@@ -692,7 +806,34 @@ export async function POST(request: Request) {
           resultat.total_charges_patronales = 0
           resultat.salaire_net = salaire_base_mur // net = base pour hors MRA
         }
-        const salaire_net_final = isHorsMRA ? salaire_base_mur : Math.round((resultat.salaire_net - montant_absence_final) * 100) / 100
+
+        // ── UL (Unpaid Leave) deduction ─────────────────────────────────
+        // Formula: deduction_ul = nb_jours_ul × (salaire_brut / nb_jours_ouvres_mois)
+        // where nb_jours_ouvres_mois is computed using the EMPLOYEE'S
+        // working_days pattern + applicable jours fériés (Mon–Fri + MU
+        // holidays by default). This differs from the unjustified-absence
+        // formula which uses salaire_base/26 — UL docks the full gross
+        // pro rata, not just the basic salary.
+        let montant_ul = 0
+        if (!isHorsMRA && joursUnpaidLeave > 0) {
+          const nbJoursOuvresMois = calculateWorkingDays(periodeStart, periodeEnd, {
+            workingDays: getWorkingDaysForEmploye(emp),
+            joursFeries: joursFeriesSet,
+          })
+          const salaireBrutPaie = Number(resultat.salaire_brut ?? 0)
+            || (salaire_base_mur
+              + (Number(elements.transport_allowance) || 0)
+              + (Number(elements.petrol_allowance) || 0)
+              + (Number(elements.heures_sup_montant) || 0)
+              + (Number(elements.special_allowance_1) || 0))
+          if (nbJoursOuvresMois > 0 && salaireBrutPaie > 0) {
+            montant_ul = Math.round(joursUnpaidLeave * (salaireBrutPaie / nbJoursOuvresMois) * 100) / 100
+          }
+          console.log(`[paie] UL: ${emp.prenom} ${emp.nom} — ${joursUnpaidLeave}j × (${salaireBrutPaie} / ${nbJoursOuvresMois}) = ${montant_ul} MUR`)
+        }
+
+        const totalDeductionAbsence = montant_absence_final + montant_ul
+        const salaire_net_final = isHorsMRA ? salaire_base_mur : Math.round((resultat.salaire_net - totalDeductionAbsence) * 100) / 100
 
         // Résumé notes pour le bulletin
         const transportAlloc = isHorsMRA ? 0 : (Number(emp.transport_allowance) || 0)
@@ -701,10 +842,11 @@ export async function POST(request: Request) {
         const primesFixesDetail = totalPrimesFixes > 0 ? `, Primes fixes: ${totalPrimesFixes}` : ''
         const autoRulesDetail = autoRulesApplied.length > 0 ? `, Auto: ${autoRulesApplied.join('; ')}` : ''
         const nightDetail = nightShiftAllowance > 0 ? `, Night shift +15%: ${nightShiftAllowance} (${Math.round(total_heures_nuit)}h nuit)` : ''
+        const ulDetail = joursUnpaidLeave > 0 ? `, UL: ${joursUnpaidLeave}j = -${montant_ul}` : ''
         const notesResume = isHorsMRA
           ? `Base: ${salaire_base_mur} [HORS MRA - Brut=Net=Base]`
-          : `Base: ${salaire_base_mur}, Transport: ${transportAlloc}, Petrol: ${petrolAlloc}, OT: ${Math.round(total_ot_montant)}${nightDetail}, Primes var: ${Math.round(total_primes - totalPrimesFixes - totalAutoRules)}${primesFixesDetail}${autoRulesDetail}, Absences: ${jours_absence_injust}j`
-        console.log(`[paie] ${emp.prenom} ${emp.nom}: base=${salaire_base_mur} transport=${transportAlloc} petrol=${petrolAlloc} OT=${Math.round(total_ot_montant)} primes=${Math.round(total_primes)} abs=${jours_absence_injust}${mraTag}`)
+          : `Base: ${salaire_base_mur}, Transport: ${transportAlloc}, Petrol: ${petrolAlloc}, OT: ${Math.round(total_ot_montant)}${nightDetail}, Primes var: ${Math.round(total_primes - totalPrimesFixes - totalAutoRules)}${primesFixesDetail}${autoRulesDetail}, Absences: ${jours_absence_injust}j${ulDetail}`
+        console.log(`[paie] ${emp.prenom} ${emp.nom}: base=${salaire_base_mur} transport=${transportAlloc} petrol=${petrolAlloc} OT=${Math.round(total_ot_montant)} primes=${Math.round(total_primes)} abs=${jours_absence_injust}j ul=${joursUnpaidLeave}j${mraTag}`)
 
         const bulletin: Record<string, any> = {
           employe_id: emp.id,
@@ -720,7 +862,7 @@ export async function POST(request: Request) {
           paye: resultat.paye,
           training_levy: resultat.training_levy,
           prgf: resultat.prgf,
-          total_deductions: Math.round((resultat.total_deductions + montant_absence_final) * 100) / 100,
+          total_deductions: Math.round((resultat.total_deductions + totalDeductionAbsence) * 100) / 100,
           total_charges_patronales: resultat.total_charges_patronales,
           heures_sup_montant: isHorsMRA ? 0 : Math.round(total_ot_montant),
           special_allowance_1: isHorsMRA ? 0 : Math.round(total_primes),
@@ -729,7 +871,10 @@ export async function POST(request: Request) {
           increment_salaire: isHorsMRA ? 0 : (Number(emp.increment_salaire) || 0),
           other_refund: isHorsMRA ? 0 : (Number(emp.other_refund) || 0),
           eoy_bonus: isHorsMRA ? 0 : eoy_bonus_montant,
-          montant_absence: isHorsMRA ? 0 : montant_absence_final,
+          // montant_absence holds the TOTAL deduction from absences (unjustified
+          // + UL). The breakdown is recorded in `notes` and can be recomputed
+          // from demandes_conges for reporting (Commit 11 conges_details).
+          montant_absence: isHorsMRA ? 0 : Math.round(totalDeductionAbsence * 100) / 100,
           notes: notesResume,
           statut: 'brouillon',
         }
