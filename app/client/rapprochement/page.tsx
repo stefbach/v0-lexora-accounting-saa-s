@@ -899,15 +899,17 @@ Voulez-vous vraiment continuer ?`
         </Button>
       </div>
 
-      {/* Filters row: Month nav (← Mois Année →) + Compte + Période */}
+      {/* Filters row: Month nav (← Mois Année →) + toggle all-months + Compte + Période */}
       <div className="flex flex-wrap items-center gap-3">
         {(() => {
           const MOIS_FR_FULL = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
           const todayYM = new Date().toISOString().slice(0, 7)
           const current = selectedMois || todayYM
           const [yy, mm] = current.split('-').map(Number)
-          const label = `${MOIS_FR_FULL[(mm || 1) - 1]} ${yy}`
+          const label = selectedMois ? `${MOIS_FR_FULL[(mm || 1) - 1]} ${yy}` : 'Toutes périodes'
           const shift = (delta: number) => {
+            // Only active when a month is selected — disabled in all-months mode.
+            if (!selectedMois) return
             const d = new Date(yy, (mm || 1) - 1 + delta, 1)
             const ny = d.getFullYear()
             const nm = String(d.getMonth() + 1).padStart(2, '0')
@@ -918,7 +920,8 @@ Voulez-vous vraiment continuer ?`
               <button
                 type="button"
                 onClick={() => shift(-1)}
-                className="h-7 w-7 flex items-center justify-center rounded hover:bg-gray-100 text-gray-600"
+                disabled={!selectedMois}
+                className="h-7 w-7 flex items-center justify-center rounded hover:bg-gray-100 text-gray-600 disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed"
                 aria-label="Mois précédent"
               >
                 ←
@@ -929,7 +932,8 @@ Voulez-vous vraiment continuer ?`
               <button
                 type="button"
                 onClick={() => shift(1)}
-                className="h-7 w-7 flex items-center justify-center rounded hover:bg-gray-100 text-gray-600"
+                disabled={!selectedMois}
+                className="h-7 w-7 flex items-center justify-center rounded hover:bg-gray-100 text-gray-600 disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed"
                 aria-label="Mois suivant"
               >
                 →
@@ -937,6 +941,26 @@ Voulez-vous vraiment continuer ?`
             </div>
           )
         })()}
+
+        {/* Toggle: all months ↔ single month (visible outline button) */}
+        {selectedMois ? (
+          <button
+            type="button"
+            onClick={() => setSelectedMois(null)}
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors"
+          >
+            Voir tous les mois
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setSelectedMois(new Date().toISOString().slice(0, 7))}
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors"
+          >
+            Choisir un mois
+          </button>
+        )}
+
         <Select value={selectedCompte} onValueChange={setSelectedCompte}>
           <SelectTrigger className="w-[220px] h-8"><SelectValue placeholder="Tous les comptes" /></SelectTrigger>
           <SelectContent>
@@ -995,30 +1019,6 @@ Voulez-vous vraiment continuer ?`
           </div>
         )
       })()}
-
-      {/* Discreet link: switch to "Tous les mois" view (clears selectedMois) */}
-      {selectedMois && (
-        <div className="text-right">
-          <button
-            type="button"
-            onClick={() => setSelectedMois(null)}
-            className="text-xs text-gray-400 hover:text-gray-600 underline-offset-2 hover:underline"
-          >
-            Voir tous les mois
-          </button>
-        </div>
-      )}
-      {!selectedMois && (
-        <div className="text-right">
-          <button
-            type="button"
-            onClick={() => setSelectedMois(new Date().toISOString().slice(0, 7))}
-            className="text-xs text-gray-400 hover:text-gray-600 underline-offset-2 hover:underline"
-          >
-            Revenir à un mois précis
-          </button>
-        </div>
-      )}
 
       {/* Auto-rapprochement progress */}
       {autoStep && (
