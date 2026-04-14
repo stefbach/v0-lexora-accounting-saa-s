@@ -883,12 +883,12 @@ Voulez-vous vraiment continuer ?`
               className="h-3 bg-gray-100"
             />
             <div className="flex flex-wrap gap-3 mt-2 text-xs text-gray-500">
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />{matchedWithInvoice.length} avec facture</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400 inline-block" />{classifiedAuto.length} classifiées (frais/salaires/MRA)</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block" />{interne.length} internes</span>
-              {paidNoInvoice.length > 0 && <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />{paidNoInvoice.length} payées sans pièce ⚠️</span>}
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />{matchedWithInvoice.length} confirmées</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400 inline-block" />{classifiedAuto.length} auto-classées</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block" />{interne.length} virements internes</span>
+              {paidNoInvoice.length > 0 && <span className="flex items-center gap-1 text-gray-400"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />{paidNoInvoice.length} à vérifier</span>}
               <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400 inline-block" />{proposed.length} à valider</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400 inline-block" />{unmatched.length} non rapprochées</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500 inline-block" />{unmatched.length} à classer</span>
               <span className="flex items-center gap-1 ml-auto font-medium text-[#0B0F2E]">{matchedWithInvoice.length + classifiedAuto.length + interne.length} / {transactions.length} total</span>
             </div>
           </CardContent>
@@ -921,13 +921,13 @@ Voulez-vous vraiment continuer ?`
       {/* KPIs — 6 catégories claires */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
         <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Transactions</p><p className="text-2xl font-bold text-[#0B0F2E]">{transactions.length}</p></CardContent></Card>
-        <Card className="border-green-200"><CardContent className="p-4"><p className="text-xs text-green-700 font-medium">✅ Avec facture</p><p className="text-2xl font-bold text-green-600">{matchedWithInvoice.length}</p></CardContent></Card>
+        <Card className="border-green-200"><CardContent className="p-4"><p className="text-xs text-green-700 font-medium">✅ Confirmées</p><p className="text-2xl font-bold text-green-600">{matchedWithInvoice.length}</p></CardContent></Card>
         <Card className="border-blue-200"><CardContent className="p-4"><p className="text-xs text-blue-700 font-medium">📋 Classifiées auto</p><p className="text-2xl font-bold text-blue-600">{classifiedAuto.length}</p><p className="text-[10px] text-gray-400">Frais, salaires, MRA</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-gray-500">↔ Internes</p><p className="text-2xl font-bold text-gray-400">{interne.length}</p></CardContent></Card>
         {paidNoInvoice.length > 0 && (
           <Card className="border-amber-300 bg-amber-50"><CardContent className="p-4"><p className="text-xs text-amber-700 font-medium">⚠️ Sans pièce</p><p className="text-2xl font-bold text-amber-600">{paidNoInvoice.length}</p><p className="text-[10px] text-amber-500">À vérifier</p></CardContent></Card>
         )}
-        <Card className={unmatched.length > 0 ? "border-red-200" : ""}><CardContent className="p-4"><p className="text-xs text-red-600 font-medium">❌ Non rapprochées</p><p className="text-2xl font-bold text-red-600">{unmatched.length}</p></CardContent></Card>
+        <Card className={unmatched.length > 0 ? "border-orange-200 bg-orange-50/40" : ""}><CardContent className="p-4"><p className="text-xs text-orange-700 font-medium">📋 À classer</p><p className="text-2xl font-bold text-orange-600">{unmatched.length}</p></CardContent></Card>
       </div>
 
       {/* Auto-rapprochement progress */}
@@ -969,7 +969,7 @@ Voulez-vous vraiment continuer ?`
         <Card className="border-green-200">
           <CardHeader className="cursor-pointer" onClick={() => setMatchedOpen(!matchedOpen)}>
             <CardTitle className="text-[#0B0F2E] flex items-center justify-between">
-              <span className="flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-green-600" />✅ Rapprochées avec facture ({matchedWithInvoice.length})</span>
+              <span className="flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-green-600" />✅ Transactions confirmées ({matchedWithInvoice.length})</span>
               {matchedOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
             </CardTitle>
           </CardHeader>
@@ -985,7 +985,7 @@ Voulez-vous vraiment continuer ?`
                       <TableCell className="text-right font-medium">{Number(tx.debit) > 0 ? <span className="text-red-600">-{fmt(Number(tx.debit))} {tx.devise}</span> : <span className="text-green-600">+{fmt(Number(tx.credit))} {tx.devise}</span>}</TableCell>
                       <TableCell className="text-sm">{tx.tiers_detecte || "—"}</TableCell>
                       <TableCell><Badge className="bg-green-100 text-green-700 text-[10px]">{tx.matched_type || 'facture'}</Badge></TableCell>
-                      <TableCell><Badge className="bg-green-100 text-green-700">{tx.lettre || "OK"}</Badge></TableCell>
+                      <TableCell><Badge className="bg-green-100 text-green-700"><CheckCircle2 className="w-3 h-3" /></Badge></TableCell>
                       <TableCell><Button variant="ghost" size="sm" onClick={() => handleUnlink(tx)}><Unlink className="w-4 h-4 text-red-500" /></Button></TableCell>
                     </TableRow>
                   ))}
@@ -1016,7 +1016,7 @@ Voulez-vous vraiment continuer ?`
                     <TableCell className="text-right font-medium">{Number(tx.debit) > 0 ? <span className="text-red-600">-{fmt(Number(tx.debit))} {tx.devise}</span> : <span className="text-green-600">+{fmt(Number(tx.credit))} {tx.devise}</span>}</TableCell>
                     <TableCell className="text-sm">{tx.tiers_detecte || "—"}</TableCell>
                     <TableCell><Badge className="bg-blue-100 text-blue-700 text-[10px]">{tx.matched_type?.replace(/_/g, ' ') || '—'}</Badge></TableCell>
-                    <TableCell><Badge className="bg-blue-100 text-blue-700">{tx.lettre || "OK"}</Badge></TableCell>
+                    <TableCell><Badge className="bg-blue-100 text-blue-700"><CheckCircle2 className="w-3 h-3" /></Badge></TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -1025,34 +1025,40 @@ Voulez-vous vraiment continuer ?`
         </Card>
       )}
 
-      {/* SECTION 3c — Payées SANS pièce comptable (orange/amber) */}
+      {/* SECTION 3c — Payées SANS pièce comptable — collapsed by default (Avancé) */}
       {paidNoInvoice.length > 0 && (
-        <Card className="border-amber-300 bg-amber-50/30">
-          <CardHeader>
-            <CardTitle className="text-amber-800 flex items-center gap-2 text-base">
-              ⚠️ Payées sans pièce comptable — à vérifier ({paidNoInvoice.length})
-            </CardTitle>
-            <p className="text-xs text-amber-600">Ces transactions ont été rapprochées mais ne correspondent à aucune facture ni classification reconnue. Vérifiez manuellement.</p>
-          </CardHeader>
-          <CardContent className="p-0 overflow-x-auto">
-            <Table>
-              <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Libellé</TableHead><TableHead className="text-right">Débit</TableHead><TableHead className="text-right">Crédit</TableHead><TableHead>Tiers</TableHead><TableHead>Type détecté</TableHead><TableHead>Action</TableHead></TableRow></TableHeader>
-              <TableBody>
-                {paidNoInvoice.map((tx: any) => (
-                  <TableRow key={tx.id} className="bg-amber-50/50">
-                    <TableCell className="text-sm">{formatDate(tx.date)}</TableCell>
-                    <TableCell className="text-sm"><TruncatedCell text={tx.libelle} /></TableCell>
-                    <TableCell className="text-right text-sm text-red-600">{Number(tx.debit) > 0 ? fmt(Number(tx.debit)) + ' ' + tx.devise : "—"}</TableCell>
-                    <TableCell className="text-right text-sm text-green-600">{Number(tx.credit) > 0 ? fmt(Number(tx.credit)) + ' ' + tx.devise : "—"}</TableCell>
-                    <TableCell className="text-sm font-medium">{tx.tiers_detecte || "—"}</TableCell>
-                    <TableCell><Badge className="bg-amber-100 text-amber-700 text-[10px]">{tx.matched_type?.replace(/_/g, ' ') || 'inconnu'}</Badge></TableCell>
-                    <TableCell><Button variant="ghost" size="sm" onClick={() => handleUnlink(tx)} title="Délettrer"><Unlink className="w-4 h-4 text-amber-600" /></Button></TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+        <details className="group">
+          <summary className="cursor-pointer flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-[#0B0F2E] py-2 px-2 rounded-md hover:bg-gray-50">
+            <ChevronDown className="w-4 h-4 group-open:rotate-180 transition-transform" />
+            🔧 Avancé — Payées sans pièce comptable à vérifier ({paidNoInvoice.length})
+          </summary>
+          <Card className="border-amber-300 bg-amber-50/30 mt-2">
+            <CardHeader>
+              <CardTitle className="text-amber-800 flex items-center gap-2 text-base">
+                ⚠️ Payées sans pièce comptable — à vérifier ({paidNoInvoice.length})
+              </CardTitle>
+              <p className="text-xs text-amber-600">Transactions rapprochées mais ne correspondant à aucune facture ni classification reconnue. Vérifiez manuellement.</p>
+            </CardHeader>
+            <CardContent className="p-0 overflow-x-auto">
+              <Table>
+                <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Libellé</TableHead><TableHead className="text-right">Débit</TableHead><TableHead className="text-right">Crédit</TableHead><TableHead>Tiers</TableHead><TableHead>Type détecté</TableHead><TableHead>Action</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {paidNoInvoice.map((tx: any) => (
+                    <TableRow key={tx.id} className="bg-amber-50/50">
+                      <TableCell className="text-sm">{formatDate(tx.date)}</TableCell>
+                      <TableCell className="text-sm"><TruncatedCell text={tx.libelle} /></TableCell>
+                      <TableCell className="text-right text-sm text-red-600">{Number(tx.debit) > 0 ? fmt(Number(tx.debit)) + ' ' + tx.devise : "—"}</TableCell>
+                      <TableCell className="text-right text-sm text-green-600">{Number(tx.credit) > 0 ? fmt(Number(tx.credit)) + ' ' + tx.devise : "—"}</TableCell>
+                      <TableCell className="text-sm font-medium">{tx.tiers_detecte || "—"}</TableCell>
+                      <TableCell><Badge className="bg-amber-100 text-amber-700 text-[10px]">{tx.matched_type?.replace(/_/g, ' ') || 'inconnu'}</Badge></TableCell>
+                      <TableCell><Button variant="ghost" size="sm" onClick={() => handleUnlink(tx)} title="Délettrer"><Unlink className="w-4 h-4 text-amber-600" /></Button></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </details>
       )}
 
       {/* AI Analysis banner */}
@@ -1158,10 +1164,13 @@ Voulez-vous vraiment continuer ?`
         </details>
       )}
 
-      {/* SECTION 4 — Non rapprochées (main focus) */}
-      <Card>
+      {/* SECTION 4 — Transactions à classer (main focus) */}
+      <Card className={unmatched.length > 0 ? "border-orange-200" : ""}>
         <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
-          <CardTitle className="text-[#0B0F2E] flex items-center gap-2"><AlertCircle className="w-5 h-5 text-orange-500" />Non rapprochées ({unmatched.length})</CardTitle>
+          <CardTitle className="text-[#0B0F2E] flex items-center gap-2">
+            <AlertCircle className="w-5 h-5 text-orange-500" />
+            📋 À faire — Transactions à classer ({unmatched.length})
+          </CardTitle>
           <div className="flex items-center gap-2">
             <div className="flex rounded border overflow-hidden text-xs">
               <button onClick={() => { setSortField('date'); setSortDir(d => d === 'desc' ? 'asc' : 'desc') }} className={`px-2 py-1 ${sortField === 'date' ? 'bg-[#0B0F2E] text-white' : 'bg-white'}`}>Date {sortField === 'date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</button>
@@ -1173,9 +1182,33 @@ Voulez-vous vraiment continuer ?`
             </div>
           </div>
         </CardHeader>
+
+        {/* Quick-action CTA bar — auto-classify the obvious cases in one click. */}
+        {unmatched.length > 0 && (
+          <div className="border-t border-b border-orange-100 bg-orange-50/50 px-4 py-3 space-y-2">
+            <p className="text-sm text-[#0B0F2E]">
+              <strong>{unmatched.length}</strong> transaction{unmatched.length > 1 ? "s" : ""} à classer.
+              Cliquez ci-dessous pour traiter automatiquement les cas évidents (salaires, frais bancaires, MRA, virements internes entre vos sociétés, remboursements personnels).
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                onClick={openAgentIA}
+                disabled={chatLoading}
+                className="bg-[#D4AF37] text-[#0B0F2E] hover:bg-[#C9A82E]"
+              >
+                {chatLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <span className="mr-2">✨</span>}
+                Auto-classer les évidences
+              </Button>
+              <span className="text-xs text-gray-500">
+                Salaires · Frais bancaires MCB · MRA · Virements internes · Remboursements
+              </span>
+            </div>
+          </div>
+        )}
+
         <CardContent className="p-0 overflow-x-auto">
           {unmatched.length === 0 ? (
-            <div className="p-8 text-center text-gray-400">Toutes les transactions sont rapprochées</div>
+            <div className="p-8 text-center text-gray-400">Toutes les transactions sont classées ✅</div>
           ) : (
             <Table>
               <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Libellé</TableHead><TableHead className="text-right">Débit</TableHead><TableHead className="text-right">Crédit</TableHead><TableHead>Tiers</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
@@ -1438,7 +1471,13 @@ Voulez-vous vraiment continuer ?`
         </Card>
       )}
 
-      {/* SECTION 5 — Lettrage écritures 401/411 */}
+      {/* SECTION 5 — Lettrage écritures 401/411 — advanced, collapsed by default */}
+      <details className="group">
+        <summary className="cursor-pointer flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-[#0B0F2E] py-2 px-2 rounded-md hover:bg-gray-50">
+          <ChevronDown className="w-4 h-4 group-open:rotate-180 transition-transform" />
+          🔧 Avancé — Lettrage comptable (écritures 401/411) {ecrituresLettrage.length > 0 && <span className="text-xs text-gray-400">— {ecrituresLettrage.length} non lettrées</span>}
+        </summary>
+        <div className="mt-2 space-y-4">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
           <CardTitle className="text-[#0B0F2E]">Lettrage fournisseurs/clients — {ecrituresLettrage.length} non lettrées</CardTitle>
@@ -1506,6 +1545,8 @@ Voulez-vous vraiment continuer ?`
           </CardContent>
         </Card>
       )}
+        </div>
+      </details>
 
       {/* Lettrage dialog */}
       <Dialog open={!!lettrageDialog} onOpenChange={o => { if (!o) { setLettrageDialog(null); setLettrageSelection(new Set()) } }}>
