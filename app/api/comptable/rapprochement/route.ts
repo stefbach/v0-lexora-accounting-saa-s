@@ -351,7 +351,12 @@ export async function POST(request: Request) {
         const clientId = dossiers?.[0]?.client_id
         const [ecrituresResult, allUserSocResult] = await Promise.all([
           dossierIds.length > 0
-            ? supabase.from('ecritures_comptables').select('id, compte, libelle, debit, credit, date_ecriture, lettre').in('dossier_id', dossierIds).is('lettre', null)
+            ? (async () => {
+                // Essayer avec facture_id + journal (migration 133 appliquée) → fallback sur select minimal sinon
+                const full = await supabase.from('ecritures_comptables').select('id, compte, libelle, debit, credit, date_ecriture, lettre, facture_id, journal').in('dossier_id', dossierIds).is('lettre', null)
+                if (!full.error) return full
+                return supabase.from('ecritures_comptables').select('id, compte, libelle, debit, credit, date_ecriture, lettre').in('dossier_id', dossierIds).is('lettre', null)
+              })()
             : Promise.resolve({ data: [] as any[] }),
           clientId
             ? supabase.from('dossiers').select('societe_id').eq('client_id', clientId)
@@ -2816,6 +2821,201 @@ export async function POST(request: Request) {
         bulletin_id: bulletin?.id || null,
         bulletin_found: !!bulletin,
       })
+    }
+
+    // === MARQUER PAYÉE — action rapide sans transaction bancaire ===
+    // Crée directement les écritures BNQ (D: 401, C: 512) et le lettrage,
+    // marque la facture comme payée, sans nécessiter de transaction bancaire.
+    // Utilisé depuis la liste "Factures fournisseurs" quand l'utilisateur
+    // sait que le paiement a été effectué mais que le relevé n'est pas importé
+    // ou que la tx n'a pas matché.
+    if (action === 'marquer_paye') {
+      const { facture_id, societe_id, date_paiement, compte_bancaire } = body
+      if (!facture_id || !societe_id) {
+        return NextResponse.json({ error: 'facture_id et societe_id requis' }, { status: 400 })
+      }
+
+      // Récupérer la facture
+      const { data: facture, error: factErr } = await supabase
+        .from('factures')
+        .select('id, numero_facture, tiers, montant_ttc, montant_mur, devise, type_facture, date_facture, statut')
+        .eq('id', facture_id)
+        .single()
+      if (factErr || !facture) {
+        return NextResponse.json({ error: `Facture non trouvée: ${factErr?.message}` }, { status: 404 })
+      }
+      if (facture.statut === 'paye') {
+        return NextResponse.json({ error: 'Facture déjà payée' }, { status: 400 })
+      }
+
+      const { data: dossier } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
+      if (!dossier) {
+        return NextResponse.json({ error: 'Dossier comptable introuvable' }, { status: 400 })
+      }
+
+      const isFournisseur = facture.type_facture === 'fournisseur' || !facture.type_facture
+      const compteAux = isFournisseur ? '401' : '411'
+      const compteBanque = compte_bancaire || '512'
+      const montantMUR = Math.round((Number(facture.montant_mur) || Number(facture.montant_ttc) || 0) * 100) / 100
+      if (montantMUR <= 0) {
+        return NextResponse.json({ error: 'Montant facture invalide' }, { status: 400 })
+      }
+      const dateOp = date_paiement || new Date().toISOString().split('T')[0]
+      const lettre = `MP${String(Date.now()).slice(-6)}`
+      const refFolio = `MP-${facture.id.substring(0, 8)}`
+      const tiers = (facture.tiers || '').substring(0, 80)
+
+      // Pour un fournisseur payé:
+      //   D: 401 Fournisseur (solde la dette) — lettre avec ACH
+      //   C: 512 Banque (sortie de trésorerie)
+      // Pour un client encaissé:
+      //   D: 512 Banque (entrée)
+      //   C: 411 Client (solde la créance) — lettre avec VTE
+      const ecritures = isFournisseur
+        ? [
+            {
+              dossier_id: dossier.id, societe_id,
+              date_ecriture: dateOp, journal: 'BNQ',
+              numero_compte: compteAux,
+              libelle: `Paiement ${tiers} — ${facture.numero_facture}`.substring(0, 100),
+              debit_mur: montantMUR, credit_mur: 0,
+              lettre, ref_folio: refFolio, facture_id: facture.id,
+            },
+            {
+              dossier_id: dossier.id, societe_id,
+              date_ecriture: dateOp, journal: 'BNQ',
+              numero_compte: compteBanque,
+              libelle: `Banque — Paiement ${tiers}`.substring(0, 100),
+              debit_mur: 0, credit_mur: montantMUR,
+              lettre, ref_folio: refFolio,
+            },
+          ]
+        : [
+            {
+              dossier_id: dossier.id, societe_id,
+              date_ecriture: dateOp, journal: 'BNQ',
+              numero_compte: compteBanque,
+              libelle: `Banque — Encaissement ${tiers}`.substring(0, 100),
+              debit_mur: montantMUR, credit_mur: 0,
+              lettre, ref_folio: refFolio,
+            },
+            {
+              dossier_id: dossier.id, societe_id,
+              date_ecriture: dateOp, journal: 'BNQ',
+              numero_compte: compteAux,
+              libelle: `Encaissement ${tiers} — ${facture.numero_facture}`.substring(0, 100),
+              debit_mur: 0, credit_mur: montantMUR,
+              lettre, ref_folio: refFolio, facture_id: facture.id,
+            },
+          ]
+
+      const { error: insErr } = await supabase.from('ecritures_comptables_v2').insert(ecritures)
+      if (insErr) {
+        return NextResponse.json({ error: `Erreur insertion écritures: ${insErr.message}` }, { status: 500 })
+      }
+
+      // Lettrer l'ACH/VTE existante sur le compte auxiliaire pour cette facture
+      // (l'écriture originale créée lors de l'import facture)
+      try {
+        await supabase
+          .from('ecritures_comptables_v2')
+          .update({ lettre, date_lettrage: dateOp })
+          .eq('dossier_id', dossier.id)
+          .eq('facture_id', facture.id)
+          .in('journal', ['ACH', 'VTE'])
+          .is('lettre', null)
+      } catch { /* best-effort */ }
+
+      // Marquer la facture payée
+      const { error: factUpdErr } = await supabase.from('factures').update({
+        statut: 'paye',
+        solde_non_paye: 0,
+        rapproche_date: dateOp,
+        rapproche_source: 'marquer_paye',
+      }).eq('id', facture_id)
+      if (factUpdErr) {
+        console.warn('[marquer_paye] facture update failed:', factUpdErr.message)
+      }
+
+      return NextResponse.json({
+        success: true,
+        facture_id,
+        lettre,
+        montant: montantMUR,
+        nb_ecritures: ecritures.length,
+      })
+    }
+
+    // === CLASSER TRANSACTION — raccourci lettrer_manuel avec classification ===
+    // Applique une classification manuelle sur une transaction 'à vérifier',
+    // sans dialogue. Raccourci pour le bouton dropdown de l'onglet.
+    // C'est strictement équivalent à lettrer_manuel avec seulement classification.
+    // On garde une action dédiée pour la lisibilité des logs.
+    if (action === 'classer_transaction') {
+      // Redirige vers lettrer_manuel en interne (même supabase/user contexte)
+      const { transaction_id, releve_id, societe_id, classification } = body
+      if (!releve_id || !transaction_id || !classification) {
+        return NextResponse.json({ error: 'releve_id, transaction_id, classification requis' }, { status: 400 })
+      }
+      const { data: releve } = await supabase
+        .from('releves_bancaires').select('id, transactions_json').eq('id', releve_id).single()
+      if (!releve) return NextResponse.json({ error: 'Relevé non trouvé' }, { status: 404 })
+
+      const txIdx = parseInt(transaction_id.split('-').pop() || '0')
+      const txs = [...(releve.transactions_json || [])]
+      if (txIdx >= txs.length) return NextResponse.json({ error: 'Transaction non trouvée' }, { status: 404 })
+
+      // Vérifier période verrouillée
+      const txDate = txs[txIdx]?.date
+      if (txDate && societe_id) {
+        const lockStatus = await checkPeriodLock(supabase, societe_id, txDate)
+        if (lockStatus.locked) {
+          return NextResponse.json({
+            error: `Période verrouillée — ${lockStatus.reason}`,
+          }, { status: 403 })
+        }
+      }
+
+      const code = `CL${String(Date.now()).slice(-4)}`
+      txs[txIdx] = { ...txs[txIdx], statut: 'rapproche', matched_type: classification, lettre: code, note: `Classification manuelle: ${classification}` }
+      await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', releve_id)
+
+      const CLASSE_COMPTES: Record<string, string> = {
+        compte_courant_associe: '455',
+        avance_personnel: '425',
+        charge_diverse: '658',
+        paiement_mra: '447',
+        frais_bancaires: '627',
+        salaire: '421',
+        virement_interne: '580',
+        remboursement_personnel: '108',
+        autre: '471',
+      }
+      const compte = CLASSE_COMPTES[classification] || '471'
+      const { data: dossier } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
+      if (dossier) {
+        const tx = txs[txIdx]
+        const txAmt = Math.max(Number(tx.debit) || 0, Number(tx.credit) || 0)
+        const isOut = (Number(tx.debit) || 0) > 0
+        await supabase.from('ecritures_comptables_v2').insert([
+          {
+            dossier_id: dossier.id, societe_id, date_ecriture: tx.date || new Date().toISOString().split('T')[0],
+            journal: 'BNQ', numero_compte: compte,
+            libelle: `${classification} — ${(tx.tiers_detecte || tx.libelle || '').substring(0, 30)}`,
+            debit_mur: isOut ? txAmt : 0, credit_mur: isOut ? 0 : txAmt,
+            lettre: code, ref_folio: `CL-${releve_id}-${txIdx}`,
+          },
+          {
+            dossier_id: dossier.id, societe_id, date_ecriture: tx.date || new Date().toISOString().split('T')[0],
+            journal: 'BNQ', numero_compte: '512',
+            libelle: `Banque — ${(tx.tiers_detecte || '').substring(0, 25)}`,
+            debit_mur: isOut ? 0 : txAmt, credit_mur: isOut ? txAmt : 0,
+            lettre: code, ref_folio: `CL-${releve_id}-${txIdx}`,
+          },
+        ])
+      }
+
+      return NextResponse.json({ success: true, lettre: code, classification })
     }
 
     return NextResponse.json({ error: 'Action inconnue' }, { status: 400 })

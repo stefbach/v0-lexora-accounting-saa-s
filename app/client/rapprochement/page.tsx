@@ -14,6 +14,7 @@ import { Progress } from "@/components/ui/progress"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { bucketizeTransactions, type BucketItem } from "@/lib/accounting/classification-rules"
 import { RapprochementKpiDashboard } from "@/components/rapprochement/KpiDashboard"
 
@@ -697,6 +698,57 @@ Voulez-vous vraiment continuer ?`
       })
       setLinkDialog(null); load()
     } catch { alert("Erreur lettrage") }
+  }
+
+  // Marquer une facture comme payée (crée BNQ + letters, sans tx)
+  const handleMarquerPaye = async (facture: any) => {
+    if (!societeId) return
+    if (!confirm(`Marquer la facture ${facture.numero_facture || facture.id} comme payée ?\n\nCela créera les écritures comptables (D: ${facture.type_facture === 'fournisseur' || !facture.type_facture ? '401' : '411'} / C: 512) et lettrera automatiquement.`)) return
+    try {
+      const res = await fetch("/api/comptable/rapprochement", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "marquer_paye",
+          facture_id: facture.id,
+          societe_id: societeId,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setToast({ type: 'error', message: data.error || 'Erreur' })
+      } else {
+        setToast({ type: 'success', message: `✓ Facture marquée payée (lettre ${data.lettre})` })
+        await load()
+      }
+    } catch (e: any) {
+      setToast({ type: 'error', message: e.message })
+    }
+  }
+
+  // Classer une transaction "à vérifier" en un type comptable
+  const handleClasserTx = async (tx: any, classification: string) => {
+    if (!societeId) return
+    try {
+      const res = await fetch("/api/comptable/rapprochement", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "classer_transaction",
+          transaction_id: tx.id,
+          releve_id: tx.releve_id,
+          societe_id: societeId,
+          classification,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setToast({ type: 'error', message: data.error || 'Erreur classification' })
+      } else {
+        setToast({ type: 'success', message: `✓ Transaction classée en "${classification}"` })
+        await load()
+      }
+    } catch (e: any) {
+      setToast({ type: 'error', message: e.message })
+    }
   }
 
   const handleUnlink = async (tx: any) => {
@@ -1389,23 +1441,38 @@ Voulez-vous vraiment continuer ?`
                       </TableCell>
                       <TableCell>
                         {status !== 'paye' && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 text-xs"
-                            onClick={() => {
-                              // Pre-open manual lettrage dialog on the unmatched side
-                              setDialogTab('factures')
-                              // Find a matching unmatched transaction to pre-fill
-                              const prefill = unmatched.find((t: any) =>
-                                Number(t.debit) > 0 &&
-                                Math.abs(Number(t.debit) - (Number(f.montant_ttc) || 0)) < (Number(f.montant_ttc) || 1) * 0.05
-                              )
-                              setLinkDialog(prefill || { preselected_facture_id: f.id })
-                            }}
-                          >
-                            Lettrer
-                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="outline" size="sm" className="h-7 text-xs gap-1">
+                                Lettrer <ChevronDown className="w-3 h-3" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-64">
+                              <DropdownMenuLabel className="text-xs">Action sur cette facture</DropdownMenuLabel>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => handleMarquerPaye(f)} className="gap-2">
+                                <CheckCircle2 className="w-4 h-4 text-green-600" />
+                                <div className="flex flex-col">
+                                  <span className="text-sm">Marquer payée</span>
+                                  <span className="text-[10px] text-gray-500">Crée BNQ + lettre auto</span>
+                                </div>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => {
+                                setDialogTab('factures')
+                                const prefill = unmatched.find((t: any) =>
+                                  Number(t.debit) > 0 &&
+                                  Math.abs(Number(t.debit) - (Number(f.montant_ttc) || 0)) < (Number(f.montant_ttc) || 1) * 0.05
+                                )
+                                setLinkDialog(prefill || { preselected_facture_id: f.id, libelle: f.tiers, date: f.date_facture, debit: Number(f.montant_ttc), credit: 0, devise: f.devise, tiers_detecte: f.tiers })
+                              }} className="gap-2">
+                                <Link2 className="w-4 h-4 text-blue-600" />
+                                <div className="flex flex-col">
+                                  <span className="text-sm">Lettrer avec une transaction</span>
+                                  <span className="text-[10px] text-gray-500">Choisir une tx bancaire</span>
+                                </div>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         )}
                       </TableCell>
                     </TableRow>
@@ -1562,7 +1629,52 @@ Voulez-vous vraiment continuer ?`
                       <TableCell className="text-right text-sm text-green-600">{Number(tx.credit) > 0 ? fmt(Number(tx.credit)) + ' ' + tx.devise : "—"}</TableCell>
                       <TableCell className="text-sm font-medium">{tx.tiers_detecte || "—"}</TableCell>
                       <TableCell><Badge className="bg-amber-100 text-amber-700 text-[10px]">{tx.matched_type?.replace(/_/g, ' ') || 'inconnu'}</Badge></TableCell>
-                      <TableCell><Button variant="ghost" size="sm" onClick={() => handleUnlink(tx)} title="Délettrer"><Unlink className="w-4 h-4 text-amber-600" /></Button></TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="outline" size="sm" className="h-7 text-xs gap-1">
+                                Classer <ChevronDown className="w-3 h-3" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-64">
+                              <DropdownMenuLabel className="text-xs">Nature de la transaction</DropdownMenuLabel>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => handleClasserTx(tx, 'frais_bancaires')}>
+                                <span className="text-xs font-mono text-gray-500 mr-2">627</span>Frais bancaires
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleClasserTx(tx, 'paiement_mra')}>
+                                <span className="text-xs font-mono text-gray-500 mr-2">447</span>Paiement MRA (impôts)
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleClasserTx(tx, 'salaire')}>
+                                <span className="text-xs font-mono text-gray-500 mr-2">421</span>Salaire net
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleClasserTx(tx, 'compte_courant_associe')}>
+                                <span className="text-xs font-mono text-gray-500 mr-2">455</span>Compte courant associé
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleClasserTx(tx, 'avance_personnel')}>
+                                <span className="text-xs font-mono text-gray-500 mr-2">425</span>Avance au personnel
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleClasserTx(tx, 'virement_interne')}>
+                                <span className="text-xs font-mono text-gray-500 mr-2">580</span>Virement interne
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleClasserTx(tx, 'charge_diverse')}>
+                                <span className="text-xs font-mono text-gray-500 mr-2">658</span>Charge diverse
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleClasserTx(tx, 'autre')}>
+                                <span className="text-xs font-mono text-gray-500 mr-2">471</span>À classer plus tard
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => { setDialogTab('factures'); setLinkDialog(tx) }}>
+                                <Link2 className="w-4 h-4 mr-2 text-blue-600" />Lettrer avec une facture
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                          <Button variant="ghost" size="sm" onClick={() => handleUnlink(tx)} title="Délettrer">
+                            <Unlink className="w-4 h-4 text-amber-600" />
+                          </Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -1967,22 +2079,73 @@ Voulez-vous vraiment continuer ?`
             <Table>
               <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Compte</TableHead><TableHead>Libellé</TableHead><TableHead className="text-right">Débit</TableHead><TableHead className="text-right">Crédit</TableHead><TableHead>Journal</TableHead><TableHead>Action</TableHead></TableRow></TableHeader>
               <TableBody>
-                {ecrituresLettrage.slice(0, 50).map((e: any) => (
-                  <TableRow key={e.id}>
-                    <TableCell className="text-sm">{formatDate(e.date_ecriture)}</TableCell>
-                    <TableCell className="font-mono text-sm">{e.compte}</TableCell>
-                    <TableCell className="text-sm"><TruncatedCell text={e.libelle || "—"} /></TableCell>
-                    <TableCell className="text-right text-sm text-red-600 font-medium">{Number(e.debit) > 0 ? fmt(Number(e.debit)) : "—"}</TableCell>
-                    <TableCell className="text-right text-sm text-green-600 font-medium">{Number(e.credit) > 0 ? fmt(Number(e.credit)) : "—"}</TableCell>
-                    <TableCell className="text-sm">{e.journal || "—"}</TableCell>
-                    <TableCell>
-                      <Button variant="outline" size="sm" onClick={() => {
-                        setLettrageDialog(e)
-                        setLettrageSelection(new Set([e.id]))
-                      }}><Link2 className="w-3 h-3 mr-1" />Lettrer</Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {ecrituresLettrage.slice(0, 50).map((e: any) => {
+                  // Une écriture 401 CRÉDIT (ACH) représente une dette fournisseur.
+                  // Pour la solder sans tx bancaire, "Marquer payée" crée le BNQ débit + letters.
+                  const canMarkPaid = e.facture_id && Number(e.credit) > 0 && String(e.compte || '').startsWith('401')
+                  return (
+                    <TableRow key={e.id}>
+                      <TableCell className="text-sm">{formatDate(e.date_ecriture)}</TableCell>
+                      <TableCell className="font-mono text-sm">{e.compte}</TableCell>
+                      <TableCell className="text-sm"><TruncatedCell text={e.libelle || "—"} /></TableCell>
+                      <TableCell className="text-right text-sm text-red-600 font-medium">{Number(e.debit) > 0 ? fmt(Number(e.debit)) : "—"}</TableCell>
+                      <TableCell className="text-right text-sm text-green-600 font-medium">{Number(e.credit) > 0 ? fmt(Number(e.credit)) : "—"}</TableCell>
+                      <TableCell className="text-sm">{e.journal || "—"}</TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" className="gap-1">
+                              <Link2 className="w-3 h-3" />Lettrer<ChevronDown className="w-3 h-3" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-64">
+                            {canMarkPaid && (
+                              <>
+                                <DropdownMenuItem onClick={async () => {
+                                  if (!societeId) return
+                                  if (!confirm("Marquer la facture comme payée ?\n\nCela crée le débit 401 (BNQ) et letters automatiquement avec le crédit 401 (ACH).")) return
+                                  try {
+                                    const res = await fetch("/api/comptable/rapprochement", {
+                                      method: "POST", headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({ action: "marquer_paye", facture_id: e.facture_id, societe_id: societeId }),
+                                    })
+                                    const d = await res.json()
+                                    if (!res.ok) setToast({ type: 'error', message: d.error || 'Erreur' })
+                                    else { setToast({ type: 'success', message: `✓ Facture payée (lettre ${d.lettre})` }); load() }
+                                  } catch (err: any) { setToast({ type: 'error', message: err.message }) }
+                                }} className="gap-2">
+                                  <CheckCircle2 className="w-4 h-4 text-green-600" />
+                                  <div className="flex flex-col">
+                                    <span className="text-sm">Marquer payée</span>
+                                    <span className="text-[10px] text-gray-500">Crée BNQ + lettre auto</span>
+                                  </div>
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                              </>
+                            )}
+                            <DropdownMenuItem onClick={() => {
+                              setLettrageDialog(e)
+                              setLettrageSelection(new Set([e.id]))
+                            }} className="gap-2">
+                              <Link2 className="w-4 h-4 text-blue-600" />
+                              <div className="flex flex-col">
+                                <span className="text-sm">Lettrer manuellement</span>
+                                <span className="text-[10px] text-gray-500">Sélectionner des écritures à regrouper</span>
+                              </div>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={handleAutoLettrage} disabled={autoLettraging} className="gap-2">
+                              <Zap className="w-4 h-4 text-amber-600" />
+                              <div className="flex flex-col">
+                                <span className="text-sm">Tout synchroniser auto</span>
+                                <span className="text-[10px] text-gray-500">Lance sync_lettrage global</span>
+                              </div>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
           )}
