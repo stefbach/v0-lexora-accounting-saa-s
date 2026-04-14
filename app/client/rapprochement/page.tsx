@@ -74,12 +74,14 @@ export default function ClientRapprochementPage() {
   const [smartDialog, setSmartDialog] = useState<'summary' | 'list' | null>(null)
 
   // Auto-classer preview dialog (shown before running the deterministic agent)
+  type AutoBucketItem = { id: string; date: string; libelle: string; tiers: string; amount: number; devise: string }
+  type AutoBucket = { count: number; total: number; items: AutoBucketItem[] }
   const [autoPreview, setAutoPreview] = useState<null | {
-    salaires: { count: number; total: number }
-    mra: { count: number; total: number }
-    frais: { count: number; total: number }
-    internes: { count: number; total: number }
-    remboursements: { count: number; total: number }
+    salaires: AutoBucket
+    mra: AutoBucket
+    frais: AutoBucket
+    internes: AutoBucket
+    remboursements: AutoBucket
   }>(null)
 
   // Pagination — Factures fournisseurs table (Part 1: 20/page).
@@ -252,11 +254,25 @@ Voulez-vous vraiment continuer ?`
     const lib = (t: any) => String(t.libelle || '').toLowerCase()
     const tiers = (t: any) => String(t.tiers_detecte || '').toLowerCase()
 
-    const salaires = { count: 0, total: 0 }
-    const mra = { count: 0, total: 0 }
-    const frais = { count: 0, total: 0 }
-    const internes = { count: 0, total: 0 }
-    const remboursements = { count: 0, total: 0 }
+    const mkBucket = (): AutoBucket => ({ count: 0, total: 0, items: [] })
+    const salaires = mkBucket()
+    const mra = mkBucket()
+    const frais = mkBucket()
+    const internes = mkBucket()
+    const remboursements = mkBucket()
+
+    const push = (b: AutoBucket, t: any, a: number) => {
+      b.count++
+      b.total += a
+      b.items.push({
+        id: String(t.id),
+        date: String(t.date || ''),
+        libelle: String(t.libelle || ''),
+        tiers: String(t.tiers_detecte || ''),
+        amount: a,
+        devise: String(t.devise || 'MUR'),
+      })
+    }
 
     for (const t of u) {
       const a = amtOf(t)
@@ -265,25 +281,25 @@ Voulez-vous vraiment continuer ?`
 
       // Remboursement perso (RBT CC STEPHANE HENRI BACH)
       if (L.includes('rbt cc') || T.includes('stephane henri bach')) {
-        remboursements.count++; remboursements.total += a; continue
+        push(remboursements, t, a); continue
       }
       // Virement interne (IB Own Account Transfer, DDS↔OCC)
       if (L.includes('ib own account') || L.includes('own account transfer') || L.includes('virement interne')) {
-        internes.count++; internes.total += a; continue
+        push(internes, t, a); continue
       }
       // MRA
       if (T.includes('mauritius revenue') || L.includes('direct debit') && L.includes('mra')) {
-        mra.count++; mra.total += a; continue
+        push(mra, t, a); continue
       }
       // Salaires (bulk ou individuels marqués PERSONNEL/SALARY)
       if (L.includes('salary') || L.includes('salaire') || (L.includes('bulk payment') && (L.includes('personnel') || L.includes('salary')))
           || T === 'personnel' || T === 'salary') {
-        salaires.count++; salaires.total += a; continue
+        push(salaires, t, a); continue
       }
       // Frais bancaires (MCB/MASTERCARD, petits montants)
       const feeKeywords = ['fee', 'subs', 'interest', 'penalty', 'service charge', 'commission', 'frais']
       if ((T.includes('mcb') || T.includes('mastercard') || feeKeywords.some(k => L.includes(k))) && a > 0 && a < 2000) {
-        frais.count++; frais.total += a; continue
+        push(frais, t, a); continue
       }
     }
     return { salaires, mra, frais, internes, remboursements }
@@ -294,9 +310,45 @@ Voulez-vous vraiment continuer ?`
     setAutoPreview(computeAutoPreview())
   }
 
-  const confirmAutoClasser = () => {
+  /**
+   * Confirm "Auto-classer les évidences" — calls the deterministic agent
+   * directly and surfaces a visible toast no matter what (the previous
+   * version delegated to openAgentIA which opens a chat panel that no
+   * longer exists in the redesigned UI, so the user saw nothing happen).
+   */
+  const confirmAutoClasser = async () => {
+    if (!societeId) return
     setAutoPreview(null)
-    openAgentIA()
+    setChatLoading(true)
+    console.log('[auto-classer] POST /api/comptable/rapprochement/agent/deterministic societe_id=', societeId)
+    try {
+      const res = await fetch('/api/comptable/rapprochement/agent/deterministic', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ societe_id: societeId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      console.log('[auto-classer] response', res.status, data)
+      if (!res.ok) {
+        showToast(`❌ Erreur (${res.status}) : ${data?.error || 'inconnue'}`, 'error')
+        return
+      }
+      const matched = Number(data.matched) || 0
+      const processed = Number(data.processed) || 0
+      if (matched > 0) {
+        showToast(`✅ ${matched} transaction(s) classée(s) automatiquement${processed > matched ? ` · ${processed - matched} sans correspondance` : ''}`)
+      } else if (processed > 0) {
+        showToast(`ℹ️ Aucune correspondance évidente sur ${processed} transaction(s) analysée(s). Utilisez le menu "Classer..." sur chaque ligne.`)
+      } else {
+        showToast(`ℹ️ ${data.message || 'Aucune transaction à analyser pour le moment.'}`)
+      }
+      await load()
+    } catch (e: any) {
+      console.error('[auto-classer] fetch failed:', e)
+      showToast(`❌ Erreur réseau : ${e?.message || 'connexion perdue'}`, 'error')
+    } finally {
+      setChatLoading(false)
+    }
   }
 
   // Open chat + auto-launch full analysis
@@ -823,27 +875,48 @@ Voulez-vous vraiment continuer ?`
   const handleAutoLettrage = async () => {
     if (!societeId) return
     setAutoLettraging(true)
+    console.log('[sync_lettrage] POST societe_id=', societeId)
     try {
       const res = await fetch("/api/comptable/rapprochement", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "sync_lettrage", societe_id: societeId }),
       })
-      const d = await res.json()
+      const d = await res.json().catch(() => ({}))
+      console.log('[sync_lettrage] response', res.status, d)
       if (!res.ok) {
-        showToast(`❌ ${d.error || 'Erreur synchronisation'}`, 'error')
-      } else {
-        const parts: string[] = []
-        if ((d.pairs_lettered || 0) > 0) parts.push(`${d.pairs_lettered} écriture(s) synchronisée(s)`)
-        if ((d.bnq_created || 0) > 0) parts.push(`${d.bnq_created} BNQ créée(s)`)
-        if ((d.already_lettered || 0) > 0) parts.push(`${d.already_lettered} déjà à jour`)
-        const errCount = Array.isArray(d.errors) ? d.errors.length : 0
-        if (errCount > 0) parts.push(`${errCount} non traitée(s)`)
-        const total = (d.pairs_lettered || 0) + (d.bnq_created || 0)
-        showToast(total > 0 ? `✅ ${parts.join(' · ')}` : (parts.length ? `ℹ️ ${parts.join(' · ')}` : 'Aucune synchronisation à faire'))
+        // Detect the most common production blocker: migration 133 not yet
+        // applied → Postgres returns "column ecritures_comptables_v2.facture_id
+        // does not exist" or similar.
+        const msg = String(d?.error || d?.message || '')
+        if (/facture_id/i.test(msg) && /does not exist|column/i.test(msg)) {
+          showToast(
+            `⚠ Migration 133 pas encore appliquée en prod. ` +
+            `Appliquez supabase/migrations/133_ecritures_facture_id_link.sql ` +
+            `puis réessayez.`,
+            'error'
+          )
+        } else {
+          showToast(`❌ Erreur (${res.status}) : ${msg || 'inconnue'}`, 'error')
+        }
+        return
       }
+      const parts: string[] = []
+      if ((d.pairs_lettered || 0) > 0) parts.push(`${d.pairs_lettered} écriture(s) synchronisée(s)`)
+      if ((d.bnq_created || 0) > 0) parts.push(`${d.bnq_created} BNQ créée(s)`)
+      if ((d.already_lettered || 0) > 0) parts.push(`${d.already_lettered} déjà à jour`)
+      const errCount = Array.isArray(d.errors) ? d.errors.length : 0
+      if (errCount > 0) parts.push(`${errCount} non traitée(s)`)
+      const total = (d.pairs_lettered || 0) + (d.bnq_created || 0)
+      showToast(
+        total > 0
+          ? `✅ ${parts.join(' · ')}`
+          : (parts.length ? `ℹ️ ${parts.join(' · ')}` : 'ℹ️ Aucune facture payée à synchroniser')
+      )
       await load()
-    } catch { showToast("Erreur réseau — synchronisation échouée", 'error') }
-    finally { setAutoLettraging(false) }
+    } catch (e: any) {
+      console.error('[sync_lettrage] fetch failed:', e)
+      showToast(`❌ Erreur réseau — synchronisation échouée${e?.message ? ' : ' + e.message : ''}`, 'error')
+    } finally { setAutoLettraging(false) }
   }
 
   if (loading) return <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-[#0B0F2E]" /></div>

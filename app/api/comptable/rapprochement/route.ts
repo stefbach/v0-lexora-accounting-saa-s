@@ -1083,15 +1083,23 @@ export async function POST(request: Request) {
         txs[txIdx] = { ...txs[txIdx], statut: 'rapproche', matched_type: classification, lettre: code, note: `Classification manuelle: ${classification}` }
         await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', releve_id)
 
-        // Créer l'écriture BNQ avec le bon compte
+        // Créer l'écriture BNQ avec le bon compte.
+        // Mapping étendu pour les classifications proposées par le menu
+        // "Classer..." de la page rapprochement (Part 2 redesign).
         const CLASSE_COMPTES: Record<string, string> = {
-          compte_courant_associe: '455',
-          avance_personnel: '425',
-          charge_diverse: '658',
-          paiement_mra: '444',
-          frais_bancaires: '627',
+          compte_courant_associe: '455',  // Comptes courants associés
+          avance_personnel: '425',        // Avances au personnel
+          charge_diverse: '658',          // Autres charges de gestion
+          paiement_mra: '444',            // État, impôts (MRA)
+          frais_bancaires: '627',         // Services bancaires et assimilés
+          // Nouveaux types ajoutés par la refonte UI :
+          salaire: '641',                 // Personnel — rémunérations
+          virement_interne: '581',        // Virements internes (bridge account)
+          remboursement_personnel: '108', // Compte de l'exploitant
+          autre: '471',                   // Charges à classer (fallback explicite)
         }
         const compteCharge = CLASSE_COMPTES[classification] || '471'
+        console.log(`[lettrer_manuel] societe=${societe_id} tx=${transaction_id} classification=${classification} → compte=${compteCharge}`)
 
         const { data: dossier } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
         if (dossier) {
@@ -1641,18 +1649,45 @@ export async function POST(request: Request) {
     if (action === 'sync_lettrage') {
       const { societe_id: socId } = body
       if (!socId) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
+      console.log(`[sync_lettrage] start societe=${socId}`)
 
       const { data: dossierRow } = await supabase
         .from('dossiers').select('id').eq('societe_id', socId).limit(1).maybeSingle()
-      if (!dossierRow) return NextResponse.json({ error: 'Aucun dossier' }, { status: 404 })
+      if (!dossierRow) {
+        console.warn(`[sync_lettrage] no dossier for societe=${socId}`)
+        return NextResponse.json({ error: 'Aucun dossier pour cette société' }, { status: 404 })
+      }
       const dossierId = dossierRow.id
 
       // Fetch paid factures for this société.
-      const { data: paidFactures } = await supabase
+      const { data: paidFactures, error: facturesErr } = await supabase
         .from('factures')
         .select('id, numero_facture, montant_ttc, montant_mur, devise, date_facture, rapproche_date, rapproche_releve_id, rapproche_transaction_idx, tiers, type_facture')
         .eq('societe_id', socId)
         .eq('statut', 'paye')
+      if (facturesErr) {
+        console.error(`[sync_lettrage] factures fetch failed:`, facturesErr.message)
+        return NextResponse.json({ error: `factures: ${facturesErr.message}` }, { status: 500 })
+      }
+      console.log(`[sync_lettrage] ${(paidFactures || []).length} paid facture(s) found`)
+
+      // Probe whether the facture_id column exists on the view (migration 133).
+      // If it's missing in this environment, we skip the by-facture_id lookup
+      // and rely solely on numero_piece matching — the operator can still
+      // reconcile manually until the migration is applied.
+      let hasFactureIdColumn = true
+      {
+        const probe = await supabase.from('ecritures_comptables').select('facture_id').limit(1)
+        if (probe.error) {
+          const msg = String(probe.error.message || '')
+          if (/facture_id/i.test(msg) && /(does not exist|column)/i.test(msg)) {
+            hasFactureIdColumn = false
+            console.warn('[sync_lettrage] facture_id column missing — migration 133 not applied yet, falling back to numero_piece matching only')
+          } else {
+            console.error('[sync_lettrage] probe failed:', probe.error.message)
+          }
+        }
+      }
 
       let pairsLettered = 0
       let pairsCreatedBnq = 0
