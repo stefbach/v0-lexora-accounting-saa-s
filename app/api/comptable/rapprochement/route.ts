@@ -170,11 +170,61 @@ export async function GET(request: Request) {
       ecritures = data || []
     }
 
+    // FIX 3 + 5 — Comptes PCG à surveiller :
+    //   • 467 Virements inter-sociétés (scénario S7 DDS↔OCC) → doit se
+    //     solder rapidement après le mouvement miroir chez la sœur.
+    //   • 580 Virements internes en transit (règle R3) → doit TOUJOURS
+    //     être soldé en fin de mois. Alerte si écritures > 30 jours non
+    //     lettrées.
+    //
+    // On calcule les soldes en scannant les écritures déjà chargées puis
+    // on construit une liste d'alertes que le client affichera en bandeau.
+    const TRENTE_JOURS_MS = 30 * 24 * 60 * 60 * 1000
+    const nowTs = Date.now()
+    const solde467 = ecritures
+      .filter(e => String(e.compte || '').startsWith('467'))
+      .reduce((s, e) => s + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
+    const solde580 = ecritures
+      .filter(e => String(e.compte || '').startsWith('580'))
+      .reduce((s, e) => s + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
+    const ecritures580OldUnlettered = ecritures.filter(e => {
+      if (!String(e.compte || '').startsWith('580')) return false
+      if (e.lettre) return false // déjà lettrée
+      const dt = e.date_ecriture ? new Date(e.date_ecriture).getTime() : 0
+      return dt > 0 && (nowTs - dt) > TRENTE_JOURS_MS
+    })
+    const transit_alerts: Array<{ compte: string; type: string; solde?: number; count?: number; message: string }> = []
+    if (Math.abs(solde467) > 0.01) {
+      transit_alerts.push({
+        compte: '467',
+        type: 'inter_societes_non_solde',
+        solde: Math.round(solde467 * 100) / 100,
+        message: `Compte 467 (virements inter-sociétés) non soldé : ${solde467.toFixed(2)} MUR. Vérifier le mouvement miroir chez la société sœur (scénario S7).`,
+      })
+    }
+    if (Math.abs(solde580) > 0.01) {
+      transit_alerts.push({
+        compte: '580',
+        type: 'transit_non_solde',
+        solde: Math.round(solde580 * 100) / 100,
+        message: `Compte 580 (virements en transit) non soldé : ${solde580.toFixed(2)} MUR. Règle R3 — le 580 doit toujours être soldé à la clôture du mois.`,
+      })
+    }
+    if (ecritures580OldUnlettered.length > 0) {
+      transit_alerts.push({
+        compte: '580',
+        type: 'transit_ancien_non_lettre',
+        count: ecritures580OldUnlettered.length,
+        message: `${ecritures580OldUnlettered.length} écriture(s) 580 non lettrée(s) depuis plus de 30 jours — lettrage urgent requis (règle R3).`,
+      })
+    }
+
     return NextResponse.json({
       rapprochements: rapprochements || [],
       bankTransactions, factures, ecritures,
       releves: releves || [],
       comptesBancaires: comptes || [],
+      transit_alerts,
     })
   } catch (e: unknown) {
     console.error('[rapprochement GET]', e)

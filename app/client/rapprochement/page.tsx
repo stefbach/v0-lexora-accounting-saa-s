@@ -62,6 +62,9 @@ export default function ClientRapprochementPage() {
   // alertes légales Companies Act Mauritius (CCA débiteur).
   const [associesCandidates, setAssociesCandidates] = useState<Array<{ id: string; nom: string; role: string }>>([])
   const [legalAlerts, setLegalAlerts] = useState<Array<{ compte_id: string; nom: string; solde: number; message: string }>>([])
+  // FIX 3 + 5 — Alertes sur comptes de transit (467 inter-sociétés, 580
+  // virements internes — doit toujours être soldé, règle R3).
+  const [transitAlerts, setTransitAlerts] = useState<Array<{ compte: string; type: string; solde?: number; count?: number; message: string }>>([])
   const [resetting, setResetting] = useState(false)
 
   // ── Chat IA state ──────────────────────────────────────────────────
@@ -591,7 +594,9 @@ Voulez-vous vraiment continuer ?`
         fetch(`/api/comptable/rapprochement?societe_id=${societeId}`),
         fetch(`/api/comptable/compte-courant?societe_id=${societeId}`).catch(() => null),
       ])
-      setData(await res.json())
+      const rapData = await res.json()
+      setData(rapData)
+      setTransitAlerts(rapData?.transit_alerts || [])
       if (ccRes?.ok) {
         const ccData = await ccRes.json()
         console.log('[rapprochement] associes loaded:', ccData.comptes?.length || 0, '+ candidats:', ccData.candidates?.length || 0)
@@ -968,6 +973,28 @@ Voulez-vous vraiment continuer ?`
           </Button>
         </div>
       </div>
+
+      {/* FIX 3 + 5 — Alertes transit : 467 inter-sociétés + 580 règle R3 */}
+      {transitAlerts.length > 0 && (
+        <div className="rounded-lg border-2 border-amber-300 bg-amber-50 p-4 space-y-2">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="font-semibold text-amber-900 text-sm">
+                ⚠️ Comptes de transit non soldés
+              </p>
+              <ul className="mt-2 space-y-1 text-xs text-amber-900">
+                {transitAlerts.map((a, i) => (
+                  <li key={`ta-${a.compte}-${a.type}-${i}`} className="flex items-start gap-2">
+                    <Badge variant="outline" className="text-[10px] font-mono shrink-0">{a.compte}</Badge>
+                    <span>{a.message}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* FIX 4 — Alerte légale Companies Act Mauritius (CCA associé débiteur) */}
       {legalAlerts.length > 0 && (
