@@ -23,18 +23,38 @@ const ROLE_DASHBOARD: Record<string, string> = {
 export default function RedirectPage() {
   useEffect(() => {
     async function go() {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { window.location.href = '/auth/login'; return }
-      const { data: profile } = await supabase.from('profiles').select('role, employe_id').eq('id', user.id).single()
-      const role = profile?.role || 'client_user'
+      try {
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) { window.location.href = '/auth/login'; return }
 
-      // Auto-link employe on login (fire and forget — don't block redirect)
-      if (['employe', 'salarie', 'rh', 'manager', 'rh_manager'].includes(role)) {
-        fetch('/api/rh/employes/me').catch(() => {})
+        // Use maybeSingle() — .single() throws when the profile row is missing
+        // (fresh account before the trigger has run), which previously stalled
+        // the redirect on a permanent loader.
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role, employe_id')
+          .eq('id', user.id)
+          .maybeSingle()
+
+        const role = profile?.role || 'client_user'
+
+        // Defensive fallback: if the profile has NO role but IS linked to an
+        // employe_id (migration 108/109 populated the back-link), treat the
+        // user as an 'employe'. Protects new accounts whose role row hasn't
+        // been stamped yet.
+        const effectiveRole = (!profile?.role && profile?.employe_id) ? 'employe' : role
+
+        // Auto-link employe on login (fire and forget — don't block redirect)
+        if (['employe', 'salarie', 'rh', 'manager', 'rh_manager'].includes(effectiveRole)) {
+          fetch('/api/rh/employes/me').catch(() => {})
+        }
+
+        window.location.href = ROLE_DASHBOARD[effectiveRole] || '/client/tableau-de-bord'
+      } catch (err) {
+        console.error('[redirect] failed, defaulting to /client:', err)
+        window.location.href = '/client/tableau-de-bord'
       }
-
-      window.location.href = ROLE_DASHBOARD[role] || '/client/tableau-de-bord'
     }
     go()
   }, [])
