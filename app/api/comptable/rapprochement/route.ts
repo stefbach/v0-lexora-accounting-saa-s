@@ -738,15 +738,15 @@ export async function POST(request: Request) {
             // Montant par facture : réparti au prorata du montant_ttc,
             // fallback équi-split. Arrondi à 2 décimales, reste sur la
             // dernière facture pour équilibrer centime par centime.
-            const totalFactures = (match.factures || []).reduce(
+            const totalFacturesTTC = (match.factures || []).reduce(
               (s: number, f: any) => s + (Number(f.montant_ttc) || 0), 0
             )
             const amountMurRounded = Math.round(payAmountMUR * 100) / 100
             const perFactureAmounts: number[] = (match.factures || []).map((f: any, i: number) => {
               const base = match.factures.length === 1
                 ? amountMurRounded
-                : (totalFactures > 0
-                    ? Math.round((Number(f.montant_ttc) || 0) / totalFactures * amountMurRounded * 100) / 100
+                : (totalFacturesTTC > 0
+                    ? Math.round((Number(f.montant_ttc) || 0) / totalFacturesTTC * amountMurRounded * 100) / 100
                     : Math.round((amountMurRounded / match.factures.length) * 100) / 100)
               return base
             })
