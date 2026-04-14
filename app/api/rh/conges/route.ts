@@ -577,8 +577,26 @@ export async function POST(request: Request) {
       // Validate Mauritius WRA 2019 rules
       // Support half-day (demi-journee): if demi_journee=true and same date, count as 0.5
       const isDemiJournee = body.demi_journee === true
+      const matinOuApresMidi: 'matin' | 'apres_midi' | null =
+        body.matin_ou_apres_midi === 'matin' || body.matin_ou_apres_midi === 'apres_midi'
+          ? body.matin_ou_apres_midi
+          : null
+
+      if (isDemiJournee) {
+        if (body.date_debut !== body.date_fin) {
+          return NextResponse.json({
+            error: 'Une demi-journée doit concerner une seule date (date_debut = date_fin)',
+          }, { status: 400 })
+        }
+        if (!matinOuApresMidi) {
+          return NextResponse.json({
+            error: 'Précisez si la demi-journée est le matin ou l\'après-midi',
+          }, { status: 400 })
+        }
+      }
+
       let nb_jours: number
-      if (isDemiJournee && body.date_debut === body.date_fin) {
+      if (isDemiJournee) {
         nb_jours = 0.5
       } else {
         nb_jours = countWorkingDays(body.date_debut, body.date_fin)
@@ -664,6 +682,8 @@ export async function POST(request: Request) {
         date_debut: body.date_debut,
         date_fin: body.date_fin,
         nb_jours,
+        demi_journee: isDemiJournee,
+        matin_ou_apres_midi: matinOuApresMidi,
         statut: body.statut || 'en_attente',
         motif: body.motif || null,
         document_url: body.document_url || null,
