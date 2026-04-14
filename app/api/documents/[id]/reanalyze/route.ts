@@ -445,13 +445,28 @@ export async function POST(
             notes: finalExtraction.analyse_tva || null,
           }
 
+          let factureIdForLink: string | null = existingFacture?.id || null
           if (existingFacture) {
             await supabase.from('factures').update(factureData).eq('id', existingFacture.id)
             console.log(`[reanalyze] Updated facture ${existingFacture.id}`)
           } else {
-            const { error: factErr } = await supabase.from('factures').insert(factureData)
+            const { data: inserted, error: factErr } = await supabase.from('factures').insert(factureData).select('id').maybeSingle()
             if (factErr) console.error('[reanalyze] facture insert error:', factErr.message)
-            else console.log(`[reanalyze] Created facture for document ${id} — tiers="${factureTiers}", ttc=${montantTTC} ${devise}`)
+            else {
+              factureIdForLink = inserted?.id || null
+              console.log(`[reanalyze] Created facture ${factureIdForLink} for document ${id} — tiers="${factureTiers}", ttc=${montantTTC} ${devise}`)
+            }
+          }
+
+          // Migration 133 link: stamp ecritures just (re)created for this
+          // document with facture_id so auto-letterage finds them without
+          // having to parse libelle text.
+          if (factureIdForLink && finalDossierId) {
+            await supabase.from('ecritures_comptables')
+              .update({ facture_id: factureIdForLink })
+              .eq('dossier_id', finalDossierId)
+              .eq('piece_justificative', id)
+              .is('facture_id', null)
           }
         }
       }

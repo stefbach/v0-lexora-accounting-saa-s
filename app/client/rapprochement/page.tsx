@@ -814,18 +814,35 @@ Voulez-vous vraiment continuer ?`
     } catch { alert("Erreur") }
   }
 
+  /**
+   * "Tout synchroniser automatiquement" — scans paid factures and
+   * materializes / letters the matching BNQ ↔ ACH pairs via
+   * POST /api/comptable/rapprochement action=sync_lettrage.
+   * Reuses the `autoLettraging` state so the existing spinner still works.
+   */
   const handleAutoLettrage = async () => {
     if (!societeId) return
     setAutoLettraging(true)
     try {
       const res = await fetch("/api/comptable/rapprochement", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "auto_lettrage_bnq", societe_id: societeId }),
+        body: JSON.stringify({ action: "sync_lettrage", societe_id: societeId }),
       })
       const d = await res.json()
-      alert(`${d.lettered || 0} paire(s) d'écritures lettrées automatiquement`)
-      load()
-    } catch { alert("Erreur auto-lettrage") }
+      if (!res.ok) {
+        showToast(`❌ ${d.error || 'Erreur synchronisation'}`, 'error')
+      } else {
+        const parts: string[] = []
+        if ((d.pairs_lettered || 0) > 0) parts.push(`${d.pairs_lettered} écriture(s) synchronisée(s)`)
+        if ((d.bnq_created || 0) > 0) parts.push(`${d.bnq_created} BNQ créée(s)`)
+        if ((d.already_lettered || 0) > 0) parts.push(`${d.already_lettered} déjà à jour`)
+        const errCount = Array.isArray(d.errors) ? d.errors.length : 0
+        if (errCount > 0) parts.push(`${errCount} non traitée(s)`)
+        const total = (d.pairs_lettered || 0) + (d.bnq_created || 0)
+        showToast(total > 0 ? `✅ ${parts.join(' · ')}` : (parts.length ? `ℹ️ ${parts.join(' · ')}` : 'Aucune synchronisation à faire'))
+      }
+      await load()
+    } catch { showToast("Erreur réseau — synchronisation échouée", 'error') }
     finally { setAutoLettraging(false) }
   }
 
@@ -1713,15 +1730,27 @@ Voulez-vous vraiment continuer ?`
               Elles sont utilisées pour la clôture comptable.
             </p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={handleGenerateEcritures} disabled={generatingEcritures}>
-              {generatingEcritures ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : null}
-              {generatingEcritures ? "Génération..." : "Générer écritures BNQ"}
-            </Button>
-            <Button variant="outline" size="sm" onClick={handleAutoLettrage} disabled={autoLettraging}>
-              <Zap className={`w-4 h-4 mr-1 ${autoLettraging ? "animate-spin" : ""}`} />
-              {autoLettraging ? "Analyse..." : "Auto-lettrage"}
-            </Button>
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={handleGenerateEcritures} disabled={generatingEcritures}>
+                {generatingEcritures ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : null}
+                {generatingEcritures ? "Génération..." : "Générer écritures BNQ"}
+              </Button>
+              <Button
+                onClick={handleAutoLettrage}
+                disabled={autoLettraging || !societeId}
+                className="bg-[#0B0F2E] hover:bg-[#1a1f4a] text-white"
+                size="sm"
+              >
+                {autoLettraging
+                  ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" />Synchronisation…</>
+                  : <><span className="mr-1">🔄</span>Tout synchroniser automatiquement</>
+                }
+              </Button>
+            </div>
+            <p className="text-[11px] text-gray-500 italic max-w-xs text-right">
+              Met à jour les écritures comptables pour refléter les paiements déjà confirmés.
+            </p>
           </div>
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">

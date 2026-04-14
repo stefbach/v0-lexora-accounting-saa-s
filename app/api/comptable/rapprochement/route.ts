@@ -1623,6 +1623,187 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, lettered: letteredCount })
     }
 
+    // === SYNC LETTRAGE — Tout synchroniser automatiquement ====================
+    //
+    // For each facture marked statut='paye' in this société:
+    //   1. Find its ACH/VTE ecriture (by facture_id — migration 133 — or by
+    //      numero_piece = numero_facture as a fallback).
+    //   2. Find the BNQ counterpart. If absent AND the facture carries a
+    //      rapproche_date, CREATE a compensating BNQ ecriture using the
+    //      montant_mur and the dossier's dedicated banque (512).
+    //   3. Letter the ACH and BNQ entries together with a fresh R### code
+    //      (next auto-number). Skip pairs already lettered.
+    //
+    // This replaces what an accountant would do by hand at month end to
+    // close the loop between factures.paye and the ledger. Idempotent:
+    // rows already lettered are skipped.
+    // ========================================================================
+    if (action === 'sync_lettrage') {
+      const { societe_id: socId } = body
+      if (!socId) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
+
+      const { data: dossierRow } = await supabase
+        .from('dossiers').select('id').eq('societe_id', socId).limit(1).maybeSingle()
+      if (!dossierRow) return NextResponse.json({ error: 'Aucun dossier' }, { status: 404 })
+      const dossierId = dossierRow.id
+
+      // Fetch paid factures for this société.
+      const { data: paidFactures } = await supabase
+        .from('factures')
+        .select('id, numero_facture, montant_ttc, montant_mur, devise, date_facture, rapproche_date, rapproche_releve_id, rapproche_transaction_idx, tiers, type_facture')
+        .eq('societe_id', socId)
+        .eq('statut', 'paye')
+
+      let pairsLettered = 0
+      let pairsCreatedBnq = 0
+      let alreadyLettered = 0
+      const errors: Array<{ facture_id: string; reason: string }> = []
+
+      // Find the highest existing "R###" code so we generate non-colliding ones.
+      const { data: existingLettres } = await supabase
+        .from('ecritures_comptables')
+        .select('lettre')
+        .eq('dossier_id', dossierId)
+        .not('lettre', 'is', null)
+        .ilike('lettre', 'R%')
+      let maxR = 0
+      for (const r of existingLettres || []) {
+        const m = String((r as any).lettre || '').match(/^R(\d+)$/i)
+        if (m) maxR = Math.max(maxR, parseInt(m[1], 10))
+      }
+      const nextCode = (): string => {
+        maxR += 1
+        return `R${String(maxR).padStart(3, '0')}`
+      }
+
+      for (const f of paidFactures || []) {
+        try {
+          // 1. Find ACH/VTE ecriture — by facture_id first, fallback to numero_piece.
+          let achRow: any = null
+          {
+            const { data } = await supabase.from('ecritures_comptables')
+              .select('id, compte, debit, credit, date_ecriture, libelle, lettre')
+              .eq('dossier_id', dossierId).eq('facture_id', f.id)
+              .or('compte.like.401%,compte.like.411%')
+              .limit(1).maybeSingle()
+            if (data) achRow = data
+          }
+          if (!achRow && f.numero_facture) {
+            const { data } = await supabase.from('ecritures_comptables')
+              .select('id, compte, debit, credit, date_ecriture, libelle, lettre')
+              .eq('dossier_id', dossierId)
+              .eq('numero_piece', f.numero_facture)
+              .or('compte.like.401%,compte.like.411%')
+              .limit(1).maybeSingle()
+            if (data) achRow = data
+          }
+          if (!achRow) {
+            errors.push({ facture_id: f.id, reason: 'Aucune écriture ACH/VTE trouvée' })
+            continue
+          }
+
+          // 2. Find BNQ counterpart on the 401/411 account, opposite direction,
+          //    same amount ±2%, no lettre yet, and (if possible) already linked
+          //    to this facture.
+          const achDebit = Number(achRow.debit) || 0
+          const achCredit = Number(achRow.credit) || 0
+          const montant = Math.max(achDebit, achCredit)
+          if (montant <= 0) {
+            errors.push({ facture_id: f.id, reason: 'Montant ACH = 0' })
+            continue
+          }
+          const minAmt = Math.round(montant * 0.98 * 100) / 100
+          const maxAmt = Math.round(montant * 1.02 * 100) / 100
+          const bnqOppositeCol = achDebit > 0 ? 'credit' : 'debit'
+
+          let bnqRow: any = null
+          // Primary lookup: BNQ journal, same 401/411 account, opposite direction.
+          {
+            const { data } = await supabase.from('ecritures_comptables')
+              .select('id, lettre, debit, credit, date_ecriture, libelle, facture_id')
+              .eq('dossier_id', dossierId)
+              .eq('journal', 'BNQ')
+              .eq('compte', achRow.compte)
+              .gte(bnqOppositeCol, minAmt)
+              .lte(bnqOppositeCol, maxAmt)
+              .order('date_ecriture', { ascending: false })
+              .limit(5)
+            // Prefer entries already linked to this facture_id.
+            const linked = (data || []).find((e: any) => e.facture_id === f.id)
+            const unletteredAny = (data || []).find((e: any) => !e.lettre)
+            bnqRow = linked || unletteredAny || null
+          }
+
+          // 3. If no BNQ counterpart exists AND the facture is rapprochée,
+          //    create one from the facture's known paiement info. This is
+          //    the "synchronise" part — we generate the ledger entry that
+          //    should have existed after rapprochement.
+          if (!bnqRow && f.rapproche_date && montant > 0) {
+            const montantMur = Number(f.montant_mur) || montant
+            const newBnq = {
+              dossier_id: dossierId,
+              date_ecriture: f.rapproche_date,
+              journal: 'BNQ',
+              numero_piece: f.numero_facture || null,
+              compte: achRow.compte, // 401 or 411, same side as ACH
+              libelle: `Paiement ${f.tiers || ''} ${f.numero_facture || ''}`.trim(),
+              debit: achDebit > 0 ? 0 : montantMur,
+              credit: achDebit > 0 ? montantMur : 0,
+              piece_justificative: f.id,
+              facture_id: f.id,
+            }
+            const { data: created, error: createErr } = await supabase
+              .from('ecritures_comptables').insert(newBnq).select('id, lettre, debit, credit').maybeSingle()
+            if (createErr) {
+              errors.push({ facture_id: f.id, reason: `BNQ insert failed: ${createErr.message}` })
+              continue
+            }
+            bnqRow = created
+            pairsCreatedBnq++
+          }
+
+          if (!bnqRow) {
+            errors.push({ facture_id: f.id, reason: 'Aucune écriture BNQ et pas de rapproche_date pour la générer' })
+            continue
+          }
+
+          // 4. Letter both entries. Skip if both already lettered with the same code.
+          if (achRow.lettre && bnqRow.lettre && achRow.lettre === bnqRow.lettre) {
+            alreadyLettered++
+            continue
+          }
+          const code = achRow.lettre || bnqRow.lettre || nextCode()
+          const now = new Date().toISOString().slice(0, 10)
+          await supabase.from('ecritures_comptables')
+            .update({ lettre: code, date_lettrage: now })
+            .in('id', [achRow.id, bnqRow.id])
+            .is('lettre', null)
+          // If one was already lettered, ensure both share the code.
+          await supabase.from('ecritures_comptables')
+            .update({ lettre: code, date_lettrage: now })
+            .in('id', [achRow.id, bnqRow.id])
+            .neq('lettre', code)
+          // Backfill facture_id on the BNQ if it wasn't set.
+          await supabase.from('ecritures_comptables')
+            .update({ facture_id: f.id })
+            .eq('id', bnqRow.id)
+            .is('facture_id', null)
+          pairsLettered++
+        } catch (err: any) {
+          errors.push({ facture_id: f.id, reason: err?.message || 'unknown error' })
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        pairs_lettered: pairsLettered,
+        bnq_created: pairsCreatedBnq,
+        already_lettered: alreadyLettered,
+        errors,
+        summary: `${pairsLettered} paire(s) lettrée(s)${pairsCreatedBnq > 0 ? ` · ${pairsCreatedBnq} écriture(s) BNQ créée(s)` : ''}${alreadyLettered > 0 ? ` · ${alreadyLettered} déjà synchronisée(s)` : ''}`,
+      })
+    }
+
     // === LETTRER ECRITURES COMPTABLES (401/411) ===
     if (action === 'lettrer_ecritures') {
       const { ecriture_ids, societe_id: socId } = body

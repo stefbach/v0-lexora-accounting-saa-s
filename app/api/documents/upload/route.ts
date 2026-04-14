@@ -1323,12 +1323,22 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
           notes: extraction.analyse_tva || (tvaApplicable ? `TVA ${tauxTva}% applicable` : 'Pas de TVA'),
         }
 
-        const { error: factureError } = await supabase.from('factures').insert(factureData)
+        const { data: insertedFacture, error: factureError } = await supabase.from('factures').insert(factureData).select('id').maybeSingle()
         if (factureError) {
           factureCreateError = factureError.message
           console.error('[upload] facture insert error:', factureError.message)
         } else {
           factureCreated = true
+          // Migration 133 — link ecritures to this facture via facture_id so
+          // auto-letterage can find the pair reliably. Ecritures were just
+          // inserted above with piece_justificative = doc.id.
+          if (insertedFacture?.id && finalDossierId) {
+            await supabase.from('ecritures_comptables')
+              .update({ facture_id: insertedFacture.id })
+              .eq('dossier_id', finalDossierId)
+              .eq('piece_justificative', doc.id)
+              .is('facture_id', null)
+          }
           console.log(`[upload] Facture ${typeDocument} created: ${extraction.numero_reference || 'sans numéro'} — ${montantTTC} ${devise}`)
         }
       }
