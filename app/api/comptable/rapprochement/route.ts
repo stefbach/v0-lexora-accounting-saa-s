@@ -3019,8 +3019,10 @@ export async function POST(request: Request) {
     // Classe manuellement une transaction "à vérifier" avec une nature comptable,
     // crée les écritures BNQ associées, ET sauvegarde le pattern (tiers) comme
     // règle de classification pour appliquer automatiquement la prochaine fois.
+    // Si apply_to_similar=true : classe aussi TOUTES les autres tx de la société
+    // avec le même tiers (propagation retroactive en 1 clic).
     if (action === 'classer_transaction') {
-      const { transaction_id, releve_id, societe_id, classification, learn_pattern } = body
+      const { transaction_id, releve_id, societe_id, classification, learn_pattern, apply_to_similar } = body
       if (!releve_id || !transaction_id || !classification) {
         return NextResponse.json({ error: 'releve_id, transaction_id, classification requis' }, { status: 400 })
       }
@@ -3191,6 +3193,87 @@ export async function POST(request: Request) {
         console.warn('[classer_transaction] auto-learn exception:', e.message)
       }
 
+      // === PROPAGATION : appliquer la classification à toutes les tx similaires ===
+      // Trouve toutes les autres tx de la société avec le même tiers et les
+      // classifie identiquement (non_identifie + a_verifier + rapproche sans facture).
+      let nbPropagated = 0
+      let propagationError: string | null = null
+      if (apply_to_similar) {
+        try {
+          const currentTx = txs[txIdx]
+          const targetTiers = (currentTx.tiers_detecte || '').trim().toLowerCase()
+          if (!targetTiers || targetTiers.length < 3) {
+            propagationError = 'Tiers trop court pour propager'
+          } else {
+            // Fetch all releves of this société
+            const { data: allReleves } = await supabase
+              .from('releves_bancaires')
+              .select('id, transactions_json')
+              .eq('societe_id', societe_id)
+            for (const rel of allReleves || []) {
+              const relTxs = [...(rel.transactions_json || [])]
+              let changed = false
+              for (let i = 0; i < relTxs.length; i++) {
+                const t = relTxs[i]
+                // Skip current tx (deja traitee)
+                if (rel.id === releve_id && i === txIdx) continue
+                // Skip si deja classifiee par regle ou facture
+                if (t.facture_id) continue
+                if (t.matched_type?.startsWith('rule_')) continue
+                if (t.matched_type === classification) continue // deja meme classification
+                // Match sur tiers
+                const txTiers = (t.tiers_detecte || '').trim().toLowerCase()
+                if (txTiers !== targetTiers) continue
+                // Classifier cette tx
+                const propCode = `CL${String(Date.now()).slice(-6)}${i}`
+                relTxs[i] = {
+                  ...t,
+                  statut: 'rapproche',
+                  matched_type: classification,
+                  lettre: propCode,
+                  note: `Propage depuis ${transaction_id} (classifie manuellement)`,
+                }
+                changed = true
+                nbPropagated++
+                // Creer ecritures BNQ pour cette tx
+                if (dossier) {
+                  const txAmt = Math.max(Number(t.debit) || 0, Number(t.credit) || 0)
+                  const isOut = (Number(t.debit) || 0) > 0
+                  const propRef = `CL-${rel.id}-${i}`
+                  try {
+                    await supabase.from('ecritures_comptables_v2').insert([
+                      {
+                        dossier_id: dossier.id, societe_id,
+                        date_ecriture: t.date || new Date().toISOString().split('T')[0],
+                        journal: 'BNQ', numero_compte: compte,
+                        libelle: `${classification} — ${(t.tiers_detecte || t.libelle || '').substring(0, 60)}`,
+                        debit_mur: isOut ? txAmt : 0, credit_mur: isOut ? 0 : txAmt,
+                        lettre: propCode, ref_folio: propRef,
+                      },
+                      {
+                        dossier_id: dossier.id, societe_id,
+                        date_ecriture: t.date || new Date().toISOString().split('T')[0],
+                        journal: 'BNQ', numero_compte: '512',
+                        libelle: `Banque — ${(t.tiers_detecte || '').substring(0, 25)}`,
+                        debit_mur: isOut ? 0 : txAmt, credit_mur: isOut ? txAmt : 0,
+                        lettre: propCode, ref_folio: propRef,
+                      },
+                    ])
+                  } catch { /* doublon possible, best effort */ }
+                }
+              }
+              if (changed) {
+                await supabase.from('releves_bancaires').update({ transactions_json: relTxs }).eq('id', rel.id)
+              }
+            }
+            console.log(`[classer_transaction] propagation: ${nbPropagated} tx classees avec tiers "${targetTiers}" = ${classification}`)
+          }
+        } catch (e: any) {
+          propagationError = e.message
+          console.error('[classer_transaction] propagation FAILED:', e)
+        }
+      }
+
       return NextResponse.json({
         success: true,
         lettre: code,
@@ -3198,9 +3281,11 @@ export async function POST(request: Request) {
         nb_ecritures: nbEcritures,
         ecritures_already_existed: ecrituresAlreadyExisted,
         pattern_saved: patternSaved,
+        nb_propagated: nbPropagated,
         warnings: {
           ecritures: ecrituresError,
           learn: learnError,
+          propagation: propagationError,
         },
       })
     }

@@ -733,12 +733,14 @@ Voulez-vous vraiment continuer ?`
   }
 
   // Classer une transaction "à vérifier" en un type comptable
-  const handleClasserTx = async (tx: any, classification: string) => {
+  // applyToSimilar=true : propage la meme classification a toutes les autres
+  // tx de la societe avec le meme tiers (retroactif, 1 clic)
+  const handleClasserTx = async (tx: any, classification: string, applyToSimilar: boolean = false) => {
     if (!societeId) {
       setToast({ type: 'error', message: 'Aucune société sélectionnée' })
       return
     }
-    setToast({ type: 'success', message: `Classification "${classification}"…` })
+    setToast({ type: 'success', message: applyToSimilar ? `Classification + propagation…` : `Classification "${classification}"…` })
     try {
       const res = await fetch("/api/comptable/rapprochement", {
         method: "POST",
@@ -750,7 +752,7 @@ Voulez-vous vraiment continuer ?`
           releve_id: tx.releve_id,
           societe_id: societeId,
           classification,
-          // NEW: sauvegarder en règle pour auto-application future (auto-learn)
+          apply_to_similar: applyToSimilar,
           learn_pattern: {
             tiers: tx.tiers_detecte || null,
             libelle: tx.libelle || null,
@@ -772,6 +774,8 @@ Voulez-vous vraiment continuer ?`
       else if (data.warnings?.ecritures) parts.push(`⚠ écritures: ${data.warnings.ecritures}`)
       if (data.pattern_saved) parts.push('règle auto-apprise')
       else if (data.warnings?.learn) parts.push(`⚠ auto-learn: ${data.warnings.learn}`)
+      if (data.nb_propagated > 0) parts.push(`⚡ ${data.nb_propagated} tx similaires classées automatiquement`)
+      else if (data.warnings?.propagation) parts.push(`⚠ propagation: ${data.warnings.propagation}`)
       setToast({
         type: (data.warnings?.ecritures || data.warnings?.learn) ? 'error' : 'success',
         message: parts.join(' · '),
@@ -1668,45 +1672,67 @@ Voulez-vous vraiment continuer ?`
                       <TableCell><Badge className="bg-amber-100 text-amber-700 text-[10px]">{tx.matched_type?.replace(/_/g, ' ') || 'inconnu'}</Badge></TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="outline" size="sm" className="h-7 text-xs gap-1">
-                                Classer <ChevronDown className="w-3 h-3" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-64">
-                              <DropdownMenuLabel className="text-xs">Nature de la transaction</DropdownMenuLabel>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem onClick={() => handleClasserTx(tx, 'frais_bancaires')}>
-                                <span className="text-xs font-mono text-gray-500 mr-2">627</span>Frais bancaires
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleClasserTx(tx, 'paiement_mra')}>
-                                <span className="text-xs font-mono text-gray-500 mr-2">447</span>Paiement MRA (impôts)
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleClasserTx(tx, 'salaire')}>
-                                <span className="text-xs font-mono text-gray-500 mr-2">421</span>Salaire net
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleClasserTx(tx, 'compte_courant_associe')}>
-                                <span className="text-xs font-mono text-gray-500 mr-2">455</span>Compte courant associé
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleClasserTx(tx, 'avance_personnel')}>
-                                <span className="text-xs font-mono text-gray-500 mr-2">425</span>Avance au personnel
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleClasserTx(tx, 'virement_interne')}>
-                                <span className="text-xs font-mono text-gray-500 mr-2">580</span>Virement interne
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleClasserTx(tx, 'charge_diverse')}>
-                                <span className="text-xs font-mono text-gray-500 mr-2">658</span>Charge diverse
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleClasserTx(tx, 'autre')}>
-                                <span className="text-xs font-mono text-gray-500 mr-2">471</span>À classer plus tard
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem onClick={() => { setDialogTab('factures'); setLinkDialog(tx) }}>
-                                <Link2 className="w-4 h-4 mr-2 text-blue-600" />Lettrer avec une facture
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          {(() => {
+                            // Compte combien d autres tx ont le meme tiers (pour UI "+N similaires")
+                            const myTiers = (tx.tiers_detecte || '').trim().toLowerCase()
+                            const nbSimilaires = myTiers.length >= 3
+                              ? paidNoInvoice.filter((o: any) =>
+                                  o.id !== tx.id
+                                  && ((o.tiers_detecte || '').trim().toLowerCase() === myTiers)
+                                ).length
+                              : 0
+                            const classifications = [
+                              { code: 'frais_bancaires',        label: 'Frais bancaires',         compte: '627' },
+                              { code: 'paiement_mra',           label: 'Paiement MRA (impôts)',   compte: '447' },
+                              { code: 'salaire',                label: 'Salaire net',             compte: '421' },
+                              { code: 'compte_courant_associe', label: 'Compte courant associé',  compte: '455' },
+                              { code: 'avance_personnel',       label: 'Avance au personnel',     compte: '425' },
+                              { code: 'virement_interne',       label: 'Virement interne',        compte: '580' },
+                              { code: 'charge_diverse',         label: 'Charge diverse',          compte: '658' },
+                              { code: 'autre',                  label: 'À classer plus tard',     compte: '471' },
+                            ]
+                            return (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="outline" size="sm" className="h-7 text-xs gap-1">
+                                    Classer{nbSimilaires > 0 ? ` (+${nbSimilaires})` : ''} <ChevronDown className="w-3 h-3" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-80">
+                                  <DropdownMenuLabel className="text-xs">Classer cette transaction</DropdownMenuLabel>
+                                  <DropdownMenuSeparator />
+                                  {classifications.map(c => (
+                                    <DropdownMenuItem key={c.code} onClick={() => handleClasserTx(tx, c.code, false)}>
+                                      <span className="text-xs font-mono text-gray-500 mr-2">{c.compte}</span>{c.label}
+                                    </DropdownMenuItem>
+                                  ))}
+                                  {nbSimilaires > 0 && (
+                                    <>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuLabel className="text-xs text-amber-700">
+                                        ⚡ Classer + propager à {nbSimilaires} tx similaires (même tiers)
+                                      </DropdownMenuLabel>
+                                      {classifications.map(c => (
+                                        <DropdownMenuItem
+                                          key={`prop-${c.code}`}
+                                          onClick={() => handleClasserTx(tx, c.code, true)}
+                                          className="text-amber-700"
+                                        >
+                                          <Zap className="w-3 h-3 mr-1 text-amber-600" />
+                                          <span className="text-xs font-mono text-gray-500 mr-2">{c.compte}</span>
+                                          {c.label} <span className="ml-auto text-[10px] text-amber-600">+{nbSimilaires}</span>
+                                        </DropdownMenuItem>
+                                      ))}
+                                    </>
+                                  )}
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem onClick={() => { setDialogTab('factures'); setLinkDialog(tx) }}>
+                                    <Link2 className="w-4 h-4 mr-2 text-blue-600" />Lettrer avec une facture
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            )
+                          })()}
                           <Button variant="ghost" size="sm" onClick={() => handleUnlink(tx)} title="Délettrer">
                             <Unlink className="w-4 h-4 text-amber-600" />
                           </Button>
