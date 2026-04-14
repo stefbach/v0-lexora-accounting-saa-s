@@ -69,6 +69,15 @@ export default function ClientRapprochementPage() {
   const [smartResult, setSmartResult] = useState<any>(null)
   const [smartProposals, setSmartProposals] = useState<any[]>([])
   const [smartDialog, setSmartDialog] = useState<'summary' | 'list' | null>(null)
+
+  // Auto-classer preview dialog (shown before running the deterministic agent)
+  const [autoPreview, setAutoPreview] = useState<null | {
+    salaires: { count: number; total: number }
+    mra: { count: number; total: number }
+    frais: { count: number; total: number }
+    internes: { count: number; total: number }
+    remboursements: { count: number; total: number }
+  }>(null)
   const [selectedSmartKeys, setSelectedSmartKeys] = useState<Set<string>>(new Set())
   const [applyingSelection, setApplyingSelection] = useState(false)
 
@@ -211,6 +220,67 @@ Voulez-vous vraiment continuer ?`
   const [rejectedProposals, setRejectedProposals] = useState<Set<string>>(new Set())
   const [applyingKey, setApplyingKey] = useState<string | null>(null)
   const [applyingBatch, setApplyingBatch] = useState(false)
+
+  /**
+   * Compute a preview of what the deterministic agent will classify from
+   * the current unmatched-transactions list — using the same rules the
+   * server applies. Values here are indicative; the server remains the
+   * source of truth when actually applying.
+   */
+  const computeAutoPreview = () => {
+    const u = (transactions as any[]).filter((t: any) =>
+      t.statut !== 'rapproche' && t.statut !== 'interne' && t.statut !== 'propose' && t.statut !== 'a_verifier'
+    )
+    const amtOf = (t: any) => Math.max(Number(t.debit) || 0, Number(t.credit) || 0)
+    const lib = (t: any) => String(t.libelle || '').toLowerCase()
+    const tiers = (t: any) => String(t.tiers_detecte || '').toLowerCase()
+
+    const salaires = { count: 0, total: 0 }
+    const mra = { count: 0, total: 0 }
+    const frais = { count: 0, total: 0 }
+    const internes = { count: 0, total: 0 }
+    const remboursements = { count: 0, total: 0 }
+
+    for (const t of u) {
+      const a = amtOf(t)
+      const L = lib(t)
+      const T = tiers(t)
+
+      // Remboursement perso (RBT CC STEPHANE HENRI BACH)
+      if (L.includes('rbt cc') || T.includes('stephane henri bach')) {
+        remboursements.count++; remboursements.total += a; continue
+      }
+      // Virement interne (IB Own Account Transfer, DDS↔OCC)
+      if (L.includes('ib own account') || L.includes('own account transfer') || L.includes('virement interne')) {
+        internes.count++; internes.total += a; continue
+      }
+      // MRA
+      if (T.includes('mauritius revenue') || L.includes('direct debit') && L.includes('mra')) {
+        mra.count++; mra.total += a; continue
+      }
+      // Salaires (bulk ou individuels marqués PERSONNEL/SALARY)
+      if (L.includes('salary') || L.includes('salaire') || (L.includes('bulk payment') && (L.includes('personnel') || L.includes('salary')))
+          || T === 'personnel' || T === 'salary') {
+        salaires.count++; salaires.total += a; continue
+      }
+      // Frais bancaires (MCB/MASTERCARD, petits montants)
+      const feeKeywords = ['fee', 'subs', 'interest', 'penalty', 'service charge', 'commission', 'frais']
+      if ((T.includes('mcb') || T.includes('mastercard') || feeKeywords.some(k => L.includes(k))) && a > 0 && a < 2000) {
+        frais.count++; frais.total += a; continue
+      }
+    }
+    return { salaires, mra, frais, internes, remboursements }
+  }
+
+  const openAutoClasserPreview = () => {
+    if (!societeId) return
+    setAutoPreview(computeAutoPreview())
+  }
+
+  const confirmAutoClasser = () => {
+    setAutoPreview(null)
+    openAgentIA()
+  }
 
   // Open chat + auto-launch full analysis
   const openAgentIA = () => {
@@ -865,6 +935,174 @@ Voulez-vous vraiment continuer ?`
         </Card>
       </details>
 
+      {/* ── Section "💳 Factures fournisseurs" ─────────────────────────────
+          Statut calculé par facture, tenant compte de la présence d'un
+          relevé pour le mois de paiement. Ne montre JAMAIS "En retard"
+          quand le relevé du mois n'est pas disponible. */}
+      {(() => {
+        const allFactures = (data?.factures || []) as any[]
+        const releves = (data?.releves || []) as any[]
+        if (allFactures.length === 0 && !selectedMois) return null
+
+        // Helper: is there a releve for a given YYYY-MM on this société?
+        const monthHasReleve = (ym: string | null | undefined): boolean => {
+          if (!ym) return false
+          return releves.some((r: any) => {
+            const p = String(r.periode || '').slice(0, 7)
+            if (p === ym) return true
+            if (r.date_debut && r.date_fin) {
+              return String(r.date_debut).slice(0, 7) <= ym && ym <= String(r.date_fin).slice(0, 7)
+            }
+            return false
+          })
+        }
+
+        // Filter factures by selectedMois (date_facture) + selectedPeriode.
+        // Fallbacks: keep 'paye' and 'en_attente'/'partiel'/'retard'.
+        const factureMois = (f: any): string | null =>
+          f.date_facture ? String(f.date_facture).slice(0, 7) : null
+        const fournFactures = allFactures
+          .filter((f: any) => f.type_facture !== 'client') // suppliers only
+          .filter((f: any) => !selectedMois || factureMois(f) === selectedMois)
+
+        if (fournFactures.length === 0) return null
+
+        // Compute display status per facture.
+        type FactureRow = {
+          f: any
+          status: 'paye' | 'releve_manquant' | 'en_attente' | 'en_retard'
+          label: string
+          badgeCls: string
+          payDate?: string | null
+        }
+        const today = new Date().toISOString().slice(0, 10)
+        const rows: FactureRow[] = fournFactures.map((f: any) => {
+          const isPaye = f.statut === 'paye'
+          const echeance = f.date_echeance ? String(f.date_echeance).slice(0, 10) : null
+          const payMonth = isPaye && f.rapproche_date
+            ? String(f.rapproche_date).slice(0, 7)
+            : (factureMois(f))
+          const releveExists = monthHasReleve(payMonth)
+
+          if (isPaye) {
+            return {
+              f, status: 'paye',
+              label: '✅ Payé',
+              badgeCls: 'bg-green-100 text-green-700 border-green-200',
+              payDate: f.rapproche_date || null,
+            }
+          }
+          // Not paid yet — decide based on releve availability
+          if (!releveExists) {
+            return {
+              f, status: 'releve_manquant',
+              label: '📋 Relevé manquant',
+              badgeCls: 'bg-orange-100 text-orange-700 border-orange-200',
+            }
+          }
+          if (echeance && echeance < today) {
+            return {
+              f, status: 'en_retard',
+              label: '🔴 En retard',
+              badgeCls: 'bg-red-100 text-red-700 border-red-200',
+            }
+          }
+          return {
+            f, status: 'en_attente',
+            label: '⏳ En attente',
+            badgeCls: 'bg-amber-100 text-amber-700 border-amber-200',
+          }
+        })
+
+        const counts = {
+          paye: rows.filter(r => r.status === 'paye').length,
+          missingReleve: rows.filter(r => r.status === 'releve_manquant').length,
+          attente: rows.filter(r => r.status === 'en_attente').length,
+          retard: rows.filter(r => r.status === 'en_retard').length,
+        }
+
+        return (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-[#0B0F2E] flex items-center gap-2">
+                <span>💳</span> Factures fournisseurs
+                <span className="text-xs font-normal text-gray-500 ml-2">
+                  {rows.length} facture{rows.length > 1 ? 's' : ''}{selectedMois ? ` pour ${selectedMois}` : ''}
+                </span>
+              </CardTitle>
+              <div className="flex flex-wrap gap-3 text-xs text-gray-500 pt-1">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" />{counts.paye} payées</span>
+                {counts.missingReleve > 0 && <span className="flex items-center gap-1 text-orange-700"><span className="w-2 h-2 rounded-full bg-orange-500" />{counts.missingReleve} relevé manquant</span>}
+                {counts.attente > 0 && <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" />{counts.attente} en attente</span>}
+                {counts.retard > 0 && <span className="flex items-center gap-1 text-red-700"><span className="w-2 h-2 rounded-full bg-red-500" />{counts.retard} en retard</span>}
+              </div>
+            </CardHeader>
+            <CardContent className="p-0 overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Fournisseur</TableHead>
+                    <TableHead>N° Facture</TableHead>
+                    <TableHead className="text-right">Montant</TableHead>
+                    <TableHead>Statut</TableHead>
+                    <TableHead>Paiement</TableHead>
+                    <TableHead>Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rows.slice(0, 50).map(({ f, label, badgeCls, payDate, status }) => (
+                    <TableRow key={f.id}>
+                      <TableCell className="text-sm font-medium">
+                        <TruncatedCell text={f.tiers || '—'} />
+                      </TableCell>
+                      <TableCell className="text-sm font-mono text-gray-600">
+                        {f.numero_facture || '—'}
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        {fmt(Number(f.montant_ttc) || Number(f.montant_mur) || 0)}{' '}
+                        <span className="text-xs text-gray-400">{f.devise || 'MUR'}</span>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={`border ${badgeCls} font-medium`}>
+                          {label}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs text-gray-500">
+                        {status === 'paye' && payDate ? `Virement du ${formatDate(payDate)}` : '—'}
+                      </TableCell>
+                      <TableCell>
+                        {status !== 'paye' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() => {
+                              // Pre-open manual lettrage dialog on the unmatched side
+                              setDialogTab('factures')
+                              // Find a matching unmatched transaction to pre-fill
+                              const prefill = unmatched.find((t: any) =>
+                                Number(t.debit) > 0 &&
+                                Math.abs(Number(t.debit) - (Number(f.montant_ttc) || 0)) < (Number(f.montant_ttc) || 1) * 0.05
+                              )
+                              setLinkDialog(prefill || { preselected_facture_id: f.id })
+                            }}
+                          >
+                            Lettrer
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {rows.length > 50 && (
+                <p className="text-xs text-gray-400 p-3">… et {rows.length - 50} autres factures</p>
+              )}
+            </CardContent>
+          </Card>
+        )
+      })()}
+
       {/* ── Global progress bar ───────────────────────────────────────────── */}
       {transactions.length > 0 && (
         <Card className="border border-gray-100 shadow-sm">
@@ -917,6 +1155,45 @@ Voulez-vous vraiment continuer ?`
           </Select>
         </div>
       </div>
+
+      {/* ── Statut du relevé pour le mois sélectionné ──────────────────── */}
+      {selectedMois && (() => {
+        const releves = data?.releves || []
+        const releveForMonth = releves.find((r: any) => {
+          const p = String(r.periode || '').slice(0, 7)
+          if (p === selectedMois) return true
+          // Fallback: match by date_debut / date_fin range
+          if (r.date_debut && r.date_fin) {
+            return String(r.date_debut).slice(0, 7) <= selectedMois
+              && selectedMois <= String(r.date_fin).slice(0, 7)
+          }
+          return false
+        })
+        const [y, m] = selectedMois.split('-')
+        const MOIS_FR = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
+        const moisLabel = `${MOIS_FR[parseInt(m) - 1]} ${y}`
+
+        if (releveForMonth) {
+          return (
+            <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 flex items-center gap-2 text-sm">
+              <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0" />
+              <span className="text-green-900">
+                ✅ Relevé de <strong>{moisLabel}</strong> importé — rapprochement possible pour ce mois.
+              </span>
+            </div>
+          )
+        }
+        return (
+          <div className="rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 flex items-start gap-2 text-sm">
+            <AlertCircle className="w-4 h-4 text-orange-600 flex-shrink-0 mt-0.5" />
+            <div className="text-orange-900">
+              <strong>⚠ Relevé bancaire de {moisLabel} non disponible.</strong>{" "}
+              Les factures de ce mois ne peuvent pas être vérifiées automatiquement.
+              Importez le relevé dans <a href="/client/documents" className="underline font-medium">Documents & OCR</a> pour continuer.
+            </div>
+          </div>
+        )
+      })()}
 
       {/* KPIs — 6 catégories claires */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
@@ -1192,7 +1469,7 @@ Voulez-vous vraiment continuer ?`
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <Button
-                onClick={openAgentIA}
+                onClick={openAutoClasserPreview}
                 disabled={chatLoading}
                 className="bg-[#D4AF37] text-[#0B0F2E] hover:bg-[#C9A82E]"
               >
@@ -1429,44 +1706,10 @@ Voulez-vous vraiment continuer ?`
               )
             })()}
 
-            {/* Sub-section B: Paiements sans facture (non rapprochées) */}
-            {unmatched.length > 0 && (
-              <div className="space-y-2 pt-3 border-t">
-                <p className="text-sm font-semibold text-amber-800">
-                  💳 Paiements bancaires sans facture ({unmatched.length})
-                </p>
-                <p className="text-xs text-gray-500">Ces transactions n'ont aucune facture correspondante en base. Vous pouvez les lettrer manuellement ou les classer.</p>
-                {unmatched.slice(0, 5).map((tx: any) => (
-                  <div key={tx.id} className="flex items-center justify-between p-2 bg-amber-50 border border-amber-200 rounded text-sm">
-                    <div className="flex-1">
-                      <span className="font-medium">{tx.tiers_detecte || tx.libelle?.substring(0, 40) || '—'}</span>
-                      <span className="text-xs text-gray-500 ml-2">{formatDate(tx.date)}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold">{Number(tx.debit) > 0 ? `-${fmt(Number(tx.debit))}` : `+${fmt(Number(tx.credit))}`} {tx.devise}</span>
-                      <Button variant="outline" size="sm" className="h-6 text-xs" onClick={() => { setDialogTab("factures"); setLinkDialog(tx) }}>Lettrer</Button>
-                    </div>
-                  </div>
-                ))}
-                {unmatched.length > 5 && <p className="text-xs text-gray-400">... voir la section "Non rapprochées" ci-dessus pour la liste complète</p>}
-              </div>
-            )}
-
-            {/* Sub-section C: Résumé écritures 401 */}
-            {(() => {
-              const ecr401 = (data?.ecritures || []).filter((e: any) => (e.compte || '').startsWith('401') && !e.lettre)
-              if (ecr401.length === 0) return null
-              return (
-                <div className="space-y-2 pt-3 border-t">
-                  <p className="text-sm font-semibold text-gray-700">
-                    📒 Écritures 401 non lettrées ({ecr401.length})
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    Ces écritures fournisseur n'ont pas encore été lettrées avec leur paiement. Cliquez "Règles auto" pour tenter le lettrage automatique, ou utilisez la section lettrage ci-dessous.
-                  </p>
-                </div>
-              )
-            })()}
+            {/* Sub-sections B & C removed — the "Paiements bancaires sans facture"
+                list was a duplicate of the main "À classer" section above, and
+                the "Écritures 401 non lettrées" summary now lives in the
+                Avancé accordion below. */}
           </CardContent>
         </Card>
       )}
@@ -1547,6 +1790,85 @@ Voulez-vous vraiment continuer ?`
       )}
         </div>
       </details>
+
+      {/* Auto-classer les évidences — preview dialog */}
+      <Dialog open={!!autoPreview} onOpenChange={o => { if (!o) setAutoPreview(null) }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <span>✨</span> Auto-classer les évidences
+            </DialogTitle>
+          </DialogHeader>
+          {autoPreview && (() => {
+            const { salaires, mra, frais, internes, remboursements } = autoPreview
+            const total = salaires.count + mra.count + frais.count + internes.count + remboursements.count
+            const totalMontant = salaires.total + mra.total + frais.total + internes.total + remboursements.total
+            if (total === 0) {
+              return (
+                <div className="py-6 text-center text-sm text-gray-500">
+                  <CheckCircle2 className="w-8 h-8 mx-auto mb-2 text-green-500" />
+                  Aucune transaction évidente à classer automatiquement.
+                  Toutes les transactions non classées nécessitent une décision manuelle.
+                </div>
+              )
+            }
+            return (
+              <div className="space-y-3 py-2">
+                <p className="text-sm text-gray-600">
+                  Voici ce qui sera classé automatiquement :
+                </p>
+                <div className="space-y-2">
+                  {salaires.count > 0 && (
+                    <div className="flex items-center justify-between p-2.5 bg-blue-50 border border-blue-200 rounded">
+                      <span className="text-sm"><span className="mr-2">👥</span>{salaires.count} paiement{salaires.count > 1 ? 's' : ''} salaire{salaires.count > 1 ? 's' : ''}</span>
+                      <span className="font-mono text-sm font-semibold text-blue-900">{fmt(salaires.total)} MUR</span>
+                    </div>
+                  )}
+                  {mra.count > 0 && (
+                    <div className="flex items-center justify-between p-2.5 bg-purple-50 border border-purple-200 rounded">
+                      <span className="text-sm"><span className="mr-2">🏛️</span>{mra.count} paiement{mra.count > 1 ? 's' : ''} MRA</span>
+                      <span className="font-mono text-sm font-semibold text-purple-900">{fmt(mra.total)} MUR</span>
+                    </div>
+                  )}
+                  {frais.count > 0 && (
+                    <div className="flex items-center justify-between p-2.5 bg-amber-50 border border-amber-200 rounded">
+                      <span className="text-sm"><span className="mr-2">💳</span>{frais.count} frais bancaire{frais.count > 1 ? 's' : ''}</span>
+                      <span className="font-mono text-sm font-semibold text-amber-900">{fmt(frais.total)} MUR</span>
+                    </div>
+                  )}
+                  {internes.count > 0 && (
+                    <div className="flex items-center justify-between p-2.5 bg-gray-50 border border-gray-200 rounded">
+                      <span className="text-sm"><span className="mr-2">↔</span>{internes.count} virement{internes.count > 1 ? 's' : ''} interne{internes.count > 1 ? 's' : ''}</span>
+                      <span className="font-mono text-sm font-semibold text-gray-700">{fmt(internes.total)} MUR</span>
+                    </div>
+                  )}
+                  {remboursements.count > 0 && (
+                    <div className="flex items-center justify-between p-2.5 bg-indigo-50 border border-indigo-200 rounded">
+                      <span className="text-sm"><span className="mr-2">💼</span>{remboursements.count} remboursement{remboursements.count > 1 ? 's' : ''} personnel{remboursements.count > 1 ? 's' : ''}</span>
+                      <span className="font-mono text-sm font-semibold text-indigo-900">{fmt(remboursements.total)} MUR</span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center justify-between pt-2 border-t">
+                  <span className="text-sm font-semibold text-[#0B0F2E]">Total à classer : {total}</span>
+                  <span className="font-mono text-sm font-bold text-[#0B0F2E]">{fmt(totalMontant)} MUR</span>
+                </div>
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button variant="outline" onClick={() => setAutoPreview(null)}>Annuler</Button>
+                  <Button
+                    className="bg-[#D4AF37] text-[#0B0F2E] hover:bg-[#C9A82E]"
+                    onClick={confirmAutoClasser}
+                    disabled={chatLoading}
+                  >
+                    <span className="mr-2">✨</span>
+                    Confirmer — classer {total} transaction{total > 1 ? 's' : ''}
+                  </Button>
+                </div>
+              </div>
+            )
+          })()}
+        </DialogContent>
+      </Dialog>
 
       {/* Lettrage dialog */}
       <Dialog open={!!lettrageDialog} onOpenChange={o => { if (!o) { setLettrageDialog(null); setLettrageSelection(new Set()) } }}>
