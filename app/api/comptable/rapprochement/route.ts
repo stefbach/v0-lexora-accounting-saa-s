@@ -555,6 +555,12 @@ export async function POST(request: Request) {
           const conf = match.confidence
           const isGroup = match.factureIds.length > 1
           const reconcileDate = new Date().toISOString()
+          // FIX 1 — rapproche_date = date métier de la transaction, fallback aujourd'hui.
+          // Never block the update on a missing tx.date.
+          const payDate: string =
+            (entry.updatedTxs[txIdx]?.date as string | undefined) ||
+            (match.transaction as any)?.date ||
+            new Date().toISOString().split('T')[0]
 
           if (conf >= 0.60) {
             // High confidence → auto-apply
@@ -578,7 +584,7 @@ export async function POST(request: Request) {
                 statut: 'paye',
                 rapproche_releve_id: releveId,
                 rapproche_transaction_idx: txIdx,
-                rapproche_date: reconcileDate,
+                rapproche_date: payDate,
                 rapproche_source: 'auto_intelligent',
               }).eq('id', fId)
               if (updErr) {
@@ -726,7 +732,10 @@ export async function POST(request: Request) {
       // ═══════════════════════════════════════════════════════════════
       let repaired = 0
       try {
-        const allFacIdsToMark = new Set<string>()
+        // FIX 1 — track the payment date per facture so auto_repair can set
+        // rapproche_date consistently (never leave it NULL).
+        const today = new Date().toISOString().split('T')[0]
+        const facIdToDate = new Map<string, string>()
 
         for (const [releveId, entry] of releveMap) {
           for (let i = 0; i < entry.updatedTxs.length; i++) {
@@ -738,30 +747,48 @@ export async function POST(request: Request) {
               counts.matched++
             }
             if (tx.statut !== 'rapproche') continue
-            // Collect all facture IDs from matched transactions
-            if (tx.facture_id) allFacIdsToMark.add(tx.facture_id)
+            // Collect all facture IDs from matched transactions + their pay date
+            const txPayDate: string = (tx.date as string | undefined) || today
+            if (tx.facture_id && !facIdToDate.has(tx.facture_id)) {
+              facIdToDate.set(tx.facture_id, txPayDate)
+            }
             if (Array.isArray(tx.facture_ids)) {
-              for (const fId of tx.facture_ids) allFacIdsToMark.add(fId)
+              for (const fId of tx.facture_ids) {
+                if (!facIdToDate.has(fId)) facIdToDate.set(fId, txPayDate)
+              }
             }
           }
         }
 
-        if (allFacIdsToMark.size > 0) {
+        if (facIdToDate.size > 0) {
           // Find factures that should be paye but aren't
           const { data: notPayeYet } = await supabase
             .from('factures')
             .select('id')
-            .in('id', [...allFacIdsToMark])
+            .in('id', [...facIdToDate.keys()])
             .neq('statut', 'paye')
 
           if (notPayeYet && notPayeYet.length > 0) {
-            const idsToFix = notPayeYet.map((f: any) => f.id)
-            const { error: repairErr } = await supabase
-              .from('factures')
-              .update({ statut: 'paye', rapproche_source: 'auto_repair' })
-              .in('id', idsToFix)
-            if (!repairErr) {
-              repaired = idsToFix.length
+            // FIX 1 — per-facture update so rapproche_date carries the actual
+            // transaction date when available (group .in() can't pass
+            // per-row values).
+            let fixedOk = 0
+            for (const f of notPayeYet) {
+              const fId = (f as any).id as string
+              const payDate = facIdToDate.get(fId) || today
+              const { error: repairErr } = await supabase
+                .from('factures')
+                .update({
+                  statut: 'paye',
+                  rapproche_date: payDate,
+                  rapproche_source: 'auto_repair',
+                })
+                .eq('id', fId)
+              if (!repairErr) fixedOk++
+              else console.warn(`[rapprochement] auto_repair ${fId}:`, repairErr.message)
+            }
+            repaired = fixedOk
+            if (repaired > 0) {
               console.log(`[rapprochement] Consistency repair: ${repaired} factures fixed to paye`)
             }
           }
@@ -1662,7 +1689,7 @@ export async function POST(request: Request) {
       // Fetch paid factures for this société.
       const { data: paidFactures, error: facturesErr } = await supabase
         .from('factures')
-        .select('id, numero_facture, montant_ttc, montant_mur, devise, date_facture, rapproche_date, rapproche_releve_id, rapproche_transaction_idx, tiers, type_facture')
+        .select('id, numero_facture, montant_ttc, montant_mur, devise, date_facture, date_echeance, rapproche_date, rapproche_releve_id, rapproche_transaction_idx, tiers, type_facture')
         .eq('societe_id', socId)
         .eq('statut', 'paye')
       if (facturesErr) {
@@ -1769,15 +1796,23 @@ export async function POST(request: Request) {
             bnqRow = linked || unletteredAny || null
           }
 
-          // 3. If no BNQ counterpart exists AND the facture is rapprochée,
-          //    create one from the facture's known paiement info. This is
-          //    the "synchronise" part — we generate the ledger entry that
-          //    should have existed after rapprochement.
-          if (!bnqRow && f.rapproche_date && montant > 0) {
+          // 3. If no BNQ counterpart exists, create one from the facture's
+          //    known paiement info. This is the "synchronise" part — we
+          //    generate the ledger entry that should have existed after
+          //    rapprochement.
+          // FIX 1 — never block on a missing rapproche_date. Fallback to
+          //    date_echeance, then date_facture, then today, and back-fill
+          //    factures.rapproche_date so the invariant holds going forward.
+          if (!bnqRow && montant > 0) {
+            const payDate: string =
+              (f as any).rapproche_date
+              || (f as any).date_echeance
+              || (f as any).date_facture
+              || new Date().toISOString().split('T')[0]
             const montantMur = Number(f.montant_mur) || montant
             const newBnq = {
               dossier_id: dossierId,
-              date_ecriture: f.rapproche_date,
+              date_ecriture: payDate,
               journal: 'BNQ',
               numero_piece: f.numero_facture || null,
               compte: achRow.compte, // 401 or 411, same side as ACH
@@ -1795,10 +1830,19 @@ export async function POST(request: Request) {
             }
             bnqRow = created
             pairsCreatedBnq++
+
+            // Back-fill factures.rapproche_date if it was missing so the
+            // invariant "paye ⇒ rapproche_date not null" is enforced.
+            if (!(f as any).rapproche_date) {
+              await supabase.from('factures')
+                .update({ rapproche_date: payDate })
+                .eq('id', f.id)
+                .is('rapproche_date', null)
+            }
           }
 
           if (!bnqRow) {
-            errors.push({ facture_id: f.id, reason: 'Aucune écriture BNQ et pas de rapproche_date pour la générer' })
+            errors.push({ facture_id: f.id, reason: 'Aucune écriture BNQ trouvée ou créée (montant = 0 ?)' })
             continue
           }
 
@@ -1882,9 +1926,15 @@ export async function POST(request: Request) {
       const totalMontant = (factures || []).reduce((s, f) => s + (Number(f.montant_ttc) || 0), 0)
 
       // Marquer les factures comme payées par associé
+      // FIX 1 — rapproche_date jamais NULL (fallback date du jour).
+      const associePayDate = new Date().toISOString().split('T')[0]
       for (const f of factures || []) {
         await supabase.from('factures').update({
-          statut: 'paye', mode_paiement: 'associe', paye_par: associe_nom,
+          statut: 'paye',
+          mode_paiement: 'associe',
+          paye_par: associe_nom,
+          rapproche_date: associePayDate,
+          rapproche_source: 'paye_par_associe',
         }).eq('id', f.id)
       }
 
