@@ -78,6 +78,10 @@ export default function ClientRapprochementPage() {
     internes: { count: number; total: number }
     remboursements: { count: number; total: number }
   }>(null)
+
+  // Pagination — Factures fournisseurs table (Part 1: 20/page).
+  const [facturesPage, setFacturesPage] = useState(1)
+  const FACTURES_PAGE_SIZE = 20
   const [selectedSmartKeys, setSelectedSmartKeys] = useState<Set<string>>(new Set())
   const [applyingSelection, setApplyingSelection] = useState(false)
 
@@ -571,6 +575,11 @@ Voulez-vous vraiment continuer ?`
 
   useEffect(() => { load() }, [load])
 
+  // Reset factures pagination whenever the filters change so the user never
+  // lands on a stale empty page (e.g. change month → fewer rows → old page
+  // is out of bounds until our clamp logic kicks in).
+  useEffect(() => { setFacturesPage(1) }, [societeId, selectedMois, selectedPeriode])
+
   const handleAutoMatch = async () => {
     if (!societeId) return
     setAutoMatching(true)
@@ -841,100 +850,23 @@ Voulez-vous vraiment continuer ?`
         </div>
       </div>
 
-      {/* ── 4-Card Rapprochement Section ─────────────────────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-        {/* Card 1 — Règles auto */}
-        <button
-          disabled={autoMatching || !societeId}
+      {/* ── Bouton unique: Rapprocher automatiquement ─────────────────── */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="text-sm text-gray-500">
+          Rapprochement automatique : frais bancaires, MRA, salaires, virements internes, factures fournisseurs.
+        </div>
+        <Button
           onClick={handleAutoMatch}
-          className="group text-left rounded-xl border-2 border-gray-200 hover:border-[#0B0F2E] hover:shadow-md bg-white p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+          disabled={autoMatching || !societeId}
+          className="bg-[#D4AF37] hover:bg-[#C9A82E] text-[#0B0F2E] font-semibold"
+          size="lg"
         >
-          <div className="flex items-start gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
-              {autoMatching ? <Loader2 className="w-5 h-5 text-white animate-spin" /> : <Zap className="w-5 h-5 text-white" />}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-bold text-sm text-[#0B0F2E]">⚡ Règles auto</p>
-              <p className="text-xs text-gray-500 mt-0.5">MCB, MRA, salaires, virements</p>
-              <p className="text-[11px] text-blue-600 font-medium mt-1.5">Rapide · ~2s</p>
-            </div>
-          </div>
-          {autoMatching && autoStep && (
-            <p className="text-xs text-blue-600 mt-2 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" />{autoStep}</p>
-          )}
-        </button>
-
-        {/* Card 2 — Smart IA heuristique */}
-        <button
-          disabled={smartLoading || !societeId}
-          onClick={handleSmartRapprochement}
-          className="group text-left rounded-xl border-2 border-gray-200 hover:border-emerald-500 hover:shadow-md bg-white p-4 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-        >
-          <div className="flex items-start gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
-              {smartLoading ? <Loader2 className="w-5 h-5 text-white animate-spin" /> : <Target className="w-5 h-5 text-white" />}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-bold text-sm text-[#0B0F2E]">🎯 Smart (IA heuristique)</p>
-              <p className="text-xs text-gray-500 mt-0.5">Factures + matching multi-stratégie</p>
-              <p className="text-[11px] text-emerald-600 font-medium mt-1.5">Propositions · ~5s</p>
-            </div>
-          </div>
-          {smartLoading && (
-            <p className="text-xs text-emerald-600 mt-2 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" />Analyse en cours...</p>
-          )}
-        </button>
-
+          {autoMatching
+            ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{autoStep || "Analyse en cours..."}</>
+            : <><span className="mr-2">✨</span>Rapprocher automatiquement</>
+          }
+        </Button>
       </div>
-
-      {/* ── Comment ça marche ─────────────────────────────────────────────── */}
-      <details className="group">
-        <summary className="cursor-pointer flex items-center gap-2 text-sm font-medium text-[#0B0F2E] hover:text-[#D4AF37] transition-colors py-2">
-          <ChevronDown className="w-4 h-4 group-open:rotate-180 transition-transform" />
-          Comment fonctionne le rapprochement intelligent ?
-        </summary>
-        <Card className="mt-2 border border-blue-100 bg-blue-50/30">
-          <CardContent className="p-4 space-y-3 text-sm text-gray-700">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <p className="font-semibold text-[#0B0F2E] mb-1">Phase 1 — Identification des tiers</p>
-                <p className="text-xs text-gray-500">Le système construit un registre de tous vos fournisseurs et clients à partir de vos factures, puis identifie chaque transaction bancaire à un tiers connu via matching intelligent (similarité de nom, alias configurés).</p>
-              </div>
-              <div>
-                <p className="font-semibold text-[#0B0F2E] mb-1">Phase 2 — Rapprochement par fournisseur</p>
-                <p className="text-xs text-gray-500">Pour chaque fournisseur, le moteur met face à face tous ses paiements bancaires et toutes ses factures impayées. Il tente : 1 paiement → 1 facture, 1 paiement → N factures, ou N paiements → 1 facture (acomptes). Tolère les écarts TDS (2-6%) et les délais de paiement.</p>
-              </div>
-              <div>
-                <p className="font-semibold text-[#0B0F2E] mb-1">Phase 3 — Classifications automatiques</p>
-                <p className="text-xs text-gray-500">Sans pièce comptable nécessaire : virements internes (entre vos comptes), frais bancaires (MCB fees), salaires (bulk payment vérifié contre bulletins de paie), charges sociales (MRA, CSG, NSF, PAYE).</p>
-              </div>
-              <div>
-                <p className="font-semibold text-[#0B0F2E] mb-1">Phase 4 — Lettrage des écritures 401</p>
-                <p className="text-xs text-gray-500">Les écritures de paiement (BNQ) sont automatiquement lettrées avec les écritures de facture (ACH) du même fournisseur. Cela garantit la cohérence entre le grand livre et le rapprochement bancaire.</p>
-              </div>
-            </div>
-            <div className="pt-2 border-t border-blue-200">
-              <p className="font-semibold text-[#0B0F2E] mb-1">Alias fournisseurs</p>
-              <p className="text-xs text-gray-500 mb-2">Le système reconnaît qu'un même fournisseur peut apparaître sous différents noms dans la banque vs les factures. Des alias globaux sont pré-configurés (MyT = Mauritius Telecom = Cellplus, etc.) et le système apprend de nouveaux alias automatiquement à chaque rapprochement validé.</p>
-              <div className="flex flex-wrap gap-1">
-                {['MyT → Mauritius Telecom', 'MCB → Mauritius Commercial Bank', 'MRA → Mauritius Revenue Authority', 'CEB → Central Electricity Board', 'CWA → Central Water Authority'].map(a => (
-                  <span key={a} className="px-2 py-0.5 bg-white border border-blue-200 rounded text-[11px] text-blue-700">{a}</span>
-                ))}
-                <span className="px-2 py-0.5 bg-amber-50 border border-amber-200 rounded text-[11px] text-amber-700">+ alias appris automatiquement</span>
-              </div>
-            </div>
-            <div className="pt-2 border-t border-blue-200">
-              <p className="font-semibold text-[#0B0F2E] mb-1">Niveaux de confiance</p>
-              <div className="flex gap-3 text-xs">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" /> ≥80% → appliqué automatiquement</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400" /> 55-79% → proposé (à valider)</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400" /> &lt;55% → non rapproché</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </details>
-
       {/* ── Section "💳 Factures fournisseurs" ─────────────────────────────
           Statut calculé par facture, tenant compte de la présence d'un
           relevé pour le mois de paiement. Ne montre JAMAIS "En retard"
@@ -1038,6 +970,14 @@ Voulez-vous vraiment continuer ?`
               </div>
             </CardHeader>
             <CardContent className="p-0 overflow-x-auto">
+              {(() => {
+                // Pagination — clamp page if the rows length shrinks.
+                const totalPages = Math.max(1, Math.ceil(rows.length / FACTURES_PAGE_SIZE))
+                const safePage = Math.min(Math.max(1, facturesPage), totalPages)
+                const start = (safePage - 1) * FACTURES_PAGE_SIZE
+                const pageRows = rows.slice(start, start + FACTURES_PAGE_SIZE)
+                return (
+              <>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -1050,7 +990,7 @@ Voulez-vous vraiment continuer ?`
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {rows.slice(0, 50).map(({ f, label, badgeCls, payDate, status }) => (
+                  {pageRows.map(({ f, label, badgeCls, payDate, status }) => (
                     <TableRow key={f.id}>
                       <TableCell className="text-sm font-medium">
                         <TruncatedCell text={f.tiers || '—'} />
@@ -1095,43 +1035,41 @@ Voulez-vous vraiment continuer ?`
                   ))}
                 </TableBody>
               </Table>
-              {rows.length > 50 && (
-                <p className="text-xs text-gray-400 p-3">… et {rows.length - 50} autres factures</p>
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between border-t bg-gray-50/50 px-4 py-2 text-sm">
+                  <span className="text-gray-600">
+                    Page <strong>{safePage}</strong> sur {totalPages}{" "}
+                    <span className="text-gray-400">· {rows.length} facture{rows.length > 1 ? "s" : ""}</span>
+                  </span>
+                  <div className="flex gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={safePage <= 1}
+                      onClick={() => setFacturesPage(p => Math.max(1, p - 1))}
+                      className="h-7 text-xs"
+                    >
+                      ← Précédent
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={safePage >= totalPages}
+                      onClick={() => setFacturesPage(p => Math.min(totalPages, p + 1))}
+                      className="h-7 text-xs"
+                    >
+                      Suivant →
+                    </Button>
+                  </div>
+                </div>
               )}
+              </>
+                )
+              })()}
             </CardContent>
           </Card>
         )
       })()}
-
-      {/* ── Global progress bar ───────────────────────────────────────────── */}
-      {transactions.length > 0 && (
-        <Card className="border border-gray-100 shadow-sm">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <BarChart3 className="w-4 h-4 text-[#0B0F2E]" />
-                <span className="text-sm font-semibold text-[#0B0F2E]">Progression du rapprochement</span>
-              </div>
-              <span className="text-sm font-bold text-[#0B0F2E]">
-                {transactions.length > 0 ? Math.round(((matched.length + interne.length) / transactions.length) * 100) : 0}%
-              </span>
-            </div>
-            <Progress
-              value={transactions.length > 0 ? Math.round(((matched.length + interne.length) / transactions.length) * 100) : 0}
-              className="h-3 bg-gray-100"
-            />
-            <div className="flex flex-wrap gap-3 mt-2 text-xs text-gray-500">
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />{matchedWithInvoice.length} confirmées</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400 inline-block" />{classifiedAuto.length} auto-classées</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block" />{interne.length} virements internes</span>
-              {paidNoInvoice.length > 0 && <span className="flex items-center gap-1 text-gray-400"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />{paidNoInvoice.length} à vérifier</span>}
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400 inline-block" />{proposed.length} à valider</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500 inline-block" />{unmatched.length} à classer</span>
-              <span className="flex items-center gap-1 ml-auto font-medium text-[#0B0F2E]">{matchedWithInvoice.length + classifiedAuto.length + interne.length} / {transactions.length} total</span>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Filters row: Month + Compte + Période */}
       <div className="flex flex-wrap items-center gap-3">
@@ -1195,48 +1133,12 @@ Voulez-vous vraiment continuer ?`
         )
       })()}
 
-      {/* KPIs — 6 catégories claires */}
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-        <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Transactions</p><p className="text-2xl font-bold text-[#0B0F2E]">{transactions.length}</p></CardContent></Card>
-        <Card className="border-green-200"><CardContent className="p-4"><p className="text-xs text-green-700 font-medium">✅ Confirmées</p><p className="text-2xl font-bold text-green-600">{matchedWithInvoice.length}</p></CardContent></Card>
-        <Card className="border-blue-200"><CardContent className="p-4"><p className="text-xs text-blue-700 font-medium">📋 Classifiées auto</p><p className="text-2xl font-bold text-blue-600">{classifiedAuto.length}</p><p className="text-[10px] text-gray-400">Frais, salaires, MRA</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-gray-500">↔ Internes</p><p className="text-2xl font-bold text-gray-400">{interne.length}</p></CardContent></Card>
-        {paidNoInvoice.length > 0 && (
-          <Card className="border-amber-300 bg-amber-50"><CardContent className="p-4"><p className="text-xs text-amber-700 font-medium">⚠️ Sans pièce</p><p className="text-2xl font-bold text-amber-600">{paidNoInvoice.length}</p><p className="text-[10px] text-amber-500">À vérifier</p></CardContent></Card>
-        )}
-        <Card className={unmatched.length > 0 ? "border-orange-200 bg-orange-50/40" : ""}><CardContent className="p-4"><p className="text-xs text-orange-700 font-medium">📋 À classer</p><p className="text-2xl font-bold text-orange-600">{unmatched.length}</p></CardContent></Card>
-      </div>
-
       {/* Auto-rapprochement progress */}
       {autoStep && (
         <Card className="border-blue-200 bg-blue-50">
           <CardContent className="p-4 flex items-center gap-3">
             <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
             <span className="text-sm text-blue-800">{autoStep}</span>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Auto-rapprochement result */}
-      {autoResult && !autoStep && (
-        <Card className={autoResult.total_classified > 0 ? "border-green-200 bg-green-50" : "border-gray-200"}>
-          <CardContent className="p-4">
-            <p className="font-medium text-sm text-[#0B0F2E]">Rapprochement terminé</p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-3 text-xs">
-              {autoResult.matched > 0 && <div className="flex items-center gap-1"><span className="text-green-600">⚡</span>{autoResult.matched} correspondance(s) factures/écritures</div>}
-              {autoResult.interne > 0 && <div className="flex items-center gap-1"><span className="text-gray-400">🏦</span>{autoResult.interne} transfert(s) interne(s)</div>}
-              {autoResult.frais_bancaires > 0 && <div className="flex items-center gap-1"><span className="text-blue-500">💰</span>{autoResult.frais_bancaires} frais bancaires</div>}
-              {autoResult.salaire_bulk > 0 && <div className="flex items-center gap-1"><span className="text-purple-500">👥</span>{autoResult.salaire_bulk} salaire(s)</div>}
-              {autoResult.mra > 0 && <div className="flex items-center gap-1"><span className="text-indigo-500">🏛️</span>{autoResult.mra} paiement(s) MRA</div>}
-              {autoResult.not_matched > 0 && <div className="flex items-center gap-1"><span className="text-red-500">❌</span>{autoResult.not_matched} sans correspondance</div>}
-            </div>
-            {autoResult.total > 0 && (
-              <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
-                <div className="bg-green-500 h-2 rounded-full transition-all" style={{ width: `${Math.round((autoResult.total_classified / autoResult.total) * 100)}%` }} />
-              </div>
-            )}
-            {autoResult.total > 0 && <p className="text-xs text-gray-400 mt-1">{autoResult.total_classified}/{autoResult.total} transactions traitées ({Math.round((autoResult.total_classified / autoResult.total) * 100)}%)</p>}
-            {autoResult.not_matched > 0 && <p className="text-xs text-gray-500 mt-2">Utilisez le rapprochement manuel pour les {autoResult.not_matched} restante(s).</p>}
           </CardContent>
         </Card>
       )}
