@@ -541,15 +541,28 @@ export async function POST(
         }
       }
 
-      if (!existingBank && bankName) {
-        await supabase.from('comptes_bancaires').insert({
-          societe_id: bankSocieteId, banque: bankName,
+      if (!existingBank) {
+        // FIX: was `if (!existingBank && bankName)` — silently skipped when
+        // OCR missed the bank name. Mirror of upload/route.ts fallback.
+        const accountHolder = finalExtraction.nom_societe || finalExtraction.titulaire || null
+        const finalBankName =
+          bankName
+          || (accountHolder && !isBankName(accountHolder) ? null : accountHolder)
+          || (extractedIBAN ? `Banque (${extractedIBAN.slice(0, 4)}…)` : null)
+          || 'Banque non identifiée'
+        console.log(`[reanalyze] Creating bank account (fallback): ${finalBankName} for societe=${bankSocieteId}`)
+        const { error: bankInsertErr } = await supabase.from('comptes_bancaires').insert({
+          societe_id: bankSocieteId, banque: finalBankName,
           nom_compte: normNumeroCompte || null,
           numero_compte: normNumeroCompte, iban: extractedIBAN,
           devise: bankDevise,
           solde_actuel: solde, solde_dernier_releve: solde,
           date_dernier_releve: normPeriodeFin, actif: true,
         })
+        if (bankInsertErr) console.error('[reanalyze] comptes_bancaires insert FAILED:', bankInsertErr.message)
+        if (!bankName) {
+          console.warn('[reanalyze] Banque non identifiée — compte créé avec libellé de secours. Document:', id)
+        }
       }
 
       // Build normalized transactions
@@ -606,6 +619,19 @@ export async function POST(
         if (data && data.societe_id === bankSocieteId) bankAccount = data
       }
 
+      // FIX: last-resort fallback — same as upload/route.ts — so a missed
+      // strict match doesn't drop the releve on the floor.
+      if (!bankAccount) {
+        const { data: anySocieteAcc } = await supabase.from('comptes_bancaires')
+          .select('id, societe_id').eq('societe_id', bankSocieteId).eq('devise', bankDevise)
+          .order('date_dernier_releve', { ascending: false, nullsFirst: false })
+          .limit(1).maybeSingle()
+        if (anySocieteAcc && anySocieteAcc.societe_id === bankSocieteId) {
+          bankAccount = anySocieteAcc
+          console.log(`[reanalyze] Fallback account ${bankAccount.id} for societe ${bankSocieteId} (devise ${bankDevise})`)
+        }
+      }
+
       if (bankAccount && normalizedTransactions.length > 0) {
         const ecartSolde = Math.abs((soldeOuverture + totalCredits - totalDebits) - soldeCloture)
         const { error: releveError } = await supabase.from('releves_bancaires').insert({
@@ -624,6 +650,10 @@ export async function POST(
         })
         if (releveError) console.error('[reanalyze] releves_bancaires insert error:', releveError.message)
         else console.log(`[reanalyze] Bank statement stored: ${normalizedTransactions.length} transactions`)
+      } else if (!bankAccount) {
+        console.error(`[reanalyze] releve NOT stored — no bank account found/created for société ${bankSocieteId}, doc ${id}`)
+      } else if (normalizedTransactions.length === 0) {
+        console.warn(`[reanalyze] releve NOT stored — 0 transactions extracted from doc ${id} (OCR may have failed; retry with force_ocr=true)`)
       }
     }
 
