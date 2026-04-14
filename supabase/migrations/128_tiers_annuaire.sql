@@ -35,6 +35,28 @@ CREATE TABLE IF NOT EXISTS tiers_annuaire (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Si la table existait déjà avec un schéma partiel, s'assurer que
+-- toutes les colonnes sont présentes avant de créer les index.
+ALTER TABLE public.tiers_annuaire
+  ADD COLUMN IF NOT EXISTS nom_variants TEXT[] DEFAULT ARRAY[]::TEXT[],
+  ADD COLUMN IF NOT EXISTS brn TEXT,
+  ADD COLUMN IF NOT EXISTS vat_number TEXT,
+  ADD COLUMN IF NOT EXISTS est_offshore BOOLEAN DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS reverse_charge BOOLEAN DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS type_tiers TEXT DEFAULT 'both',
+  ADD COLUMN IF NOT EXISTS pays TEXT DEFAULT 'MU',
+  ADD COLUMN IF NOT EXISTS devise_principale TEXT DEFAULT 'MUR',
+  ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'ocr_auto',
+  ADD COLUMN IF NOT EXISTS verifie BOOLEAN DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS confiance INT DEFAULT 50,
+  ADD COLUMN IF NOT EXISTS nb_utilisations INT DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS notes TEXT,
+  ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS verified_by UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW(),
+  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
 -- Unique by normalized name (case-insensitive)
 CREATE UNIQUE INDEX IF NOT EXISTS idx_tiers_annuaire_nom_lower
   ON tiers_annuaire (LOWER(nom));
