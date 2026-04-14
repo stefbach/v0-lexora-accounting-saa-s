@@ -199,6 +199,37 @@ function amountOf(tx: TransactionLike): { debit: number; credit: number; amount:
   return { debit, credit, amount: Math.max(debit, credit) }
 }
 
+// ─── PCG account classification (shared with server route) ──────────────────
+// FIX 9 — extracted from app/api/comptable/rapprochement/route.ts so it can
+// be imported by lib/accounting/accounting-rules.ts without a circular dep.
+
+const LETTRABLE_PREFIXES_LIB = ['401', '411', '421', '425', '431', '455', '467', '409', '486', '580']
+const SKIP_LETTRAGE_PREFIXES_LIB = ['627', '444', '422']
+
+/**
+ * Classifie un compte PCG/Mauritius en :
+ *   • 'lettrable' — tiers / transit : 401/411/421/425/431/455/467/409/486/580
+ *   • 'skip'      — 627 frais bancaires, 444 TVA due, 422 avances permanentes
+ *   • 'charge'    — 6xxx hors 627/422
+ *   • 'produit'   — 7xxx
+ *   • 'autre'     — comptes 1/2/3/5 classes non listés ci-dessus
+ */
+export function accountClass(
+  compte: string | null | undefined,
+): 'lettrable' | 'skip' | 'charge' | 'produit' | 'autre' {
+  const c = String(compte || '').trim()
+  if (!c) return 'autre'
+  if (SKIP_LETTRAGE_PREFIXES_LIB.some(p => c.startsWith(p))) return 'skip'
+  if (LETTRABLE_PREFIXES_LIB.some(p => c.startsWith(p))) return 'lettrable'
+  if (c.startsWith('6')) return 'charge'
+  if (c.startsWith('7')) return 'produit'
+  return 'autre'
+}
+
+export function isLettrableAccount(compte: string | null | undefined): boolean {
+  return accountClass(compte) === 'lettrable'
+}
+
 // ─── Main entry point ────────────────────────────────────────────────────────
 
 /**

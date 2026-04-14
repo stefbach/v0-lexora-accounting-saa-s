@@ -6,6 +6,8 @@ import type { SupplierAlias } from '@/lib/accounting/intelligent-rapprochement'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getTauxChange } from '@/lib/taux-change'
+import { accountClass } from '@/lib/accounting/classification-rules'
+import { validateLettrageGroup } from '@/lib/accounting/accounting-rules'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -58,49 +60,9 @@ async function safeQuery(supabase: any, table: string, query: any) {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// FIX 2 — Classification PCG/Mauritius des comptes pour le lettrage.
-//
-// Référentiel (PCG Mauritius) :
-//   • LETTRABLE (= on peut apparier débit/crédit et poser une lettre) :
-//       401 fournisseurs · 411 clients ·
-//       421 salaires · 425 avances salaires ·
-//       431 charges sociales MRA (431CSG/NSF/PRGF/TL/PAYE) ·
-//       455 compte courant associé ·
-//       467 virements inter-sociétés ·
-//       409 acomptes clients/fournisseurs ·
-//       486 charges constatées d'avance ·
-//       580 transit (doit toujours être soldé — règle R3)
-//   • SKIP (lettrage interdit — règle R7 + spécifiques Mauritius) :
-//       627 frais bancaires — comptabilisés directement, pas de lettrage
-//       444 TVA due/MRA — géré par déclaration, pas par lettrage
-//       6xxx autres charges · 7xxx produits — R7 : pas de lettre sur résultat
-//
-// Note : sync_lettrage est piloté par `paidFactures` donc l'ACH est
-// TOUJOURS 401 ou 411. Le garde ci-dessous est défensif : si jamais le
-// back-fill d'une migration future a écrit un achRow.compte erroné, on
-// refuse de générer / lettrer une BNQ plutôt que de propager l'erreur.
-// ─────────────────────────────────────────────────────────────────────────────
-const LETTRABLE_PREFIXES = ['401', '411', '421', '425', '431', '455', '467', '409', '486', '580']
-// FIX 8 — 422 « Personnel – avances et acomptes permanents » est un compte
-// de tiers mais NE DOIT PAS être lettré : il représente une avance qui
-// tourne en permanence (caisse, avance de frais standing), pas une dette
-// qui s'éteint. Inclusion dans SKIP_LETTRAGE_PREFIXES.
-const SKIP_LETTRAGE_PREFIXES = ['627', '444', '422']
-
-function accountClass(compte: string | null | undefined): 'lettrable' | 'skip' | 'charge' | 'produit' | 'autre' {
-  const c = String(compte || '').trim()
-  if (!c) return 'autre'
-  if (SKIP_LETTRAGE_PREFIXES.some(p => c.startsWith(p))) return 'skip'
-  if (LETTRABLE_PREFIXES.some(p => c.startsWith(p))) return 'lettrable'
-  if (c.startsWith('6')) return 'charge'
-  if (c.startsWith('7')) return 'produit'
-  return 'autre'
-}
-
-function isLettrableAccount(compte: string | null | undefined): boolean {
-  return accountClass(compte) === 'lettrable'
-}
+// FIX 2 & FIX 8 — accountClass / isLettrableAccount sont maintenant dans
+// lib/accounting/classification-rules.ts (source unique, partagée avec
+// lib/accounting/accounting-rules.ts). Import en tête de fichier.
 
 // GET — Rapprochements + transactions + factures + écritures
 export async function GET(request: Request) {
@@ -2105,6 +2067,12 @@ export async function POST(request: Request) {
     }
 
     // === LETTRER ECRITURES COMPTABLES (401/411) ===
+    // FIX 9 — applique les règles R1/R2/R7 avant de poser la lettre :
+    //   R1 Équilibre  — ∑débit = ∑crédit sur les écritures groupées
+    //   R2 Unicité    — aucune écriture ne doit déjà porter une lettre ≠
+    //   R7 Pas de 6xxx/7xxx/skip — refus si un compte de résultat/skip
+    // Retourne 409 avec le détail de la violation pour que le client
+    // surface le message à l'utilisateur.
     if (action === 'lettrer_ecritures') {
       const { ecriture_ids, societe_id: socId } = body
       if (!ecriture_ids || !Array.isArray(ecriture_ids) || ecriture_ids.length < 2) {
@@ -2112,6 +2080,27 @@ export async function POST(request: Request) {
       }
       const lettreCode = `LE${String(Date.now()).slice(-4)}`
       const now = new Date().toISOString().split('T')[0]
+
+      // Charger les écritures pour valider les règles AVANT toute mutation
+      const { data: ecrituresToLetter } = await supabase
+        .from('ecritures_comptables')
+        .select('id, compte, debit, credit, date_ecriture, lettre, journal')
+        .in('id', ecriture_ids)
+      if (!ecrituresToLetter || ecrituresToLetter.length !== ecriture_ids.length) {
+        return NextResponse.json({ error: 'Certaines écritures sont introuvables' }, { status: 404 })
+      }
+      const violation = validateLettrageGroup({
+        ecritures: ecrituresToLetter as any,
+        newLettre: lettreCode,
+      })
+      if (violation) {
+        return NextResponse.json({
+          error: 'rule_violation',
+          rule_violation: violation,
+          message: violation,
+        }, { status: 409 })
+      }
+
       for (const eid of ecriture_ids) {
         await supabase.from('ecritures_comptables')
           .update({ lettre: lettreCode, date_lettrage: now })
