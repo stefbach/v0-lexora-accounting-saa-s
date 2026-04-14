@@ -58,6 +58,10 @@ export default function ClientRapprochementPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [selectedPeriode, setSelectedPeriode] = useState('2025-2026')
   const [associes, setAssocies] = useState<any[]>([])
+  // FIX 4 — Candidats associés (employés role=direction sans CCA) et
+  // alertes légales Companies Act Mauritius (CCA débiteur).
+  const [associesCandidates, setAssociesCandidates] = useState<Array<{ id: string; nom: string; role: string }>>([])
+  const [legalAlerts, setLegalAlerts] = useState<Array<{ compte_id: string; nom: string; solde: number; message: string }>>([])
   const [resetting, setResetting] = useState(false)
 
   // ── Chat IA state ──────────────────────────────────────────────────
@@ -588,7 +592,13 @@ Voulez-vous vraiment continuer ?`
         fetch(`/api/comptable/compte-courant?societe_id=${societeId}`).catch(() => null),
       ])
       setData(await res.json())
-      if (ccRes?.ok) { const ccData = await ccRes.json(); console.log('[rapprochement] associes loaded:', ccData.comptes?.length || 0); setAssocies(ccData.comptes || []) }
+      if (ccRes?.ok) {
+        const ccData = await ccRes.json()
+        console.log('[rapprochement] associes loaded:', ccData.comptes?.length || 0, '+ candidats:', ccData.candidates?.length || 0)
+        setAssocies(ccData.comptes || [])
+        setAssociesCandidates(ccData.candidates || [])
+        setLegalAlerts(ccData.legal_alerts || [])
+      }
     } catch { setData(null) }
     finally { setLoading(false) }
   }, [societeId])
@@ -958,6 +968,32 @@ Voulez-vous vraiment continuer ?`
           </Button>
         </div>
       </div>
+
+      {/* FIX 4 — Alerte légale Companies Act Mauritius (CCA associé débiteur) */}
+      {legalAlerts.length > 0 && (
+        <div className="rounded-lg border-2 border-red-300 bg-red-50 p-4 space-y-2">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="font-semibold text-red-900 text-sm">
+                ⚠️ Compte courant associé débiteur — Convention de prêt obligatoire
+              </p>
+              <p className="text-xs text-red-700 mt-1">
+                Companies Act Mauritius : toute avance nette de la société à un associé exige
+                une convention de prêt signée, à défaut risque de requalification en distribution.
+              </p>
+              <ul className="mt-2 space-y-1 text-xs">
+                {legalAlerts.map(a => (
+                  <li key={a.compte_id} className="flex items-center gap-2">
+                    <span className="font-medium text-red-900">{a.nom}</span>
+                    <span className="font-mono text-red-800">({fmt(a.solde)} MUR)</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Bouton unique: Rapprocher automatiquement ─────────────────── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -2115,10 +2151,18 @@ Voulez-vous vraiment continuer ?`
                     </div>
                     <div>
                       <Label className="text-xs">Nom</Label>
-                      {associes.length > 0 ? (
+                      {(associes.length > 0 || associesCandidates.length > 0) ? (
                         <Select value={payeParNom} onValueChange={setPayeParNom}>
                           <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Choisir..." /></SelectTrigger>
-                          <SelectContent>{associes.map((a: any) => <SelectItem key={a.id} value={a.nom}>{a.nom} ({a.type})</SelectItem>)}</SelectContent>
+                          <SelectContent>
+                            {associes.map((a: any) => (
+                              <SelectItem key={`cca-${a.id}`} value={a.nom}>{a.nom} ({a.type})</SelectItem>
+                            ))}
+                            {/* FIX 4 — Candidats : employés role=direction sans CCA */}
+                            {associesCandidates.map(c => (
+                              <SelectItem key={`cand-${c.id}`} value={c.nom}>{c.nom} (dirigeant — nouveau CCA)</SelectItem>
+                            ))}
+                          </SelectContent>
                         </Select>
                       ) : (
                         <Input className="h-8 text-xs" value={payeParNom} onChange={e => setPayeParNom(e.target.value)} placeholder="Nom de l'associé" />

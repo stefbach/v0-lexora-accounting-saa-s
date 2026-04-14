@@ -44,13 +44,54 @@ export async function GET(request: Request) {
 
     if (mouvErr) throw mouvErr
 
+    // FIX 4 — candidats associés/dirigeants : employés de la société avec
+    // role='direction' qui n'ont pas encore de CCA. Permet de sélectionner
+    // un associé dans un popup sans devoir saisir son nom à la main.
+    const existingNames = new Set((comptes || []).map((c: any) => (c.nom || '').toLowerCase().trim()))
+    let candidates: Array<{ id: string; nom: string; role: string; source: 'employes' }> = []
+    try {
+      const { data: employes } = await supabase
+        .from('employes')
+        .select('id, nom, prenom, role')
+        .eq('societe_id', societe_id)
+        .in('role', ['direction', 'admin'])
+      candidates = (employes || [])
+        .map((e: any) => {
+          const fullName = [e.prenom, e.nom].filter(Boolean).join(' ').trim()
+          return {
+            id: String(e.id),
+            nom: fullName,
+            role: String(e.role || ''),
+            source: 'employes' as const,
+          }
+        })
+        .filter(c => c.nom && !existingNames.has(c.nom.toLowerCase()))
+    } catch (candErr) {
+      // Non-bloquant — si la table employes n'est pas dispo on continue.
+      console.warn('[compte-courant GET] employes fetch skipped:', candErr)
+    }
+
     // Compute total balance (what the company owes all associates/collaborateurs)
     const totalSolde = (comptes || []).reduce((s: number, c: any) => s + (Number(c.solde) || 0), 0)
+
+    // FIX 4 — Alerte légale : si un CCA associé est débiteur (solde < 0),
+    // la société doit avoir une convention de prêt signée conformément au
+    // Companies Act Mauritius. On retourne la liste des CCA concernés pour
+    // que le client affiche le banner.
+    const debiteurs = (comptes || []).filter((c: any) => Number(c.solde) < 0 && c.type === 'associe')
+    const legal_alerts = debiteurs.map((c: any) => ({
+      compte_id: c.id,
+      nom: c.nom,
+      solde: Number(c.solde),
+      message: `Convention de prêt obligatoire (Companies Act Mauritius) — la société doit ${Math.abs(Number(c.solde)).toFixed(2)} MUR à ${c.nom}. Sans convention signée, risque de requalification en distribution de dividende.`,
+    }))
 
     return NextResponse.json({
       comptes: comptes || [],
       mouvements: mouvements || [],
       totalSolde,
+      candidates,
+      legal_alerts,
     })
   } catch (e: unknown) {
     console.error('[compte-courant GET]', e)
