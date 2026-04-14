@@ -57,6 +57,7 @@ async function createEcrituresForFacture(
       debit: number
       credit: number
       piece_justificative: string
+      facture_id: string
     }> = []
 
     // Debit 411 Clients = montant_ttc
@@ -70,6 +71,7 @@ async function createEcrituresForFacture(
       debit: Number(facture.montant_ttc) || 0,
       credit: 0,
       piece_justificative: facture.id,
+      facture_id: facture.id,
     })
 
     // Credit 706 Prestations de services = montant_ht
@@ -83,6 +85,7 @@ async function createEcrituresForFacture(
       debit: 0,
       credit: Number(facture.montant_ht) || 0,
       piece_justificative: facture.id,
+      facture_id: facture.id,
     })
 
     // Credit 4457 TVA collectee = montant_tva (only if > 0)
@@ -97,6 +100,7 @@ async function createEcrituresForFacture(
         debit: 0,
         credit: Number(facture.montant_tva),
         piece_justificative: facture.id,
+        facture_id: facture.id,
       })
     }
 

@@ -85,15 +85,17 @@ export async function updateSession(request: NextRequest) {
     const isAdminRoute = adminRoutes.some(r => pathname.startsWith(r))
     const isJuridiqueRoute = pathname.startsWith('/juridique')
     const isClientRoute = pathname.startsWith('/client')
+    const isSalarieRoute = pathname.startsWith('/salarie')
 
-    if (isDirectionRoute || isRhRoute || isAdminRoute || isJuridiqueRoute || isClientRoute) {
+    if (isDirectionRoute || isRhRoute || isAdminRoute || isJuridiqueRoute || isClientRoute || isSalarieRoute) {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('role')
+        .select('role, employe_id')
         .eq('id', user.id)
         .maybeSingle()
 
       const role = profile?.role || ''
+      const hasEmployeLink = !!profile?.employe_id
 
       if (isAdminRoute && !['admin', 'super_admin'].includes(role)) {
         const url = request.nextUrl.clone()
@@ -123,6 +125,24 @@ export async function updateSession(request: NextRequest) {
         const url = request.nextUrl.clone()
         url.pathname = '/redirect'
         return NextResponse.redirect(url)
+      }
+
+      // Salarié portal: employees only, plus admins/HR for support views.
+      // We also allow users whose profile carries an employe_id back-link
+      // even if the role column is empty (migration 108/109 link arrived
+      // before the role was stamped).
+      if (isSalarieRoute) {
+        const salarieAllowed = [
+          'employe', 'salarie',
+          'rh', 'rh_manager', 'manager',
+          'admin', 'super_admin',
+          'direction', 'client_admin', 'client_assistant',
+        ]
+        if (!salarieAllowed.includes(role) && !hasEmployeLink) {
+          const url = request.nextUrl.clone()
+          url.pathname = '/redirect'
+          return NextResponse.redirect(url)
+        }
       }
     }
   }

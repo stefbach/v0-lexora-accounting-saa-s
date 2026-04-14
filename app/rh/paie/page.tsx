@@ -708,6 +708,81 @@ export default function PaiePage() {
                             </Button>
                           </div>
 
+                          {/* Commit 11 — Congés du mois (shown when conges_details is available) */}
+                          {b.conges_details && (
+                            (b.conges_details.al_jours > 0
+                              || b.conges_details.sl_jours > 0
+                              || b.conges_details.ul_jours > 0
+                              || b.conges_details.mat_pat_jours > 0
+                              || (b.conges_details.anomalies_pointage?.length ?? 0) > 0) ? (
+                              <div className="mb-4 rounded-md border border-blue-200 bg-white p-3">
+                                <p className="text-[11px] font-bold uppercase tracking-wide text-blue-700 mb-2">Congés du mois</p>
+                                <table className="w-full text-xs">
+                                  <thead className="text-[10px] text-gray-500 uppercase">
+                                    <tr>
+                                      <th className="text-left py-1">Type</th>
+                                      <th className="text-right py-1">Jours</th>
+                                      <th className="text-right py-1">Impact salaire</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {b.conges_details.al_employe_jours > 0 && (
+                                      <tr className="border-t border-gray-100">
+                                        <td className="py-1">Annual Leave <span className="text-gray-400">(employé)</span></td>
+                                        <td className="text-right py-1 font-medium">{b.conges_details.al_employe_jours}</td>
+                                        <td className="text-right py-1 text-gray-400">—</td>
+                                      </tr>
+                                    )}
+                                    {b.conges_details.al_impose_jours > 0 && (
+                                      <tr className="border-t border-gray-100">
+                                        <td className="py-1">Annual Leave <span className="text-amber-700">(imposé société)</span></td>
+                                        <td className="text-right py-1 font-medium">{b.conges_details.al_impose_jours}</td>
+                                        <td className="text-right py-1 text-gray-400">—</td>
+                                      </tr>
+                                    )}
+                                    {b.conges_details.sl_jours > 0 && (
+                                      <tr className="border-t border-gray-100">
+                                        <td className="py-1">Sick Leave</td>
+                                        <td className="text-right py-1 font-medium">{b.conges_details.sl_jours}</td>
+                                        <td className="text-right py-1 text-gray-400">—</td>
+                                      </tr>
+                                    )}
+                                    {b.conges_details.ul_jours > 0 && (
+                                      <tr className="border-t border-gray-100">
+                                        <td className="py-1">Sans solde (UL)</td>
+                                        <td className="text-right py-1 font-medium">{b.conges_details.ul_jours}</td>
+                                        <td className="text-right py-1 text-red-600 font-medium">−{fmt(b.conges_details.ul_deduction_mur)} MUR</td>
+                                      </tr>
+                                    )}
+                                    {b.conges_details.mat_pat_jours > 0 && (
+                                      <tr className="border-t border-gray-100">
+                                        <td className="py-1">Maternité / Paternité</td>
+                                        <td className="text-right py-1 font-medium">{b.conges_details.mat_pat_jours}</td>
+                                        <td className="text-right py-1 text-gray-400">—</td>
+                                      </tr>
+                                    )}
+                                  </tbody>
+                                </table>
+                                {b.conges_details.anomalies_pointage && b.conges_details.anomalies_pointage.length > 0 && (
+                                  <div className="mt-2 border-t border-orange-200 pt-2">
+                                    <p className="text-[10px] font-bold uppercase text-orange-700 mb-1">
+                                      <AlertTriangle className="w-3 h-3 inline-block mr-1 -mt-0.5" />
+                                      Anomalies pointage
+                                    </p>
+                                    <ul className="text-[11px] text-orange-700 space-y-0.5 list-disc pl-5">
+                                      {b.conges_details.anomalies_pointage.slice(0, 6).map((a: string, i: number) => (
+                                        <li key={i}>{a}</li>
+                                      ))}
+                                      {b.conges_details.anomalies_pointage.length > 6 && (
+                                        <li className="text-gray-500">… +{b.conges_details.anomalies_pointage.length - 6} autre(s)</li>
+                                      )}
+                                    </ul>
+                                  </div>
+                                )}
+                              </div>
+                            ) : null
+                          )}
+
                           {/* Salaire et allocations */}
                           <p className="text-[10px] font-bold text-gray-500 mb-1">Salaire et allocations</p>
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">

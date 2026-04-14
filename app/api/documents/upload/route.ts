@@ -1323,12 +1323,22 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
           notes: extraction.analyse_tva || (tvaApplicable ? `TVA ${tauxTva}% applicable` : 'Pas de TVA'),
         }
 
-        const { error: factureError } = await supabase.from('factures').insert(factureData)
+        const { data: insertedFacture, error: factureError } = await supabase.from('factures').insert(factureData).select('id').maybeSingle()
         if (factureError) {
           factureCreateError = factureError.message
           console.error('[upload] facture insert error:', factureError.message)
         } else {
           factureCreated = true
+          // Migration 133 — link ecritures to this facture via facture_id so
+          // auto-letterage can find the pair reliably. Ecritures were just
+          // inserted above with piece_justificative = doc.id.
+          if (insertedFacture?.id && finalDossierId) {
+            await supabase.from('ecritures_comptables')
+              .update({ facture_id: insertedFacture.id })
+              .eq('dossier_id', finalDossierId)
+              .eq('piece_justificative', doc.id)
+              .is('facture_id', null)
+          }
           console.log(`[upload] Facture ${typeDocument} created: ${extraction.numero_reference || 'sans numéro'} — ${montantTTC} ${devise}`)
         }
       }
@@ -1496,12 +1506,20 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
           }
         }
 
-        if (!existingBank && bankName) {
-          // Create new bank account only if bank name was identified
-          console.log(`[upload] Creating new bank account: ${bankName} for societe=${bankSocieteId}`)
+        if (!existingBank) {
+          // FIX: was `if (!existingBank && bankName)` — silently dropped releves
+          // when OCR didn't pull a clean bank name (e.g. OCC statements with
+          // the bank logo as an image). We now always create an account when
+          // we have a societe_id, falling back to a descriptive placeholder.
+          const finalBankName =
+            bankName
+            || (extractedNomSociete && !isBankName(extractedNomSociete) ? null : extractedNomSociete)
+            || (extractedIBAN ? `Banque (${extractedIBAN.slice(0, 4)}…)` : null)
+            || 'Banque non identifiée'
+          console.log(`[upload] Creating bank account (fallback): ${finalBankName} for societe=${bankSocieteId}`)
           const { error: bankInsertError } = await supabase.from('comptes_bancaires').insert({
             societe_id: bankSocieteId,
-            banque: bankName,
+            banque: finalBankName,
             nom_compte: normNumeroCompte || null,
             numero_compte: normNumeroCompte,
             iban: extractedIBAN,
@@ -1514,9 +1532,9 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
           if (bankInsertError) {
             console.error('[upload] comptes_bancaires insert FAILED:', bankInsertError.message)
           }
-        } else {
-          // Bank name not identified — skip account creation, add warning
-          console.warn('[upload] Banque non identifiée — compte bancaire non créé. Document:', doc.id)
+          if (!bankName) {
+            console.warn('[upload] Banque non identifiée par OCR — compte créé avec libellé de secours. Document:', doc.id)
+          }
         }
 
         // Store bank statement record — find the account we just created/updated
@@ -1557,8 +1575,23 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
             bankAccount = null
           }
         }
+        // FIX: last-resort fallback — if no strict match worked but we DID
+        // create (or have) an account for this société + devise, pick it up
+        // so the releve is actually stored. Previously a silent skip left
+        // docs with statut=traite but no releves_bancaires row.
         if (!bankAccount) {
-          console.warn(`[upload] No matching bank account found for société ${bankSocieteId} — releve will not be stored`)
+          const { data: anySocieteAcc } = await supabase.from('comptes_bancaires')
+            .select('id, societe_id')
+            .eq('societe_id', bankSocieteId)
+            .eq('devise', bankDevise)
+            .order('date_dernier_releve', { ascending: false, nullsFirst: false })
+            .limit(1).maybeSingle()
+          if (anySocieteAcc && anySocieteAcc.societe_id === bankSocieteId) {
+            bankAccount = anySocieteAcc
+            console.log(`[upload] Fallback account ${bankAccount.id} for societe ${bankSocieteId} (devise ${bankDevise})`)
+          } else {
+            console.warn(`[upload] No bank account at all for société ${bankSocieteId} — releve will not be stored`)
+          }
         }
 
         if (bankAccount) {

@@ -93,6 +93,7 @@ export async function GET() {
       message: "Compte non lié à un employé. Communiquez votre email au RH: " + user.email,
     })
   } catch (e: unknown) {
+    console.error('[employes/me] error:', e)
     return NextResponse.json(
       { error: e instanceof Error ? e.message : 'Erreur' },
       { status: 500 }

@@ -6,15 +6,19 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import {
   Loader2, Plus, CheckCircle, XCircle, AlertTriangle,
   Calendar, Thermometer, Clock, ShieldAlert, Users, FileWarning,
-  Upload, ChevronLeft, ChevronRight, Eye, Pencil, Save, X
+  Upload, ChevronLeft, ChevronRight, Eye, Pencil, Save, X,
+  Megaphone
 } from "lucide-react"
+import { createClient } from "@/lib/supabase/client"
 
 // ─── Constants ───────────────────────────────────────────────────
 const TYPE_LABELS: Record<string, string> = {
@@ -92,6 +96,10 @@ interface BalanceRow {
   date_arrivee: string | null
   al_droit: number
   al_pris: number
+  /** Subset of al_pris consumed by company-imposed leaves (Commit 10). */
+  al_impose_societe?: number
+  /** Subset of al_pris chosen by the employee. */
+  al_impose_employe?: number
   al_solde: number
   sl_droit: number
   sl_pris: number
@@ -121,6 +129,9 @@ interface CongeRecord {
   date_debut: string
   date_fin: string
   nb_jours: number
+  demi_journee?: boolean
+  matin_ou_apres_midi?: 'matin' | 'apres_midi' | null
+  impose_par_societe?: boolean
   statut: string
   motif: string | null
   document_url: string | null
@@ -137,6 +148,15 @@ interface CongeRecord {
     societe_id: string
   } | null
 }
+
+/**
+ * Leave types that CAN be requested as a half day. Most company policies
+ * only allow AL / SL / CAR / UL half-days — statutory leaves (MAT/PAT)
+ * and accident leave (WI/PH) are always full days. The API additionally
+ * checks conges_employes.demi_journee_autorisee before accepting the
+ * request.
+ */
+const DEMI_JOURNEE_ALLOWED_TYPES = new Set(['AL', 'SL', 'CAR', 'UL'])
 
 // ─── Helper ──────────────────────────────────────────────────────
 function formatDate(d: string) {
@@ -441,13 +461,51 @@ export default function CongesPage() {
   // Dialogs
   const [dialogOpen, setDialogOpen] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({
-    employe_id: "", type_conge: "AL", date_debut: "", date_fin: "", motif: ""
+  const [form, setForm] = useState<{
+    employe_id: string
+    type_conge: string
+    date_debut: string
+    date_fin: string
+    motif: string
+    demi_journee: boolean
+    matin_ou_apres_midi: 'matin' | 'apres_midi'
+  }>({
+    employe_id: "", type_conge: "AL", date_debut: "", date_fin: "", motif: "",
+    demi_journee: false, matin_ou_apres_midi: 'matin',
   })
   const [formError, setFormError] = useState<string | null>(null)
   const [refusDialog, setRefusDialog] = useState<string | null>(null)
   const [refusMotif, setRefusMotif] = useState("")
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+
+  // Fix 2 — cancel-imposed-leave dialog state
+  const [annulerTarget, setAnnulerTarget] = useState<CongeRecord | null>(null)
+  const [annulerMotif, setAnnulerMotif] = useState("")
+  const [toast, setToast] = useState<string | null>(null)
+
+  // ── Collectif (Commit 10) ─────────────────────────────────────
+  const [userRole, setUserRole] = useState<string>("")
+  const [groupes, setGroupes] = useState<Array<{ id: string; nom: string }>>([])
+  const [collectifOpen, setCollectifOpen] = useState(false)
+  const [collectifForm, setCollectifForm] = useState<{
+    titre: string
+    societe_id: string
+    type_conge: string
+    date_debut: string
+    date_fin: string
+    applique_a: 'all' | 'groupe'
+    groupe_id: string
+    motif: string
+  }>({
+    titre: "", societe_id: "", type_conge: "AL",
+    date_debut: "", date_fin: "", applique_a: 'all', groupe_id: "", motif: "",
+  })
+  const [collectifError, setCollectifError] = useState<string | null>(null)
+  const [collectifSaving, setCollectifSaving] = useState(false)
+  const [collectifFeedback, setCollectifFeedback] = useState<{ nb: number; jours: number } | null>(null)
+
+  // Roles allowed to impose collective leave (matches the API gate).
+  const canImposeCollectif = ['admin', 'super_admin', 'client_admin', 'rh', 'rh_manager', 'direction'].includes(userRole)
 
   // Calendar tab
   const [calendarConges, setCalendarConges] = useState<CongeRecord[]>([])
@@ -579,6 +637,73 @@ export default function CongesPage() {
 
   // Initial load
   useEffect(() => { loadSocietes() }, [loadSocietes])
+
+  // Fetch current user's role so we can gate the "Imposer collectif" button.
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return
+      supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+        .then(({ data }) => { if (data?.role) setUserRole(String(data.role)) })
+    })
+  }, [])
+
+  // Fetch groupes for the target société (lazy — only when the modal is open
+  // and applique_a='groupe').
+  useEffect(() => {
+    if (!collectifOpen) return
+    if (!collectifForm.societe_id) { setGroupes([]); return }
+    let cancelled = false
+    fetch(`/api/rh/groupes?societe_id=${collectifForm.societe_id}`)
+      .then(r => r.json())
+      .then(d => { if (!cancelled) setGroupes(d.groupes || []) })
+      .catch(() => { if (!cancelled) setGroupes([]) })
+    return () => { cancelled = true }
+  }, [collectifOpen, collectifForm.societe_id])
+
+  const openCollectifModal = () => {
+    setCollectifError(null)
+    setCollectifFeedback(null)
+    // Pre-fill societe_id with the current filter if one is selected.
+    const preSociete = societe !== 'all' ? societe : (societes[0]?.id || '')
+    setCollectifForm(f => ({
+      ...f,
+      titre: "", type_conge: 'AL', date_debut: "", date_fin: "",
+      applique_a: 'all', groupe_id: "", motif: "",
+      societe_id: preSociete,
+    }))
+    setCollectifOpen(true)
+  }
+
+  const submitCollectif = async () => {
+    setCollectifError(null)
+    if (!collectifForm.titre.trim()) return setCollectifError("Titre requis")
+    if (!collectifForm.societe_id) return setCollectifError("Société requise")
+    if (!collectifForm.date_debut || !collectifForm.date_fin) return setCollectifError("Dates requises")
+    if (collectifForm.date_fin < collectifForm.date_debut) return setCollectifError("date_fin doit être ≥ date_debut")
+    if (collectifForm.applique_a === 'groupe' && !collectifForm.groupe_id) return setCollectifError("Groupe requis")
+    setCollectifSaving(true)
+    try {
+      const res = await fetch("/api/rh/conges/collectif", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(collectifForm),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Erreur")
+      setCollectifFeedback({ nb: data.nb_employes || 0, jours: data.total_jours_imposes || 0 })
+      // Refresh the current tab — new approved leaves may appear + balances change.
+      if (tab === "dashboard") loadBalances()
+      if (tab === "demandes") loadDemandes()
+      if (tab === "historique") loadHistorique()
+      // Auto-close after 2s.
+      setTimeout(() => { setCollectifOpen(false); setCollectifFeedback(null) }, 2500)
+    } catch (e: unknown) {
+      setCollectifError(e instanceof Error ? e.message : "Erreur")
+    } finally {
+      setCollectifSaving(false)
+    }
+  }
   useEffect(() => { loadEmployes() }, [loadEmployes])
 
   // Always load balances for KPI display (needed across all tabs)
@@ -603,22 +728,34 @@ export default function CongesPage() {
       setFormError("Champs requis manquants")
       return
     }
-    if (form.date_fin < form.date_debut) {
-      setFormError("La date de fin doit etre apres la date de debut")
+    if (!form.demi_journee && form.date_fin < form.date_debut) {
+      setFormError("La date de fin doit être après la date de début")
+      return
+    }
+    if (form.demi_journee && !DEMI_JOURNEE_ALLOWED_TYPES.has(form.type_conge)) {
+      setFormError(`Ce type de congé (${TYPE_LABELS[form.type_conge] || form.type_conge}) ne permet pas les demi-journées.`)
       return
     }
     setSaving(true)
     setFormError(null)
     try {
+      // On a half day we send the same date for debut/fin; the API
+      // re-validates and sets nb_jours=0.5.
+      const payload = form.demi_journee
+        ? { ...form, date_fin: form.date_debut }
+        : form
       const res = await fetch("/api/rh/conges", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "creer", ...form }),
+        body: JSON.stringify({ action: "creer", ...payload }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Erreur")
       setDialogOpen(false)
-      setForm({ employe_id: "", type_conge: "AL", date_debut: "", date_fin: "", motif: "" })
+      setForm({
+        employe_id: "", type_conge: "AL", date_debut: "", date_fin: "", motif: "",
+        demi_journee: false, matin_ou_apres_midi: 'matin',
+      })
       // Reload current tab data
       if (tab === "dashboard") loadBalances()
       if (tab === "demandes") loadDemandes()
@@ -659,6 +796,42 @@ export default function CongesPage() {
       loadBalances()
     } catch (e) { console.error(e) }
     finally { setActionLoading(null) }
+  }
+
+  // Fix 2 — cancel an imposed (or any approved) leave with balance restore.
+  // Uses POST /api/rh/conges with action='annuler' — endpoint was added in
+  // Commit 4. On success the API recomputes soldes_conges from scratch for
+  // the affected (employe, year, type), so the AL impose_societe counter
+  // drops by nb_jours.
+  const annulerImpose = async () => {
+    if (!annulerTarget) return
+    setActionLoading(annulerTarget.id)
+    try {
+      const res = await fetch("/api/rh/conges", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "annuler",
+          id: annulerTarget.id,
+          motif_annulation: annulerMotif || null,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`)
+      const nb = annulerTarget.nb_jours
+      setToast(`Congé annulé — ${nb}j re-crédité${nb > 1 ? 's' : ''} sur le solde AL.`)
+      setAnnulerTarget(null)
+      setAnnulerMotif("")
+      loadDemandes()
+      loadBalances()
+      if (tab === "historique") loadHistorique()
+      setTimeout(() => setToast(null), 4500)
+    } catch (e: any) {
+      setToast(`⚠ Échec de l'annulation: ${e?.message || 'erreur'}`)
+      setTimeout(() => setToast(null), 6000)
+    } finally {
+      setActionLoading(null)
+    }
   }
 
   const sickRetroactif = async (empId: string) => {
@@ -766,6 +939,16 @@ export default function CongesPage() {
           <Button onClick={() => { setDialogOpen(true); setFormError(null) }} className="bg-[#0B0F2E] text-white">
             <Plus className="w-4 h-4 mr-2" />Nouvelle demande
           </Button>
+          {canImposeCollectif && (
+            <Button
+              onClick={openCollectifModal}
+              variant="outline"
+              className="border-amber-500 text-amber-700 hover:bg-amber-50"
+              title="Imposer une période de congé à tous les employés (ou à un groupe)"
+            >
+              <Megaphone className="w-4 h-4 mr-2" />Imposer congé collectif
+            </Button>
+          )}
         </div>
       </div>
 
@@ -932,7 +1115,18 @@ export default function CongesPage() {
                             {isEditing ? (
                               <Input type="number" className="h-7 text-xs w-14 text-center" value={editBalFields.al_pris}
                                 onChange={e => setEditBalFields(f => ({ ...f, al_pris: parseFloat(e.target.value) || 0 }))} />
-                            ) : b.al_pris}
+                            ) : (
+                              <div className="flex flex-col items-center leading-tight">
+                                <span className="font-semibold">{b.al_pris}</span>
+                                {((b.al_impose_societe || 0) > 0 || (b.al_impose_employe || 0) > 0) && (
+                                  <span className="text-[9px] text-gray-500 mt-0.5">
+                                    <span title="Choisi par l'employé">emp: {b.al_impose_employe ?? b.al_pris}</span>
+                                    <span className="mx-1">·</span>
+                                    <span title="Imposé par la société" className={b.al_impose_societe && b.al_impose_societe > 0 ? "text-amber-700 font-medium" : ""}>soc: {b.al_impose_societe ?? 0}</span>
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </TableCell>
                           <TableCell className="text-center">
                             <span className={`font-semibold ${b.al_solde <= 0 ? "text-red-600" : b.al_solde <= 5 ? "text-orange-500" : "text-green-600"}`}>
@@ -1041,12 +1235,26 @@ export default function CongesPage() {
                             {c.employe?.societe_id ? societeMap.get(c.employe.societe_id) || "---" : "---"}
                           </TableCell>
                           <TableCell>
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${TYPE_COLORS[c.type_conge] || "bg-gray-100 text-gray-800"}`}>
-                              {TYPE_LABELS[c.type_conge] || c.type_conge}
-                            </span>
+                            <div className="flex items-center gap-1 flex-wrap">
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${TYPE_COLORS[c.type_conge] || "bg-gray-100 text-gray-800"}`}>
+                                {TYPE_LABELS[c.type_conge] || c.type_conge}
+                              </span>
+                              {c.demi_journee && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-100 text-purple-800 border border-purple-200">
+                                  {c.matin_ou_apres_midi === 'apres_midi' ? '½ PM' : '½ AM'}
+                                </span>
+                              )}
+                              {c.impose_par_societe && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200" title="Imposé par la société">
+                                  Imposé
+                                </span>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className="text-sm">
-                            {formatDate(c.date_debut)} &rarr; {formatDate(c.date_fin)}
+                            {c.demi_journee
+                              ? formatDate(c.date_debut)
+                              : <>{formatDate(c.date_debut)} &rarr; {formatDate(c.date_fin)}</>}
                           </TableCell>
                           <TableCell>
                             <span className="font-semibold">{c.nb_jours}j</span>
@@ -1289,6 +1497,7 @@ export default function CongesPage() {
                         <TableHead>Approbation</TableHead>
                         <TableHead>Motif</TableHead>
                         <TableHead>Commentaire</TableHead>
+                        {canImposeCollectif && <TableHead className="text-right">Actions</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1298,12 +1507,26 @@ export default function CongesPage() {
                             {c.employe?.prenom} {c.employe?.nom}
                           </TableCell>
                           <TableCell>
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${TYPE_COLORS[c.type_conge] || "bg-gray-100 text-gray-800"}`}>
-                              {TYPE_LABELS[c.type_conge] || c.type_conge}
-                            </span>
+                            <div className="flex items-center gap-1 flex-wrap">
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${TYPE_COLORS[c.type_conge] || "bg-gray-100 text-gray-800"}`}>
+                                {TYPE_LABELS[c.type_conge] || c.type_conge}
+                              </span>
+                              {c.demi_journee && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-100 text-purple-800 border border-purple-200">
+                                  {c.matin_ou_apres_midi === 'apres_midi' ? '½ PM' : '½ AM'}
+                                </span>
+                              )}
+                              {c.impose_par_societe && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200" title="Imposé par la société">
+                                  Imposé
+                                </span>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className="text-sm">
-                            {formatDate(c.date_debut)} &rarr; {formatDate(c.date_fin)}
+                            {c.demi_journee
+                              ? formatDate(c.date_debut)
+                              : <>{formatDate(c.date_debut)} &rarr; {formatDate(c.date_fin)}</>}
                           </TableCell>
                           <TableCell>
                             <span className="font-semibold">{c.nb_jours}j</span>
@@ -1322,6 +1545,29 @@ export default function CongesPage() {
                           <TableCell className="text-sm text-gray-500 max-w-32 truncate">
                             {c.commentaire_manager || "---"}
                           </TableCell>
+                          {canImposeCollectif && (
+                            <TableCell className="text-right">
+                              {/* Annuler button — visible only on approved imposed leaves
+                                  (the original spec). We still gate by role for defence in
+                                  depth, even though the API also gates. */}
+                              {c.statut === "approuve" && c.impose_par_societe && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 text-xs text-red-600 hover:bg-red-50"
+                                  disabled={actionLoading === c.id}
+                                  onClick={() => { setAnnulerTarget(c); setAnnulerMotif("") }}
+                                >
+                                  {actionLoading === c.id ? (
+                                    <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                                  ) : (
+                                    <XCircle className="w-3 h-3 mr-1" />
+                                  )}
+                                  Annuler
+                                </Button>
+                              )}
+                            </TableCell>
+                          )}
                         </TableRow>
                       ))}
                     </TableBody>
@@ -1378,22 +1624,76 @@ export default function CongesPage() {
                 {form.type_conge === "PAT" && "Paternite: 5 jours ouvrables. Reserves aux hommes."}
               </p>
             </div>
+
+            {/* Demi-journée — only offered for leave types where it makes sense */}
+            {DEMI_JOURNEE_ALLOWED_TYPES.has(form.type_conge) && (
+              <div className="border rounded-lg p-3 bg-gray-50 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="demi-journee-toggle"
+                    checked={form.demi_journee}
+                    onCheckedChange={(checked) => setForm(f => ({
+                      ...f,
+                      demi_journee: checked === true,
+                      // When toggling ON: collapse the range to a single day.
+                      // When toggling OFF: keep whatever the user had.
+                      date_fin: checked === true ? (f.date_debut || f.date_fin) : f.date_fin,
+                    }))}
+                  />
+                  <Label htmlFor="demi-journee-toggle" className="cursor-pointer text-sm font-medium">
+                    Demi-journée (0,5 jour)
+                  </Label>
+                </div>
+                {form.demi_journee && (
+                  <div className="pl-6">
+                    <Label className="text-xs text-gray-600">Moment de la journée</Label>
+                    <RadioGroup
+                      value={form.matin_ou_apres_midi}
+                      onValueChange={(v: string) => setForm(f => ({
+                        ...f,
+                        matin_ou_apres_midi: (v === 'apres_midi' ? 'apres_midi' : 'matin') as 'matin' | 'apres_midi',
+                      }))}
+                      className="flex gap-6 mt-1"
+                    >
+                      <div className="flex items-center gap-2">
+                        <RadioGroupItem value="matin" id="demi-matin" />
+                        <Label htmlFor="demi-matin" className="cursor-pointer text-sm">Matin (AM)</Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <RadioGroupItem value="apres_midi" id="demi-apresmidi" />
+                        <Label htmlFor="demi-apresmidi" className="cursor-pointer text-sm">Après-midi (PM)</Label>
+                      </div>
+                    </RadioGroup>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Date debut *</Label>
                 <Input
                   type="date"
                   value={form.date_debut}
-                  onChange={e => setForm(f => ({ ...f, date_debut: e.target.value }))}
+                  onChange={e => setForm(f => ({
+                    ...f,
+                    date_debut: e.target.value,
+                    // Half day: keep date_fin aligned with date_debut.
+                    date_fin: f.demi_journee ? e.target.value : f.date_fin,
+                  }))}
                 />
               </div>
               <div>
                 <Label>Date fin *</Label>
                 <Input
                   type="date"
-                  value={form.date_fin}
+                  value={form.demi_journee ? form.date_debut : form.date_fin}
+                  disabled={form.demi_journee}
                   onChange={e => setForm(f => ({ ...f, date_fin: e.target.value }))}
                 />
+                {form.demi_journee && (
+                  <p className="text-[10px] text-gray-500 mt-1">Désactivé pour une demi-journée (même date que le début).</p>
+                )}
               </div>
             </div>
             <div>
@@ -1498,6 +1798,217 @@ export default function CongesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ═══ DIALOG: Imposer congé collectif ═══ */}
+      <Dialog open={collectifOpen} onOpenChange={setCollectifOpen}>
+        <DialogContent className="sm:max-w-lg" aria-describedby="collectif-desc">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Megaphone className="w-4 h-4 text-amber-600" />
+              Imposer un congé collectif
+            </DialogTitle>
+            <DialogDescription id="collectif-desc">
+              Crée une période de congé imposée pour tous les employés actifs (ou un groupe).
+              Les demandes sont créées automatiquement en statut "approuvé" et le solde AL
+              est décompté côté "imposé par la société".
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 py-2">
+            {collectifError && (
+              <div className="bg-red-50 border border-red-200 rounded-md p-3">
+                <p className="text-sm text-red-700">{collectifError}</p>
+              </div>
+            )}
+            {collectifFeedback && (
+              <div className="bg-green-50 border border-green-200 rounded-md p-3 text-sm text-green-800">
+                <CheckCircle className="w-4 h-4 inline-block mr-1" />
+                Congé collectif créé : <strong>{collectifFeedback.nb}</strong> employé(s) · <strong>{collectifFeedback.jours}</strong> jour(s) imposé(s) au total.
+              </div>
+            )}
+            <div>
+              <Label>Titre *</Label>
+              <Input
+                value={collectifForm.titre}
+                onChange={e => setCollectifForm(f => ({ ...f, titre: e.target.value }))}
+                placeholder="Ex: Fermeture annuelle — décembre 2026"
+              />
+            </div>
+            <div>
+              <Label>Société *</Label>
+              <Select
+                value={collectifForm.societe_id}
+                onValueChange={v => setCollectifForm(f => ({ ...f, societe_id: v, groupe_id: "" }))}
+              >
+                <SelectTrigger><SelectValue placeholder="Choisir une société…" /></SelectTrigger>
+                <SelectContent>
+                  {societes.map((s: any) => (
+                    <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Type de congé *</Label>
+                <Select
+                  value={collectifForm.type_conge}
+                  onValueChange={v => setCollectifForm(f => ({ ...f, type_conge: v }))}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="AL">Congé annuel (AL)</SelectItem>
+                    <SelectItem value="UL">Sans solde (UL)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-gray-500 mt-1">
+                  Seul AL décompte le solde au titre "imposé société".
+                </p>
+              </div>
+              <div>
+                <Label>Appliquer à *</Label>
+                <Select
+                  value={collectifForm.applique_a}
+                  onValueChange={(v: string) => setCollectifForm(f => ({
+                    ...f,
+                    applique_a: (v === 'groupe' ? 'groupe' : 'all') as 'all' | 'groupe',
+                    groupe_id: v === 'groupe' ? f.groupe_id : "",
+                  }))}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tous les employés actifs</SelectItem>
+                    <SelectItem value="groupe">Un groupe</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {collectifForm.applique_a === 'groupe' && (
+              <div>
+                <Label>Groupe *</Label>
+                <Select
+                  value={collectifForm.groupe_id}
+                  onValueChange={v => setCollectifForm(f => ({ ...f, groupe_id: v }))}
+                >
+                  <SelectTrigger><SelectValue placeholder={groupes.length ? "Choisir un groupe…" : "Aucun groupe défini pour cette société"} /></SelectTrigger>
+                  <SelectContent>
+                    {groupes.map(g => (
+                      <SelectItem key={g.id} value={g.id}>{g.nom}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Date début *</Label>
+                <Input
+                  type="date"
+                  value={collectifForm.date_debut}
+                  onChange={e => setCollectifForm(f => ({ ...f, date_debut: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label>Date fin *</Label>
+                <Input
+                  type="date"
+                  value={collectifForm.date_fin}
+                  onChange={e => setCollectifForm(f => ({ ...f, date_fin: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Motif</Label>
+              <Textarea
+                rows={2}
+                value={collectifForm.motif}
+                onChange={e => setCollectifForm(f => ({ ...f, motif: e.target.value }))}
+                placeholder="Raison de l'imposition (optionnel)"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCollectifOpen(false)}>Fermer</Button>
+            <Button
+              onClick={submitCollectif}
+              disabled={collectifSaving || !!collectifFeedback}
+              className="bg-amber-600 text-white hover:bg-amber-700"
+            >
+              {collectifSaving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+              <Megaphone className="w-4 h-4 mr-2" />Imposer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══ DIALOG: Annuler un congé imposé (Fix 2) ═══ */}
+      <Dialog open={!!annulerTarget} onOpenChange={open => { if (!open) { setAnnulerTarget(null); setAnnulerMotif("") } }}>
+        <DialogContent aria-describedby="annuler-desc">
+          <DialogHeader>
+            <DialogTitle className="text-red-700 flex items-center gap-2">
+              <XCircle className="w-5 h-5" />
+              Annuler ce congé imposé
+            </DialogTitle>
+            <DialogDescription id="annuler-desc">
+              Le congé sera marqué "annulé" (soft-delete) et les jours seront re-crédités sur le solde AL de l'employé.
+            </DialogDescription>
+          </DialogHeader>
+          {annulerTarget && (
+            <div className="py-2 space-y-3">
+              <div className="rounded-md bg-amber-50 border border-amber-200 p-3 text-sm">
+                <p className="font-medium text-amber-900">
+                  Annuler ce congé imposé pour <strong>{annulerTarget.employe?.prenom} {annulerTarget.employe?.nom}</strong> ?
+                </p>
+                <p className="text-amber-800 mt-1">
+                  <strong>{annulerTarget.nb_jours}</strong> jour{annulerTarget.nb_jours > 1 ? 's' : ''} seront re-crédité{annulerTarget.nb_jours > 1 ? 's' : ''} sur son solde AL.
+                </p>
+                <p className="text-xs text-amber-700 mt-1">
+                  {formatDate(annulerTarget.date_debut)}
+                  {annulerTarget.date_debut !== annulerTarget.date_fin && <> &rarr; {formatDate(annulerTarget.date_fin)}</>}
+                  {" · "}{TYPE_LABELS[annulerTarget.type_conge] || annulerTarget.type_conge}
+                </p>
+              </div>
+              <div>
+                <Label>Motif de l'annulation (optionnel)</Label>
+                <Textarea
+                  value={annulerMotif}
+                  onChange={e => setAnnulerMotif(e.target.value)}
+                  placeholder="Ex: Fermeture reportée, erreur de saisie…"
+                  rows={2}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setAnnulerTarget(null); setAnnulerMotif("") }}>
+              Fermer
+            </Button>
+            <Button
+              onClick={annulerImpose}
+              disabled={actionLoading === annulerTarget?.id}
+              className="bg-red-600 text-white hover:bg-red-700"
+            >
+              {actionLoading === annulerTarget?.id && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+              <XCircle className="w-4 h-4 mr-2" />Confirmer l'annulation
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Toast — Fix 2 success feedback */}
+      {toast && (
+        <div className="fixed bottom-5 right-5 z-50 max-w-sm">
+          <div className={`rounded-lg shadow-lg border px-4 py-3 flex items-start gap-2 text-sm ${
+            toast.startsWith('⚠')
+              ? 'bg-red-50 border-red-300 text-red-800'
+              : 'bg-green-50 border-green-300 text-green-800'
+          }`}>
+            {toast.startsWith('⚠')
+              ? <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+              : <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />}
+            <span className="flex-1">{toast}</span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

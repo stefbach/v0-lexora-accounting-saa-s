@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getUserSocieteIds } from '@/lib/rh/access'
+import { calculateWorkingDays } from '@/lib/rh/calculateWorkingDays'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,17 +14,18 @@ function getAdminClient() {
   )
 }
 
-/** Count working days between two dates (exclude Sat/Sun) */
+/**
+ * Count working days between two dates (Mon–Fri, excluding Mauritius public
+ * holidays). Thin wrapper around the shared calculateWorkingDays utility so
+ * this file keeps its previous call-site signature.
+ *
+ * NOTE: the previous version excluded weekends only — no holidays — which
+ * slightly overcounted the notice period for any month containing a MU
+ * holiday. The shared helper now excludes them, matching Workers' Rights
+ * Act Section 23 practice (notice period is "working days").
+ */
 function countWorkingDays(dateDebut: string, dateFin: string): number {
-  let count = 0
-  const d = new Date(dateDebut + 'T12:00:00')
-  const end = new Date(dateFin + 'T12:00:00')
-  while (d <= end) {
-    const day = d.getDay()
-    if (day !== 0 && day !== 6) count++
-    d.setDate(d.getDate() + 1)
-  }
-  return count
+  return calculateWorkingDays(dateDebut, dateFin)
 }
 
 /** Calculate ancienneté between two dates */

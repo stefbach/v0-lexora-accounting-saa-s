@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server'
-import { createEcrituresForPayment } from '@/lib/accounting/ecritures-factures'
+import { createEcrituresForPayment, createEcrituresForFacture } from '@/lib/accounting/ecritures-factures'
 import { analyzeAllTransactions, MatchingTransaction, MatchingFacture } from '@/lib/accounting/matching-engine'
 import { runIntelligentRapprochement, buildAliasMap } from '@/lib/accounting/intelligent-rapprochement'
 import type { SupplierAlias } from '@/lib/accounting/intelligent-rapprochement'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getTauxChange } from '@/lib/taux-change'
+import { accountClass } from '@/lib/accounting/classification-rules'
+import { validateLettrageGroup } from '@/lib/accounting/accounting-rules'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -58,6 +60,10 @@ async function safeQuery(supabase: any, table: string, query: any) {
   }
 }
 
+// FIX 2 & FIX 8 — accountClass / isLettrableAccount sont maintenant dans
+// lib/accounting/classification-rules.ts (source unique, partagée avec
+// lib/accounting/accounting-rules.ts). Import en tête de fichier.
+
 // GET — Rapprochements + transactions + factures + écritures
 export async function GET(request: Request) {
   try {
@@ -106,14 +112,52 @@ export async function GET(request: Request) {
       })
     })
 
-    // 3. Factures (table may not exist)
+    // 3. Factures — FIX 6 : on inclut aussi 'paye' pour que la colonne
+    //    « Paiement » de l'UI puisse afficher les factures déjà
+    //    rapprochées (le filtre précédent sur ['en_attente','retard',
+    //    'partiel'] forçait un compte de « 0 payées » alors que la DB en
+    //    contient 60+). Les factures 'annule' restent exclues.
     let factures: any[] = []
     const { data: facturesData, error: facturesErr } = await supabase
       .from('factures').select('*')
       .eq('societe_id', societe_id)
-      .in('statut', ['en_attente', 'retard', 'partiel'])
+      .in('statut', ['en_attente', 'retard', 'partiel', 'paye'])
       .order('date_facture', { ascending: false })
     if (!facturesErr) factures = facturesData || []
+
+    // FIX 5 — Enrichir chaque facture payée avec le libellé de la
+    // transaction bancaire qui l'a soldée (si rapproche_releve_id +
+    // rapproche_transaction_idx sont renseignés). Permet à la colonne
+    // « Paiement » d'afficher « Virement du DD/MM/YYYY — FT-2026… »
+    // sans requête client supplémentaire.
+    try {
+      const releveIds = new Set<string>()
+      for (const f of factures) {
+        if (f.statut === 'paye' && f.rapproche_releve_id) releveIds.add(f.rapproche_releve_id)
+      }
+      if (releveIds.size > 0) {
+        const { data: relevesForTx } = await supabase
+          .from('releves_bancaires')
+          .select('id, transactions_json')
+          .in('id', [...releveIds])
+        const txByReleve = new Map<string, any[]>()
+        for (const r of relevesForTx || []) {
+          txByReleve.set((r as any).id, (r as any).transactions_json || [])
+        }
+        for (const f of factures) {
+          if (f.statut !== 'paye' || !f.rapproche_releve_id) continue
+          const txs = txByReleve.get(f.rapproche_releve_id) || []
+          const idx = Number(f.rapproche_transaction_idx)
+          if (Number.isFinite(idx) && idx >= 0 && idx < txs.length) {
+            const tx = txs[idx] || {}
+            f.rapproche_tx_libelle = String(tx.libelle || '')
+            f.rapproche_tx_date = tx.date || null
+          }
+        }
+      }
+    } catch (txEnrichErr) {
+      console.warn('[rapprochement GET] tx libelle enrichment failed:', txEnrichErr)
+    }
 
     // 4. Écritures comptables v1 (pour lettrage)
     const { data: dossiers } = await supabase
@@ -130,11 +174,61 @@ export async function GET(request: Request) {
       ecritures = data || []
     }
 
+    // FIX 3 + 5 — Comptes PCG à surveiller :
+    //   • 467 Virements inter-sociétés (scénario S7 DDS↔OCC) → doit se
+    //     solder rapidement après le mouvement miroir chez la sœur.
+    //   • 580 Virements internes en transit (règle R3) → doit TOUJOURS
+    //     être soldé en fin de mois. Alerte si écritures > 30 jours non
+    //     lettrées.
+    //
+    // On calcule les soldes en scannant les écritures déjà chargées puis
+    // on construit une liste d'alertes que le client affichera en bandeau.
+    const TRENTE_JOURS_MS = 30 * 24 * 60 * 60 * 1000
+    const nowTs = Date.now()
+    const solde467 = ecritures
+      .filter(e => String(e.compte || '').startsWith('467'))
+      .reduce((s, e) => s + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
+    const solde580 = ecritures
+      .filter(e => String(e.compte || '').startsWith('580'))
+      .reduce((s, e) => s + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
+    const ecritures580OldUnlettered = ecritures.filter(e => {
+      if (!String(e.compte || '').startsWith('580')) return false
+      if (e.lettre) return false // déjà lettrée
+      const dt = e.date_ecriture ? new Date(e.date_ecriture).getTime() : 0
+      return dt > 0 && (nowTs - dt) > TRENTE_JOURS_MS
+    })
+    const transit_alerts: Array<{ compte: string; type: string; solde?: number; count?: number; message: string }> = []
+    if (Math.abs(solde467) > 0.01) {
+      transit_alerts.push({
+        compte: '467',
+        type: 'inter_societes_non_solde',
+        solde: Math.round(solde467 * 100) / 100,
+        message: `Compte 467 (virements inter-sociétés) non soldé : ${solde467.toFixed(2)} MUR. Vérifier le mouvement miroir chez la société sœur (scénario S7).`,
+      })
+    }
+    if (Math.abs(solde580) > 0.01) {
+      transit_alerts.push({
+        compte: '580',
+        type: 'transit_non_solde',
+        solde: Math.round(solde580 * 100) / 100,
+        message: `Compte 580 (virements en transit) non soldé : ${solde580.toFixed(2)} MUR. Règle R3 — le 580 doit toujours être soldé à la clôture du mois.`,
+      })
+    }
+    if (ecritures580OldUnlettered.length > 0) {
+      transit_alerts.push({
+        compte: '580',
+        type: 'transit_ancien_non_lettre',
+        count: ecritures580OldUnlettered.length,
+        message: `${ecritures580OldUnlettered.length} écriture(s) 580 non lettrée(s) depuis plus de 30 jours — lettrage urgent requis (règle R3).`,
+      })
+    }
+
     return NextResponse.json({
       rapprochements: rapprochements || [],
       bankTransactions, factures, ecritures,
       releves: releves || [],
       comptesBancaires: comptes || [],
+      transit_alerts,
     })
   } catch (e: unknown) {
     console.error('[rapprochement GET]', e)
@@ -186,7 +280,9 @@ export async function POST(request: Request) {
           supabase.from('dossiers').select('id, client_id').eq('societe_id', societe_id),
           supabase.from('factures').select('id, numero_facture, tiers, montant_ttc, montant_mur, type_facture, devise, date_facture, date_echeance, conditions_paiement, statut').eq('societe_id', societe_id).in('statut', ['en_attente', 'retard', 'partiel']),
           getTauxChange().catch(() => ({ MUR: 1, EUR: 46.50, USD: 44.80, GBP: 54.20 })),
-          supabase.from('comptes_bancaires').select('id, devise').eq('societe_id', societe_id),
+          // FIX 1 — compte_comptable est nécessaire pour router la 2e ligne
+          // BNQ sur le bon 512xxx (ex: 512100 DDS MUR, 512200 DDS EUR).
+          supabase.from('comptes_bancaires').select('id, devise, compte_comptable, banque, numero_compte').eq('societe_id', societe_id),
           supabase.from('bulletins_paie').select('id, employe_id, salaire_net, periode, statut').eq('societe_id', societe_id).eq('statut', 'valide'),
         ])
 
@@ -222,7 +318,13 @@ export async function POST(request: Request) {
       }
 
       const compteDeviseMap: Record<string, string> = {}
-      ;(comptesBancaires || []).forEach((c: any) => { compteDeviseMap[c.id] = c.devise || 'MUR' })
+      // FIX 1 — map compte_bancaire_id → compte_comptable (512xxx) pour
+      // que la ligne BNQ crédite la bonne sous-classe 512.
+      const cbToCompteComptable: Record<string, string> = {}
+      ;(comptesBancaires || []).forEach((c: any) => {
+        compteDeviseMap[c.id] = c.devise || 'MUR'
+        if (c.compte_comptable) cbToCompteComptable[c.id] = String(c.compte_comptable)
+      })
 
       // Second batch: écritures + other société names
       let ecritures: any[] = []
@@ -555,6 +657,12 @@ export async function POST(request: Request) {
           const conf = match.confidence
           const isGroup = match.factureIds.length > 1
           const reconcileDate = new Date().toISOString()
+          // FIX 1 — rapproche_date = date métier de la transaction, fallback aujourd'hui.
+          // Never block the update on a missing tx.date.
+          const payDate: string =
+            (entry.updatedTxs[txIdx]?.date as string | undefined) ||
+            (match.transaction as any)?.date ||
+            new Date().toISOString().split('T')[0]
 
           if (conf >= 0.60) {
             // High confidence → auto-apply
@@ -594,7 +702,7 @@ export async function POST(request: Request) {
                 statut: newStatut,
                 rapproche_releve_id: releveId,
                 rapproche_transaction_idx: txIdx,
-                rapproche_date: reconcileDate,
+                rapproche_date: payDate,
                 rapproche_source: 'auto_intelligent',
                 solde_non_paye: soldeRestant > 1 ? soldeRestant : 0,
                 tds_retenu: tdsRetenu,
@@ -610,23 +718,65 @@ export async function POST(request: Request) {
               console.log(`[rapprochement] ${facturesUpdated} facture(s) → paye for ${match.supplierName}`)
             }
 
-            // Generate BNQ journal entries
+            // FIX 1 — Generate BNQ journal entries + lettrer ACH/BNQ ensemble.
+            // On émet un jeu d'écritures par facture du groupe pour que
+            // chacune porte son propre facture_id (le lettrage peut
+            // ensuite solder tiers par tiers). Le 2e compte BNQ est
+            // routé vers le bon 512xxx via cbToCompteComptable.
             const txRaw = entry.updatedTxs[txIdx]
             const txAmount = Math.max(Number(txRaw.debit) || 0, Number(txRaw.credit) || 0)
             const payAmountMUR = toMUR(txAmount, entry.releveDevise)
             const isOutgoing = (Number(txRaw.debit) || 0) > 0
             const payType: 'supplier' | 'client' = isOutgoing ? 'supplier' : 'client'
             const tiers = (match.supplierName || txRaw.tiers_detecte || '').substring(0, 50)
+            // Résoudre le compte bancaire comptable à partir du relevé
+            const releveRef = releves.find((r: any) => r.id === releveId)
+            const compteBanque = (releveRef && cbToCompteComptable[releveRef.compte_bancaire_id]) || '512'
+            const datePayment = txRaw.date || new Date().toISOString().split('T')[0]
+            const txLibelle = String(txRaw.libelle || '').substring(0, 100)
 
-            await createEcrituresForPayment(supabase, {
-              societe_id,
-              date_payment: txRaw.date || new Date().toISOString().split('T')[0],
-              amount_mur: Math.round(payAmountMUR * 100) / 100,
-              type: payType,
-              tiers,
-              ref_folio: `BANK-${releveId}-${txIdx}`,
-              description: `Paiement ${isGroup ? match.factureIds.length + ' factures' : match.factures[0]?.numero_facture || ''} — ${tiers}`,
+            // Montant par facture : réparti au prorata du montant_ttc,
+            // fallback équi-split. Arrondi à 2 décimales, reste sur la
+            // dernière facture pour équilibrer centime par centime.
+            const totalFactures = (match.factures || []).reduce(
+              (s: number, f: any) => s + (Number(f.montant_ttc) || 0), 0
+            )
+            const amountMurRounded = Math.round(payAmountMUR * 100) / 100
+            const perFactureAmounts: number[] = (match.factures || []).map((f: any, i: number) => {
+              const base = match.factures.length === 1
+                ? amountMurRounded
+                : (totalFactures > 0
+                    ? Math.round((Number(f.montant_ttc) || 0) / totalFactures * amountMurRounded * 100) / 100
+                    : Math.round((amountMurRounded / match.factures.length) * 100) / 100)
+              return base
             })
+            const summed = perFactureAmounts.reduce((s, n) => s + n, 0)
+            const residual = Math.round((amountMurRounded - summed) * 100) / 100
+            if (perFactureAmounts.length > 0 && Math.abs(residual) >= 0.01) {
+              perFactureAmounts[perFactureAmounts.length - 1] += residual
+            }
+
+            for (let i = 0; i < (match.factures || []).length; i++) {
+              const fac = match.factures[i]
+              const amountPerFacture = perFactureAmounts[i] || 0
+              if (amountPerFacture <= 0) continue
+              const { error: payErr } = await createEcrituresForPayment(supabase, {
+                societe_id,
+                date_payment: datePayment,
+                amount_mur: amountPerFacture,
+                type: payType,
+                tiers,
+                ref_folio: `BANK-${releveId}-${txIdx}-${fac.id}`,
+                description: `Règlement ${fac.numero_facture || ''} — ${tiers}`.trim(),
+                compte_banque: compteBanque,
+                facture_id: fac.id,
+                lettre_code: code,
+                numero_piece: txLibelle,
+              })
+              if (payErr) {
+                console.warn(`[rapprochement] BNQ insert failed for facture ${fac.id}:`, payErr)
+              }
+            }
 
             // Si TDS détecté → enregistrer la retenue (D 401 / C 443 - TVA retenue à source)
             if (isTds && diffForTds > 0) {
@@ -765,7 +915,10 @@ export async function POST(request: Request) {
       // ═══════════════════════════════════════════════════════════════
       let repaired = 0
       try {
-        const allFacIdsToMark = new Set<string>()
+        // FIX 1 — track the payment date per facture so auto_repair can set
+        // rapproche_date consistently (never leave it NULL).
+        const today = new Date().toISOString().split('T')[0]
+        const facIdToDate = new Map<string, string>()
 
         for (const [releveId, entry] of releveMap) {
           for (let i = 0; i < entry.updatedTxs.length; i++) {
@@ -777,36 +930,147 @@ export async function POST(request: Request) {
               counts.matched++
             }
             if (tx.statut !== 'rapproche') continue
-            // Collect all facture IDs from matched transactions
-            if (tx.facture_id) allFacIdsToMark.add(tx.facture_id)
+            // Collect all facture IDs from matched transactions + their pay date
+            const txPayDate: string = (tx.date as string | undefined) || today
+            if (tx.facture_id && !facIdToDate.has(tx.facture_id)) {
+              facIdToDate.set(tx.facture_id, txPayDate)
+            }
             if (Array.isArray(tx.facture_ids)) {
-              for (const fId of tx.facture_ids) allFacIdsToMark.add(fId)
+              for (const fId of tx.facture_ids) {
+                if (!facIdToDate.has(fId)) facIdToDate.set(fId, txPayDate)
+              }
             }
           }
         }
 
-        if (allFacIdsToMark.size > 0) {
+        if (facIdToDate.size > 0) {
           // Find factures that should be paye but aren't
           const { data: notPayeYet } = await supabase
             .from('factures')
             .select('id')
-            .in('id', [...allFacIdsToMark])
+            .in('id', [...facIdToDate.keys()])
             .neq('statut', 'paye')
 
           if (notPayeYet && notPayeYet.length > 0) {
-            const idsToFix = notPayeYet.map((f: any) => f.id)
-            const { error: repairErr } = await supabase
-              .from('factures')
-              .update({ statut: 'paye', rapproche_source: 'auto_repair' })
-              .in('id', idsToFix)
-            if (!repairErr) {
-              repaired = idsToFix.length
+            // FIX 1 — per-facture update so rapproche_date carries the actual
+            // transaction date when available (group .in() can't pass
+            // per-row values).
+            let fixedOk = 0
+            for (const f of notPayeYet) {
+              const fId = (f as any).id as string
+              const payDate = facIdToDate.get(fId) || today
+              const { error: repairErr } = await supabase
+                .from('factures')
+                .update({
+                  statut: 'paye',
+                  rapproche_date: payDate,
+                  rapproche_source: 'auto_repair',
+                })
+                .eq('id', fId)
+              if (!repairErr) fixedOk++
+              else console.warn(`[rapprochement] auto_repair ${fId}:`, repairErr.message)
+            }
+            repaired = fixedOk
+            if (repaired > 0) {
               console.log(`[rapprochement] Consistency repair: ${repaired} factures fixed to paye`)
             }
           }
         }
       } catch (repairErr) {
         console.warn('[rapprochement] Consistency repair failed:', repairErr)
+      }
+
+      // ═══════════════════════════════════════════════════════════════
+      // FIX 4 — facture_id backfill dans transactions_json
+      //
+      // Problème prod : 21 tx statut='rapproche' sans facture_id dans le
+      // JSON. L'absence de ce lien empêche la colonne « Paiement » de la
+      // section Factures de retrouver la date/le libellé du virement.
+      //
+      // Stratégie de récupération (par ordre de fiabilité) :
+      //   a) tx.ecriture_id → ecriture.facture_id (lien direct mig. 133)
+      //   b) tx.lettre      → recherche d'une ACH/VTE même lettre + facture_id
+      //   c) match libellé/montant contre les factures 'paye' de la période
+      //
+      // Idempotent : n'écrase jamais un facture_id existant.
+      // ═══════════════════════════════════════════════════════════════
+      let backfilled = 0
+      try {
+        // Prépare la liste des factures payées pour la stratégie (c).
+        const { data: paidForBackfill } = await supabase
+          .from('factures')
+          .select('id, numero_facture, tiers, montant_ttc, rapproche_releve_id, rapproche_transaction_idx')
+          .eq('societe_id', societe_id)
+          .eq('statut', 'paye')
+        const paidList = paidForBackfill || []
+
+        for (const [releveId, entry] of releveMap) {
+          let entryChanged = false
+          for (let i = 0; i < entry.updatedTxs.length; i++) {
+            const tx = entry.updatedTxs[i]
+            if (tx.statut !== 'rapproche') continue
+            if (tx.facture_id || (Array.isArray(tx.facture_ids) && tx.facture_ids.length > 0)) continue
+
+            let foundFactureId: string | null = null
+
+            // (a) via ecriture_id
+            if (tx.ecriture_id) {
+              try {
+                const { data: ecr } = await supabase
+                  .from('ecritures_comptables')
+                  .select('facture_id')
+                  .eq('id', tx.ecriture_id)
+                  .maybeSingle()
+                if (ecr && (ecr as any).facture_id) foundFactureId = String((ecr as any).facture_id)
+              } catch { /* best-effort */ }
+            }
+
+            // (b) via tx.lettre
+            if (!foundFactureId && tx.lettre) {
+              try {
+                const { data: lettred } = await supabase
+                  .from('ecritures_comptables')
+                  .select('facture_id')
+                  .eq('lettre', tx.lettre)
+                  .not('facture_id', 'is', null)
+                  .limit(1)
+                if (lettred && lettred.length > 0) foundFactureId = String((lettred[0] as any).facture_id)
+              } catch { /* best-effort */ }
+            }
+
+            // (c) via rapproche_releve_id + transaction_idx côté facture
+            if (!foundFactureId) {
+              const m = paidList.find((f: any) =>
+                f.rapproche_releve_id === releveId && f.rapproche_transaction_idx === i
+              )
+              if (m) foundFactureId = String(m.id)
+            }
+
+            if (foundFactureId) {
+              entry.updatedTxs[i] = {
+                ...tx,
+                facture_id: foundFactureId,
+                facture_ids: [foundFactureId],
+              }
+              entryChanged = true
+              backfilled++
+            }
+          }
+          if (entryChanged) entry.changed = true
+        }
+        if (backfilled > 0) {
+          console.log(`[rapprochement] FIX 4 backfill: ${backfilled} tx rapproche ← facture_id inféré`)
+          // Persiste uniquement les relevés effectivement touchés.
+          for (const [releveId, entry] of releveMap) {
+            if (entry.changed) {
+              await supabase.from('releves_bancaires')
+                .update({ transactions_json: entry.updatedTxs })
+                .eq('id', releveId)
+            }
+          }
+        }
+      } catch (backfillErr) {
+        console.warn('[rapprochement] FIX 4 backfill failed:', backfillErr)
       }
 
       // ═══════════════════════════════════════════════════════════════
@@ -1117,15 +1381,23 @@ export async function POST(request: Request) {
         txs[txIdx] = { ...txs[txIdx], statut: 'rapproche', matched_type: classification, lettre: code, note: `Classification manuelle: ${classification}` }
         await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', releve_id)
 
-        // Créer l'écriture BNQ avec le bon compte
+        // Créer l'écriture BNQ avec le bon compte.
+        // Mapping étendu pour les classifications proposées par le menu
+        // "Classer..." de la page rapprochement (Part 2 redesign).
         const CLASSE_COMPTES: Record<string, string> = {
-          compte_courant_associe: '455',
-          avance_personnel: '425',
-          charge_diverse: '658',
-          paiement_mra: '444',
-          frais_bancaires: '627',
+          compte_courant_associe: '455',  // Comptes courants associés
+          avance_personnel: '425',        // Avances au personnel
+          charge_diverse: '658',          // Autres charges de gestion
+          paiement_mra: '444',            // État, impôts (MRA)
+          frais_bancaires: '627',         // Services bancaires et assimilés
+          // Nouveaux types ajoutés par la refonte UI :
+          salaire: '641',                 // Personnel — rémunérations
+          virement_interne: '581',        // Virements internes (bridge account)
+          remboursement_personnel: '108', // Compte de l'exploitant
+          autre: '471',                   // Charges à classer (fallback explicite)
         }
         const compteCharge = CLASSE_COMPTES[classification] || '471'
+        console.log(`[lettrer_manuel] societe=${societe_id} tx=${transaction_id} classification=${classification} → compte=${compteCharge}`)
 
         const { data: dossier } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
         if (dossier) {
@@ -1415,8 +1687,24 @@ export async function POST(request: Request) {
     }
 
     // === LETTRAGE MULTI — 1 paiement = plusieurs factures ===
+    // FIX 6 — prise en compte type_ecart (PCG Mauritius) :
+    //   'auto'         → |ecart| ≤ 1 MUR → 658/758 (régularisation)
+    //   'change'       → 666 perte / 766 gain change
+    //   'escompte'     → 665 escompte accordé / 765 escompte obtenu
+    //   'penalite'     → 631 pénalités (toujours côté charge)
+    //   'exceptionnel' → 658 charges / 758 produits exceptionnels
+    //   undefined      → si |ecart| > 1, règle R4 : pas de lettrage forcé,
+    //                     on refuse et on retourne un 409 avec les choix.
+    // Les écritures d'écart ne reçoivent JAMAIS la lettre (règle R7 — pas
+    // de lettrage sur résultat 6xxx/7xxx).
     if (action === 'lettrer_multi') {
-      const { transaction_id, releve_id, facture_ids, societe_id } = body
+      const { transaction_id, releve_id, facture_ids, societe_id, type_ecart } = body as {
+        transaction_id?: string
+        releve_id?: string
+        facture_ids?: string[]
+        societe_id?: string
+        type_ecart?: 'auto' | 'change' | 'escompte' | 'penalite' | 'exceptionnel'
+      }
       if (!releve_id || !facture_ids || !Array.isArray(facture_ids) || facture_ids.length === 0) {
         return NextResponse.json({ error: 'releve_id et facture_ids[] requis' }, { status: 400 })
       }
@@ -1425,7 +1713,7 @@ export async function POST(request: Request) {
         .from('releves_bancaires').select('id, transactions_json').eq('id', releve_id).single()
       if (!releve) return NextResponse.json({ error: 'Relevé non trouvé' }, { status: 404 })
 
-      const txIdx = parseInt(transaction_id.split('-').pop() || '0')
+      const txIdx = parseInt((transaction_id || '').split('-').pop() || '0')
       const txs = [...(releve.transactions_json || [])]
       if (txIdx >= txs.length) return NextResponse.json({ error: 'Transaction non trouvée' }, { status: 404 })
 
@@ -1433,9 +1721,31 @@ export async function POST(request: Request) {
       const txAmount = Number(tx.credit) > 0 ? Number(tx.credit) : Number(tx.debit)
 
       // Vérifier que la somme des factures ≈ montant transaction
-      const { data: facturesData } = await supabase.from('factures').select('id, montant_ttc, numero_facture, tiers').in('id', facture_ids)
+      const { data: facturesData } = await supabase.from('factures').select('id, montant_ttc, numero_facture, tiers, type_facture').in('id', facture_ids)
       const facturesTotal = (facturesData || []).reduce((s, f) => s + (Number(f.montant_ttc) || 0), 0)
       const ecart = Math.abs(txAmount - facturesTotal)
+      const ecartSigne = txAmount - facturesTotal // + = reçu plus que prévu, - = reçu moins
+      const SEUIL_AUTO = 1 // MUR — en-dessous on régularise automatiquement en 658/758
+
+      // FIX 6 — Règle R4 : si écart > seuil auto ET aucun type_ecart fourni,
+      // on refuse le lettrage plutôt que de forcer. L'utilisateur doit
+      // qualifier l'écart (change, escompte, pénalité, exceptionnel).
+      if (ecart > SEUIL_AUTO && !type_ecart) {
+        return NextResponse.json({
+          error: 'ecart_requires_qualification',
+          message: `Écart de ${ecart.toFixed(2)} MUR entre la transaction (${txAmount.toFixed(2)}) et le total factures (${facturesTotal.toFixed(2)}). Règle R4 : pas de lettrage forcé. Qualifier l'écart avant de relancer.`,
+          ecart: Math.round(ecart * 100) / 100,
+          ecart_signe: Math.round(ecartSigne * 100) / 100,
+          tx_amount: txAmount,
+          factures_total: facturesTotal,
+          options: [
+            { type_ecart: 'change', label: 'Écart de change', compte: ecartSigne > 0 ? '766 (gain)' : '666 (perte)' },
+            { type_ecart: 'escompte', label: 'Escompte', compte: ecartSigne > 0 ? '765 (escompte obtenu)' : '665 (escompte accordé)' },
+            { type_ecart: 'penalite', label: 'Pénalité de retard', compte: '631' },
+            { type_ecart: 'exceptionnel', label: 'Écart exceptionnel', compte: ecartSigne > 0 ? '758' : '658' },
+          ],
+        }, { status: 409 })
+      }
 
       const lettreCode = `RM${String(Date.now()).slice(-4)}`
       const reconcileDate = new Date().toISOString()
@@ -1487,22 +1797,59 @@ export async function POST(request: Request) {
         console.warn('[audit] lettrer_multi log failed:', auditErr)
       }
 
-      // Si écart > 0, créer écriture d'écart
-      if (ecart > 1) {
+      // FIX 6 — Écriture d'écart selon type_ecart + règle R7 (pas de
+      // lettre sur 6xxx/7xxx) : l'écart ne reçoit JAMAIS la lettre des
+      // factures principales. Seul le bloc ACH/BNQ des factures est
+      // lettré — l'écart est une ligne OD à part, consultable en
+      // analyse financière mais pas mélangée avec le lettrage.
+      if (ecart > 0.01) {
         const { data: dossier } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
         if (dossier) {
-          // Comptes Maurice valides:
-          // - 673 = Pertes sur créances (paiement < facture) - charge
-          // - 773 = Reprises sur créances irrécouvrables (paiement > facture) - produit
+          // Choix du compte selon type_ecart + sens (tx > factures → produit/crédit,
+          // tx < factures → charge/débit).
+          // ecartSigne > 0 = on a reçu/payé PLUS — gain pour la société si créance, perte si dette.
+          // Ici on raisonne "bank moins facture" donc :
+          //   - ecartSigne > 0 ⇒ on a encaissé plus que la facture (gain) ou payé plus (perte côté fournisseur)
+          // La catégorisation finale est pilotée par type_ecart.
+          const ecartAbs = Math.round(ecart * 100) / 100
+          let compteEcart: string
+          let libelleEcart: string
+          if (ecart <= SEUIL_AUTO) {
+            // Régularisation automatique <1 MUR
+            compteEcart = ecartSigne > 0 ? '758' : '658'
+            libelleEcart = `Régularisation écart <1 MUR — ${lettreCode}`
+          } else {
+            switch (type_ecart) {
+              case 'change':
+                compteEcart = ecartSigne > 0 ? '766' : '666'
+                libelleEcart = `${ecartSigne > 0 ? 'Gain' : 'Perte'} de change — ${lettreCode}`
+                break
+              case 'escompte':
+                compteEcart = ecartSigne > 0 ? '765' : '665'
+                libelleEcart = `${ecartSigne > 0 ? 'Escompte obtenu' : 'Escompte accordé'} — ${lettreCode}`
+                break
+              case 'penalite':
+                // Pénalité de retard — toujours en charge (631)
+                compteEcart = '631'
+                libelleEcart = `Pénalité de retard — ${lettreCode}`
+                break
+              case 'exceptionnel':
+              default:
+                compteEcart = ecartSigne > 0 ? '758' : '658'
+                libelleEcart = `Écart exceptionnel rapprochement — ${lettreCode}`
+                break
+            }
+          }
           await supabase.from('ecritures_comptables').insert({
             dossier_id: dossier.id,
             date_ecriture: new Date().toISOString().split('T')[0],
             journal: 'OD',
-            compte: txAmount > facturesTotal ? '773' : '673',
-            libelle: `Écart rapprochement multi-factures — ${lettreCode}`,
-            debit: txAmount > facturesTotal ? Math.round(ecart * 100) / 100 : 0,
-            credit: txAmount < facturesTotal ? Math.round(ecart * 100) / 100 : 0,
-            lettre: lettreCode,
+            compte: compteEcart,
+            libelle: libelleEcart,
+            // 631/658/666/665 = charges → débit. 758/766/765 = produits → crédit.
+            debit: /^(6)/.test(compteEcart) ? ecartAbs : 0,
+            credit: /^(7)/.test(compteEcart) ? ecartAbs : 0,
+            // Règle R7 : pas de lettrage sur 6xxx/7xxx. `lettre` volontairement omis.
           })
         }
       }
@@ -1680,7 +2027,403 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, lettered: letteredCount })
     }
 
+    // === SYNC LETTRAGE — Tout synchroniser automatiquement ====================
+    //
+    // For each facture marked statut='paye' in this société:
+    //   1. Find its ACH/VTE ecriture (by facture_id — migration 133 — or by
+    //      numero_piece = numero_facture as a fallback).
+    //   2. Find the BNQ counterpart. If absent AND the facture carries a
+    //      rapproche_date, CREATE a compensating BNQ ecriture using the
+    //      montant_mur and the dossier's dedicated banque (512).
+    //   3. Letter the ACH and BNQ entries together with a fresh R### code
+    //      (next auto-number). Skip pairs already lettered.
+    //
+    // This replaces what an accountant would do by hand at month end to
+    // close the loop between factures.paye and the ledger. Idempotent:
+    // rows already lettered are skipped.
+    // ========================================================================
+    if (action === 'sync_lettrage') {
+      const { societe_id: socId } = body
+      if (!socId) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
+      console.log(`[sync_lettrage] start societe=${socId}`)
+
+      const { data: dossierRow } = await supabase
+        .from('dossiers').select('id').eq('societe_id', socId).limit(1).maybeSingle()
+      if (!dossierRow) {
+        console.warn(`[sync_lettrage] no dossier for societe=${socId}`)
+        return NextResponse.json({ error: 'Aucun dossier pour cette société' }, { status: 404 })
+      }
+      const dossierId = dossierRow.id
+
+      // Fetch paid factures for this société.
+      // FIX 7 — on récupère aussi type_document et facture_origine_id pour
+      // pouvoir grouper un avoir avec sa facture d'origine dans le même
+      // lettrage.
+      const { data: paidFactures, error: facturesErr } = await supabase
+        .from('factures')
+        .select('id, numero_facture, montant_ht, montant_tva, montant_ttc, montant_mur, devise, date_facture, date_echeance, rapproche_date, rapproche_releve_id, rapproche_transaction_idx, tiers, type_facture, type_document, facture_origine_id')
+        .eq('societe_id', socId)
+        .eq('statut', 'paye')
+      if (facturesErr) {
+        console.error(`[sync_lettrage] factures fetch failed:`, facturesErr.message)
+        return NextResponse.json({ error: `factures: ${facturesErr.message}` }, { status: 500 })
+      }
+      console.log(`[sync_lettrage] ${(paidFactures || []).length} paid facture(s) found`)
+
+      // FIX 2 — Charger comptes bancaires + relevés pour router la 2e
+      // ligne BNQ sur le bon 512xxx. Map : releve_id → compte_comptable.
+      // Fallback par devise si le facture n'a pas de rapproche_releve_id
+      // (factures historiques antérieures au tracking).
+      const { data: cbRows } = await supabase
+        .from('comptes_bancaires')
+        .select('id, devise, compte_comptable')
+        .eq('societe_id', socId)
+      const { data: releveRows } = await supabase
+        .from('releves_bancaires')
+        .select('id, compte_bancaire_id')
+        .eq('societe_id', socId)
+      const cbByDevise = new Map<string, string>()
+      const cbById = new Map<string, string>()
+      ;(cbRows || []).forEach((c: any) => {
+        if (c.compte_comptable) {
+          cbById.set(c.id, String(c.compte_comptable))
+          if (!cbByDevise.has(c.devise || 'MUR')) {
+            cbByDevise.set(c.devise || 'MUR', String(c.compte_comptable))
+          }
+        }
+      })
+      const releveToCbId = new Map<string, string>()
+      ;(releveRows || []).forEach((r: any) => releveToCbId.set(r.id, r.compte_bancaire_id))
+      const resolveCompteBanque = (facture: any): string => {
+        // Priorité 1 : via rapproche_releve_id → cb → compte_comptable
+        if (facture.rapproche_releve_id) {
+          const cbId = releveToCbId.get(facture.rapproche_releve_id)
+          if (cbId && cbById.has(cbId)) return cbById.get(cbId)!
+        }
+        // Priorité 2 : premier 512xxx de la société de la bonne devise
+        const byDev = cbByDevise.get(String(facture.devise || 'MUR').toUpperCase())
+        if (byDev) return byDev
+        // Priorité 3 : n'importe quel 512xxx configuré
+        const first = cbRows?.find((c: any) => c.compte_comptable)?.compte_comptable
+        return first ? String(first) : '512'
+      }
+
+      // Probe whether the facture_id column exists on the view (migration 133).
+      // If it's missing in this environment, we skip the by-facture_id lookup
+      // and rely solely on numero_piece matching — the operator can still
+      // reconcile manually until the migration is applied.
+      let hasFactureIdColumn = true
+      {
+        const probe = await supabase.from('ecritures_comptables').select('facture_id').limit(1)
+        if (probe.error) {
+          const msg = String(probe.error.message || '')
+          if (/facture_id/i.test(msg) && /(does not exist|column)/i.test(msg)) {
+            hasFactureIdColumn = false
+            console.warn('[sync_lettrage] facture_id column missing — migration 133 not applied yet, falling back to numero_piece matching only')
+          } else {
+            console.error('[sync_lettrage] probe failed:', probe.error.message)
+          }
+        }
+      }
+
+      let pairsLettered = 0
+      let pairsCreatedBnq = 0
+      let alreadyLettered = 0
+      const errors: Array<{ facture_id: string; reason: string }> = []
+
+      // Find the highest existing "R###" code so we generate non-colliding ones.
+      const { data: existingLettres } = await supabase
+        .from('ecritures_comptables')
+        .select('lettre')
+        .eq('dossier_id', dossierId)
+        .not('lettre', 'is', null)
+        .ilike('lettre', 'R%')
+      let maxR = 0
+      for (const r of existingLettres || []) {
+        const m = String((r as any).lettre || '').match(/^R(\d+)$/i)
+        if (m) maxR = Math.max(maxR, parseInt(m[1], 10))
+      }
+      const nextCode = (): string => {
+        maxR += 1
+        return `R${String(maxR).padStart(3, '0')}`
+      }
+
+      for (const f of paidFactures || []) {
+        try {
+          // 1. Find ACH/VTE ecriture — by facture_id first, fallback to numero_piece.
+          let achRow: any = null
+          {
+            const { data } = await supabase.from('ecritures_comptables')
+              .select('id, compte, debit, credit, date_ecriture, libelle, lettre')
+              .eq('dossier_id', dossierId).eq('facture_id', f.id)
+              .or('compte.like.401%,compte.like.411%')
+              .limit(1).maybeSingle()
+            if (data) achRow = data
+          }
+          if (!achRow && f.numero_facture) {
+            const { data } = await supabase.from('ecritures_comptables')
+              .select('id, compte, debit, credit, date_ecriture, libelle, lettre')
+              .eq('dossier_id', dossierId)
+              .eq('numero_piece', f.numero_facture)
+              .or('compte.like.401%,compte.like.411%')
+              .limit(1).maybeSingle()
+            if (data) achRow = data
+          }
+          // FIX 3 — Si aucune ACH/VTE n'existe pour cette facture, on la
+          // recrée à la volée (10 cas observés en prod : Baydon Murray,
+          // E-Payroll, Jean Daril, Emtel). createEcrituresForFacture gère
+          // déjà la ventilation complète (607/4456/401 pour fournisseur,
+          // 411/706/4457 pour client). Ensuite on re-query pour récupérer
+          // la nouvelle ACH et poursuivre le flux normal.
+          if (!achRow) {
+            const minimumOk = !!f.date_facture && Number(f.montant_ttc) > 0
+            if (!minimumOk) {
+              errors.push({ facture_id: f.id, reason: 'Aucune écriture ACH/VTE trouvée ET infos facture insuffisantes pour la recréer' })
+              continue
+            }
+            const gen = await createEcrituresForFacture(supabase, {
+              id: f.id,
+              societe_id: socId,
+              numero_facture: f.numero_facture || '',
+              tiers: f.tiers || '',
+              date_facture: f.date_facture,
+              montant_ht: Number(f.montant_ht) || 0,
+              montant_tva: Number(f.montant_tva) || 0,
+              montant_ttc: Number(f.montant_ttc) || 0,
+              type_facture: (f.type_facture === 'client' ? 'client' : 'fournisseur'),
+            })
+            if (!gen.ok) {
+              errors.push({ facture_id: f.id, reason: `ACH/VTE absente et recréation échouée : ${gen.error || 'inconnue'}` })
+              continue
+            }
+            console.log(`[sync_lettrage] ACH/VTE recréée pour facture ${f.id} (${f.numero_facture}) — ${gen.nb_entries} lignes`)
+            // Re-query the ACH row that was just inserted.
+            const { data: reAch } = await supabase.from('ecritures_comptables')
+              .select('id, compte, debit, credit, date_ecriture, libelle, lettre')
+              .eq('dossier_id', dossierId)
+              .eq('facture_id', f.id)
+              .or('compte.like.401%,compte.like.411%')
+              .limit(1).maybeSingle()
+            if (reAch) {
+              achRow = reAch
+            } else {
+              // Fallback lookup via numero_piece
+              const { data: reAch2 } = await supabase.from('ecritures_comptables')
+                .select('id, compte, debit, credit, date_ecriture, libelle, lettre')
+                .eq('dossier_id', dossierId)
+                .eq('numero_piece', f.numero_facture || '')
+                .or('compte.like.401%,compte.like.411%')
+                .limit(1).maybeSingle()
+              if (reAch2) achRow = reAch2
+            }
+            if (!achRow) {
+              errors.push({ facture_id: f.id, reason: 'ACH/VTE recréée mais re-requête vide — incohérence société/dossier ?' })
+              continue
+            }
+          }
+
+          // FIX 2 — Garde PCG : on refuse de lettrer si le compte ACH n'est pas
+          // dans la liste blanche LETTRABLE (401/411/...). En pratique les
+          // factures écrivent toujours sur 401 ou 411, mais un back-fill
+          // incorrect pourrait avoir pointé sur 627 (frais bancaires), 444
+          // (TVA due), ou un compte 6xxx/7xxx — auquel cas le lettrage est
+          // interdit par la règle R7 (pas de lettre sur résultat).
+          const achClass = accountClass(achRow.compte)
+          if (achClass !== 'lettrable') {
+            errors.push({
+              facture_id: f.id,
+              reason: `Compte ACH ${achRow.compte} non lettrable (classe: ${achClass}). SKIP par règle PCG/R7.`,
+            })
+            continue
+          }
+
+          // 2. Find BNQ counterpart on the 401/411 account, opposite direction,
+          //    same amount ±2%, no lettre yet, and (if possible) already linked
+          //    to this facture.
+          const achDebit = Number(achRow.debit) || 0
+          const achCredit = Number(achRow.credit) || 0
+          const montant = Math.max(achDebit, achCredit)
+          if (montant <= 0) {
+            errors.push({ facture_id: f.id, reason: 'Montant ACH = 0' })
+            continue
+          }
+          const minAmt = Math.round(montant * 0.98 * 100) / 100
+          const maxAmt = Math.round(montant * 1.02 * 100) / 100
+          const bnqOppositeCol = achDebit > 0 ? 'credit' : 'debit'
+
+          let bnqRow: any = null
+          // Primary lookup: BNQ journal, same 401/411 account, opposite direction.
+          {
+            const { data } = await supabase.from('ecritures_comptables')
+              .select('id, lettre, debit, credit, date_ecriture, libelle, facture_id')
+              .eq('dossier_id', dossierId)
+              .eq('journal', 'BNQ')
+              .eq('compte', achRow.compte)
+              .gte(bnqOppositeCol, minAmt)
+              .lte(bnqOppositeCol, maxAmt)
+              .order('date_ecriture', { ascending: false })
+              .limit(5)
+            // Prefer entries already linked to this facture_id.
+            const linked = (data || []).find((e: any) => e.facture_id === f.id)
+            const unletteredAny = (data || []).find((e: any) => !e.lettre)
+            bnqRow = linked || unletteredAny || null
+          }
+
+          // 3. If no BNQ counterpart exists, create TWO balanced BNQ
+          //    entries (tier side + banque side) so Σdébit = Σcrédit.
+          // FIX 2 — auparavant sync_lettrage n'insérait qu'une ligne 401
+          // débit sans contrepartie 512 : le journal BNQ n'était pas
+          // équilibré (R1 violée) et le compte 512xxx ne reflétait pas
+          // le paiement. On insère maintenant les deux lignes ensemble,
+          // on les lettre avec le même code, et on lettre aussi l'ACH.
+          // FIX 1 — never block on a missing rapproche_date. Fallback to
+          //    date_echeance, then date_facture, then today, and back-fill
+          //    factures.rapproche_date so the invariant holds going forward.
+          let bnqBanqueRow: any = null
+          if (!bnqRow && montant > 0) {
+            const payDate: string =
+              (f as any).rapproche_date
+              || (f as any).date_echeance
+              || (f as any).date_facture
+              || new Date().toISOString().split('T')[0]
+            const montantMur = Number(f.montant_mur) || montant
+            const compteBanque = resolveCompteBanque(f)
+            const isSupplier = achCredit > 0 // ACH 401 credit → supplier
+            const libelleBase = `Règlement ${f.numero_facture || ''} — ${(f.tiers || '').substring(0, 40)}`.trim()
+
+            const tierSide = {
+              dossier_id: dossierId,
+              date_ecriture: payDate,
+              journal: 'BNQ',
+              numero_piece: f.numero_facture || null,
+              compte: achRow.compte, // 401 ou 411
+              libelle: libelleBase,
+              debit: isSupplier ? montantMur : 0,
+              credit: isSupplier ? 0 : montantMur,
+              piece_justificative: f.id,
+              facture_id: f.id,
+            }
+            const bankSide = {
+              dossier_id: dossierId,
+              date_ecriture: payDate,
+              journal: 'BNQ',
+              numero_piece: f.numero_facture || null,
+              compte: compteBanque,
+              libelle: libelleBase,
+              debit: isSupplier ? 0 : montantMur,
+              credit: isSupplier ? montantMur : 0,
+              piece_justificative: f.id,
+              facture_id: f.id,
+            }
+            const { data: createdRows, error: createErr } = await supabase
+              .from('ecritures_comptables')
+              .insert([tierSide, bankSide])
+              .select('id, lettre, debit, credit, compte')
+            if (createErr) {
+              errors.push({ facture_id: f.id, reason: `BNQ insert failed: ${createErr.message}` })
+              continue
+            }
+            const createdTier = (createdRows || []).find((r: any) => r.compte === achRow.compte) || createdRows?.[0]
+            const createdBank = (createdRows || []).find((r: any) => r.compte === compteBanque) || createdRows?.[1]
+            bnqRow = createdTier
+            bnqBanqueRow = createdBank
+            pairsCreatedBnq++
+
+            // Back-fill factures.rapproche_date if it was missing so the
+            // invariant "paye ⇒ rapproche_date not null" is enforced.
+            if (!(f as any).rapproche_date) {
+              await supabase.from('factures')
+                .update({ rapproche_date: payDate })
+                .eq('id', f.id)
+                .is('rapproche_date', null)
+            }
+          }
+
+          if (!bnqRow) {
+            errors.push({ facture_id: f.id, reason: 'Aucune écriture BNQ trouvée ou créée (montant = 0 ?)' })
+            continue
+          }
+
+          // 4. Letter the triplet (ACH + BNQ tier + BNQ banque si créée).
+          // FIX 2 — le bank side de la BNQ est inclus dans le groupe
+          // pour que le rapprochement 512 ↔ 401 soit explicite.
+          if (achRow.lettre && bnqRow.lettre && achRow.lettre === bnqRow.lettre) {
+            alreadyLettered++
+            continue
+          }
+          const code = achRow.lettre || bnqRow.lettre || nextCode()
+          const now = new Date().toISOString().slice(0, 10)
+          const lettrageIds: string[] = [achRow.id, bnqRow.id]
+          if (bnqBanqueRow?.id) lettrageIds.push(bnqBanqueRow.id)
+
+          await supabase.from('ecritures_comptables')
+            .update({ lettre: code, date_lettrage: now })
+            .in('id', lettrageIds)
+            .is('lettre', null)
+          // If one was already lettered, ensure all share the code.
+          await supabase.from('ecritures_comptables')
+            .update({ lettre: code, date_lettrage: now })
+            .in('id', lettrageIds)
+            .neq('lettre', code)
+          // Backfill facture_id on the BNQ if it wasn't set.
+          await supabase.from('ecritures_comptables')
+            .update({ facture_id: f.id })
+            .eq('id', bnqRow.id)
+            .is('facture_id', null)
+
+          // FIX 7 — Rattacher les avoirs au même groupe de lettrage.
+          // Si la facture courante est une facture (pas un avoir) avec
+          // des avoirs liés, on récupère leurs écritures 401/411 et on
+          // leur applique la même lettre. Inversement si on traite un
+          // avoir, on inclut ses écritures dans le groupe.
+          try {
+            const isAvoir = (f as any).type_document === 'avoir'
+            const avoirLinks: string[] = []
+            if (isAvoir && (f as any).facture_origine_id) {
+              avoirLinks.push((f as any).facture_origine_id)
+            } else if (!isAvoir && hasFactureIdColumn) {
+              const { data: avoirs } = await supabase
+                .from('factures')
+                .select('id')
+                .eq('facture_origine_id', f.id)
+                .eq('type_document', 'avoir')
+              for (const a of avoirs || []) avoirLinks.push((a as any).id)
+            }
+            if (avoirLinks.length > 0 && hasFactureIdColumn) {
+              // Lettrer toutes les écritures 401/411 liées aux factures du groupe
+              await supabase.from('ecritures_comptables')
+                .update({ lettre: code, date_lettrage: now })
+                .in('facture_id', avoirLinks)
+                .or('compte.like.401%,compte.like.411%')
+                .is('lettre', null)
+            }
+          } catch (linkErr) {
+            console.warn('[sync_lettrage] avoir link step failed for facture', f.id, linkErr)
+          }
+
+          pairsLettered++
+        } catch (err: any) {
+          errors.push({ facture_id: f.id, reason: err?.message || 'unknown error' })
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        pairs_lettered: pairsLettered,
+        bnq_created: pairsCreatedBnq,
+        already_lettered: alreadyLettered,
+        errors,
+        summary: `${pairsLettered} paire(s) lettrée(s)${pairsCreatedBnq > 0 ? ` · ${pairsCreatedBnq} écriture(s) BNQ créée(s)` : ''}${alreadyLettered > 0 ? ` · ${alreadyLettered} déjà synchronisée(s)` : ''}`,
+      })
+    }
+
     // === LETTRER ECRITURES COMPTABLES (401/411) ===
+    // FIX 9 — applique les règles R1/R2/R7 avant de poser la lettre :
+    //   R1 Équilibre  — ∑débit = ∑crédit sur les écritures groupées
+    //   R2 Unicité    — aucune écriture ne doit déjà porter une lettre ≠
+    //   R7 Pas de 6xxx/7xxx/skip — refus si un compte de résultat/skip
+    // Retourne 409 avec le détail de la violation pour que le client
+    // surface le message à l'utilisateur.
     if (action === 'lettrer_ecritures') {
       const { ecriture_ids, societe_id: socId } = body
       if (!ecriture_ids || !Array.isArray(ecriture_ids) || ecriture_ids.length < 2) {
@@ -1688,6 +2431,27 @@ export async function POST(request: Request) {
       }
       const lettreCode = `LE${String(Date.now()).slice(-4)}`
       const now = new Date().toISOString().split('T')[0]
+
+      // Charger les écritures pour valider les règles AVANT toute mutation
+      const { data: ecrituresToLetter } = await supabase
+        .from('ecritures_comptables')
+        .select('id, compte, debit, credit, date_ecriture, lettre, journal')
+        .in('id', ecriture_ids)
+      if (!ecrituresToLetter || ecrituresToLetter.length !== ecriture_ids.length) {
+        return NextResponse.json({ error: 'Certaines écritures sont introuvables' }, { status: 404 })
+      }
+      const violation = validateLettrageGroup({
+        ecritures: ecrituresToLetter as any,
+        newLettre: lettreCode,
+      })
+      if (violation) {
+        return NextResponse.json({
+          error: 'rule_violation',
+          rule_violation: violation,
+          message: violation,
+        }, { status: 409 })
+      }
+
       for (const eid of ecriture_ids) {
         await supabase.from('ecritures_comptables')
           .update({ lettre: lettreCode, date_lettrage: now })
@@ -1723,9 +2487,15 @@ export async function POST(request: Request) {
       const totalMontant = (factures || []).reduce((s, f) => s + (Number(f.montant_ttc) || 0), 0)
 
       // Marquer les factures comme payées par associé
+      // FIX 1 — rapproche_date jamais NULL (fallback date du jour).
+      const associePayDate = new Date().toISOString().split('T')[0]
       for (const f of factures || []) {
         await supabase.from('factures').update({
-          statut: 'paye', mode_paiement: 'associe', paye_par: associe_nom,
+          statut: 'paye',
+          mode_paiement: 'associe',
+          paye_par: associe_nom,
+          rapproche_date: associePayDate,
+          rapproche_source: 'paye_par_associe',
         }).eq('id', f.id)
       }
 
@@ -1770,7 +2540,16 @@ export async function POST(request: Request) {
           const txIdx = parseInt(transaction_id.split('-').pop() || '0')
           const txs = [...(releve.transactions_json || [])]
           if (txIdx < txs.length) {
-            txs[txIdx] = { ...txs[txIdx], lettre: `CCA${String(Date.now()).slice(-4)}`, statut: 'rapproche', paye_par_associe: associe_nom }
+            // FIX 4 — stocker facture_id(s) pour que la transaction reste
+            // traçable jusqu'aux factures payées via CCA.
+            txs[txIdx] = {
+              ...txs[txIdx],
+              lettre: `CCA${String(Date.now()).slice(-4)}`,
+              statut: 'rapproche',
+              paye_par_associe: associe_nom,
+              facture_id: facture_ids[0] || null,
+              facture_ids,
+            }
             await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', releve_id)
           }
         }

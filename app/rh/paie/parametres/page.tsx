@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Loader2, Save, Info } from "lucide-react"
+import { Loader2, Save, Info, RefreshCw, CheckCircle2, AlertTriangle } from "lucide-react"
 
 const NAVY = "#0B0F2E"
 
@@ -101,6 +101,63 @@ export default function ParametresPaiePage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
+  // ── MRA rates fetch (Fix 1) ──────────────────────────────────────
+  // Status of the live MRA-rates fetch:
+  //   'idle'    → never attempted this session
+  //   'loading' → request in flight
+  //   'ok'      → rates pulled from /api/rh/paie/ai-rates this session
+  //   'error'   → request failed / returned error; fields fall back to
+  //               whatever DB had, and a warning is shown above the form
+  const [mraStatus, setMraStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle')
+  const [mraError, setMraError] = useState<string | null>(null)
+  const [mraUpdatedAt, setMraUpdatedAt] = useState<string | null>(null)
+  const [mraSource, setMraSource] = useState<string | null>(null)
+
+  const fetchMraRates = async (opts: { fromMount?: boolean } = {}) => {
+    setMraStatus('loading')
+    setMraError(null)
+    try {
+      const res = await fetch("/api/rh/paie/ai-rates", { method: "POST" })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok || !d?.rates) {
+        throw new Error(d?.error || `HTTP ${res.status}`)
+      }
+      const r = d.rates as Record<string, any>
+      setParams(p => ({
+        ...p,
+        csg_seuil_taux_reduit: r.csg_seuil_taux_reduit != null ? String(r.csg_seuil_taux_reduit) : p.csg_seuil_taux_reduit,
+        csg_salarie_taux_reduit: r.csg_salarie_taux_reduit != null ? String(r.csg_salarie_taux_reduit) : p.csg_salarie_taux_reduit,
+        csg_salarie_taux_plein: r.csg_salarie_taux_plein != null ? String(r.csg_salarie_taux_plein) : p.csg_salarie_taux_plein,
+        csg_patronal: r.csg_patronal != null ? String(r.csg_patronal) : p.csg_patronal,
+        nsf_salarie: r.nsf_salarie != null ? String(r.nsf_salarie) : p.nsf_salarie,
+        nsf_patronal: r.nsf_patronal != null ? String(r.nsf_patronal) : p.nsf_patronal,
+        training_levy: r.training_levy != null ? String(r.training_levy) : p.training_levy,
+        prgf_taux_emoluments: r.prgf_taux != null ? String(r.prgf_taux) : p.prgf_taux_emoluments,
+        paye_seuil_exoneration: r.paye_seuil_exoneration != null ? String(r.paye_seuil_exoneration) : p.paye_seuil_exoneration,
+        paye_taux_1: r.paye_taux_1 != null ? String(r.paye_taux_1) : p.paye_taux_1,
+        paye_seuil_taux_2: r.paye_seuil_taux_2 != null ? String(r.paye_seuil_taux_2) : p.paye_seuil_taux_2,
+        paye_taux_2: r.paye_taux_2 != null ? String(r.paye_taux_2) : p.paye_taux_2,
+      }))
+      setMraUpdatedAt(d.updated_at || new Date().toISOString())
+      setMraSource(r.source || null)
+      setMraStatus('ok')
+    } catch (e: any) {
+      setMraStatus('error')
+      setMraError(e?.message || 'Erreur réseau')
+      // On mount, failure is non-fatal — we keep whatever DB had.
+      if (!opts.fromMount) console.error('[paie/parametres] MRA rates fetch failed:', e)
+    }
+  }
+
+  // Auto-fetch MRA rates on mount — runs once the DB-backed params have
+  // finished loading so fetched values cleanly override the baseline.
+  useEffect(() => {
+    if (loading) return
+    if (mraStatus !== 'idle') return
+    fetchMraRates({ fromMount: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading])
+
   // Fetch live exchange rates on mount
   useEffect(() => {
     setLoadingRates(true)
@@ -193,20 +250,69 @@ export default function ParametresPaiePage() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>
-            Paramètres Paie & RH
-          </h1>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-2xl font-bold" style={{ color: NAVY }}>
+              Paramètres Paie & RH
+            </h1>
+            {mraStatus === 'ok' && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-green-100 text-green-800 border border-green-200">
+                <CheckCircle2 className="w-3 h-3" />
+                Taux MRA à jour
+              </span>
+            )}
+            {(mraStatus === 'error' || mraStatus === 'idle') && !loading && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-orange-100 text-orange-800 border border-orange-200">
+                <AlertTriangle className="w-3 h-3" />
+                Taux non vérifiés
+              </span>
+            )}
+            {mraStatus === 'loading' && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue-100 text-blue-700 border border-blue-200">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Récupération…
+              </span>
+            )}
+          </div>
           <p className="text-sm text-gray-500">
-            Taux MRA Finance Act 2024/25 — Jours fériés Maurice
+            Taux MRA Finance Act {new Date().getFullYear()}/{new Date().getFullYear() + 1} — Jours fériés Maurice
+            {mraUpdatedAt && mraStatus === 'ok' && (
+              <span className="text-gray-400"> · Mis à jour {new Date(mraUpdatedAt).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+            )}
+            {mraSource && mraStatus === 'ok' && (
+              <span className="text-gray-400"> · Source: {mraSource}</span>
+            )}
           </p>
         </div>
-        <Button onClick={handleSave} disabled={saving} className="text-white" style={{ backgroundColor: NAVY }}>
-          {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
-          {saved ? "✅ Sauvegardé !" : "Sauvegarder"}
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={() => fetchMraRates()}
+            disabled={mraStatus === 'loading'}
+            variant="outline"
+            className="border-[#0B0F2E] text-[#0B0F2E]"
+          >
+            {mraStatus === 'loading'
+              ? <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              : <RefreshCw className="w-4 h-4 mr-2" />}
+            Actualiser les taux
+          </Button>
+          <Button onClick={handleSave} disabled={saving} className="text-white" style={{ backgroundColor: NAVY }}>
+            {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+            {saved ? "✅ Sauvegardé !" : "Sauvegarder"}
+          </Button>
+        </div>
       </div>
+
+      {mraStatus === 'error' && (
+        <div className="rounded-md border border-orange-200 bg-orange-50 p-3 flex items-start gap-2 text-sm">
+          <AlertTriangle className="w-4 h-4 text-orange-600 mt-0.5 flex-shrink-0" />
+          <div className="text-orange-900">
+            <strong>Impossible de récupérer les taux MRA automatiquement.</strong> Vérifiez manuellement avant de calculer la paie.
+            {mraError && <span className="block text-[11px] text-orange-700 mt-0.5">Détail: {mraError}</span>}
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-12">
