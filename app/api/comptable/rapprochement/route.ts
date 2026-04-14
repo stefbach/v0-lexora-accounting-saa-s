@@ -2959,18 +2959,30 @@ export async function POST(request: Request) {
         }
       } catch (e: any) { console.warn('[marquer_paye] lettrage ACH failed:', e.message) }
 
-      // Marquer la facture payée
-      const { error: factUpdErr, data: factUpdData } = await supabase.from('factures').update({
-        statut: 'paye',
-        solde_non_paye: 0,
-        rapproche_date: dateOp,
-        rapproche_source: 'marquer_paye',
-      }).eq('id', facture_id).select('id, statut, solde_non_paye')
+      // Marquer la facture payée (avec fallback progressif si colonnes manquantes)
+      // Migration 128 ajoute solde_non_paye, migration 121 ajoute rapproche_date/source
+      const tryUpdate = async (payload: Record<string, any>) => {
+        return supabase.from('factures').update(payload).eq('id', facture_id).select('id, statut')
+      }
+      let factUpdData: any = null
+      let factUpdErr: any = null
+      // Niveau 1 : tout
+      let r = await tryUpdate({ statut: 'paye', solde_non_paye: 0, rapproche_date: dateOp, rapproche_source: 'marquer_paye' })
+      if (r.error && /solde_non_paye/i.test(r.error.message || '')) {
+        console.warn('[marquer_paye] fallback: colonne solde_non_paye manquante (migration 128)')
+        r = await tryUpdate({ statut: 'paye', rapproche_date: dateOp, rapproche_source: 'marquer_paye' })
+      }
+      if (r.error && /(rapproche_source|rapproche_date)/i.test(r.error.message || '')) {
+        console.warn('[marquer_paye] fallback: colonnes rapproche_* manquantes (migration 121)')
+        r = await tryUpdate({ statut: 'paye' })
+      }
+      factUpdErr = r.error
+      factUpdData = r.data
       if (factUpdErr) {
         console.error('[marquer_paye] facture update FAILED:', factUpdErr.message, factUpdErr)
         return NextResponse.json({
           error: `Ecritures creees (lettre ${lettre}) MAIS facture non marquee payee: ${factUpdErr.message}`,
-          hint: 'Verifiez que les colonnes rapproche_date, rapproche_source existent (migration 121)',
+          hint: 'Verifiez que les colonnes statut/rapproche_date/solde_non_paye existent',
           lettre,
           nb_ecritures: 2,
         }, { status: 500 })
