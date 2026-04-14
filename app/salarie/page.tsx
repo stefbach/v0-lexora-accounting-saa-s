@@ -830,6 +830,32 @@ export default function EspaceEmployePage() {
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t) }, [])
   useEffect(() => { if (feedback) { const t = setTimeout(() => setFeedback(""), 4000); return () => clearTimeout(t) } }, [feedback])
 
+  // Sync tab with URL hash (sidebar links use /salarie#conges, #bulletins, …).
+  // On mount and on hashchange, if the hash is a known tab, switch to it.
+  const KNOWN_TABS: Tab[] = ["dashboard", "profil", "bulletins", "planning", "primes", "conges", "documents", "trajets", "sante", "contrats"]
+  useEffect(() => {
+    const applyHash = () => {
+      if (typeof window === "undefined") return
+      const h = (window.location.hash || "").replace(/^#/, "") as Tab
+      if (h && KNOWN_TABS.includes(h)) setTab(h)
+    }
+    applyHash()
+    window.addEventListener("hashchange", applyHash)
+    return () => window.removeEventListener("hashchange", applyHash)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  // When the user clicks the in-page tab bar, keep the URL in sync so the
+  // sidebar highlight follows.
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const desired = `#${tab}`
+    if (window.location.hash !== desired) {
+      history.replaceState(null, "", `/salarie${desired}`)
+      // Fire hashchange so the sidebar's own hashchange listener updates.
+      window.dispatchEvent(new HashChangeEvent("hashchange"))
+    }
+  }, [tab])
+
   const load = useCallback(async () => {
     setLoading(true)
     try {
