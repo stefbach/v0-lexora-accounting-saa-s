@@ -14,7 +14,6 @@ import { Progress } from "@/components/ui/progress"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { ScrollArea } from "@/components/ui/scroll-area"
 
 function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 function formatDate(d: string) { return d ? new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" }) : "—" }
@@ -2483,8 +2482,12 @@ Voulez-vous vraiment continuer ?`
             ))}
           </div>
 
-          {/* Messages */}
-          <ScrollArea className="flex-1 px-3 py-3">
+          {/* Messages — plain scrollable div. Radix ScrollArea was used here
+              previously but `flex-1` without `min-h-0` inside a flex-column
+              made it grow to its content height instead of constraining it,
+              which killed the scroll entirely. Plain overflow-y-auto works
+              in every browser and doesn't need any flex tweak. */}
+          <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3">
             {chatMessages.length === 0 && (
               <div className="text-center text-gray-400 text-sm mt-8 space-y-2">
                 <Bot className="w-8 h-8 mx-auto opacity-40" />
@@ -2533,7 +2536,7 @@ Voulez-vous vraiment continuer ?`
               </div>
             )}
             <div ref={chatEndRef} />
-          </ScrollArea>
+          </div>
 
           {/* Input */}
           <div className="px-3 py-3 border-t border-gray-200">
