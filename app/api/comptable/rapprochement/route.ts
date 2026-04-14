@@ -1436,8 +1436,24 @@ export async function POST(request: Request) {
     }
 
     // === LETTRAGE MULTI — 1 paiement = plusieurs factures ===
+    // FIX 6 — prise en compte type_ecart (PCG Mauritius) :
+    //   'auto'         → |ecart| ≤ 1 MUR → 658/758 (régularisation)
+    //   'change'       → 666 perte / 766 gain change
+    //   'escompte'     → 665 escompte accordé / 765 escompte obtenu
+    //   'penalite'     → 631 pénalités (toujours côté charge)
+    //   'exceptionnel' → 658 charges / 758 produits exceptionnels
+    //   undefined      → si |ecart| > 1, règle R4 : pas de lettrage forcé,
+    //                     on refuse et on retourne un 409 avec les choix.
+    // Les écritures d'écart ne reçoivent JAMAIS la lettre (règle R7 — pas
+    // de lettrage sur résultat 6xxx/7xxx).
     if (action === 'lettrer_multi') {
-      const { transaction_id, releve_id, facture_ids, societe_id } = body
+      const { transaction_id, releve_id, facture_ids, societe_id, type_ecart } = body as {
+        transaction_id?: string
+        releve_id?: string
+        facture_ids?: string[]
+        societe_id?: string
+        type_ecart?: 'auto' | 'change' | 'escompte' | 'penalite' | 'exceptionnel'
+      }
       if (!releve_id || !facture_ids || !Array.isArray(facture_ids) || facture_ids.length === 0) {
         return NextResponse.json({ error: 'releve_id et facture_ids[] requis' }, { status: 400 })
       }
@@ -1446,7 +1462,7 @@ export async function POST(request: Request) {
         .from('releves_bancaires').select('id, transactions_json').eq('id', releve_id).single()
       if (!releve) return NextResponse.json({ error: 'Relevé non trouvé' }, { status: 404 })
 
-      const txIdx = parseInt(transaction_id.split('-').pop() || '0')
+      const txIdx = parseInt((transaction_id || '').split('-').pop() || '0')
       const txs = [...(releve.transactions_json || [])]
       if (txIdx >= txs.length) return NextResponse.json({ error: 'Transaction non trouvée' }, { status: 404 })
 
@@ -1454,9 +1470,31 @@ export async function POST(request: Request) {
       const txAmount = Number(tx.credit) > 0 ? Number(tx.credit) : Number(tx.debit)
 
       // Vérifier que la somme des factures ≈ montant transaction
-      const { data: facturesData } = await supabase.from('factures').select('id, montant_ttc, numero_facture, tiers').in('id', facture_ids)
+      const { data: facturesData } = await supabase.from('factures').select('id, montant_ttc, numero_facture, tiers, type_facture').in('id', facture_ids)
       const facturesTotal = (facturesData || []).reduce((s, f) => s + (Number(f.montant_ttc) || 0), 0)
       const ecart = Math.abs(txAmount - facturesTotal)
+      const ecartSigne = txAmount - facturesTotal // + = reçu plus que prévu, - = reçu moins
+      const SEUIL_AUTO = 1 // MUR — en-dessous on régularise automatiquement en 658/758
+
+      // FIX 6 — Règle R4 : si écart > seuil auto ET aucun type_ecart fourni,
+      // on refuse le lettrage plutôt que de forcer. L'utilisateur doit
+      // qualifier l'écart (change, escompte, pénalité, exceptionnel).
+      if (ecart > SEUIL_AUTO && !type_ecart) {
+        return NextResponse.json({
+          error: 'ecart_requires_qualification',
+          message: `Écart de ${ecart.toFixed(2)} MUR entre la transaction (${txAmount.toFixed(2)}) et le total factures (${facturesTotal.toFixed(2)}). Règle R4 : pas de lettrage forcé. Qualifier l'écart avant de relancer.`,
+          ecart: Math.round(ecart * 100) / 100,
+          ecart_signe: Math.round(ecartSigne * 100) / 100,
+          tx_amount: txAmount,
+          factures_total: facturesTotal,
+          options: [
+            { type_ecart: 'change', label: 'Écart de change', compte: ecartSigne > 0 ? '766 (gain)' : '666 (perte)' },
+            { type_ecart: 'escompte', label: 'Escompte', compte: ecartSigne > 0 ? '765 (escompte obtenu)' : '665 (escompte accordé)' },
+            { type_ecart: 'penalite', label: 'Pénalité de retard', compte: '631' },
+            { type_ecart: 'exceptionnel', label: 'Écart exceptionnel', compte: ecartSigne > 0 ? '758' : '658' },
+          ],
+        }, { status: 409 })
+      }
 
       const lettreCode = `RM${String(Date.now()).slice(-4)}`
       const reconcileDate = new Date().toISOString()
@@ -1508,19 +1546,59 @@ export async function POST(request: Request) {
         console.warn('[audit] lettrer_multi log failed:', auditErr)
       }
 
-      // Si écart > 0, créer écriture d'écart
-      if (ecart > 1) {
+      // FIX 6 — Écriture d'écart selon type_ecart + règle R7 (pas de
+      // lettre sur 6xxx/7xxx) : l'écart ne reçoit JAMAIS la lettre des
+      // factures principales. Seul le bloc ACH/BNQ des factures est
+      // lettré — l'écart est une ligne OD à part, consultable en
+      // analyse financière mais pas mélangée avec le lettrage.
+      if (ecart > 0.01) {
         const { data: dossier } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
         if (dossier) {
+          // Choix du compte selon type_ecart + sens (tx > factures → produit/crédit,
+          // tx < factures → charge/débit).
+          // ecartSigne > 0 = on a reçu/payé PLUS — gain pour la société si créance, perte si dette.
+          // Ici on raisonne "bank moins facture" donc :
+          //   - ecartSigne > 0 ⇒ on a encaissé plus que la facture (gain) ou payé plus (perte côté fournisseur)
+          // La catégorisation finale est pilotée par type_ecart.
+          const ecartAbs = Math.round(ecart * 100) / 100
+          let compteEcart: string
+          let libelleEcart: string
+          if (ecart <= SEUIL_AUTO) {
+            // Régularisation automatique <1 MUR
+            compteEcart = ecartSigne > 0 ? '758' : '658'
+            libelleEcart = `Régularisation écart <1 MUR — ${lettreCode}`
+          } else {
+            switch (type_ecart) {
+              case 'change':
+                compteEcart = ecartSigne > 0 ? '766' : '666'
+                libelleEcart = `${ecartSigne > 0 ? 'Gain' : 'Perte'} de change — ${lettreCode}`
+                break
+              case 'escompte':
+                compteEcart = ecartSigne > 0 ? '765' : '665'
+                libelleEcart = `${ecartSigne > 0 ? 'Escompte obtenu' : 'Escompte accordé'} — ${lettreCode}`
+                break
+              case 'penalite':
+                // Pénalité de retard — toujours en charge (631)
+                compteEcart = '631'
+                libelleEcart = `Pénalité de retard — ${lettreCode}`
+                break
+              case 'exceptionnel':
+              default:
+                compteEcart = ecartSigne > 0 ? '758' : '658'
+                libelleEcart = `Écart exceptionnel rapprochement — ${lettreCode}`
+                break
+            }
+          }
           await supabase.from('ecritures_comptables').insert({
             dossier_id: dossier.id,
             date_ecriture: new Date().toISOString().split('T')[0],
             journal: 'OD',
-            compte: txAmount > facturesTotal ? '758' : '658',
-            libelle: `Écart rapprochement multi-factures — ${lettreCode}`,
-            debit: txAmount > facturesTotal ? Math.round(ecart * 100) / 100 : 0,
-            credit: txAmount < facturesTotal ? Math.round(ecart * 100) / 100 : 0,
-            lettre: lettreCode,
+            compte: compteEcart,
+            libelle: libelleEcart,
+            // 631/658/666/665 = charges → débit. 758/766/765 = produits → crédit.
+            debit: /^(6)/.test(compteEcart) ? ecartAbs : 0,
+            credit: /^(7)/.test(compteEcart) ? ecartAbs : 0,
+            // Règle R7 : pas de lettrage sur 6xxx/7xxx. `lettre` volontairement omis.
           })
         }
       }
