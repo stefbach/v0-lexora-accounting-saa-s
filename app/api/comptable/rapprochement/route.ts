@@ -2960,15 +2960,30 @@ export async function POST(request: Request) {
       } catch (e: any) { console.warn('[marquer_paye] lettrage ACH failed:', e.message) }
 
       // Marquer la facture payée
-      const { error: factUpdErr } = await supabase.from('factures').update({
+      const { error: factUpdErr, data: factUpdData } = await supabase.from('factures').update({
         statut: 'paye',
         solde_non_paye: 0,
         rapproche_date: dateOp,
         rapproche_source: 'marquer_paye',
-      }).eq('id', facture_id)
+      }).eq('id', facture_id).select('id, statut, solde_non_paye')
       if (factUpdErr) {
-        console.warn('[marquer_paye] facture update failed:', factUpdErr.message)
+        console.error('[marquer_paye] facture update FAILED:', factUpdErr.message, factUpdErr)
+        return NextResponse.json({
+          error: `Ecritures creees (lettre ${lettre}) MAIS facture non marquee payee: ${factUpdErr.message}`,
+          hint: 'Verifiez que les colonnes rapproche_date, rapproche_source existent (migration 121)',
+          lettre,
+          nb_ecritures: 2,
+        }, { status: 500 })
       }
+      if (!factUpdData || factUpdData.length === 0) {
+        console.error('[marquer_paye] update silencieusement ignore - RLS ou ligne non trouvee')
+        return NextResponse.json({
+          error: `Facture non mise a jour (0 ligne affectee). Verifiez RLS ou que la facture existe bien`,
+          lettre,
+          nb_ecritures: 2,
+        }, { status: 500 })
+      }
+      console.log('[marquer_paye] facture updated:', factUpdData)
 
       return NextResponse.json({
         success: true,
@@ -2976,6 +2991,7 @@ export async function POST(request: Request) {
         lettre,
         montant: montantMUR,
         nb_ecritures: 2,
+        facture_updated: factUpdData[0],
       })
     }
 
@@ -3011,11 +3027,22 @@ export async function POST(request: Request) {
 
       const code = `CL${String(Date.now()).slice(-6)}`
       txs[txIdx] = { ...txs[txIdx], statut: 'rapproche', matched_type: classification, lettre: code, note: `Classification manuelle: ${classification}` }
-      const { error: updRelErr } = await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', releve_id)
+      const { error: updRelErr, data: updRelData } = await supabase
+        .from('releves_bancaires')
+        .update({ transactions_json: txs })
+        .eq('id', releve_id)
+        .select('id')
       if (updRelErr) {
-        console.error('[classer_transaction] update relevé failed:', updRelErr.message)
-        return NextResponse.json({ error: `MAJ relevé échouée: ${updRelErr.message}` }, { status: 500 })
+        console.error('[classer_transaction] update releve FAILED:', updRelErr.message, updRelErr)
+        return NextResponse.json({ error: `MAJ releve echouee: ${updRelErr.message}` }, { status: 500 })
       }
+      if (!updRelData || updRelData.length === 0) {
+        console.error('[classer_transaction] update silencieusement ignore (0 ligne) - probablement RLS')
+        return NextResponse.json({
+          error: `Relevé non mis à jour (0 ligne affectée). RLS bloquante ou relevé inexistant.`,
+        }, { status: 500 })
+      }
+      console.log(`[classer_transaction] releve ${releve_id} mis a jour, tx ${txIdx} classee en ${classification}`)
 
       // Mapping classification → compte comptable
       const CLASSE_COMPTES: Record<string, string> = {
