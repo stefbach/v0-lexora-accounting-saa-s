@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createEcrituresForPayment } from '@/lib/accounting/ecritures-factures'
+import { createEcrituresForPayment, createEcrituresForFacture } from '@/lib/accounting/ecritures-factures'
 import { analyzeAllTransactions, MatchingTransaction, MatchingFacture } from '@/lib/accounting/matching-engine'
 import { runIntelligentRapprochement, buildAliasMap } from '@/lib/accounting/intelligent-rapprochement'
 import type { SupplierAlias } from '@/lib/accounting/intelligent-rapprochement'
@@ -1876,7 +1876,7 @@ export async function POST(request: Request) {
       // lettrage.
       const { data: paidFactures, error: facturesErr } = await supabase
         .from('factures')
-        .select('id, numero_facture, montant_ttc, montant_mur, devise, date_facture, date_echeance, rapproche_date, rapproche_releve_id, rapproche_transaction_idx, tiers, type_facture, type_document, facture_origine_id')
+        .select('id, numero_facture, montant_ht, montant_tva, montant_ttc, montant_mur, devise, date_facture, date_echeance, rapproche_date, rapproche_releve_id, rapproche_transaction_idx, tiers, type_facture, type_document, facture_origine_id')
         .eq('societe_id', socId)
         .eq('statut', 'paye')
       if (facturesErr) {
@@ -1984,9 +1984,57 @@ export async function POST(request: Request) {
               .limit(1).maybeSingle()
             if (data) achRow = data
           }
+          // FIX 3 — Si aucune ACH/VTE n'existe pour cette facture, on la
+          // recrée à la volée (10 cas observés en prod : Baydon Murray,
+          // E-Payroll, Jean Daril, Emtel). createEcrituresForFacture gère
+          // déjà la ventilation complète (607/4456/401 pour fournisseur,
+          // 411/706/4457 pour client). Ensuite on re-query pour récupérer
+          // la nouvelle ACH et poursuivre le flux normal.
           if (!achRow) {
-            errors.push({ facture_id: f.id, reason: 'Aucune écriture ACH/VTE trouvée' })
-            continue
+            const minimumOk = !!f.date_facture && Number(f.montant_ttc) > 0
+            if (!minimumOk) {
+              errors.push({ facture_id: f.id, reason: 'Aucune écriture ACH/VTE trouvée ET infos facture insuffisantes pour la recréer' })
+              continue
+            }
+            const gen = await createEcrituresForFacture(supabase, {
+              id: f.id,
+              societe_id: socId,
+              numero_facture: f.numero_facture || '',
+              tiers: f.tiers || '',
+              date_facture: f.date_facture,
+              montant_ht: Number(f.montant_ht) || 0,
+              montant_tva: Number(f.montant_tva) || 0,
+              montant_ttc: Number(f.montant_ttc) || 0,
+              type_facture: (f.type_facture === 'client' ? 'client' : 'fournisseur'),
+            })
+            if (!gen.ok) {
+              errors.push({ facture_id: f.id, reason: `ACH/VTE absente et recréation échouée : ${gen.error || 'inconnue'}` })
+              continue
+            }
+            console.log(`[sync_lettrage] ACH/VTE recréée pour facture ${f.id} (${f.numero_facture}) — ${gen.nb_entries} lignes`)
+            // Re-query the ACH row that was just inserted.
+            const { data: reAch } = await supabase.from('ecritures_comptables')
+              .select('id, compte, debit, credit, date_ecriture, libelle, lettre')
+              .eq('dossier_id', dossierId)
+              .eq('facture_id', f.id)
+              .or('compte.like.401%,compte.like.411%')
+              .limit(1).maybeSingle()
+            if (reAch) {
+              achRow = reAch
+            } else {
+              // Fallback lookup via numero_piece
+              const { data: reAch2 } = await supabase.from('ecritures_comptables')
+                .select('id, compte, debit, credit, date_ecriture, libelle, lettre')
+                .eq('dossier_id', dossierId)
+                .eq('numero_piece', f.numero_facture || '')
+                .or('compte.like.401%,compte.like.411%')
+                .limit(1).maybeSingle()
+              if (reAch2) achRow = reAch2
+            }
+            if (!achRow) {
+              errors.push({ facture_id: f.id, reason: 'ACH/VTE recréée mais re-requête vide — incohérence société/dossier ?' })
+              continue
+            }
           }
 
           // FIX 2 — Garde PCG : on refuse de lettrer si le compte ACH n'est pas
