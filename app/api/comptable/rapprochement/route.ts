@@ -112,14 +112,52 @@ export async function GET(request: Request) {
       })
     })
 
-    // 3. Factures (table may not exist)
+    // 3. Factures — FIX 6 : on inclut aussi 'paye' pour que la colonne
+    //    « Paiement » de l'UI puisse afficher les factures déjà
+    //    rapprochées (le filtre précédent sur ['en_attente','retard',
+    //    'partiel'] forçait un compte de « 0 payées » alors que la DB en
+    //    contient 60+). Les factures 'annule' restent exclues.
     let factures: any[] = []
     const { data: facturesData, error: facturesErr } = await supabase
       .from('factures').select('*')
       .eq('societe_id', societe_id)
-      .in('statut', ['en_attente', 'retard', 'partiel'])
+      .in('statut', ['en_attente', 'retard', 'partiel', 'paye'])
       .order('date_facture', { ascending: false })
     if (!facturesErr) factures = facturesData || []
+
+    // FIX 5 — Enrichir chaque facture payée avec le libellé de la
+    // transaction bancaire qui l'a soldée (si rapproche_releve_id +
+    // rapproche_transaction_idx sont renseignés). Permet à la colonne
+    // « Paiement » d'afficher « Virement du DD/MM/YYYY — FT-2026… »
+    // sans requête client supplémentaire.
+    try {
+      const releveIds = new Set<string>()
+      for (const f of factures) {
+        if (f.statut === 'paye' && f.rapproche_releve_id) releveIds.add(f.rapproche_releve_id)
+      }
+      if (releveIds.size > 0) {
+        const { data: relevesForTx } = await supabase
+          .from('releves_bancaires')
+          .select('id, transactions_json')
+          .in('id', [...releveIds])
+        const txByReleve = new Map<string, any[]>()
+        for (const r of relevesForTx || []) {
+          txByReleve.set((r as any).id, (r as any).transactions_json || [])
+        }
+        for (const f of factures) {
+          if (f.statut !== 'paye' || !f.rapproche_releve_id) continue
+          const txs = txByReleve.get(f.rapproche_releve_id) || []
+          const idx = Number(f.rapproche_transaction_idx)
+          if (Number.isFinite(idx) && idx >= 0 && idx < txs.length) {
+            const tx = txs[idx] || {}
+            f.rapproche_tx_libelle = String(tx.libelle || '')
+            f.rapproche_tx_date = tx.date || null
+          }
+        }
+      }
+    } catch (txEnrichErr) {
+      console.warn('[rapprochement GET] tx libelle enrichment failed:', txEnrichErr)
+    }
 
     // 4. Écritures comptables v1 (pour lettrage)
     const { data: dossiers } = await supabase

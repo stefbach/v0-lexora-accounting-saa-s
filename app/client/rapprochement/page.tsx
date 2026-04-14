@@ -749,7 +749,11 @@ Voulez-vous vraiment continuer ?`
 
   const allTransactions = data?.bankTransactions || []
   const allComptes = data?.comptes || []
-  const factures = data?.factures || []
+  // FIX 6 — data.factures contient désormais aussi les factures 'paye'.
+  // On expose 2 vues : `factures` (compat, factures non-payées uniquement
+  // pour le dialog de lettrage manuel) et on laisse les vues par statut
+  // filtrer elles-mêmes sur data.factures.
+  const factures = (data?.factures || []).filter((f: any) => f.statut !== 'paye')
   const ecritures = (data?.ecritures || []).filter((e: any) => !e.lettre)
 
   // Filter by month + compte
@@ -1210,6 +1214,7 @@ Voulez-vous vraiment continuer ?`
           label: string
           badgeCls: string
           payDate?: string | null
+          txLibelle?: string | null // FIX 5 — libellé de la transaction bancaire
         }
         const today = new Date().toISOString().slice(0, 10)
         const rows: FactureRow[] = fournFactures.map((f: any) => {
@@ -1225,7 +1230,9 @@ Voulez-vous vraiment continuer ?`
               f, status: 'paye',
               label: '✅ Payé',
               badgeCls: 'bg-green-100 text-green-700 border-green-200',
-              payDate: f.rapproche_date || null,
+              // FIX 5 — priorité date facture.rapproche_date puis date tx
+              payDate: f.rapproche_date || f.rapproche_tx_date || null,
+              txLibelle: f.rapproche_tx_libelle || null,
             }
           }
           // Not paid yet — decide based on releve availability
@@ -1302,7 +1309,7 @@ Voulez-vous vraiment continuer ?`
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {pageRows.map(({ f, label, badgeCls, payDate, status }) => (
+                  {pageRows.map(({ f, label, badgeCls, payDate, status, txLibelle }) => (
                     <TableRow key={f.id}>
                       <TableCell className="text-sm font-medium">
                         <TruncatedCell text={f.tiers || '—'} />
@@ -1319,8 +1326,20 @@ Voulez-vous vraiment continuer ?`
                           {label}
                         </Badge>
                       </TableCell>
+                      {/* FIX 5 — colonne Paiement : date virement + libellé de la transaction */}
                       <TableCell className="text-xs text-gray-500">
-                        {status === 'paye' && payDate ? `Virement du ${formatDate(payDate)}` : '—'}
+                        {status === 'paye' && payDate ? (
+                          <div className="space-y-0.5">
+                            <div className="font-medium text-gray-700">
+                              Virement du {formatDate(payDate)}
+                            </div>
+                            {txLibelle && (
+                              <div className="text-gray-500 text-[11px] truncate max-w-[260px]" title={txLibelle}>
+                                {txLibelle}
+                              </div>
+                            )}
+                          </div>
+                        ) : '—'}
                       </TableCell>
                       <TableCell>
                         {status !== 'paye' && (
