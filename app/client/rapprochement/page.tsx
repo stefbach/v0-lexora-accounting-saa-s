@@ -702,52 +702,73 @@ Voulez-vous vraiment continuer ?`
 
   // Marquer une facture comme payée (crée BNQ + letters, sans tx)
   const handleMarquerPaye = async (facture: any) => {
-    if (!societeId) return
-    if (!confirm(`Marquer la facture ${facture.numero_facture || facture.id} comme payée ?\n\nCela créera les écritures comptables (D: ${facture.type_facture === 'fournisseur' || !facture.type_facture ? '401' : '411'} / C: 512) et lettrera automatiquement.`)) return
+    if (!societeId) {
+      setToast({ type: 'error', message: 'Aucune société sélectionnée' })
+      return
+    }
+    setToast({ type: 'success', message: 'Enregistrement du paiement…' })
     try {
       const res = await fetch("/api/comptable/rapprochement", {
-        method: "POST", headers: { "Content-Type": "application/json" },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           action: "marquer_paye",
           facture_id: facture.id,
           societe_id: societeId,
         }),
       })
-      const data = await res.json()
+      const data = await res.json().catch(() => ({}))
+      console.log('[marquer_paye] response', res.status, data)
       if (!res.ok) {
-        setToast({ type: 'error', message: data.error || 'Erreur' })
-      } else {
-        setToast({ type: 'success', message: `✓ Facture marquée payée (lettre ${data.lettre})` })
-        await load()
+        setToast({ type: 'error', message: `❌ ${data.error || data.hint || `HTTP ${res.status}`}` })
+        return
       }
+      setToast({ type: 'success', message: `✓ Facture marquée payée (lettre ${data.lettre})` })
+      await load()
     } catch (e: any) {
-      setToast({ type: 'error', message: e.message })
+      console.error('[marquer_paye] fetch error', e)
+      setToast({ type: 'error', message: `❌ ${e.message || 'Erreur réseau'}` })
     }
   }
 
   // Classer une transaction "à vérifier" en un type comptable
   const handleClasserTx = async (tx: any, classification: string) => {
-    if (!societeId) return
+    if (!societeId) {
+      setToast({ type: 'error', message: 'Aucune société sélectionnée' })
+      return
+    }
+    setToast({ type: 'success', message: `Classification "${classification}"…` })
     try {
       const res = await fetch("/api/comptable/rapprochement", {
-        method: "POST", headers: { "Content-Type": "application/json" },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           action: "classer_transaction",
           transaction_id: tx.id,
           releve_id: tx.releve_id,
           societe_id: societeId,
           classification,
+          // NEW: sauvegarder en règle pour auto-application future (auto-learn)
+          learn_pattern: {
+            tiers: tx.tiers_detecte || null,
+            libelle: tx.libelle || null,
+          },
         }),
       })
-      const data = await res.json()
+      const data = await res.json().catch(() => ({}))
+      console.log('[classer_transaction] response', res.status, data)
       if (!res.ok) {
-        setToast({ type: 'error', message: data.error || 'Erreur classification' })
-      } else {
-        setToast({ type: 'success', message: `✓ Transaction classée en "${classification}"` })
-        await load()
+        setToast({ type: 'error', message: `❌ ${data.error || `HTTP ${res.status}`}` })
+        return
       }
+      const learnMsg = data.pattern_saved ? ' · règle enregistrée pour auto-classification future' : ''
+      setToast({ type: 'success', message: `✓ Classée en "${classification}"${learnMsg}` })
+      await load()
     } catch (e: any) {
-      setToast({ type: 'error', message: e.message })
+      console.error('[classer_transaction] fetch error', e)
+      setToast({ type: 'error', message: `❌ ${e.message || 'Erreur réseau'}` })
     }
   }
 

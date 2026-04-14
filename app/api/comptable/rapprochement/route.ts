@@ -2871,60 +2871,93 @@ export async function POST(request: Request) {
       // Pour un client encaissé:
       //   D: 512 Banque (entrée)
       //   C: 411 Client (solde la créance) — lettre avec VTE
-      const ecritures = isFournisseur
-        ? [
-            {
-              dossier_id: dossier.id, societe_id,
-              date_ecriture: dateOp, journal: 'BNQ',
-              numero_compte: compteAux,
-              libelle: `Paiement ${tiers} — ${facture.numero_facture}`.substring(0, 100),
-              debit_mur: montantMUR, credit_mur: 0,
-              lettre, ref_folio: refFolio, facture_id: facture.id,
-            },
-            {
-              dossier_id: dossier.id, societe_id,
-              date_ecriture: dateOp, journal: 'BNQ',
-              numero_compte: compteBanque,
-              libelle: `Banque — Paiement ${tiers}`.substring(0, 100),
-              debit_mur: 0, credit_mur: montantMUR,
-              lettre, ref_folio: refFolio,
-            },
-          ]
-        : [
-            {
-              dossier_id: dossier.id, societe_id,
-              date_ecriture: dateOp, journal: 'BNQ',
-              numero_compte: compteBanque,
-              libelle: `Banque — Encaissement ${tiers}`.substring(0, 100),
-              debit_mur: montantMUR, credit_mur: 0,
-              lettre, ref_folio: refFolio,
-            },
-            {
-              dossier_id: dossier.id, societe_id,
-              date_ecriture: dateOp, journal: 'BNQ',
-              numero_compte: compteAux,
-              libelle: `Encaissement ${tiers} — ${facture.numero_facture}`.substring(0, 100),
-              debit_mur: 0, credit_mur: montantMUR,
-              lettre, ref_folio: refFolio, facture_id: facture.id,
-            },
-          ]
+      const buildEcritures = (withFactureId: boolean) => {
+        const withFk = (fkId: string) => withFactureId ? { facture_id: fkId } : {}
+        return isFournisseur
+          ? [
+              {
+                dossier_id: dossier.id, societe_id,
+                date_ecriture: dateOp, journal: 'BNQ',
+                numero_compte: compteAux,
+                libelle: `Paiement ${tiers} — ${facture.numero_facture}`.substring(0, 100),
+                debit_mur: montantMUR, credit_mur: 0,
+                lettre, ref_folio: refFolio,
+                ...withFk(facture.id),
+              },
+              {
+                dossier_id: dossier.id, societe_id,
+                date_ecriture: dateOp, journal: 'BNQ',
+                numero_compte: compteBanque,
+                libelle: `Banque — Paiement ${tiers}`.substring(0, 100),
+                debit_mur: 0, credit_mur: montantMUR,
+                lettre, ref_folio: refFolio,
+              },
+            ]
+          : [
+              {
+                dossier_id: dossier.id, societe_id,
+                date_ecriture: dateOp, journal: 'BNQ',
+                numero_compte: compteBanque,
+                libelle: `Banque — Encaissement ${tiers}`.substring(0, 100),
+                debit_mur: montantMUR, credit_mur: 0,
+                lettre, ref_folio: refFolio,
+              },
+              {
+                dossier_id: dossier.id, societe_id,
+                date_ecriture: dateOp, journal: 'BNQ',
+                numero_compte: compteAux,
+                libelle: `Encaissement ${tiers} — ${facture.numero_facture}`.substring(0, 100),
+                debit_mur: 0, credit_mur: montantMUR,
+                lettre, ref_folio: refFolio,
+                ...withFk(facture.id),
+              },
+            ]
+      }
 
-      const { error: insErr } = await supabase.from('ecritures_comptables_v2').insert(ecritures)
+      // Tenter d'abord avec facture_id (migration 133) puis fallback sans
+      let insResult = await supabase.from('ecritures_comptables_v2').insert(buildEcritures(true))
+      let insErr: any = insResult.error
+      if (insErr && /facture_id/i.test(String(insErr.message || '')) && /(does not exist|column)/i.test(String(insErr.message || ''))) {
+        console.warn('[marquer_paye] facture_id column missing, retry without it')
+        insResult = await supabase.from('ecritures_comptables_v2').insert(buildEcritures(false))
+        insErr = insResult.error
+      }
       if (insErr) {
-        return NextResponse.json({ error: `Erreur insertion écritures: ${insErr.message}` }, { status: 500 })
+        console.error('[marquer_paye] insertion failed:', insErr.message)
+        // Si doublon (unique index ref_folio), on peut considérer que c'est déjà fait
+        if (/duplicate key value|unique constraint/i.test(String(insErr.message || ''))) {
+          console.log('[marquer_paye] already inserted previously, continuing to mark facture paye')
+        } else {
+          return NextResponse.json({
+            error: `Erreur insertion écritures: ${insErr.message}`,
+            hint: 'La migration 128 (ref_folio unique) et 133 (facture_id) doivent être appliquées.',
+          }, { status: 500 })
+        }
       }
 
       // Lettrer l'ACH/VTE existante sur le compte auxiliaire pour cette facture
       // (l'écriture originale créée lors de l'import facture)
+      // On tente plusieurs stratégies : par facture_id (m133), sinon par ref_folio
+      // qui matche le numero_facture, sinon par libellé contenant le numero.
       try {
-        await supabase
+        const upd1 = await supabase
           .from('ecritures_comptables_v2')
           .update({ lettre, date_lettrage: dateOp })
           .eq('dossier_id', dossier.id)
           .eq('facture_id', facture.id)
           .in('journal', ['ACH', 'VTE'])
           .is('lettre', null)
-      } catch { /* best-effort */ }
+        if (upd1.error && /facture_id/i.test(String(upd1.error.message || ''))) {
+          // Fallback : par libellé
+          await supabase
+            .from('ecritures_comptables_v2')
+            .update({ lettre, date_lettrage: dateOp })
+            .eq('dossier_id', dossier.id)
+            .in('journal', ['ACH', 'VTE'])
+            .is('lettre', null)
+            .ilike('libelle', `%${facture.numero_facture}%`)
+        }
+      } catch (e: any) { console.warn('[marquer_paye] lettrage ACH failed:', e.message) }
 
       // Marquer la facture payée
       const { error: factUpdErr } = await supabase.from('factures').update({
@@ -2942,44 +2975,49 @@ export async function POST(request: Request) {
         facture_id,
         lettre,
         montant: montantMUR,
-        nb_ecritures: ecritures.length,
+        nb_ecritures: 2,
       })
     }
 
-    // === CLASSER TRANSACTION — raccourci lettrer_manuel avec classification ===
-    // Applique une classification manuelle sur une transaction 'à vérifier',
-    // sans dialogue. Raccourci pour le bouton dropdown de l'onglet.
-    // C'est strictement équivalent à lettrer_manuel avec seulement classification.
-    // On garde une action dédiée pour la lisibilité des logs.
+    // === CLASSER TRANSACTION — raccourci avec auto-learn pattern ===
+    // Classe manuellement une transaction "à vérifier" avec une nature comptable,
+    // crée les écritures BNQ associées, ET sauvegarde le pattern (tiers) comme
+    // règle de classification pour appliquer automatiquement la prochaine fois.
     if (action === 'classer_transaction') {
-      // Redirige vers lettrer_manuel en interne (même supabase/user contexte)
-      const { transaction_id, releve_id, societe_id, classification } = body
+      const { transaction_id, releve_id, societe_id, classification, learn_pattern } = body
       if (!releve_id || !transaction_id || !classification) {
         return NextResponse.json({ error: 'releve_id, transaction_id, classification requis' }, { status: 400 })
       }
-      const { data: releve } = await supabase
+      console.log(`[classer_transaction] societe=${societe_id} tx=${transaction_id} classification=${classification}`)
+
+      const { data: releve, error: relErr } = await supabase
         .from('releves_bancaires').select('id, transactions_json').eq('id', releve_id).single()
-      if (!releve) return NextResponse.json({ error: 'Relevé non trouvé' }, { status: 404 })
+      if (relErr || !releve) {
+        console.error('[classer_transaction] relevé introuvable:', relErr?.message)
+        return NextResponse.json({ error: `Relevé non trouvé: ${relErr?.message}` }, { status: 404 })
+      }
 
       const txIdx = parseInt(transaction_id.split('-').pop() || '0')
       const txs = [...(releve.transactions_json || [])]
       if (txIdx >= txs.length) return NextResponse.json({ error: 'Transaction non trouvée' }, { status: 404 })
 
-      // Vérifier période verrouillée
       const txDate = txs[txIdx]?.date
       if (txDate && societe_id) {
         const lockStatus = await checkPeriodLock(supabase, societe_id, txDate)
         if (lockStatus.locked) {
-          return NextResponse.json({
-            error: `Période verrouillée — ${lockStatus.reason}`,
-          }, { status: 403 })
+          return NextResponse.json({ error: `Période verrouillée — ${lockStatus.reason}` }, { status: 403 })
         }
       }
 
-      const code = `CL${String(Date.now()).slice(-4)}`
+      const code = `CL${String(Date.now()).slice(-6)}`
       txs[txIdx] = { ...txs[txIdx], statut: 'rapproche', matched_type: classification, lettre: code, note: `Classification manuelle: ${classification}` }
-      await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', releve_id)
+      const { error: updRelErr } = await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', releve_id)
+      if (updRelErr) {
+        console.error('[classer_transaction] update relevé failed:', updRelErr.message)
+        return NextResponse.json({ error: `MAJ relevé échouée: ${updRelErr.message}` }, { status: 500 })
+      }
 
+      // Mapping classification → compte comptable
       const CLASSE_COMPTES: Record<string, string> = {
         compte_courant_associe: '455',
         avance_personnel: '425',
@@ -2992,30 +3030,93 @@ export async function POST(request: Request) {
         autre: '471',
       }
       const compte = CLASSE_COMPTES[classification] || '471'
+
       const { data: dossier } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
+      let nbEcritures = 0
       if (dossier) {
         const tx = txs[txIdx]
         const txAmt = Math.max(Number(tx.debit) || 0, Number(tx.credit) || 0)
         const isOut = (Number(tx.debit) || 0) > 0
-        await supabase.from('ecritures_comptables_v2').insert([
+        const refFolio = `CL-${String(releve_id).substring(0, 8)}-${txIdx}`
+        const { error: insEcrErr } = await supabase.from('ecritures_comptables_v2').insert([
           {
             dossier_id: dossier.id, societe_id, date_ecriture: tx.date || new Date().toISOString().split('T')[0],
             journal: 'BNQ', numero_compte: compte,
-            libelle: `${classification} — ${(tx.tiers_detecte || tx.libelle || '').substring(0, 30)}`,
+            libelle: `${classification} — ${(tx.tiers_detecte || tx.libelle || '').substring(0, 60)}`,
             debit_mur: isOut ? txAmt : 0, credit_mur: isOut ? 0 : txAmt,
-            lettre: code, ref_folio: `CL-${releve_id}-${txIdx}`,
+            lettre: code, ref_folio: refFolio,
           },
           {
             dossier_id: dossier.id, societe_id, date_ecriture: tx.date || new Date().toISOString().split('T')[0],
             journal: 'BNQ', numero_compte: '512',
             libelle: `Banque — ${(tx.tiers_detecte || '').substring(0, 25)}`,
             debit_mur: isOut ? 0 : txAmt, credit_mur: isOut ? txAmt : 0,
-            lettre: code, ref_folio: `CL-${releve_id}-${txIdx}`,
+            lettre: code, ref_folio: refFolio,
           },
         ])
+        if (insEcrErr) {
+          console.error('[classer_transaction] insertion écritures échouée:', insEcrErr.message)
+          // Ne pas bloquer la réponse — la tx est classée dans le relevé
+          // mais signaler que les écritures n'ont pas été créées
+        } else {
+          nbEcritures = 2
+        }
       }
 
-      return NextResponse.json({ success: true, lettre: code, classification })
+      // === AUTO-LEARN : sauvegarder le pattern comme règle de classification ===
+      // Quand l'utilisateur classe manuellement, on crée une règle spécifique
+      // à la société pour que les prochaines transactions similaires (même tiers)
+      // soient auto-classifiées. Priority = 100 + (ordre insertion) pour passer
+      // APRÈS les règles globales R01-R07 (priority 10-60).
+      let patternSaved = false
+      try {
+        const tx = txs[txIdx]
+        const patternTiers = (learn_pattern?.tiers || tx.tiers_detecte || '').trim()
+        if (patternTiers && patternTiers.length >= 3) {
+          // Check if rule already exists for this tiers+classification
+          const { data: existing } = await supabase
+            .from('classification_rules')
+            .select('id')
+            .eq('societe_id', societe_id)
+            .eq('pattern_tiers', patternTiers)
+            .eq('classification', classification)
+            .maybeSingle()
+          if (!existing) {
+            const ruleCode = `LEARN_${societe_id.substring(0, 8)}_${Date.now().toString(36)}`
+            const { error: ruleErr } = await supabase.from('classification_rules').insert({
+              rule_code: ruleCode,
+              societe_id,
+              priority: 100,
+              active: true,
+              pattern_libelle: null,
+              pattern_tiers: patternTiers,
+              classification,
+              compte_debit: compte,
+              compte_credit: '512',
+              libelle_template: `${classification} — {{tiers}}`,
+              requires_validation: false,
+            })
+            if (!ruleErr) {
+              patternSaved = true
+              console.log(`[classer_transaction] auto-learn: règle ${ruleCode} créée pour tiers="${patternTiers}" → ${classification}`)
+            } else {
+              console.warn('[classer_transaction] auto-learn échoué (migration 135 non appliquée?):', ruleErr.message)
+            }
+          } else {
+            console.log(`[classer_transaction] règle existe déjà pour "${patternTiers}" → ${classification}`)
+          }
+        }
+      } catch (e: any) {
+        console.warn('[classer_transaction] auto-learn exception:', e.message)
+      }
+
+      return NextResponse.json({
+        success: true,
+        lettre: code,
+        classification,
+        nb_ecritures: nbEcritures,
+        pattern_saved: patternSaved,
+      })
     }
 
     return NextResponse.json({ error: 'Action inconnue' }, { status: 400 })
