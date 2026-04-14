@@ -486,6 +486,34 @@ Voulez-vous vraiment continuer ?`
     }
   }
 
+  // ── Reclassify (réapplique R01-R07 sur tx sans facture) ──────────
+  const [reclassifying, setReclassifying] = useState(false)
+  const handleReclassify = async () => {
+    if (!societeId || reclassifying) return
+    setReclassifying(true)
+    try {
+      const res = await fetch('/api/comptable/rapprochement/reclassify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ societe_id: societeId, scope: 'unclassified' }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setToast({ type: 'error', message: data.error || 'Erreur re-classification' })
+      } else {
+        setToast({
+          type: 'success',
+          message: `✓ ${data.matched} transactions classées • ${data.director_detected} dirigeants détectés • ${data.bnq_entries_created} écritures BNQ créées`,
+        })
+        await load()
+      }
+    } catch (e: any) {
+      setToast({ type: 'error', message: e.message })
+    } finally {
+      setReclassifying(false)
+    }
+  }
+
   // ── Patterns apply ────────────────────────────────────────────────
   const runApplyPatterns = async (): Promise<void> => {
     if (!societeId) return
@@ -1036,17 +1064,31 @@ Voulez-vous vraiment continuer ?`
         <div className="text-sm text-gray-500">
           Rapprochement automatique : frais bancaires, MRA, salaires, virements internes, factures fournisseurs.
         </div>
-        <Button
-          onClick={handleAutoMatch}
-          disabled={autoMatching || !societeId}
-          className="bg-[#D4AF37] hover:bg-[#C9A82E] text-[#0B0F2E] font-semibold"
-          size="lg"
-        >
-          {autoMatching
-            ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{autoStep || "Analyse en cours..."}</>
-            : <><span className="mr-2">✨</span>Rapprocher automatiquement</>
-          }
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={handleReclassify}
+            disabled={reclassifying || !societeId}
+            variant="outline"
+            size="lg"
+            title="Applique les règles R01-R07 (MRA, MCB, E-Payroll, salaires...) sur toutes les transactions sans facture — sans refaire le rapprochement complet"
+          >
+            {reclassifying
+              ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Re-classification…</>
+              : <><Target className="w-4 h-4 mr-2" />Re-classifier (R01-R07)</>
+            }
+          </Button>
+          <Button
+            onClick={handleAutoMatch}
+            disabled={autoMatching || !societeId}
+            className="bg-[#D4AF37] hover:bg-[#C9A82E] text-[#0B0F2E] font-semibold"
+            size="lg"
+          >
+            {autoMatching
+              ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{autoStep || "Analyse en cours..."}</>
+              : <><span className="mr-2">✨</span>Rapprocher automatiquement</>
+            }
+          </Button>
+        </div>
       </div>
 
       {/* Filters row: Month nav (← Mois Année →) + toggle all-months + Compte + Période */}

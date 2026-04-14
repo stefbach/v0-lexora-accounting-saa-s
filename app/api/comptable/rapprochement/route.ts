@@ -1283,8 +1283,9 @@ export async function POST(request: Request) {
               const txDate2 = tx.date || new Date().toISOString().split('T')[0]
 
             // ── NEW: Appliquer les règles de classification configurables (R01-R07+) ──
-            // Pour les transactions encore sans matched_type ni facture
-            if (tx.statut === 'non_identifie' && !tx.matched_type && classificationRules.length > 0) {
+            // Pour les transactions non rapprochées par facture (non_identifie + a_verifier)
+            const isUnclassified = (tx.statut === 'non_identifie' || tx.statut === 'a_verifier') && !tx.facture_id
+            if (isUnclassified && !tx.matched_type?.startsWith('rule_') && classificationRules.length > 0) {
               const classified = classifyTransaction({
                 date: tx.date || '',
                 libelle: tx.libelle || '',
@@ -1321,7 +1322,8 @@ export async function POST(request: Request) {
             }
 
             // ── NEW: Détecter virements vers/depuis dirigeants/associés ──
-            if (tx.statut === 'non_identifie' && !tx.matched_type && directors.length > 0) {
+            const isUnclassifiedDir = (tx.statut === 'non_identifie' || tx.statut === 'a_verifier') && !tx.facture_id
+            if (isUnclassifiedDir && !tx.matched_type?.startsWith('rule_') && tx.matched_type !== 'qualification_requise' && directors.length > 0) {
               const dirMatch = detectDirector({
                 date: tx.date || '',
                 libelle: tx.libelle || '',

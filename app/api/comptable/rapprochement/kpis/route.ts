@@ -52,24 +52,43 @@ export async function GET(request: Request) {
 
     // Toutes les requêtes en parallèle
     const [
-      { data: releves },
-      { data: factures },
+      relevesRes,
+      facturesRes,
       ecr401Res,
-      { data: ecrBNQRes },
+      ecrBNQRes,
       alertsRes,
-      { data: reconciliations },
+      reconciliationsRes,
     ] = await Promise.all([
-      supabase.from('releves_bancaires').select('id, transactions_json').eq('societe_id', societe_id),
-      supabase.from('factures').select('id, statut, solde_non_paye, montant_ttc, rapproche_date, date_facture').eq('societe_id', societe_id),
+      safeQuery(supabase.from('releves_bancaires').select('id, transactions_json').eq('societe_id', societe_id)),
+      safeQuery(supabase.from('factures').select('id, statut, solde_non_paye, montant_ttc, rapproche_date, date_facture, societe_id, dossier_id').eq('societe_id', societe_id)),
       dossier
-        ? supabase.from('ecritures_comptables_v2').select('numero_compte, debit_mur, credit_mur, lettre, date_ecriture').eq('dossier_id', dossier.id)
+        ? safeQuery(supabase.from('ecritures_comptables_v2').select('numero_compte, debit_mur, credit_mur, lettre, date_ecriture').eq('dossier_id', dossier.id))
         : Promise.resolve({ data: [] }),
       dossier
-        ? supabase.from('ecritures_comptables_v2').select('numero_compte, debit_mur, credit_mur').eq('dossier_id', dossier.id).eq('numero_compte', '580')
+        ? safeQuery(supabase.from('ecritures_comptables_v2').select('numero_compte, debit_mur, credit_mur').eq('dossier_id', dossier.id).eq('numero_compte', '580'))
         : Promise.resolve({ data: [] }),
       safeQuery(supabase.from('compliance_alerts').select('severity, status').eq('societe_id', societe_id).eq('status', 'open')),
       safeQuery(supabase.from('bank_reconciliations').select('status, period_end').eq('societe_id', societe_id)),
     ])
+
+    const releves = relevesRes.data || []
+    let factures = facturesRes.data || []
+
+    // Fallback: si aucune facture via societe_id mais un dossier existe, tenter via dossier_id
+    // (certains imports historiques peuvent avoir dossier_id sans societe_id)
+    if (factures.length === 0 && dossier) {
+      const fb = await safeQuery(
+        supabase.from('factures').select('id, statut, solde_non_paye, montant_ttc, rapproche_date, date_facture, societe_id, dossier_id').eq('dossier_id', dossier.id)
+      )
+      factures = fb.data || []
+      if (factures.length > 0) {
+        console.log(`[kpis] fallback dossier_id=${dossier.id} → ${factures.length} factures`)
+      }
+    }
+
+    if (factures.length === 0) {
+      console.log(`[kpis] WARNING: 0 factures pour societe_id=${societe_id} dossier_id=${dossier?.id || 'n/a'}`)
+    }
 
     // Calculer les KPIs
     let totalTx = 0, autoMatched = 0, unknown = 0, qualificationRequise = 0
@@ -85,12 +104,14 @@ export async function GET(request: Request) {
     const tauxAuto = totalTx > 0 ? Math.round((autoMatched / totalTx) * 100) : 0
 
     // Lettrage 401/411
-    const ecr401 = (ecr401Res.data || []).filter((e: any) => (e.numero_compte || '').match(/^(401|411)/))
+    const ecr401Data: any[] = (ecr401Res as any)?.data || []
+    const ecr401 = ecr401Data.filter((e: any) => (e.numero_compte || '').match(/^(401|411)/))
     const ecr401Lettrees = ecr401.filter((e: any) => e.lettre)
     const tauxLettrage = ecr401.length > 0 ? Math.round((ecr401Lettrees.length / ecr401.length) * 100) : 0
 
     // Solde 580 transit
-    const solde580 = (ecrBNQRes || []).reduce((s: number, e: any) => s + (Number(e.debit_mur) || 0) - (Number(e.credit_mur) || 0), 0)
+    const ecrBNQData: any[] = (ecrBNQRes as any)?.data || []
+    const solde580 = ecrBNQData.reduce((s: number, e: any) => s + (Number(e.debit_mur) || 0) - (Number(e.credit_mur) || 0), 0)
 
     // Factures
     const totalFact = (factures || []).length
@@ -106,17 +127,22 @@ export async function GET(request: Request) {
     const alertsTotal = alertsData.length
 
     // Rapprochements mensuels
-    const recon = reconciliations || []
+    const recon: any[] = (reconciliationsRes as any)?.data || []
     const reconLocked = recon.filter((r: any) => r.status === 'locked').length
     const reconValidated = recon.filter((r: any) => r.status === 'validated').length
     const reconDraft = recon.filter((r: any) => r.status === 'draft').length
 
     // Balance âgée fournisseurs
+    // Si solde_non_paye n'est pas défini (legacy), on prend montant_ttc pour les factures
+    // non payées. Seules les factures avec statut 'paye' sont exclues.
     const today = new Date()
     const aged = { '0-30': 0, '31-60': 0, '61-90': 0, '>90': 0 }
     for (const f of factures || []) {
       if (f.statut === 'paye') continue
-      const soldeRestant = Number(f.solde_non_paye) || Number(f.montant_ttc) || 0
+      const snp = Number(f.solde_non_paye)
+      const mtt = Number(f.montant_ttc) || 0
+      // Si solde_non_paye est null/undefined/0, on prend montant_ttc (cas legacy)
+      const soldeRestant = (f.solde_non_paye !== null && f.solde_non_paye !== undefined && !isNaN(snp) && snp > 0) ? snp : mtt
       if (soldeRestant <= 0) continue
       const factDate = f.date_facture ? new Date(f.date_facture) : today
       const days = Math.floor((today.getTime() - factDate.getTime()) / (1000 * 60 * 60 * 24))
