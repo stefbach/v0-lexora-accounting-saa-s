@@ -58,6 +58,46 @@ async function safeQuery(supabase: any, table: string, query: any) {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// FIX 2 — Classification PCG/Mauritius des comptes pour le lettrage.
+//
+// Référentiel (PCG Mauritius) :
+//   • LETTRABLE (= on peut apparier débit/crédit et poser une lettre) :
+//       401 fournisseurs · 411 clients ·
+//       421 salaires · 425 avances salaires ·
+//       431 charges sociales MRA (431CSG/NSF/PRGF/TL/PAYE) ·
+//       455 compte courant associé ·
+//       467 virements inter-sociétés ·
+//       409 acomptes clients/fournisseurs ·
+//       486 charges constatées d'avance ·
+//       580 transit (doit toujours être soldé — règle R3)
+//   • SKIP (lettrage interdit — règle R7 + spécifiques Mauritius) :
+//       627 frais bancaires — comptabilisés directement, pas de lettrage
+//       444 TVA due/MRA — géré par déclaration, pas par lettrage
+//       6xxx autres charges · 7xxx produits — R7 : pas de lettre sur résultat
+//
+// Note : sync_lettrage est piloté par `paidFactures` donc l'ACH est
+// TOUJOURS 401 ou 411. Le garde ci-dessous est défensif : si jamais le
+// back-fill d'une migration future a écrit un achRow.compte erroné, on
+// refuse de générer / lettrer une BNQ plutôt que de propager l'erreur.
+// ─────────────────────────────────────────────────────────────────────────────
+const LETTRABLE_PREFIXES = ['401', '411', '421', '425', '431', '455', '467', '409', '486', '580']
+const SKIP_LETTRAGE_PREFIXES = ['627', '444']
+
+function accountClass(compte: string | null | undefined): 'lettrable' | 'skip' | 'charge' | 'produit' | 'autre' {
+  const c = String(compte || '').trim()
+  if (!c) return 'autre'
+  if (SKIP_LETTRAGE_PREFIXES.some(p => c.startsWith(p))) return 'skip'
+  if (LETTRABLE_PREFIXES.some(p => c.startsWith(p))) return 'lettrable'
+  if (c.startsWith('6')) return 'charge'
+  if (c.startsWith('7')) return 'produit'
+  return 'autre'
+}
+
+function isLettrableAccount(compte: string | null | undefined): boolean {
+  return accountClass(compte) === 'lettrable'
+}
+
 // GET — Rapprochements + transactions + factures + écritures
 export async function GET(request: Request) {
   try {
@@ -1761,6 +1801,21 @@ export async function POST(request: Request) {
           }
           if (!achRow) {
             errors.push({ facture_id: f.id, reason: 'Aucune écriture ACH/VTE trouvée' })
+            continue
+          }
+
+          // FIX 2 — Garde PCG : on refuse de lettrer si le compte ACH n'est pas
+          // dans la liste blanche LETTRABLE (401/411/...). En pratique les
+          // factures écrivent toujours sur 401 ou 411, mais un back-fill
+          // incorrect pourrait avoir pointé sur 627 (frais bancaires), 444
+          // (TVA due), ou un compte 6xxx/7xxx — auquel cas le lettrage est
+          // interdit par la règle R7 (pas de lettre sur résultat).
+          const achClass = accountClass(achRow.compte)
+          if (achClass !== 'lettrable') {
+            errors.push({
+              facture_id: f.id,
+              reason: `Compte ACH ${achRow.compte} non lettrable (classe: ${achClass}). SKIP par règle PCG/R7.`,
+            })
             continue
           }
 
