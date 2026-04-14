@@ -8,6 +8,7 @@ import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getTauxChange } from '@/lib/taux-change'
 import { accountClass } from '@/lib/accounting/classification-rules'
 import { validateLettrageGroup } from '@/lib/accounting/accounting-rules'
+import { classifyTransaction, detectDirector, getComplianceSeverity, type ClassificationRule } from '@/lib/accounting/classification-engine'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -300,6 +301,23 @@ export async function POST(request: Request) {
           error: `Chargement des données échoué: ${loadErr.message || loadErr}`,
           _phase: 'data_loading',
         }, { status: 500 })
+      }
+
+      // ── Charger règles de classification + dirigeants (best-effort) ──
+      let classificationRules: ClassificationRule[] = []
+      let directors: Array<{ id: string; nom_complet: string; role: string }> = []
+      try {
+        const [rulesRes, dirRes] = await Promise.all([
+          supabase.from('classification_rules').select('*').eq('active', true)
+            .or(`societe_id.eq.${societe_id},societe_id.is.null`).order('priority'),
+          supabase.from('directors_shareholders').select('id, nom_complet, role')
+            .eq('societe_id', societe_id).eq('active', true),
+        ])
+        classificationRules = (rulesRes.data || []) as ClassificationRule[]
+        directors = (dirRes.data || []) as any[]
+        console.log(`[rapprochement] Loaded ${classificationRules.length} rules, ${directors.length} directors`)
+      } catch (rulesErr) {
+        console.warn('[rapprochement] classification_rules/directors not available (migration 135 not applied?):', rulesErr)
       }
 
       console.log(`[rapprochement] Parallel load done in ${Date.now() - t0}ms: ${releves.length} releves, ${(facturesData || []).length} factures`)
@@ -1263,6 +1281,80 @@ export async function POST(request: Request) {
               const txAmountMUR2 = Math.round(toMUR(txAmount2, entry2.releveDevise) * 100) / 100
               const txDate2 = tx.date || new Date().toISOString().split('T')[0]
 
+            // ── NEW: Appliquer les règles de classification configurables (R01-R07+) ──
+            // Pour les transactions encore sans matched_type ni facture
+            if (tx.statut === 'non_identifie' && !tx.matched_type && classificationRules.length > 0) {
+              const classified = classifyTransaction({
+                date: tx.date || '',
+                libelle: tx.libelle || '',
+                tiers_detecte: tx.tiers_detecte || null,
+                debit: Number(tx.debit) || 0,
+                credit: Number(tx.credit) || 0,
+                devise: entry2.releveDevise,
+              }, classificationRules)
+              if (classified.matched && classified.compte_debit) {
+                tx.statut = 'rapproche'
+                tx.matched_type = `rule_${classified.rule_code}`
+                tx.note = `Auto-classé: ${classified.classification} (règle ${classified.rule_code})`
+                tx.classification_rule = classified.rule_code
+                tx.classification_compte = classified.compte_debit
+                entry2.changed = true
+
+                // Si flag compliance → créer alerte
+                if (classified.compliance_flag) {
+                  try {
+                    await supabase.from('compliance_alerts').insert({
+                      societe_id, alert_type: classified.compliance_flag,
+                      severity: getComplianceSeverity(classified.compliance_flag, txAmount2),
+                      title: classified.legal_warning?.split('.')[0] || `Alerte: ${classified.classification}`,
+                      description: classified.legal_warning || `Transaction nécessitant attention: ${tx.libelle}`,
+                      legal_reference: classified.compliance_flag === 'director_loan' ? 'Companies Act 2001, Section 166' : null,
+                      amount: txAmount2,
+                      related_entity_type: 'transaction',
+                      related_entity_id: `${releveId2}-${i2}`,
+                      created_by: user.id,
+                    })
+                  } catch { /* best-effort */ }
+                }
+              }
+            }
+
+            // ── NEW: Détecter virements vers/depuis dirigeants/associés ──
+            if (tx.statut === 'non_identifie' && !tx.matched_type && directors.length > 0) {
+              const dirMatch = detectDirector({
+                date: tx.date || '',
+                libelle: tx.libelle || '',
+                tiers_detecte: tx.tiers_detecte || null,
+                debit: Number(tx.debit) || 0,
+                credit: Number(tx.credit) || 0,
+                devise: entry2.releveDevise,
+              }, directors)
+              if (dirMatch) {
+                // NE PAS auto-rapprocher — exiger validation humaine (R07)
+                tx.matched_type = 'qualification_requise'
+                tx.qualification_status = 'pending'
+                tx.director_id = dirMatch.director_id
+                tx.director_name = dirMatch.director_name
+                tx.note = `⚠ Qualification requise: virement avec ${dirMatch.director_name} (${dirMatch.role}). Choisissez la nature: NDF / Avance salaire / Rémunération / Dividendes / Prêt`
+                entry2.changed = true
+
+                // Créer alerte de qualification
+                try {
+                  await supabase.from('compliance_alerts').insert({
+                    societe_id, alert_type: 'director_transaction_pending',
+                    severity: 'high',
+                    title: `Qualification requise: ${dirMatch.director_name}`,
+                    description: `Virement de ${txAmount2.toFixed(2)} ${entry2.releveDevise} concernant ${dirMatch.director_name} (${dirMatch.role}). Doit être qualifié comme: A) Remboursement NDF / B) Avance salaire / C) Rémunération / D) Avance dividendes / E) Prêt (⚠ interdit dirigeants - Companies Act s.166)`,
+                    legal_reference: 'Companies Act 2001, Section 166 (si Prêt)',
+                    amount: txAmount2,
+                    related_entity_type: 'transaction',
+                    related_entity_id: `${releveId2}-${i2}`,
+                    created_by: user.id,
+                  })
+                } catch { /* best-effort */ }
+              }
+            }
+
             // ── Transactions classifiées SANS facture → BNQ avec le bon compte ──
             // MRA → D 444 / C 512, Frais bancaires → D 627 / C 512,
             // Salaires → D 421 / C 512, Particuliers → D 467 / C 512
@@ -1285,6 +1377,10 @@ export async function POST(request: Request) {
                   compteCharge = '421'; libellePrefix = 'Salaire'
                 } else if (tx.matched_type === 'reversal_salaire') {
                   compteCharge = '421'; libellePrefix = 'Reversal salaire'
+                } else if (tx.matched_type?.startsWith('rule_') && tx.classification_compte) {
+                  // Classification par règle configurable (R01-R07+)
+                  compteCharge = tx.classification_compte
+                  libellePrefix = tx.note?.replace(/^Auto-classé:\s*/, '').split(' (')[0] || 'Classification auto'
                 }
 
                 const classLettre = tx.lettre || `CLS${String(ecrituresCreees + 1).padStart(3, '0')}`
