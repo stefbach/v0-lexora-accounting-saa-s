@@ -1,6 +1,8 @@
 // Use any for Supabase client to support both admin and server clients
 type SupabaseClient = any
 
+import { safeInsertBnq } from './bnq-dedupe'
+
 export interface FactureForEcritures {
   id: string
   societe_id: string
@@ -285,11 +287,18 @@ export async function createEcrituresForPayment(
       credit_mur: isSupplier ? payment.amount_mur : 0,
     }
 
-    const { data: inserted, error } = await supabase
-      .from('ecritures_comptables_v2')
-      .insert([tierSide, bankSide])
-      .select('id')
-    if (error) return { ok: false, error: error.message }
+    // Sprint 2 — Anti-doublon BNQ : si l'utilisateur clique 2x sur
+    // « rapprocher » ou si sync_lettrage tourne 2 fois, on ne crée pas
+    // 2 paires d'écritures BNQ identiques. Le bankSide a toujours
+    // journal='BNQ' donc dedupBnqEntries le filtre. Le tierSide a
+    // aussi journal='BNQ' (cf. base.journal = 'BNQ' ci-dessus) donc
+    // les deux sont vérifiés.
+    const insRes = await safeInsertBnq(supabase, [tierSide, bankSide])
+    if (insRes.error) return { ok: false, error: insRes.error.message }
+    if (insRes.skipped > 0) {
+      console.log(`[createEcrituresForPayment] skipped ${insRes.skipped} doublon(s) BNQ:`, insRes.skipReasons)
+    }
+    const inserted = insRes.data || []
 
     // FIX 1 — si une lettre est posée, rattacher l'ACH/VTE 401|411 de
     // la facture au même groupe de lettrage. Tentative par facture_id

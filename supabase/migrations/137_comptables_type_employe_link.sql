@@ -100,3 +100,16 @@ ALTER TABLE public.parametres_paie_mra
 COMMENT ON COLUMN public.parametres_paie_mra.night_shift_pct IS
   'Majoration % de salaire base appliquée aux heures de nuit (21h-6h).
    0.15 = +15% par défaut. Lue par /api/rh/paie route.ts.';
+
+-- ============================================================================
+-- 7. Sprint 2 — ot_seuil_alerte paramétrable (TÂCHE 9 quick win + bug C#3)
+-- ============================================================================
+-- Le seuil au-dessus duquel /api/rh/paie/validate signale « heures
+-- supplémentaires excessives » était hardcodé à 60h. Devient paramétrable
+-- par société (60h reste le défaut compatible avec l'existant).
+ALTER TABLE public.parametres_paie_mra
+  ADD COLUMN IF NOT EXISTS ot_seuil_alerte NUMERIC(5,1) DEFAULT 60.0;
+
+COMMENT ON COLUMN public.parametres_paie_mra.ot_seuil_alerte IS
+  'Seuil mensuel d''heures supplémentaires au-dessus duquel /rh/paie/validation
+   émet un avertissement. Défaut 60h. Lu par /api/rh/paie/validate.';

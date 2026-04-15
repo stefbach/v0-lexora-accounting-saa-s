@@ -735,6 +735,30 @@ export async function POST(request: Request) {
         }, { status: 400 })
       }
 
+      // Sprint 2 — Anti-doublon : refuse une demande strictement identique
+      // (même employé, même type, mêmes dates de début ET fin). Retour 409
+      // pour que le client puisse différencier d'un 400 (validation).
+      // Volontairement strict sur les 4 colonnes : un user peut soumettre
+      // 2 demandes pour la même semaine si dates différentes (matin/après-midi
+      // par ex. via demi-journée) — donc on ne dédoublonne que sur l'identité
+      // exacte de la période.
+      const { data: dupExisting } = await supabase
+        .from('demandes_conges')
+        .select('id, statut, nb_jours')
+        .eq('employe_id', body.employe_id)
+        .eq('type_conge', body.type_conge)
+        .eq('date_debut', body.date_debut)
+        .eq('date_fin', body.date_fin)
+        .maybeSingle()
+      if (dupExisting) {
+        return NextResponse.json({
+          error: 'Une demande identique existe déjà',
+          existing_id: dupExisting.id,
+          existing_statut: dupExisting.statut,
+          hint: 'Si vous voulez modifier ou ajouter à cette demande, ouvrez-la directement.',
+        }, { status: 409 })
+      }
+
       if (body.type_conge === 'MAT' && emp.gender === 'M') {
         return NextResponse.json({ error: 'Conge maternite reserve aux femmes (WRA 2019)' }, { status: 400 })
       }

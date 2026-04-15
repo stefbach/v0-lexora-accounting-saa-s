@@ -4,10 +4,26 @@ import { createClient as createServerClient } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
 
+// Sprint 2 — bug #2 : ajout d'un role-check avant exécution. La validation
+// liste des données salariales sensibles, donc on restreint aux RH/admins.
+const ALLOWED_ROLES = [
+  'admin',
+  'super_admin',
+  'rh',
+  'rh_manager',
+  'client_admin',
+  'direction',
+]
+
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
   return createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
+}
+
+async function getUserRole(supabase: ReturnType<typeof getAdminClient>, userId: string): Promise<string> {
+  const { data } = await supabase.from('profiles').select('role').eq('id', userId).maybeSingle()
+  return data?.role || ''
 }
 
 interface Anomalie {
@@ -27,12 +43,40 @@ export async function POST(request: Request) {
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
     const supabase = getAdminClient()
+
+    // Sprint 2 bug #2 — role-check
+    const role = await getUserRole(supabase, user.id)
+    if (!ALLOWED_ROLES.includes(role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const body = await request.json()
     const { societe_id, periode } = body
 
     if (!societe_id || !periode) {
       return NextResponse.json({ error: 'societe_id et periode (YYYY-MM) requis' }, { status: 400 })
     }
+
+    // Sprint 2 bug #1 — lire pointage_actif de la société pour ne pas
+    // signaler « pointage manquant » comme erreur si la société est en
+    // mode test (toggle OFF, défaut). Defensive si colonne absente.
+    let pointageActif = false
+    try {
+      const { data: socData, error: socErr } = await supabase
+        .from('societes').select('pointage_actif').eq('id', societe_id).maybeSingle()
+      if (!socErr) pointageActif = (socData as any)?.pointage_actif === true
+    } catch {}
+
+    // Sprint 2 bug #3 — seuil OT lu depuis parametres_paie_mra
+    // (ot_seuil_alerte) ou regles_planning.max_heures_ot_mois — fallback
+    // 60h pour compat. Lecture defensive (col peut ne pas exister).
+    let otSeuilAlerte = 60
+    try {
+      const { data: paramsData } = await supabase
+        .from('parametres_paie_mra').select('ot_seuil_alerte').eq('societe_id', societe_id).maybeSingle()
+      const v = Number((paramsData as any)?.ot_seuil_alerte)
+      if (Number.isFinite(v) && v > 0) otSeuilAlerte = v
+    } catch {}
 
     const [annee, mois] = periode.split('-').map(Number)
     const nbJours = new Date(annee, mois, 0).getDate()
@@ -104,8 +148,12 @@ export async function POST(request: Request) {
       }
 
       // 2. Pointage exists for the period (at least 1 record)
+      // Sprint 2 bug #1 — UNIQUEMENT si pointage_actif=true. Sinon les
+      // pointages ne sont pas requis (saisie manuelle des absences) et
+      // signaler « pointage manquant » serait un faux positif sur les
+      // sociétés en mode test (DDS/OCC actuellement).
       const ptEmp = (pointages || []).filter(p => p.employe_id === emp.id)
-      if (ptEmp.length === 0) {
+      if (pointageActif && ptEmp.length === 0) {
         anomalies.push({
           employe_id: emp.id,
           employe_nom: nomComplet,
@@ -143,18 +191,23 @@ export async function POST(request: Request) {
         })
       }
 
-      // 5. OT hours reasonable (< 60h/month) — estimate from total worked hours minus standard
-      const totalWorkedMinutes = ptEmp.reduce((sum, p) => sum + (Number(p.duree_minutes) || 0), 0)
-      const standardMinutes = ptEmp.length * 9 * 60 // 9h standard per day
-      const totalOT = Math.max(0, (totalWorkedMinutes - standardMinutes) / 60)
-      if (totalOT >= 60) {
-        anomalies.push({
-          employe_id: emp.id,
-          employe_nom: nomComplet,
-          type: 'heures_sup_excessives',
-          message: `Heures supplémentaires excessives: ${Math.round(totalOT * 100) / 100}h (seuil: 60h)`,
-          severite: 'avertissement',
-        })
+      // 5. OT hours reasonable — estimate from total worked hours minus standard
+      // Sprint 2 bug #3 — seuil OT lu depuis parametres_paie_mra.ot_seuil_alerte
+      // (fallback 60h). UNIQUEMENT si pointage_actif (sinon totalWorkedMinutes
+      // sera 0 → 0 OT → check inutile).
+      if (pointageActif) {
+        const totalWorkedMinutes = ptEmp.reduce((sum, p) => sum + (Number(p.duree_minutes) || 0), 0)
+        const standardMinutes = ptEmp.length * 9 * 60 // 9h standard per day
+        const totalOT = Math.max(0, (totalWorkedMinutes - standardMinutes) / 60)
+        if (totalOT >= otSeuilAlerte) {
+          anomalies.push({
+            employe_id: emp.id,
+            employe_nom: nomComplet,
+            type: 'heures_sup_excessives',
+            message: `Heures supplémentaires excessives: ${Math.round(totalOT * 100) / 100}h (seuil: ${otSeuilAlerte}h)`,
+            severite: 'avertissement',
+          })
+        }
       }
 
       // 6. Primes approved
