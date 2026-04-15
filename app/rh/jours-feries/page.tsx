@@ -428,6 +428,15 @@ export default function JoursFeriesPage() {
   const [newType, setNewType] = useState<"variable" | "fixe" | "custom">("custom")
   const [saving, setSaving] = useState(false)
 
+  // Sprint 4 TÂCHE 2 — Import Nager.Date preview state
+  // Jamais d'import auto — toujours afficher preview avec cases à cocher.
+  const [nagerOpen, setNagerOpen] = useState(false)
+  const [nagerLoading, setNagerLoading] = useState(false)
+  const [nagerError, setNagerError] = useState<string | null>(null)
+  type NagerItem = { date: string; libelle: string; selected: boolean; already_exists: boolean }
+  const [nagerItems, setNagerItems] = useState<NagerItem[]>([])
+  const [nagerImporting, setNagerImporting] = useState(false)
+
   // Calendar preview month navigation
   const [calMonth, setCalMonth] = useState(new Date().getMonth())
 
@@ -558,6 +567,78 @@ export default function JoursFeriesPage() {
     }
   }
 
+  // Sprint 4 TÂCHE 2 — Import Nager.Date (preview obligatoire, jamais auto).
+  // API : https://date.nager.at/api/v3/PublicHolidays/{year}/MU
+  // Exclut systématiquement les fêtes pascales qui ne sont PAS fériées
+  // officielles à Maurice (Good Friday, Easter Monday, Easter Sunday, …).
+  const EXCLUDED_NAMES_RE = /easter|good\s?friday|pâques|paques/i
+
+  const loadFromNager = async () => {
+    setNagerLoading(true)
+    setNagerError(null)
+    setNagerItems([])
+    try {
+      const res = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${yearNum}/MU`, { cache: 'no-store' })
+      if (!res.ok) throw new Error(`API Nager.Date HTTP ${res.status}`)
+      const rawItems = await res.json() as Array<{ date: string; name: string; localName: string }>
+      // Construire la liste existante DB (indépendamment de la société :
+      // on veut éviter de créer un doublon sur un jour national déjà là).
+      const existingDates = new Set((dbHolidays || []).map(h => h.date.slice(0, 10)))
+      const items: NagerItem[] = rawItems
+        .filter(it => !EXCLUDED_NAMES_RE.test(it.name) && !EXCLUDED_NAMES_RE.test(it.localName))
+        .map(it => ({
+          date: it.date,
+          libelle: it.localName || it.name,
+          selected: !existingDates.has(it.date), // déjà en DB → pré-décoché
+          already_exists: existingDates.has(it.date),
+        }))
+      if (items.length === 0) {
+        setNagerError('Aucun jour férié trouvé pour Maurice cette année via Nager.Date.')
+      }
+      setNagerItems(items)
+    } catch (e: any) {
+      setNagerError(`Erreur de chargement : ${e?.message || 'réseau'}. Vérifiez votre connexion ou réessayez plus tard.`)
+    } finally {
+      setNagerLoading(false)
+    }
+  }
+
+  const toggleNagerItem = (idx: number) => {
+    setNagerItems(prev => prev.map((it, i) => i === idx ? { ...it, selected: !it.selected } : it))
+  }
+
+  const importSelectedNager = async () => {
+    const selected = nagerItems.filter(it => it.selected && !it.already_exists)
+    if (selected.length === 0) {
+      setNagerError('Aucun jour à importer sélectionné.')
+      return
+    }
+    setNagerImporting(true)
+    setNagerError(null)
+    try {
+      for (const it of selected) {
+        await fetch('/api/rh/jours-feries', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'creer',
+            date: it.date,
+            libelle: it.libelle,
+            type_jour: 'variable',
+            societe_id: societe !== 'all' ? societe : null,
+          }),
+        })
+      }
+      setNagerOpen(false)
+      setNagerItems([])
+      await load()
+    } catch (e: any) {
+      setNagerError(`Erreur d'import : ${e?.message || 'réseau'}`)
+    } finally {
+      setNagerImporting(false)
+    }
+  }
+
   // Delete holiday
   const handleDelete = async (id: string) => {
     if (!confirm("Supprimer ce jour férié ?")) return
@@ -663,6 +744,16 @@ export default function JoursFeriesPage() {
 
             {/* ─── Actions ─── */}
             <div className="flex items-center gap-2 flex-wrap">
+              {/* Sprint 4 TÂCHE 2 — Import Nager.Date. Toujours preview avant
+                  import (jamais automatique). Exclut Easter/Good Friday. */}
+              <Button
+                variant="outline"
+                onClick={() => { setNagerOpen(true); setNagerError(null); setNagerItems([]); loadFromNager() }}
+                className="border-[#0B0F2E] text-[#0B0F2E]"
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Importer depuis calendrier Maurice
+              </Button>
               <Button
                 onClick={() => {
                   setNewDate("")
@@ -790,6 +881,77 @@ export default function JoursFeriesPage() {
           </TabsContent>
         ))}
       </Tabs>
+
+      {/* Sprint 4 TÂCHE 2 — Dialog preview import Nager.Date */}
+      <Dialog open={nagerOpen} onOpenChange={setNagerOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RefreshCw className="w-5 h-5" style={{ color: GOLD }} />
+              Importer les jours fériés Maurice {yearNum}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 overflow-y-auto flex-1 pr-1">
+            <p className="text-sm text-gray-600">
+              Source : <a href="https://date.nager.at/" target="_blank" rel="noopener" className="underline">Nager.Date</a> — jours fériés officiels Maurice.
+              Les fêtes pascales (Good Friday, Easter Monday) sont exclues automatiquement car NON fériées officielles à Maurice.
+            </p>
+            {nagerLoading && (
+              <div className="flex items-center gap-2 text-sm text-gray-500 py-6 justify-center">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Chargement depuis Nager.Date…
+              </div>
+            )}
+            {nagerError && (
+              <Alert className="border-red-300 bg-red-50">
+                <Info className="h-4 w-4 text-red-600" />
+                <AlertDescription className="text-red-800 text-sm">{nagerError}</AlertDescription>
+              </Alert>
+            )}
+            {!nagerLoading && !nagerError && nagerItems.length > 0 && (
+              <>
+                <div className="text-xs text-gray-500 pb-1">
+                  {nagerItems.filter(i => i.selected && !i.already_exists).length} à importer · {nagerItems.filter(i => i.already_exists).length} déjà en DB
+                </div>
+                <div className="border rounded-lg divide-y max-h-[50vh] overflow-y-auto">
+                  {nagerItems.map((it, idx) => (
+                    <label
+                      key={`${it.date}-${it.libelle}`}
+                      className={`flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-gray-50 ${it.already_exists ? 'opacity-60 bg-gray-50' : ''}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={it.selected}
+                        disabled={it.already_exists}
+                        onChange={() => toggleNagerItem(idx)}
+                        className="h-4 w-4"
+                      />
+                      <span className="text-xs font-mono text-gray-500 shrink-0 w-24">{it.date}</span>
+                      <span className="text-sm flex-1">{it.libelle}</span>
+                      {it.already_exists && (
+                        <Badge variant="outline" className="text-[10px]">déjà importé</Badge>
+                      )}
+                    </label>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+          <div className="flex justify-end gap-2 pt-3 border-t">
+            <Button variant="outline" onClick={() => setNagerOpen(false)} disabled={nagerImporting}>
+              Annuler
+            </Button>
+            <Button
+              onClick={importSelectedNager}
+              disabled={nagerImporting || nagerItems.filter(i => i.selected && !i.already_exists).length === 0}
+              style={{ backgroundColor: GOLD, color: NAVY }}
+            >
+              {nagerImporting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
+              Importer les sélectionnés
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* ─── Add Holiday Dialog ─── */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
