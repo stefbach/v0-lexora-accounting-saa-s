@@ -304,6 +304,8 @@ export async function POST(request: Request) {
       paye_taux_1: Number(paramsDB.paye_taux_1 ?? 0.10),
       paye_seuil_taux_2: Number(paramsDB.paye_seuil_taux_2 ?? 650000),
       paye_taux_2: Number(paramsDB.paye_taux_2 ?? 0.15),
+      // Sprint 2 — night shift majoration paramétrable (defaut 15%)
+      night_shift_pct: Number(paramsDB.night_shift_pct ?? 0.15),
       salary_compensation: Number(paramsDB.salary_compensation ?? 635),
       salary_compensation_seuil: Number(paramsDB.salary_compensation_seuil ?? 50000),
     } : PARAMS_MRA_DEFAUT
@@ -761,12 +763,14 @@ export async function POST(request: Request) {
           total_heures_nuit += ot.heuresNuit
         }
 
-        // Night Shift Allowance: 15% of base salary for night hours (21h-6h)
-        // Does NOT apply if employee's schedule is exclusively nocturnal
+        // Night Shift Allowance: majoration % of base salary for night hours (21h-6h)
+        // Does NOT apply if employee's schedule is exclusively nocturnal.
+        // Sprint 2 — taux paramétrable via params.night_shift_pct (défaut 15%).
         const shiftCode = (planAssignments || [])[0]?.shift_code || ''
         const isExclusivelyNight = shiftCode.toLowerCase() === 'nuit' || shiftCode === 'N'
+        const nightShiftPct = Number((params as any).night_shift_pct ?? 0.15)
         const nightShiftAllowance = (!isExclusivelyNight && total_heures_nuit > 0)
-          ? Math.round(Number(emp.salaire_base) * 0.15 * (total_heures_nuit / (45 * 52 / 12)))
+          ? Math.round(Number(emp.salaire_base) * nightShiftPct * (total_heures_nuit / (45 * 52 / 12)))
           : 0
 
         // INTÉGRATION 4 — Primes de la période : approuve=true ET
@@ -1073,7 +1077,7 @@ export async function POST(request: Request) {
         const mraTag = isHorsMRA ? ' [HORS MRA - Brut=Base]' : ''
         const primesFixesDetail = totalPrimesFixes > 0 ? `, Primes fixes: ${totalPrimesFixes}` : ''
         const autoRulesDetail = autoRulesApplied.length > 0 ? `, Auto: ${autoRulesApplied.join('; ')}` : ''
-        const nightDetail = nightShiftAllowance > 0 ? `, Night shift +15%: ${nightShiftAllowance} (${Math.round(total_heures_nuit)}h nuit)` : ''
+        const nightDetail = nightShiftAllowance > 0 ? `, Night shift +${(nightShiftPct * 100).toFixed(0)}%: ${nightShiftAllowance} (${Math.round(total_heures_nuit)}h nuit)` : ''
         const ulDetail = joursUnpaidLeave > 0 ? `, UL: ${joursUnpaidLeave}j = -${montant_ul}` : ''
         const notesResume = isHorsMRA
           ? `Base: ${salaire_base_mur} [HORS MRA - Brut=Net=Base]`

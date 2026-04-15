@@ -88,6 +88,8 @@ export default function ParametresPaiePage() {
     paye_taux_1: "0.10",
     paye_seuil_taux_2: "650000",
     paye_taux_2: "0.15",
+    // Sprint 2 — night shift majoration paramétrable (mig 137).
+    night_shift_pct: "0.15",
   })
 
   // tauxEur local edit state — only pushed to parent on blur
@@ -198,6 +200,7 @@ export default function ParametresPaiePage() {
             paye_taux_1: String(d.params.paye_taux_1 || 0.10),
             paye_seuil_taux_2: String(d.params.paye_seuil_taux_2 || 650000),
             paye_taux_2: String(d.params.paye_taux_2 || 0.15),
+            night_shift_pct: String(d.params.night_shift_pct ?? 0.15),
           })
         }
       })
@@ -448,6 +451,17 @@ export default function ParametresPaiePage() {
               <div className="bg-blue-50 p-3 rounded text-xs text-blue-800 flex gap-2">
                 <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
                 <p>Barème 2024/25 : 0% jusqu'à 390K MUR/an, 10% jusqu'à 650K, 15% au-delà.</p>
+              </div>
+
+              {/* Sprint 2 — night shift majoration paramétrable (mig 137) */}
+              <div className="border-t pt-3 mt-3">
+                <NumField
+                  label="Majoration heures de nuit"
+                  desc="Pourcentage du salaire base ajouté pour les heures travaillées 21h-6h. Défaut WRA 2019 : 15%."
+                  defaultVal={params.night_shift_pct}
+                  pct
+                  onCommit={setParam("night_shift_pct")}
+                />
               </div>
             </CardContent>
           </Card>

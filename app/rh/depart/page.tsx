@@ -313,15 +313,28 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
             <AlertTriangle className="w-5 h-5" />
             <p className="text-sm font-medium">Cette action est irréversible. L'employé sera marqué comme "Sorti".</p>
           </div>
-          <Button
-            onClick={onConfirm}
-            disabled={confirming}
-            className="bg-red-600 hover:bg-red-700 text-white px-6"
-          >
-            {confirming && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-            <CheckCircle className="w-4 h-4 mr-2" />
-            Confirmer le départ
-          </Button>
+          <div className="flex gap-2 print:hidden">
+            {/* Sprint 2 — Export PDF via window.print(). Le user sélectionne
+                « Enregistrer comme PDF » dans la boîte d'impression — fonctionne
+                dans tous les navigateurs sans dépendance jsPDF/pdfkit. */}
+            <Button
+              variant="outline"
+              onClick={() => window.print()}
+              className="border-[#0B0F2E] text-[#0B0F2E]"
+              type="button"
+            >
+              📄 Télécharger PDF
+            </Button>
+            <Button
+              onClick={onConfirm}
+              disabled={confirming}
+              className="bg-red-600 hover:bg-red-700 text-white px-6"
+            >
+              {confirming && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+              <CheckCircle className="w-4 h-4 mr-2" />
+              Confirmer le départ
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>

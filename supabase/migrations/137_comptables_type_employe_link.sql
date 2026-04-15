@@ -86,3 +86,17 @@ COMMENT ON COLUMN public.comptables.type_comptable IS
 CREATE INDEX IF NOT EXISTS idx_comptables_employe_id
   ON public.comptables(employe_id)
   WHERE employe_id IS NOT NULL;
+
+-- ============================================================================
+-- 6. Sprint 2 — night_shift_pct paramétrable (TÂCHE 9 quick win)
+-- ============================================================================
+-- Auparavant le taux de majoration des heures de nuit était hardcodé à 15%
+-- dans /api/rh/paie/route.ts (ligne 769). On expose désormais la valeur via
+-- parametres_paie_mra pour qu'elle soit éditable depuis /rh/paie/parametres.
+-- Défaut 0.15 = 15% (compat avec le code legacy).
+ALTER TABLE public.parametres_paie_mra
+  ADD COLUMN IF NOT EXISTS night_shift_pct NUMERIC(5,4) DEFAULT 0.15;
+
+COMMENT ON COLUMN public.parametres_paie_mra.night_shift_pct IS
+  'Majoration % de salaire base appliquée aux heures de nuit (21h-6h).
+   0.15 = +15% par défaut. Lue par /api/rh/paie route.ts.';
