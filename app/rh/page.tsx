@@ -10,6 +10,7 @@ import {
   AlertCircle, FileWarning, UserX, ChevronRight
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import MonEspacePersonnel from "@/components/rh/MonEspacePersonnel"
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from "recharts"
 import Link from "next/link"
 
@@ -231,6 +232,10 @@ export default function RHDashboard() {
             </SelectContent>
           </Select>
         </div>
+
+        {/* TÂCHE 7 — Mon espace personnel (rendu uniquement si l'user RH
+            a une fiche employé liée ; sinon le composant retourne null). */}
+        <MonEspacePersonnel />
 
         {/* Tabs */}
         <div className="flex gap-1 overflow-x-auto" style={{ borderBottom: `1px solid ${CARD_BORDER}` }}>

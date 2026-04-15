@@ -16,6 +16,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import MonEspacePersonnel from "@/components/rh/MonEspacePersonnel"
 import {
   Upload, FolderOpen, Loader2, FileText, CheckCircle, Search, X,
   Clock, Download, ChevronRight, Lock, AlertTriangle, Building2, RefreshCw, Camera, Pencil,
@@ -449,6 +450,10 @@ export default function AssistantPage() {
           </Button>
         </Link>
       </div>
+
+      {/* TÂCHE 7 — Mon espace personnel (rendu uniquement si le user
+          assistant a une fiche employé liée — cas Daril chez OCC). */}
+      <MonEspacePersonnel />
 
       {/* Société selector — optional */}
       {societes.length > 0 && (

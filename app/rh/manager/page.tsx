@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Users, Clock, Calendar, AlertTriangle, CheckCircle, UserX, Coffee, TrendingUp, Loader2 } from "lucide-react"
+import MonEspacePersonnel from "@/components/rh/MonEspacePersonnel"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -121,6 +122,10 @@ export default function ManagerDashboard() {
           )}
         </div>
       </div>
+
+      {/* TÂCHE 7 — Mon espace personnel (rendu uniquement si le manager
+          a une fiche employé liée — il l'a presque toujours). */}
+      <MonEspacePersonnel />
 
       {loading ? (
         <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-gray-400" /></div>
