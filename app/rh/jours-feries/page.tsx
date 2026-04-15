@@ -78,6 +78,41 @@ const VARIABLE_HOLIDAYS_BY_YEAR: Record<number, { month: number; day: number; li
     { month: 9, day: 15, libelle: "Ganesh Chaturthi" },
     { month: 10, day: 28, libelle: "Divali" },
   ],
+  // Sprint 1 — 2028-2030 ajoutés (audit RH a relevé que 2027 était la
+  // dernière année hardcodée). Dates calculées à partir des calendriers
+  // lunaires (hindou/musulman/chinois) — APPROXIMATIVES. Le gouvernement
+  // mauricien publie chaque année la liste officielle ; vérifier et
+  // corriger ces dates dès publication via /rh/jours-feries (custom add).
+  2028: [
+    { month: 2, day: 9,  libelle: "Thaipoosam Cavadee" },
+    { month: 1, day: 26, libelle: "Fête du Printemps Chinois" },
+    { month: 2, day: 22, libelle: "Maha Shivaratree" },
+    { month: 3, day: 21, libelle: "Eid-Ul-Fitr" },
+    { month: 3, day: 26, libelle: "Ougadi" },
+    { month: 8, day: 15, libelle: "Assomption de la Bienheureuse Vierge Marie" },
+    { month: 9, day: 2,  libelle: "Ganesh Chaturthi" },
+    { month: 10, day: 17, libelle: "Divali" },
+  ],
+  2029: [
+    { month: 1, day: 28, libelle: "Thaipoosam Cavadee" },
+    { month: 2, day: 13, libelle: "Fête du Printemps Chinois" },
+    { month: 2, day: 11, libelle: "Maha Shivaratree" },
+    { month: 3, day: 13, libelle: "Eid-Ul-Fitr" },
+    { month: 4, day: 14, libelle: "Ougadi" },
+    { month: 8, day: 15, libelle: "Assomption de la Bienheureuse Vierge Marie" },
+    { month: 9, day: 23, libelle: "Ganesh Chaturthi" },
+    { month: 11, day: 5, libelle: "Divali" },
+  ],
+  2030: [
+    { month: 1, day: 18, libelle: "Thaipoosam Cavadee" },
+    { month: 2, day: 3,  libelle: "Fête du Printemps Chinois" },
+    { month: 3, day: 2,  libelle: "Maha Shivaratree" },
+    { month: 3, day: 3,  libelle: "Eid-Ul-Fitr" },
+    { month: 4, day: 3,  libelle: "Ougadi" },
+    { month: 8, day: 15, libelle: "Assomption de la Bienheureuse Vierge Marie" },
+    { month: 9, day: 12, libelle: "Ganesh Chaturthi" },
+    { month: 10, day: 26, libelle: "Divali" },
+  ],
 }
 
 function getHolidaysForYear(year: number): HolidayDef[] {

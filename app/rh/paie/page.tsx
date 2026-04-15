@@ -77,9 +77,17 @@ export default function PaiePage() {
       const params = new URLSearchParams({ periode })
       if (societe !== "all") params.set("societe_id", societe)
       const data = await fetch(`/api/rh/paie?${params}`).then(r => r.json())
+      if (data?.error) throw new Error(data.error)
       setBulletins(data.bulletins || [])
       setTotaux(data.totaux || {})
-    } catch (e) { console.error(e) } finally { setLoading(false) }
+    } catch (e: any) {
+      // Sprint 1 — avant : silent console.error → l'utilisateur voyait
+      // un tableau vide sans comprendre pourquoi. Maintenant : on garde
+      // le tableau vide mais on remonte une erreur visible.
+      setBulletins([])
+      setTotaux({})
+      alert(`Erreur de chargement de la paie : ${e?.message || 'inconnue'}. Réessayez ou contactez l'administrateur.`)
+    } finally { setLoading(false) }
   }, [societe, periode, periodeReady])
 
   const loadWorkflow = useCallback(async () => {

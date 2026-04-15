@@ -90,7 +90,10 @@ interface Conflict {
   detail: string
 }
 
-const WEEKLY_HOURS_LIMIT = 45
+// Sprint 1 — fallback uniquement (WRA 2019 art. 14(1)). La valeur réelle
+// est lue depuis /api/rh/planning/regles?societe_id=… au mount + à chaque
+// changement de société. Voir state `weeklyLimit` plus bas.
+const WEEKLY_HOURS_LIMIT_DEFAULT = 45
 const WEEK_DAY_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
 
 const DEFAULT_CRENEAUX: Creneau[] = [
@@ -108,6 +111,9 @@ export default function PlanningPage() {
   const [month, setMonth] = useState(now.getMonth())
   const [societes, setSocietes] = useState<any[]>([])
   const [societe, setSociete] = useState("all")
+  // Sprint 1 — Limite hebdo lue depuis /api/rh/planning/regles (config WRA
+  // par société). Fallback 45 si la société n'a pas de règle persistée.
+  const [weeklyLimit, setWeeklyLimit] = useState<number>(WEEKLY_HOURS_LIMIT_DEFAULT)
   const [employes, setEmployes] = useState<any[]>([])
   const [planning, setPlanning] = useState<Record<string, Record<number, CellData | null>>>({})
   const [loading, setLoading] = useState(true)
@@ -213,17 +219,18 @@ export default function PlanningPage() {
           }
         }
       }
-      // Check weekly hours > 45h
+      // Sprint 1 — limite hebdo lue dynamiquement depuis les règles WRA
+      // de la société (fallback 45h). Avant: hardcodée à 45.
       let d = 1
       while (d <= daysInMonth) {
         const weekEnd = Math.min(d + 6, daysInMonth)
         const hours = getWeeklyHours(emp.id, d, weekEnd)
-        if (hours > WEEKLY_HOURS_LIMIT) {
+        if (hours > weeklyLimit) {
           result.push({
             type: "hours",
             empId: emp.id,
             empName: `${emp.prenom} ${emp.nom}`,
-            detail: `Semaine du ${d}/${month + 1}: ${hours}h (limite ${WEEKLY_HOURS_LIMIT}h)`,
+            detail: `Semaine du ${d}/${month + 1}: ${hours}h (limite ${weeklyLimit}h)`,
           })
         }
         d += 7
@@ -464,6 +471,29 @@ export default function PlanningPage() {
       if (unique.length >= 1) setSociete(unique[0].id)
     })
   }, [])
+
+  // Sprint 1 — fetch la limite hebdo depuis les règles WRA persistées de
+  // la société. Évite de bloquer l'utilisateur si la règle n'existe pas
+  // encore (fallback sur la valeur par défaut 45h).
+  useEffect(() => {
+    if (!societe || societe === "all") {
+      setWeeklyLimit(WEEKLY_HOURS_LIMIT_DEFAULT)
+      return
+    }
+    fetch(`/api/rh/planning/regles?societe_id=${societe}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        const regles = data?.regles
+        if (Array.isArray(regles)) {
+          const r = regles.find((x: any) => x.key === 'max_heures_semaine' && x.enabled)
+          const v = r ? Number(r.value) : NaN
+          setWeeklyLimit(Number.isFinite(v) && v > 0 ? v : WEEKLY_HOURS_LIMIT_DEFAULT)
+        } else {
+          setWeeklyLimit(WEEKLY_HOURS_LIMIT_DEFAULT)
+        }
+      })
+      .catch(() => setWeeklyLimit(WEEKLY_HOURS_LIMIT_DEFAULT))
+  }, [societe])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -752,7 +782,13 @@ export default function PlanningPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>Planning</h1>
-          <p className="text-gray-500 text-sm">Créneaux personnalisables avec pauses</p>
+          <p className="text-gray-500 text-sm">
+            Créneaux personnalisables avec pauses ·{' '}
+            <span className="text-gray-600">
+              Limite hebdomadaire : <b>{weeklyLimit}h</b>
+              {weeklyLimit === WEEKLY_HOURS_LIMIT_DEFAULT ? ' (WRA 2019 défaut)' : ' (règle société)'}
+            </span>
+          </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <Select value={societe} onValueChange={setSociete}>
@@ -1078,7 +1114,7 @@ export default function PlanningPage() {
                   <tbody>
                     {employes.map(emp => {
                       const weekHours = getWeeklyHours(emp.id, currentWeek?.start || 1, currentWeek?.end || 7)
-                      const hoursExceeded = weekHours > WEEKLY_HOURS_LIMIT
+                      const hoursExceeded = weekHours > weeklyLimit
                       return (
                         <tr key={emp.id}>
                           <td className="sticky left-0 bg-white z-10 border px-3 py-2 font-medium">{emp.prenom} {emp.nom}</td>
@@ -1155,7 +1191,7 @@ export default function PlanningPage() {
                             )
                           })}
                           <td className={`border px-2 py-2 text-center font-bold text-sm ${hoursExceeded ? "bg-red-50 text-red-700" : "bg-gray-50"}`}
-                            title={hoursExceeded ? `Dépassement: ${weekHours}h / ${WEEKLY_HOURS_LIMIT}h max` : `${weekHours}h cette semaine`}>
+                            title={hoursExceeded ? `Dépassement: ${weekHours}h / ${weeklyLimit}h max` : `${weekHours}h cette semaine`}>
                             {weekHours}h
                             {hoursExceeded && <AlertTriangle className="inline h-3 w-3 text-red-500 ml-1" />}
                           </td>

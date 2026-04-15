@@ -229,13 +229,17 @@ function CertificatUploadZone({ congeId, existingUrl, onUploaded }: {
       const formData = new FormData()
       formData.append("file", file)
       formData.append("conge_id", congeId)
-      await fetch("/api/rh/conges/upload-certificat", {
+      const res = await fetch("/api/rh/conges/upload-certificat", {
         method: "POST",
         body: formData,
       })
+      if (!res.ok) throw new Error(`Upload échoué (${res.status})`)
       onUploaded?.()
-    } catch (e) {
-      console.error(e)
+    } catch (e: any) {
+      // Sprint 1 — l'utilisateur doit savoir si l'upload a échoué.
+      // Avant : console.error(e) silencieux, l'utilisateur croyait que ça
+      // avait marché alors que le certificat n'était jamais arrivé.
+      alert(`Upload du certificat échoué : ${e?.message || 'erreur réseau'}. Réessayez ou contactez votre RH.`)
     } finally {
       setUploading(false)
     }

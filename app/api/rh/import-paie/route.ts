@@ -10,6 +10,30 @@ function getAdminClient() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
+// Sprint 1 — rôles autorisés pour import-paie + historique-paie.
+// L'audit RH a relevé que ces routes vérifiaient l'auth mais PAS le
+// rôle : un client_user ou un employé (s'il avait une session valide
+// pour une autre raison) pouvait techniquement appeler le POST import.
+const ALLOWED_ROLES = [
+  'admin',
+  'super_admin',
+  'rh',
+  'rh_manager',
+  'client_admin',
+  'comptable',         // historique-paie aussi
+  'comptable_dedie',
+]
+
+async function getUserRole(userId: string): Promise<string> {
+  const supabase = getAdminClient()
+  const { data } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', userId)
+    .maybeSingle()
+  return data?.role || ''
+}
+
 const COL_PATTERNS: Record<string, string[]> = {
   code: ['code', 'employee code', 'emp code', 'no.', 'no '],
   nom: ['last name', 'last_name', 'nom', 'surname', 'family name'],
@@ -80,6 +104,14 @@ export async function GET(request: Request) {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+
+    // Sprint 1 — role gate : seuls admin/RH/comptables peuvent lire
+    // l'historique d'import paie (il contient des montants nets sensibles).
+    const role = await getUserRole(user.id)
+    if (!ALLOWED_ROLES.includes(role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const supabase = getAdminClient()
     const { searchParams } = new URL(request.url)
     const action = searchParams.get('action')
@@ -129,6 +161,14 @@ export async function POST(request: Request) {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+
+    // Sprint 1 — role gate : import paie = écriture massive de bulletins,
+    // restreint aux rôles admin/RH/comptable uniquement.
+    const role = await getUserRole(user.id)
+    if (!ALLOWED_ROLES.includes(role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const supabase = getAdminClient()
     const contentType = request.headers.get('content-type') || ''
 
