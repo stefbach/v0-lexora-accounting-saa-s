@@ -352,11 +352,33 @@ export async function POST(request: Request) {
         total_ot_montant += montant15 + montant2
       }
 
-      // 2. Récupérer toutes les primes de la période (approuvées ou saisies par un RH/admin)
-      const { data: primesMois } = await supabase.from('primes_variables_mois')
-        .select('*').eq('employe_id', employe_id).eq('periode', periodeDate)
-
-      const total_primes = (primesMois || []).reduce((s, p) => s + Number(p.montant || 0), 0)
+      // INTÉGRATION 4 — Primes de la période : on ne compte QUE celles
+      // qui sont approuvées (approuve=true) ET pas encore intégrées
+      // à un bulletin (integre_paie=false). Ancienne version incluait
+      // les primes en attente de validation (sur-paie) et pouvait
+      // double-compter entre deux runs du calcul.
+      let primesMois: any[] = []
+      {
+        const { data, error } = await supabase.from('primes_variables_mois')
+          .select('*')
+          .eq('employe_id', employe_id)
+          .eq('periode', periodeDate)
+          .eq('approuve', true)
+          .eq('integre_paie', false)
+        if (error) {
+          // Fallback si la colonne integre_paie n'a pas encore été
+          // backfillée en env hors-prod : on retire le filtre et on se
+          // contente de approuve=true (risque de double-compter, mais
+          // moins pire que de ne rien compter).
+          console.warn('[paie calculer] primes fetch with integre_paie filter failed — fallback:', error.message)
+          const retry = await supabase.from('primes_variables_mois')
+            .select('*').eq('employe_id', employe_id).eq('periode', periodeDate).eq('approuve', true)
+          primesMois = retry.data || []
+        } else {
+          primesMois = data || []
+        }
+      }
+      const total_primes = primesMois.reduce((s, p) => s + Number(p.montant || 0), 0)
 
       // 3. Congés approuvés qui CHEVAUCHENT le mois (cf. fix de calculer_batch).
       const periodeStartSingle = `${periodeStr}-01`
@@ -686,10 +708,26 @@ export async function POST(request: Request) {
           ? Math.round(Number(emp.salaire_base) * 0.15 * (total_heures_nuit / (45 * 52 / 12)))
           : 0
 
-        // 2. Toutes les primes de la période (approuvées ou saisies)
-        const { data: primesMois } = await supabase.from('primes_variables_mois')
-          .select('*').eq('employe_id', emp.id).eq('periode', periodeDate)
-        let total_primes = (primesMois || []).reduce((s, p) => s + Number(p.montant || 0), 0)
+        // INTÉGRATION 4 — Primes de la période : approuve=true ET
+        // integre_paie=false uniquement (cf. calculer pour rationale).
+        let primesMois: any[] = []
+        {
+          const { data, error } = await supabase.from('primes_variables_mois')
+            .select('*')
+            .eq('employe_id', emp.id)
+            .eq('periode', periodeDate)
+            .eq('approuve', true)
+            .eq('integre_paie', false)
+          if (error) {
+            console.warn('[paie batch] primes fetch with integre_paie filter failed — fallback:', error.message)
+            const retry = await supabase.from('primes_variables_mois')
+              .select('*').eq('employe_id', emp.id).eq('periode', periodeDate).eq('approuve', true)
+            primesMois = retry.data || []
+          } else {
+            primesMois = data || []
+          }
+        }
+        let total_primes = primesMois.reduce((s, p) => s + Number(p.montant || 0), 0)
 
         // 2b. Primes fixes de la fiche employé (récurrentes chaque mois)
         const primeFixe1 = Number(emp.prime_fixe_1) || 0
