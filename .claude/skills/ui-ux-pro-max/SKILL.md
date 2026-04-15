@@ -101,3 +101,5 @@ Canvas → formes génératives 2D, noise, grilles, effets légers
 - `scroll.md` — Lenis + GSAP ScrollTrigger
 - `tokens.md` — Design tokens system complet
 - `performance.md` — Web Vitals, optimisation, checklist prod
+- `video.md` — Intégration vidéo multi-format (AV1/VP9/H.265/H.264),
+  VideoHero, LazyVideo, HoverVideoCard, ScrollVideo, FFmpeg
