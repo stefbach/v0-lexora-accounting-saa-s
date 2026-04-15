@@ -20,7 +20,8 @@ const nextConfig = {
       { source: '/rh/historique',    destination: '/rh/historique-paie', permanent: true },
       { source: '/rh/clara',         destination: '/rh/chat',            permanent: true },
       { source: '/rh/exports',       destination: '/rh/exports/paie',    permanent: true },
-      { source: '/rh/parametres',    destination: '/rh/societe',         permanent: true },
+      // Sprint 2 — /rh/parametres existe maintenant comme hub dédié,
+      // donc PAS de redirect ici (sinon la page serait inatteignable).
     ]
   },
 }

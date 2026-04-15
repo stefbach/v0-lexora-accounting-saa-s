@@ -44,6 +44,8 @@ const ALL_LINKS: NavLink[] = [
   { href: '/rh/historique-paie', label: 'Historique Paie', icon: Calendar, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'comptable', 'comptable_dedie'] },
   { href: '/rh/annonces', label: 'Annonces', icon: Megaphone, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
   { href: '/rh/chat', label: 'CLARA — Assistant IA', icon: Bot },
+  // Sprint 2 — hub central de paramètres en plus des sous-pages spécifiques.
+  { href: '/rh/parametres', label: 'Paramètres (hub)', icon: Settings, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
   { href: '/rh/societe', label: 'Paramètres société', icon: Settings, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
   { href: '/rh/paie/parametres', label: 'Paramètres paie', labelKey: 'rh.payroll_settings', icon: Settings, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
 ]
