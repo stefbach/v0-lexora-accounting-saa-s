@@ -19,6 +19,8 @@ import {
   PressableWrap,
   FadeSlide,
 } from "@/components/ui/motion"
+import { NeuralNetworkScene } from "@/components/NeuralNetworkScene"
+import { PricingShowcase } from "@/components/PricingShowcase"
 import { t, getLocale } from "@/lib/i18n"
 import { LanguageSwitcherLight } from "@/components/LanguageSwitcher"
 import { LexoraLogo } from "@/components/LexoraLogo"
@@ -277,80 +279,192 @@ export default function HomePage() {
       </header>
 
       <main className="flex-1">
-        {/* HERO — dark section for impact */}
+        {/* HERO — dark, modern two-column layout with permanent neural scene */}
         <section
-          className="relative overflow-hidden py-24 md:py-32"
+          className="relative overflow-hidden py-20 md:py-28"
           style={{ backgroundColor: "#0B0F2E" }}
         >
-          <div className="absolute inset-0 opacity-5" style={{
-            backgroundImage: "radial-gradient(circle at 25% 25%, #D4AF37 1px, transparent 1px), radial-gradient(circle at 75% 75%, #D4AF37 1px, transparent 1px)",
-            backgroundSize: "60px 60px",
-          }} />
-          <div className="relative mx-auto max-w-4xl px-4 sm:px-6 text-center">
-            {/* Hero content animated with staggered fade+slide (enter: 500ms ease-out) */}
-            <FadeSlide delay={0} y={18}>
-              <Badge
-                className="mb-6 border-0 px-4 py-1.5 text-sm font-medium"
-                style={{ backgroundColor: "rgba(212,175,55,0.12)", color: "#D4AF37", border: "1px solid rgba(212,175,55,0.25)", fontFamily: "'Poppins', sans-serif" }}
-              >
-                <Sparkles className="mr-2 h-4 w-4" aria-hidden="true" />
-                {t('home.hero_badge', locale)}
-              </Badge>
-            </FadeSlide>
+          {/* Subtle dotted pattern (decorative, aria-hidden) */}
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 opacity-[0.06]"
+            style={{
+              backgroundImage:
+                "radial-gradient(circle at 25% 25%, #D4AF37 1px, transparent 1px), radial-gradient(circle at 75% 75%, #D4AF37 1px, transparent 1px)",
+              backgroundSize: "60px 60px",
+            }}
+          />
+          {/* Ambient gradient glow (decorative) */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0"
+            style={{
+              backgroundImage:
+                "radial-gradient(ellipse 40% 35% at 20% 30%, rgba(65,145,255,0.18) 0%, transparent 70%), radial-gradient(ellipse 40% 35% at 80% 70%, rgba(212,175,55,0.12) 0%, transparent 70%)",
+            }}
+          />
 
-            <FadeSlide delay={0.08} y={20}>
-              <h1
-                className="mb-6 text-4xl font-bold tracking-tight md:text-6xl"
-                style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif" }}
-              >
-                <span style={{ letterSpacing: "0.04em" }}>LE<span style={{ color: "#D4AF37" }}>X</span>ORA</span>
-                <br />
-                <span className="text-2xl md:text-4xl" style={{ fontWeight: 400 }}>
-                  {locale === "fr" ? "L'ERP piloté par l'IA pour Maurice" : "The AI-powered ERP for Mauritius"}
-                </span>
-              </h1>
-            </FadeSlide>
+          <div className="relative mx-auto max-w-7xl px-4 sm:px-6">
+            <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+              {/* LEFT — copy + CTAs */}
+              <div className="text-center lg:text-left">
+                <FadeSlide delay={0} y={18}>
+                  <Badge
+                    className="mb-6 border-0 px-4 py-1.5 text-sm font-medium"
+                    style={{ backgroundColor: "rgba(212,175,55,0.12)", color: "#D4AF37", border: "1px solid rgba(212,175,55,0.25)", fontFamily: "'Poppins', sans-serif" }}
+                  >
+                    <Sparkles className="mr-2 h-4 w-4" aria-hidden="true" />
+                    {t('home.hero_badge', locale)}
+                  </Badge>
+                </FadeSlide>
 
-            <FadeSlide delay={0.16} y={20}>
-              {/* §6 contrast-readability: body raised to #A8AFC7 on #0B0F2E (~8.5:1) */}
-              <p className="mx-auto mb-10 max-w-2xl text-lg" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif", fontWeight: 300, lineHeight: 1.7 }}>
-                {locale === "fr"
-                  ? "Avec Lexora, ce n'est pas un simple logiciel que vous prenez — c'est toute une équipe d'agents IA qui va vous accompagner à chaque étape. Comptabilité, RH, juridique, fiscal : chaque module est piloté par l'intelligence artificielle, paramétrable selon vos besoins, et greffé aux services experts de Lexora. Construisez plus grand, plus vite."
-                  : "With Lexora, you're not just getting software — you're getting an entire team of AI agents that will support you at every step. Accounting, HR, legal, tax: every module is AI-powered, fully configurable to your needs, and connected to Lexora's expert services. Build bigger, faster."}
-              </p>
-            </FadeSlide>
-
-            <FadeSlide delay={0.24} y={12}>
-              <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
-                {/* §4 primary-action: primary CTA dominant with scale press feedback */}
-                <PressableWrap>
-                  <Link href="/auth/login">
-                    <Button
-                      size="lg"
-                      className="px-8 text-base font-semibold"
-                      style={{ backgroundColor: "#4191FF", color: "#FFFFFF", fontFamily: "'Poppins', sans-serif", fontWeight: 500, borderRadius: "6px" }}
+                <FadeSlide delay={0.08} y={20}>
+                  <h1
+                    className="mb-6 text-4xl font-bold tracking-tight md:text-6xl lg:text-[64px] lg:leading-[1.05]"
+                    style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif", letterSpacing: "-0.02em" }}
+                  >
+                    <span style={{ letterSpacing: "0.04em" }}>LE<span style={{ color: "#D4AF37" }}>X</span>ORA</span>
+                    <br />
+                    <span
+                      className="block text-2xl md:text-4xl lg:text-[40px] lg:leading-[1.15]"
+                      style={{ fontWeight: 400 }}
                     >
-                      {t('home.get_started', locale)}
-                      <ArrowRight className="ml-2 h-5 w-5" aria-hidden="true" />
-                    </Button>
-                  </Link>
-                </PressableWrap>
+                      {locale === "fr" ? (
+                        <>
+                          <span>L&apos;ERP piloté par l&apos;</span>
+                          <span
+                            style={{
+                              backgroundImage:
+                                "linear-gradient(90deg, #4191FF 0%, #D4AF37 100%)",
+                              WebkitBackgroundClip: "text",
+                              backgroundClip: "text",
+                              color: "transparent",
+                              fontWeight: 600,
+                            }}
+                          >
+                            IA
+                          </span>
+                          <span> pour Maurice</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>The </span>
+                          <span
+                            style={{
+                              backgroundImage:
+                                "linear-gradient(90deg, #4191FF 0%, #D4AF37 100%)",
+                              WebkitBackgroundClip: "text",
+                              backgroundClip: "text",
+                              color: "transparent",
+                              fontWeight: 600,
+                            }}
+                          >
+                            AI-powered
+                          </span>
+                          <span> ERP for Mauritius</span>
+                        </>
+                      )}
+                    </span>
+                  </h1>
+                </FadeSlide>
 
-                {/* Fixed: was a dead button — now scrolls to features anchor */}
-                <PressableWrap>
-                  <a href="#features">
-                    <Button
-                      size="lg"
-                      variant="outline"
-                      className="px-8 text-base font-semibold"
-                      style={{ border: "1px solid #4191FF", color: "#4191FF", backgroundColor: "transparent", fontFamily: "'Poppins', sans-serif", fontWeight: 500, borderRadius: "6px" }}
-                    >
-                      {t('home.watch_demo', locale)}
-                    </Button>
-                  </a>
-                </PressableWrap>
+                <FadeSlide delay={0.16} y={20}>
+                  <p
+                    className="mx-auto mb-8 max-w-2xl text-base md:text-lg lg:mx-0"
+                    style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif", fontWeight: 300, lineHeight: 1.7 }}
+                  >
+                    {locale === "fr"
+                      ? "Avec Lexora, ce n'est pas un simple logiciel que vous prenez — c'est toute une équipe d'agents IA qui va vous accompagner à chaque étape. Comptabilité, RH, juridique, fiscal : chaque module est piloté par l'intelligence artificielle et greffé aux services experts de Lexora."
+                      : "With Lexora, you're not just getting software — you're getting an entire team of AI agents supporting you at every step. Accounting, HR, legal, tax: every module is AI-powered and connected to Lexora's expert services."}
+                  </p>
+                </FadeSlide>
+
+                <FadeSlide delay={0.24} y={12}>
+                  <div className="flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center lg:justify-start">
+                    <PressableWrap>
+                      <Link href="/auth/login">
+                        <Button
+                          size="lg"
+                          className="w-full px-8 text-base font-semibold sm:w-auto"
+                          style={{ backgroundColor: "#4191FF", color: "#FFFFFF", fontFamily: "'Poppins', sans-serif", fontWeight: 500, borderRadius: "8px" }}
+                        >
+                          {t('home.get_started', locale)}
+                          <ArrowRight className="ml-2 h-5 w-5" aria-hidden="true" />
+                        </Button>
+                      </Link>
+                    </PressableWrap>
+
+                    <PressableWrap>
+                      <a href="#features">
+                        <Button
+                          size="lg"
+                          variant="outline"
+                          className="w-full px-8 text-base font-semibold sm:w-auto"
+                          style={{ border: "1px solid rgba(65,145,255,0.45)", color: "#E8EAFC", backgroundColor: "rgba(232,234,252,0.04)", fontFamily: "'Poppins', sans-serif", fontWeight: 500, borderRadius: "8px" }}
+                        >
+                          {t('home.watch_demo', locale)}
+                        </Button>
+                      </a>
+                    </PressableWrap>
+                  </div>
+                </FadeSlide>
+
+                {/* Trust bar — micro-stats strip */}
+                <FadeSlide delay={0.32} y={10}>
+                  <ul
+                    className="mt-10 grid max-w-md grid-cols-3 gap-3 sm:max-w-lg lg:mx-0"
+                    style={{ fontFamily: "'Poppins', sans-serif" }}
+                  >
+                    {[
+                      { value: "6", label: locale === "fr" ? "Agents IA" : "AI agents" },
+                      { value: "24/7", label: locale === "fr" ? "Temps réel" : "Real-time" },
+                      { value: "100%", label: "MRA" },
+                    ].map((s) => (
+                      <li
+                        key={s.label}
+                        className="rounded-xl px-4 py-3 text-center sm:text-left"
+                        style={{
+                          backgroundColor: "rgba(232,234,252,0.04)",
+                          border: "1px solid rgba(232,234,252,0.08)",
+                        }}
+                      >
+                        <div
+                          className="text-xl font-bold md:text-2xl"
+                          style={{ color: "#E8EAFC", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.01em" }}
+                        >
+                          {s.value}
+                        </div>
+                        <div className="text-xs" style={{ color: "#A8AFC7" }}>
+                          {s.label}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </FadeSlide>
               </div>
-            </FadeSlide>
+
+              {/* RIGHT — permanent neural network animation (visual anchor) */}
+              <FadeSlide delay={0.2} y={24}>
+                <div className="relative mx-auto w-full max-w-xl lg:max-w-none">
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute -inset-4 rounded-[32px]"
+                    style={{
+                      background:
+                        "radial-gradient(ellipse 60% 60% at 50% 50%, rgba(65,145,255,0.18) 0%, transparent 70%)",
+                    }}
+                  />
+                  <NeuralNetworkScene
+                    className="relative"
+                    ariaLabel={
+                      locale === "fr"
+                        ? "Illustration animée : 6 agents IA connectés au cœur Lexora"
+                        : "Animated illustration: 6 AI agents connected to the Lexora core"
+                    }
+                  />
+                </div>
+              </FadeSlide>
+            </div>
           </div>
         </section>
 
@@ -789,6 +903,9 @@ export default function HomePage() {
             </StaggerGroup>
           </div>
         </section>
+
+        {/* PRICING — modern 4-tier showcase */}
+        <PricingShowcase locale={locale === "fr" ? "fr" : "en"} />
 
         {/* COMPLIANCE — light grey (pills stagger in) */}
         <section id="compliance" className="py-20 md:py-28" style={{ backgroundColor: "#F0F2F8" }}>
