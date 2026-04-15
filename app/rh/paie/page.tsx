@@ -821,6 +821,20 @@ export default function PaiePage() {
                                     </ul>
                                   </div>
                                 )}
+                                {/* Sprint 3 BUG 3 — alerte UL appliqué hors MRA.
+                                    Visible seulement quand l'employé est exclure_mra=true
+                                    ET a des congés UL ce mois → le RH voit que la
+                                    déduction est bien appliquée mais hors déclaration. */}
+                                {b.conges_details.ul_hors_mra && b.conges_details.ul_jours > 0 && (
+                                  <div className="mt-2 border-t border-amber-200 pt-2 bg-amber-50 -mx-2 -mb-2 px-2 pb-2 rounded-b-md">
+                                    <p className="text-[11px] text-amber-900">
+                                      <AlertTriangle className="w-3 h-3 inline-block mr-1 -mt-0.5" />
+                                      <b>Hors MRA</b> — {b.conges_details.ul_jours} j UL ce mois,
+                                      déduction <b>Rs {Math.round(b.conges_details.ul_deduction_mur).toLocaleString('fr-FR')}</b> appliquée
+                                      au net mais l'employé reste exclu des déclarations CSG/NSF/PAYE.
+                                    </p>
+                                  </div>
+                                )}
                               </div>
                             ) : null
                           )}

@@ -1040,16 +1040,17 @@ export async function POST(request: Request) {
         // holidays by default). This differs from the unjustified-absence
         // formula which uses salaire_base/26 — UL docks the full gross
         // pro rata, not just the basic salary.
-        // INTÉGRATION 3 — UL deduction.
-        // Constat prod : 0 bulletin avec déduction malgré UL approuvés
-        // (ex. Sheetal Sekely UL 2026-02-06 → 2026-03-06). On log
-        // systématiquement les skip pour diagnostiquer quelle garde a
-        // coupé le calcul, au lieu de logger uniquement le cas OK.
+        // INTÉGRATION 3 + Sprint 3 BUG 3 — UL deduction TOUJOURS appliquée.
+        // Avant : la garde !isHorsMRA skippait silencieusement le calcul UL
+        // pour les employés exclure_mra=true (cas Sheetal Sekely). Or la
+        // déduction UL est INDÉPENDANTE de la déclaration MRA : un employé
+        // hors MRA peut quand même avoir des congés UL qui doivent être
+        // déduits du salaire net.
+        // Le flag isHorsMRA ne contrôle QUE l'inclusion dans les
+        // déclarations CSG/NSF/PAYE, pas le calcul net.
         let montant_ul = 0
-        if (joursUnpaidLeave > 0 && isHorsMRA) {
-          console.log(`[paie] UL SKIP isHorsMRA — ${emp.prenom} ${emp.nom} (${joursUnpaidLeave}j UL non déduits)`)
-        }
-        if (!isHorsMRA && joursUnpaidLeave > 0) {
+        let ul_skip_reason: string | null = null
+        if (joursUnpaidLeave > 0) {
           const nbJoursOuvresMois = calculateWorkingDays(periodeStart, periodeEnd, {
             workingDays: getWorkingDaysForEmploye(emp),
             joursFeries: joursFeriesSet,
@@ -1062,14 +1063,21 @@ export async function POST(request: Request) {
               + (Number(elements.special_allowance_1) || 0))
           if (nbJoursOuvresMois > 0 && salaireBrutPaie > 0) {
             montant_ul = Math.round(joursUnpaidLeave * (salaireBrutPaie / nbJoursOuvresMois) * 100) / 100
-            console.log(`[paie] UL OK ${emp.prenom} ${emp.nom} — ${joursUnpaidLeave}j × (${salaireBrutPaie} / ${nbJoursOuvresMois}) = ${montant_ul} MUR`)
+            const tag = isHorsMRA ? ' [hors MRA — déduction net seule]' : ''
+            console.log(`[paie] UL OK ${emp.prenom} ${emp.nom} — ${joursUnpaidLeave}j × (${salaireBrutPaie} / ${nbJoursOuvresMois}) = ${montant_ul} MUR${tag}`)
           } else {
-            console.warn(`[paie] UL SKIP zero-guard — ${emp.prenom} ${emp.nom} joursOuvres=${nbJoursOuvresMois} salaireBrut=${salaireBrutPaie} (resultat.salaire_brut=${resultat.salaire_brut})`)
+            ul_skip_reason = `joursOuvres=${nbJoursOuvresMois} salaireBrut=${salaireBrutPaie}`
+            console.warn(`[paie] UL SKIP zero-guard — ${emp.prenom} ${emp.nom} ${ul_skip_reason} (resultat.salaire_brut=${resultat.salaire_brut})`)
           }
         }
 
+        // Sprint 3 BUG 3 — déduction UL appliquée AUSSI quand isHorsMRA.
+        // Avant : net = salaire_base si hors MRA → ignorait l'UL. Maintenant :
+        // net = salaire_base - totalDeductionAbsence si hors MRA.
         const totalDeductionAbsence = montant_absence_final + montant_ul
-        const salaire_net_final = isHorsMRA ? salaire_base_mur : Math.round((resultat.salaire_net - totalDeductionAbsence) * 100) / 100
+        const salaire_net_final = isHorsMRA
+          ? Math.round((salaire_base_mur - totalDeductionAbsence) * 100) / 100
+          : Math.round((resultat.salaire_net - totalDeductionAbsence) * 100) / 100
 
         // Résumé notes pour le bulletin
         const transportAlloc = isHorsMRA ? 0 : (Number(emp.transport_allowance) || 0)
@@ -1163,6 +1171,10 @@ export async function POST(request: Request) {
             sl_jours: Math.round(joursSickLeave * 100) / 100,
             ul_jours: Math.round(joursUnpaidLeave * 100) / 100,
             ul_deduction_mur: Math.round(montant_ul * 100) / 100,
+            // Sprint 3 BUG 3 — flag pour l'UI : UL appliqué hors MRA ?
+            // Permet d'afficher l'alerte "X j UL ce mois — Rs Y appliqués
+            // hors déclaration MRA" dans la liste des bulletins.
+            ul_hors_mra: isHorsMRA && montant_ul > 0,
             mat_pat_jours: Math.round(joursMatPat * 100) / 100,
             anomalies_pointage: anomaliesPointageBatch,
           }
