@@ -23,6 +23,7 @@ import { NeuralNetworkScene } from "@/components/NeuralNetworkScene"
 import { ParticleField } from "@/components/ParticleField"
 import { ScrollProgress } from "@/components/ScrollProgress"
 import { AnimatedCounter } from "@/components/AnimatedCounter"
+import { PricingOrb3DLazy } from "@/components/3d/PricingOrb3DLoader"
 
 /* ------------------------------------------------------------------ */
 /*  Design tokens                                                      */
@@ -1017,6 +1018,21 @@ export default function TarifsPage() {
         />
 
         <div style={{ position: "relative", maxWidth: "960px", margin: "0 auto" }}>
+          {/* 3D wireframe orb overlay — evokes "3e millénaire" */}
+          <div
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              inset: "-60px 0 0 0",
+              height: "360px",
+              pointerEvents: "none",
+              opacity: 0.55,
+              mixBlendMode: "screen",
+            }}
+          >
+            <PricingOrb3DLazy height={360} />
+          </div>
+
           <FadeSlide delay={0} y={14}>
             <span style={{
               display: "inline-flex", alignItems: "center", gap: "8px",

@@ -27,6 +27,8 @@ import { DashboardPreview } from "@/components/DashboardPreview"
 import { AnimatedCounter } from "@/components/AnimatedCounter"
 import { LogoMarquee } from "@/components/LogoMarquee"
 import { ScrollProgress } from "@/components/ScrollProgress"
+import { BrainOrb3DLazy } from "@/components/3d/BrainOrb3DLoader"
+import { FourPillars } from "@/components/FourPillars"
 import { t, getLocale } from "@/lib/i18n"
 import { LanguageSwitcherLight } from "@/components/LanguageSwitcher"
 import { LexoraLogo } from "@/components/LexoraLogo"
@@ -483,9 +485,11 @@ export default function HomePage() {
                 </FadeSlide>
               </div>
 
-              {/* RIGHT — live dashboard mockup (real product visual) */}
+              {/* RIGHT — 3D brain orb (WebGL shader noise displacement) */}
               <FadeSlide delay={0.2} y={24}>
-                <DashboardPreview locale={locale === "fr" ? "fr" : "en"} />
+                <div className="relative mx-auto w-full max-w-xl lg:max-w-none">
+                  <BrainOrb3DLazy height={540} />
+                </div>
               </FadeSlide>
             </div>
           </div>
@@ -511,6 +515,107 @@ export default function HomePage() {
                 : "Compliant with Mauritian and international standards"}
             </div>
             <LogoMarquee durationSec={32} />
+          </div>
+        </section>
+
+        {/* FOUR PILLARS — "Dispositif unique au monde" : Compta/IA/RH/Santé */}
+        <FourPillars locale={locale === "fr" ? "fr" : "en"} />
+
+        {/* SEE LEXORA IN ACTION — dashboard preview section */}
+        <section
+          className="relative overflow-hidden py-20 md:py-28"
+          style={{ backgroundColor: "#F8F9FC" }}
+        >
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0"
+            style={{
+              backgroundImage:
+                "radial-gradient(ellipse 55% 45% at 50% 50%, rgba(65,145,255,0.06) 0%, transparent 70%)",
+            }}
+          />
+          <div className="relative mx-auto max-w-7xl px-4 sm:px-6">
+            <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+              <Reveal>
+                <span
+                  className="mb-5 inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-xs font-bold uppercase tracking-widest"
+                  style={{
+                    backgroundColor: "rgba(65,145,255,0.08)",
+                    color: "#4191FF",
+                    borderColor: "rgba(65,145,255,0.22)",
+                    fontFamily: "'Poppins', sans-serif",
+                  }}
+                >
+                  <span
+                    aria-hidden="true"
+                    className="h-1.5 w-1.5 rounded-full"
+                    style={{ backgroundColor: "#4191FF" }}
+                  />
+                  {locale === "fr" ? "En temps réel" : "In real time"}
+                </span>
+                <h2
+                  className="mb-5 text-3xl font-bold tracking-tight md:text-5xl"
+                  style={{
+                    color: "#0B0F2E",
+                    fontFamily: "'Poppins', sans-serif",
+                    fontWeight: 700,
+                    letterSpacing: "-0.02em",
+                  }}
+                >
+                  {locale === "fr"
+                    ? "Voyez Lexora respirer"
+                    : "See Lexora breathing"}
+                </h2>
+                <p
+                  className="mb-6 text-base md:text-lg"
+                  style={{
+                    color: "#4A5490",
+                    fontFamily: "'Poppins', sans-serif",
+                    fontWeight: 300,
+                    lineHeight: 1.7,
+                  }}
+                >
+                  {locale === "fr"
+                    ? "Vos KPIs se mettent à jour à la seconde. Chaque facture analysée, chaque bulletin émis, chaque écriture lettrée apparaît en direct dans votre tableau de bord — orchestré par les six agents IA."
+                    : "Your KPIs refresh to the second. Every invoice analyzed, every payslip issued, every entry matched shows up live in your dashboard — orchestrated by the six AI agents."}
+                </p>
+                <ul className="space-y-3">
+                  {[
+                    {
+                      fr: "Trésorerie consolidée multi-devises",
+                      en: "Consolidated multi-currency cashflow",
+                    },
+                    {
+                      fr: "Activité des agents IA seconde par seconde",
+                      en: "AI agent activity second by second",
+                    },
+                    {
+                      fr: "Alertes MRA avant échéance",
+                      en: "MRA alerts before deadlines",
+                    },
+                  ].map((it, i) => (
+                    <li
+                      key={i}
+                      className="flex items-start gap-3 text-sm md:text-base"
+                      style={{ color: "#0B0F2E", fontFamily: "'Poppins', sans-serif" }}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className="mt-1 inline-block h-1 w-6 shrink-0 rounded-full"
+                        style={{
+                          background: "linear-gradient(90deg, #4191FF, #D4AF37)",
+                        }}
+                      />
+                      <span>{locale === "fr" ? it.fr : it.en}</span>
+                    </li>
+                  ))}
+                </ul>
+              </Reveal>
+
+              <FadeSlide delay={0.15} y={20}>
+                <DashboardPreview locale={locale === "fr" ? "fr" : "en"} />
+              </FadeSlide>
+            </div>
           </div>
         </section>
 
