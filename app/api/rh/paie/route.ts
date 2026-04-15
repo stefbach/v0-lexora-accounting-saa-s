@@ -251,7 +251,18 @@ export async function GET(request: Request) {
     }
 
     console.log(`[paie GET] ${enriched.length} bulletins, periode=${periode}, societe=${societe_id || 'all'}`)
-    return NextResponse.json({ bulletins: enriched, totaux, nb: enriched.length })
+
+    // Migration 135 — exposer pointage_actif au client pour qu'il puisse
+    // afficher le bandeau d'info correspondant. Lecture single ; si pas
+    // de societe_id, on retourne null (l'UI affichera un message neutre).
+    let pointage_actif: boolean | null = null
+    if (societe_id) {
+      const { data: socData } = await supabase
+        .from('societes').select('pointage_actif').eq('id', societe_id).maybeSingle()
+      pointage_actif = (socData as any)?.pointage_actif === true
+    }
+
+    return NextResponse.json({ bulletins: enriched, totaux, nb: enriched.length, pointage_actif })
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
@@ -306,6 +317,19 @@ export async function POST(request: Request) {
 
       const { data: emp } = await supabase.from('employes').select('*').eq('id', employe_id).single()
       if (!emp) return NextResponse.json({ error: 'Employé non trouvé' }, { status: 404 })
+
+      // Migration 135 — toggle pointage_actif par société. Si OFF (défaut),
+      // pas de déduction auto des absences depuis pointages : comportement
+      // legacy préservé (les absences viennent de body.absences ou 0).
+      let pointageActifSingle = false
+      {
+        const sid = targetSocieteId || emp.societe_id
+        if (sid) {
+          const { data: soc } = await supabase
+            .from('societes').select('pointage_actif').eq('id', sid).maybeSingle()
+          pointageActifSingle = (soc as any)?.pointage_actif === true
+        }
+      }
 
       // 1. Récupérer OT de la période depuis les pointages
       const { data: pointagesMois } = await supabase.from('pointages')
@@ -425,37 +449,39 @@ export async function POST(request: Request) {
         console.log(`[paie] UL detected (single) — ${emp.prenom} ${emp.nom} ${periodeStr}: ${joursUnpaidLeaveSingle}j`)
       }
 
-      // INTÉGRATION 2 — Absences injustifiées par JOUR OUVRÉ (pas par
-      // pointage). Ancienne version : itérait pointagesMois → si un
-      // employé n'avait AUCUN pointage sur un jour ouvré, aucune absence
-      // n'était comptée. Nouvelle version : on liste tous les jours
-      // ouvrés du mois selon working_days + jours_feries de la société,
-      // et pour chacun on vérifie s'il existe un pointage OU un congé
-      // approuvé couvrant ce jour.
+      // INTÉGRATION 2 + Migration 135 — Absences injustifiées par JOUR
+      // OUVRÉ. UNIQUEMENT si la société a pointage_actif=true (toggle
+      // dans /rh/societe). Sinon : comportement legacy, jours_absence=0
+      // sauf si l'opérateur a saisi body.absences ou body.jours_absence.
       const anomaliesPointage: string[] = []
       let jours_absence_injust = 0
-      const pointageByDate = new Map<string, any>()
-      for (const pt of pointagesMois || []) {
-        pointageByDate.set(pt.date_pointage, pt)
-      }
-      const workingDaysList = listWorkingDaysInPeriod(
-        `${periodeStr}-01`, lastDayOfMonth(periodeStr), emp, joursFeriesSetSingle,
-      )
-      for (const day of workingDaysList) {
-        const pt = pointageByDate.get(day)
-        const enConge = (congesApprouves || []).some(c => day >= c.date_debut && day <= c.date_fin)
-        if (enConge) {
-          if (pt?.heure_entree) {
-            anomaliesPointage.push(`Pointage enregistré le ${day} alors que l'employé était en congé (le congé prévaut)`)
+      if (pointageActifSingle) {
+        const pointageByDate = new Map<string, any>()
+        for (const pt of pointagesMois || []) {
+          pointageByDate.set(pt.date_pointage, pt)
+        }
+        const workingDaysList = listWorkingDaysInPeriod(
+          `${periodeStr}-01`, lastDayOfMonth(periodeStr), emp, joursFeriesSetSingle,
+        )
+        for (const day of workingDaysList) {
+          const pt = pointageByDate.get(day)
+          const enConge = (congesApprouves || []).some(c => day >= c.date_debut && day <= c.date_fin)
+          if (enConge) {
+            if (pt?.heure_entree) {
+              anomaliesPointage.push(`Pointage enregistré le ${day} alors que l'employé était en congé (le congé prévaut)`)
+            }
+            continue
           }
-          continue
+          if (!pt || (!pt.heure_entree && pt.absent_justifie !== true)) {
+            jours_absence_injust++
+            anomaliesPointage.push(`Absence non justifiée le ${day}`)
+          } else if (pt.heure_entree && !pt.heure_sortie) {
+            anomaliesPointage.push(`Oubli de pointage sortie le ${day}`)
+          }
         }
-        if (!pt || (!pt.heure_entree && pt.absent_justifie !== true)) {
-          jours_absence_injust++
-          anomaliesPointage.push(`Absence non justifiée le ${day}`)
-        } else if (pt.heure_entree && !pt.heure_sortie) {
-          anomaliesPointage.push(`Oubli de pointage sortie le ${day}`)
-        }
+      } else {
+        // Toggle OFF — saisie manuelle uniquement
+        jours_absence_injust = Number(body.absences || body.jours_absence || 0) || 0
       }
       const montant_absence = Math.round(jours_absence_injust * (Number(emp.salaire_base) / 26) * 100) / 100
 
@@ -636,6 +662,17 @@ export async function POST(request: Request) {
         }
       }
       console.log(`[paie batch] ${employes.length} employes actifs sur ${allEmps.length} total pour societe=${societe_id}, periode=${periodeStr}`)
+
+      // Migration 135 — fetch pointage_actif UNE FOIS pour tout le batch
+      // (toutes les écritures partagent la même société). Si OFF (défaut),
+      // les absences sont saisies manuellement ; aucune déduction auto.
+      let pointageActifBatch = false
+      if (societe_id) {
+        const { data: socData } = await supabase
+          .from('societes').select('pointage_actif').eq('id', societe_id).maybeSingle()
+        pointageActifBatch = (socData as any)?.pointage_actif === true
+      }
+      console.log(`[paie batch] pointage_actif=${pointageActifBatch} pour societe=${societe_id}`)
 
       // Get variables from request body if provided
       const requestVariables: Record<string, any> = {}
@@ -863,31 +900,36 @@ export async function POST(request: Request) {
         const otScaleFactor = dailyOtSum > 0 && otMensuelBrut < dailyOtSum ? otMensuelBrut / dailyOtSum : 1
         total_ot_montant = Math.round(total_ot_montant * otScaleFactor)
 
-        // INTÉGRATION 2 — Absences injustifiées par JOUR OUVRÉ
-        // (cf. action=calculer pour le rationale complet).
+        // INTÉGRATION 2 + Migration 135 — Absences injustifiées par
+        // JOUR OUVRÉ. Conditionnel sur pointageActifBatch.
+        // OFF (défaut)  → jours_absence_injust=0 (saisie manuelle via
+        //                  reqVar.absences plus bas).
+        // ON            → boucle complète sur les jours ouvrés.
         let jours_absence_injust = 0
         const anomaliesPointageBatch: string[] = []
-        const pointageByDateBatch = new Map<string, any>()
-        for (const pt of pointagesMois || []) {
-          pointageByDateBatch.set(pt.date_pointage, pt)
-        }
-        const workingDaysListBatch = listWorkingDaysInPeriod(
-          periodeStart, periodeEnd, emp, joursFeriesSet,
-        )
-        for (const day of workingDaysListBatch) {
-          const pt = pointageByDateBatch.get(day)
-          const enConge = (congesApprouves || []).some(c => day >= c.date_debut && day <= c.date_fin)
-          if (enConge) {
-            if (pt?.heure_entree) {
-              anomaliesPointageBatch.push(`Pointage le ${day} alors que l'employé était en congé`)
-            }
-            continue
+        if (pointageActifBatch) {
+          const pointageByDateBatch = new Map<string, any>()
+          for (const pt of pointagesMois || []) {
+            pointageByDateBatch.set(pt.date_pointage, pt)
           }
-          if (!pt || (!pt.heure_entree && pt.absent_justifie !== true)) {
-            jours_absence_injust++
-            anomaliesPointageBatch.push(`Absence non justifiée le ${day}`)
-          } else if (pt.heure_entree && !pt.heure_sortie) {
-            anomaliesPointageBatch.push(`Oubli de pointage sortie le ${day}`)
+          const workingDaysListBatch = listWorkingDaysInPeriod(
+            periodeStart, periodeEnd, emp, joursFeriesSet,
+          )
+          for (const day of workingDaysListBatch) {
+            const pt = pointageByDateBatch.get(day)
+            const enConge = (congesApprouves || []).some(c => day >= c.date_debut && day <= c.date_fin)
+            if (enConge) {
+              if (pt?.heure_entree) {
+                anomaliesPointageBatch.push(`Pointage le ${day} alors que l'employé était en congé`)
+              }
+              continue
+            }
+            if (!pt || (!pt.heure_entree && pt.absent_justifie !== true)) {
+              jours_absence_injust++
+              anomaliesPointageBatch.push(`Absence non justifiée le ${day}`)
+            } else if (pt.heure_entree && !pt.heure_sortie) {
+              anomaliesPointageBatch.push(`Oubli de pointage sortie le ${day}`)
+            }
           }
         }
         // 4. Override with request variables if provided
