@@ -719,11 +719,20 @@ export async function POST(request: Request) {
       if (isDemiJournee) {
         nb_jours = 0.5
       } else {
-        nb_jours = countWorkingDays(body.date_debut, body.date_fin)
+        // FIX 2 — utiliser computeNbJoursForEmploye (employee-aware) au
+        // lieu du thin wrapper countWorkingDays() qui ignorait les
+        // working_days de l'employé ET les jours_feries en DB. Pour un
+        // employé Mon-Fri standard le résultat est identique, mais pour
+        // un employé 6j/sem (commerce, hôtellerie) le samedi n'était
+        // pas compté → nb_jours sous-estimé, solde mal débité.
+        nb_jours = await computeNbJoursForEmploye(supabase, body.employe_id, body.date_debut, body.date_fin)
       }
 
       if (nb_jours <= 0) {
-        return NextResponse.json({ error: 'La période sélectionnée ne contient aucun jour ouvrable' }, { status: 400 })
+        return NextResponse.json({
+          error: 'La période sélectionnée ne contient aucun jour ouvrable',
+          hint: 'Vérifiez que les dates ne tombent pas uniquement sur des weekends ou des jours fériés (selon votre pattern working_days).',
+        }, { status: 400 })
       }
 
       if (body.type_conge === 'MAT' && emp.gender === 'M') {
@@ -751,7 +760,14 @@ export async function POST(request: Request) {
         }
       }
 
-      // Check balance for AL and SL
+      // Check balance for AL and SL.
+      // FIX 2 — politique RH : si le solde est insuffisant, NE PAS bloquer.
+      // Le congé est créé en bascule UL (unpaid leave) automatiquement et
+      // un avertissement est retourné à l'UI. Ainsi un manager ne peut
+      // jamais empêcher un salarié de prendre un congé pour solde nul ;
+      // le coût est simplement déduit du salaire au prochain calcul de paie.
+      let typeCongeFinal: string = body.type_conge
+      let bascule_ul_warning: string | null = null
       if (body.type_conge === 'AL' || body.type_conge === 'SL') {
         const currentYear = new Date().getFullYear()
         const { data: existingLeaves } = await supabase
@@ -769,7 +785,9 @@ export async function POST(request: Request) {
         const { data: empFull } = await supabase.from('employes').select('date_arrivee').eq('id', body.employe_id).maybeSingle()
         const hireDate = empFull?.date_arrivee
 
-        // Calculate months of service for probation check
+        // Calculate months of service for probation check (still BLOCKING:
+        // WRA 2019 interdit le droit à congé en période d'essai, donc même
+        // une bascule UL ne s'applique pas — on refuse).
         if (hireDate) {
           const hire = new Date(hireDate + 'T00:00:00')
           const now = new Date()
@@ -787,18 +805,23 @@ export async function POST(request: Request) {
 
         const remaining = entitled - taken
         if (nb_jours > remaining) {
+          // FIX 2 — bascule UL au lieu de bloquer. Si le solde restant est
+          // partiel (>0), on enregistre quand même tout en UL pour ne pas
+          // mélanger deux types de congé sur une seule demande (plus simple
+          // pour la paie + plus clair pour l'utilisateur). Le RH peut
+          // approuver/refuser à la main si nécessaire.
           const typeLabel = body.type_conge === 'AL' ? 'Local Leave' : 'Sick Leave'
-          return NextResponse.json({
-            error: `Solde ${typeLabel} insuffisant: ${remaining} jour(s) restant(s) sur ${entitled} jour(s) de droit`,
-          }, { status: 400 })
+          typeCongeFinal = 'UL'
+          bascule_ul_warning = `Solde ${typeLabel} insuffisant (${remaining}j restants sur ${entitled}j) — congé enregistré en Unpaid Leave et déduit du salaire ce mois.`
+          console.warn(`[conges] BASCULE UL — employe=${body.employe_id} type=${body.type_conge} demande=${nb_jours}j solde=${remaining}j`)
         }
       }
 
-      console.log(`[conges] Creating: type=${body.type_conge}, debut=${body.date_debut}, fin=${body.date_fin}, nb_jours=${nb_jours}`)
+      console.log(`[conges] Creating: type=${typeCongeFinal} (initial=${body.type_conge}), debut=${body.date_debut}, fin=${body.date_fin}, nb_jours=${nb_jours}`)
 
       const { data, error } = await supabase.from('demandes_conges').insert({
         employe_id: body.employe_id,
-        type_conge: body.type_conge,
+        type_conge: typeCongeFinal,
         date_debut: body.date_debut,
         date_fin: body.date_fin,
         nb_jours,
@@ -806,11 +829,19 @@ export async function POST(request: Request) {
         matin_ou_apres_midi: matinOuApresMidi,
         impose_par_societe: imposeParSociete,
         statut: body.statut || 'en_attente',
-        motif: body.motif || null,
+        motif: bascule_ul_warning
+          ? `${body.motif || ''}\n[Auto-bascule UL] ${bascule_ul_warning}`.trim()
+          : (body.motif || null),
         document_url: body.document_url || null,
       }).select().single()
       if (error) throw error
-      return NextResponse.json({ conge: data }, { status: 201 })
+      return NextResponse.json({
+        conge: data,
+        warning: bascule_ul_warning, // null si pas de bascule, sinon message UX
+        bascule_ul: bascule_ul_warning !== null,
+        type_conge_initial: body.type_conge,
+        type_conge_final: typeCongeFinal,
+      }, { status: 201 })
     }
 
     // ---- ACTION: approuver ----
