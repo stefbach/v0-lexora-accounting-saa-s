@@ -15,6 +15,7 @@ import { Search, Landmark, AlertCircle, Clock, RefreshCw, Loader2, Building2, X,
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { useProfile } from "@/hooks/use-profile"
 import { MonthPicker } from "@/components/ui/MonthPicker"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 function formatAmount(amount: number, devise?: string) {
   const d = devise || "MUR"
@@ -243,17 +244,16 @@ export default function ClientBanquePage() {
     : null
 
   return (
-    <div className="flex-1 overflow-auto p-6 space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>
-            Vos comptes bancaires
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Suivi et rapprochement des opérations bancaires
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
+    <ClientPageShell
+      breadcrumbs={[
+        { label: "Espace client", href: "/client" },
+        { label: "Banque" },
+      ]}
+      kicker={`${bankAccounts.length} compte${bankAccounts.length > 1 ? "s" : ""} bancaire${bankAccounts.length > 1 ? "s" : ""}`}
+      title="Vos comptes bancaires"
+      subtitle="Suivi en temps réel de vos comptes, import des relevés et rapprochement automatique des opérations."
+      actions={
+        <>
           {availableSocietes.length > 0 && (
             <div className="flex items-center gap-2">
               <Building2 className="h-4 w-4 text-muted-foreground" />
@@ -270,9 +270,9 @@ export default function ClientBanquePage() {
             <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
             Actualiser
           </Button>
-        </div>
-      </div>
-
+        </>
+      }
+    >
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
@@ -612,6 +612,6 @@ export default function ClientBanquePage() {
           )}
         </SheetContent>
       </Sheet>
-    </div>
+    </ClientPageShell>
   )
 }

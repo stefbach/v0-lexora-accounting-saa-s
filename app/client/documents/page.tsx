@@ -20,6 +20,7 @@ import {
   Upload, FolderOpen, Loader2, FileText, CheckCircle, Search, X,
   Clock, Download, ChevronRight, Lock, AlertTriangle, Building2, RefreshCw, Camera, Pencil,
 } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -450,14 +451,15 @@ export default function ClientDocumentsPage() {
   const unassignedCount = documents.filter(d => !d.societe_detectee).length
 
   return (
-    <div className="flex-1 overflow-auto p-4 pt-14 md:pt-6 md:p-6 lg:p-8 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Mes Documents</h1>
-        <p className="text-sm text-muted-foreground">
-          Envoyez et consultez tous vos documents comptables
-        </p>
-      </div>
-
+    <ClientPageShell
+      breadcrumbs={[
+        { label: "Espace client", href: "/client" },
+        { label: "Documents & OCR" },
+      ]}
+      kicker="OCR IA · détection automatique"
+      title="Mes Documents"
+      subtitle="Déposez vos factures, reçus et relevés — l'OCR extrait les données et les classe automatiquement par société et par nature."
+    >
       {/* Société selector — optional */}
       {societes.length > 0 && (
         <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg border bg-muted/30">
@@ -990,6 +992,6 @@ export default function ClientDocumentsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </ClientPageShell>
   )
 }

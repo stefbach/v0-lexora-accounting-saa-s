@@ -14,8 +14,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Search, Plus, Loader2, FileText, TrendingUp, Clock, AlertCircle,
   Eye, Trash2, RefreshCw, CalendarDays, Settings, Pencil, CheckCircle2,
-  Shield, ShieldCheck, X, Building2, Download
+  Shield, ShieldCheck, X, Building2, Download, Receipt,
 } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { ClientKpi, ClientPanel } from "@/components/client/ClientKit"
 
 interface Facture {
   id: string; numero_facture: string | null; tiers: string | null; description: string | null
@@ -308,13 +310,16 @@ export default function ClientFacturesPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-[#0B0F2E]">Factures Clients</h1>
-          <p className="text-sm text-gray-500">Gestion des creances clients - Conforme MRA</p>
-        </div>
-        <div className="flex gap-2 items-center">
+    <ClientPageShell
+      breadcrumbs={[
+        { label: "Espace client", href: "/client" },
+        { label: "Factures Clients" },
+      ]}
+      kicker={`${filtered.length} ${filtered.length > 1 ? "factures" : "facture"} · Conforme MRA`}
+      title="Factures Clients"
+      subtitle="Gestion des créances clients avec IRN, QR Code MRA, multi-devises et facturation récurrente."
+      actions={
+        <>
           {societes.length > 0 && (
             <Select value={selectedSociete} onValueChange={setSelectedSociete}>
               <SelectTrigger className="w-[200px]"><SelectValue placeholder="Société" /></SelectTrigger>
@@ -324,17 +329,37 @@ export default function ClientFacturesPage() {
               </SelectContent>
             </Select>
           )}
-          <Button variant="outline" onClick={() => router.push("/client/facturation-settings")}><Settings className="w-4 h-4 mr-2" />Parametres</Button>
-          <Button className="bg-[#0B0F2E]" onClick={() => router.push("/client/nouvelle-facture")}><Plus className="w-4 h-4 mr-2" />Nouvelle facture</Button>
-        </div>
-      </div>
-
+          <Button variant="outline" onClick={() => router.push("/client/facturation-settings")}><Settings className="w-4 h-4 mr-2" />Paramètres</Button>
+          <Button
+            onClick={() => router.push("/client/nouvelle-facture")}
+            style={{
+              background: "linear-gradient(135deg, #D4AF37 0%, #E4C547 100%)",
+              color: "#0B0F2E",
+              fontWeight: 700,
+              borderRadius: "10px",
+              border: "none",
+              boxShadow: "0 10px 24px -8px rgba(212,175,55,0.55)",
+              fontFamily: "'Poppins', sans-serif",
+            }}
+          >
+            <Plus className="w-4 h-4 mr-2" />Nouvelle facture
+          </Button>
+        </>
+      }
+    >
       {/* KPIs */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <Card><CardContent className="p-4 flex items-center gap-3"><FileText className="w-8 h-8 text-blue-600" /><div><p className="text-xs text-gray-500">Total CA (MUR)</p><p className="text-xl font-bold text-[#0B0F2E]">{fmt(totalMUR)}</p></div></CardContent></Card>
-        <Card><CardContent className="p-4 flex items-center gap-3"><TrendingUp className="w-8 h-8 text-green-600" /><div><p className="text-xs text-gray-500">Factures</p><p className="text-xl font-bold text-[#0B0F2E]">{filtered.length}</p></div></CardContent></Card>
-        <Card><CardContent className="p-4 flex items-center gap-3"><Clock className="w-8 h-8 text-yellow-600" /><div><p className="text-xs text-gray-500">En attente</p><p className="text-xl font-bold text-[#0B0F2E]">{nbEnAttente}</p></div></CardContent></Card>
-        <Card><CardContent className="p-4 flex items-center gap-3"><AlertCircle className="w-8 h-8 text-red-600" /><div><p className="text-xs text-gray-500">En retard</p><p className="text-xl font-bold text-[#0B0F2E]">{nbRetard}</p></div></CardContent></Card>
+      <div
+        style={{
+          display: "grid",
+          gap: "16px",
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          marginBottom: "22px",
+        }}
+      >
+        <ClientKpi label="Total CA" value={`${fmt(totalMUR)} MUR`} icon={Receipt} accent="blue" />
+        <ClientKpi label="Factures" value={filtered.length} icon={FileText} accent="green" />
+        <ClientKpi label="En attente" value={nbEnAttente} icon={Clock} accent="orange" />
+        <ClientKpi label="En retard" value={nbRetard} icon={AlertCircle} accent="red" />
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -680,6 +705,6 @@ export default function ClientFacturesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </ClientPageShell>
   )
 }
