@@ -14,12 +14,14 @@ function getAdminClient() {
 // L'audit RH a relevé que ces routes vérifiaient l'auth mais PAS le
 // rôle : un client_user ou un employé (s'il avait une session valide
 // pour une autre raison) pouvait techniquement appeler le POST import.
+// Sprint 2 — ajout 'direction' à la whitelist (audit RH).
 const ALLOWED_ROLES = [
   'admin',
   'super_admin',
   'rh',
   'rh_manager',
   'client_admin',
+  'direction',
   'comptable',         // historique-paie aussi
   'comptable_dedie',
 ]

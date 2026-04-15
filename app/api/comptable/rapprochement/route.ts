@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createEcrituresForPayment, createEcrituresForFacture } from '@/lib/accounting/ecritures-factures'
+import { safeInsertBnq } from '@/lib/accounting/bnq-dedupe'
 import { analyzeAllTransactions, MatchingTransaction, MatchingFacture } from '@/lib/accounting/matching-engine'
 import { runIntelligentRapprochement, buildAliasMap } from '@/lib/accounting/intelligent-rapprochement'
 import type { SupplierAlias } from '@/lib/accounting/intelligent-rapprochement'
@@ -2058,14 +2059,14 @@ export async function POST(request: Request) {
             const isOutgoing = txDebit > 0
             const libelle = `Virement interne ${(tx.libelle || '').substring(0, 30)}`
 
-            await supabase.from('ecritures_comptables').insert([
-              // 512 → 581 (bank to transit)
-              { dossier_id: dossier.id, date_ecriture: txDate, journal: 'BNQ', compte: '512',
-                libelle, debit: isOutgoing ? 0 : txAmountMUR, credit: isOutgoing ? txAmountMUR : 0, lettre: lettre581 },
-              // 581 debit (transit out)
-              { dossier_id: dossier.id, date_ecriture: txDate, journal: 'BNQ', compte: '581',
-                libelle, debit: isOutgoing ? txAmountMUR : 0, credit: isOutgoing ? 0 : txAmountMUR, lettre: lettre581 },
-            ])
+            // Sprint 2 — anti-doublon BNQ via safeInsertBnq (table v1 view).
+            const insTransit = await safeInsertBnq(supabase, [
+              { dossier_id: dossier.id, date_ecriture: txDate, journal: 'BNQ', numero_compte: '512',
+                libelle, debit_mur: isOutgoing ? 0 : txAmountMUR, credit_mur: isOutgoing ? txAmountMUR : 0, lettre: lettre581 },
+              { dossier_id: dossier.id, date_ecriture: txDate, journal: 'BNQ', numero_compte: '581',
+                libelle, debit_mur: isOutgoing ? txAmountMUR : 0, credit_mur: isOutgoing ? 0 : txAmountMUR, lettre: lettre581 },
+            ], 'ecritures_comptables')
+            if (insTransit.skipped > 0) console.log(`[auto_rapprocher transit BNQ] skipped:`, insTransit.skipReasons)
             created++
             continue
           }
@@ -2091,14 +2092,16 @@ export async function POST(request: Request) {
           const compte401 = facture.type_facture === 'fournisseur' ? '401' : '411'
           const isPayment = txDebit > 0 // debit = payment out
 
-          await supabase.from('ecritures_comptables').insert([
-            { dossier_id: dossier.id, date_ecriture: txDate, journal: 'BNQ', compte: compte401,
+          // Sprint 2 — anti-doublon BNQ via safeInsertBnq.
+          const insRegular = await safeInsertBnq(supabase, [
+            { dossier_id: dossier.id, date_ecriture: txDate, journal: 'BNQ', numero_compte: compte401,
               libelle: `Paiement ${(facture.tiers || '').substring(0, 30)} — ${facture.numero_facture || ''}`,
-              debit: isPayment ? txAmountMUR : 0, credit: isPayment ? 0 : txAmountMUR, lettre },
-            { dossier_id: dossier.id, date_ecriture: txDate, journal: 'BNQ', compte: '512',
+              debit_mur: isPayment ? txAmountMUR : 0, credit_mur: isPayment ? 0 : txAmountMUR, lettre },
+            { dossier_id: dossier.id, date_ecriture: txDate, journal: 'BNQ', numero_compte: '512',
               libelle: `Virement ${(facture.tiers || '').substring(0, 30)}`,
-              debit: isPayment ? 0 : txAmountMUR, credit: isPayment ? txAmountMUR : 0, lettre },
-          ])
+              debit_mur: isPayment ? 0 : txAmountMUR, credit_mur: isPayment ? txAmountMUR : 0, lettre },
+          ], 'ecritures_comptables')
+          if (insRegular.skipped > 0) console.log(`[auto_rapprocher regular BNQ] skipped:`, insRegular.skipReasons)
 
           // Letter existing 401/411 facture entry with same code
           const factureMUR = Math.round(Number(facture.montant_mur || 0) * 100) / 100
@@ -2473,16 +2476,19 @@ export async function POST(request: Request) {
               piece_justificative: f.id,
               facture_id: f.id,
             }
-            const { data: createdRows, error: createErr } = await supabase
-              .from('ecritures_comptables')
-              .insert([tierSide, bankSide])
-              .select('id, lettre, debit, credit, compte')
-            if (createErr) {
-              errors.push({ facture_id: f.id, reason: `BNQ insert failed: ${createErr.message}` })
+            // Sprint 2 — anti-doublon BNQ : si sync_lettrage retourne 2x
+            // sur la même facture, on ne crée pas 2 paires d'écritures.
+            // safeInsertBnq normalise compte→numero_compte / debit→debit_mur
+            // pour la comparaison côté v2.
+            const insSync = await safeInsertBnq(supabase, [tierSide, bankSide] as any, 'ecritures_comptables')
+            if (insSync.error) {
+              errors.push({ facture_id: f.id, reason: `BNQ insert failed: ${(insSync.error as any).message || insSync.error}` })
               continue
             }
-            const createdTier = (createdRows || []).find((r: any) => r.compte === achRow.compte) || createdRows?.[0]
-            const createdBank = (createdRows || []).find((r: any) => r.compte === compteBanque) || createdRows?.[1]
+            if (insSync.skipped > 0) console.log(`[sync_lettrage BNQ] skipped:`, insSync.skipReasons)
+            const createdRows = insSync.data || []
+            const createdTier = createdRows.find((r: any) => r.compte === achRow.compte) || createdRows[0]
+            const createdBank = createdRows.find((r: any) => r.compte === compteBanque) || createdRows[1]
             bnqRow = createdTier
             bnqBanqueRow = createdBank
             pairsCreatedBnq++

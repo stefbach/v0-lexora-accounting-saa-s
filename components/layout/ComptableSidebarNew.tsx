@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { useState, useEffect } from "react"
 import { t, getLocale } from "@/lib/i18n"
 import { LanguageSwitcher } from "@/components/LanguageSwitcher"
+import MonEspaceSalarieLink from "@/components/rh/MonEspaceSalarieLink"
 import {
   LayoutDashboard,
   Users,
@@ -365,6 +366,11 @@ export function ComptableSidebarNew() {
           >
             {collapsed ? <ChevronRight className="h-4 w-4" /> : <><ChevronLeft className="h-4 w-4" /><span className="ml-2">Réduire</span></>}
           </Button>
+
+          {/* TÂCHE 8 — lien Mon espace salarié si comptable type='interne'
+              (mig 137 a employe_id renseigné). Le composant détecte
+              automatiquement et masque pour 'externe' / 'dedie'. */}
+          {!collapsed && <MonEspaceSalarieLink compact />}
 
           <Link
             href="/profil"

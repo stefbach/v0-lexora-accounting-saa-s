@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { t, getLocale } from "@/lib/i18n"
 import { LanguageSwitcher } from "@/components/LanguageSwitcher"
+import MonEspaceSalarieLink from "@/components/rh/MonEspaceSalarieLink"
 import {
   Clock, Users, Calendar, CreditCard, TrendingUp, Banknote,
   Settings, LogOut, ArrowLeft, Menu, X, CalendarDays, Car, Bot, CheckCircle, Upload, UserMinus, Megaphone, MapPin, Route, Shield, FilePen
@@ -44,6 +45,8 @@ const ALL_LINKS: NavLink[] = [
   { href: '/rh/historique-paie', label: 'Historique Paie', icon: Calendar, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'comptable', 'comptable_dedie'] },
   { href: '/rh/annonces', label: 'Annonces', icon: Megaphone, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
   { href: '/rh/chat', label: 'CLARA — Assistant IA', icon: Bot },
+  // Sprint 2 — hub central de paramètres en plus des sous-pages spécifiques.
+  { href: '/rh/parametres', label: 'Paramètres (hub)', icon: Settings, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
   { href: '/rh/societe', label: 'Paramètres société', icon: Settings, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
   { href: '/rh/paie/parametres', label: 'Paramètres paie', labelKey: 'rh.payroll_settings', icon: Settings, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
 ]
@@ -138,6 +141,10 @@ export function RHSidebarDedicated() {
           )
         })}
       </nav>
+      {/* TÂCHE 8 — lien vers /salarie si l'user RH a une fiche employé liée.
+          Le composant détecte tout seul ; rend null sinon. */}
+      <MonEspaceSalarieLink compact />
+
       <div className="p-3 border-t border-white/10 space-y-1">
         <div className="flex justify-center mb-2">
           <LanguageSwitcher />

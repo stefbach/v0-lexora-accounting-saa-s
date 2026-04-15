@@ -60,6 +60,18 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
     if (!form.prenom) errs.prenom = "Prenom requis"
     if (!form.salaire_base) errs.salaire_base = "Salaire requis"
     if (!form.date_arrivee) errs.date_arrivee = "Date requise"
+    // Sprint 2 — validation email + téléphone (Maurice). Champs optionnels :
+    // on ne valide QUE s'ils sont renseignés.
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+      errs.email = "Format email invalide (ex: jean@example.com)"
+    }
+    if (form.telephone) {
+      // Mauritius : +230 suivi de 7 ou 8 chiffres, espaces tolérés.
+      // Accepte aussi format local (5XXX XXXX, 8 chiffres sans préfixe).
+      const cleaned = form.telephone.replace(/\s+/g, '')
+      const okMu = /^\+230\d{7,8}$/.test(cleaned) || /^\d{7,8}$/.test(cleaned)
+      if (!okMu) errs.telephone = "Format invalide. Attendu : +230 XXXX XXXX ou XXXX XXXX"
+    }
     setErrors(errs)
     return Object.keys(errs).length === 0
   }
@@ -104,9 +116,11 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
         </FormField>
         <FormField label="Email">
           <Input className={inputClass} type="email" value={form.email} onChange={e=>u("email",e.target.value)} placeholder="jean@example.com"/>
+          {fieldErr("email")}
         </FormField>
         <FormField label="Telephone">
           <Input className={inputClass} value={form.telephone} onChange={e=>u("telephone",e.target.value)} placeholder="+230 5123 4567"/>
+          {fieldErr("telephone")}
         </FormField>
         <FormField label="Genre">
           <Select value={form.genre} onValueChange={v=>u("genre",v)}><SelectTrigger className={selectTriggerClass}><SelectValue placeholder="Choisir..."/></SelectTrigger><SelectContent><SelectItem value="M">Masculin</SelectItem><SelectItem value="F">Feminin</SelectItem></SelectContent></Select>
