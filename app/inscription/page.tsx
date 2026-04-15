@@ -16,6 +16,7 @@
 
 import * as React from "react"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion"
 import {
   Sparkles,
@@ -62,10 +63,18 @@ const ACCENTS = {
 
 const FONT = "'Poppins', sans-serif"
 
-export default function InscriptionPage() {
+function InscriptionPageInner() {
   const prefersReducedMotion = useReducedMotion()
+  const params = useSearchParams()
+  const roleParam = params?.get("role") ?? null
+  const initialRole: Role =
+    roleParam === "expert" || roleParam === "expert-comptable"
+      ? "expert"
+      : roleParam === "unknown"
+        ? "unknown"
+        : "entreprise"
 
-  const [role, setRole] = React.useState<Role>("entreprise")
+  const [role, setRole] = React.useState<Role>(initialRole)
 
   // Shared contact
   const [firstName, setFirstName] = React.useState("")
@@ -865,5 +874,14 @@ function Field({
         }}
       />
     </div>
+  )
+}
+
+// useSearchParams requires a Suspense boundary in App Router.
+export default function InscriptionPage() {
+  return (
+    <React.Suspense fallback={<div style={{ backgroundColor: "#0B0F2E", minHeight: "100vh" }} />}>
+      <InscriptionPageInner />
+    </React.Suspense>
   )
 }

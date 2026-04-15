@@ -1910,10 +1910,10 @@ export default function HomePage() {
                 {locale === "fr" ? "Plateforme" : "Platform"}
               </h3>
               <ul className="space-y-2.5 text-sm" style={{ fontFamily: "'Poppins', sans-serif" }}>
-                <li><a href="#features" style={{ color: "#A8AFC7", textDecoration: "none" }}>{locale === "fr" ? "Modules" : "Modules"}</a></li>
-                <li><a href="#ai" style={{ color: "#A8AFC7", textDecoration: "none" }}>{locale === "fr" ? "Agents IA" : "AI Agents"}</a></li>
-                <li><a href="#offres" style={{ color: "#A8AFC7", textDecoration: "none" }}>{locale === "fr" ? "Offres" : "Offers"}</a></li>
-                <li><Link href="/tarifs" style={{ color: "#A8AFC7", textDecoration: "none" }}>Tarifs</Link></li>
+                <li><a href="#features" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>{locale === "fr" ? "Modules" : "Modules"}</a></li>
+                <li><a href="#ai" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>{locale === "fr" ? "Agents IA" : "AI Agents"}</a></li>
+                <li><a href="#offres" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>{locale === "fr" ? "Offres" : "Offers"}</a></li>
+                <li><Link href="/tarifs" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>Tarifs</Link></li>
               </ul>
             </div>
 
@@ -1925,10 +1925,42 @@ export default function HomePage() {
                 {locale === "fr" ? "Ressources" : "Resources"}
               </h3>
               <ul className="space-y-2.5 text-sm" style={{ fontFamily: "'Poppins', sans-serif" }}>
-                <li><Link href="/auth/login" style={{ color: "#A8AFC7", textDecoration: "none" }}>{t('home.login', locale)}</Link></li>
-                <li><a href="mailto:contact@lexora.finance" style={{ color: "#A8AFC7", textDecoration: "none" }}>Contact</a></li>
-                <li><a href="mailto:dpo@lexora.finance" style={{ color: "#A8AFC7", textDecoration: "none" }}>DPO · RGPD</a></li>
-                <li><a href="mailto:contact@lexora.finance?subject=Programme Expert-Comptable" style={{ color: "#D4AF37", textDecoration: "none", fontWeight: 500 }}>{locale === "fr" ? "Programme Expert-Comptable" : "Accountant Program"}</a></li>
+                <li>
+                  <Link
+                    href="/auth/login"
+                    className="transition-colors hover:text-[#E8EAFC]"
+                    style={{ color: "#A8AFC7", textDecoration: "none" }}
+                  >
+                    {t('home.login', locale)}
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/inscription"
+                    className="transition-colors hover:text-[#E8EAFC]"
+                    style={{ color: "#A8AFC7", textDecoration: "none" }}
+                  >
+                    {locale === "fr" ? "Nous contacter" : "Contact us"}
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/protection-donnees"
+                    className="transition-colors hover:text-[#E8EAFC]"
+                    style={{ color: "#A8AFC7", textDecoration: "none" }}
+                  >
+                    DPO · RGPD
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/inscription?role=expert"
+                    className="transition-colors hover:text-[#FFE8A3]"
+                    style={{ color: "#D4AF37", textDecoration: "none", fontWeight: 500 }}
+                  >
+                    {locale === "fr" ? "Programme Expert-Comptable" : "Accountant Program"}
+                  </Link>
+                </li>
               </ul>
             </div>
 
@@ -1940,10 +1972,10 @@ export default function HomePage() {
                 {locale === "fr" ? "Légal" : "Legal"}
               </h3>
               <ul className="space-y-2.5 text-sm" style={{ fontFamily: "'Poppins', sans-serif" }}>
-                <li><Link href="/mentions-legales" style={{ color: "#A8AFC7", textDecoration: "none" }}>{locale === "fr" ? "Mentions légales" : "Legal Notice"}</Link></li>
-                <li><Link href="/cgu" style={{ color: "#A8AFC7", textDecoration: "none" }}>CGU</Link></li>
-                <li><Link href="/cgv" style={{ color: "#A8AFC7", textDecoration: "none" }}>CGV</Link></li>
-                <li><Link href="/protection-donnees" style={{ color: "#A8AFC7", textDecoration: "none" }}>{locale === "fr" ? "Protection des données" : "Data Protection"}</Link></li>
+                <li><Link href="/mentions-legales" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>{locale === "fr" ? "Mentions légales" : "Legal Notice"}</Link></li>
+                <li><Link href="/cgu" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>CGU</Link></li>
+                <li><Link href="/cgv" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>CGV</Link></li>
+                <li><Link href="/protection-donnees" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>{locale === "fr" ? "Protection des données" : "Data Protection"}</Link></li>
               </ul>
             </div>
           </div>
