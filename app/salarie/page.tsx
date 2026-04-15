@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Progress } from "@/components/ui/progress"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { Loader2, Clock, Calendar, CreditCard, TrendingUp, LogIn, LogOut, Coffee, Download, User, Save, CheckCircle, FileText, CalendarPlus, UserCircle, FolderOpen, Bell, Eye, Upload, X, LayoutDashboard, MoreHorizontal, Car, MapPin, Navigation, Play, Square, HeartPulse, Video, Stethoscope, Pill, ShieldCheck, Phone, MessageCircle, Activity, Scan, Printer } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { Textarea } from "@/components/ui/textarea"
 
 const NAVY = "#0B0F2E"
@@ -1092,7 +1093,8 @@ export default function EspaceEmployePage() {
   const onPause = pointageToday?.heure_pause_debut && !pointageToday?.heure_pause_fin
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <ClientPageShell hideHero disableParticles>
+    <div>
       {/* Header */}
       <div className="p-4 md:p-6" style={{ backgroundColor: NAVY }}>
         <div className="max-w-4xl mx-auto flex items-center justify-between">
@@ -2027,6 +2029,7 @@ export default function EspaceEmployePage() {
         </div>
       </nav>
     </div>
+    </ClientPageShell>
   )
 }
 

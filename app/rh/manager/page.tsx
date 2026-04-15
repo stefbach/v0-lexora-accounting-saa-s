@@ -98,14 +98,13 @@ export default function ManagerDashboard() {
   for (const b of filteredBalances) balanceMap.set(b.employe_id, b)
 
   return (
-    <ClientPageShell hideHero disableParticles>
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Tableau de bord Manager</h1>
-          <p className="text-gray-500 text-sm">Suivi de votre équipe en temps réel</p>
-        </div>
-        <div className="flex items-center gap-2">
+    <ClientPageShell
+      breadcrumbs={[{ label: "RH · Paie", href: "/rh" }, { label: "Manager" }]}
+      kicker={`Mon équipe · ${employes.length} ${employes.length > 1 ? "collaborateurs" : "collaborateur"}`}
+      title="Tableau de bord Manager"
+      subtitle="Suivi temps réel de votre équipe — présence, pointage, congés, alertes de certificats médicaux et soldes de jours."
+      actions={
+        <>
           <Select value={societe} onValueChange={setSociete}>
             <SelectTrigger className="w-[180px]"><SelectValue placeholder="Société" /></SelectTrigger>
             <SelectContent>
@@ -121,8 +120,10 @@ export default function ManagerDashboard() {
               </SelectContent>
             </Select>
           )}
-        </div>
-      </div>
+        </>
+      }
+    >
+    <div className="space-y-6">
 
       {loading ? (
         <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-gray-400" /></div>
