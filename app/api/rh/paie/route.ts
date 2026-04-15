@@ -388,14 +388,19 @@ export async function POST(request: Request) {
           emp, joursFeriesSetSingle
         )
         if (n <= 0) continue
-        if (c.type_conge === 'AL') {
+        // INTÉGRATION 3 — normalisation defensive trim + upper (idem batch).
+        const tc = String(c.type_conge || '').trim().toUpperCase()
+        if (tc === 'AL') {
           if (c.impose_par_societe === true) joursAlImpose += n
           else joursAlEmploye += n
-        } else if (c.type_conge === 'SL') {
+        } else if (tc === 'SL') {
           joursSickLeaveSingle += n
-        } else if (c.type_conge === 'UL') {
+        } else if (tc === 'UL') {
           joursUnpaidLeaveSingle += n
         }
+      }
+      if (joursUnpaidLeaveSingle > 0) {
+        console.log(`[paie] UL detected (single) — ${emp.prenom} ${emp.nom} ${periodeStr}: ${joursUnpaidLeaveSingle}j`)
       }
 
       // INTÉGRATION 2 — Absences injustifiées par JOUR OUVRÉ (pas par
@@ -457,6 +462,7 @@ export async function POST(request: Request) {
       const resultat = calculerBulletin(elements, params as any, joursTravailles, Number(emp.pct_refacturation) || 0)
 
       // UL deduction: days in-period × salaire_brut / nb_jours_ouvres_mois.
+      // INTÉGRATION 3 — diagnostic log (cf. calculer_batch).
       let montant_ul_single = 0
       if (joursUnpaidLeaveSingle > 0) {
         const nbJoursOuvresMoisSingle = calculateWorkingDays(periodeStartSingle, periodeEndSingle, {
@@ -471,6 +477,9 @@ export async function POST(request: Request) {
             + (Number(elements.special_allowance_1) || 0))
         if (nbJoursOuvresMoisSingle > 0 && salaireBrutSingle > 0) {
           montant_ul_single = Math.round(joursUnpaidLeaveSingle * (salaireBrutSingle / nbJoursOuvresMoisSingle) * 100) / 100
+          console.log(`[paie] UL OK (single) ${emp.prenom} ${emp.nom} — ${joursUnpaidLeaveSingle}j × (${salaireBrutSingle} / ${nbJoursOuvresMoisSingle}) = ${montant_ul_single} MUR`)
+        } else {
+          console.warn(`[paie] UL SKIP zero-guard (single) — ${emp.prenom} ${emp.nom} joursOuvres=${nbJoursOuvresMoisSingle} salaireBrut=${salaireBrutSingle}`)
         }
       }
 
@@ -757,6 +766,9 @@ export async function POST(request: Request) {
         // Count leave days (working-days only) intersected with the period.
         // SL reduces the OT threshold; AL does not; UL triggers a deduction
         // on the net; MAT/PAT are tracked for reporting (no deduction).
+        // INTÉGRATION 3 — normalisation defensive type_conge (trim + upper)
+        // pour encaisser les données DB où un espace ou une casse
+        // inattendue empêchait le match strict 'UL' → 0 déduction en prod.
         let joursSickLeave = 0
         let joursLocalLeave = 0
         let joursAlImposeBatch = 0     // subset of joursLocalLeave
@@ -769,14 +781,18 @@ export async function POST(request: Request) {
             emp, joursFeriesSet
           )
           if (n <= 0) continue
-          if (c.type_conge === 'SL') joursSickLeave += n
-          else if (c.type_conge === 'AL') {
+          const tc = String(c.type_conge || '').trim().toUpperCase()
+          if (tc === 'SL') joursSickLeave += n
+          else if (tc === 'AL') {
             joursLocalLeave += n
             if (c.impose_par_societe === true) joursAlImposeBatch += n
             else joursAlEmployeBatch += n
           }
-          else if (c.type_conge === 'UL') joursUnpaidLeave += n
-          else if (c.type_conge === 'MAT' || c.type_conge === 'PAT') joursMatPat += n
+          else if (tc === 'UL') joursUnpaidLeave += n
+          else if (tc === 'MAT' || tc === 'PAT') joursMatPat += n
+        }
+        if (joursUnpaidLeave > 0) {
+          console.log(`[paie] UL detected — ${emp.prenom} ${emp.nom} ${periodeStr}: ${joursUnpaidLeave}j (${(congesApprouves || []).filter(c => String(c.type_conge || '').trim().toUpperCase() === 'UL').map(c => `${c.date_debut}→${c.date_fin}`).join(', ')})`)
         }
 
         // Monthly OT threshold: standard hours minus sick leave hours
@@ -916,7 +932,15 @@ export async function POST(request: Request) {
         // holidays by default). This differs from the unjustified-absence
         // formula which uses salaire_base/26 — UL docks the full gross
         // pro rata, not just the basic salary.
+        // INTÉGRATION 3 — UL deduction.
+        // Constat prod : 0 bulletin avec déduction malgré UL approuvés
+        // (ex. Sheetal Sekely UL 2026-02-06 → 2026-03-06). On log
+        // systématiquement les skip pour diagnostiquer quelle garde a
+        // coupé le calcul, au lieu de logger uniquement le cas OK.
         let montant_ul = 0
+        if (joursUnpaidLeave > 0 && isHorsMRA) {
+          console.log(`[paie] UL SKIP isHorsMRA — ${emp.prenom} ${emp.nom} (${joursUnpaidLeave}j UL non déduits)`)
+        }
         if (!isHorsMRA && joursUnpaidLeave > 0) {
           const nbJoursOuvresMois = calculateWorkingDays(periodeStart, periodeEnd, {
             workingDays: getWorkingDaysForEmploye(emp),
@@ -930,8 +954,10 @@ export async function POST(request: Request) {
               + (Number(elements.special_allowance_1) || 0))
           if (nbJoursOuvresMois > 0 && salaireBrutPaie > 0) {
             montant_ul = Math.round(joursUnpaidLeave * (salaireBrutPaie / nbJoursOuvresMois) * 100) / 100
+            console.log(`[paie] UL OK ${emp.prenom} ${emp.nom} — ${joursUnpaidLeave}j × (${salaireBrutPaie} / ${nbJoursOuvresMois}) = ${montant_ul} MUR`)
+          } else {
+            console.warn(`[paie] UL SKIP zero-guard — ${emp.prenom} ${emp.nom} joursOuvres=${nbJoursOuvresMois} salaireBrut=${salaireBrutPaie} (resultat.salaire_brut=${resultat.salaire_brut})`)
           }
-          console.log(`[paie] UL: ${emp.prenom} ${emp.nom} — ${joursUnpaidLeave}j × (${salaireBrutPaie} / ${nbJoursOuvresMois}) = ${montant_ul} MUR`)
         }
 
         const totalDeductionAbsence = montant_absence_final + montant_ul
