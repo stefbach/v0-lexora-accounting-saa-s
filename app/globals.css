@@ -203,3 +203,19 @@
 html {
   scroll-behavior: smooth;
 }
+
+/* ------------------------------------------------------------------ */
+/* Reusable keyframes for accent animations                            */
+/* ------------------------------------------------------------------ */
+
+/* Rotating conic-gradient ring behind an icon tile (hover state). */
+@keyframes lexora-ring-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Slow float for decorative elements. */
+@keyframes lexora-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}

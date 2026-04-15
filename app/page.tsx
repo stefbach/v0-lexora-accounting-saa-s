@@ -639,50 +639,110 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* FEATURES — modern modules section with gradient strips + numbered badges */}
+        {/* FEATURES — premium modules section */}
         <section
           id="features"
           className="relative overflow-hidden py-20 md:py-28"
-          style={{ backgroundColor: "#FFFFFF" }}
+          style={{
+            background:
+              "linear-gradient(180deg, #FFFFFF 0%, #F4F7FC 50%, #FFFFFF 100%)",
+          }}
         >
-          {/* Ambient backdrop */}
+          {/* Ambient top + bottom glows */}
           <div
             aria-hidden="true"
             className="pointer-events-none absolute inset-0"
             style={{
               backgroundImage:
-                "radial-gradient(ellipse 50% 40% at 50% 0%, rgba(65,145,255,0.06) 0%, transparent 70%)",
+                "radial-gradient(ellipse 60% 40% at 30% 0%, rgba(65,145,255,0.08) 0%, transparent 70%), radial-gradient(ellipse 50% 30% at 80% 100%, rgba(212,175,55,0.06) 0%, transparent 70%)",
+            }}
+          />
+          {/* Soft dot-grid backdrop */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 opacity-[0.35]"
+            style={{
+              backgroundImage:
+                "radial-gradient(circle at 20% 20%, rgba(65,145,255,0.12) 1px, transparent 1px)",
+              backgroundSize: "40px 40px",
+              maskImage:
+                "radial-gradient(ellipse 60% 50% at 50% 50%, black 20%, transparent 75%)",
+              WebkitMaskImage:
+                "radial-gradient(ellipse 60% 50% at 50% 50%, black 20%, transparent 75%)",
             }}
           />
 
           <div className="relative mx-auto max-w-7xl px-4 sm:px-6">
-            <Reveal className="mb-16 text-center">
+            <Reveal className="mx-auto mb-16 max-w-3xl text-center">
+              {/* Eyebrow — richer, with icon + animated live dot */}
               <span
-                className="mb-5 inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-xs font-bold uppercase tracking-widest"
+                className="mb-6 inline-flex items-center gap-2.5 rounded-full px-4 py-2 text-[11px] font-bold uppercase tracking-[0.16em]"
                 style={{
-                  backgroundColor: "rgba(65,145,255,0.06)",
-                  color: "#4191FF",
-                  borderColor: "rgba(65,145,255,0.20)",
+                  background:
+                    "linear-gradient(135deg, rgba(65,145,255,0.08) 0%, rgba(212,175,55,0.08) 100%)",
+                  color: "#2A6FCC",
+                  border: "1px solid rgba(65,145,255,0.25)",
                   fontFamily: "'Poppins', sans-serif",
+                  boxShadow: "0 4px 12px -4px rgba(65,145,255,0.25)",
                 }}
               >
-                <span
-                  aria-hidden="true"
-                  className="h-1.5 w-1.5 rounded-full"
-                  style={{ backgroundColor: "#D4AF37" }}
-                />
-                {locale === "fr" ? "7 modules intégrés" : "7 integrated modules"}
+                <span className="relative flex h-2 w-2" aria-hidden="true">
+                  <span
+                    className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75"
+                    style={{ backgroundColor: "#D4AF37" }}
+                  />
+                  <span
+                    className="relative inline-flex h-2 w-2 rounded-full"
+                    style={{
+                      backgroundColor: "#D4AF37",
+                      boxShadow: "0 0 6px #D4AF37",
+                    }}
+                  />
+                </span>
+                {locale === "fr" ? "7 modules intégrés · 1 plateforme" : "7 integrated modules · 1 platform"}
               </span>
+              {/* H2 with gradient clip on the key word */}
               <h2
-                className="mb-4 text-3xl font-bold tracking-tight md:text-5xl"
+                className="mb-5 text-4xl font-bold tracking-tight md:text-6xl"
                 style={{
                   color: "#0B0F2E",
                   fontFamily: "'Poppins', sans-serif",
                   fontWeight: 700,
-                  letterSpacing: "-0.02em",
+                  letterSpacing: "-0.03em",
+                  lineHeight: 1.05,
                 }}
               >
-                {t('home.smart_modules', locale)}
+                {locale === "fr" ? (
+                  <>
+                    Modules{" "}
+                    <span
+                      style={{
+                        backgroundImage:
+                          "linear-gradient(90deg, #4191FF 0%, #D4AF37 100%)",
+                        WebkitBackgroundClip: "text",
+                        backgroundClip: "text",
+                        color: "transparent",
+                      }}
+                    >
+                      intelligents
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    Smart{" "}
+                    <span
+                      style={{
+                        backgroundImage:
+                          "linear-gradient(90deg, #4191FF 0%, #D4AF37 100%)",
+                        WebkitBackgroundClip: "text",
+                        backgroundClip: "text",
+                        color: "transparent",
+                      }}
+                    >
+                      modules
+                    </span>
+                  </>
+                )}
               </h2>
               <p
                 className="mx-auto max-w-2xl text-base md:text-lg"
@@ -920,77 +980,127 @@ export default function HomePage() {
 
                 // Standard module cards (1–6)
                 const accent = idx % 2 === 0 ? "#4191FF" : "#D4AF37"
+                const accentDark = idx % 2 === 0 ? "#1D5FC4" : "#A88925"
                 const accentSoft = idx % 2 === 0 ? "rgba(65,145,255,0.12)" : "rgba(212,175,55,0.14)"
                 return (
                   <StaggerItem key={feature.title} className="h-full">
-                    <HoverLift lift={6} className="h-full">
+                    <HoverLift lift={8} className="h-full">
                       <article
-                        className="group relative flex h-full flex-col overflow-hidden rounded-2xl"
+                        className="group relative flex h-full flex-col overflow-hidden rounded-2xl transition-all duration-500"
                         style={{
-                          // Subtle vertical gradient gives depth vs. flat white.
+                          // Multi-layer background: base → tint → subtle vignette.
                           background:
                             "linear-gradient(180deg, #FFFFFF 0%, #F7F9FF 100%)",
                           border: "1px solid #D8DFED",
-                          // Layered shadows: thin contact + soft ambient + subtle ring.
+                          // Premium layered shadows.
                           boxShadow:
-                            "0 1px 2px rgba(15,23,42,0.04), 0 24px 48px -24px rgba(15,23,42,0.20), inset 0 1px 0 rgba(255,255,255,0.9)",
+                            "0 1px 2px rgba(15,23,42,0.05), 0 24px 48px -24px rgba(15,23,42,0.18), inset 0 1px 0 rgba(255,255,255,0.9)",
                         }}
                       >
-                        {/* Top accent stripe */}
+                        {/* Top accent stripe — thicker + gradient */}
                         <div
                           aria-hidden="true"
-                          className="absolute inset-x-0 top-0 h-[3px]"
+                          className="absolute inset-x-0 top-0 h-1"
                           style={{
-                            background: `linear-gradient(90deg, ${accent} 0%, ${accent}33 100%)`,
-                          }}
-                        />
-                        {/* Subtle corner glow on hover */}
-                        <div
-                          aria-hidden="true"
-                          className="pointer-events-none absolute -right-20 -top-20 h-48 w-48 rounded-full opacity-0 transition-opacity duration-500 group-hover:opacity-100"
-                          style={{
-                            background: `radial-gradient(circle, ${accentSoft} 0%, transparent 70%)`,
+                            background: `linear-gradient(90deg, transparent 0%, ${accent} 15%, ${accent} 85%, transparent 100%)`,
+                            opacity: 0.9,
                           }}
                         />
 
+                        {/* Diagonal dot-grid decoration in top-right corner */}
+                        <div
+                          aria-hidden="true"
+                          className="pointer-events-none absolute right-0 top-0 h-32 w-32 opacity-40 transition-opacity duration-500 group-hover:opacity-80"
+                          style={{
+                            backgroundImage: `radial-gradient(circle, ${accent}22 1px, transparent 1px)`,
+                            backgroundSize: "14px 14px",
+                            maskImage:
+                              "linear-gradient(225deg, black 0%, transparent 70%)",
+                            WebkitMaskImage:
+                              "linear-gradient(225deg, black 0%, transparent 70%)",
+                          }}
+                        />
+
+                        {/* Ambient hover glow from top-right corner */}
+                        <div
+                          aria-hidden="true"
+                          className="pointer-events-none absolute -right-24 -top-24 h-56 w-56 rounded-full opacity-0 transition-opacity duration-500 group-hover:opacity-100"
+                          style={{
+                            background: `radial-gradient(circle, ${accent}33 0%, transparent 70%)`,
+                          }}
+                        />
+
+                        {/* Number badge — top-right, styled tile */}
+                        <div
+                          className="absolute right-5 top-5 z-10 flex flex-col items-end"
+                          style={{ fontFamily: "'Poppins', sans-serif" }}
+                        >
+                          <span
+                            className="text-[9px] font-bold uppercase tracking-[0.18em]"
+                            style={{ color: "#94A3B8" }}
+                          >
+                            {locale === "fr" ? "Module" : "Module"}
+                          </span>
+                          <span
+                            className="text-xl font-bold leading-none"
+                            style={{
+                              color: accentDark,
+                              fontVariantNumeric: "tabular-nums",
+                              letterSpacing: "-0.02em",
+                            }}
+                          >
+                            {moduleNum}
+                            <span
+                              className="ml-0.5 text-xs font-medium"
+                              style={{ color: "#CBD5E1" }}
+                            >
+                              /{totalStr}
+                            </span>
+                          </span>
+                        </div>
+
                         <div className="relative flex flex-1 flex-col p-7 md:p-8">
-                          {/* Header: icon tile + module number */}
-                          <div className="mb-6 flex items-start justify-between">
+                          {/* Icon block — larger, with rotating ring + glow */}
+                          <div className="relative mb-6">
+                            {/* Rotating conic-gradient ring behind the icon */}
                             <div
-                              className="flex h-14 w-14 items-center justify-center rounded-2xl transition-transform duration-300 group-hover:scale-110"
+                              aria-hidden="true"
+                              className="pointer-events-none absolute -inset-1.5 rounded-[20px] opacity-0 transition-opacity duration-500 group-hover:opacity-100"
                               style={{
-                                background: `linear-gradient(135deg, ${accent}1F 0%, ${accent}0D 100%)`,
-                                border: `1px solid ${accent}40`,
-                                boxShadow: `0 12px 28px -10px ${accent}55, inset 0 1px 0 rgba(255,255,255,0.4)`,
+                                background: `conic-gradient(from 0deg, ${accent}00 0%, ${accent}55 25%, ${accent}00 50%, ${accent}55 75%, ${accent}00 100%)`,
+                                animation:
+                                  "lexora-ring-spin 6s linear infinite",
+                                filter: "blur(6px)",
+                              }}
+                            />
+                            <div
+                              className="relative flex h-16 w-16 items-center justify-center rounded-2xl transition-transform duration-500 group-hover:scale-105 group-hover:rotate-[-4deg]"
+                              style={{
+                                background: `linear-gradient(135deg, ${accent}26 0%, ${accent}10 100%)`,
+                                border: `1px solid ${accent}55`,
+                                boxShadow: `0 14px 32px -10px ${accent}70, inset 0 1px 0 rgba(255,255,255,0.6), inset 0 -12px 24px -12px ${accent}22`,
                               }}
                             >
                               <feature.icon
-                                className="h-6 w-6"
-                                style={{ color: accent }}
+                                className="h-7 w-7"
+                                style={{
+                                  color: accentDark,
+                                  filter: `drop-shadow(0 2px 4px ${accent}60)`,
+                                }}
                                 aria-hidden="true"
                                 strokeWidth={1.8}
                               />
                             </div>
-                            <span
-                              className="text-xs font-bold tracking-widest"
-                              style={{
-                                color: "#94A3B8",
-                                fontFamily: "'Poppins', sans-serif",
-                                fontVariantNumeric: "tabular-nums",
-                              }}
-                            >
-                              {moduleNum} / {totalStr}
-                            </span>
                           </div>
 
                           {/* Title */}
                           <h3
-                            className="mb-4 text-xl font-bold leading-tight"
+                            className="mb-4 text-[22px] font-bold leading-tight"
                             style={{
                               color: "#0B0F2E",
                               fontFamily: "'Poppins', sans-serif",
                               fontWeight: 700,
-                              letterSpacing: "-0.01em",
+                              letterSpacing: "-0.02em",
                             }}
                           >
                             {feature.title}
@@ -1004,13 +1114,14 @@ export default function HomePage() {
                                   aria-hidden="true"
                                   className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
                                   style={{
-                                    backgroundColor: accentSoft,
+                                    background: `linear-gradient(135deg, ${accent}33 0%, ${accent}11 100%)`,
+                                    boxShadow: `inset 0 0 0 1px ${accent}22`,
                                   }}
                                 >
                                   <CheckCircle2
                                     className="h-3.5 w-3.5"
-                                    style={{ color: accent }}
-                                    strokeWidth={2.5}
+                                    style={{ color: accentDark }}
+                                    strokeWidth={2.8}
                                   />
                                 </span>
                                 <span
@@ -1018,6 +1129,7 @@ export default function HomePage() {
                                     color: "#334155",
                                     fontFamily: "'Poppins', sans-serif",
                                     lineHeight: 1.6,
+                                    fontWeight: 400,
                                   }}
                                 >
                                   {item}
@@ -1026,16 +1138,37 @@ export default function HomePage() {
                             ))}
                           </ul>
 
-                          {/* Footer hint */}
+                          {/* Footer — now a connector row with arrow that slides on hover */}
                           <div
-                            className="mt-6 pt-4 text-xs font-bold uppercase tracking-widest"
+                            className="relative mt-7 flex items-center justify-between pt-4"
                             style={{
-                              color: accent,
-                              fontFamily: "'Poppins', sans-serif",
-                              borderTop: "1px solid #E6EBF7",
+                              borderTop: "1px dashed #D8DFED",
                             }}
                           >
-                            {locale === "fr" ? "Inclus dans chaque formule" : "Included in every plan"}
+                            <div className="flex items-center gap-2">
+                              <span
+                                aria-hidden="true"
+                                className="inline-block h-1.5 w-1.5 rounded-full"
+                                style={{
+                                  backgroundColor: accent,
+                                  boxShadow: `0 0 8px ${accent}80`,
+                                }}
+                              />
+                              <span
+                                className="text-[10px] font-bold uppercase tracking-[0.16em]"
+                                style={{
+                                  color: accentDark,
+                                  fontFamily: "'Poppins', sans-serif",
+                                }}
+                              >
+                                {locale === "fr" ? "Inclus dans chaque formule" : "Included in every plan"}
+                              </span>
+                            </div>
+                            <ArrowRight
+                              className="h-3.5 w-3.5 shrink-0 transition-transform duration-300 group-hover:translate-x-1"
+                              style={{ color: accentDark }}
+                              aria-hidden="true"
+                            />
                           </div>
                         </div>
                       </article>
