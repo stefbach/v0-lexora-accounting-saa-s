@@ -140,3 +140,34 @@
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+/* ------------------------------------------------------------------ */
+/* UI/UX Pro Max — accessibility & motion                              */
+/* ------------------------------------------------------------------ */
+
+/* focus-states (rule §1): visible 2px focus ring on every interactive  */
+/* element, using the design-system ring token.                         */
+*:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Skip animations and transitions when user requests reduced motion.  */
+/* reduced-motion (rule §1): covers CSS-based animations. Framer Motion */
+/* primitives also call useReducedMotion() to bail out.                 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Smooth anchor navigation by default (respects reduced-motion above). */
+html {
+  scroll-behavior: smooth;
+}
