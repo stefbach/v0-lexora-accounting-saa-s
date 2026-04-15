@@ -272,7 +272,15 @@ export async function GET(request: Request) {
         )).catch(e => console.warn('[pointage] backfill pa_id failed:', e))
       }
 
-      return NextResponse.json({ pointages: enriched, mois, nb: enriched.length })
+      // Migration 135 — exposer pointage_actif au client UI.
+      let pointage_actif: boolean | null = null
+      if (societe_id) {
+        const { data: socData } = await supabase
+          .from('societes').select('pointage_actif').eq('id', societe_id).maybeSingle()
+        pointage_actif = (socData as any)?.pointage_actif === true
+      }
+
+      return NextResponse.json({ pointages: enriched, mois, nb: enriched.length, pointage_actif })
     }
 
     // Daily view
@@ -337,7 +345,15 @@ export async function GET(request: Request) {
       )).catch(e => console.warn('[pointage] backfill pa_id (daily) failed:', e))
     }
 
-    return NextResponse.json({ pointages: enriched, date })
+    // Migration 135 — exposer pointage_actif au client UI (cf. monthly).
+    let pointage_actif_daily: boolean | null = null
+    if (societe_id) {
+      const { data: socDataD } = await supabase
+        .from('societes').select('pointage_actif').eq('id', societe_id).maybeSingle()
+      pointage_actif_daily = (socDataD as any)?.pointage_actif === true
+    }
+
+    return NextResponse.json({ pointages: enriched, date, pointage_actif: pointage_actif_daily })
   } catch (e: unknown) {
     console.error('[pointage GET]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })

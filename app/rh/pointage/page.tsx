@@ -112,6 +112,8 @@ export default function PointagePage() {
   const [societes, setSocietes] = useState<Societe[]>([])
   const [employes, setEmployes] = useState<Employe[]>([])
   const [pointages, setPointages] = useState<Pointage[]>([])
+  // Migration 135 — état du toggle pointage_actif renvoyé par l'API.
+  const [pointageActif, setPointageActif] = useState<boolean | null>(null)
   const [congesToday, setCongesToday] = useState<CongeToday[]>([])
   const [loading, setLoading] = useState(true)
   const [doingPointage, setDoingPointage] = useState(false)
@@ -197,6 +199,7 @@ export default function PointagePage() {
       ])
 
       setPointages(pointageRes.pointages || [])
+      setPointageActif(pointageRes.pointage_actif ?? null)
 
       // Filter congés that cover today
       const today = todayISO()
@@ -517,6 +520,33 @@ export default function PointagePage() {
   // ---------------------------------------------------------------------------
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8 space-y-6 max-w-6xl mx-auto">
+      {/* Migration 135 — bandeau état du toggle pointage_actif (par société) */}
+      {societeId && pointageActif === false && (
+        <div className="rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-900 flex items-start gap-3">
+          <span className="text-lg leading-none">⚠️</span>
+          <div>
+            <p className="font-medium">Le pointage est en mode test.</p>
+            <p className="text-xs text-orange-800 mt-0.5">
+              Les pointages sont enregistrés mais <b>n'impactent pas encore la paie</b>.
+              Activez le pointage obligatoire dans{' '}
+              <a href="/rh/societe" className="underline font-medium">Paramètres société → Pointage</a>{' '}
+              quand vous êtes prêt.
+            </p>
+          </div>
+        </div>
+      )}
+      {societeId && pointageActif === true && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 flex items-start gap-3">
+          <span className="text-lg leading-none">✅</span>
+          <div>
+            <p className="font-medium">Pointage actif — les absences impactent la paie.</p>
+            <p className="text-xs text-emerald-800 mt-0.5">
+              Tout employé sans pointage ni congé approuvé sur un jour ouvré est compté absent au prochain calcul de paie.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* TOP SECTION: Clock + Punch buttons */}
       <Card className="border-0 shadow-lg overflow-hidden">
         <div className="bg-[#0B0F2E] text-white p-6 md:p-10 text-center">
