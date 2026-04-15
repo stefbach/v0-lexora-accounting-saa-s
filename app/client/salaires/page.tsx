@@ -17,6 +17,7 @@ import {
 } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
 import { MonthPicker } from "@/components/ui/MonthPicker"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 function fmt(n: number) {
   return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " MUR"
@@ -401,24 +402,19 @@ export default function ClientSalairesPage() {
   }
 
   return (
-    <div className="flex-1 overflow-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>
-            Gestion de la paie
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Bulletins de paie, calcul et exports MRA
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
+    <ClientPageShell
+      breadcrumbs={[{ label: "Espace client", href: "/client" }, { label: "Salaires" }]}
+      kicker="Comptabilité · Paie"
+      title="Gestion de la paie"
+      subtitle="Bulletins de paie, calcul PAYE · CSG · NSF et exports MRA. Conforme WRA 2019."
+      actions={
+        <>
           {societes.length > 0 && (
             <div className="flex items-center gap-2">
               <Building2 className="h-4 w-4 text-muted-foreground" />
               <Select value={selectedSociete} onValueChange={setSelectedSociete}>
                 <SelectTrigger className="w-[220px] h-9">
-                  <SelectValue placeholder="S&eacute;lectionner une soci&eacute;t&eacute;" />
+                  <SelectValue placeholder="Sélectionner une société" />
                 </SelectTrigger>
                 <SelectContent>
                   {societes.map((s) => (
@@ -429,7 +425,11 @@ export default function ClientSalairesPage() {
             </div>
           )}
           <MonthPicker value={selectedPeriode} onChange={v => { if (v) setSelectedPeriode(v) }} showTout={false} />
-        </div>
+        </>
+      }
+    >
+      <div className="space-y-6">
+        <div className="hidden">{/* placeholder — header moved to shell */}</div>
 
         {/* Brouillon warning */}
         {isMoisBrouillon && (
@@ -914,6 +914,6 @@ export default function ClientSalairesPage() {
           </div>
         </TabsContent>
       </Tabs>
-    </div>
+    </ClientPageShell>
   )
 }

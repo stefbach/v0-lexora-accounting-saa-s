@@ -25,6 +25,7 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs"
 import { Calculator, FileText, Save, Download, Loader2, Upload, CheckCircle, AlertCircle } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -325,18 +326,13 @@ export default function ITForm3Page() {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-5xl mx-auto print:p-2">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2" style={{ color: NAVY }}>
-            <FileText className="w-7 h-7" style={{ color: GOLD }} />
-            IT Form 3 - Return of Income (Company)
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">Mauritius Revenue Authority — Déclaration d&apos;impôt sur le revenu des sociétés</p>
-          <p className="text-xs text-blue-600 mt-1">Pour un exercice juillet-juin, la date limite de soumission est le 31 décembre. Taux d&apos;imposition: 15%.</p>
-        </div>
-        <div className="flex items-center gap-2">
+    <ClientPageShell
+      breadcrumbs={[{ label: "Espace client", href: "/client" }, { label: "IT Form 3" }]}
+      kicker={`Fiscal MRA · Assessment Year ${assessmentYear}`}
+      title="IT Form 3 — Return of Income (Company)"
+      subtitle="Mauritius Revenue Authority — Déclaration d'impôt sur le revenu des sociétés. Exercice juillet-juin, date limite 31 décembre, taux 15%."
+      actions={
+        <>
           {societes.length > 1 && (
             <Select value={selectedSociete} onValueChange={setSelectedSociete}>
               <SelectTrigger className="w-[220px]"><SelectValue placeholder="Société" /></SelectTrigger>
@@ -346,8 +342,10 @@ export default function ITForm3Page() {
           <Badge className="text-sm px-3 py-1" style={{ backgroundColor: GOLD, color: NAVY }}>
             Assessment Year {assessmentYear}
           </Badge>
-        </div>
-      </div>
+        </>
+      }
+    >
+      <div className="space-y-6 max-w-5xl mx-auto print:p-2">
 
       {/* PDF Import Section */}
       <Card className="border-2 border-dashed print:hidden" style={{ borderColor: GOLD }}>
@@ -862,6 +860,7 @@ export default function ITForm3Page() {
           Télécharger PDF
         </Button>
       </div>
-    </div>
+      </div>
+    </ClientPageShell>
   )
 }

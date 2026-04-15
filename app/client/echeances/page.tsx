@@ -17,6 +17,7 @@ import {
   AlertTriangle, Receipt, FileText, RefreshCw, Plus, Clock,
   ArrowUpRight, ArrowDownRight, ExternalLink
 } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -409,14 +410,13 @@ export default function EcheancesPage() {
   const today = new Date().toISOString().slice(0, 10)
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="flex items-center gap-4">
-          <div>
-            <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Echeances</h1>
-            <p className="text-sm text-muted-foreground mt-1">Calendrier des echeances fiscales et factures</p>
-          </div>
+    <ClientPageShell
+      breadcrumbs={[{ label: "Espace client", href: "/client" }, { label: "Échéances" }]}
+      kicker="États financiers"
+      title="Échéances"
+      subtitle="Calendrier des échéances fiscales (MRA) et des factures fournisseurs / clients. Délai standard Maurice : 30 jours (Companies Act 2001)."
+      actions={
+        <>
           {societes.length > 0 && (
             <div className="flex items-center gap-2">
               <Building2 className="h-4 w-4 text-muted-foreground" />
@@ -424,17 +424,19 @@ export default function EcheancesPage() {
                 <SelectTrigger className="w-[220px] h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
-                  {societes.length > 1 && <SelectItem value="all">Toutes les societes</SelectItem>}
+                  {societes.length > 1 && <SelectItem value="all">Toutes les sociétés</SelectItem>}
                 </SelectContent>
               </Select>
             </div>
           )}
-        </div>
-        <Button variant="outline" size="sm" onClick={fetchData} disabled={fetching}>
-          <RefreshCw className={`h-4 w-4 mr-2 ${fetching ? "animate-spin" : ""}`} />
-          Actualiser
-        </Button>
-      </div>
+          <Button variant="outline" size="sm" onClick={fetchData} disabled={fetching}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${fetching ? "animate-spin" : ""}`} />
+            Actualiser
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-6">
 
       {/* Mauritius context */}
       <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-800">
@@ -815,6 +817,7 @@ export default function EcheancesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+      </div>
+    </ClientPageShell>
   )
 }

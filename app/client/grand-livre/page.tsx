@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Loader2, BookOpen, ChevronLeft, ChevronRight, Download, RefreshCw, FileDown } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 function fmtDate(d: string) { return d ? new Date(d).toLocaleDateString("fr-FR") : "—" }
@@ -175,13 +176,13 @@ export default function ClientGrandLivrePage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-[#0B0F2E]">Grand Livre</h1>
-          <p className="text-sm text-gray-500">Ecritures comptables avec solde progressif et lettrage</p>
-        </div>
-        <div className="flex gap-2">
+    <ClientPageShell
+      breadcrumbs={[{ label: "Espace client", href: "/client" }, { label: "Grand Livre" }]}
+      kicker="Comptabilité"
+      title="Grand Livre"
+      subtitle="Écritures comptables avec solde progressif, lettrage et export CSV / PDF."
+      actions={
+        <>
           <Button variant="outline" size="sm" onClick={load} disabled={loading}>
             <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />Actualiser
           </Button>
@@ -191,8 +192,10 @@ export default function ClientGrandLivrePage() {
           <Button variant="outline" size="sm" onClick={exportPDF} disabled={!selectedSociete || pdfLoading}>
             {pdfLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileDown className="w-4 h-4 mr-2" />}PDF
           </Button>
-        </div>
-      </div>
+        </>
+      }
+    >
+      <div className="space-y-6">
 
       {/* Filtres */}
       <Card>
@@ -383,6 +386,7 @@ export default function ClientGrandLivrePage() {
           </Card>
         </>
       )}
-    </div>
+      </div>
+    </ClientPageShell>
   )
 }

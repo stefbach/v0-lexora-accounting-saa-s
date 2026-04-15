@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, Plus, Users, ArrowUpRight, ArrowDownLeft, Wallet, RefreshCw, ChevronLeft } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 function formatDate(d: string) { return d ? new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" }) : "--" }
@@ -146,42 +147,42 @@ export default function CompteCourantPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+    <ClientPageShell
+      breadcrumbs={[
+        { label: "Espace client", href: "/client" },
+        { label: "Comptes Courants" },
+      ]}
+      kicker="Comptabilité"
+      title={selectedCompte ? `Compte Courant — ${selectedCompte.nom}` : "Comptes Courants Associés"}
+      subtitle={
+        selectedCompte
+          ? `${selectedCompte.type === 'associe' ? 'Associé' : 'Collaborateur'} — Compte ${selectedCompte.type === 'associe' ? '455' : '467'}`
+          : "Suivi des avances associés et collaborateurs."
+      }
+      actions={
+        <>
           {selectedCompte && (
             <Button variant="ghost" size="sm" onClick={() => setSelectedCompte(null)}>
-              <ChevronLeft className="w-4 h-4" />
+              <ChevronLeft className="w-4 h-4 mr-1" /> Retour
             </Button>
           )}
-          <div>
-            <h1 className="text-2xl font-bold text-[#0B0F2E]">
-              {selectedCompte ? `Compte Courant — ${selectedCompte.nom}` : "Comptes Courants Associes"}
-            </h1>
-            <p className="text-sm text-gray-500">
-              {selectedCompte
-                ? `${selectedCompte.type === 'associe' ? 'Associe' : 'Collaborateur'} — Compte ${selectedCompte.type === 'associe' ? '455' : '467'}`
-                : "Suivi des avances associes et collaborateurs"}
-            </p>
-          </div>
-        </div>
-        <div className="flex gap-2">
           {societes.length > 0 && (
             <Select value={societeId || ""} onValueChange={setSocieteId}>
-              <SelectTrigger className="w-48"><SelectValue placeholder="Societe..." /></SelectTrigger>
+              <SelectTrigger className="w-48"><SelectValue placeholder="Société..." /></SelectTrigger>
               <SelectContent>{societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent>
             </Select>
           )}
           <Button variant="outline" onClick={load}><RefreshCw className="w-4 h-4 mr-2" />Actualiser</Button>
           <Button onClick={() => setAvanceDialog(true)} className="bg-[#D4AF37] text-[#0B0F2E] hover:bg-[#D4AF37]/90">
-            <ArrowUpRight className="w-4 h-4 mr-2" />Enregistrer une avance
+            <ArrowUpRight className="w-4 h-4 mr-2" />Avance
           </Button>
           <Button onClick={() => setRemboursementDialog(true)} className="bg-[#0B0F2E]">
-            <ArrowDownLeft className="w-4 h-4 mr-2" />Enregistrer un remboursement
+            <ArrowDownLeft className="w-4 h-4 mr-2" />Remboursement
           </Button>
-        </div>
-      </div>
+        </>
+      }
+    >
+      <div className="space-y-6">
 
       {/* KPIs */}
       <div className="grid grid-cols-4 gap-4">
@@ -558,6 +559,7 @@ export default function CompteCourantPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+      </div>
+    </ClientPageShell>
   )
 }
