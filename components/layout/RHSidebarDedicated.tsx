@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { t, getLocale } from "@/lib/i18n"
 import { LanguageSwitcher } from "@/components/LanguageSwitcher"
+import MonEspaceSalarieLink from "@/components/rh/MonEspaceSalarieLink"
 import {
   Clock, Users, Calendar, CreditCard, TrendingUp, Banknote,
   Settings, LogOut, ArrowLeft, Menu, X, CalendarDays, Car, Bot, CheckCircle, Upload, UserMinus, Megaphone, MapPin, Route, Shield, FilePen
@@ -140,6 +141,10 @@ export function RHSidebarDedicated() {
           )
         })}
       </nav>
+      {/* TÂCHE 8 — lien vers /salarie si l'user RH a une fiche employé liée.
+          Le composant détecte tout seul ; rend null sinon. */}
+      <MonEspaceSalarieLink compact />
+
       <div className="p-3 border-t border-white/10 space-y-1">
         <div className="flex justify-center mb-2">
           <LanguageSwitcher />
