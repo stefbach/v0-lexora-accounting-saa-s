@@ -27,6 +27,7 @@ import { DashboardPreview } from "@/components/DashboardPreview"
 import { AnimatedCounter } from "@/components/AnimatedCounter"
 import { LogoMarquee } from "@/components/LogoMarquee"
 import { ScrollProgress } from "@/components/ScrollProgress"
+import { LiveEconomicWidget } from "@/components/LiveEconomicWidget"
 import { BrainOrb3DLazy } from "@/components/3d/BrainOrb3DLoader"
 import { FourPillars } from "@/components/FourPillars"
 import { t, getLocale } from "@/lib/i18n"
@@ -1180,6 +1181,28 @@ export default function HomePage() {
           </div>
         </section>
 
+        {/* LIVE ECONOMIC / HR INDICATORS — dark strip, data pulled from /api/public/economic-snapshot */}
+        <section
+          id="live-data"
+          className="relative overflow-hidden py-16 md:py-20"
+          style={{ backgroundColor: "#0B0F2E" }}
+        >
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0"
+            style={{
+              backgroundImage:
+                "radial-gradient(ellipse 55% 40% at 20% 0%, rgba(65,145,255,0.10) 0%, transparent 70%), radial-gradient(ellipse 45% 40% at 90% 100%, rgba(212,175,55,0.08) 0%, transparent 70%)",
+            }}
+          />
+          <div className="relative mx-auto max-w-7xl px-4 sm:px-6">
+            <LiveEconomicWidget
+              locale={locale === "fr" ? "fr" : "en"}
+              variant="dark"
+            />
+          </div>
+        </section>
+
         {/* AI SECTION — dark navy, live particle field + neural scene hero */}
         <section
           id="ai"
@@ -1860,38 +1883,78 @@ export default function HomePage() {
         </section>
       </main>
 
-      {/* FOOTER — dark
+      {/* FOOTER — dark, now with full legal menu
           §6 contrast: body text #A8AFC7 on #0B0F2E ≈ 8.5:1 (AAA).
           Links get an explicit target (not href="#"). */}
-      <footer style={{ backgroundColor: "#0B0F2E", borderTop: "1px solid #1E2760" }} className="py-12">
+      <footer style={{ backgroundColor: "#0B0F2E", borderTop: "1px solid #1E2760" }} className="py-14">
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
-          <div className="flex flex-col items-center justify-between gap-6 md:flex-row">
-            <div className="flex items-center gap-3">
-              <LexoraLogo href="/" size="md" />
-              <span className="text-xs" style={{ color: "#1E2760" }} aria-hidden="true">|</span>
-              <span className="text-xs" style={{ color: "#A8AFC7" }}>
-                Powered by <strong style={{ color: "#E8EAFC" }}>Digital Data Solutions Ltd</strong>
-              </span>
-            </div>
-            <div className="flex items-center gap-6">
-              <Link href="/auth/login" className="text-sm transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
-                {t('home.login', locale)}
-              </Link>
-              <a
-                href="mailto:contact@lexora.finance"
-                className="text-sm transition-colors hover:text-[#E8EAFC]"
-                style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}
+          {/* Top row: logo + 4 column menu */}
+          <div className="grid gap-10 md:grid-cols-4">
+            <div>
+              <LexoraLogo href="/" size="md" showBaseline />
+              <p
+                className="mt-4 text-sm"
+                style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif", fontWeight: 300, lineHeight: 1.7 }}
               >
-                {t('home.contact', locale)}
-              </a>
+                {locale === "fr"
+                  ? "L'ERP mauricien piloté par l'IA — Compta, Paie, Fiscal, Juridique et Santé salariés."
+                  : "The AI-driven Mauritian ERP — Accounting, Payroll, Tax, Legal and Employee Health."}
+              </p>
+            </div>
+
+            <div>
+              <h3
+                className="mb-4 text-xs font-bold uppercase tracking-widest"
+                style={{ color: "#D4AF37", fontFamily: "'Poppins', sans-serif" }}
+              >
+                {locale === "fr" ? "Plateforme" : "Platform"}
+              </h3>
+              <ul className="space-y-2.5 text-sm" style={{ fontFamily: "'Poppins', sans-serif" }}>
+                <li><a href="#features" style={{ color: "#A8AFC7", textDecoration: "none" }}>{locale === "fr" ? "Modules" : "Modules"}</a></li>
+                <li><a href="#ai" style={{ color: "#A8AFC7", textDecoration: "none" }}>{locale === "fr" ? "Agents IA" : "AI Agents"}</a></li>
+                <li><a href="#offres" style={{ color: "#A8AFC7", textDecoration: "none" }}>{locale === "fr" ? "Offres" : "Offers"}</a></li>
+                <li><Link href="/tarifs" style={{ color: "#A8AFC7", textDecoration: "none" }}>Tarifs</Link></li>
+              </ul>
+            </div>
+
+            <div>
+              <h3
+                className="mb-4 text-xs font-bold uppercase tracking-widest"
+                style={{ color: "#D4AF37", fontFamily: "'Poppins', sans-serif" }}
+              >
+                {locale === "fr" ? "Ressources" : "Resources"}
+              </h3>
+              <ul className="space-y-2.5 text-sm" style={{ fontFamily: "'Poppins', sans-serif" }}>
+                <li><Link href="/auth/login" style={{ color: "#A8AFC7", textDecoration: "none" }}>{t('home.login', locale)}</Link></li>
+                <li><a href="mailto:contact@lexora.finance" style={{ color: "#A8AFC7", textDecoration: "none" }}>Contact</a></li>
+                <li><a href="mailto:dpo@lexora.finance" style={{ color: "#A8AFC7", textDecoration: "none" }}>DPO · RGPD</a></li>
+                <li><a href="mailto:contact@lexora.finance?subject=Programme Expert-Comptable" style={{ color: "#D4AF37", textDecoration: "none", fontWeight: 500 }}>{locale === "fr" ? "Programme Expert-Comptable" : "Accountant Program"}</a></li>
+              </ul>
+            </div>
+
+            <div>
+              <h3
+                className="mb-4 text-xs font-bold uppercase tracking-widest"
+                style={{ color: "#D4AF37", fontFamily: "'Poppins', sans-serif" }}
+              >
+                {locale === "fr" ? "Légal" : "Legal"}
+              </h3>
+              <ul className="space-y-2.5 text-sm" style={{ fontFamily: "'Poppins', sans-serif" }}>
+                <li><Link href="/mentions-legales" style={{ color: "#A8AFC7", textDecoration: "none" }}>{locale === "fr" ? "Mentions légales" : "Legal Notice"}</Link></li>
+                <li><Link href="/cgu" style={{ color: "#A8AFC7", textDecoration: "none" }}>CGU</Link></li>
+                <li><Link href="/cgv" style={{ color: "#A8AFC7", textDecoration: "none" }}>CGV</Link></li>
+                <li><Link href="/protection-donnees" style={{ color: "#A8AFC7", textDecoration: "none" }}>{locale === "fr" ? "Protection des données" : "Data Protection"}</Link></li>
+              </ul>
             </div>
           </div>
-          <div className="mt-8 pt-6 text-center" style={{ borderTop: "1px solid #1E2760" }}>
-            <p className="text-sm" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif", fontWeight: 300 }}>
-              {t('home.footer_tagline', locale)}
-            </p>
-            <p className="mt-2 text-xs" style={{ color: "#A8AFC7" }}>
+
+          {/* Bottom row */}
+          <div className="mt-12 flex flex-col items-center justify-between gap-4 pt-6 md:flex-row" style={{ borderTop: "1px solid #1E2760" }}>
+            <p className="text-xs" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
               &copy; {new Date().getFullYear()} LE<span style={{ color: "#D4AF37" }}>X</span>ORA — Digital Data Solutions Ltd. {locale === 'fr' ? 'Tous droits réservés.' : 'All rights reserved.'}
+            </p>
+            <p className="text-xs" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
+              Bourdet Road, Grand Baie, Maurice · +230 4687378
             </p>
           </div>
         </div>
