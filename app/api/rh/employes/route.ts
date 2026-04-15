@@ -105,7 +105,68 @@ export async function POST(request: Request) {
       sl_pris: 0,
     })
 
-    return NextResponse.json({ employe: data }, { status: 201 })
+    // Sprint 4 TÂCHE 6 — Contrat brouillon auto à l'embauche.
+    // Cherche un template dans contrat_templates qui matche le type_contrat
+    // de l'employé (CDI, CDD, …). Si trouvé → crée un contrats_employes
+    // statut='brouillon'. Si non trouvé → on n'échoue PAS la création de
+    // l'employé, on retourne juste un flag no_template pour que l'UI
+    // affiche le bon toast.
+    //
+    // Le template substitution (remplacer {{nom}}, {{date_debut}} etc.
+    // dans contenu_html) n'est PAS fait ici — c'est le job de
+    // /rh/juridique où le RH peut personnaliser. On copie juste le
+    // contenu brut comme point de départ.
+    let contratStatus: 'created' | 'no_template' | 'failed' = 'no_template'
+    let contratId: string | null = null
+    try {
+      const typeContrat = String(data.type_contrat || body.type_contrat || 'CDI')
+      const { data: template } = await supabase
+        .from('contrat_templates')
+        .select('id, nom, contenu_html, contenu_markdown')
+        .eq('type_contrat', typeContrat)
+        .eq('actif', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (template) {
+        const { data: contrat, error: contratErr } = await supabase
+          .from('contrats_employes')
+          .insert({
+            employe_id: data.id,
+            societe_id: data.societe_id,
+            type_contrat: typeContrat,
+            secteur: 'general',
+            poste: data.poste || null,
+            date_debut: data.date_arrivee,
+            salaire_brut: Number(data.salaire_base) || null,
+            html_content: template.contenu_html || null,
+            statut: 'brouillon',
+            notes: `Généré automatiquement depuis le template « ${template.nom} » à la création de l'employé. À personnaliser via /rh/juridique.`,
+            created_by: user.id,
+          })
+          .select('id')
+          .maybeSingle()
+        if (contratErr) {
+          console.warn('[employes POST] contrat brouillon échec:', contratErr.message)
+          contratStatus = 'failed'
+        } else if (contrat) {
+          contratStatus = 'created'
+          contratId = contrat.id
+        }
+      }
+    } catch (e: any) {
+      // Best-effort — on ne bloque jamais la création d'employé pour un
+      // problème de contrat
+      console.warn('[employes POST] contrat brouillon exception:', e?.message || e)
+      contratStatus = 'failed'
+    }
+
+    return NextResponse.json({
+      employe: data,
+      contrat_status: contratStatus, // 'created' | 'no_template' | 'failed'
+      contrat_id: contratId,
+    }, { status: 201 })
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
