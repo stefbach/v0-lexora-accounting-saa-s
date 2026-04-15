@@ -19,20 +19,29 @@ axim-ai-mu/
 ├── README.md                     ← ce fichier
 ├── middleware.ts                 ← refresh session Supabase à chaque request
 ├── next.config.mjs
-├── package.json
+├── package.json                  ← Next 14 + three.js + R3F + framer-motion
 ├── postcss.config.mjs
-├── tailwind.config.ts
+├── tailwind.config.ts            ← palette AXON + keyframes custom
 ├── tsconfig.json
 ├── vercel.json
 ├── app/
 │   ├── globals.css
-│   ├── layout.tsx
-│   ├── page.tsx                  ← landing
+│   ├── layout.tsx                ← fonts Syne+Inter+JetBrains, OG metadata
+│   ├── page.tsx                  ← landing AXON AI modernisée (3D+video)
 │   ├── login/page.tsx            ← formulaire email + password / signup
 │   ├── auth/callback/route.ts    ← OAuth / email-confirm callback
 │   ├── auth/sign-out/route.ts    ← POST /auth/sign-out
-│   └── protected/page.tsx        ← exemple page protégée (redirige si anon)
-├── components/ui/button.tsx
+│   └── protected/page.tsx        ← exemple page protégée
+├── components/
+│   ├── landing/
+│   │   ├── Nav.tsx               ← nav glassmorphism sticky
+│   │   ├── NeuralHero.tsx        ← hero + 3D neural (client, dynamic)
+│   │   ├── Reveal.tsx            ← wrapper Framer Motion on-scroll
+│   │   └── Sections.tsx          ← Promise/Agents/Proof/Process/CTA/Footer
+│   ├── three/
+│   │   ├── NeuralField3D.tsx     ← @react-three/fiber — réseau 3D + bloom
+│   │   └── VideoBackground.tsx   ← bg vidéo/gradient animé + grille + noise
+│   └── ui/button.tsx
 ├── hooks/use-user.ts
 ├── lib/
 │   ├── utils.ts                  ← cn() helper
@@ -44,6 +53,22 @@ axim-ai-mu/
 └── supabase/migrations/
     └── 0001_initial_schema.sql   ← profiles + trigger + RLS
 ```
+
+### Landing AXON AI — stack visuelle
+
+- **3D** : `@react-three/fiber` + `@react-three/drei` + `three.js` 0.169
+  - `components/three/NeuralField3D.tsx` — sphère de 120 nœuds en Fibonacci,
+    arêtes tressées, signaux additifs en déplacement, bloom post-processing.
+- **Background vidéo** : `components/three/VideoBackground.tsx` — 3 couches
+  (orbes flottants, grille avec mask radial, noise SVG fractal). Slot `<video>`
+  prêt à recevoir `/public/media/neural-loop.mp4` en uncomment.
+- **Animations** : `framer-motion` pour reveals on-scroll + transitions.
+- **Glassmorphism** : cartes `bg-white/[0.02]` + `backdrop-blur-xl` partout.
+- **Typo** : Syne (display), Inter (body), JetBrains Mono (code/tags).
+
+> Pour ajouter une vraie vidéo de fond, déposer `neural-loop.mp4` (≤ 2 Mo,
+> 10s loop) dans `public/media/` et décommenter le bloc `<video>` dans
+> `VideoBackground.tsx`.
 
 ---
 
