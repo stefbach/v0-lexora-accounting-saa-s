@@ -156,7 +156,10 @@ export async function POST(request: Request) {
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Erreur CSG'
     const stack = e instanceof Error ? e.stack?.split('\n').slice(0, 3).join(' | ') : ''
+    // Sécurité : stack côté serveur uniquement (pas dans la réponse HTTP)
     console.error('[csg-mra] CRASH:', msg, stack)
-    return NextResponse.json({ error: msg, debug_stack: stack }, { status: 500 })
+    return NextResponse.json({
+      error: 'Erreur interne lors de la génération CSG/NSF. Vérifiez les logs serveur.',
+    }, { status: 500 })
   }
 }

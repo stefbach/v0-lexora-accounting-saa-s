@@ -198,7 +198,11 @@ export default function ExportPaiePage() {
       const text = await res.text()
       try { data = JSON.parse(text) } catch { throw new Error(`Reponse non-JSON (${res.status}): ${text.slice(0, 300)}`) }
       if (!res.ok || data.error) {
-        throw new Error(`[${res.status}] ${data.error || data.message || '?'}${data.debug_stack ? ' — STACK: ' + data.debug_stack : ''}`)
+        // Sécurité — on log la stack côté console (DevTools) mais on ne
+        // l'affiche JAMAIS à l'utilisateur final. Message UX neutre,
+        // détails techniques accessibles aux dev seulement.
+        if (data.debug_stack) console.error('[exports/virement] server stack:', data.debug_stack)
+        throw new Error(`Une erreur est survenue lors de la génération du virement. Contactez l'administrateur.`)
       }
       // Response can have fichiers array or single content
       if (data.fichiers && Array.isArray(data.fichiers)) {
@@ -282,7 +286,10 @@ export default function ExportPaiePage() {
       let data: any
       const textCSG = await res.text()
       try { data = JSON.parse(textCSG) } catch { throw new Error(`Reponse non-JSON CSG (${res.status}): ${textCSG.slice(0, 300)}`) }
-      if (!res.ok || data.error) throw new Error(`[CSG ${res.status}] ${data.error || '?'}${data.debug_stack ? ' — STACK: ' + data.debug_stack : ''}`)
+      if (!res.ok || data.error) {
+        if (data.debug_stack) console.error('[exports/csg-mra] server stack:', data.debug_stack)
+        throw new Error(`Une erreur est survenue lors de la génération CSG/NSF. Contactez l'administrateur.`)
+      }
 
       // Download recap + detail CSVs
       if (data.recap_csv) downloadFile(data.recap_csv, data.filename_recap || `CSG_NSF_Recap_${periode}.csv`)

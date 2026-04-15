@@ -121,7 +121,8 @@ export async function POST(request: Request) {
         allBulletins = anyStatus || []
       }
     } catch (dbErr: any) {
-      return NextResponse.json({ error: `Erreur DB bulletins: ${dbErr.message}`, debug_stack: dbErr.stack?.split('\n').slice(0,3).join(' | ') }, { status: 500 })
+      console.error('[virement] DB bulletins error:', dbErr.message, dbErr.stack?.split('\n').slice(0, 3).join(' | '))
+      return NextResponse.json({ error: 'Erreur DB lors de la récupération des bulletins.' }, { status: 500 })
     }
 
     // Filter out excluded employees (espèces, individuel)
@@ -344,10 +345,12 @@ export async function POST(request: Request) {
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Erreur génération virement'
     const stack = e instanceof Error ? e.stack?.split('\n').slice(0, 3).join(' | ') : ''
+    // Sécurité : la stack reste côté serveur (Vercel logs), JAMAIS exposée
+    // dans la réponse HTTP — fuites d'info évitées (chemins fichiers,
+    // versions de libs, etc.).
     console.error('[virement] CRASH:', msg, stack)
     return NextResponse.json({
-      error: msg,
-      debug_stack: stack,
+      error: 'Erreur interne lors de la génération du virement. Vérifiez les logs serveur.',
     }, { status: 500 })
   }
 }
