@@ -3058,11 +3058,19 @@ export async function POST(request: Request) {
       console.log(`[classer_transaction] societe=${societe_id} tx=${transaction_id} classification=${classification}`)
 
       const { data: releve, error: relErr } = await supabase
-        .from('releves_bancaires').select('id, transactions_json').eq('id', releve_id).single()
+        .from('releves_bancaires').select('id, transactions_json, compte_bancaire_id').eq('id', releve_id).single()
       if (relErr || !releve) {
         console.error('[classer_transaction] relevé introuvable:', relErr?.message)
         return NextResponse.json({ error: `Relevé non trouvé: ${relErr?.message}` }, { status: 404 })
       }
+
+      // Recuperer la devise du compte bancaire + taux de change pour conversion MUR
+      const { data: compteBancaire } = await supabase
+        .from('comptes_bancaires').select('devise').eq('id', releve.compte_bancaire_id).maybeSingle()
+      const txDevise = (compteBancaire?.devise || 'MUR').toUpperCase()
+      const rates: Record<string, number> = await getTauxChange().catch(() => ({ MUR: 1, EUR: 46.50, USD: 44.80, GBP: 54.20 }))
+      const tauxDevise = rates[txDevise] || 1
+      console.log(`[classer_transaction] devise=${txDevise} taux=${tauxDevise}`)
 
       const txIdx = parseInt(transaction_id.split('-').pop() || '0')
       const txs = [...(releve.transactions_json || [])]
@@ -3120,6 +3128,9 @@ export async function POST(request: Request) {
         const tx = txs[txIdx]
         const txAmt = Math.max(Number(tx.debit) || 0, Number(tx.credit) || 0)
         const isOut = (Number(tx.debit) || 0) > 0
+        // Conversion en MUR : si la tx est en EUR/USD/GBP, on convertit via le taux
+        const txAmtMUR = Math.round(txAmt * tauxDevise * 100) / 100
+        const deviseLabel = txDevise === 'MUR' ? '' : ` [${txDevise} @ ${tauxDevise}]`
         // ref_folio determinISTE pour cette tx specifique (releve_id complet + txIdx)
         // Permet la detection idempotente du doublon = re-click sur la meme tx.
         const refFolio = `CL-${releve_id}-${txIdx}`
@@ -3127,15 +3138,15 @@ export async function POST(request: Request) {
           {
             dossier_id: dossier.id, societe_id, date_ecriture: tx.date || new Date().toISOString().split('T')[0],
             journal: 'BNQ', numero_compte: compte,
-            libelle: `${classification} — ${(tx.tiers_detecte || tx.libelle || '').substring(0, 60)}`,
-            debit_mur: isOut ? txAmt : 0, credit_mur: isOut ? 0 : txAmt,
+            libelle: `${classification} — ${(tx.tiers_detecte || tx.libelle || '').substring(0, 60)}${deviseLabel}`,
+            debit_mur: isOut ? txAmtMUR : 0, credit_mur: isOut ? 0 : txAmtMUR,
             lettre: code, ref_folio: refFolio,
           },
           {
             dossier_id: dossier.id, societe_id, date_ecriture: tx.date || new Date().toISOString().split('T')[0],
             journal: 'BNQ', numero_compte: '512',
-            libelle: `Banque — ${(tx.tiers_detecte || '').substring(0, 25)}`,
-            debit_mur: isOut ? 0 : txAmt, credit_mur: isOut ? txAmt : 0,
+            libelle: `Banque${deviseLabel} — ${(tx.tiers_detecte || '').substring(0, 25)}`,
+            debit_mur: isOut ? 0 : txAmtMUR, credit_mur: isOut ? txAmtMUR : 0,
             lettre: code, ref_folio: refFolio,
           },
         ]
@@ -3210,13 +3221,15 @@ export async function POST(request: Request) {
             }
 
             if (compteId) {
-              const montant = Math.max(Number(tx.debit) || 0, Number(tx.credit) || 0)
+              const montantOrig = Math.max(Number(tx.debit) || 0, Number(tx.credit) || 0)
+              // Conversion en MUR : le solde du CCA doit etre coherent en MUR
+              // meme si la tx est en EUR/USD/GBP. On convertit avec le taux.
+              const montant = Math.round(montantOrig * tauxDevise * 100) / 100
               const isOut = (Number(tx.debit) || 0) > 0
-              // Si sortie banque vers associe = avance de la societe a l associe (solde devient negatif)
-              // Si entree banque depuis associe = apport de l associe a la societe (solde devient positif)
               const type = isOut ? 'avance' : 'apport'
               const deltaSolde = isOut ? -montant : montant
-              const description = `${isOut ? 'Avance societe a associe' : 'Apport associe a societe'} — ${(tx.libelle || '').substring(0, 60)}`
+              const conversionLabel = txDevise === 'MUR' ? '' : ` (${montantOrig.toFixed(2)} ${txDevise} @ ${tauxDevise})`
+              const description = `${isOut ? 'Avance societe a associe' : 'Apport associe a societe'}${conversionLabel} — ${(tx.libelle || '').substring(0, 60)}`
 
               const { error: mvtErr } = await supabase
                 .from('mouvements_compte_courant')
@@ -3321,11 +3334,22 @@ export async function POST(request: Request) {
           } else {
             const { data: allReleves } = await supabase
               .from('releves_bancaires')
-              .select('id, transactions_json')
+              .select('id, transactions_json, compte_bancaire_id')
               .eq('societe_id', societe_id)
+
+            // Map relev_id -> devise du compte bancaire pour conversion MUR par tx
+            const cbIds = Array.from(new Set((allReleves || []).map((r: any) => r.compte_bancaire_id).filter(Boolean)))
+            const { data: cbData } = cbIds.length > 0
+              ? await supabase.from('comptes_bancaires').select('id, devise').in('id', cbIds)
+              : { data: [] }
+            const deviseByCb: Record<string, string> = {}
+            for (const c of cbData || []) deviseByCb[(c as any).id] = ((c as any).devise || 'MUR').toUpperCase()
+
             for (const rel of allReleves || []) {
               const relTxs = [...(rel.transactions_json || [])]
               let changed = false
+              const relDevise = deviseByCb[(rel as any).compte_bancaire_id] || 'MUR'
+              const relTauxDevise = rates[relDevise] || 1
               for (let i = 0; i < relTxs.length; i++) {
                 const t = relTxs[i]
                 if (rel.id === releve_id && i === txIdx) continue
@@ -3350,16 +3374,19 @@ export async function POST(request: Request) {
                 changed = true
                 nbPropagated++
                 if (dossier) {
-                  const txAmt = Math.max(Number(t.debit) || 0, Number(t.credit) || 0)
+                  const txAmtOrig = Math.max(Number(t.debit) || 0, Number(t.credit) || 0)
+                  // Conversion en MUR par tx (devise du compte bancaire du releve)
+                  const txAmt = Math.round(txAmtOrig * relTauxDevise * 100) / 100
                   const isOut = (Number(t.debit) || 0) > 0
                   const propRef = `CL-${rel.id}-${i}`
+                  const devLbl = relDevise === 'MUR' ? '' : ` [${relDevise} @ ${relTauxDevise}]`
                   try {
                     const { error: insErr } = await supabase.from('ecritures_comptables_v2').insert([
                       {
                         dossier_id: dossier.id, societe_id,
                         date_ecriture: t.date || new Date().toISOString().split('T')[0],
                         journal: 'BNQ', numero_compte: compte,
-                        libelle: `${classification} — ${(rawTxTiers || t.libelle || '').substring(0, 60)}`,
+                        libelle: `${classification} — ${(rawTxTiers || t.libelle || '').substring(0, 60)}${devLbl}`,
                         debit_mur: isOut ? txAmt : 0, credit_mur: isOut ? 0 : txAmt,
                         lettre: propCode, ref_folio: propRef,
                       },
@@ -3367,7 +3394,7 @@ export async function POST(request: Request) {
                         dossier_id: dossier.id, societe_id,
                         date_ecriture: t.date || new Date().toISOString().split('T')[0],
                         journal: 'BNQ', numero_compte: '512',
-                        libelle: `Banque — ${(rawTxTiers || '').substring(0, 25)}`,
+                        libelle: `Banque${devLbl} — ${(rawTxTiers || '').substring(0, 25)}`,
                         debit_mur: isOut ? 0 : txAmt, credit_mur: isOut ? txAmt : 0,
                         lettre: propCode, ref_folio: propRef,
                       },
@@ -3406,7 +3433,7 @@ export async function POST(request: Request) {
                           date_mouvement: t.date || new Date().toISOString().split('T')[0],
                           type: isOut ? 'avance' : 'apport',
                           montant: txAmt,
-                          description: `Propage (${classification}) — ${(t.libelle || '').substring(0, 60)}`,
+                          description: `Propage (${classification}) ${relDevise !== 'MUR' ? `[${txAmtOrig.toFixed(2)} ${relDevise} @ ${relTauxDevise}]` : ''} — ${(t.libelle || '').substring(0, 60)}`,
                         })
                         await supabase.from('comptes_courants_associes')
                           .update({ solde: solde + delta, updated_at: new Date().toISOString() })
