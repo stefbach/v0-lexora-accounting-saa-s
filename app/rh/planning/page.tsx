@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Loader2, Calendar, ChevronLeft, ChevronRight, Send, Wand2, Users, Check, Plus, Trash2, Clock, Coffee, AlertTriangle, FileDown, Copy, Eye, Shield, CheckCircle2, XCircle } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { toast } from "sonner"
 import Link from "next/link"
 
@@ -747,7 +748,8 @@ export default function PlanningPage() {
   // ─── Render ─────────────────────────────────────────────────────
 
   return (
-    <div className="p-4 md:p-6 space-y-4">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -1345,6 +1347,7 @@ export default function PlanningPage() {
         </DialogContent>
       </Dialog>
     </div>
+    </ClientPageShell>
   )
 }
 

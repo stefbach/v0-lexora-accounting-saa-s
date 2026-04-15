@@ -9,6 +9,7 @@ import {
   MessageSquare, Upload, CalendarDays, Briefcase, Bell,
   AlertCircle, FileWarning, UserX, ChevronRight
 } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from "recharts"
 import Link from "next/link"
@@ -215,8 +216,13 @@ export default function RHDashboard() {
   }, [societe, periode])
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: PAGE_BG }}>
-      <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
+    <ClientPageShell
+      breadcrumbs={[{ label: "RH · Paie", href: "/rh" }, { label: "Tableau de bord" }]}
+      kicker="RH & Paie"
+      title="Tableau de bord RH"
+      subtitle="Vue consolidée de votre équipe, des absences, des bulletins et des échéances MRA. Conforme WRA 2019."
+    >
+      <div className="space-y-6 max-w-[1400px] mx-auto">
         {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
@@ -260,7 +266,7 @@ export default function RHDashboard() {
         {tab === "paie" && <PaieTab />}
         {tab === "parametres" && <ParametresTab />}
       </div>
-    </div>
+    </ClientPageShell>
   )
 }
 

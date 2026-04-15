@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Loader2, UserMinus, Calculator, CheckCircle, AlertTriangle, Clock, Banknote } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 function fmt(n: number) {
   return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "MUR", maximumFractionDigits: 0 }).format(n)
@@ -492,7 +493,8 @@ export default function DepartPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-[#0B0F2E]">Gestion des départs</h1>
         <p className="text-sm text-gray-500">Calculer le solde de tout compte et enregistrer les départs</p>
@@ -530,5 +532,6 @@ export default function DepartPage() {
       {/* Recent departures */}
       <RecentDepartures refreshKey={refreshKey} />
     </div>
+    </ClientPageShell>
   )
 }

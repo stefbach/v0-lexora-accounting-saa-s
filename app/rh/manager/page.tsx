@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Users, Clock, Calendar, AlertTriangle, CheckCircle, UserX, Coffee, TrendingUp, Loader2 } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -97,7 +98,8 @@ export default function ManagerDashboard() {
   for (const b of filteredBalances) balanceMap.set(b.employe_id, b)
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Tableau de bord Manager</h1>
@@ -302,5 +304,6 @@ export default function ManagerDashboard() {
         </>
       )}
     </div>
+    </ClientPageShell>
   )
 }

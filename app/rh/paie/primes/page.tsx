@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Loader2, Plus, CheckCircle, Pencil, Trash2, Upload, FileSpreadsheet, AlertTriangle, X } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import * as XLSX from "xlsx"
 import { Switch } from "@/components/ui/switch"
 
@@ -307,7 +308,8 @@ export default function PrimesPage() {
   const primeSelectionnee = catalogue.find(p => p.id === saisieForm.prime_id)
 
   return (
-    <div className="p-6 space-y-5">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[#0B0F2E]">Primes & Bonus</h1>
@@ -849,5 +851,6 @@ export default function PrimesPage() {
         </DialogContent>
       </Dialog>
     </div>
+    </ClientPageShell>
   )
 }

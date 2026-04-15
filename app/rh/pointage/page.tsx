@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Loader2, Clock, LogIn, LogOut, Users, Calendar, ChevronLeft, ChevronRight, X, AlertTriangle, CheckCircle, Coffee } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -516,7 +517,8 @@ export default function PointagePage() {
   // Render
   // ---------------------------------------------------------------------------
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-8 space-y-6 max-w-6xl mx-auto">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6 max-w-6xl mx-auto">
       {/* TOP SECTION: Clock + Punch buttons */}
       <Card className="border-0 shadow-lg overflow-hidden">
         <div className="bg-[#0B0F2E] text-white p-6 md:p-10 text-center">
@@ -960,5 +962,6 @@ export default function PointagePage() {
         Actualisation automatique toutes les 30 secondes
       </p>
     </div>
+    </ClientPageShell>
   )
 }

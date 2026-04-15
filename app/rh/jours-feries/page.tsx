@@ -13,6 +13,7 @@ import {
   Loader2, Calendar, Star, Plus, Trash2, Info, RefreshCw,
   ChevronLeft, ChevronRight, Sun, Moon, Sparkles, Clock, MapPin
 } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 // ─── Colors ───
 const NAVY = "#0B0F2E"
@@ -545,7 +546,8 @@ export default function JoursFeriesPage() {
   }, [allHolidays])
 
   return (
-    <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-6">
+    <ClientPageShell hideHero disableParticles>
+    <div className="max-w-6xl mx-auto space-y-6">
       {/* ─── Header ─── */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
@@ -844,5 +846,6 @@ export default function JoursFeriesPage() {
         </DialogContent>
       </Dialog>
     </div>
+    </ClientPageShell>
   )
 }

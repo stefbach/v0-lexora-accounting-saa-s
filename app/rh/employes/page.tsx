@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Search, Plus, Loader2, Users, Upload, Download, FileSpreadsheet, Pencil, ExternalLink, UserPlus, Key, User, Briefcase, Banknote, Building2, Trash2, AlertTriangle } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { BANQUES_MAURITIUS } from "@/lib/rh/banques-mauritius"
 
 /* ── Section card for grouped form fields ── */
@@ -389,7 +390,8 @@ export default function EmployesPage() {
   }
 
   return (
-    <div className="p-4 sm:p-6 space-y-5">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-5">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -696,5 +698,6 @@ export default function EmployesPage() {
         </DialogContent>
       </Dialog>
     </div>
+    </ClientPageShell>
   )
 }

@@ -18,6 +18,7 @@ import {
   Upload, ChevronLeft, ChevronRight, Eye, Pencil, Save, X,
   Megaphone
 } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { createClient } from "@/lib/supabase/client"
 
 // ─── Constants ───────────────────────────────────────────────────
@@ -915,7 +916,8 @@ export default function CongesPage() {
 
   // ─── Render ────────────────────────────────────────────────────
   return (
-    <div className="p-6 space-y-5">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -2010,5 +2012,6 @@ export default function CongesPage() {
         </div>
       )}
     </div>
+    </ClientPageShell>
   )
 }

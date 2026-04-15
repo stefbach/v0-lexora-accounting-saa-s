@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Loader2, Save, Info, RefreshCw, CheckCircle2, AlertTriangle } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 const NAVY = "#0B0F2E"
 
@@ -249,7 +250,8 @@ export default function ParametresPaiePage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -584,5 +586,6 @@ export default function ParametresPaiePage() {
         </div>
       )}
     </div>
+    </ClientPageShell>
   )
 }

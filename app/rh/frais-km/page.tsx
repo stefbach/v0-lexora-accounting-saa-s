@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Loader2, Car, Plus, CheckCircle, Edit2, Save, DollarSign } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -160,10 +161,11 @@ export default function FraisKmPage() {
   const nbApprouves = frais.filter(f => f.statut === "approuve").length
 
   return (
-    <div className="p-4 md:p-6 space-y-4">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-4">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Frais Kilometriques</h1>
+          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Frais Kilométriques</h1>
           <p className="text-gray-500 text-sm">Gestion des indemnites kilometriques des employes</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -382,5 +384,6 @@ export default function FraisKmPage() {
         </DialogContent>
       </Dialog>
     </div>
+    </ClientPageShell>
   )
 }
