@@ -14,6 +14,7 @@ import {
 } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
 import Link from "next/link"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -466,7 +467,8 @@ export default function AnnualReturnPage() {
   const years = Array.from({ length: 5 }, (_, i) => currentYear - i)
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto print:p-2">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6 max-w-7xl mx-auto print:p-2">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 print:hidden">
         <div>
@@ -1220,5 +1222,6 @@ export default function AnnualReturnPage() {
         </Tabs>
       )}
     </div>
+    </ClientPageShell>
   )
 }

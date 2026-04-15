@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { User, Building2, Bell, Shield, Loader2 } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useProfile } from "@/hooks/use-profile"
 
 interface Societe {
@@ -99,16 +100,13 @@ export default function ProfilPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>
-          Mon Profil
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          G&eacute;rez vos informations personnelles et vos pr&eacute;f&eacute;rences.
-        </p>
-      </div>
-
+    <ClientPageShell
+      breadcrumbs={[{ label: "Espace client", href: "/client" }, { label: "Mon Profil" }]}
+      kicker="Mon compte"
+      title="Mon Profil"
+      subtitle="Gérez vos informations personnelles, votre langue et vos préférences de notification."
+    >
+      <div className="space-y-6">
       {/* Informations personnelles */}
       <Card>
         <CardHeader>
@@ -289,6 +287,7 @@ export default function ProfilPage() {
           </div>
         </CardContent>
       </Card>
-    </div>
+      </div>
+    </ClientPageShell>
   )
 }

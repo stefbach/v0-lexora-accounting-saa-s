@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useProfile } from "@/hooks/use-profile"
 import { Loader2, Building2, Download, Calendar, Upload, FileText, CheckCircle, AlertCircle } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
@@ -470,7 +471,8 @@ export default function BilanPage() {
   const periodLabel = viewMode === "mensuel" ? `Pour le mois de ${periodEnd}` : `For the year ended ${periodEnd}`
 
   return (
-    <div className="p-6 space-y-6 max-w-[900px] mx-auto">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6 max-w-[900px] mx-auto">
       <style jsx global>{`
         @media print {
           .no-print { display: none !important; }
@@ -785,5 +787,6 @@ export default function BilanPage() {
         </div>
       </div>
     </div>
+    </ClientPageShell>
   )
 }

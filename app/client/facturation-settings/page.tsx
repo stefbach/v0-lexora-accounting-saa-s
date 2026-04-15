@@ -15,6 +15,7 @@ import {
   Building2, Users, Package, Layout, Save, Plus, Pencil, Trash2, Check, X, Eye, Palette,
   Shield, Wifi, WifiOff, Info, Loader2
 } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 const ACCENT_COLORS = [
   { name: "Navy", hex: "#0B0F2E" }, { name: "Gold", hex: "#D4AF37" },
@@ -218,15 +219,19 @@ export default function FacturationSettingsPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-[#0B0F2E]">Parametres de Facturation</h1>
-          <p className="text-sm text-gray-500">Configuration MRA pour vos factures</p>
-        </div>
+    <ClientPageShell
+      breadcrumbs={[{ label: "Espace client", href: "/client" }, { label: "Paramètres Facturation" }]}
+      kicker="Facturation"
+      title="Paramètres de Facturation"
+      subtitle="Configuration MRA (ERN, IRN, TVA, devise par défaut) pour toutes vos factures émises."
+      actions={
         <Button onClick={saveAll} className="bg-[#0B0F2E] hover:bg-[#2a3d6b]">
-          {saved ? <><Check className="w-4 h-4 mr-2" />Sauvegarde !</> : <><Save className="w-4 h-4 mr-2" />Sauvegarder tout</>}
+          {saved ? <><Check className="w-4 h-4 mr-2" />Sauvegardé !</> : <><Save className="w-4 h-4 mr-2" />Sauvegarder tout</>}
         </Button>
+      }
+    >
+      <div className="space-y-6">
+        <div className="hidden">{/* header moved to shell */}
       </div>
 
       <Tabs defaultValue="entreprise" className="space-y-4">
@@ -784,6 +789,7 @@ export default function FacturationSettingsPage() {
           </div>
         </TabsContent>
       </Tabs>
-    </div>
+      </div>
+    </ClientPageShell>
   )
 }

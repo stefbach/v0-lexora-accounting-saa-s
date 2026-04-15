@@ -32,6 +32,7 @@ import {
 } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
 import Link from "next/link"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import * as XLSX from "xlsx"
 import { MonthPicker } from "@/components/ui/MonthPicker"
@@ -383,7 +384,8 @@ export default function TVAPage() {
   ]
 
   return (
-    <div className="p-6 space-y-6">
+    <ClientPageShell hideHero disableParticles>
+      <div className="space-y-6">
       <style jsx global>{`
         @media print {
           .no-print { display: none !important; }
@@ -898,6 +900,7 @@ export default function TVAPage() {
           </CardContent>
         </Card>
       )}
-    </div>
+      </div>
+    </ClientPageShell>
   )
 }

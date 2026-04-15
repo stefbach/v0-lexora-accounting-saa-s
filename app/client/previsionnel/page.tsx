@@ -16,6 +16,7 @@ import {
   Landmark, CreditCard, PiggyBank, Wallet
 } from "lucide-react"
 import { MonthPicker } from "@/components/ui/MonthPicker"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -389,13 +390,14 @@ setSaveStatus(prev => ({ ...prev, [cr.id]: 'saving' }))
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-center gap-4">
           <div>
-            <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Mon Previsionnel</h1>
-            <p className="text-sm text-muted-foreground mt-1">Budget, tresorerie, BFR et investissements</p>
+            <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Mon Prévisionnel</h1>
+            <p className="text-sm text-muted-foreground mt-1">Budget, trésorerie, BFR et investissements</p>
           </div>
           {societes.length > 0 && (
             <div className="flex items-center gap-2">
@@ -903,5 +905,6 @@ setSaveStatus(prev => ({ ...prev, [cr.id]: 'saving' }))
         </TabsContent>
       </Tabs>
     </div>
+    </ClientPageShell>
   )
 }

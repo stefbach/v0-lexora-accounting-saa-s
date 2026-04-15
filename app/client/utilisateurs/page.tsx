@@ -14,6 +14,7 @@ import {
   ChevronUp, ChevronRight, Calendar, ArrowUpDown, X, Check,
   FileText, Calculator, Receipt, Scale, BarChart3, UserCheck
 } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -422,7 +423,8 @@ export default function UtilisateursPage() {
   // Render
   // ---------------------------------------------------------------------------
   return (
-    <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6 max-w-[1400px] mx-auto">
       {/* ---- HEADER ---- */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -431,7 +433,7 @@ export default function UtilisateursPage() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-[#0B0F2E]">Gestion des utilisateurs</h1>
-            <p className="text-sm text-gray-500">{users.length} compte{users.length !== 1 ? "s" : ""} enregistre{users.length !== 1 ? "s" : ""}</p>
+            <p className="text-sm text-gray-500">{users.length} compte{users.length !== 1 ? "s" : ""} enregistré{users.length !== 1 ? "s" : ""}</p>
           </div>
         </div>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
@@ -863,6 +865,7 @@ export default function UtilisateursPage() {
         </DialogContent>
       </Dialog>
     </div>
+    </ClientPageShell>
   )
 }
 

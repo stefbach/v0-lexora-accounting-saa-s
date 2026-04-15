@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Loader2, RefreshCw, Link2, Unlink, Zap, CheckCircle2, AlertCircle, Users, Search, ChevronDown, ChevronUp, Sparkles, Send, Bot, Wrench, X, Target, BrainCircuit, BarChart3 } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { Progress } from "@/components/ui/progress"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
@@ -1073,7 +1074,8 @@ Voulez-vous vraiment continuer ?`
   if (loading) return <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-[#0B0F2E]" /></div>
 
   return (
-    <div className="p-6 space-y-6">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6">
       {/* Toast notification */}
       {toast && (
         <div className={`fixed top-4 right-4 z-[100] flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg text-sm font-medium transition-all ${toast.type === 'error' ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white'}`}>
@@ -2914,5 +2916,6 @@ Voulez-vous vraiment continuer ?`
       )}
 
     </div>
+    </ClientPageShell>
   )
 }
