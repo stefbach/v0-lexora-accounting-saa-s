@@ -66,6 +66,7 @@ const TIERS: Tier[] = [
     features: {
       fr: [
         "Compta + Paie complètes",
+        "TIBOK Santé salariés · inclus",
         "Jusqu'à 50 transactions / mois",
         "OCR IA illimité",
         "e-MRA : EDF5 basique",
@@ -73,6 +74,7 @@ const TIERS: Tier[] = [
       ],
       en: [
         "Full accounting + payroll",
+        "TIBOK employee health · included",
         "Up to 50 transactions / month",
         "Unlimited AI OCR",
         "e-MRA: basic EDF5",
@@ -93,6 +95,7 @@ const TIERS: Tier[] = [
     features: {
       fr: [
         "Tout Solo, +",
+        "TIBOK Santé · téléconsultation illimitée",
         "Jusqu'à 200 transactions / mois",
         "e-MRA : EDF5 + VAT auto",
         "Rapprochement bancaire auto",
@@ -100,6 +103,7 @@ const TIERS: Tier[] = [
       ],
       en: [
         "Everything in Solo, plus",
+        "TIBOK Health · unlimited telemedicine",
         "Up to 200 transactions / month",
         "e-MRA: EDF5 + auto VAT",
         "Auto bank reconciliation",
@@ -121,6 +125,7 @@ const TIERS: Tier[] = [
     features: {
       fr: [
         "Tout Business, +",
+        "TIBOK Santé · toute l'équipe couverte",
         "Jusqu'à 500 transactions / mois",
         "e-MRA : toutes déclarations",
         "Multi-devises (EUR, USD, GBP)",
@@ -129,6 +134,7 @@ const TIERS: Tier[] = [
       ],
       en: [
         "Everything in Business, plus",
+        "TIBOK Health · whole team covered",
         "Up to 500 transactions / month",
         "e-MRA: all filings",
         "Multi-currency (EUR, USD, GBP)",
@@ -150,6 +156,7 @@ const TIERS: Tier[] = [
     features: {
       fr: [
         "Tout PME, +",
+        "TIBOK Santé · suivi médecin du travail",
         "Transactions illimitées",
         "Audit trail e-MRA complet",
         "API & intégrations sur mesure",
@@ -158,6 +165,7 @@ const TIERS: Tier[] = [
       ],
       en: [
         "Everything in PME, plus",
+        "TIBOK Health · occupational doctor",
         "Unlimited transactions",
         "Full e-MRA audit trail",
         "Custom API & integrations",
@@ -232,8 +240,8 @@ export function PricingShowcase({ locale }: { locale: "fr" | "en" }) {
             }}
           >
             {locale === "fr"
-              ? "Chaque formule inclut les modules Compta + Paie et les 6 agents IA. Payez uniquement ce dont vous avez besoin, faites évoluer votre plan quand vous grandissez."
-              : "Every plan includes Accounting + Payroll and all 6 AI agents. Pay only for what you need, upgrade as you grow."}
+              ? "Chaque formule inclut les 7 modules — Compta, Paie, Juridique, Fiscal, Facturation, OCR et TIBOK Santé salariés — pilotés par les 6 agents IA. Payez uniquement ce dont vous avez besoin, faites évoluer votre plan quand vous grandissez."
+              : "Every plan includes all 7 modules — Accounting, Payroll, Legal, Tax, Invoicing, OCR and TIBOK employee health — driven by the 6 AI agents. Pay only for what you need, upgrade as you grow."}
           </p>
         </Reveal>
 
@@ -257,13 +265,15 @@ export function PricingShowcase({ locale }: { locale: "fr" | "en" }) {
                   <article
                     className="relative flex h-full flex-col overflow-hidden rounded-2xl"
                     style={{
-                      backgroundColor: isPopular ? "#0B0F2E" : "#FFFFFF",
+                      background: isPopular
+                        ? "#0B0F2E"
+                        : "linear-gradient(180deg, #FFFFFF 0%, #F7F9FF 100%)",
                       border: isPopular
                         ? "1px solid #D4AF37"
-                        : "1px solid #E2E5F0",
+                        : "1px solid #D8DFED",
                       boxShadow: isPopular
-                        ? "0 20px 60px -20px rgba(65,145,255,0.35), 0 0 0 1px rgba(212,175,55,0.20)"
-                        : "0 1px 2px rgba(11,15,46,0.04)",
+                        ? "0 30px 70px -20px rgba(65,145,255,0.40), 0 0 0 1px rgba(212,175,55,0.28), inset 0 1px 0 rgba(255,255,255,0.06)"
+                        : "0 1px 2px rgba(15,23,42,0.04), 0 24px 48px -24px rgba(15,23,42,0.20), inset 0 1px 0 rgba(255,255,255,0.9)",
                     }}
                   >
                     {/* Popular ribbon */}
@@ -303,19 +313,22 @@ export function PricingShowcase({ locale }: { locale: "fr" | "en" }) {
                         <div
                           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
                           style={{
-                            backgroundColor: isPopular
-                              ? "rgba(212,175,55,0.12)"
-                              : "rgba(65,145,255,0.08)",
+                            background: isPopular
+                              ? "rgba(212,175,55,0.14)"
+                              : "linear-gradient(135deg, rgba(65,145,255,0.18) 0%, rgba(65,145,255,0.06) 100%)",
                             border: isPopular
-                              ? "1px solid rgba(212,175,55,0.30)"
-                              : "1px solid rgba(65,145,255,0.18)",
+                              ? "1px solid rgba(212,175,55,0.35)"
+                              : "1px solid rgba(65,145,255,0.32)",
+                            boxShadow: isPopular
+                              ? undefined
+                              : "0 10px 24px -10px rgba(65,145,255,0.40), inset 0 1px 0 rgba(255,255,255,0.6)",
                           }}
                         >
                           <Icon
                             size={20}
                             strokeWidth={1.8}
                             aria-hidden={true}
-                            style={{ color: isPopular ? "#D4AF37" : "#4191FF" }}
+                            style={{ color: isPopular ? "#D4AF37" : "#2A6FCC" }}
                           />
                         </div>
                         <div>
@@ -345,7 +358,7 @@ export function PricingShowcase({ locale }: { locale: "fr" | "en" }) {
                       <p
                         className="mb-6 text-sm"
                         style={{
-                          color: isPopular ? "#A8AFC7" : "#4A5490",
+                          color: isPopular ? "#A8AFC7" : "#475569",
                           fontFamily: "'Poppins', sans-serif",
                           fontWeight: 300,
                           lineHeight: 1.6,
@@ -359,7 +372,7 @@ export function PricingShowcase({ locale }: { locale: "fr" | "en" }) {
                         <span
                           className="text-[15px] font-medium"
                           style={{
-                            color: isPopular ? "#A8AFC7" : "#4A5490",
+                            color: isPopular ? "#A8AFC7" : "#475569",
                             fontFamily: "'Poppins', sans-serif",
                           }}
                         >
@@ -383,7 +396,7 @@ export function PricingShowcase({ locale }: { locale: "fr" | "en" }) {
                         <span
                           className="mb-1 ml-1 text-sm"
                           style={{
-                            color: isPopular ? "#A8AFC7" : "#4A5490",
+                            color: isPopular ? "#A8AFC7" : "#475569",
                             fontFamily: "'Poppins', sans-serif",
                           }}
                         >
@@ -395,35 +408,56 @@ export function PricingShowcase({ locale }: { locale: "fr" | "en" }) {
                       <div
                         className="mb-5 h-px w-full"
                         style={{
-                          backgroundColor: isPopular
-                            ? "rgba(232,234,252,0.12)"
-                            : "#E2E5F0",
+                          background: isPopular
+                            ? "linear-gradient(90deg, transparent, rgba(212,175,55,0.35), transparent)"
+                            : "linear-gradient(90deg, transparent, #D8DFED, transparent)",
                         }}
                       />
 
                       {/* Features */}
                       <ul className="mb-7 space-y-2.5">
-                        {tier.features[locale].map((f, i) => (
-                          <li key={i} className="flex items-start gap-2.5">
-                            <Check
-                              size={16}
-                              strokeWidth={2.5}
-                              className="mt-0.5 shrink-0"
-                              style={{ color: isPopular ? "#D4AF37" : "#4191FF" }}
-                              aria-hidden="true"
-                            />
-                            <span
-                              className="text-sm"
-                              style={{
-                                color: isPopular ? "#E8EAFC" : "#0B0F2E",
-                                fontFamily: "'Poppins', sans-serif",
-                                lineHeight: 1.5,
-                              }}
-                            >
-                              {f}
-                            </span>
-                          </li>
-                        ))}
+                        {tier.features[locale].map((f, i) => {
+                          // Highlight the TIBOK line in every tier.
+                          const isTibok = /TIBOK/i.test(f)
+                          return (
+                            <li key={i} className="flex items-start gap-2.5">
+                              <span
+                                aria-hidden="true"
+                                className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
+                                style={{
+                                  background: isTibok
+                                    ? "linear-gradient(135deg, rgba(46,204,138,0.20) 0%, rgba(46,204,138,0.08) 100%)"
+                                    : isPopular
+                                      ? "rgba(212,175,55,0.18)"
+                                      : "linear-gradient(135deg, rgba(65,145,255,0.18) 0%, rgba(65,145,255,0.08) 100%)",
+                                }}
+                              >
+                                <Check
+                                  size={12}
+                                  strokeWidth={3}
+                                  style={{
+                                    color: isTibok
+                                      ? "#2ECC8A"
+                                      : isPopular
+                                        ? "#D4AF37"
+                                        : "#2A6FCC",
+                                  }}
+                                />
+                              </span>
+                              <span
+                                className="text-sm"
+                                style={{
+                                  color: isPopular ? "#E8EAFC" : "#1E293B",
+                                  fontFamily: "'Poppins', sans-serif",
+                                  lineHeight: 1.5,
+                                  fontWeight: isTibok ? 600 : 400,
+                                }}
+                              >
+                                {f}
+                              </span>
+                            </li>
+                          )
+                        })}
                       </ul>
 
                       {/* CTA */}

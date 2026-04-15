@@ -53,6 +53,7 @@ import {
   CheckCircle2,
   Briefcase,
   Menu,
+  HeartPulse,
 } from "lucide-react"
 
 export default function HomePage() {
@@ -139,6 +140,25 @@ export default function HomePage() {
         'ROC Annual Return: intelligent pre-filling',
         'FAR with automatic depreciation',
       ],
+    },
+    {
+      // 7th module — TIBOK Santé. Flagged premium=true so the Features
+      // section renders it as a dark, gold-bordered "unique worldwide"
+      // card instead of the standard blue/gold alternating tile.
+      icon: HeartPulse,
+      title: locale === 'fr' ? 'TIBOK · Santé salariés' : 'TIBOK · Employee Health',
+      items: locale === 'fr' ? [
+        'Téléconsultation illimitée pour vos salariés',
+        'Médecins partenaires agréés à Maurice',
+        'Ordonnances digitales et suivi médical',
+        'Intégré dans la paie — aucun coût additionnel par salarié',
+      ] : [
+        'Unlimited telemedicine for your employees',
+        'Licensed partner doctors in Mauritius',
+        'Digital prescriptions and medical follow-up',
+        'Integrated in payroll — no extra cost per employee',
+      ],
+      premium: true as const,
     },
   ]
 
@@ -569,9 +589,9 @@ export default function HomePage() {
                 <p
                   className="mb-6 text-base md:text-lg"
                   style={{
-                    color: "#4A5490",
+                    color: "#475569",
                     fontFamily: "'Poppins', sans-serif",
-                    fontWeight: 300,
+                    fontWeight: 400,
                     lineHeight: 1.7,
                   }}
                 >
@@ -651,7 +671,7 @@ export default function HomePage() {
                   className="h-1.5 w-1.5 rounded-full"
                   style={{ backgroundColor: "#D4AF37" }}
                 />
-                {locale === "fr" ? "6 modules intégrés" : "6 integrated modules"}
+                {locale === "fr" ? "7 modules intégrés" : "7 integrated modules"}
               </span>
               <h2
                 className="mb-4 text-3xl font-bold tracking-tight md:text-5xl"
@@ -667,9 +687,9 @@ export default function HomePage() {
               <p
                 className="mx-auto max-w-2xl text-base md:text-lg"
                 style={{
-                  color: "#4A5490",
+                  color: "#475569",
                   fontFamily: "'Poppins', sans-serif",
-                  fontWeight: 300,
+                  fontWeight: 400,
                   lineHeight: 1.7,
                 }}
               >
@@ -679,19 +699,241 @@ export default function HomePage() {
 
             <StaggerGroup className="grid gap-6 md:grid-cols-2 lg:grid-cols-3" staggerMs={60}>
               {features.map((feature, idx) => {
-                const accent = idx % 2 === 0 ? "#4191FF" : "#D4AF37"
-                const accentSoft = idx % 2 === 0 ? "rgba(65,145,255,0.10)" : "rgba(212,175,55,0.10)"
+                const total = features.length
+                const totalStr = String(total).padStart(2, "0")
                 const moduleNum = String(idx + 1).padStart(2, "0")
+                const isPremium = (feature as { premium?: boolean }).premium === true
+
+                if (isPremium) {
+                  // 7th module — TIBOK Santé.
+                  // Rendered as a full-width dark premium card: navy bg,
+                  // gold border, green health accent, Crown "Exclusif"
+                  // ribbon, and horizontal icon+copy layout on desktop.
+                  const accent = "#2ECC8A" // TIBOK health green
+                  return (
+                    <StaggerItem key={feature.title} className="h-full md:col-span-2 lg:col-span-3">
+                      <HoverLift lift={6} className="h-full">
+                        <article
+                          className="group relative flex h-full flex-col overflow-hidden rounded-2xl"
+                          style={{
+                            backgroundColor: "#0B0F2E",
+                            border: "1px solid #D4AF37",
+                            boxShadow:
+                              "0 30px 80px -30px rgba(212,175,55,0.35), 0 0 0 1px rgba(212,175,55,0.22)",
+                          }}
+                        >
+                          {/* Triple-stripe gradient (blue → gold → green) */}
+                          <div
+                            aria-hidden="true"
+                            className="absolute inset-x-0 top-0 h-[3px]"
+                            style={{
+                              background:
+                                "linear-gradient(90deg, #4191FF 0%, #D4AF37 50%, #2ECC8A 100%)",
+                            }}
+                          />
+
+                          {/* Ambient radial gold glow */}
+                          <div
+                            aria-hidden="true"
+                            className="pointer-events-none absolute inset-0"
+                            style={{
+                              background:
+                                "radial-gradient(ellipse 70% 80% at 30% 0%, rgba(212,175,55,0.14) 0%, transparent 70%), radial-gradient(ellipse 60% 70% at 90% 100%, rgba(46,204,138,0.10) 0%, transparent 70%)",
+                            }}
+                          />
+
+                          {/* Shine sweep */}
+                          <ShineSweep color="rgba(212,175,55,0.16)" duration={4.5} />
+
+                          {/* Crown ribbon */}
+                          <div
+                            className="absolute right-0 top-0 rounded-bl-2xl px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest"
+                            style={{
+                              backgroundColor: "#D4AF37",
+                              color: "#0B0F2E",
+                              fontFamily: "'Poppins', sans-serif",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              zIndex: 2,
+                            }}
+                          >
+                            <Sparkles className="h-3 w-3" aria-hidden="true" />
+                            {locale === "fr" ? "Exclusif · Unique à Maurice" : "Exclusive · Unique in Mauritius"}
+                          </div>
+
+                          <div className="relative grid gap-8 p-7 md:p-10 lg:grid-cols-[auto_1fr_auto] lg:items-center lg:gap-10">
+                            {/* Left — icon tile (larger, green glow) */}
+                            <div className="flex items-center gap-5">
+                              <div
+                                className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl transition-transform duration-300 group-hover:scale-110"
+                                style={{
+                                  backgroundColor: "rgba(46,204,138,0.14)",
+                                  border: "1px solid rgba(46,204,138,0.45)",
+                                  boxShadow: "0 0 28px rgba(46,204,138,0.35)",
+                                }}
+                              >
+                                <feature.icon
+                                  className="h-7 w-7"
+                                  style={{ color: accent }}
+                                  aria-hidden="true"
+                                  strokeWidth={1.8}
+                                />
+                                {/* Live pulse */}
+                                <span
+                                  aria-hidden="true"
+                                  className="absolute -right-1 -top-1 flex h-3 w-3 items-center justify-center"
+                                >
+                                  <span
+                                    className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75"
+                                    style={{ backgroundColor: accent }}
+                                  />
+                                  <span
+                                    className="relative inline-flex h-2 w-2 rounded-full"
+                                    style={{ backgroundColor: accent }}
+                                  />
+                                </span>
+                              </div>
+                              <div className="lg:hidden">
+                                <div
+                                  className="text-[10px] font-bold uppercase tracking-widest"
+                                  style={{ color: "#D4AF37", fontFamily: "'Poppins', sans-serif" }}
+                                >
+                                  {moduleNum} / {totalStr} · {locale === "fr" ? "Module Santé" : "Health Module"}
+                                </div>
+                                <h3
+                                  className="mt-1 text-xl font-bold leading-tight md:text-2xl"
+                                  style={{
+                                    color: "#E8EAFC",
+                                    fontFamily: "'Poppins', sans-serif",
+                                    fontWeight: 700,
+                                    letterSpacing: "-0.02em",
+                                  }}
+                                >
+                                  {feature.title}
+                                </h3>
+                              </div>
+                            </div>
+
+                            {/* Middle — title + description + bullets */}
+                            <div>
+                              <div className="hidden lg:block">
+                                <div
+                                  className="text-[10px] font-bold uppercase tracking-widest"
+                                  style={{ color: "#D4AF37", fontFamily: "'Poppins', sans-serif" }}
+                                >
+                                  {moduleNum} / {totalStr} · {locale === "fr" ? "Module Santé" : "Health Module"}
+                                </div>
+                                <h3
+                                  className="mb-3 mt-1 text-2xl font-bold leading-tight md:text-3xl"
+                                  style={{
+                                    color: "#E8EAFC",
+                                    fontFamily: "'Poppins', sans-serif",
+                                    fontWeight: 700,
+                                    letterSpacing: "-0.02em",
+                                  }}
+                                >
+                                  {feature.title}
+                                </h3>
+                              </div>
+                              <p
+                                className="mb-4 text-sm md:text-base"
+                                style={{
+                                  color: "#A8AFC7",
+                                  fontFamily: "'Poppins', sans-serif",
+                                  fontWeight: 300,
+                                  lineHeight: 1.65,
+                                }}
+                              >
+                                {locale === "fr"
+                                  ? "Le seul ERP mauricien qui intègre un dispositif de téléconsultation pour vos salariés. TIBOK Santé est inclus dans toutes les formules, sans coût supplémentaire."
+                                  : "The only Mauritian ERP that bundles a telemedicine platform for your employees. TIBOK Health is included in every plan, at no extra cost."}
+                              </p>
+                              <ul className="grid gap-2 sm:grid-cols-2">
+                                {feature.items.map((item, i) => (
+                                  <li key={i} className="flex items-start gap-2.5 text-sm">
+                                    <span
+                                      aria-hidden="true"
+                                      className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
+                                      style={{ backgroundColor: "rgba(46,204,138,0.18)" }}
+                                    >
+                                      <CheckCircle2
+                                        className="h-3.5 w-3.5"
+                                        style={{ color: accent }}
+                                        strokeWidth={2.5}
+                                      />
+                                    </span>
+                                    <span
+                                      style={{
+                                        color: "#E8EAFC",
+                                        fontFamily: "'Poppins', sans-serif",
+                                        lineHeight: 1.55,
+                                      }}
+                                    >
+                                      {item}
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+
+                            {/* Right — stat + CTA (visible on lg) */}
+                            <div className="hidden flex-col items-end justify-center gap-3 lg:flex">
+                              <div
+                                className="rounded-xl px-5 py-4 text-right"
+                                style={{
+                                  backgroundColor: "rgba(46,204,138,0.10)",
+                                  border: "1px solid rgba(46,204,138,0.28)",
+                                }}
+                              >
+                                <div
+                                  className="text-[10px] font-bold uppercase tracking-widest"
+                                  style={{ color: accent, fontFamily: "'Poppins', sans-serif" }}
+                                >
+                                  {locale === "fr" ? "Téléconsultation" : "Telemedicine"}
+                                </div>
+                                <div
+                                  className="text-2xl font-bold"
+                                  style={{
+                                    color: "#E8EAFC",
+                                    fontFamily: "'Poppins', sans-serif",
+                                    fontVariantNumeric: "tabular-nums",
+                                    letterSpacing: "-0.02em",
+                                  }}
+                                >
+                                  {locale === "fr" ? "Illimitée" : "Unlimited"}
+                                </div>
+                              </div>
+                              <div
+                                className="text-right text-[10px] font-medium uppercase tracking-widest"
+                                style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}
+                              >
+                                {locale === "fr" ? "Inclus · Aucun coût" : "Included · No cost"}
+                              </div>
+                            </div>
+                          </div>
+                        </article>
+                      </HoverLift>
+                    </StaggerItem>
+                  )
+                }
+
+                // Standard module cards (1–6)
+                const accent = idx % 2 === 0 ? "#4191FF" : "#D4AF37"
+                const accentSoft = idx % 2 === 0 ? "rgba(65,145,255,0.12)" : "rgba(212,175,55,0.14)"
                 return (
                   <StaggerItem key={feature.title} className="h-full">
                     <HoverLift lift={6} className="h-full">
                       <article
                         className="group relative flex h-full flex-col overflow-hidden rounded-2xl"
                         style={{
-                          backgroundColor: "#FFFFFF",
-                          border: "1px solid #E2E5F0",
+                          // Subtle vertical gradient gives depth vs. flat white.
+                          background:
+                            "linear-gradient(180deg, #FFFFFF 0%, #F7F9FF 100%)",
+                          border: "1px solid #D8DFED",
+                          // Layered shadows: thin contact + soft ambient + subtle ring.
                           boxShadow:
-                            "0 1px 3px rgba(11,15,46,0.04), 0 8px 24px -12px rgba(11,15,46,0.08)",
+                            "0 1px 2px rgba(15,23,42,0.04), 0 24px 48px -24px rgba(15,23,42,0.20), inset 0 1px 0 rgba(255,255,255,0.9)",
                         }}
                       >
                         {/* Top accent stripe */}
@@ -717,9 +959,9 @@ export default function HomePage() {
                             <div
                               className="flex h-14 w-14 items-center justify-center rounded-2xl transition-transform duration-300 group-hover:scale-110"
                               style={{
-                                backgroundColor: accentSoft,
-                                border: `1px solid ${accent}30`,
-                                boxShadow: `0 8px 20px -8px ${accent}40`,
+                                background: `linear-gradient(135deg, ${accent}1F 0%, ${accent}0D 100%)`,
+                                border: `1px solid ${accent}40`,
+                                boxShadow: `0 12px 28px -10px ${accent}55, inset 0 1px 0 rgba(255,255,255,0.4)`,
                               }}
                             >
                               <feature.icon
@@ -732,12 +974,12 @@ export default function HomePage() {
                             <span
                               className="text-xs font-bold tracking-widest"
                               style={{
-                                color: "#A8AFC7",
+                                color: "#94A3B8",
                                 fontFamily: "'Poppins', sans-serif",
                                 fontVariantNumeric: "tabular-nums",
                               }}
                             >
-                              {moduleNum} / 06
+                              {moduleNum} / {totalStr}
                             </span>
                           </div>
 
@@ -773,7 +1015,7 @@ export default function HomePage() {
                                 </span>
                                 <span
                                   style={{
-                                    color: "#4A5490",
+                                    color: "#334155",
                                     fontFamily: "'Poppins', sans-serif",
                                     lineHeight: 1.6,
                                   }}
@@ -786,11 +1028,11 @@ export default function HomePage() {
 
                           {/* Footer hint */}
                           <div
-                            className="mt-6 pt-4 text-xs font-medium uppercase tracking-widest"
+                            className="mt-6 pt-4 text-xs font-bold uppercase tracking-widest"
                             style={{
                               color: accent,
                               fontFamily: "'Poppins', sans-serif",
-                              borderTop: "1px solid #F0F2F8",
+                              borderTop: "1px solid #E6EBF7",
                             }}
                           >
                             {locale === "fr" ? "Inclus dans chaque formule" : "Included in every plan"}
