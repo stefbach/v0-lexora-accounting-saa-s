@@ -77,6 +77,10 @@ export async function GET(request: Request) {
     const societe_id = searchParams.get('societe_id')
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
 
+    // ── Filtre de période (mois par mois) ──────────────────────────────
+    const date_debut = searchParams.get('date_debut') || null  // ex: 2024-07-01
+    const date_fin   = searchParams.get('date_fin')   || null  // ex: 2024-07-31
+
     const supabase = getAdminClient()
 
     // 1. Rapprochements existants
@@ -84,11 +88,18 @@ export async function GET(request: Request) {
       .from('rapprochements_bancaires').select('*')
       .eq('societe_id', societe_id).order('periode_debut', { ascending: false })
 
-    // 2. Bank transactions from releves
-    const { data: releves } = await supabase
+    // 2. Bank transactions from releves — filtrés par période si fournie
+    let relevesQuery = supabase
       .from('releves_bancaires')
       .select('id, compte_bancaire_id, periode, date_debut, date_fin, transactions_json, solde_ouverture, solde_cloture')
-      .eq('societe_id', societe_id).order('date_fin', { ascending: false })
+      .eq('societe_id', societe_id)
+      .order('date_fin', { ascending: false })
+
+    // Restreindre les relevés qui chevauchent la période demandée
+    if (date_debut) relevesQuery = relevesQuery.gte('date_fin',   date_debut)
+    if (date_fin)   relevesQuery = relevesQuery.lte('date_debut', date_fin)
+
+    const { data: releves } = await relevesQuery
 
     const { data: comptes } = await supabase
       .from('comptes_bancaires').select('id, banque, devise, numero_compte').eq('societe_id', societe_id)
@@ -99,6 +110,9 @@ export async function GET(request: Request) {
     ;(releves || []).forEach((r: any) => {
       const compte = compteMap[r.compte_bancaire_id] || {}
       ;(r.transactions_json || []).forEach((tx: any, idx: number) => {
+        // Filtrer les transactions hors période si dates fournies
+        if (date_debut && tx.date && tx.date < date_debut) return
+        if (date_fin   && tx.date && tx.date > date_fin)   return
         bankTransactions.push({
           id: `${r.id}-${idx}`, releve_id: r.id,
           transaction_idx: idx,
