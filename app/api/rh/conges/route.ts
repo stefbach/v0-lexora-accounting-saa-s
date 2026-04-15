@@ -414,7 +414,8 @@ export async function GET(request: Request) {
 
     // ---- ACTION: balances ----
     if (action === 'balances') {
-      const currentYear = new Date().getFullYear()
+      const now = new Date()
+      const currentYear = now.getFullYear()
 
       // Get all approved leave requests for current year
       const { data: congesData } = await supabase
@@ -450,10 +451,39 @@ export async function GET(request: Request) {
         const empSl = allSl.filter((c: any) => c.employe_id === emp.id)
         const sickCertAlert = detectSickCertAlert(empSl)
 
-        // Status indicator
-        let statusColor = 'green'
-        if (alBalance <= 0 || slBalance <= 0) statusColor = 'red'
-        else if (alBalance <= 5 || slBalance <= 3) statusColor = 'orange'
+        // Sprint 4 TÂCHE 4 — Points couleur alignés sur WRA 2019.
+        //
+        // Ancienne logique (avant Sprint 4) — mélangeait AL et SL :
+        //   rouge si al_solde <= 0 OU sl_solde <= 0
+        //   orange si al_solde <= 5 OU sl_solde <= 3
+        //   vert sinon
+        // Problème : employés en période d'essai (< 12 mois) étaient
+        // parfois flaggés orange sans raison claire (solde SL tombait
+        // bas après un arrêt maladie), et rien ne signalait les 3 mois
+        // de carence WRA 2019 qui empêchent TOUT droit à congé.
+        //
+        // Nouvelle logique (spec utilisateur — basée sur ancienneté AL) :
+        //   🔴 rouge   = pas éligible (< 3 mois de carence WRA)
+        //                OU solde AL totalement épuisé (= 0)
+        //   🟡 orange  = en période d'essai 3-12 mois (éligible prorata)
+        //                OU solde AL < 5 jours (alerte faible)
+        //   🟢 vert    = éligible plein droit (>= 12 mois) avec solde >= 5
+        //
+        // SL n'entre PLUS dans le calcul du point couleur : la colonne
+        // sick_cert_alert gère déjà l'alerte certificat médical, et le
+        // solde SL faible n'est pas aussi critique qu'un AL épuisé
+        // (WRA 2019 donne 15j SL/an récupérables sur déclaration).
+        const hireDate = emp.date_arrivee ? new Date(String(emp.date_arrivee) + 'T00:00:00') : null
+        const monthsService = hireDate
+          ? (now.getFullYear() - hireDate.getFullYear()) * 12 + (now.getMonth() - hireDate.getMonth())
+          : 99
+
+        let statusColor: 'green' | 'orange' | 'red' = 'green'
+        if (monthsService < 3 || alBalance <= 0) {
+          statusColor = 'red'
+        } else if (monthsService < 12 || alBalance < 5) {
+          statusColor = 'orange'
+        }
 
         return {
           employe_id: emp.id,
