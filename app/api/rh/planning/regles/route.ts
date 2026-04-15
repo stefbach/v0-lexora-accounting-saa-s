@@ -1,8 +1,30 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { userHasAccessToSociete } from '@/lib/rh/access'
 
 export const dynamic = 'force-dynamic'
+
+// Sécurité Sprint 1 — rôles autorisés à lire/modifier les règles WRA.
+// Doit matcher le layout app/rh/planning/regles/layout.tsx.
+const ALLOWED_ROLES = [
+  'admin',
+  'super_admin',
+  'rh',
+  'rh_manager',
+  'client_admin',
+  'direction',
+]
+
+async function getUserRole(userId: string): Promise<string> {
+  const supabase = getAdminClient()
+  const { data } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', userId)
+    .maybeSingle()
+  return data?.role || ''
+}
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -17,11 +39,22 @@ export async function GET(request: Request) {
     const { data: { user } } = await supabaseAuth.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorise' }, { status: 401 })
 
+    // Sprint 1 — role gate API
+    const role = await getUserRole(user.id)
+    if (!ALLOWED_ROLES.includes(role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const { searchParams } = new URL(request.url)
     const societe_id = searchParams.get('societe_id')
 
     if (!societe_id) {
       return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
+    }
+
+    // Sprint 1 — vérifie que l'utilisateur a réellement accès à cette société
+    if (!(await userHasAccessToSociete(user.id, societe_id))) {
+      return NextResponse.json({ error: 'Forbidden — société hors périmètre' }, { status: 403 })
     }
 
     const supabase = getAdminClient()
@@ -54,11 +87,22 @@ export async function POST(request: Request) {
     const { data: { user } } = await supabaseAuth.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorise' }, { status: 401 })
 
+    // Sprint 1 — role gate API
+    const role = await getUserRole(user.id)
+    if (!ALLOWED_ROLES.includes(role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const body = await request.json()
     const { societe_id, regles } = body
 
     if (!societe_id || !regles) {
       return NextResponse.json({ error: 'societe_id et regles requis' }, { status: 400 })
+    }
+
+    // Sprint 1 — vérifie que l'utilisateur a réellement accès à cette société
+    if (!(await userHasAccessToSociete(user.id, societe_id))) {
+      return NextResponse.json({ error: 'Forbidden — société hors périmètre' }, { status: 403 })
     }
 
     const supabase = getAdminClient()

@@ -57,7 +57,10 @@ const STORAGE_KEY = "lexora_planning_rules"
 export default function ReglesPage() {
   const [rules, setRules] = useState<PlanningRule[]>(DEFAULT_RULES)
   const [societes, setSocietes] = useState<any[]>([])
-  const [societe, setSociete] = useState("all")
+  // Sprint 1 — état initial vide (l'option « Toutes » a été retirée). La
+  // première société chargée est sélectionnée automatiquement à l'arrivée
+  // de la liste (cf. effet ci-dessous).
+  const [societe, setSociete] = useState("")
   const [saving, setSaving] = useState(false)
   const [loaded, setLoaded] = useState(false)
 
@@ -162,10 +165,14 @@ export default function ReglesPage() {
               <ArrowLeft className="h-4 w-4 mr-1" /> Retour au planning
             </Button>
           </Link>
+          {/* Sprint 1 — l'option « Toutes » est retirée : les règles WRA
+              s'appliquent par société, pas globalement. Le sélecteur ne
+              propose que les sociétés réellement accessibles à l'utilisateur
+              (filtrées par /api/comptable/societes + /api/client/societes
+              qui appliquent eux-mêmes getUserSocieteIds). */}
           <Select value={societe} onValueChange={setSociete}>
             <SelectTrigger className="w-[200px]"><SelectValue placeholder="Societe" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Toutes</SelectItem>
               {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
             </SelectContent>
           </Select>
