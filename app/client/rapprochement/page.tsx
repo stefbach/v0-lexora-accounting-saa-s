@@ -43,6 +43,9 @@ export default function ClientRapprochementPage() {
   const [autoStep, setAutoStep] = useState("")
   const [autoResult, setAutoResult] = useState<{ matched: number; total: number; interne: number; frais_bancaires: number; salaire_bulk: number; mra: number; not_matched: number; total_classified: number; matches: any[] } | null>(null)
   const [linkDialog, setLinkDialog] = useState<any>(null)
+  // Multi-facture lettrage : checkboxes selectionnees + filtre tiers
+  const [selectedFactureIds, setSelectedFactureIds] = useState<Set<string>>(new Set())
+  const [lettrageTiersFilter, setLettrageTiersFilter] = useState("")
   const [societeId, setSocieteId] = useState<string | null>(null)
   const [societes, setSocietes] = useState<any[]>([])
   const [payeParAssocie, setPayeParAssocie] = useState(false)
@@ -494,10 +497,15 @@ Voulez-vous vraiment continuer ?`
     if (!societeId || reclassifying) return
     setReclassifying(true)
     try {
+      // Scoper au mois actif si selectionne
       const res = await fetch('/api/comptable/rapprochement/reclassify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ societe_id: societeId, scope: 'unclassified' }),
+        body: JSON.stringify({
+          societe_id: societeId,
+          scope: 'unclassified',
+          ...(selectedMois ? { mois: selectedMois } : {}),
+        }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -656,10 +664,27 @@ Voulez-vous vraiment continuer ?`
       setAutoStep("Analyse des transactions bancaires...")
       await new Promise(r => setTimeout(r, 800))
       setAutoStep("Recherche des factures correspondantes...")
+
+      // Dates : si un mois est selectionne, on limite au mois actif
+      // (le backend filtrera factures/tx sur cette plage).
+      // Sinon fallback sur l exercice fiscal pour ne pas traiter l infini.
+      let dateFilter: { date_debut?: string; date_fin?: string } = {}
+      if (selectedMois) {
+        const [yy, mm] = selectedMois.split('-').map(Number)
+        const start = `${yy}-${String(mm).padStart(2, '0')}-01`
+        const lastDay = new Date(yy, mm, 0).getDate()
+        const end = `${yy}-${String(mm).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+        dateFilter = { date_debut: start, date_fin: end }
+        setAutoStep(`Rapprochement automatique du mois ${selectedMois}...`)
+      } else if (selectedPeriode !== 'tout') {
+        dateFilter = selectedPeriode === '2025-2026'
+          ? { date_debut: '2025-07-01', date_fin: '2026-06-30' }
+          : { date_debut: '2024-07-01', date_fin: '2025-06-30' }
+      }
+
       const res = await fetch("/api/comptable/rapprochement", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "auto_rapprocher", societe_id: societeId,
-          ...(selectedPeriode !== 'tout' ? { date_debut: selectedPeriode === '2025-2026' ? '2025-07-01' : '2024-07-01', date_fin: selectedPeriode === '2025-2026' ? '2026-06-30' : '2025-06-30' } : {}) }),
+        body: JSON.stringify({ action: "auto_rapprocher", societe_id: societeId, ...dateFilter }),
       })
       setAutoStep("Rapprochement des écritures comptables...")
       const d = await res.json()
@@ -699,6 +724,40 @@ Voulez-vous vraiment continuer ?`
       })
       setLinkDialog(null); load()
     } catch { alert("Erreur lettrage") }
+  }
+
+  // Lettrage multi-facture : 1 transaction bancaire vs N factures
+  const handleManualLinkMulti = async (tx: any, factures: any[]) => {
+    if (!societeId || factures.length === 0) return
+    const ids = factures.map(f => f.id)
+    try {
+      const res = await fetch("/api/comptable/rapprochement", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "lettrer_multi",
+          transaction_id: tx.id,
+          releve_id: tx.releve_id,
+          facture_ids: ids,
+          societe_id: societeId,
+        }),
+      })
+      const d = await res.json().catch(() => ({}))
+      console.log('[lettrer_multi] response', res.status, d)
+      if (!res.ok) {
+        setToast({ type: 'error', message: `❌ ${d.error || `HTTP ${res.status}`}` })
+        return
+      }
+      setToast({
+        type: 'success',
+        message: `✓ ${ids.length} factures lettrees avec la transaction (lettre ${d.lettre || '—'})`,
+      })
+      setLinkDialog(null)
+      setSelectedFactureIds(new Set())
+      setLettrageTiersFilter("")
+      await load()
+    } catch (e: any) {
+      setToast({ type: 'error', message: `❌ ${e.message}` })
+    }
   }
 
   // Marquer une facture comme payée (crée BNQ + letters, sans tx)
@@ -2467,32 +2526,127 @@ Voulez-vous vraiment continuer ?`
                 ))}
               </div>
 
-              {/* Tab: Factures */}
-              {dialogTab === "factures" && (
-                <div className="space-y-2 max-h-[350px] overflow-y-auto">
-                  {factures.length === 0 ? (
-                    <p className="text-sm text-gray-400 py-4 text-center">Aucune facture en attente</p>
-                  ) : factures
-                    .sort((a: any, b: any) => {
-                      const txAmt = linkDialog.debit > 0 ? linkDialog.debit : linkDialog.credit
-                      return Math.abs((Number(a.montant_ttc) || 0) - txAmt) - Math.abs((Number(b.montant_ttc) || 0) - txAmt)
-                    })
-                    .map((f: any) => {
-                      const txAmount = linkDialog.debit > 0 ? linkDialog.debit : linkDialog.credit
-                      const fAmount = Number(f.montant_ttc) || 0
-                      const isClose = Math.abs(txAmount - fAmount) <= Math.max(fAmount * 0.05, 1)
-                      return (
-                        <div key={f.id} onClick={() => handleManualLink(linkDialog, f, "facture")}
-                          className={`p-3 border rounded-lg cursor-pointer hover:bg-blue-50 ${isClose ? "border-green-300 bg-green-50" : "border-gray-200"}`}>
-                          <div className="flex justify-between">
-                            <div><p className="font-medium text-sm">{f.numero_facture || "—"} <Badge className="text-xs ml-1">{f.type_facture}</Badge></p><p className="text-xs text-gray-500">{f.tiers} — {formatDate(f.date_facture)}</p></div>
-                            <div className="text-right"><p className="font-bold text-sm">{fmt(fAmount)} {f.devise}</p>{isClose && <Badge className="bg-green-100 text-green-700 text-xs">Proche</Badge>}</div>
-                          </div>
+              {/* Tab: Factures — avec selection multiple pour 1 paiement = N factures */}
+              {dialogTab === "factures" && (() => {
+                const txAmount = (linkDialog.debit > 0 ? linkDialog.debit : linkDialog.credit) || 0
+                // Filtre client (tiers) saisi dans la zone de recherche
+                const filtered = factures
+                  .filter((f: any) => {
+                    if (!lettrageTiersFilter) return true
+                    const q = lettrageTiersFilter.toLowerCase()
+                    return (f.tiers || '').toLowerCase().includes(q)
+                      || (f.numero_facture || '').toLowerCase().includes(q)
+                  })
+                  .sort((a: any, b: any) => {
+                    return Math.abs((Number(a.montant_ttc) || 0) - txAmount)
+                      - Math.abs((Number(b.montant_ttc) || 0) - txAmount)
+                  })
+                const selected = Array.from(selectedFactureIds)
+                  .map(id => factures.find((f: any) => f.id === id))
+                  .filter(Boolean) as any[]
+                const totalSelected = selected.reduce((s: number, f: any) => s + (Number(f.montant_ttc) || 0), 0)
+                const gap = totalSelected - txAmount
+                const gapClose = Math.abs(gap) < Math.max(txAmount * 0.02, 1)
+
+                return (
+                  <div className="space-y-2">
+                    {/* Barre de filtre tiers + compteur selection */}
+                    <div className="sticky top-0 bg-white pb-1 border-b space-y-1">
+                      <div className="flex gap-2 items-center">
+                        <Input
+                          value={lettrageTiersFilter}
+                          onChange={e => setLettrageTiersFilter(e.target.value)}
+                          placeholder="🔍 Filtrer par client / n° facture..."
+                          className="h-8 text-sm flex-1"
+                        />
+                        <span className="text-xs text-gray-500 whitespace-nowrap">
+                          {filtered.length}/{factures.length}
+                        </span>
+                      </div>
+                      {selectedFactureIds.size > 0 && (
+                        <div className={`flex items-center justify-between gap-2 p-2 rounded text-xs ${gapClose ? 'bg-green-50 border border-green-200' : 'bg-amber-50 border border-amber-200'}`}>
+                          <span className="font-medium">
+                            {selectedFactureIds.size} facture{selectedFactureIds.size > 1 ? 's' : ''} • Total {fmt(totalSelected)}
+                          </span>
+                          <span className={gapClose ? 'text-green-700 font-bold' : 'text-amber-700'}>
+                            Écart tx : {gap > 0 ? '+' : ''}{fmt(gap)}
+                            {gapClose && ' ✓'}
+                          </span>
+                          <Button
+                            size="sm"
+                            className="h-6 bg-[#0B0F2E] text-white hover:bg-[#1a1f4a] text-xs"
+                            onClick={() => handleManualLinkMulti(linkDialog, selected)}
+                            disabled={selectedFactureIds.size === 0}
+                          >
+                            Lettrer ({selectedFactureIds.size})
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 text-xs"
+                            onClick={() => setSelectedFactureIds(new Set())}
+                          >
+                            ×
+                          </Button>
                         </div>
-                      )
-                    })}
-                </div>
-              )}
+                      )}
+                    </div>
+
+                    <div className="space-y-2 max-h-[320px] overflow-y-auto">
+                      {filtered.length === 0 ? (
+                        <p className="text-sm text-gray-400 py-4 text-center">
+                          {lettrageTiersFilter ? 'Aucune facture ne correspond au filtre' : 'Aucune facture en attente'}
+                        </p>
+                      ) : filtered.map((f: any) => {
+                        const fAmount = Number(f.montant_ttc) || 0
+                        const isClose = Math.abs(txAmount - fAmount) <= Math.max(fAmount * 0.05, 1)
+                        const isChecked = selectedFactureIds.has(f.id)
+                        return (
+                          <div
+                            key={f.id}
+                            className={`p-3 border rounded-lg flex items-center gap-2 transition-colors ${
+                              isChecked
+                                ? "border-blue-400 bg-blue-50"
+                                : isClose
+                                  ? "border-green-300 bg-green-50 hover:bg-green-100"
+                                  : "border-gray-200 hover:bg-gray-50"
+                            }`}
+                          >
+                            <Checkbox
+                              checked={isChecked}
+                              onCheckedChange={(checked) => {
+                                const next = new Set(selectedFactureIds)
+                                if (checked) next.add(f.id)
+                                else next.delete(f.id)
+                                setSelectedFactureIds(next)
+                              }}
+                              className="shrink-0"
+                            />
+                            <div
+                              className="flex-1 cursor-pointer"
+                              onClick={() => handleManualLink(linkDialog, f, "facture")}
+                              title="Clic pour lettrer cette seule facture"
+                            >
+                              <div className="flex justify-between">
+                                <div>
+                                  <p className="font-medium text-sm">
+                                    {f.numero_facture || "—"} <Badge className="text-xs ml-1">{f.type_facture}</Badge>
+                                  </p>
+                                  <p className="text-xs text-gray-500">{f.tiers} — {formatDate(f.date_facture)}</p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="font-bold text-sm">{fmt(fAmount)} {f.devise}</p>
+                                  {isClose && <Badge className="bg-green-100 text-green-700 text-xs">Proche</Badge>}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })()}
 
               {/* Tab: Écritures */}
               {dialogTab === "ecritures" && (

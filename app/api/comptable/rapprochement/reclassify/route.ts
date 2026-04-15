@@ -31,6 +31,7 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({}))
     const societe_id = body.societe_id
     const scope = body.scope || 'unclassified' // 'all' = re-classify toutes, 'unclassified' = celles sans règle
+    const moisFilter = body.mois // YYYY-MM optionnel - limite aux tx du mois
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
 
     const supabase = getAdminClient()
@@ -77,6 +78,11 @@ export async function POST(request: Request) {
       const devise = deviseByCompte[releve.compte_bancaire_id] || 'MUR'
 
       for (let i = 0; i < txs.length; i++) {
+        // Filtre par mois si demande
+        if (moisFilter && /^\d{4}-\d{2}$/.test(moisFilter)) {
+          const txMois = String(txs[i]?.date || '').substring(0, 7)
+          if (txMois !== moisFilter) continue
+        }
         const tx = txs[i]
         totalProcessed++
 
