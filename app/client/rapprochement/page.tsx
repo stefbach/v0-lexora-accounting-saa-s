@@ -2053,71 +2053,87 @@ Voulez-vous vraiment continuer ?`
                       <TableCell className="text-right text-sm text-green-600 font-medium">{tx.credit > 0 ? fmt(tx.credit) + " " + tx.devise : "—"}</TableCell>
                       <TableCell className="text-sm">{tx.tiers_detecte || "—"}</TableCell>
                       <TableCell>
-                        <div className="flex gap-1 flex-wrap">
-                          <Button variant="outline" size="sm" onClick={() => { setDialogTab("factures"); setLinkDialog(tx) }} className="gap-1"><Link2 className="w-3 h-3" />Lettrer</Button>
+                        <div className="flex gap-1 flex-wrap items-center">
+                          <Button variant="outline" size="sm" onClick={() => { setDialogTab("factures"); setLinkDialog(tx) }} className="gap-1">
+                            <Link2 className="w-3 h-3" />Lettrer
+                          </Button>
                           {associes.length > 0 && (
-                            <Button variant="outline" size="sm" onClick={() => { setPayeParNom(associes[0]?.nom || ""); setPayeParType("associe"); setDialogTab("bach"); setLinkDialog(tx) }} className="gap-1 text-purple-600 border-purple-200 hover:bg-purple-50"><Users className="w-3 h-3" />Associé</Button>
+                            <Button variant="outline" size="sm" onClick={() => { setPayeParNom(associes[0]?.nom || ""); setPayeParType("associe"); setDialogTab("bach"); setLinkDialog(tx) }} className="gap-1 text-purple-600 border-purple-200 hover:bg-purple-50">
+                              <Users className="w-3 h-3" />Associé
+                            </Button>
                           )}
-                          {/* Classification manuelle sans facture */}
-                          <select
-                            className="text-xs border rounded px-1 py-1 bg-white text-gray-600 cursor-pointer"
-                            defaultValue=""
-                            onChange={async (e) => {
-                              const classType = e.target.value
-                              if (!classType || !societeId) return
-                              // "fournisseur" reuses the existing manual-link dialog
-                              // since the user needs to pick which facture to attach.
-                              if (classType === 'fournisseur') {
-                                setDialogTab('factures')
-                                setLinkDialog(tx)
-                                e.target.value = ''
-                                return
-                              }
-                              // "autre" → ask the user for a free-form label.
-                              let extraLabel: string | null = null
-                              if (classType === 'autre') {
-                                extraLabel = window.prompt('Décrivez cette transaction (champ libre):', '')
-                                if (!extraLabel) { e.target.value = ''; return }
-                              }
-                              try {
-                                await fetch('/api/comptable/rapprochement', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({
-                                    action: 'lettrer_manuel',
-                                    transaction_id: tx.id,
-                                    releve_id: tx.releve_id,
-                                    societe_id: societeId,
-                                    classification: classType,
-                                    libelle: extraLabel || undefined,
-                                  }),
-                                })
-                                const labels: Record<string, string> = {
-                                  salaire: 'Salaire / charge personnel',
-                                  frais_bancaires: 'Frais bancaires',
-                                  virement_interne: 'Virement interne',
-                                  remboursement_personnel: 'Remboursement personnel',
-                                  paiement_mra: 'Paiement MRA',
-                                  compte_courant_associe: 'Compte courant associé',
-                                  avance_personnel: 'Avance personnel',
-                                  charge_diverse: 'Charge diverse',
-                                  autre: extraLabel || 'Autre',
-                                }
-                                showToast(`✅ Classifié comme : ${labels[classType] || classType}`)
-                                load()
-                              } catch { showToast('Erreur classification', 'error') }
-                            }}
-                          >
-                            <option value="">Classer…</option>
-                            <option value="fournisseur">Paiement fournisseur (lettrer)</option>
-                            <option value="salaire">Salaire / charge personnel</option>
-                            <option value="frais_bancaires">Frais bancaires</option>
-                            <option value="virement_interne">Virement interne DDS↔OCC</option>
-                            <option value="remboursement_personnel">Remboursement personnel</option>
-                            <option value="paiement_mra">Paiement MRA</option>
-                            <option value="compte_courant_associe">Compte courant associé</option>
-                            <option value="autre">Autre (champ libre…)</option>
-                          </select>
+                          {/* Dropdown riche avec numeros de compte + propagation tiers similaires */}
+                          {(() => {
+                            const norm = (s: string) => (s || '')
+                              .trim()
+                              .toLowerCase()
+                              .replace(/\b(mr|mrs|ms|mme|monsieur|madame|m\.|sir)\b/g, '')
+                              .replace(/[^a-z0-9\s]/g, ' ')
+                              .replace(/\s+/g, ' ')
+                              .trim()
+                            const myTiers = norm(tx.tiers_detecte || (tx as any).tiers || '')
+                            const candidates = [...paidNoInvoice, ...unmatched]
+                            const nbSimilaires = myTiers.length >= 3
+                              ? candidates.filter((o: any) =>
+                                  o.id !== tx.id
+                                  && norm(o.tiers_detecte || o.tiers || '') === myTiers
+                                ).length
+                              : 0
+                            const classifications = [
+                              { code: 'frais_bancaires',         label: 'Frais bancaires',         compte: '627' },
+                              { code: 'paiement_mra',            label: 'Paiement MRA (impots)',   compte: '447' },
+                              { code: 'salaire',                 label: 'Salaire net',             compte: '421' },
+                              { code: 'compte_courant_associe',  label: 'Compte courant associe',  compte: '455' },
+                              { code: 'avance_personnel',        label: 'Avance au personnel',     compte: '425' },
+                              { code: 'virement_interne',        label: 'Virement interne',        compte: '580' },
+                              { code: 'remboursement_personnel', label: 'Remboursement personnel', compte: '108' },
+                              { code: 'charge_diverse',          label: 'Charge diverse',          compte: '658' },
+                              { code: 'autre',                   label: 'A classer plus tard',     compte: '471' },
+                            ]
+                            return (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="outline" size="sm" className="h-7 text-xs gap-1">
+                                    Classer{nbSimilaires > 0 ? ` (+${nbSimilaires})` : ''} <ChevronDown className="w-3 h-3" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-80">
+                                  <DropdownMenuLabel className="text-xs">Classer cette transaction</DropdownMenuLabel>
+                                  <DropdownMenuSeparator />
+                                  {classifications.map(c => (
+                                    <DropdownMenuItem key={c.code} onClick={() => handleClasserTx(tx, c.code, false)}>
+                                      <span className="text-xs font-mono text-gray-500 mr-2">{c.compte}</span>{c.label}
+                                    </DropdownMenuItem>
+                                  ))}
+                                  {nbSimilaires > 0 && (
+                                    <>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuLabel className="text-xs text-amber-700">
+                                        ⚡ Classer + propager a {nbSimilaires} tx similaires (meme tiers)
+                                      </DropdownMenuLabel>
+                                      {classifications.map(c => (
+                                        <DropdownMenuItem
+                                          key={`prop-${c.code}`}
+                                          onClick={() => handleClasserTx(tx, c.code, true)}
+                                          className="text-amber-700"
+                                        >
+                                          <Zap className="w-3 h-3 mr-1 text-amber-600" />
+                                          <span className="text-xs font-mono text-gray-500 mr-2">{c.compte}</span>
+                                          {c.label}
+                                          <span className="ml-auto text-[10px] text-amber-600">+{nbSimilaires}</span>
+                                        </DropdownMenuItem>
+                                      ))}
+                                    </>
+                                  )}
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem onClick={() => { setDialogTab('factures'); setLinkDialog(tx) }}>
+                                    <Link2 className="w-4 h-4 mr-2 text-blue-600" />
+                                    Lettrer avec facture(s) fournisseur
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            )
+                          })()}
                         </div>
                       </TableCell>
                     </TableRow>
