@@ -54,41 +54,50 @@ export function PeriodeBar({
 }) {
   const [months, setMonths] = useState<MonthStats[]>([])
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!societeId) return
     setLoading(true)
+    setError(null)
     fetch(`/api/comptable/rapprochement/mois-overview?societe_id=${societeId}`)
       .then(r => r.json())
-      .then(d => setMonths(d.months || []))
-      .catch(() => {})
+      .then(d => {
+        if (d?.error) {
+          setError(d.error)
+          setMonths([])
+        } else {
+          setMonths(d.months || [])
+        }
+      })
+      .catch(e => setError(e.message))
       .finally(() => setLoading(false))
   }, [societeId])
 
-  if (!societeId) return null
-  if (loading && months.length === 0) {
+  if (!societeId) {
     return (
-      <div className="flex items-center gap-2 text-sm text-slate-500 py-4">
-        <Loader2 className="h-4 w-4 animate-spin" /> Chargement des périodes…
-      </div>
+      <Card className="border-2 border-slate-200 bg-slate-50">
+        <CardContent className="p-3 text-sm text-slate-500">
+          Sélectionnez une société pour voir les périodes
+        </CardContent>
+      </Card>
     )
   }
-  if (months.length === 0) return null
 
   const activeStats = months.find(m => m.mois === activeMonth)
 
   return (
     <Card className="border-2 border-[#D4AF37]/30 bg-gradient-to-r from-[#FFFAF0] to-white">
       <CardContent className="p-3">
-        <div className="flex items-center gap-2 mb-2">
+        <div className="flex items-center gap-2 mb-2 flex-wrap">
           <Calendar className="w-4 h-4 text-[#0B0F2E]" />
           <h3 className="font-semibold text-sm text-[#0B0F2E]">
             Période active : {activeMonth ? formatMoisLong(activeMonth) : "Toutes périodes"}
           </h3>
           {activeStats && statusBadge(activeStats.reconciliation_status)}
           {activeStats && (
-            <span className="text-xs text-slate-500 ml-2">
-              {activeStats.completion_pct}% rapproché · {activeStats.a_verifier} à vérifier · {activeStats.non_identifie} inconnues · {activeStats.ecritures_401_non_lettrees} écritures à lettrer
+            <span className="text-xs text-slate-500">
+              {activeStats.completion_pct}% rapproché · {activeStats.a_verifier} à vérifier · {activeStats.non_identifie} inconnues · {activeStats.ecritures_401_non_lettrees} écritures 401
             </span>
           )}
           <div className="ml-auto flex items-center gap-2">
@@ -119,40 +128,51 @@ export function PeriodeBar({
           </div>
         </div>
 
-        {/* Carrousel horizontal des mois */}
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {months.map(m => {
-            const isActive = m.mois === activeMonth
-            const hasIssue = m.a_verifier > 0 || m.non_identifie > 0 || m.ecritures_401_non_lettrees > 0
-            return (
-              <button
-                key={m.mois}
-                onClick={() => onSelectMonth(m.mois)}
-                className={`shrink-0 min-w-[180px] text-left rounded-lg border-2 transition-all p-2 ${
-                  isActive
-                    ? "border-[#D4AF37] bg-white shadow-md"
-                    : "border-slate-200 bg-white/60 hover:border-slate-300 hover:bg-white"
-                }`}
-              >
-                <div className="flex items-center justify-between gap-1 mb-1">
-                  <span className="font-semibold text-xs text-[#0B0F2E]">{formatMoisLong(m.mois)}</span>
-                  {statusBadge(m.reconciliation_status)}
-                </div>
-                <div className="flex items-center gap-1 mb-1">
-                  <Progress value={m.completion_pct} className="h-1.5 flex-1" />
-                  <span className="text-[10px] font-mono text-slate-600 w-8 text-right">{m.completion_pct}%</span>
-                </div>
-                <div className="flex items-center gap-2 text-[10px] text-slate-600">
-                  <span>{m.total_tx} tx</span>
-                  {m.a_verifier > 0 && <span className="text-amber-600">• {m.a_verifier} ⚠</span>}
-                  {m.non_identifie > 0 && <span className="text-red-600">• {m.non_identifie} ?</span>}
-                  {m.ecritures_401_non_lettrees > 0 && <span className="text-blue-600">• {m.ecritures_401_non_lettrees} 401</span>}
-                </div>
-                {isActive && <ChevronRight className="w-3 h-3 text-[#D4AF37] absolute" />}
-              </button>
-            )
-          })}
-        </div>
+        {loading && months.length === 0 ? (
+          <div className="flex items-center gap-2 text-sm text-slate-500 py-4">
+            <Loader2 className="h-4 w-4 animate-spin" /> Chargement des périodes…
+          </div>
+        ) : error ? (
+          <div className="flex items-center gap-2 text-sm text-red-600 py-2">
+            <AlertCircle className="h-4 w-4" /> {error}
+          </div>
+        ) : months.length === 0 ? (
+          <div className="text-sm text-slate-500 py-2">
+            Aucune période détectée. Importez un relevé bancaire pour voir les mois apparaître.
+          </div>
+        ) : (
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {months.map(m => {
+              const isActive = m.mois === activeMonth
+              return (
+                <button
+                  key={m.mois}
+                  onClick={() => onSelectMonth(m.mois)}
+                  className={`shrink-0 min-w-[180px] text-left rounded-lg border-2 transition-all p-2 relative ${
+                    isActive
+                      ? "border-[#D4AF37] bg-white shadow-md"
+                      : "border-slate-200 bg-white/60 hover:border-slate-300 hover:bg-white"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-1 mb-1">
+                    <span className="font-semibold text-xs text-[#0B0F2E]">{formatMoisLong(m.mois)}</span>
+                    {statusBadge(m.reconciliation_status)}
+                  </div>
+                  <div className="flex items-center gap-1 mb-1">
+                    <Progress value={m.completion_pct} className="h-1.5 flex-1" />
+                    <span className="text-[10px] font-mono text-slate-600 w-8 text-right">{m.completion_pct}%</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px] text-slate-600 flex-wrap">
+                    <span>{m.total_tx} tx</span>
+                    {m.a_verifier > 0 && <span className="text-amber-600">• {m.a_verifier} ⚠</span>}
+                    {m.non_identifie > 0 && <span className="text-red-600">• {m.non_identifie} ?</span>}
+                    {m.ecritures_401_non_lettrees > 0 && <span className="text-blue-600">• {m.ecritures_401_non_lettrees} 401</span>}
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        )}
       </CardContent>
     </Card>
   )
