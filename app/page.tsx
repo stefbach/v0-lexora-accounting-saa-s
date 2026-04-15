@@ -468,91 +468,411 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* FEATURES — white
-            §7 animation: Reveal (fade+translateY 450ms) on heading,
-            StaggerGroup with 45ms per card; §4 consistent card styling;
-            §2 HoverLift (scale+y) for press/hover feedback. */}
-        <section id="features" className="py-20 md:py-28" style={{ backgroundColor: "#FFFFFF" }}>
-          <div className="mx-auto max-w-7xl px-4 sm:px-6">
+        {/* FEATURES — modern modules section with gradient strips + numbered badges */}
+        <section
+          id="features"
+          className="relative overflow-hidden py-20 md:py-28"
+          style={{ backgroundColor: "#FFFFFF" }}
+        >
+          {/* Ambient backdrop */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0"
+            style={{
+              backgroundImage:
+                "radial-gradient(ellipse 50% 40% at 50% 0%, rgba(65,145,255,0.06) 0%, transparent 70%)",
+            }}
+          />
+
+          <div className="relative mx-auto max-w-7xl px-4 sm:px-6">
             <Reveal className="mb-16 text-center">
-              <h2 className="mb-4 text-3xl font-bold md:text-4xl" style={{ color: "#0B0F2E", fontFamily: "'Poppins', sans-serif", fontWeight: 700 }}>
+              <span
+                className="mb-5 inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-xs font-bold uppercase tracking-widest"
+                style={{
+                  backgroundColor: "rgba(65,145,255,0.06)",
+                  color: "#4191FF",
+                  borderColor: "rgba(65,145,255,0.20)",
+                  fontFamily: "'Poppins', sans-serif",
+                }}
+              >
+                <span
+                  aria-hidden="true"
+                  className="h-1.5 w-1.5 rounded-full"
+                  style={{ backgroundColor: "#D4AF37" }}
+                />
+                {locale === "fr" ? "6 modules intégrés" : "6 integrated modules"}
+              </span>
+              <h2
+                className="mb-4 text-3xl font-bold tracking-tight md:text-5xl"
+                style={{
+                  color: "#0B0F2E",
+                  fontFamily: "'Poppins', sans-serif",
+                  fontWeight: 700,
+                  letterSpacing: "-0.02em",
+                }}
+              >
                 {t('home.smart_modules', locale)}
               </h2>
-              <p className="mx-auto max-w-2xl" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif", fontWeight: 300, lineHeight: 1.7 }}>
+              <p
+                className="mx-auto max-w-2xl text-base md:text-lg"
+                style={{
+                  color: "#4A5490",
+                  fontFamily: "'Poppins', sans-serif",
+                  fontWeight: 300,
+                  lineHeight: 1.7,
+                }}
+              >
                 {t('home.smart_modules_desc', locale)}
               </p>
             </Reveal>
 
-            <StaggerGroup className="grid gap-8 md:grid-cols-2 lg:grid-cols-3" staggerMs={45}>
-              {features.map((feature) => (
-                <StaggerItem key={feature.title}>
-                  <HoverLift lift={4} className="h-full">
-                    <Card
-                      className="group h-full"
-                      style={{ backgroundColor: "#FFFFFF", border: "1px solid #E2E5F0", borderRadius: "12px" }}
-                    >
-                      <CardHeader className="pb-3">
+            <StaggerGroup className="grid gap-6 md:grid-cols-2 lg:grid-cols-3" staggerMs={60}>
+              {features.map((feature, idx) => {
+                const accent = idx % 2 === 0 ? "#4191FF" : "#D4AF37"
+                const accentSoft = idx % 2 === 0 ? "rgba(65,145,255,0.10)" : "rgba(212,175,55,0.10)"
+                const moduleNum = String(idx + 1).padStart(2, "0")
+                return (
+                  <StaggerItem key={feature.title} className="h-full">
+                    <HoverLift lift={6} className="h-full">
+                      <article
+                        className="group relative flex h-full flex-col overflow-hidden rounded-2xl"
+                        style={{
+                          backgroundColor: "#FFFFFF",
+                          border: "1px solid #E2E5F0",
+                          boxShadow:
+                            "0 1px 3px rgba(11,15,46,0.04), 0 8px 24px -12px rgba(11,15,46,0.08)",
+                        }}
+                      >
+                        {/* Top accent stripe */}
                         <div
-                          className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl"
-                          style={{ backgroundColor: "rgba(65,145,255,0.08)" }}
-                        >
-                          <feature.icon className="h-6 w-6" style={{ color: "#4191FF" }} aria-hidden="true" />
+                          aria-hidden="true"
+                          className="absolute inset-x-0 top-0 h-[3px]"
+                          style={{
+                            background: `linear-gradient(90deg, ${accent} 0%, ${accent}33 100%)`,
+                          }}
+                        />
+                        {/* Subtle corner glow on hover */}
+                        <div
+                          aria-hidden="true"
+                          className="pointer-events-none absolute -right-20 -top-20 h-48 w-48 rounded-full opacity-0 transition-opacity duration-500 group-hover:opacity-100"
+                          style={{
+                            background: `radial-gradient(circle, ${accentSoft} 0%, transparent 70%)`,
+                          }}
+                        />
+
+                        <div className="relative flex flex-1 flex-col p-7 md:p-8">
+                          {/* Header: icon tile + module number */}
+                          <div className="mb-6 flex items-start justify-between">
+                            <div
+                              className="flex h-14 w-14 items-center justify-center rounded-2xl transition-transform duration-300 group-hover:scale-110"
+                              style={{
+                                backgroundColor: accentSoft,
+                                border: `1px solid ${accent}30`,
+                                boxShadow: `0 8px 20px -8px ${accent}40`,
+                              }}
+                            >
+                              <feature.icon
+                                className="h-6 w-6"
+                                style={{ color: accent }}
+                                aria-hidden="true"
+                                strokeWidth={1.8}
+                              />
+                            </div>
+                            <span
+                              className="text-xs font-bold tracking-widest"
+                              style={{
+                                color: "#A8AFC7",
+                                fontFamily: "'Poppins', sans-serif",
+                                fontVariantNumeric: "tabular-nums",
+                              }}
+                            >
+                              {moduleNum} / 06
+                            </span>
+                          </div>
+
+                          {/* Title */}
+                          <h3
+                            className="mb-4 text-xl font-bold leading-tight"
+                            style={{
+                              color: "#0B0F2E",
+                              fontFamily: "'Poppins', sans-serif",
+                              fontWeight: 700,
+                              letterSpacing: "-0.01em",
+                            }}
+                          >
+                            {feature.title}
+                          </h3>
+
+                          {/* Feature list */}
+                          <ul className="flex-1 space-y-3">
+                            {feature.items.map((item, i) => (
+                              <li key={i} className="flex items-start gap-3 text-sm">
+                                <span
+                                  aria-hidden="true"
+                                  className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
+                                  style={{
+                                    backgroundColor: accentSoft,
+                                  }}
+                                >
+                                  <CheckCircle2
+                                    className="h-3.5 w-3.5"
+                                    style={{ color: accent }}
+                                    strokeWidth={2.5}
+                                  />
+                                </span>
+                                <span
+                                  style={{
+                                    color: "#4A5490",
+                                    fontFamily: "'Poppins', sans-serif",
+                                    lineHeight: 1.6,
+                                  }}
+                                >
+                                  {item}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+
+                          {/* Footer hint */}
+                          <div
+                            className="mt-6 pt-4 text-xs font-medium uppercase tracking-widest"
+                            style={{
+                              color: accent,
+                              fontFamily: "'Poppins', sans-serif",
+                              borderTop: "1px solid #F0F2F8",
+                            }}
+                          >
+                            {locale === "fr" ? "Inclus dans chaque formule" : "Included in every plan"}
+                          </div>
                         </div>
-                        <CardTitle className="text-lg" style={{ color: "#0B0F2E", fontFamily: "'Poppins', sans-serif", fontWeight: 500 }}>
-                          {feature.title}
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <ul className="space-y-2">
-                          {feature.items.map((item, i) => (
-                            <li key={i} className="flex items-start gap-2 text-sm" style={{ color: "#4A5490" }}>
-                              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "#D4AF37" }} aria-hidden="true" />
-                              <span>{item}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </CardContent>
-                    </Card>
-                  </HoverLift>
-                </StaggerItem>
-              ))}
+                      </article>
+                    </HoverLift>
+                  </StaggerItem>
+                )
+              })}
             </StaggerGroup>
           </div>
         </section>
 
-        {/* AI SECTION — light grey (staggered cards, reveal heading) */}
-        <section id="ai" className="py-20 md:py-28" style={{ backgroundColor: "#F0F2F8" }}>
-          <div className="mx-auto max-w-7xl px-4 sm:px-6">
+        {/* AI SECTION — dark navy theme, numbered agent cards with gradient ring */}
+        <section
+          id="ai"
+          className="relative overflow-hidden py-20 md:py-28"
+          style={{ backgroundColor: "#0B0F2E" }}
+        >
+          {/* Dotted grid + ambient glow */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 opacity-[0.06]"
+            style={{
+              backgroundImage:
+                "radial-gradient(circle at 50% 50%, #D4AF37 1px, transparent 1px)",
+              backgroundSize: "32px 32px",
+            }}
+          />
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0"
+            style={{
+              backgroundImage:
+                "radial-gradient(ellipse 60% 50% at 50% 0%, rgba(65,145,255,0.10) 0%, transparent 70%), radial-gradient(ellipse 50% 40% at 100% 100%, rgba(212,175,55,0.08) 0%, transparent 70%)",
+            }}
+          />
+
+          <div className="relative mx-auto max-w-7xl px-4 sm:px-6">
             <Reveal className="mb-16 text-center">
-              <h2 className="mb-4 text-3xl font-bold md:text-4xl" style={{ color: "#0B0F2E", fontFamily: "'Poppins', sans-serif", fontWeight: 700 }}>
-                {locale === 'fr' ? "6 agents IA qui travaillent pour vous" : "6 AI agents working for you"}
+              <span
+                className="mb-5 inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-xs font-bold uppercase tracking-widest"
+                style={{
+                  backgroundColor: "rgba(212,175,55,0.08)",
+                  color: "#D4AF37",
+                  borderColor: "rgba(212,175,55,0.25)",
+                  fontFamily: "'Poppins', sans-serif",
+                }}
+              >
+                <Brain className="h-3.5 w-3.5" aria-hidden="true" />
+                {locale === "fr" ? "Équipe d'agents IA" : "AI agent team"}
+              </span>
+              <h2
+                className="mb-4 text-3xl font-bold tracking-tight md:text-5xl"
+                style={{
+                  color: "#E8EAFC",
+                  fontFamily: "'Poppins', sans-serif",
+                  fontWeight: 700,
+                  letterSpacing: "-0.02em",
+                }}
+              >
+                {locale === "fr" ? (
+                  <>
+                    6 agents{" "}
+                    <span
+                      style={{
+                        backgroundImage:
+                          "linear-gradient(90deg, #4191FF 0%, #D4AF37 100%)",
+                        WebkitBackgroundClip: "text",
+                        backgroundClip: "text",
+                        color: "transparent",
+                      }}
+                    >
+                      IA
+                    </span>{" "}
+                    qui travaillent pour vous
+                  </>
+                ) : (
+                  <>
+                    6{" "}
+                    <span
+                      style={{
+                        backgroundImage:
+                          "linear-gradient(90deg, #4191FF 0%, #D4AF37 100%)",
+                        WebkitBackgroundClip: "text",
+                        backgroundClip: "text",
+                        color: "transparent",
+                      }}
+                    >
+                      AI agents
+                    </span>{" "}
+                    working for you
+                  </>
+                )}
               </h2>
-              <p className="mx-auto max-w-2xl" style={{ color: "#4A5490", fontFamily: "'Poppins', sans-serif", fontWeight: 300, lineHeight: 1.7 }}>
-                {locale === 'fr'
-                  ? "Chaque module de Lexora est piloté par un agent IA spécialisé. Pas de saisie manuelle, pas de configuration complexe — vos agents comprennent votre entreprise et s'adaptent à vos besoins. C'est comme avoir une équipe complète d'experts qui travaille 24h/24."
-                  : "Every Lexora module is powered by a specialized AI agent. No manual entry, no complex setup — your agents understand your business and adapt to your needs. It's like having a full team of experts working 24/7."}
+              <p
+                className="mx-auto max-w-2xl text-base md:text-lg"
+                style={{
+                  color: "#A8AFC7",
+                  fontFamily: "'Poppins', sans-serif",
+                  fontWeight: 300,
+                  lineHeight: 1.7,
+                }}
+              >
+                {locale === "fr"
+                  ? "Chaque module de Lexora est piloté par un agent IA spécialisé. Pas de saisie manuelle, pas de configuration complexe — vos agents comprennent votre entreprise et s'adaptent à vos besoins."
+                  : "Every Lexora module is powered by a specialized AI agent. No manual entry, no complex setup — your agents understand your business and adapt to your needs."}
               </p>
             </Reveal>
 
-            <StaggerGroup className="grid gap-6 md:grid-cols-2 lg:grid-cols-3" staggerMs={40}>
-              {aiCapabilities.map((cap, i) => (
-                <StaggerItem key={i}>
-                  <HoverLift lift={3} className="h-full">
-                    <div
-                      className="flex h-full items-start gap-4 rounded-xl p-6"
-                      style={{ backgroundColor: "#FFFFFF", border: "1px solid #E2E5F0", borderRadius: "12px" }}
-                    >
-                      <div
-                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
-                        style={{ backgroundColor: "#0B0F2E" }}
+            <StaggerGroup className="grid gap-5 md:grid-cols-2 lg:grid-cols-3" staggerMs={70}>
+              {aiCapabilities.map((cap, i) => {
+                // Split "Agent X — description" into name + body.
+                const dash = cap.text.indexOf("—")
+                const name =
+                  dash > 0 ? cap.text.slice(0, dash).trim() : `Agent #${i + 1}`
+                const body =
+                  dash > 0 ? cap.text.slice(dash + 1).trim() : cap.text
+                const accent = i % 2 === 0 ? "#4191FF" : "#D4AF37"
+                const accentSoft =
+                  i % 2 === 0
+                    ? "rgba(65,145,255,0.15)"
+                    : "rgba(212,175,55,0.15)"
+                const num = String(i + 1).padStart(2, "0")
+
+                return (
+                  <StaggerItem key={i} className="h-full">
+                    <HoverLift lift={5} className="h-full">
+                      <article
+                        className="group relative flex h-full flex-col overflow-hidden rounded-2xl p-6 md:p-7"
+                        style={{
+                          backgroundColor: "#101847",
+                          border: "1px solid #1E2760",
+                        }}
                       >
-                        <cap.icon className="h-5 w-5 text-white" aria-hidden="true" />
-                      </div>
-                      <p className="text-sm leading-relaxed" style={{ color: "#4A5490", fontWeight: 300, lineHeight: 1.7 }}>{cap.text}</p>
-                    </div>
-                  </HoverLift>
-                </StaggerItem>
-              ))}
+                        {/* Hover gradient ring */}
+                        <div
+                          aria-hidden="true"
+                          className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 transition-opacity duration-500 group-hover:opacity-100"
+                          style={{
+                            background: `linear-gradient(135deg, ${accent}40 0%, transparent 40%, transparent 60%, ${accent}20 100%)`,
+                            mixBlendMode: "overlay",
+                          }}
+                        />
+
+                        {/* Header row: icon + big number */}
+                        <div className="relative mb-5 flex items-start justify-between gap-4">
+                          <div
+                            className="relative flex h-12 w-12 items-center justify-center rounded-xl"
+                            style={{
+                              backgroundColor: accentSoft,
+                              border: `1px solid ${accent}40`,
+                              boxShadow: `0 0 20px ${accent}25`,
+                            }}
+                          >
+                            <cap.icon
+                              className="h-5 w-5"
+                              style={{ color: accent }}
+                              aria-hidden="true"
+                              strokeWidth={1.8}
+                            />
+                            {/* Live indicator */}
+                            <span
+                              aria-hidden="true"
+                              className="absolute -right-1 -top-1 flex h-3 w-3 items-center justify-center"
+                            >
+                              <span
+                                className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75"
+                                style={{ backgroundColor: accent }}
+                              />
+                              <span
+                                className="relative inline-flex h-2 w-2 rounded-full"
+                                style={{ backgroundColor: accent }}
+                              />
+                            </span>
+                          </div>
+                          <span
+                            className="text-3xl font-bold leading-none md:text-4xl"
+                            style={{
+                              color: "rgba(232,234,252,0.08)",
+                              fontFamily: "'Poppins', sans-serif",
+                              fontVariantNumeric: "tabular-nums",
+                              letterSpacing: "-0.04em",
+                            }}
+                          >
+                            {num}
+                          </span>
+                        </div>
+
+                        {/* Agent name */}
+                        <h3
+                          className="relative mb-3 text-lg font-bold leading-tight"
+                          style={{
+                            color: "#E8EAFC",
+                            fontFamily: "'Poppins', sans-serif",
+                            fontWeight: 700,
+                            letterSpacing: "-0.01em",
+                          }}
+                        >
+                          {name}
+                        </h3>
+
+                        {/* Description */}
+                        <p
+                          className="relative flex-1 text-sm"
+                          style={{
+                            color: "#A8AFC7",
+                            fontFamily: "'Poppins', sans-serif",
+                            fontWeight: 300,
+                            lineHeight: 1.7,
+                          }}
+                        >
+                          {body}
+                        </p>
+
+                        {/* Status footer */}
+                        <div
+                          className="relative mt-5 flex items-center justify-between pt-4 text-[11px] font-medium uppercase tracking-widest"
+                          style={{ borderTop: "1px solid rgba(30,39,96,0.6)" }}
+                        >
+                          <span style={{ color: accent, fontFamily: "'Poppins', sans-serif" }}>
+                            {locale === "fr" ? "En ligne · 24/7" : "Online · 24/7"}
+                          </span>
+                          <span style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
+                            AI · ML
+                          </span>
+                        </div>
+                      </article>
+                    </HoverLift>
+                  </StaggerItem>
+                )
+              })}
             </StaggerGroup>
           </div>
         </section>
