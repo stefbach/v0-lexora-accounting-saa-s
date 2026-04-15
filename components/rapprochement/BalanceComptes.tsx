@@ -5,7 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { BookOpen, ChevronDown, ChevronRight, Loader2, AlertCircle, CheckCircle2 } from "lucide-react"
+import { BookOpen, ChevronDown, ChevronRight, Loader2, AlertCircle, CheckCircle2, ExternalLink } from "lucide-react"
+import Link from "next/link"
 
 interface SampleEcriture {
   date: string
@@ -186,12 +187,22 @@ export function BalanceComptes({ societeId, mois }: { societeId: string | null; 
                       {fmt(c.solde)}
                     </TableCell>
                     <TableCell className="text-right text-sm">
-                      <span className="text-slate-600">{c.nb_ecritures}</span>
-                      {c.nb_lettrees > 0 && (
-                        <span className="ml-1 text-emerald-600 text-[10px]" title="Écritures lettrées">
-                          ({c.nb_lettrees} ✓)
-                        </span>
-                      )}
+                      <div className="flex items-center justify-end gap-2">
+                        <span className="text-slate-600">{c.nb_ecritures}</span>
+                        {c.nb_lettrees > 0 && (
+                          <span className="text-emerald-600 text-[10px]" title="Écritures lettrées">
+                            ({c.nb_lettrees} ✓)
+                          </span>
+                        )}
+                        <Link
+                          href={`/client/ecritures?compte=${c.compte}${mois ? `&mois=${mois}` : ''}`}
+                          onClick={e => e.stopPropagation()}
+                          className="text-blue-600 hover:text-blue-800"
+                          title="Voir toutes les écritures du compte"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                        </Link>
+                      </div>
                     </TableCell>
                   </TableRow>
                   {expanded.has(c.compte) && (
