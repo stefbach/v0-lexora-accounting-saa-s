@@ -78,10 +78,31 @@ export async function POST(request: Request) {
     const { data, error } = await supabase.from('employes').insert(body).select().single()
     if (error) throw error
 
-    // Initialiser soldes congés année en cours
+    // Sprint 3 BUG 2 — Initialiser soldes congés année en cours AVEC les
+    // valeurs WRA 2019. Auparavant on insérait juste {employe_id, annee}
+    // → al_droit / sl_droit NULL en DB → cassait les rapports SQL et
+    // exports analytics. La page /rh/conges recalcule à la volée donc le
+    // bug était invisible côté UI.
+    //
+    // Calcul prorata si embauche en cours d'année :
+    //   • mois >= 12 → 22 j AL, 15 j SL (droit plein)
+    //   • sinon       → mois × 22/12 (resp. 15/12), arrondi à l'entier
+    const dateArrivee = data.date_arrivee ? new Date(String(data.date_arrivee)) : new Date()
+    const now = new Date()
+    const moisAnciennete = Math.max(0,
+      (now.getFullYear() - dateArrivee.getFullYear()) * 12
+      + (now.getMonth() - dateArrivee.getMonth())
+    )
+    const alDroit = moisAnciennete >= 12 ? 22 : Math.max(0, Math.round(moisAnciennete * 22 / 12))
+    const slDroit = moisAnciennete >= 12 ? 15 : Math.max(0, Math.round(moisAnciennete * 15 / 12))
+
     await supabase.from('soldes_conges').insert({
       employe_id: data.id,
-      annee: new Date().getFullYear(),
+      annee: now.getFullYear(),
+      al_droit: alDroit,
+      al_pris: 0,
+      sl_droit: slDroit,
+      sl_pris: 0,
     })
 
     return NextResponse.json({ employe: data }, { status: 201 })
