@@ -289,12 +289,15 @@ Voulez-vous vraiment continuer ?`
     if (!societeId) return
     setAutoPreview(null)
     setChatLoading(true)
-    console.log('[auto-classer] POST /api/comptable/rapprochement/agent/deterministic societe_id=', societeId)
+    console.log('[auto-classer] POST /api/comptable/rapprochement/agent/deterministic societe_id=', societeId, 'mois=', selectedMois || 'all')
     try {
       const res = await fetch('/api/comptable/rapprochement/agent/deterministic', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ societe_id: societeId }),
+        body: JSON.stringify({
+          societe_id: societeId,
+          ...(selectedMois ? { mois: selectedMois } : {}),
+        }),
       })
       const data = await res.json().catch(() => ({}))
       console.log('[auto-classer] response', res.status, data)

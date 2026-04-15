@@ -120,10 +120,16 @@ export async function POST(request: Request) {
 
     const supabase = getAdminClient()
     const body = await request.json()
-    const { societe_id, dry_run = false } = body
+    const { societe_id, dry_run = false, mois } = body
 
     if (!societe_id) {
       return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
+    }
+
+    // Validation optionnelle du format du mois (YYYY-MM)
+    const moisFilter = mois && /^\d{4}-\d{2}$/.test(mois) ? mois : null
+    if (moisFilter) {
+      console.log(`[auto-classer] scope mensuel actif : ${moisFilter}`)
     }
 
     // ── Load exchange rates ──
@@ -171,6 +177,12 @@ export async function POST(request: Request) {
 
       for (let idx = 0; idx < txs.length; idx++) {
         const tx = txs[idx]
+
+        // Filtre mois : si moisFilter actif, ne traite que les tx de ce mois
+        if (moisFilter) {
+          const txMois = String(tx.date || '').substring(0, 7)
+          if (txMois !== moisFilter) continue
+        }
 
         // Skip already matched
         if (tx.statut === 'rapproche' || tx.statut === 'interne') continue
