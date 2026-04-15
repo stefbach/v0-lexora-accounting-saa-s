@@ -272,12 +272,18 @@ export async function GET(request: Request) {
         )).catch(e => console.warn('[pointage] backfill pa_id failed:', e))
       }
 
-      // Migration 135 — exposer pointage_actif au client UI.
+      // Migration 135 — defensive : si la colonne pointage_actif n'existe
+      // pas (mig pas déployée partout) on retourne null sans 500.
       let pointage_actif: boolean | null = null
       if (societe_id) {
-        const { data: socData } = await supabase
-          .from('societes').select('pointage_actif').eq('id', societe_id).maybeSingle()
-        pointage_actif = (socData as any)?.pointage_actif === true
+        try {
+          const { data: socData, error: socErr } = await supabase
+            .from('societes').select('pointage_actif').eq('id', societe_id).maybeSingle()
+          if (socErr) console.warn('[pointage GET monthly] pointage_actif lookup failed:', socErr.message)
+          else pointage_actif = (socData as any)?.pointage_actif === true
+        } catch (e: any) {
+          console.warn('[pointage GET monthly] pointage_actif exception:', e?.message || e)
+        }
       }
 
       return NextResponse.json({ pointages: enriched, mois, nb: enriched.length, pointage_actif })
@@ -345,12 +351,17 @@ export async function GET(request: Request) {
       )).catch(e => console.warn('[pointage] backfill pa_id (daily) failed:', e))
     }
 
-    // Migration 135 — exposer pointage_actif au client UI (cf. monthly).
+    // Migration 135 — defensive (cf. monthly path).
     let pointage_actif_daily: boolean | null = null
     if (societe_id) {
-      const { data: socDataD } = await supabase
-        .from('societes').select('pointage_actif').eq('id', societe_id).maybeSingle()
-      pointage_actif_daily = (socDataD as any)?.pointage_actif === true
+      try {
+        const { data: socDataD, error: socErrD } = await supabase
+          .from('societes').select('pointage_actif').eq('id', societe_id).maybeSingle()
+        if (socErrD) console.warn('[pointage GET daily] pointage_actif lookup failed:', socErrD.message)
+        else pointage_actif_daily = (socDataD as any)?.pointage_actif === true
+      } catch (e: any) {
+        console.warn('[pointage GET daily] pointage_actif exception:', e?.message || e)
+      }
     }
 
     return NextResponse.json({ pointages: enriched, date, pointage_actif: pointage_actif_daily })

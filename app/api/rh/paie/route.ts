@@ -253,13 +253,23 @@ export async function GET(request: Request) {
     console.log(`[paie GET] ${enriched.length} bulletins, periode=${periode}, societe=${societe_id || 'all'}`)
 
     // Migration 135 — exposer pointage_actif au client pour qu'il puisse
-    // afficher le bandeau d'info correspondant. Lecture single ; si pas
-    // de societe_id, on retourne null (l'UI affichera un message neutre).
+    // afficher le bandeau d'info correspondant. Lecture defensive :
+    // si la colonne n'existe pas (mig 135 pas déployée partout) ou si
+    // PostgREST a un cache schema obsolète, on log + retourne null
+    // au lieu de propager l'erreur (régression /rh/paie 500).
     let pointage_actif: boolean | null = null
     if (societe_id) {
-      const { data: socData } = await supabase
-        .from('societes').select('pointage_actif').eq('id', societe_id).maybeSingle()
-      pointage_actif = (socData as any)?.pointage_actif === true
+      try {
+        const { data: socData, error: socErr } = await supabase
+          .from('societes').select('pointage_actif').eq('id', societe_id).maybeSingle()
+        if (socErr) {
+          console.warn('[paie GET] pointage_actif lookup failed (col missing?):', socErr.message)
+        } else {
+          pointage_actif = (socData as any)?.pointage_actif === true
+        }
+      } catch (e: any) {
+        console.warn('[paie GET] pointage_actif exception:', e?.message || e)
+      }
     }
 
     return NextResponse.json({ bulletins: enriched, totaux, nb: enriched.length, pointage_actif })
@@ -325,9 +335,16 @@ export async function POST(request: Request) {
       {
         const sid = targetSocieteId || emp.societe_id
         if (sid) {
-          const { data: soc } = await supabase
-            .from('societes').select('pointage_actif').eq('id', sid).maybeSingle()
-          pointageActifSingle = (soc as any)?.pointage_actif === true
+          // Hotfix régression — defensive : si la colonne n'existe pas
+          // (mig 135 incomplète) on retombe sur false (legacy).
+          try {
+            const { data: soc, error: socErr } = await supabase
+              .from('societes').select('pointage_actif').eq('id', sid).maybeSingle()
+            if (socErr) console.warn('[paie calculer] pointage_actif lookup failed:', socErr.message)
+            else pointageActifSingle = (soc as any)?.pointage_actif === true
+          } catch (e: any) {
+            console.warn('[paie calculer] pointage_actif exception:', e?.message || e)
+          }
         }
       }
 
@@ -666,11 +683,18 @@ export async function POST(request: Request) {
       // Migration 135 — fetch pointage_actif UNE FOIS pour tout le batch
       // (toutes les écritures partagent la même société). Si OFF (défaut),
       // les absences sont saisies manuellement ; aucune déduction auto.
+      // Hotfix régression — defensive : si la colonne n'existe pas, on
+      // retombe sur false plutôt que de 500 tout le batch.
       let pointageActifBatch = false
       if (societe_id) {
-        const { data: socData } = await supabase
-          .from('societes').select('pointage_actif').eq('id', societe_id).maybeSingle()
-        pointageActifBatch = (socData as any)?.pointage_actif === true
+        try {
+          const { data: socData, error: socErr } = await supabase
+            .from('societes').select('pointage_actif').eq('id', societe_id).maybeSingle()
+          if (socErr) console.warn('[paie batch] pointage_actif lookup failed:', socErr.message)
+          else pointageActifBatch = (socData as any)?.pointage_actif === true
+        } catch (e: any) {
+          console.warn('[paie batch] pointage_actif exception:', e?.message || e)
+        }
       }
       console.log(`[paie batch] pointage_actif=${pointageActifBatch} pour societe=${societe_id}`)
 

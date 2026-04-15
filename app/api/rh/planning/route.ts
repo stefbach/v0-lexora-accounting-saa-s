@@ -34,7 +34,13 @@ export async function GET(request: Request) {
     const periode = searchParams.get('periode') // YYYY-MM
 
     if (!societe_id) {
-      return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
+      // Régression hotfix — auparavant on renvoyait 400 si societe_id
+      // manquait. Plusieurs callers (notamment le polling de l'UI) tirent
+      // l'API sans avoir encore résolu la société (init), provoquant un
+      // 400 visible dans la console. On retourne maintenant une réponse
+      // vide cohérente qui ne casse pas le rendu et laisse le client
+      // recharger quand societe_id sera disponible.
+      return NextResponse.json({ planning: [], published: false, total: 0, error: 'societe_id requis' })
     }
 
     // Multi-tenant OR self-service: verify user has access
