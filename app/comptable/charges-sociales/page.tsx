@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Loader2, Scale, Download, TrendingUp, TrendingDown } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 interface BalanceLigne {
   compte: string; classe: string
@@ -70,7 +71,8 @@ export default function BalancePage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[#0B0F2E]">Balance Générale</h1>
@@ -203,5 +205,6 @@ export default function BalancePage() {
         </CardContent>
       </Card>
     </div>
+    </ClientPageShell>
   )
 }

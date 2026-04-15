@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import {
   Users, UserCog, Building2, FileText, Briefcase, Loader2
 } from 'lucide-react'
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 
@@ -187,7 +188,8 @@ export default function AdminDashboardPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold" style={{ color: '#0B0F2E' }}>
           Tableau de bord administrateur
@@ -323,5 +325,6 @@ export default function AdminDashboardPage() {
         </CardContent>
       </Card>
     </div>
+    </ClientPageShell>
   )
 }

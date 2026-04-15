@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, Building2, Users, TrendingUp, AlertTriangle, Download, Brain } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import dynamic from "next/dynamic"
 
 const CerveauTIBOK = dynamic(() => import("@/components/CerveauTIBOK"), { ssr: false })
@@ -74,6 +75,7 @@ export default function DirectionPage() {
   }
 
   return (
+    <ClientPageShell hideHero disableParticles>
     <div className="min-h-screen bg-gray-50">
       {/* Header Direction */}
       <div className="bg-[#0B0F2E] text-white px-6 py-4 flex items-center justify-between">
@@ -168,5 +170,6 @@ export default function DirectionPage() {
         </div>
       )}
     </div>
+    </ClientPageShell>
   )
 }

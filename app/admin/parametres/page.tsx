@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Save, Loader2, CheckCircle2, AlertCircle } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 type Params = {
   org_nom: string
@@ -97,7 +98,8 @@ export default function AdminParametresPage() {
   }
 
   return (
-    <div className="flex-1 overflow-auto p-6 space-y-6 max-w-3xl">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6 max-w-3xl">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>Paramètres plateforme</h1>
@@ -269,5 +271,6 @@ export default function AdminParametresPage() {
         </Button>
       </div>
     </div>
+    </ClientPageShell>
   )
 }

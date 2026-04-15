@@ -16,6 +16,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow
 } from '@/components/ui/table'
 import { ArrowLeftRight, Plus, AlertTriangle, Download, RefreshCw } from 'lucide-react'
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -205,7 +206,8 @@ export default function IntercoPage() {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -501,5 +503,6 @@ export default function IntercoPage() {
         </CardContent>
       </Card>
     </div>
+    </ClientPageShell>
   )
 }

@@ -20,6 +20,7 @@ import {
   Loader2, Settings, Check, X, Building2, Users, CreditCard,
   Pencil, Save, ChevronDown, ChevronUp,
 } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -299,7 +300,8 @@ export default function AdminServicesPage() {
   // Render
   // ----------------------------------------------------------------
   return (
-    <div className="p-6 space-y-6">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>Services & Plans</h1>
@@ -775,5 +777,6 @@ export default function AdminServicesPage() {
         </DialogContent>
       </Dialog>
     </div>
+    </ClientPageShell>
   )
 }

@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Plus, Search, Loader2, UserPlus, Building2 } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useProfile } from "@/hooks/use-profile"
 
 interface UserProfile {
@@ -219,7 +220,8 @@ export default function ComptableSocietesPage() {
   }
 
   return (
-    <div className="flex-1 overflow-auto p-6 space-y-6">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>Sociétés</h1>
@@ -424,5 +426,6 @@ export default function ComptableSocietesPage() {
         </DialogContent>
       </Dialog>
     </div>
+    </ClientPageShell>
   )
 }

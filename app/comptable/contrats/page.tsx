@@ -27,6 +27,7 @@ import {
   Loader2,
   FilePen,
 } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { TYPES_CONTRATS, STATUTS_CONTRATS } from "@/lib/contrats/constants"
 
 interface Contrat {
@@ -115,7 +116,8 @@ export default function ContratsPage() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <ClientPageShell hideHero disableParticles>
+    <div className="max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -307,5 +309,6 @@ export default function ContratsPage() {
         </div>
       )}
     </div>
+    </ClientPageShell>
   )
 }

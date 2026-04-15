@@ -12,6 +12,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import { FileText, Eye, Search, CheckCircle, FolderOpen, Loader2 } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 interface Document {
   id: string
@@ -87,7 +88,8 @@ export default function ComptableDocumentsPage() {
   const enCours = documents.filter((d) => d.statut === "en_cours").length
 
   return (
-    <div className="flex-1 overflow-auto p-6 space-y-6">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>Documents</h1>
         <p className="text-muted-foreground">Documents de tous vos clients</p>
@@ -164,5 +166,6 @@ export default function ComptableDocumentsPage() {
         </CardContent>
       </Card>
     </div>
+    </ClientPageShell>
   )
 }

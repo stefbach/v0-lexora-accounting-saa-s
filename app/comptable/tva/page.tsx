@@ -13,6 +13,7 @@ import {
   Loader2, Calculator, TrendingDown, TrendingUp, Download, RefreshCw,
   CheckCircle, AlertTriangle, Clock, XCircle
 } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -161,7 +162,8 @@ export default function TVAPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -417,5 +419,6 @@ export default function TVAPage() {
         </CardContent>
       </Card>
     </div>
+    </ClientPageShell>
   )
 }

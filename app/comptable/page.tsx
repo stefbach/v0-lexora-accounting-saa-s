@@ -34,6 +34,7 @@ import {
   UserCheck,
   Briefcase,
 } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useProfile } from "@/hooks/use-profile"
 
 const NAVY = "#0B0F2E"
@@ -182,7 +183,8 @@ export default function ComptableDashboardPage() {
   const totalSocietes = new Set(dossiers.map((d) => d.societe_id)).size
 
   return (
-    <div className="flex-1 overflow-auto p-6 space-y-6">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
         <div
@@ -520,5 +522,6 @@ export default function ComptableDashboardPage() {
         </Card>
       )}
     </div>
+    </ClientPageShell>
   )
 }

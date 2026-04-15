@@ -46,6 +46,7 @@ import {
   Loader2,
   UserPlus,
 } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -379,7 +380,8 @@ export default function SocietesPage() {
 
   // --------------- render ---------------
   return (
-    <div className="p-6 space-y-6">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -910,5 +912,6 @@ export default function SocietesPage() {
         </CardContent>
       </Card>
     </div>
+    </ClientPageShell>
   )
 }

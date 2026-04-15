@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { FileText, Search, Loader2 } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 interface Document {
   id: string
@@ -120,7 +121,8 @@ export default function AdminDocumentsPage() {
   )
 
   return (
-    <div className="p-6 space-y-6">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>Documents</h1>
         <p className="text-muted-foreground">Suivi des documents de la plateforme (stockage / usage)</p>
@@ -257,5 +259,6 @@ export default function AdminDocumentsPage() {
         </CardContent>
       </Card>
     </div>
+    </ClientPageShell>
   )
 }
