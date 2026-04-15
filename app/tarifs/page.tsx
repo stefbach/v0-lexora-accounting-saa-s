@@ -894,32 +894,31 @@ export default function TarifsPage() {
   /* ------------------------------------------------------------------
    * Calculator logic — per-employee for Paie, transaction-based for Compta
    * ------------------------------------------------------------------
-   * Design:
-   * - Paie: fixed platform base + per-employee fee with tiered rates
-   *   (volume discount as the headcount grows). Progression is SMOOTH:
-   *   adding one employee changes the price by the marginal rate, never
-   *   by a "step" jump like brackets do.
-   * - Compta: estimate monthly transactions from headcount (~10 tx/emp)
-   *   and map to the underlying plan tier (50/200/500/unlimited tx).
-   * - Bundle: Paie + Compta with a 20% bundle discount.
+   * Paie pricing is PURE per-employee (no flat platform fee). The rate
+   * is tiered so larger companies benefit from a volume discount, but
+   * the total always equals the sum of the marginal rate paid for each
+   * headcount. Adding 1 employee changes the total by exactly the rate
+   * in the current tier — no bracket jumps.
    *
-   * The "tier label" shown in the UI (Solo / Business / PME / Enterprise)
-   * is a cosmetic categorization matching the tier card criteria; the
-   * actual price comes from the formula. */
+   * Floor price: Rs 250/mois — even a solo setup (1 employee) pays
+   * at least Rs 250. This is the "prix plancher RH".
+   *
+   * Compta is transaction-based (we estimate ~10 tx per employee per
+   * month) and maps to one of four plans (50/200/500/unlimited tx).
+   * Bundle = Paie + Compta with a 20 % discount. */
 
-  // Paie per-employee rates (marginal, per additional employee).
-  const PAIE_BASE = 1100
+  const PAIE_FLOOR = 250 // minimum monthly Paie price
   const PAIE_TIERS: { upTo: number; rate: number }[] = [
-    { upTo: 10,       rate: 200 },
-    { upTo: 25,       rate: 130 },
-    { upTo: 50,       rate: 100 },
-    { upTo: 100,      rate: 80  },
-    { upTo: Infinity, rate: 60  },
+    { upTo: 5,        rate: 250 }, // entry rate — 1 emp = Rs 250 (floor)
+    { upTo: 15,       rate: 180 },
+    { upTo: 50,       rate: 120 },
+    { upTo: 100,      rate: 90  },
+    { upTo: Infinity, rate: 70  },
   ]
 
   function computePaiePrice(emp: number): number {
-    if (emp <= 0) return PAIE_BASE
-    let price = PAIE_BASE
+    if (emp <= 0) return PAIE_FLOOR
+    let price = 0
     let remaining = emp
     let from = 1
     for (const tier of PAIE_TIERS) {
@@ -930,7 +929,7 @@ export default function TarifsPage() {
       remaining -= count
       from = tier.upTo + 1
     }
-    return Math.round(price)
+    return Math.max(PAIE_FLOOR, Math.round(price))
   }
 
   function paieTierLabel(emp: number): { tier: string; range: string } {
@@ -981,6 +980,26 @@ export default function TarifsPage() {
     if (employees <= 15) return txt.calcFeatsSmall
     if (employees <= 50) return txt.calcFeatsMed
     return txt.calcFeatsLarge
+  }
+
+  /* Build a breakdown of the Paie price by volume tier, so the UI can
+   * show exactly how the total is composed (e.g.: 5 × Rs 250 + 10 × Rs 180). */
+  function paieBreakdown(emp: number): { label: string; count: number; rate: number; subtotal: number }[] {
+    if (emp <= 0) return []
+    const rows: { label: string; count: number; rate: number; subtotal: number }[] = []
+    let remaining = emp
+    let from = 1
+    for (const tier of PAIE_TIERS) {
+      if (remaining <= 0) break
+      const upToDisplay = tier.upTo === Infinity ? "+" : `${tier.upTo}`
+      const tierSize = tier.upTo - from + 1
+      const count = Math.min(remaining, tierSize)
+      const label = tier.upTo === Infinity ? `${from}${upToDisplay}` : `${from}–${upToDisplay}`
+      rows.push({ label, count, rate: tier.rate, subtotal: count * tier.rate })
+      remaining -= count
+      from = tier.upTo + 1
+    }
+    return rows
   }
 
   // Per-employee average (only meaningful for Paie/Bundle).
@@ -1526,22 +1545,20 @@ export default function TarifsPage() {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
                   <span>
                     {locale === "fr"
-                      ? <>Calcul <span style={{ color: C.white, fontWeight: 600 }}>par salarié</span> — dégressif au volume</>
+                      ? <>Calcul <span style={{ color: C.white, fontWeight: 600 }}>par salarié</span> — tarif dégressif au volume</>
                       : <>Priced <span style={{ color: C.white, fontWeight: 600 }}>per employee</span> — volume discount</>}
                   </span>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: "2px" }}>
-                  <span>{locale === "fr" ? "Plateforme (base)" : "Platform (base)"}</span>
-                  <span style={{ color: C.white, fontVariantNumeric: "tabular-nums" }}>MRs {fmt(PAIE_BASE)}</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                  <span>
-                    {employees} × {locale === "fr" ? "salariés" : "employees"}
-                  </span>
-                  <span style={{ color: C.white, fontVariantNumeric: "tabular-nums" }}>
-                    + MRs {fmt(calcPaiePrice() - PAIE_BASE)}
-                  </span>
-                </div>
+                {paieBreakdown(employees).map((row) => (
+                  <div key={row.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: "2px" }}>
+                    <span style={{ fontVariantNumeric: "tabular-nums" }}>
+                      {row.count} × {locale === "fr" ? "sal." : "emp."} <span style={{ opacity: 0.7 }}>({row.label})</span> @ MRs {row.rate}
+                    </span>
+                    <span style={{ color: C.white, fontVariantNumeric: "tabular-nums" }}>
+                      MRs {fmt(row.subtotal)}
+                    </span>
+                  </div>
+                ))}
                 <div style={{ height: "1px", backgroundColor: C.navyBorder, margin: "8px 0" }} />
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
                   <span style={{ fontWeight: 600, color: C.white }}>Total</span>
@@ -1551,7 +1568,7 @@ export default function TarifsPage() {
                 </div>
                 {employees > 0 && (
                   <div style={{ fontSize: "12px", color: C.muted, marginTop: "4px", fontVariantNumeric: "tabular-nums" }}>
-                    ≈ MRs {fmt(perEmpPaie)} {locale === "fr" ? "/ salarié / mois" : "/ employee / month"} · {locale === "fr" ? "TIBOK santé inclus" : "TIBOK health included"}
+                    ≈ MRs {fmt(perEmpPaie)} {locale === "fr" ? "/ salarié / mois" : "/ employee / month"} · {locale === "fr" ? "plancher MRs 250 · TIBOK inclus" : "floor MRs 250 · TIBOK included"}
                   </div>
                 )}
               </div>
