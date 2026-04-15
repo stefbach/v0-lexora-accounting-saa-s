@@ -65,6 +65,12 @@ export default function ClientRapprochementPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [selectedPeriode, setSelectedPeriode] = useState('2025-2026')
   const [associes, setAssocies] = useState<any[]>([])
+  const [employes, setEmployes] = useState<any[]>([])
+  // Dialog remboursement NDF
+  const [ndfDialog, setNdfDialog] = useState<any>(null)
+  const [ndfEmployeId, setNdfEmployeId] = useState<string>("")
+  const [ndfDescription, setNdfDescription] = useState<string>("")
+  const [ndfCompte, setNdfCompte] = useState<string>("425")
   // FIX 4 — Candidats associés (employés role=direction sans CCA) et
   // alertes légales Companies Act Mauritius (CCA débiteur).
   const [associesCandidates, setAssociesCandidates] = useState<Array<{ id: string; nom: string; role: string }>>([])
@@ -648,9 +654,60 @@ Voulez-vous vraiment continuer ?`
         setAssociesCandidates(ccData.candidates || [])
         setLegalAlerts(ccData.legal_alerts || [])
       }
+      // Charger les employes pour le picker NDF
+      try {
+        const empRes = await fetch(`/api/comptable/equipe?societe_id=${societeId}`).catch(() => null)
+        if (empRes?.ok) {
+          const empData = await empRes.json()
+          setEmployes(empData.employes || empData.membres || [])
+        }
+      } catch { /* best-effort */ }
     } catch { setData(null) }
     finally { setLoading(false) }
   }, [societeId])
+
+  // Ouvrir le dialog remboursement NDF pour une tx
+  const openNdfDialog = (tx: any) => {
+    setNdfDialog(tx)
+    setNdfEmployeId("")
+    setNdfDescription("")
+    setNdfCompte("425")
+  }
+
+  // Enregistrer le remboursement NDF
+  const handleRembourserEmploye = async () => {
+    if (!societeId || !ndfDialog) return
+    try {
+      const emp = employes.find(e => e.id === ndfEmployeId)
+      const res = await fetch("/api/comptable/rapprochement", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "rembourser_employe",
+          transaction_id: ndfDialog.id,
+          releve_id: ndfDialog.releve_id,
+          societe_id: societeId,
+          employe_id: ndfEmployeId || null,
+          employe_nom: emp ? `${emp.prenom || ''} ${emp.nom || ''}`.trim() : (ndfDialog.tiers_detecte || ''),
+          description: ndfDescription,
+          compte_charge: ndfCompte,
+        }),
+      })
+      const d = await res.json()
+      if (!res.ok) {
+        setToast({ type: 'error', message: d.error })
+      } else {
+        setToast({
+          type: 'success',
+          message: `✓ Remboursement ${d.employe} enregistré (${fmt(d.montant_mur)} MUR, compte ${d.compte})`,
+        })
+        setNdfDialog(null)
+        await load()
+      }
+    } catch (e: any) {
+      setToast({ type: 'error', message: e.message })
+    }
+  }
 
   useEffect(() => { load() }, [load])
 
@@ -1859,6 +1916,9 @@ Voulez-vous vraiment continuer ?`
                                   <DropdownMenuItem onClick={() => { setDialogTab('factures'); setLinkDialog(tx) }}>
                                     <Link2 className="w-4 h-4 mr-2 text-blue-600" />Lettrer avec une facture
                                   </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => openNdfDialog(tx)}>
+                                    <Users className="w-4 h-4 mr-2 text-purple-600" />Rembourser un employé (NDF)
+                                  </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             )
@@ -2133,6 +2193,10 @@ Voulez-vous vraiment continuer ?`
                                   <DropdownMenuItem onClick={() => { setDialogTab('factures'); setLinkDialog(tx) }}>
                                     <Link2 className="w-4 h-4 mr-2 text-blue-600" />
                                     Lettrer avec facture(s) fournisseur
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => openNdfDialog(tx)}>
+                                    <Users className="w-4 h-4 mr-2 text-purple-600" />
+                                    Rembourser un employé (NDF)
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
@@ -2486,6 +2550,93 @@ Voulez-vous vraiment continuer ?`
       </Dialog>
 
       {/* Lettrage dialog */}
+      {/* NDF — Remboursement employe */}
+      <Dialog open={!!ndfDialog} onOpenChange={o => { if (!o) setNdfDialog(null) }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="w-5 h-5 text-purple-600" /> Remboursement note de frais
+            </DialogTitle>
+          </DialogHeader>
+          {ndfDialog && (
+            <div className="space-y-3">
+              <div className="p-2 bg-slate-50 rounded text-xs space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Transaction :</span>
+                  <span className="font-medium">{formatDate(ndfDialog.date)}</span>
+                </div>
+                <div className="truncate" title={ndfDialog.libelle}>{ndfDialog.libelle}</div>
+                <div className="flex justify-between font-bold">
+                  <span>Montant :</span>
+                  <span className={ndfDialog.debit > 0 ? 'text-red-600' : 'text-green-600'}>
+                    {fmt(Math.max(Number(ndfDialog.debit) || 0, Number(ndfDialog.credit) || 0))} {ndfDialog.devise}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-xs">Employé bénéficiaire</Label>
+                <Select value={ndfEmployeId} onValueChange={setNdfEmployeId}>
+                  <SelectTrigger><SelectValue placeholder="— Sélectionner un employé —" /></SelectTrigger>
+                  <SelectContent>
+                    {employes.length === 0 ? (
+                      <SelectItem value="_none" disabled>Aucun employé (chargez depuis /rh/employes)</SelectItem>
+                    ) : (
+                      employes.map((e: any) => (
+                        <SelectItem key={e.id} value={e.id}>
+                          {`${e.prenom || ''} ${e.nom || ''}`.trim() || e.email || e.id}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Optionnel — si vide, le tiers_detecte de la tx sera utilisé
+                </p>
+              </div>
+
+              <div>
+                <Label className="text-xs">Description / Nature de la dépense</Label>
+                <Input
+                  value={ndfDescription}
+                  onChange={e => setNdfDescription(e.target.value)}
+                  placeholder="Ex: taxi aéroport, repas client, fournitures…"
+                  className="h-8 text-sm"
+                />
+              </div>
+
+              <div>
+                <Label className="text-xs">Compte comptable à débiter</Label>
+                <Select value={ndfCompte} onValueChange={setNdfCompte}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="425">425 — Avances au personnel</SelectItem>
+                    <SelectItem value="108">108 — Compte de l'exploitant</SelectItem>
+                    <SelectItem value="625">625 — Déplacements / missions</SelectItem>
+                    <SelectItem value="624">624 — Transports de biens</SelectItem>
+                    <SelectItem value="626">626 — Frais postaux / télécom</SelectItem>
+                    <SelectItem value="622">622 — Rémunérations intermédiaires</SelectItem>
+                    <SelectItem value="6251">6251 — Voyages et déplacements</SelectItem>
+                    <SelectItem value="6257">6257 — Réceptions / clients</SelectItem>
+                    <SelectItem value="658">658 — Autres charges diverses</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <Button variant="outline" onClick={() => setNdfDialog(null)}>Annuler</Button>
+                <Button
+                  className="bg-purple-600 text-white hover:bg-purple-700"
+                  onClick={handleRembourserEmploye}
+                >
+                  <Users className="w-4 h-4 mr-1" /> Enregistrer le remboursement
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!lettrageDialog} onOpenChange={o => { if (!o) { setLettrageDialog(null); setLettrageSelection(new Set()) } }}>
         <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Lettrer les écritures</DialogTitle></DialogHeader>
@@ -2552,18 +2703,81 @@ Voulez-vous vraiment continuer ?`
               {/* Tab: Factures — avec selection multiple pour 1 paiement = N factures */}
               {dialogTab === "factures" && (() => {
                 const txAmount = (linkDialog.debit > 0 ? linkDialog.debit : linkDialog.credit) || 0
-                // Filtre client (tiers) saisi dans la zone de recherche
+                const txDate = linkDialog.date ? new Date(linkDialog.date) : null
+                // Parser le filtre : supporte "client xxx", "montant 1500", "date 2026-03"
+                // ou simplement des tokens separes par espace qui peuvent etre montant, date, ou texte
+                const q = lettrageTiersFilter.trim().toLowerCase()
+                const tokens = q.split(/\s+/).filter(Boolean)
+                // Extraire filtres specifiques
+                let filterAmount: number | null = null
+                let filterAmountMin: number | null = null
+                let filterAmountMax: number | null = null
+                let filterDate: string | null = null
+                let filterText = ''
+                for (const tok of tokens) {
+                  const amtMatch = tok.match(/^(\d+(?:\.\d+)?)$/)
+                  const dateMatch = tok.match(/^(\d{4}-\d{2}(?:-\d{2})?)$/)
+                  const rangeMatch = tok.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)$/)
+                  if (rangeMatch) {
+                    filterAmountMin = parseFloat(rangeMatch[1])
+                    filterAmountMax = parseFloat(rangeMatch[2])
+                  } else if (amtMatch && parseFloat(tok) > 10) {
+                    filterAmount = parseFloat(tok)
+                  } else if (dateMatch) {
+                    filterDate = dateMatch[1]
+                  } else {
+                    filterText += (filterText ? ' ' : '') + tok
+                  }
+                }
+
                 const filtered = factures
                   .filter((f: any) => {
-                    if (!lettrageTiersFilter) return true
-                    const q = lettrageTiersFilter.toLowerCase()
-                    return (f.tiers || '').toLowerCase().includes(q)
-                      || (f.numero_facture || '').toLowerCase().includes(q)
+                    const fAmt = Number(f.montant_ttc) || 0
+                    const fDate = f.date_facture || ''
+                    // Filtre texte (tiers + numero)
+                    if (filterText) {
+                      const hay = `${(f.tiers || '').toLowerCase()} ${(f.numero_facture || '').toLowerCase()} ${(f.description || '').toLowerCase()}`
+                      if (!hay.includes(filterText)) return false
+                    }
+                    // Filtre montant exact (±5%)
+                    if (filterAmount !== null) {
+                      const tol = Math.max(filterAmount * 0.05, 1)
+                      if (Math.abs(fAmt - filterAmount) > tol) return false
+                    }
+                    // Filtre montant range
+                    if (filterAmountMin !== null && filterAmountMax !== null) {
+                      if (fAmt < filterAmountMin || fAmt > filterAmountMax) return false
+                    }
+                    // Filtre date (YYYY-MM ou YYYY-MM-DD)
+                    if (filterDate) {
+                      if (!fDate.startsWith(filterDate)) return false
+                    }
+                    return true
                   })
-                  .sort((a: any, b: any) => {
-                    return Math.abs((Number(a.montant_ttc) || 0) - txAmount)
-                      - Math.abs((Number(b.montant_ttc) || 0) - txAmount)
+                  // Score de pertinence : plus le score est petit plus c est pertinent
+                  .map((f: any) => {
+                    const fAmt = Number(f.montant_ttc) || 0
+                    const fDate = f.date_facture ? new Date(f.date_facture) : null
+                    let score = 0
+                    // Ecart de montant (normalise par le montant tx)
+                    const amountGap = Math.abs(fAmt - txAmount) / Math.max(txAmount, 1)
+                    score += amountGap * 100
+                    // Ecart de date en jours (si date tx connue)
+                    if (txDate && fDate && !isNaN(fDate.getTime())) {
+                      const days = Math.abs((txDate.getTime() - fDate.getTime()) / (1000 * 60 * 60 * 24))
+                      score += Math.min(days / 30, 5)
+                    }
+                    // Bonus tiers matching si le libelle de la tx contient le tiers facture
+                    const txTiersNorm = (linkDialog.tiers_detecte || linkDialog.libelle || '').toLowerCase()
+                    const fTiersNorm = (f.tiers || '').toLowerCase()
+                    if (fTiersNorm && txTiersNorm.includes(fTiersNorm.split(/\s+/)[0])) {
+                      score -= 20
+                    }
+                    return { f, score }
                   })
+                  .sort((a: any, b: any) => a.score - b.score)
+                  .map((x: any) => x.f)
+
                 const selected = Array.from(selectedFactureIds)
                   .map(id => factures.find((f: any) => f.id === id))
                   .filter(Boolean) as any[]
@@ -2573,18 +2787,21 @@ Voulez-vous vraiment continuer ?`
 
                 return (
                   <div className="space-y-2">
-                    {/* Barre de filtre tiers + compteur selection */}
+                    {/* Barre de filtre multi-criteres + compteur selection */}
                     <div className="sticky top-0 bg-white pb-1 border-b space-y-1">
                       <div className="flex gap-2 items-center">
                         <Input
                           value={lettrageTiersFilter}
                           onChange={e => setLettrageTiersFilter(e.target.value)}
-                          placeholder="🔍 Filtrer par client / n° facture..."
+                          placeholder="🔍 Client, n° facture, montant (1500), plage (1000-2000), date (2026-03)..."
                           className="h-8 text-sm flex-1"
                         />
                         <span className="text-xs text-gray-500 whitespace-nowrap">
                           {filtered.length}/{factures.length}
                         </span>
+                      </div>
+                      <div className="text-[10px] text-slate-500 italic">
+                        Ex : "MyT 225"  ·  "telecom 2026-03"  ·  "1000-2000"  ·  "SKYCALL"
                       </div>
                       {selectedFactureIds.size > 0 && (
                         <div className={`flex items-center justify-between gap-2 p-2 rounded text-xs ${gapClose ? 'bg-green-50 border border-green-200' : 'bg-amber-50 border border-amber-200'}`}>

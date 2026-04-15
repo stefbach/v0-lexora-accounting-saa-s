@@ -105,6 +105,7 @@ const CLIENT_SECTIONS: NavSection[] = [
       { href: "/client/rapprochement-mensuel", label: "Rapprochement mensuel", icon: FileSpreadsheet },
       { href: "/client/ecritures", label: "Écritures & OD", icon: FilePen },
       { href: "/client/grand-livre", label: "Grand Livre", icon: BookOpen },
+      { href: "/client/tiers-consolidation", label: "Consolider tiers", icon: UsersRound },
     ],
   },
   {

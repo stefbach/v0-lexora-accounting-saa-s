@@ -3629,6 +3629,105 @@ export async function POST(request: Request) {
       })
     }
 
+    // === REMBOURSER NOTE DE FRAIS (NDF) EMPLOYE ===
+    // Cree l ecriture comptable : D 425 Avances personnel / C 512 Banque
+    // Avec lien optionnel a un employe_id + description de la depense.
+    // Le montant est converti MUR selon la devise du compte bancaire.
+    if (action === 'rembourser_employe') {
+      const { transaction_id, releve_id, societe_id, employe_id, employe_nom, description, compte_charge } = body
+      if (!releve_id || !transaction_id || !societe_id) {
+        return NextResponse.json({ error: 'releve_id, transaction_id, societe_id requis' }, { status: 400 })
+      }
+
+      const { data: releve } = await supabase
+        .from('releves_bancaires')
+        .select('id, transactions_json, compte_bancaire_id')
+        .eq('id', releve_id).single()
+      if (!releve) return NextResponse.json({ error: 'Releve non trouve' }, { status: 404 })
+
+      const { data: cb } = await supabase
+        .from('comptes_bancaires').select('devise').eq('id', releve.compte_bancaire_id).maybeSingle()
+      const devise = (cb?.devise || 'MUR').toUpperCase()
+      const rates: Record<string, number> = await getTauxChange().catch(() => ({ MUR: 1, EUR: 46.50, USD: 44.80, GBP: 54.20 }))
+      const taux = rates[devise] || 1
+
+      const txIdx = parseInt(transaction_id.split('-').pop() || '0')
+      const txs = [...(releve.transactions_json || [])]
+      if (txIdx >= txs.length) return NextResponse.json({ error: 'Transaction non trouvee' }, { status: 404 })
+
+      // Verif periode non verrouillee
+      const txDate = txs[txIdx]?.date
+      if (txDate) {
+        const lockStatus = await checkPeriodLock(supabase, societe_id, txDate)
+        if (lockStatus.locked) {
+          return NextResponse.json({ error: `Periode verrouillee — ${lockStatus.reason}` }, { status: 403 })
+        }
+      }
+
+      const tx = txs[txIdx]
+      const montantOrig = Math.max(Number(tx.debit) || 0, Number(tx.credit) || 0)
+      const montantMUR = Math.round(montantOrig * taux * 100) / 100
+
+      // Employe optionnel
+      let employeInfo = null
+      if (employe_id) {
+        const { data: emp } = await supabase.from('employes').select('id, nom, prenom').eq('id', employe_id).single()
+        if (emp) employeInfo = emp
+      }
+      const nomEmploye = employeInfo
+        ? `${employeInfo.prenom || ''} ${employeInfo.nom || ''}`.trim()
+        : (employe_nom || 'Employé')
+
+      const code = `NDF${String(Date.now()).slice(-6)}`
+      const compteDebit = compte_charge || '425' // 425 Avances personnel par defaut
+      const refFolio = `NDF-${releve_id}-${txIdx}`
+
+      // Marquer la transaction
+      txs[txIdx] = {
+        ...tx,
+        statut: 'rapproche',
+        matched_type: 'remboursement_personnel',
+        lettre: code,
+        employe_id: employeInfo?.id || null,
+        employe_nom: nomEmploye,
+        note: `Remboursement ${nomEmploye} — ${description || 'Note de frais'}`,
+      }
+      await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', releve_id)
+
+      // Ecritures BNQ : D 425 (ou compte_charge) / C 512
+      const { data: dossier } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
+      if (dossier) {
+        const devLbl = devise === 'MUR' ? '' : ` [${devise} @ ${taux}]`
+        await supabase.from('ecritures_comptables_v2').insert([
+          {
+            dossier_id: dossier.id, societe_id,
+            date_ecriture: tx.date || new Date().toISOString().split('T')[0],
+            journal: 'BNQ', numero_compte: compteDebit,
+            libelle: `Remboursement ${nomEmploye} — ${(description || 'NDF').substring(0, 60)}${devLbl}`,
+            debit_mur: montantMUR, credit_mur: 0,
+            lettre: code, ref_folio: refFolio,
+          },
+          {
+            dossier_id: dossier.id, societe_id,
+            date_ecriture: tx.date || new Date().toISOString().split('T')[0],
+            journal: 'BNQ', numero_compte: '512',
+            libelle: `Banque${devLbl} — Remboursement ${nomEmploye.substring(0, 40)}`,
+            debit_mur: 0, credit_mur: montantMUR,
+            lettre: code, ref_folio: refFolio,
+          },
+        ])
+      }
+
+      return NextResponse.json({
+        success: true,
+        lettre: code,
+        montant_mur: montantMUR,
+        devise,
+        employe: nomEmploye,
+        compte: compteDebit,
+      })
+    }
+
     return NextResponse.json({ error: 'Action inconnue' }, { status: 400 })
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
