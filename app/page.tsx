@@ -418,7 +418,7 @@ export default function HomePage() {
                 <FadeSlide delay={0.24} y={12}>
                   <div className="flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center lg:justify-start">
                     <PressableWrap>
-                      <Link href="/auth/login">
+                      <Link href="/inscription">
                         <Button
                           size="lg"
                           className="w-full px-8 text-base font-semibold sm:w-auto"
@@ -1867,7 +1867,7 @@ export default function HomePage() {
                 {t('home.cta_subtitle', locale)}
               </p>
               <PressableWrap>
-                <Link href="/auth/login">
+                <Link href="/inscription">
                   <Button
                     size="lg"
                     className="px-10 text-base font-semibold"
