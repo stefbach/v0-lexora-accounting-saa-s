@@ -127,6 +127,59 @@ async function findPlanningAssignment(supabase: ReturnType<typeof getAdminClient
   return data && data.length > 0 ? data[0] : null
 }
 
+// INTÉGRATION 1 — calcule les flags de retard / départ anticipé par
+// rapport au planning du jour. Seuil de tolérance 15 min, dans les 2 sens.
+//   retard_minutes > 0           ⇒ l'employé est arrivé en retard
+//   depart_anticipe_minutes > 0  ⇒ l'employé est parti plus tôt
+//   ecart_heures                 ⇒ heures réelles − heures prévues
+// Retourne null si le planning manque ou est un jour de repos.
+function computePointagePunctuality(
+  planAssignment: { heure_debut?: string | null; heure_fin?: string | null; heures_prevues?: number | null; est_repos?: boolean | null } | null,
+  heure_entree: string | null,
+  heure_sortie: string | null,
+  heures_travaillees: number | null,
+) {
+  if (!planAssignment || planAssignment.est_repos) return null
+  const TOL_MIN = 15
+  const toMs = (h: string) => new Date(`1970-01-01T${h}`).getTime()
+
+  let retard_minutes = 0
+  let en_retard = false
+  if (heure_entree && planAssignment.heure_debut) {
+    const delta = Math.round((toMs(heure_entree) - toMs(planAssignment.heure_debut)) / 60000)
+    if (delta > TOL_MIN) {
+      retard_minutes = delta
+      en_retard = true
+    }
+  }
+
+  let depart_anticipe_minutes = 0
+  let depart_anticipe = false
+  if (heure_sortie && planAssignment.heure_fin) {
+    const delta = Math.round((toMs(planAssignment.heure_fin) - toMs(heure_sortie)) / 60000)
+    if (delta > TOL_MIN) {
+      depart_anticipe_minutes = delta
+      depart_anticipe = true
+    }
+  }
+
+  let ecart_heures: number | null = null
+  if (heures_travaillees != null && planAssignment.heures_prevues != null) {
+    ecart_heures = parseFloat((heures_travaillees - Number(planAssignment.heures_prevues)).toFixed(2))
+  }
+
+  return {
+    prevu_debut: planAssignment.heure_debut || null,
+    prevu_fin: planAssignment.heure_fin || null,
+    prevu_heures: planAssignment.heures_prevues != null ? Number(planAssignment.heures_prevues) : null,
+    en_retard,
+    retard_minutes,
+    depart_anticipe,
+    depart_anticipe_minutes,
+    ecart_heures,
+  }
+}
+
 export async function GET(request: Request) {
   try {
     const supabaseAuth = await createServerClient()
@@ -172,10 +225,52 @@ export async function GET(request: Request) {
         for (const e of emps || []) empMap[e.id] = { nom: e.nom, prenom: e.prenom, poste: e.poste }
       }
 
+      // INTÉGRATION 1 — charger les planning_assignments du mois pour tous
+      // les employés en une seule requête, puis joindre localement. On
+      // construit une map key=`${employe_id}|${date}` → assignment.
+      const planMap = new Map<string, any>()
+      if (uniqueEmpIds.length > 0) {
+        const { data: plans } = await supabase
+          .from('planning_assignments')
+          .select('id, employe_id, date, shift_code, heure_debut, heure_fin, heures_prevues, est_repos')
+          .gte('date', dateDebut)
+          .lte('date', dateFin)
+          .in('employe_id', uniqueEmpIds)
+        for (const pa of plans || []) {
+          planMap.set(`${pa.employe_id}|${pa.date}`, pa)
+        }
+      }
+
       const enriched = (data || []).map(p => {
         const { duree_minutes, heures_travaillees, heures_sup } = computeHours(p.heure_entree, p.heure_sortie, p.duree_minutes)
-        return { ...p, date: p.date_pointage, duree_minutes, heures_travaillees, heures_sup, employe: empMap[p.employe_id] || null }
+        const pa = planMap.get(`${p.employe_id}|${p.date_pointage}`) || null
+        const punctuality = computePointagePunctuality(pa, p.heure_entree, p.heure_sortie, heures_travaillees)
+        return {
+          ...p,
+          date: p.date_pointage,
+          duree_minutes,
+          heures_travaillees,
+          heures_sup,
+          employe: empMap[p.employe_id] || null,
+          planning: pa, // shift info brut pour l'UI
+          punctuality,  // retard / départ anticipé / écart
+        }
       })
+
+      // INTÉGRATION 1 — backfill opportuniste : les pointages historiques
+      // n'ont pas de planning_assignment_id (3 orphelins en prod). Dès
+      // qu'on trouve le pa correspondant, on l'écrit en DB pour que la
+      // prochaine lecture soit déjà liée. Best-effort : on n'échoue pas
+      // le GET si l'UPDATE échoue.
+      const toBackfill = enriched.filter(p => !p.planning_assignment_id && p.planning?.id)
+      if (toBackfill.length > 0) {
+        Promise.all(toBackfill.map(p =>
+          safeUpdatePointage(supabase, p.id, {
+            planning_assignment_id: p.planning.id,
+            shift_code: p.planning.shift_code,
+          })
+        )).catch(e => console.warn('[pointage] backfill pa_id failed:', e))
+      }
 
       return NextResponse.json({ pointages: enriched, mois, nb: enriched.length })
     }
@@ -202,10 +297,45 @@ export async function GET(request: Request) {
       for (const e of emps || []) empMap[e.id] = { nom: e.nom, prenom: e.prenom, poste: e.poste }
     }
 
+    // INTÉGRATION 1 — planning du jour par employé, pour calcul retard
+    // et affichage « Prévu 08:00-17:00 | Réel 08:15-17:00 ».
+    const planMapDaily = new Map<string, any>()
+    if (uniqueEmpIds.length > 0) {
+      const { data: plans } = await supabase
+        .from('planning_assignments')
+        .select('id, employe_id, date, shift_code, heure_debut, heure_fin, heures_prevues, est_repos')
+        .eq('date', date)
+        .in('employe_id', uniqueEmpIds)
+      for (const pa of plans || []) {
+        planMapDaily.set(pa.employe_id, pa)
+      }
+    }
+
     const enriched = (data || []).map(p => {
       const { duree_minutes, heures_travaillees, heures_sup } = computeHours(p.heure_entree, p.heure_sortie, p.duree_minutes)
-      return { ...p, duree_minutes, heures_travaillees, heures_sup, employe: empMap[p.employe_id] || null }
+      const pa = planMapDaily.get(p.employe_id) || null
+      const punctuality = computePointagePunctuality(pa, p.heure_entree, p.heure_sortie, heures_travaillees)
+      return {
+        ...p,
+        duree_minutes,
+        heures_travaillees,
+        heures_sup,
+        employe: empMap[p.employe_id] || null,
+        planning: pa,
+        punctuality,
+      }
     })
+
+    // INTÉGRATION 1 — backfill opportuniste (cf. path mensuel).
+    const toBackfillDaily = enriched.filter(p => !p.planning_assignment_id && p.planning?.id)
+    if (toBackfillDaily.length > 0) {
+      Promise.all(toBackfillDaily.map(p =>
+        safeUpdatePointage(supabase, p.id, {
+          planning_assignment_id: p.planning.id,
+          shift_code: p.planning.shift_code,
+        })
+      )).catch(e => console.warn('[pointage] backfill pa_id (daily) failed:', e))
+    }
 
     return NextResponse.json({ pointages: enriched, date })
   } catch (e: unknown) {
