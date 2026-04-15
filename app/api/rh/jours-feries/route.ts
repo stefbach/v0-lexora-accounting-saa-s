@@ -106,6 +106,39 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true })
     }
 
+    // ---- UPDATE (Sprint 4 TÂCHE 3 — toggle travail_autorise + majoration) ----
+    if (action === 'modifier') {
+      const { id, travail_autorise, majoration_pct, libelle } = body
+      if (!id) return NextResponse.json({ error: 'ID requis' }, { status: 400 })
+
+      const updates: Record<string, unknown> = {}
+      if (travail_autorise !== undefined) updates.travail_autorise = !!travail_autorise
+      if (majoration_pct !== undefined) {
+        const pct = Number(majoration_pct)
+        if (!Number.isFinite(pct) || pct < 0 || pct > 1000) {
+          return NextResponse.json({ error: 'majoration_pct doit être entre 0 et 1000' }, { status: 400 })
+        }
+        updates.majoration_pct = pct
+      }
+      if (libelle !== undefined) updates.libelle = String(libelle).trim()
+      if (Object.keys(updates).length === 0) {
+        return NextResponse.json({ error: 'Aucun champ à mettre à jour' }, { status: 400 })
+      }
+
+      const { data, error } = await supabase.from('jours_feries')
+        .update(updates).eq('id', id).select().maybeSingle()
+      if (error) {
+        // Si mig 139 pas appliquée → colonnes travail_autorise/majoration_pct absentes
+        if (/travail_autorise|majoration_pct/.test(error.message)) {
+          return NextResponse.json({
+            error: 'Migration 139 non appliquée — exécutez supabase/migrations/139_jours_feries_ameliore.sql',
+          }, { status: 503 })
+        }
+        return NextResponse.json({ error: error.message }, { status: 500 })
+      }
+      return NextResponse.json({ success: true, jour_ferie: data })
+    }
+
     // ---- INIT YEAR (pre-fill fixed holidays) ----
     if (action === 'init_annee') {
       const { annee, societe_id } = body

@@ -69,10 +69,13 @@ async function loadJoursFeriesForYears(
   const maxYear = Math.max(...years)
   try {
     const { data } = await supabase.from('jours_feries')
-      .select('date')
+      .select('date, travail_autorise')
       .gte('date', `${minYear}-01-01`)
       .lte('date', `${maxYear}-12-31`)
-    for (const r of data || []) set.add(String((r as any).date).slice(0, 10))
+    // Sprint 4 — exclure les jours travail_autorise=true du set de fériés.
+    for (const r of data || []) {
+      if (!(r as any).travail_autorise) set.add(String((r as any).date).slice(0, 10))
+    }
   } catch {}
   if (set.size === 0) {
     for (const y of years) for (const h of getMauritiusPublicHolidays(y)) set.add(h)

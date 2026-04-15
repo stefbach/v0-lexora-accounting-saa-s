@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
-  Loader2, Calendar, Star, Plus, Trash2, Info, RefreshCw,
+  Loader2, Calendar, Star, Plus, Trash2, Info, RefreshCw, Edit3,
   ChevronLeft, ChevronRight, Sun, Moon, Sparkles, Clock, MapPin
 } from "lucide-react"
 
@@ -27,12 +27,18 @@ interface JourFerie {
   type_jour: string
   societe_id: string | null
   annee: number | null
+  travail_autorise?: boolean // Sprint 4 mig 139
+  majoration_pct?: number    // Sprint 4 mig 139
 }
 
 interface HolidayDef {
   date: string
   libelle: string
   type: "fixe" | "variable" | "custom"
+  // Sprint 4 TÂCHE 3 — paramètres « travail autorisé » (mig 139).
+  // Nullable/optionnel car les défauts côté DB sont false/100.
+  travail_autorise?: boolean
+  majoration_pct?: number
 }
 
 // ─── Complete Mauritius Public Holidays Data ───
@@ -331,10 +337,12 @@ function HolidayCard({
   holiday,
   isPast,
   onDelete,
+  onEdit,
 }: {
   holiday: HolidayDef & { id?: string }
   isPast: boolean
   onDelete?: (id: string) => void
+  onEdit?: () => void
 }) {
   const d = new Date(holiday.date + "T00:00:00")
   const dayNum = d.getDate()
@@ -375,7 +383,7 @@ function HolidayCard({
             {holiday.libelle}
           </span>
         </div>
-        <div className="flex items-center gap-2 mt-0.5">
+        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
           <span className="text-xs text-gray-400 capitalize">{weekday}</span>
           <Badge
             variant="outline"
@@ -383,20 +391,43 @@ function HolidayCard({
           >
             {typeLabel(holiday.type)}
           </Badge>
+          {/* Sprint 4 TÂCHE 3 — badge travail autorisé + majoration */}
+          {holiday.travail_autorise && (
+            <Badge
+              variant="outline"
+              className="text-[10px] px-1.5 py-0 h-4 bg-emerald-50 text-emerald-700 border-emerald-200"
+              title="Les employés peuvent travailler ce jour férié (WRA 2019 art. 21)"
+            >
+              Travail +{holiday.majoration_pct ?? 100}%
+            </Badge>
+          )}
         </div>
       </div>
 
-      {/* Delete button for custom / DB holidays */}
-      {holiday.id && onDelete && (
-        <div className="flex items-center pr-2 opacity-0 group-hover:opacity-100 transition-opacity">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onDelete(holiday.id!)}
-            className="text-red-400 hover:text-red-600 hover:bg-red-50 h-7 w-7 p-0"
-          >
-            <Trash2 size={14} />
-          </Button>
+      {/* Edit + Delete buttons for DB holidays */}
+      {holiday.id && (onEdit || onDelete) && (
+        <div className="flex items-center pr-2 gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          {onEdit && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onEdit}
+              className="text-gray-500 hover:text-[#0B0F2E] hover:bg-gray-100 h-7 w-7 p-0"
+              title="Modifier (travail autorisé, majoration)"
+            >
+              <Edit3 size={14} />
+            </Button>
+          )}
+          {onDelete && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onDelete(holiday.id!)}
+              className="text-red-400 hover:text-red-600 hover:bg-red-50 h-7 w-7 p-0"
+            >
+              <Trash2 size={14} />
+            </Button>
+          )}
         </div>
       )}
     </div>
@@ -436,6 +467,13 @@ export default function JoursFeriesPage() {
   type NagerItem = { date: string; libelle: string; selected: boolean; already_exists: boolean }
   const [nagerItems, setNagerItems] = useState<NagerItem[]>([])
   const [nagerImporting, setNagerImporting] = useState(false)
+
+  // Sprint 4 TÂCHE 3 — Edit dialog (travail_autorise + majoration_pct)
+  const [editingHoliday, setEditingHoliday] = useState<JourFerie | null>(null)
+  const [editTravailAutorise, setEditTravailAutorise] = useState(false)
+  const [editMajoration, setEditMajoration] = useState("100")
+  const [editSaving, setEditSaving] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
 
   // Calendar preview month navigation
   const [calMonth, setCalMonth] = useState(new Date().getMonth())
@@ -482,9 +520,14 @@ export default function JoursFeriesPage() {
     for (const jf of dbHolidays) {
       const key = `${jf.date}|${jf.libelle}`
       if (map.has(key)) {
-        // merge with id
+        // merge with id + Sprint 4 mig 139 flags
         const existing = map.get(key)!
-        map.set(key, { ...existing, id: jf.id })
+        map.set(key, {
+          ...existing,
+          id: jf.id,
+          travail_autorise: jf.travail_autorise === true,
+          majoration_pct: Number(jf.majoration_pct ?? 100),
+        })
       } else {
         // custom holiday from DB
         map.set(key, {
@@ -492,6 +535,8 @@ export default function JoursFeriesPage() {
           libelle: jf.libelle,
           type: (jf.type_jour === "fixe" || jf.type_jour === "variable") ? jf.type_jour : "custom",
           id: jf.id,
+          travail_autorise: jf.travail_autorise === true,
+          majoration_pct: Number(jf.majoration_pct ?? 100),
         })
       }
     }
@@ -636,6 +681,43 @@ export default function JoursFeriesPage() {
       setNagerError(`Erreur d'import : ${e?.message || 'réseau'}`)
     } finally {
       setNagerImporting(false)
+    }
+  }
+
+  // Sprint 4 TÂCHE 3 — ouvrir le dialog d'édition travail_autorise/majoration
+  const openEditDialog = (h: JourFerie) => {
+    setEditingHoliday(h)
+    setEditTravailAutorise(h.travail_autorise === true)
+    setEditMajoration(String(h.majoration_pct ?? 100))
+    setEditError(null)
+  }
+
+  const saveEditHoliday = async () => {
+    if (!editingHoliday) return
+    setEditSaving(true)
+    setEditError(null)
+    try {
+      const res = await fetch('/api/rh/jours-feries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'modifier',
+          id: editingHoliday.id,
+          travail_autorise: editTravailAutorise,
+          majoration_pct: Number(editMajoration) || 100,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || data.error) {
+        setEditError(data.error || `Erreur ${res.status}`)
+        return
+      }
+      setEditingHoliday(null)
+      await load()
+    } catch (e: any) {
+      setEditError(e?.message || 'Erreur réseau')
+    } finally {
+      setEditSaving(false)
     }
   }
 
@@ -799,6 +881,13 @@ export default function JoursFeriesPage() {
                         holiday={h}
                         isPast={h.date < todayStr}
                         onDelete={h.id ? handleDelete : undefined}
+                        onEdit={h.id
+                          ? () => {
+                              // Retrouve la row DB complète pour alimenter le dialog
+                              const dbRow = dbHolidays.find(r => r.id === h.id)
+                              if (dbRow) openEditDialog(dbRow)
+                            }
+                          : undefined}
                       />
                     ))}
                   </div>
@@ -948,6 +1037,77 @@ export default function JoursFeriesPage() {
             >
               {nagerImporting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
               Importer les sélectionnés
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Sprint 4 TÂCHE 3 — Dialog édition travail_autorise + majoration_pct */}
+      <Dialog open={!!editingHoliday} onOpenChange={(o) => { if (!o) setEditingHoliday(null) }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Modifier le jour férié</DialogTitle>
+          </DialogHeader>
+          {editingHoliday && (
+            <div className="space-y-4">
+              <div>
+                <Label className="text-sm">Date</Label>
+                <p className="text-sm font-medium">{editingHoliday.date}</p>
+              </div>
+              <div>
+                <Label className="text-sm">Libellé</Label>
+                <p className="text-sm font-medium">{editingHoliday.libelle}</p>
+              </div>
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 space-y-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editTravailAutorise}
+                    onChange={(e) => setEditTravailAutorise(e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  <span className="text-sm font-medium text-emerald-900">Travail autorisé ce jour</span>
+                </label>
+                <p className="text-xs text-emerald-800">
+                  Si activé : les employés peuvent pointer ce jour. WRA 2019 art. 21 —
+                  rémunération = salaire normal + majoration.
+                </p>
+              </div>
+              {editTravailAutorise && (
+                <div>
+                  <Label className="text-sm">Majoration (%)</Label>
+                  <Input
+                    type="number"
+                    value={editMajoration}
+                    onChange={(e) => setEditMajoration(e.target.value)}
+                    min="0"
+                    max="1000"
+                    step="1"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    100 = +100% = double salaire (défaut WRA 2019). Ajustez si votre société applique un autre taux.
+                  </p>
+                </div>
+              )}
+              {editError && (
+                <Alert className="border-red-300 bg-red-50">
+                  <Info className="h-4 w-4 text-red-600" />
+                  <AlertDescription className="text-red-800 text-sm">{editError}</AlertDescription>
+                </Alert>
+              )}
+            </div>
+          )}
+          <div className="flex justify-end gap-2 pt-3 border-t">
+            <Button variant="outline" onClick={() => setEditingHoliday(null)} disabled={editSaving}>
+              Annuler
+            </Button>
+            <Button
+              onClick={saveEditHoliday}
+              disabled={editSaving}
+              style={{ backgroundColor: GOLD, color: NAVY }}
+            >
+              {editSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Enregistrer
             </Button>
           </div>
         </DialogContent>

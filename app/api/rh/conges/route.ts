@@ -33,10 +33,19 @@ async function loadJoursFeriesForYear(
   try {
     const { data } = await supabase
       .from('jours_feries')
-      .select('date')
+      .select('date, travail_autorise')
       .gte('date', `${year}-01-01`)
       .lte('date', `${year}-12-31`)
-    const set = new Set<string>((data || []).map((r: any) => String(r.date).slice(0, 10)))
+    // Sprint 4 TÂCHE 3 — on exclut les jours fériés avec travail_autorise=TRUE
+    // (WRA 2019 art. 21 — ces jours deviennent ouvrables avec majoration).
+    // Filtrage JS plutôt que SQL pour rétrocompat si mig 139 non appliquée :
+    // si la colonne n'existe pas, travail_autorise est undefined → falsy
+    // → la ligne est conservée (comportement legacy).
+    const set = new Set<string>(
+      (data || [])
+        .filter((r: any) => !r.travail_autorise)
+        .map((r: any) => String(r.date).slice(0, 10)),
+    )
     if (set.size > 0) return set
   } catch {
     // Fall through to hardcoded fallback below
