@@ -56,7 +56,6 @@ export default function ImportPaiePage() {
 
   const handleFile = async (file: File) => {
     if (!file) return
-    console.log("[import-paie] Selected file:", file.name, file.size, file.type)
     setFileName(file.name)
     setParsing(true)
     setParseError("")
@@ -67,13 +66,10 @@ export default function ImportPaiePage() {
       }
       const fd = new FormData()
       fd.append("file", file)
-      console.log("[import-paie] Uploading to API...")
       const res = await fetch("/api/rh/import-paie", { method: "POST", body: fd })
-      console.log("[import-paie] Response status:", res.status)
 
       if (!res.ok) {
         const text = await res.text()
-        console.error("[import-paie] Error response:", text)
         try {
           const errData = JSON.parse(text)
           setParseError(errData.error || `Erreur serveur (${res.status})`)
@@ -84,7 +80,6 @@ export default function ImportPaiePage() {
       }
 
       const data = await res.json()
-      console.log("[import-paie] Parsed:", data.nb_rows, "rows,", data.columns?.length, "columns")
 
       if (data.error) { setParseError(data.error); return }
       if (!data.employes || data.employes.length === 0) {
@@ -97,7 +92,9 @@ export default function ImportPaiePage() {
       if (data.periode_detected && !periode) setPeriode(data.periode_detected)
       setStep("preview")
     } catch (e: any) {
-      console.error("[import-paie] Exception:", e)
+      // Sprint 1 — l'utilisateur voit déjà le message via setParseError ;
+      // on n'expose plus la stack/exception détaillée en console pour
+      // éviter la pollution des logs prod.
       setParseError("Erreur: " + (e.message || "Connexion échouée. Vérifiez votre connexion internet."))
     }
     finally { setParsing(false) }
@@ -109,13 +106,11 @@ export default function ImportPaiePage() {
     if (employes.length === 0) { alert("Aucun employé à importer"); return }
     setImporting(true)
     try {
-      console.log(`[import] Importing ${employes.length} employees for ${societe} period ${periode}`)
       const res = await fetch("/api/rh/import-paie", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "import", societe_id: societe, periode, employes }),
       })
       const data = await res.json()
-      console.log("[import] Result:", data)
       if (data.error) { alert("Erreur: " + data.error); return }
       setResult(data)
       setStep("result")

@@ -298,9 +298,10 @@ export default function CongesParametresPage() {
       setRules(prev => prev.map(r => r.type_conge === editRule.type_conge ? updated : r))
       // Keep dialog open briefly so user sees the feedback, then close.
       setTimeout(() => { setEditOpen(false); setSaveFeedback(null) }, 1200)
-    } catch (e) {
-      console.error(e)
-      setSaveFeedback("Erreur lors de l'enregistrement")
+    } catch (e: any) {
+      // Sprint 1 — feedback déjà visible via setSaveFeedback ; pas de
+      // log console redondant en prod.
+      setSaveFeedback(`Erreur lors de l'enregistrement : ${e?.message || 'inconnue'}`)
     } finally {
       setSaving(false)
     }

@@ -142,10 +142,10 @@ export default function ParametresPaiePage() {
       setMraSource(r.source || null)
       setMraStatus('ok')
     } catch (e: any) {
+      // Sprint 1 — feedback déjà visible via mraStatus + mraError badge.
+      // Pas de log console redondant en prod.
       setMraStatus('error')
       setMraError(e?.message || 'Erreur réseau')
-      // On mount, failure is non-fatal — we keep whatever DB had.
-      if (!opts.fromMount) console.error('[paie/parametres] MRA rates fetch failed:', e)
     }
   }
 
