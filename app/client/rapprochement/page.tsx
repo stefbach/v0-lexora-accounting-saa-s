@@ -17,6 +17,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { bucketizeTransactions, type BucketItem } from "@/lib/accounting/classification-rules"
 import { RapprochementKpiDashboard } from "@/components/rapprochement/KpiDashboard"
+import { PeriodeBar } from "@/components/rapprochement/PeriodeBar"
 
 function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 function formatDate(d: string) { return d ? new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" }) : "—" }
@@ -988,10 +989,14 @@ Voulez-vous vraiment continuer ?`
   }))
 
   // Lettrage computed values (must be AFTER ecritures is defined)
-  const ecritures401 = ecritures.filter((e: any) => e.compte?.startsWith('401') && !e.lettre)
-  const ecritures411 = ecritures.filter((e: any) => e.compte?.startsWith('411') && !e.lettre)
+  // Filtre optionnel par mois actif (selectedMois = YYYY-MM) pour eviter
+  // de polluer la vue avec les ecritures d autres mois.
+  const ecrMatchMois = (e: any) =>
+    !selectedMois || (e.date_ecriture && String(e.date_ecriture).substring(0, 7) === selectedMois)
+  const ecritures401 = ecritures.filter((e: any) => e.compte?.startsWith('401') && !e.lettre && ecrMatchMois(e))
+  const ecritures411 = ecritures.filter((e: any) => e.compte?.startsWith('411') && !e.lettre && ecrMatchMois(e))
   const ecrituresLettrage = [...ecritures401, ...ecritures411]
-  const ecrituresLettrees = ecritures.filter((e: any) => e.lettre)
+  const ecrituresLettrees = ecritures.filter((e: any) => e.lettre && ecrMatchMois(e))
 
   const handleLettrer = async () => {
     if (!societeId || lettrageSelection.size < 2) return
@@ -1023,14 +1028,52 @@ Voulez-vous vraiment continuer ?`
    * POST /api/comptable/rapprochement action=sync_lettrage.
    * Reuses the `autoLettraging` state so the existing spinner still works.
    */
+  // P3 — Cloturer un mois (verif invariants + creation bank_reconciliation + lock)
+  const [cloturingMois, setCloturingMois] = useState(false)
+  const handleCloturerMois = async (mois: string) => {
+    if (!societeId || !mois) return
+    if (!window.confirm(`Cloturer la periode ${mois} ?\n\nCela va :\n- Verifier que toutes les tx sont classees\n- Verifier que toutes les ecritures 401/411 sont lettrees\n- Verifier solde 580 = 0\n- Creer le tableau de rapprochement officiel\n- VERROUILLER la periode (irreversible sans admin)\n\nContinuer ?`)) return
+    setCloturingMois(true)
+    try {
+      const res = await fetch('/api/comptable/rapprochement', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'cloturer_mois', societe_id: societeId, mois }),
+      })
+      const d = await res.json().catch(() => ({}))
+      console.log('[cloturer_mois] response', res.status, d)
+      if (!res.ok) {
+        const blockers = (d.blockers || []).join('\n  - ')
+        setToast({
+          type: 'error',
+          message: `❌ Cloture refusee : ${d.error || 'invariants non respectes'}${blockers ? '\n  - ' + blockers : ''}`,
+        })
+        return
+      }
+      setToast({
+        type: 'success',
+        message: `✓ Periode ${mois} cloturee. ${d.reconciliations_created} tableau(x) cree(s). ${d.period_locked ? 'Periode verrouillee.' : ''}`,
+      })
+      await load()
+    } catch (e: any) {
+      setToast({ type: 'error', message: `❌ ${e.message}` })
+    } finally {
+      setCloturingMois(false)
+    }
+  }
+
   const handleAutoLettrage = async () => {
     if (!societeId) return
     setAutoLettraging(true)
-    console.log('[sync_lettrage] POST societe_id=', societeId)
+    // P4 : si un mois est actif, scoper le lettrage au mois actif uniquement.
+    // Permet d eviter de toucher aux factures d autres mois (notamment mois
+    // deja cloturees).
+    const moisPayload = selectedMois ? { mois: selectedMois } : {}
+    console.log('[sync_lettrage] POST societe_id=', societeId, 'mois=', selectedMois || 'all')
     try {
       const res = await fetch("/api/comptable/rapprochement", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "sync_lettrage", societe_id: societeId }),
+        body: JSON.stringify({ action: "sync_lettrage", societe_id: societeId, ...moisPayload }),
       })
       const d = await res.json().catch(() => ({}))
       console.log('[sync_lettrage] response', res.status, d)
@@ -1155,6 +1198,14 @@ Voulez-vous vraiment continuer ?`
 
       {/* B4 — Dashboard KPIs rapprochement */}
       <RapprochementKpiDashboard societeId={societeId} />
+
+      {/* P1 — Barre de selection de periode active avec compteurs par mois */}
+      <PeriodeBar
+        societeId={societeId}
+        activeMonth={selectedMois}
+        onSelectMonth={setSelectedMois}
+        onCloturer={handleCloturerMois}
+      />
 
       {/* ── Bouton unique: Rapprocher automatiquement ─────────────────── */}
       <div className="flex flex-wrap items-center justify-between gap-3">

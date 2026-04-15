@@ -2192,9 +2192,9 @@ export async function POST(request: Request) {
     // rows already lettered are skipped.
     // ========================================================================
     if (action === 'sync_lettrage') {
-      const { societe_id: socId } = body
+      const { societe_id: socId, mois: moisFilter } = body
       if (!socId) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
-      console.log(`[sync_lettrage] start societe=${socId}`)
+      console.log(`[sync_lettrage] start societe=${socId} mois_filter=${moisFilter || 'all'}`)
 
       const { data: dossierRow } = await supabase
         .from('dossiers').select('id').eq('societe_id', socId).limit(1).maybeSingle()
@@ -2208,11 +2208,20 @@ export async function POST(request: Request) {
       // FIX 7 — on récupère aussi type_document et facture_origine_id pour
       // pouvoir grouper un avoir avec sa facture d'origine dans le même
       // lettrage.
-      const { data: paidFactures, error: facturesErr } = await supabase
+      let facturesQuery = supabase
         .from('factures')
         .select('id, numero_facture, montant_ht, montant_tva, montant_ttc, montant_mur, devise, date_facture, date_echeance, rapproche_date, rapproche_releve_id, rapproche_transaction_idx, tiers, type_facture, type_document, facture_origine_id')
         .eq('societe_id', socId)
         .eq('statut', 'paye')
+      // Filtre optionnel sur le mois (pour sync_lettrage scope mensuel)
+      if (moisFilter && /^\d{4}-\d{2}$/.test(moisFilter)) {
+        const [yy, mm] = moisFilter.split('-').map(Number)
+        const startOfMonth = `${yy}-${String(mm).padStart(2, '0')}-01`
+        const lastDay = new Date(yy, mm, 0).getDate()
+        const endOfMonth = `${yy}-${String(mm).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+        facturesQuery = facturesQuery.gte('date_facture', startOfMonth).lte('date_facture', endOfMonth)
+      }
+      const { data: paidFactures, error: facturesErr } = await facturesQuery
       if (facturesErr) {
         console.error(`[sync_lettrage] factures fetch failed:`, facturesErr.message)
         return NextResponse.json({ error: `factures: ${facturesErr.message}` }, { status: 500 })
@@ -3431,6 +3440,159 @@ export async function POST(request: Request) {
           propagation: propagationError,
           cca: ccaError,
         },
+      })
+    }
+
+    // === CLOTURER MOIS — Verifie invariants + cree bank_reconciliation + verrouille ===
+    // body: { societe_id, mois: 'YYYY-MM', force?: boolean }
+    // Invariants :
+    //   - Aucune tx non_identifie ou a_verifier dans le mois
+    //   - Aucune ecriture 401/411 non lettree du mois
+    //   - Solde 580 = 0 (virements internes soldes)
+    // Si force=true, cree quand meme en mode 'draft' avec warnings.
+    if (action === 'cloturer_mois') {
+      const { societe_id, mois, force } = body
+      if (!societe_id || !mois) {
+        return NextResponse.json({ error: 'societe_id et mois (YYYY-MM) requis' }, { status: 400 })
+      }
+      if (!/^\d{4}-\d{2}$/.test(mois)) {
+        return NextResponse.json({ error: 'Format mois invalide - attendu YYYY-MM' }, { status: 400 })
+      }
+
+      const [annee, moisNum] = mois.split('-').map(Number)
+      const period_start = `${annee}-${String(moisNum).padStart(2, '0')}-01`
+      const lastDay = new Date(annee, moisNum, 0).getDate()
+      const period_end = `${annee}-${String(moisNum).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+
+      // === Verification des invariants ===
+      const invariants: { check: string; ok: boolean; details?: string }[] = []
+
+      // 1. Transactions bancaires du mois
+      const { data: releves } = await supabase
+        .from('releves_bancaires').select('id, transactions_json, compte_bancaire_id').eq('societe_id', societe_id)
+      let tx_non_identifie = 0
+      let tx_a_verifier = 0
+      let tx_total_mois = 0
+      for (const r of releves || []) {
+        for (const tx of ((r as any).transactions_json || [])) {
+          const d = tx.date || ''
+          if (d.substring(0, 7) !== mois) continue
+          tx_total_mois++
+          if (tx.statut === 'non_identifie') tx_non_identifie++
+          else if (tx.statut === 'a_verifier') tx_a_verifier++
+        }
+      }
+      invariants.push({
+        check: 'Aucune transaction non identifiee',
+        ok: tx_non_identifie === 0,
+        details: tx_non_identifie > 0 ? `${tx_non_identifie} tx en statut non_identifie` : undefined,
+      })
+      invariants.push({
+        check: 'Aucune transaction a verifier',
+        ok: tx_a_verifier === 0,
+        details: tx_a_verifier > 0 ? `${tx_a_verifier} tx en statut a_verifier` : undefined,
+      })
+
+      // 2. Ecritures 401/411 non lettrees du mois
+      const { data: dossierClosure } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
+      let ecr_non_lettrees = 0
+      let solde_580 = 0
+      if (dossierClosure) {
+        const { data: ecrs } = await supabase
+          .from('ecritures_comptables_v2')
+          .select('numero_compte, debit_mur, credit_mur, lettre')
+          .eq('dossier_id', dossierClosure.id)
+          .gte('date_ecriture', period_start)
+          .lte('date_ecriture', period_end)
+        for (const e of ecrs || []) {
+          const c = String(e.numero_compte || '')
+          if (!e.lettre && (c.startsWith('401') || c.startsWith('411'))) ecr_non_lettrees++
+          if (c.startsWith('580')) solde_580 += (Number(e.debit_mur) || 0) - (Number(e.credit_mur) || 0)
+        }
+      }
+      invariants.push({
+        check: 'Toutes ecritures 401/411 du mois lettrees',
+        ok: ecr_non_lettrees === 0,
+        details: ecr_non_lettrees > 0 ? `${ecr_non_lettrees} ecritures 401/411 non lettrees` : undefined,
+      })
+      invariants.push({
+        check: 'Solde 580 (virements internes) = 0',
+        ok: Math.abs(solde_580) < 0.01,
+        details: Math.abs(solde_580) >= 0.01 ? `Solde restant : ${solde_580.toFixed(2)} MUR` : undefined,
+      })
+
+      const allOk = invariants.every(i => i.ok)
+      const failedChecks = invariants.filter(i => !i.ok)
+
+      if (!allOk && !force) {
+        return NextResponse.json({
+          error: 'Invariants non respectes - classez toutes les transactions et lettrez les ecritures avant la cloture',
+          invariants,
+          blockers: failedChecks.map(f => f.check + (f.details ? ` (${f.details})` : '')),
+        }, { status: 400 })
+      }
+
+      // === Creer ou mettre a jour bank_reconciliations pour chaque compte bancaire ===
+      const compteBancaireIds = Array.from(new Set((releves || []).map((r: any) => r.compte_bancaire_id).filter(Boolean)))
+      const createdReconciliations: any[] = []
+      for (const cbId of compteBancaireIds) {
+        const { data: cb } = await supabase.from('comptes_bancaires')
+          .select('compte_comptable').eq('id', cbId).single()
+        const numeroCompteCompta = cb?.compte_comptable || '512'
+
+        // GL balance au period_end
+        let gl_balance = 0
+        if (dossierClosure) {
+          const { data: ecrGl } = await supabase
+            .from('ecritures_comptables_v2')
+            .select('debit_mur, credit_mur')
+            .eq('dossier_id', dossierClosure.id)
+            .eq('numero_compte', numeroCompteCompta)
+            .lte('date_ecriture', period_end)
+          gl_balance = (ecrGl || []).reduce((s: number, e: any) => s + (Number(e.debit_mur) || 0) - (Number(e.credit_mur) || 0), 0)
+          gl_balance = Math.round(gl_balance * 100) / 100
+        }
+
+        const { data: reconCreated, error: reconErr } = await supabase.from('bank_reconciliations').upsert({
+          societe_id, compte_bancaire_id: cbId,
+          numero_compte_compta: numeroCompteCompta,
+          period_start, period_end,
+          bank_balance: 0, // A saisir manuellement si besoin dans le tableau officiel
+          gl_balance,
+          adjusted_bank_balance: 0,
+          adjusted_gl_balance: gl_balance,
+          residual_gap: -gl_balance,
+          status: allOk ? 'validated' : 'draft',
+          prepared_by: user.id,
+          validated_by: allOk ? user.id : null,
+          validated_at: allOk ? new Date().toISOString() : null,
+        }, { onConflict: 'societe_id,compte_bancaire_id,period_end' }).select().single()
+
+        if (!reconErr && reconCreated) createdReconciliations.push(reconCreated)
+      }
+
+      // === Verrouiller accounting_periods (seulement si invariants OK) ===
+      let periodLocked = false
+      if (allOk) {
+        const { error: lockErr } = await supabase.from('accounting_periods').upsert({
+          societe_id, period_start, period_end,
+          status: 'locked',
+          closed_by: user.id,
+          closed_at: new Date().toISOString(),
+        }, { onConflict: 'societe_id,period_end' })
+        if (!lockErr) periodLocked = true
+      }
+
+      return NextResponse.json({
+        success: true,
+        mois,
+        period_start, period_end,
+        all_invariants_ok: allOk,
+        invariants,
+        stats: { tx_total_mois, tx_non_identifie, tx_a_verifier, ecr_non_lettrees, solde_580 },
+        reconciliations_created: createdReconciliations.length,
+        period_locked: periodLocked,
+        forced: !!force,
       })
     }
 
