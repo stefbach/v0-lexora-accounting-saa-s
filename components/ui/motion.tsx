@@ -248,3 +248,46 @@ export function FadeSlide({
     </motion.div>
   )
 }
+
+// ------------------------------------------------------------------
+// ShineSweep — gold highlight that sweeps across the parent element
+// continuously. Parent must be `position: relative` + `overflow: hidden`.
+// ------------------------------------------------------------------
+
+export function ShineSweep({
+  color = "rgba(255,255,255,0.12)",
+  duration = 3.5,
+  className,
+}: {
+  color?: string
+  duration?: number
+  className?: string
+}) {
+  const prefersReducedMotion = useReducedMotion()
+  if (prefersReducedMotion) return null
+
+  return (
+    <motion.span
+      aria-hidden="true"
+      className={className}
+      initial={{ x: "-120%" }}
+      animate={{ x: "220%" }}
+      transition={{
+        duration,
+        repeat: Infinity,
+        ease: "easeInOut",
+        repeatDelay: 0.8,
+      }}
+      style={{
+        position: "absolute",
+        top: 0,
+        bottom: 0,
+        width: "50%",
+        background: `linear-gradient(110deg, transparent 0%, ${color} 50%, transparent 100%)`,
+        pointerEvents: "none",
+        mixBlendMode: "screen",
+      }}
+    />
+  )
+}
+

@@ -17,8 +17,12 @@ import {
   HoverLift,
   PressableWrap,
   FadeSlide,
+  ShineSweep,
 } from "@/components/ui/motion"
 import { NeuralNetworkScene } from "@/components/NeuralNetworkScene"
+import { ParticleField } from "@/components/ParticleField"
+import { ScrollProgress } from "@/components/ScrollProgress"
+import { AnimatedCounter } from "@/components/AnimatedCounter"
 
 /* ------------------------------------------------------------------ */
 /*  Design tokens                                                      */
@@ -625,6 +629,9 @@ function TierCard({
         />
       )}
 
+      {/* Shine sweep on popular tier — continuous premium feel */}
+      {ctaPrimary && <ShineSweep color="rgba(212,175,55,0.14)" duration={4} />}
+
       {/* Crown on popular tier */}
       {ctaPrimary && (
         <div style={{
@@ -661,13 +668,19 @@ function TierCard({
         alignSelf: "flex-start", marginBottom: "22px",
       }}>{criteria}</span>
 
-      {/* Price — animated */}
+      {/* Price — count-up animation when scrolled into view */}
       <div style={{ position: "relative", marginBottom: "6px", display: "flex", alignItems: "baseline", gap: "6px" }}>
         <span style={{
           color: C.gold, fontSize: "40px", fontWeight: 800, lineHeight: 1,
           fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em",
         }}>
-          MRs {fmt(price)}
+          <AnimatedCounter
+            value={price}
+            prefix="MRs "
+            duration={1.2}
+            format={(n) => fmt(Math.round(n))}
+            ariaLabel={`MRs ${fmt(price)} ${txt.perMonth}`}
+          />
         </span>
         <span style={{ color: C.muted, fontSize: "14px" }}>{txt.perMonth}</span>
       </div>
@@ -924,6 +937,7 @@ export default function TarifsPage() {
 
   return (
     <div style={{ backgroundColor: C.bg, minHeight: "100vh", fontFamily: FONT }}>
+      <ScrollProgress />
 
       {/* ============================================================= */}
       {/* 1. NAVBAR                                                      */}
@@ -976,25 +990,29 @@ export default function TarifsPage() {
       </nav>
 
       {/* ============================================================= */}
-      {/* 2. HERO — modern with gradient accent + ambient glow            */}
+      {/* 2. HERO — modern with live particle field + gradient accent     */}
       {/* ============================================================= */}
       <section style={{ position: "relative", textAlign: "center", padding: "72px 24px 48px", overflow: "hidden" }}>
+        {/* Live particle field */}
+        <div
+          aria-hidden="true"
+          style={{ position: "absolute", inset: 0, pointerEvents: "none", opacity: 0.55 }}
+        >
+          <ParticleField
+            density={0.8}
+            color="rgba(212,175,55,0.55)"
+            linkColor="rgba(212,175,55,0.18)"
+            linkDistance={140}
+            speed={0.22}
+          />
+        </div>
         {/* Ambient gradient glow */}
         <div
           aria-hidden="true"
           style={{
             position: "absolute", inset: 0, pointerEvents: "none",
             backgroundImage:
-              `radial-gradient(ellipse 50% 40% at 50% 0%, ${C.gold}14 0%, transparent 70%), radial-gradient(ellipse 40% 30% at 50% 100%, ${C.blue}12 0%, transparent 70%)`,
-          }}
-        />
-        {/* Decorative dotted pattern */}
-        <div
-          aria-hidden="true"
-          style={{
-            position: "absolute", inset: 0, opacity: 0.05, pointerEvents: "none",
-            backgroundImage: `radial-gradient(circle at 25% 25%, ${C.gold} 1px, transparent 1px), radial-gradient(circle at 75% 75%, ${C.blue} 1px, transparent 1px)`,
-            backgroundSize: "60px 60px",
+              `radial-gradient(ellipse 50% 40% at 50% 0%, ${C.gold}18 0%, transparent 70%), radial-gradient(ellipse 40% 30% at 50% 100%, ${C.blue}14 0%, transparent 70%)`,
           }}
         />
 
@@ -1549,34 +1567,63 @@ export default function TarifsPage() {
       </section>
 
       {/* ============================================================= */}
-      {/* 11. BOTTOM CTA                                                 */}
+      {/* 11. BOTTOM CTA — live particles + scale press on buttons        */}
       {/* ============================================================= */}
-      <section style={{ textAlign: "center", padding: "80px 24px" }}>
-        <h2 style={{
-          color: C.white, fontSize: "clamp(24px, 3vw, 36px)", fontWeight: 800,
-          margin: "0 auto 24px", maxWidth: "700px", fontFamily: FONT,
-        }}>
-          {txt.ctaTitle}
-        </h2>
-        <div style={{ display: "flex", gap: "16px", justifyContent: "center", flexWrap: "wrap", marginBottom: "32px" }}>
-          <Link href="/auth/login" style={{
-            display: "inline-block", padding: "14px 32px", borderRadius: "10px",
-            fontWeight: 700, fontSize: "15px", backgroundColor: C.gold, color: C.bg,
-            textDecoration: "none", fontFamily: FONT,
-          }}>{txt.ctaBtn1}</Link>
-          <Link href="/auth/login" style={{
-            display: "inline-block", padding: "14px 32px", borderRadius: "10px",
-            fontWeight: 700, fontSize: "15px", backgroundColor: "transparent",
-            color: C.white, border: `1px solid ${C.navyBorder}`,
-            textDecoration: "none", fontFamily: FONT,
-          }}>{txt.ctaBtn2}</Link>
+      <section style={{ position: "relative", textAlign: "center", padding: "80px 24px", overflow: "hidden" }}>
+        <div
+          aria-hidden="true"
+          style={{ position: "absolute", inset: 0, pointerEvents: "none", opacity: 0.4 }}
+        >
+          <ParticleField
+            density={0.6}
+            color="rgba(65,145,255,0.55)"
+            linkColor="rgba(65,145,255,0.18)"
+            linkDistance={150}
+            speed={0.22}
+          />
         </div>
-        <div style={{ display: "flex", gap: "16px 32px", justifyContent: "center", flexWrap: "wrap" }}>
-          {txt.ctaTrust.map((t, i) => (
-            <span key={i} style={{ color: C.muted, fontSize: "13px", display: "flex", alignItems: "center", gap: "6px" }}>
-              <Check className="w-4 h-4 inline-block" style={{ color: C.green }} /> {t}
-            </span>
-          ))}
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute", inset: 0, pointerEvents: "none",
+            backgroundImage: `radial-gradient(ellipse 50% 50% at 50% 50%, ${C.gold}12 0%, transparent 70%)`,
+          }}
+        />
+        <div style={{ position: "relative" }}>
+          <Reveal>
+            <h2 style={{
+              color: C.white, fontSize: "clamp(28px, 3.6vw, 44px)", fontWeight: 800,
+              margin: "0 auto 28px", maxWidth: "760px", fontFamily: FONT,
+              letterSpacing: "-0.02em",
+            }}>
+              {txt.ctaTitle}
+            </h2>
+            <div style={{ display: "flex", gap: "16px", justifyContent: "center", flexWrap: "wrap", marginBottom: "32px" }}>
+              <PressableWrap>
+                <Link href="/auth/login" style={{
+                  display: "inline-block", padding: "15px 34px", borderRadius: "12px",
+                  fontWeight: 700, fontSize: "15px", backgroundColor: C.gold, color: C.bg,
+                  textDecoration: "none", fontFamily: FONT,
+                  boxShadow: `0 12px 28px -10px ${C.gold}80`,
+                }}>{txt.ctaBtn1}</Link>
+              </PressableWrap>
+              <PressableWrap>
+                <Link href="/auth/login" style={{
+                  display: "inline-block", padding: "15px 34px", borderRadius: "12px",
+                  fontWeight: 700, fontSize: "15px", backgroundColor: "rgba(248,246,241,0.04)",
+                  color: C.white, border: `1px solid ${C.navyBorder}`,
+                  textDecoration: "none", fontFamily: FONT,
+                }}>{txt.ctaBtn2}</Link>
+              </PressableWrap>
+            </div>
+            <div style={{ display: "flex", gap: "16px 32px", justifyContent: "center", flexWrap: "wrap" }}>
+              {txt.ctaTrust.map((tx, i) => (
+                <span key={i} style={{ color: C.muted, fontSize: "13px", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <Check className="w-4 h-4 inline-block" style={{ color: C.green }} /> {tx}
+                </span>
+              ))}
+            </div>
+          </Reveal>
         </div>
       </section>
 

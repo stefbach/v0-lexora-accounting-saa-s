@@ -18,9 +18,15 @@ import {
   HoverLift,
   PressableWrap,
   FadeSlide,
+  ShineSweep,
 } from "@/components/ui/motion"
 import { NeuralNetworkScene } from "@/components/NeuralNetworkScene"
 import { PricingShowcase } from "@/components/PricingShowcase"
+import { ParticleField } from "@/components/ParticleField"
+import { DashboardPreview } from "@/components/DashboardPreview"
+import { AnimatedCounter } from "@/components/AnimatedCounter"
+import { LogoMarquee } from "@/components/LogoMarquee"
+import { ScrollProgress } from "@/components/ScrollProgress"
 import { t, getLocale } from "@/lib/i18n"
 import { LanguageSwitcherLight } from "@/components/LanguageSwitcher"
 import { LexoraLogo } from "@/components/LexoraLogo"
@@ -160,6 +166,9 @@ export default function HomePage() {
 
   return (
     <div className="flex min-h-screen flex-col" style={{ backgroundColor: "#F8F9FC" }}>
+      {/* Top scroll-progress indicator */}
+      <ScrollProgress />
+
       {/* NAVBAR — dark
           UI/UX Pro Max rules applied:
           - §1 contrast: nav links use #A8AFC7 on #0B0F2E (~8.5:1, AAA).
@@ -279,28 +288,32 @@ export default function HomePage() {
       </header>
 
       <main className="flex-1">
-        {/* HERO — dark, modern two-column layout with permanent neural scene */}
+        {/* HERO — dark, modern 2-column with live neural particle field bg */}
         <section
           className="relative overflow-hidden py-20 md:py-28"
           style={{ backgroundColor: "#0B0F2E" }}
         >
-          {/* Subtle dotted pattern (decorative, aria-hidden) */}
+          {/* Live particle field — neurons constantly moving */}
           <div
             aria-hidden="true"
-            className="absolute inset-0 opacity-[0.06]"
-            style={{
-              backgroundImage:
-                "radial-gradient(circle at 25% 25%, #D4AF37 1px, transparent 1px), radial-gradient(circle at 75% 75%, #D4AF37 1px, transparent 1px)",
-              backgroundSize: "60px 60px",
-            }}
-          />
+            className="pointer-events-none absolute inset-0"
+            style={{ opacity: 0.55 }}
+          >
+            <ParticleField
+              density={0.9}
+              color="rgba(65,145,255,0.75)"
+              linkColor="rgba(65,145,255,0.22)"
+              linkDistance={140}
+              speed={0.28}
+            />
+          </div>
           {/* Ambient gradient glow (decorative) */}
           <div
             aria-hidden="true"
             className="pointer-events-none absolute inset-0"
             style={{
               backgroundImage:
-                "radial-gradient(ellipse 40% 35% at 20% 30%, rgba(65,145,255,0.18) 0%, transparent 70%), radial-gradient(ellipse 40% 35% at 80% 70%, rgba(212,175,55,0.12) 0%, transparent 70%)",
+                "radial-gradient(ellipse 40% 35% at 20% 30%, rgba(65,145,255,0.20) 0%, transparent 70%), radial-gradient(ellipse 40% 35% at 80% 70%, rgba(212,175,55,0.14) 0%, transparent 70%)",
             }}
           />
 
@@ -409,62 +422,95 @@ export default function HomePage() {
                   </div>
                 </FadeSlide>
 
-                {/* Trust bar — micro-stats strip */}
+                {/* Trust bar — micro-stats strip with animated counters */}
                 <FadeSlide delay={0.32} y={10}>
                   <ul
                     className="mt-10 grid max-w-md grid-cols-3 gap-3 sm:max-w-lg lg:mx-0"
                     style={{ fontFamily: "'Poppins', sans-serif" }}
                   >
-                    {[
-                      { value: "6", label: locale === "fr" ? "Agents IA" : "AI agents" },
-                      { value: "24/7", label: locale === "fr" ? "Temps réel" : "Real-time" },
-                      { value: "100%", label: "MRA" },
-                    ].map((s) => (
-                      <li
-                        key={s.label}
-                        className="rounded-xl px-4 py-3 text-center sm:text-left"
-                        style={{
-                          backgroundColor: "rgba(232,234,252,0.04)",
-                          border: "1px solid rgba(232,234,252,0.08)",
-                        }}
+                    <li
+                      className="rounded-xl px-4 py-3 text-center sm:text-left"
+                      style={{
+                        backgroundColor: "rgba(232,234,252,0.04)",
+                        border: "1px solid rgba(232,234,252,0.08)",
+                      }}
+                    >
+                      <div
+                        className="text-xl font-bold md:text-2xl"
+                        style={{ color: "#E8EAFC", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.01em" }}
                       >
-                        <div
-                          className="text-xl font-bold md:text-2xl"
-                          style={{ color: "#E8EAFC", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.01em" }}
-                        >
-                          {s.value}
-                        </div>
-                        <div className="text-xs" style={{ color: "#A8AFC7" }}>
-                          {s.label}
-                        </div>
-                      </li>
-                    ))}
+                        <AnimatedCounter value={6} suffix="" duration={1.2} />
+                      </div>
+                      <div className="text-xs" style={{ color: "#A8AFC7" }}>
+                        {locale === "fr" ? "Agents IA" : "AI agents"}
+                      </div>
+                    </li>
+                    <li
+                      className="rounded-xl px-4 py-3 text-center sm:text-left"
+                      style={{
+                        backgroundColor: "rgba(232,234,252,0.04)",
+                        border: "1px solid rgba(232,234,252,0.08)",
+                      }}
+                    >
+                      <div
+                        className="text-xl font-bold md:text-2xl"
+                        style={{ color: "#E8EAFC", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.01em" }}
+                      >
+                        24/7
+                      </div>
+                      <div className="text-xs" style={{ color: "#A8AFC7" }}>
+                        {locale === "fr" ? "Temps réel" : "Real-time"}
+                      </div>
+                    </li>
+                    <li
+                      className="rounded-xl px-4 py-3 text-center sm:text-left"
+                      style={{
+                        backgroundColor: "rgba(232,234,252,0.04)",
+                        border: "1px solid rgba(232,234,252,0.08)",
+                      }}
+                    >
+                      <div
+                        className="text-xl font-bold md:text-2xl"
+                        style={{ color: "#E8EAFC", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.01em" }}
+                      >
+                        <AnimatedCounter value={100} suffix="%" duration={1.4} />
+                      </div>
+                      <div className="text-xs" style={{ color: "#A8AFC7" }}>
+                        MRA
+                      </div>
+                    </li>
                   </ul>
                 </FadeSlide>
               </div>
 
-              {/* RIGHT — permanent neural network animation (visual anchor) */}
+              {/* RIGHT — live dashboard mockup (real product visual) */}
               <FadeSlide delay={0.2} y={24}>
-                <div className="relative mx-auto w-full max-w-xl lg:max-w-none">
-                  <div
-                    aria-hidden="true"
-                    className="pointer-events-none absolute -inset-4 rounded-[32px]"
-                    style={{
-                      background:
-                        "radial-gradient(ellipse 60% 60% at 50% 50%, rgba(65,145,255,0.18) 0%, transparent 70%)",
-                    }}
-                  />
-                  <NeuralNetworkScene
-                    className="relative"
-                    ariaLabel={
-                      locale === "fr"
-                        ? "Illustration animée : 6 agents IA connectés au cœur Lexora"
-                        : "Animated illustration: 6 AI agents connected to the Lexora core"
-                    }
-                  />
-                </div>
+                <DashboardPreview locale={locale === "fr" ? "fr" : "en"} />
               </FadeSlide>
             </div>
+          </div>
+        </section>
+
+        {/* TRUST STRIP — infinite marquee just below hero */}
+        <section
+          aria-label={locale === "fr" ? "Conformités et standards" : "Compliance and standards"}
+          className="relative overflow-hidden py-8"
+          style={{
+            backgroundColor: "#0B0F2E",
+            borderTop: "1px solid rgba(30,39,96,0.5)",
+            borderBottom: "1px solid rgba(30,39,96,0.5)",
+          }}
+        >
+          <div className="mx-auto max-w-7xl px-4 sm:px-6">
+            <div
+              className="mb-5 text-center text-xs font-bold uppercase tracking-widest"
+              style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}
+            >
+              {locale === "fr"
+                ? "Conforme aux standards mauriciens et internationaux"
+                : "Compliant with Mauritian and international standards"}
+            </div>
+            <LogoMarquee durationSec={32} />
           </div>
         </section>
 
@@ -654,28 +700,33 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* AI SECTION — dark navy theme, numbered agent cards with gradient ring */}
+        {/* AI SECTION — dark navy, live particle field + neural scene hero */}
         <section
           id="ai"
           className="relative overflow-hidden py-20 md:py-28"
           style={{ backgroundColor: "#0B0F2E" }}
         >
-          {/* Dotted grid + ambient glow */}
+          {/* Live particle field */}
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-0 opacity-[0.06]"
-            style={{
-              backgroundImage:
-                "radial-gradient(circle at 50% 50%, #D4AF37 1px, transparent 1px)",
-              backgroundSize: "32px 32px",
-            }}
-          />
+            className="pointer-events-none absolute inset-0"
+            style={{ opacity: 0.45 }}
+          >
+            <ParticleField
+              density={1}
+              color="rgba(212,175,55,0.55)"
+              linkColor="rgba(212,175,55,0.18)"
+              linkDistance={120}
+              speed={0.22}
+            />
+          </div>
+          {/* Ambient glow */}
           <div
             aria-hidden="true"
             className="pointer-events-none absolute inset-0"
             style={{
               backgroundImage:
-                "radial-gradient(ellipse 60% 50% at 50% 0%, rgba(65,145,255,0.10) 0%, transparent 70%), radial-gradient(ellipse 50% 40% at 100% 100%, rgba(212,175,55,0.08) 0%, transparent 70%)",
+                "radial-gradient(ellipse 60% 50% at 50% 0%, rgba(65,145,255,0.12) 0%, transparent 70%), radial-gradient(ellipse 50% 40% at 100% 100%, rgba(212,175,55,0.10) 0%, transparent 70%)",
             }}
           />
 
@@ -749,6 +800,30 @@ export default function HomePage() {
                   ? "Chaque module de Lexora est piloté par un agent IA spécialisé. Pas de saisie manuelle, pas de configuration complexe — vos agents comprennent votre entreprise et s'adaptent à vos besoins."
                   : "Every Lexora module is powered by a specialized AI agent. No manual entry, no complex setup — your agents understand your business and adapt to your needs."}
               </p>
+            </Reveal>
+
+            {/* Neural network scene — visual anchor before the agent grid */}
+            <Reveal className="mx-auto mb-16 w-full max-w-4xl">
+              <div
+                className="relative"
+                style={{
+                  backgroundColor: "rgba(16,24,71,0.60)",
+                  border: "1px solid rgba(65,145,255,0.18)",
+                  borderRadius: "24px",
+                  padding: "20px",
+                  backdropFilter: "blur(6px)",
+                  WebkitBackdropFilter: "blur(6px)",
+                  boxShadow: "0 30px 80px -30px rgba(65,145,255,0.30)",
+                }}
+              >
+                <NeuralNetworkScene
+                  ariaLabel={
+                    locale === "fr"
+                      ? "Illustration animée : 6 agents IA connectés au cœur Lexora"
+                      : "Animated illustration: 6 AI agents connected to the Lexora core"
+                  }
+                />
+              </div>
             </Reveal>
 
             <StaggerGroup className="grid gap-5 md:grid-cols-2 lg:grid-cols-3" staggerMs={70}>
@@ -1253,9 +1328,33 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* CTA — dark for contrast */}
-        <section className="py-20 md:py-28" style={{ backgroundColor: "#0B0F2E" }}>
-          <div className="mx-auto max-w-3xl px-4 sm:px-6 text-center">
+        {/* CTA — dark with live particles + floating gold accent */}
+        <section
+          className="relative overflow-hidden py-20 md:py-28"
+          style={{ backgroundColor: "#0B0F2E" }}
+        >
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0"
+            style={{ opacity: 0.5 }}
+          >
+            <ParticleField
+              density={0.7}
+              color="rgba(212,175,55,0.6)"
+              linkColor="rgba(212,175,55,0.20)"
+              linkDistance={150}
+              speed={0.2}
+            />
+          </div>
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0"
+            style={{
+              backgroundImage:
+                "radial-gradient(ellipse 45% 50% at 50% 50%, rgba(65,145,255,0.18) 0%, transparent 70%)",
+            }}
+          />
+          <div className="relative mx-auto max-w-3xl px-4 sm:px-6 text-center">
             <Reveal>
               <h2 className="mb-4 text-3xl font-bold md:text-4xl" style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif", fontWeight: 700 }}>
                 {t('home.cta_title', locale)}

@@ -19,14 +19,15 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { motion, useReducedMotion } from "framer-motion"
 import { Button } from "@/components/ui/button"
+import { AnimatedCounter } from "@/components/AnimatedCounter"
 import {
   StaggerGroup,
   StaggerItem,
   HoverLift,
   PressableWrap,
   Reveal,
+  ShineSweep,
 } from "@/components/ui/motion"
 import {
   Rocket,
@@ -178,8 +179,6 @@ function formatPrice(n: number): string {
 }
 
 export function PricingShowcase({ locale }: { locale: "fr" | "en" }) {
-  const prefersReducedMotion = useReducedMotion()
-
   return (
     <section
       id="pricing"
@@ -295,6 +294,8 @@ export function PricingShowcase({ locale }: { locale: "fr" | "en" }) {
                         }}
                       />
                     )}
+                    {/* Shine sweep on popular card for premium feel */}
+                    {isPopular && <ShineSweep color="rgba(212,175,55,0.14)" duration={4} />}
 
                     <div className="relative flex h-full flex-col p-6 md:p-7">
                       {/* Header */}
@@ -364,15 +365,7 @@ export function PricingShowcase({ locale }: { locale: "fr" | "en" }) {
                         >
                           Rs
                         </span>
-                        <motion.span
-                          initial={
-                            prefersReducedMotion
-                              ? { opacity: 1 }
-                              : { opacity: 0, y: 6 }
-                          }
-                          whileInView={{ opacity: 1, y: 0 }}
-                          viewport={{ once: true, amount: 0.5 }}
-                          transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                        <span
                           className="text-4xl font-bold leading-none md:text-5xl"
                           style={{
                             color: isPopular ? "#E8EAFC" : "#0B0F2E",
@@ -381,8 +374,12 @@ export function PricingShowcase({ locale }: { locale: "fr" | "en" }) {
                             letterSpacing: "-0.02em",
                           }}
                         >
-                          {formatPrice(tier.monthly)}
-                        </motion.span>
+                          <AnimatedCounter
+                            value={tier.monthly}
+                            duration={1.3}
+                            format={(n) => formatPrice(Math.round(n))}
+                          />
+                        </span>
                         <span
                           className="mb-1 ml-1 text-sm"
                           style={{
