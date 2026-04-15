@@ -44,6 +44,34 @@ function countLeaveDaysInPeriod(
   })
 }
 
+// INTÉGRATION 2 — liste les DATES de jours ouvrés entre deux bornes,
+// en respectant le pattern working_days de l'employé et les jours
+// fériés. Sert au calcul des absences injustifiées : on veut traiter
+// chaque jour ouvré (pas chaque pointage), sinon un jour SANS pointage
+// du tout n'est jamais compté comme absent.
+function listWorkingDaysInPeriod(
+  periodeStart: string,
+  periodeEnd: string,
+  emp: { working_days?: any } | null | undefined,
+  joursFeries: Set<string>,
+): string[] {
+  const dayKeys: Array<'sun' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat'> =
+    ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
+  const wd = getWorkingDaysForEmploye(emp)
+  const result: string[] = []
+  const [ys, ms, ds] = periodeStart.split('-').map(n => parseInt(n, 10))
+  const [ye, me, de] = periodeEnd.split('-').map(n => parseInt(n, 10))
+  const cursor = new Date(ys, (ms || 1) - 1, ds || 1, 12, 0, 0)
+  const end = new Date(ye, (me || 1) - 1, de || 1, 12, 0, 0)
+  while (cursor <= end) {
+    const iso = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`
+    const key = dayKeys[cursor.getDay()]
+    if (wd[key] && !joursFeries.has(iso)) result.push(iso)
+    cursor.setDate(cursor.getDate() + 1)
+  }
+  return result
+}
+
 function getAdminClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -370,20 +398,36 @@ export async function POST(request: Request) {
         }
       }
 
-      // Pointage anomalies the operator should see at a glance in the
-      // bulletin preview.
+      // INTÉGRATION 2 — Absences injustifiées par JOUR OUVRÉ (pas par
+      // pointage). Ancienne version : itérait pointagesMois → si un
+      // employé n'avait AUCUN pointage sur un jour ouvré, aucune absence
+      // n'était comptée. Nouvelle version : on liste tous les jours
+      // ouvrés du mois selon working_days + jours_feries de la société,
+      // et pour chacun on vérifie s'il existe un pointage OU un congé
+      // approuvé couvrant ce jour.
       const anomaliesPointage: string[] = []
       let jours_absence_injust = 0
+      const pointageByDate = new Map<string, any>()
       for (const pt of pointagesMois || []) {
-        if (isWeekend(pt.date_pointage)) continue
-        const enConge = (congesApprouves || []).some(c => pt.date_pointage >= c.date_debut && pt.date_pointage <= c.date_fin)
-        if (!pt.heure_entree && !enConge && pt.absent_justifie !== true) {
+        pointageByDate.set(pt.date_pointage, pt)
+      }
+      const workingDaysList = listWorkingDaysInPeriod(
+        `${periodeStr}-01`, lastDayOfMonth(periodeStr), emp, joursFeriesSetSingle,
+      )
+      for (const day of workingDaysList) {
+        const pt = pointageByDate.get(day)
+        const enConge = (congesApprouves || []).some(c => day >= c.date_debut && day <= c.date_fin)
+        if (enConge) {
+          if (pt?.heure_entree) {
+            anomaliesPointage.push(`Pointage enregistré le ${day} alors que l'employé était en congé (le congé prévaut)`)
+          }
+          continue
+        }
+        if (!pt || (!pt.heure_entree && pt.absent_justifie !== true)) {
           jours_absence_injust++
-          anomaliesPointage.push(`Absence non justifiée le ${pt.date_pointage}`)
+          anomaliesPointage.push(`Absence non justifiée le ${day}`)
         } else if (pt.heure_entree && !pt.heure_sortie) {
-          anomaliesPointage.push(`Oubli de pointage sortie le ${pt.date_pointage}`)
-        } else if (pt.heure_entree && enConge) {
-          anomaliesPointage.push(`Pointage enregistré le ${pt.date_pointage} alors que l'employé était en congé (le congé prévaut)`)
+          anomaliesPointage.push(`Oubli de pointage sortie le ${day}`)
         }
       }
       const montant_absence = Math.round(jours_absence_injust * (Number(emp.salaire_base) / 26) * 100) / 100
@@ -765,19 +809,31 @@ export async function POST(request: Request) {
         const otScaleFactor = dailyOtSum > 0 && otMensuelBrut < dailyOtSum ? otMensuelBrut / dailyOtSum : 1
         total_ot_montant = Math.round(total_ot_montant * otScaleFactor)
 
-        // 4. Absences injustifiées + pointage anomalies for conges_details
+        // INTÉGRATION 2 — Absences injustifiées par JOUR OUVRÉ
+        // (cf. action=calculer pour le rationale complet).
         let jours_absence_injust = 0
         const anomaliesPointageBatch: string[] = []
+        const pointageByDateBatch = new Map<string, any>()
         for (const pt of pointagesMois || []) {
-          if (isWeekend(pt.date_pointage)) continue
-          const enConge = (congesApprouves || []).some(c => pt.date_pointage >= c.date_debut && pt.date_pointage <= c.date_fin)
-          if (!pt.heure_entree && !enConge && pt.absent_justifie !== true) {
+          pointageByDateBatch.set(pt.date_pointage, pt)
+        }
+        const workingDaysListBatch = listWorkingDaysInPeriod(
+          periodeStart, periodeEnd, emp, joursFeriesSet,
+        )
+        for (const day of workingDaysListBatch) {
+          const pt = pointageByDateBatch.get(day)
+          const enConge = (congesApprouves || []).some(c => day >= c.date_debut && day <= c.date_fin)
+          if (enConge) {
+            if (pt?.heure_entree) {
+              anomaliesPointageBatch.push(`Pointage le ${day} alors que l'employé était en congé`)
+            }
+            continue
+          }
+          if (!pt || (!pt.heure_entree && pt.absent_justifie !== true)) {
             jours_absence_injust++
-            anomaliesPointageBatch.push(`Absence non justifiée le ${pt.date_pointage}`)
+            anomaliesPointageBatch.push(`Absence non justifiée le ${day}`)
           } else if (pt.heure_entree && !pt.heure_sortie) {
-            anomaliesPointageBatch.push(`Oubli de pointage sortie le ${pt.date_pointage}`)
-          } else if (pt.heure_entree && enConge) {
-            anomaliesPointageBatch.push(`Pointage le ${pt.date_pointage} alors que l'employé était en congé`)
+            anomaliesPointageBatch.push(`Oubli de pointage sortie le ${day}`)
           }
         }
         // 4. Override with request variables if provided
