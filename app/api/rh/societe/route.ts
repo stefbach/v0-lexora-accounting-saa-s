@@ -154,6 +154,8 @@ export async function PUT(req: NextRequest) {
       'bank_name', 'bank_account_number', 'iban',
       // Fiscal identifiers
       'paye_number', 'csg_number', 'nsf_number',
+      // Pointage / déduction automatique des absences (mig 135)
+      'pointage_actif',
     ]
 
     const updates: Record<string, unknown> = {}

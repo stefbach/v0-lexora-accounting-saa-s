@@ -28,6 +28,10 @@ export default function PaiePage() {
   const [availablePeriodes, setAvailablePeriodes] = useState<string[]>([])
   const [bulletins, setBulletins] = useState<any[]>([])
   const [totaux, setTotaux] = useState<any>({})
+  // Migration 135 — toggle pointage_actif renvoyé par /api/rh/paie pour
+  // afficher le bandeau correspondant. null = pas encore chargé / pas
+  // de société sélectionnée.
+  const [pointageActif, setPointageActif] = useState<boolean | null>(null)
   const [loading, setLoading] = useState(false)
   const [calculating, setCalculating] = useState(false)
   const [pdfLoading, setPdfLoading] = useState<string | null>(null)
@@ -80,12 +84,16 @@ export default function PaiePage() {
       if (data?.error) throw new Error(data.error)
       setBulletins(data.bulletins || [])
       setTotaux(data.totaux || {})
+      // Migration 135 — toggle pointage_actif renvoyé par /api/rh/paie
+      // pour piloter le bandeau d'info en haut de la page.
+      setPointageActif(data.pointage_actif ?? null)
     } catch (e: any) {
       // Sprint 1 — avant : silent console.error → l'utilisateur voyait
       // un tableau vide sans comprendre pourquoi. Maintenant : on garde
       // le tableau vide mais on remonte une erreur visible.
       setBulletins([])
       setTotaux({})
+      setPointageActif(null)
       alert(`Erreur de chargement de la paie : ${e?.message || 'inconnue'}. Réessayez ou contactez l'administrateur.`)
     } finally { setLoading(false) }
   }, [societe, periode, periodeReady])
@@ -381,6 +389,32 @@ export default function PaiePage() {
             <p className="text-sm text-gray-500">Calcul, validation, verrouillage et exports</p>
           </div>
         </div>
+
+        {/* Migration 135 — bandeau état du toggle pointage_actif */}
+        {societe !== "all" && pointageActif === false && (
+          <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 flex items-start gap-3">
+            <span className="text-lg leading-none">ℹ️</span>
+            <div>
+              <p className="font-medium">Le pointage automatique est désactivé.</p>
+              <p className="text-xs text-blue-800 mt-0.5">
+                Les absences sont saisies manuellement (champ <code>absences</code> dans le calcul).
+                Pour activer la déduction automatique depuis les pointages, allez dans{' '}
+                <a href="/rh/societe" className="underline font-medium">Paramètres société → Pointage</a>.
+              </p>
+            </div>
+          </div>
+        )}
+        {societe !== "all" && pointageActif === true && (
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 flex items-start gap-3">
+            <span className="text-lg leading-none">✅</span>
+            <div>
+              <p className="font-medium">Pointage actif — les absences sont calculées automatiquement.</p>
+              <p className="text-xs text-emerald-800 mt-0.5">
+                Tout employé sans pointage ni congé approuvé sur un jour ouvré est compté absent.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Period selector */}
         <Card>

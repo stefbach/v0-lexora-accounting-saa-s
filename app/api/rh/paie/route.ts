@@ -44,6 +44,34 @@ function countLeaveDaysInPeriod(
   })
 }
 
+// INTÉGRATION 2 — liste les DATES de jours ouvrés entre deux bornes,
+// en respectant le pattern working_days de l'employé et les jours
+// fériés. Sert au calcul des absences injustifiées : on veut traiter
+// chaque jour ouvré (pas chaque pointage), sinon un jour SANS pointage
+// du tout n'est jamais compté comme absent.
+function listWorkingDaysInPeriod(
+  periodeStart: string,
+  periodeEnd: string,
+  emp: { working_days?: any } | null | undefined,
+  joursFeries: Set<string>,
+): string[] {
+  const dayKeys: Array<'sun' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat'> =
+    ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
+  const wd = getWorkingDaysForEmploye(emp)
+  const result: string[] = []
+  const [ys, ms, ds] = periodeStart.split('-').map(n => parseInt(n, 10))
+  const [ye, me, de] = periodeEnd.split('-').map(n => parseInt(n, 10))
+  const cursor = new Date(ys, (ms || 1) - 1, ds || 1, 12, 0, 0)
+  const end = new Date(ye, (me || 1) - 1, de || 1, 12, 0, 0)
+  while (cursor <= end) {
+    const iso = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`
+    const key = dayKeys[cursor.getDay()]
+    if (wd[key] && !joursFeries.has(iso)) result.push(iso)
+    cursor.setDate(cursor.getDate() + 1)
+  }
+  return result
+}
+
 function getAdminClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -223,7 +251,18 @@ export async function GET(request: Request) {
     }
 
     console.log(`[paie GET] ${enriched.length} bulletins, periode=${periode}, societe=${societe_id || 'all'}`)
-    return NextResponse.json({ bulletins: enriched, totaux, nb: enriched.length })
+
+    // Migration 135 — exposer pointage_actif au client pour qu'il puisse
+    // afficher le bandeau d'info correspondant. Lecture single ; si pas
+    // de societe_id, on retourne null (l'UI affichera un message neutre).
+    let pointage_actif: boolean | null = null
+    if (societe_id) {
+      const { data: socData } = await supabase
+        .from('societes').select('pointage_actif').eq('id', societe_id).maybeSingle()
+      pointage_actif = (socData as any)?.pointage_actif === true
+    }
+
+    return NextResponse.json({ bulletins: enriched, totaux, nb: enriched.length, pointage_actif })
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
@@ -279,6 +318,19 @@ export async function POST(request: Request) {
       const { data: emp } = await supabase.from('employes').select('*').eq('id', employe_id).single()
       if (!emp) return NextResponse.json({ error: 'Employé non trouvé' }, { status: 404 })
 
+      // Migration 135 — toggle pointage_actif par société. Si OFF (défaut),
+      // pas de déduction auto des absences depuis pointages : comportement
+      // legacy préservé (les absences viennent de body.absences ou 0).
+      let pointageActifSingle = false
+      {
+        const sid = targetSocieteId || emp.societe_id
+        if (sid) {
+          const { data: soc } = await supabase
+            .from('societes').select('pointage_actif').eq('id', sid).maybeSingle()
+          pointageActifSingle = (soc as any)?.pointage_actif === true
+        }
+      }
+
       // 1. Récupérer OT de la période depuis les pointages
       const { data: pointagesMois } = await supabase.from('pointages')
         .select('*').eq('employe_id', employe_id)
@@ -324,11 +376,33 @@ export async function POST(request: Request) {
         total_ot_montant += montant15 + montant2
       }
 
-      // 2. Récupérer toutes les primes de la période (approuvées ou saisies par un RH/admin)
-      const { data: primesMois } = await supabase.from('primes_variables_mois')
-        .select('*').eq('employe_id', employe_id).eq('periode', periodeDate)
-
-      const total_primes = (primesMois || []).reduce((s, p) => s + Number(p.montant || 0), 0)
+      // INTÉGRATION 4 — Primes de la période : on ne compte QUE celles
+      // qui sont approuvées (approuve=true) ET pas encore intégrées
+      // à un bulletin (integre_paie=false). Ancienne version incluait
+      // les primes en attente de validation (sur-paie) et pouvait
+      // double-compter entre deux runs du calcul.
+      let primesMois: any[] = []
+      {
+        const { data, error } = await supabase.from('primes_variables_mois')
+          .select('*')
+          .eq('employe_id', employe_id)
+          .eq('periode', periodeDate)
+          .eq('approuve', true)
+          .eq('integre_paie', false)
+        if (error) {
+          // Fallback si la colonne integre_paie n'a pas encore été
+          // backfillée en env hors-prod : on retire le filtre et on se
+          // contente de approuve=true (risque de double-compter, mais
+          // moins pire que de ne rien compter).
+          console.warn('[paie calculer] primes fetch with integre_paie filter failed — fallback:', error.message)
+          const retry = await supabase.from('primes_variables_mois')
+            .select('*').eq('employe_id', employe_id).eq('periode', periodeDate).eq('approuve', true)
+          primesMois = retry.data || []
+        } else {
+          primesMois = data || []
+        }
+      }
+      const total_primes = primesMois.reduce((s, p) => s + Number(p.montant || 0), 0)
 
       // 3. Congés approuvés qui CHEVAUCHENT le mois (cf. fix de calculer_batch).
       const periodeStartSingle = `${periodeStr}-01`
@@ -360,31 +434,54 @@ export async function POST(request: Request) {
           emp, joursFeriesSetSingle
         )
         if (n <= 0) continue
-        if (c.type_conge === 'AL') {
+        // INTÉGRATION 3 — normalisation defensive trim + upper (idem batch).
+        const tc = String(c.type_conge || '').trim().toUpperCase()
+        if (tc === 'AL') {
           if (c.impose_par_societe === true) joursAlImpose += n
           else joursAlEmploye += n
-        } else if (c.type_conge === 'SL') {
+        } else if (tc === 'SL') {
           joursSickLeaveSingle += n
-        } else if (c.type_conge === 'UL') {
+        } else if (tc === 'UL') {
           joursUnpaidLeaveSingle += n
         }
       }
+      if (joursUnpaidLeaveSingle > 0) {
+        console.log(`[paie] UL detected (single) — ${emp.prenom} ${emp.nom} ${periodeStr}: ${joursUnpaidLeaveSingle}j`)
+      }
 
-      // Pointage anomalies the operator should see at a glance in the
-      // bulletin preview.
+      // INTÉGRATION 2 + Migration 135 — Absences injustifiées par JOUR
+      // OUVRÉ. UNIQUEMENT si la société a pointage_actif=true (toggle
+      // dans /rh/societe). Sinon : comportement legacy, jours_absence=0
+      // sauf si l'opérateur a saisi body.absences ou body.jours_absence.
       const anomaliesPointage: string[] = []
       let jours_absence_injust = 0
-      for (const pt of pointagesMois || []) {
-        if (isWeekend(pt.date_pointage)) continue
-        const enConge = (congesApprouves || []).some(c => pt.date_pointage >= c.date_debut && pt.date_pointage <= c.date_fin)
-        if (!pt.heure_entree && !enConge && pt.absent_justifie !== true) {
-          jours_absence_injust++
-          anomaliesPointage.push(`Absence non justifiée le ${pt.date_pointage}`)
-        } else if (pt.heure_entree && !pt.heure_sortie) {
-          anomaliesPointage.push(`Oubli de pointage sortie le ${pt.date_pointage}`)
-        } else if (pt.heure_entree && enConge) {
-          anomaliesPointage.push(`Pointage enregistré le ${pt.date_pointage} alors que l'employé était en congé (le congé prévaut)`)
+      if (pointageActifSingle) {
+        const pointageByDate = new Map<string, any>()
+        for (const pt of pointagesMois || []) {
+          pointageByDate.set(pt.date_pointage, pt)
         }
+        const workingDaysList = listWorkingDaysInPeriod(
+          `${periodeStr}-01`, lastDayOfMonth(periodeStr), emp, joursFeriesSetSingle,
+        )
+        for (const day of workingDaysList) {
+          const pt = pointageByDate.get(day)
+          const enConge = (congesApprouves || []).some(c => day >= c.date_debut && day <= c.date_fin)
+          if (enConge) {
+            if (pt?.heure_entree) {
+              anomaliesPointage.push(`Pointage enregistré le ${day} alors que l'employé était en congé (le congé prévaut)`)
+            }
+            continue
+          }
+          if (!pt || (!pt.heure_entree && pt.absent_justifie !== true)) {
+            jours_absence_injust++
+            anomaliesPointage.push(`Absence non justifiée le ${day}`)
+          } else if (pt.heure_entree && !pt.heure_sortie) {
+            anomaliesPointage.push(`Oubli de pointage sortie le ${day}`)
+          }
+        }
+      } else {
+        // Toggle OFF — saisie manuelle uniquement
+        jours_absence_injust = Number(body.absences || body.jours_absence || 0) || 0
       }
       const montant_absence = Math.round(jours_absence_injust * (Number(emp.salaire_base) / 26) * 100) / 100
 
@@ -413,6 +510,7 @@ export async function POST(request: Request) {
       const resultat = calculerBulletin(elements, params as any, joursTravailles, Number(emp.pct_refacturation) || 0)
 
       // UL deduction: days in-period × salaire_brut / nb_jours_ouvres_mois.
+      // INTÉGRATION 3 — diagnostic log (cf. calculer_batch).
       let montant_ul_single = 0
       if (joursUnpaidLeaveSingle > 0) {
         const nbJoursOuvresMoisSingle = calculateWorkingDays(periodeStartSingle, periodeEndSingle, {
@@ -427,6 +525,9 @@ export async function POST(request: Request) {
             + (Number(elements.special_allowance_1) || 0))
         if (nbJoursOuvresMoisSingle > 0 && salaireBrutSingle > 0) {
           montant_ul_single = Math.round(joursUnpaidLeaveSingle * (salaireBrutSingle / nbJoursOuvresMoisSingle) * 100) / 100
+          console.log(`[paie] UL OK (single) ${emp.prenom} ${emp.nom} — ${joursUnpaidLeaveSingle}j × (${salaireBrutSingle} / ${nbJoursOuvresMoisSingle}) = ${montant_ul_single} MUR`)
+        } else {
+          console.warn(`[paie] UL SKIP zero-guard (single) — ${emp.prenom} ${emp.nom} joursOuvres=${nbJoursOuvresMoisSingle} salaireBrut=${salaireBrutSingle}`)
         }
       }
 
@@ -562,6 +663,17 @@ export async function POST(request: Request) {
       }
       console.log(`[paie batch] ${employes.length} employes actifs sur ${allEmps.length} total pour societe=${societe_id}, periode=${periodeStr}`)
 
+      // Migration 135 — fetch pointage_actif UNE FOIS pour tout le batch
+      // (toutes les écritures partagent la même société). Si OFF (défaut),
+      // les absences sont saisies manuellement ; aucune déduction auto.
+      let pointageActifBatch = false
+      if (societe_id) {
+        const { data: socData } = await supabase
+          .from('societes').select('pointage_actif').eq('id', societe_id).maybeSingle()
+        pointageActifBatch = (socData as any)?.pointage_actif === true
+      }
+      console.log(`[paie batch] pointage_actif=${pointageActifBatch} pour societe=${societe_id}`)
+
       // Get variables from request body if provided
       const requestVariables: Record<string, any> = {}
       if (body.variables && Array.isArray(body.variables)) {
@@ -633,10 +745,26 @@ export async function POST(request: Request) {
           ? Math.round(Number(emp.salaire_base) * 0.15 * (total_heures_nuit / (45 * 52 / 12)))
           : 0
 
-        // 2. Toutes les primes de la période (approuvées ou saisies)
-        const { data: primesMois } = await supabase.from('primes_variables_mois')
-          .select('*').eq('employe_id', emp.id).eq('periode', periodeDate)
-        let total_primes = (primesMois || []).reduce((s, p) => s + Number(p.montant || 0), 0)
+        // INTÉGRATION 4 — Primes de la période : approuve=true ET
+        // integre_paie=false uniquement (cf. calculer pour rationale).
+        let primesMois: any[] = []
+        {
+          const { data, error } = await supabase.from('primes_variables_mois')
+            .select('*')
+            .eq('employe_id', emp.id)
+            .eq('periode', periodeDate)
+            .eq('approuve', true)
+            .eq('integre_paie', false)
+          if (error) {
+            console.warn('[paie batch] primes fetch with integre_paie filter failed — fallback:', error.message)
+            const retry = await supabase.from('primes_variables_mois')
+              .select('*').eq('employe_id', emp.id).eq('periode', periodeDate).eq('approuve', true)
+            primesMois = retry.data || []
+          } else {
+            primesMois = data || []
+          }
+        }
+        let total_primes = primesMois.reduce((s, p) => s + Number(p.montant || 0), 0)
 
         // 2b. Primes fixes de la fiche employé (récurrentes chaque mois)
         const primeFixe1 = Number(emp.prime_fixe_1) || 0
@@ -713,6 +841,9 @@ export async function POST(request: Request) {
         // Count leave days (working-days only) intersected with the period.
         // SL reduces the OT threshold; AL does not; UL triggers a deduction
         // on the net; MAT/PAT are tracked for reporting (no deduction).
+        // INTÉGRATION 3 — normalisation defensive type_conge (trim + upper)
+        // pour encaisser les données DB où un espace ou une casse
+        // inattendue empêchait le match strict 'UL' → 0 déduction en prod.
         let joursSickLeave = 0
         let joursLocalLeave = 0
         let joursAlImposeBatch = 0     // subset of joursLocalLeave
@@ -725,14 +856,18 @@ export async function POST(request: Request) {
             emp, joursFeriesSet
           )
           if (n <= 0) continue
-          if (c.type_conge === 'SL') joursSickLeave += n
-          else if (c.type_conge === 'AL') {
+          const tc = String(c.type_conge || '').trim().toUpperCase()
+          if (tc === 'SL') joursSickLeave += n
+          else if (tc === 'AL') {
             joursLocalLeave += n
             if (c.impose_par_societe === true) joursAlImposeBatch += n
             else joursAlEmployeBatch += n
           }
-          else if (c.type_conge === 'UL') joursUnpaidLeave += n
-          else if (c.type_conge === 'MAT' || c.type_conge === 'PAT') joursMatPat += n
+          else if (tc === 'UL') joursUnpaidLeave += n
+          else if (tc === 'MAT' || tc === 'PAT') joursMatPat += n
+        }
+        if (joursUnpaidLeave > 0) {
+          console.log(`[paie] UL detected — ${emp.prenom} ${emp.nom} ${periodeStr}: ${joursUnpaidLeave}j (${(congesApprouves || []).filter(c => String(c.type_conge || '').trim().toUpperCase() === 'UL').map(c => `${c.date_debut}→${c.date_fin}`).join(', ')})`)
         }
 
         // Monthly OT threshold: standard hours minus sick leave hours
@@ -765,19 +900,36 @@ export async function POST(request: Request) {
         const otScaleFactor = dailyOtSum > 0 && otMensuelBrut < dailyOtSum ? otMensuelBrut / dailyOtSum : 1
         total_ot_montant = Math.round(total_ot_montant * otScaleFactor)
 
-        // 4. Absences injustifiées + pointage anomalies for conges_details
+        // INTÉGRATION 2 + Migration 135 — Absences injustifiées par
+        // JOUR OUVRÉ. Conditionnel sur pointageActifBatch.
+        // OFF (défaut)  → jours_absence_injust=0 (saisie manuelle via
+        //                  reqVar.absences plus bas).
+        // ON            → boucle complète sur les jours ouvrés.
         let jours_absence_injust = 0
         const anomaliesPointageBatch: string[] = []
-        for (const pt of pointagesMois || []) {
-          if (isWeekend(pt.date_pointage)) continue
-          const enConge = (congesApprouves || []).some(c => pt.date_pointage >= c.date_debut && pt.date_pointage <= c.date_fin)
-          if (!pt.heure_entree && !enConge && pt.absent_justifie !== true) {
-            jours_absence_injust++
-            anomaliesPointageBatch.push(`Absence non justifiée le ${pt.date_pointage}`)
-          } else if (pt.heure_entree && !pt.heure_sortie) {
-            anomaliesPointageBatch.push(`Oubli de pointage sortie le ${pt.date_pointage}`)
-          } else if (pt.heure_entree && enConge) {
-            anomaliesPointageBatch.push(`Pointage le ${pt.date_pointage} alors que l'employé était en congé`)
+        if (pointageActifBatch) {
+          const pointageByDateBatch = new Map<string, any>()
+          for (const pt of pointagesMois || []) {
+            pointageByDateBatch.set(pt.date_pointage, pt)
+          }
+          const workingDaysListBatch = listWorkingDaysInPeriod(
+            periodeStart, periodeEnd, emp, joursFeriesSet,
+          )
+          for (const day of workingDaysListBatch) {
+            const pt = pointageByDateBatch.get(day)
+            const enConge = (congesApprouves || []).some(c => day >= c.date_debut && day <= c.date_fin)
+            if (enConge) {
+              if (pt?.heure_entree) {
+                anomaliesPointageBatch.push(`Pointage le ${day} alors que l'employé était en congé`)
+              }
+              continue
+            }
+            if (!pt || (!pt.heure_entree && pt.absent_justifie !== true)) {
+              jours_absence_injust++
+              anomaliesPointageBatch.push(`Absence non justifiée le ${day}`)
+            } else if (pt.heure_entree && !pt.heure_sortie) {
+              anomaliesPointageBatch.push(`Oubli de pointage sortie le ${day}`)
+            }
           }
         }
         // 4. Override with request variables if provided
@@ -860,7 +1012,15 @@ export async function POST(request: Request) {
         // holidays by default). This differs from the unjustified-absence
         // formula which uses salaire_base/26 — UL docks the full gross
         // pro rata, not just the basic salary.
+        // INTÉGRATION 3 — UL deduction.
+        // Constat prod : 0 bulletin avec déduction malgré UL approuvés
+        // (ex. Sheetal Sekely UL 2026-02-06 → 2026-03-06). On log
+        // systématiquement les skip pour diagnostiquer quelle garde a
+        // coupé le calcul, au lieu de logger uniquement le cas OK.
         let montant_ul = 0
+        if (joursUnpaidLeave > 0 && isHorsMRA) {
+          console.log(`[paie] UL SKIP isHorsMRA — ${emp.prenom} ${emp.nom} (${joursUnpaidLeave}j UL non déduits)`)
+        }
         if (!isHorsMRA && joursUnpaidLeave > 0) {
           const nbJoursOuvresMois = calculateWorkingDays(periodeStart, periodeEnd, {
             workingDays: getWorkingDaysForEmploye(emp),
@@ -874,8 +1034,10 @@ export async function POST(request: Request) {
               + (Number(elements.special_allowance_1) || 0))
           if (nbJoursOuvresMois > 0 && salaireBrutPaie > 0) {
             montant_ul = Math.round(joursUnpaidLeave * (salaireBrutPaie / nbJoursOuvresMois) * 100) / 100
+            console.log(`[paie] UL OK ${emp.prenom} ${emp.nom} — ${joursUnpaidLeave}j × (${salaireBrutPaie} / ${nbJoursOuvresMois}) = ${montant_ul} MUR`)
+          } else {
+            console.warn(`[paie] UL SKIP zero-guard — ${emp.prenom} ${emp.nom} joursOuvres=${nbJoursOuvresMois} salaireBrut=${salaireBrutPaie} (resultat.salaire_brut=${resultat.salaire_brut})`)
           }
-          console.log(`[paie] UL: ${emp.prenom} ${emp.nom} — ${joursUnpaidLeave}j × (${salaireBrutPaie} / ${nbJoursOuvresMois}) = ${montant_ul} MUR`)
         }
 
         const totalDeductionAbsence = montant_absence_final + montant_ul
