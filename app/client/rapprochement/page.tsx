@@ -18,6 +18,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { bucketizeTransactions, type BucketItem } from "@/lib/accounting/classification-rules"
 import { RapprochementKpiDashboard } from "@/components/rapprochement/KpiDashboard"
 import { PeriodeBar } from "@/components/rapprochement/PeriodeBar"
+import { BalanceComptes } from "@/components/rapprochement/BalanceComptes"
 
 function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 function formatDate(d: string) { return d ? new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" }) : "—" }
@@ -1268,6 +1269,9 @@ Voulez-vous vraiment continuer ?`
         onSelectMonth={setSelectedMois}
         onCloturer={handleCloturerMois}
       />
+
+      {/* Balance par compte — voir tous les comptes comptables utilises */}
+      <BalanceComptes societeId={societeId} mois={selectedMois} />
 
       {/* ── Bouton unique: Rapprocher automatiquement ─────────────────── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
