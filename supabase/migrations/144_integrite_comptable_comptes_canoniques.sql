@@ -148,6 +148,60 @@ DROP FUNCTION IF EXISTS canonicalize_compte(TEXT);
 DROP FUNCTION IF EXISTS trg_canonicalize_numero_compte() CASCADE;
 
 -- ────────────────────────────────────────────────────────────────────────────
+-- 4bis. Garantir les libellés PCM des codes utilisés par le module paie
+-- ────────────────────────────────────────────────────────────────────────────
+-- Sur certaines bases, la migration 018 n'a pas été appliquée ou des UPSERT
+-- ultérieurs ont écrasé les libellés des sous-comptes (64xx, 43xx). La
+-- balance affiche alors « Rémunérations du personnel » pour 6411/6412/6413/
+-- 6419 au lieu de chaque libellé précis. On upsert ici les libellés clés.
+INSERT INTO public.plan_comptable (compte, libelle, type_compte, sens_normal, compte_parent, niveau)
+VALUES
+  -- Classe 4 — Tiers (dettes de personnel et organismes sociaux)
+  ('4210', 'Salaires nets à payer',                           'passif', 'C', '421', 4),
+  ('4211', 'Primes et gratifications à payer',                'passif', 'C', '421', 4),
+  ('4212', '13e mois à payer (EOY Bonus)',                    'passif', 'C', '421', 4),
+  ('4311', 'CSG salarié à verser',                            'passif', 'C', '431', 4),
+  ('4312', 'NSF salarié à verser',                            'passif', 'C', '431', 4),
+  ('4321', 'CSG patronal à verser',                           'passif', 'C', '432', 4),
+  ('4322', 'NSF patronal à verser',                           'passif', 'C', '432', 4),
+  ('4323', 'PRGF à verser',                                   'passif', 'C', '432', 4),
+  ('4324', 'Training Levy HRDC à verser',                     'passif', 'C', '432', 4),
+  ('4330', 'PAYE à reverser à la MRA',                        'passif', 'C', '433', 4),
+  -- Classe 6 — Charges de personnel
+  ('6411', 'Salaires et appointements bruts',                 'charge', 'D', '641', 4),
+  ('6412', 'Transport allowance',                             'charge', 'D', '641', 4),
+  ('6413', 'Petrol allowance',                                'charge', 'D', '641', 4),
+  ('6414', 'Heures supplémentaires',                          'charge', 'D', '641', 4),
+  ('6415', 'Primes et gratifications',                        'charge', 'D', '641', 4),
+  ('6416', '13e mois — EOY Bonus (provision)',                'charge', 'D', '641', 4),
+  ('6417', 'Indemnités compensatrices et de départ',          'charge', 'D', '641', 4),
+  ('6418', 'Indemnités compensatrices (préavis, etc.)',       'charge', 'D', '641', 4),
+  ('6419', 'Autres rémunérations du personnel',               'charge', 'D', '641', 4),
+  ('6451', 'CSG patronale',                                   'charge', 'D', '645', 4),
+  ('6452', 'NSF patronal',                                    'charge', 'D', '645', 4),
+  ('6453', 'PRGF (Portable Retirement Gratuity Fund)',        'charge', 'D', '645', 4),
+  ('6454', 'Training Levy HRDC (1%)',                         'charge', 'D', '645', 4)
+ON CONFLICT (compte) DO UPDATE
+  SET libelle = EXCLUDED.libelle,
+      type_compte = EXCLUDED.type_compte,
+      sens_normal = EXCLUDED.sens_normal,
+      compte_parent = EXCLUDED.compte_parent,
+      niveau = EXCLUDED.niveau;
+
+-- Rétro-fix des `nom_compte` incohérents dans les écritures v2 :
+-- certaines écritures paie ont été persistées avec nom_compte = 'Rémunérations
+-- du personnel' (libellé du parent 641) au lieu du libellé précis du sous-compte.
+-- On réaligne sur le libellé PCM quand il existe.
+UPDATE ecritures_comptables_v2 e
+SET nom_compte = pc.libelle
+FROM plan_comptable pc
+WHERE pc.compte = e.numero_compte
+  AND e.nom_compte IS DISTINCT FROM pc.libelle
+  AND e.numero_compte IN ('4210','4211','4212','4311','4312','4321','4322','4323','4324','4330',
+                          '6411','6412','6413','6414','6415','6416','6417','6418','6419',
+                          '6451','6452','6453','6454');
+
+-- ────────────────────────────────────────────────────────────────────────────
 -- 5. Vue v_ecritures_desequilibre — surfacer les folios non équilibrés
 -- ────────────────────────────────────────────────────────────────────────────
 CREATE OR REPLACE VIEW v_ecritures_desequilibre AS
