@@ -18,7 +18,7 @@ import {
 import { Input } from "@/components/ui/input"
 import {
   Upload, FolderOpen, Loader2, FileText, CheckCircle, Search, X,
-  Clock, Download, ChevronRight, Lock, AlertTriangle, Building2, RefreshCw, Camera, Pencil,
+  Clock, Download, ChevronRight, Lock, AlertTriangle, Building2, RefreshCw, Camera, Pencil, Trash2,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
@@ -126,6 +126,40 @@ export default function ClientDocumentsPage() {
   const { profile } = useProfile()
   const [documents, setDocuments] = useState<Document[]>([])
   const [loading, setLoading] = useState(true)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return
+    if (!confirm(`Supprimer ${ids.length} document(s) sélectionné(s) ?\n\nCela supprime les fichiers du storage ET toutes les écritures/factures/relevés liés. Action irréversible.`)) return
+    setBulkDeleting(true)
+    try {
+      const res = await fetch('/api/documents/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      })
+      const data = await res.json()
+      if (!res.ok) { alert(data.error || `Erreur HTTP ${res.status}`); return }
+      setDocuments(prev => prev.filter(d => !data.deleted?.includes(d.id)))
+      setSelectedIds(new Set())
+      if (data.failed_count > 0) alert(`${data.deleted_count} supprimés, ${data.failed_count} échecs.`)
+    } catch {
+      alert('Erreur de connexion')
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
   const [uploading, setUploading] = useState(false)
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
@@ -570,6 +604,30 @@ export default function ClientDocumentsPage() {
       </div>
 
       {/* Selected folder content */}
+      {/* Bulk actions toolbar — affichée uniquement quand ≥1 ligne sélectionnée */}
+      {selectedIds.size > 0 && (
+        <div className="sticky top-0 z-20 flex items-center justify-between gap-3 rounded-lg border border-[#9F1239]/30 bg-[#9F1239]/5 px-4 py-3 shadow-sm mb-3">
+          <div className="text-sm">
+            <span className="font-semibold text-[#0B0F2E]">{selectedIds.size}</span>
+            <span className="text-gray-600"> document{selectedIds.size > 1 ? 's' : ''} sélectionné{selectedIds.size > 1 ? 's' : ''}</span>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())} disabled={bulkDeleting}>
+              Tout désélectionner
+            </Button>
+            <Button
+              size="sm"
+              className="gap-2 bg-[#9F1239] hover:bg-[#9F1239]/90 text-white"
+              onClick={handleBulkDelete}
+              disabled={bulkDeleting}
+            >
+              {bulkDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              Supprimer {selectedIds.size}
+            </Button>
+          </div>
+        </div>
+      )}
+
       <Card>
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
@@ -673,6 +731,18 @@ export default function ClientDocumentsPage() {
           <Table className="min-w-[900px]">
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 cursor-pointer"
+                    title="Tout (dé)sélectionner"
+                    checked={currentDocs.length > 0 && currentDocs.every(d => selectedIds.has(d.id))}
+                    onChange={(e) => {
+                      if (e.target.checked) setSelectedIds(new Set(currentDocs.map(d => d.id)))
+                      else setSelectedIds(new Set())
+                    }}
+                  />
+                </TableHead>
                 <TableHead>Fichier</TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead>Société</TableHead>
@@ -686,7 +756,15 @@ export default function ClientDocumentsPage() {
               {currentDocs.map((doc) => {
                 const confiance = doc.confiance_type ?? doc.n8n_result?.routing?.confiance_type ?? null
                 return (
-                <TableRow key={doc.id}>
+                <TableRow key={doc.id} className={selectedIds.has(doc.id) ? "bg-[#D4AF37]/5" : undefined}>
+                  <TableCell>
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 cursor-pointer"
+                      checked={selectedIds.has(doc.id)}
+                      onChange={() => toggleSelect(doc.id)}
+                    />
+                  </TableCell>
                   <TableCell className="flex items-center gap-2">
                     <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
                     <Link
@@ -813,7 +891,7 @@ export default function ClientDocumentsPage() {
               })}
               {currentDocs.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-12">
+                  <TableCell colSpan={8} className="text-center py-12">
                     <FileText className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
                     <p className="text-muted-foreground">Aucun document dans ce dossier.</p>
                   </TableCell>
