@@ -1568,8 +1568,9 @@ Voulez-vous vraiment continuer ?`
               f, status: 'paye',
               label: '✅ Payé',
               badgeCls: 'bg-green-100 text-green-700 border-green-200',
-              // FIX 5 — priorité date facture.rapproche_date puis date tx
-              payDate: f.rapproche_date || f.rapproche_tx_date || null,
+              // FIX 5 — afficher la date RÉELLE de la transaction bancaire (rapproche_tx_date),
+              // pas la date à laquelle le lettrage a été enregistré (rapproche_date = aujourd'hui).
+              payDate: f.rapproche_tx_date || f.rapproche_date || null,
               txLibelle: f.rapproche_tx_libelle || null,
             }
           }
