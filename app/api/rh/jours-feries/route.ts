@@ -13,16 +13,20 @@ function getAdminClient() {
 }
 
 /** Mauritius fixed public holidays (same dates every year) */
+// Sprint 10 BUG 2 — `type_jour` n'existe PAS comme colonne sur jours_feries
+// en prod (la colonne a été retirée après mig 105). On garde le champ ici
+// UNIQUEMENT pour la logique applicative (distinction fixe/variable côté UI)
+// mais on NE l'envoie JAMAIS dans les INSERT/UPDATE.
 function getFixedHolidays(annee: number) {
   return [
-    { date: `${annee}-01-01`, libelle: 'Nouvel An', type_jour: 'fixe' },
-    { date: `${annee}-01-02`, libelle: 'Nouvel An (2e jour)', type_jour: 'fixe' },
-    { date: `${annee}-02-01`, libelle: 'Abolition de l\'esclavage', type_jour: 'fixe' },
-    { date: `${annee}-03-12`, libelle: 'Fête nationale', type_jour: 'fixe' },
-    { date: `${annee}-05-01`, libelle: 'Fête du travail', type_jour: 'fixe' },
-    { date: `${annee}-08-15`, libelle: 'Assomption', type_jour: 'fixe' },
-    { date: `${annee}-11-01`, libelle: 'Toussaint', type_jour: 'fixe' },
-    { date: `${annee}-12-25`, libelle: 'Noël', type_jour: 'fixe' },
+    { date: `${annee}-01-01`, libelle: 'Nouvel An' },
+    { date: `${annee}-01-02`, libelle: 'Nouvel An (2e jour)' },
+    { date: `${annee}-02-01`, libelle: 'Abolition de l\'esclavage' },
+    { date: `${annee}-03-12`, libelle: 'Fête nationale' },
+    { date: `${annee}-05-01`, libelle: 'Fête du travail' },
+    { date: `${annee}-08-15`, libelle: 'Assomption' },
+    { date: `${annee}-11-01`, libelle: 'Toussaint' },
+    { date: `${annee}-12-25`, libelle: 'Noël' },
   ]
 }
 
@@ -76,36 +80,28 @@ export async function POST(request: Request) {
     const { action } = body
 
     // ---- CREATE ----
-    // Sprint 6 FIX 1 — le frontend envoie type_jour='custom' pour les jours
-    // personnalisés société, mais la CHECK constraint DB (mig 105) n'autorise
-    // QUE 'fixe' ou 'variable' → INSERT en 500. On normalise :
-    //   - type_jour='custom' + societe_id NULL → 'variable' (fallback)
-    //   - type_jour='custom' + societe_id != NULL → 'variable'
-    //     (la nature custom est portée par societe_id, pas par type_jour)
-    //   - autres valeurs non autorisées → 'variable' par défaut.
-    // Du coup le badge UI se calcule ensuite à partir de (societe_id, date)
-    // et non plus de type_jour seul (voir FIX 2).
+    // Sprint 10 BUG 2 — la colonne `type_jour` n'existe PAS en prod
+    // (schema cache: "Could not find the 'type_jour' column"). On retire
+    // complètement ce champ de l'INSERT. Le badge UI se calcule à partir
+    // de (societe_id, date) via une liste hardcodée de dates fixes MU
+    // (voir Sprint 6 FIX 2 côté page.tsx).
+    //
+    // Historique : Sprint 6 FIX 1 normalisait 'custom' → 'variable' pour
+    // respecter la CHECK constraint mig 105, mais la colonne a été
+    // ultérieurement supprimée de la table en prod → on ne l'envoie plus
+    // du tout.
     if (action === 'creer') {
       const { date, libelle, societe_id, travail_autorise, majoration_pct } = body
-      let { type_jour } = body
       if (!date || !libelle) {
         return NextResponse.json({ error: 'Date et libellé requis' }, { status: 400 })
-      }
-      // Normalisation type_jour pour respecter la CHECK constraint DB
-      if (type_jour !== 'fixe' && type_jour !== 'variable') {
-        type_jour = 'variable'
       }
 
       const insertRow: Record<string, unknown> = {
         date,
         libelle,
-        type_jour,
         societe_id: societe_id || null,
-        // Sprint 7 FIX 4 — la colonne `annee` n'existe PAS sur jours_feries
-        // en prod (l'année est dérivée du champ `date`). La tentative
-        // d'INSERT avec `annee` provoquait une erreur 42703
-        //   "Could not find the 'annee' column of 'jours_feries'"
-        // → on retire le champ.
+        // Sprint 7 FIX 4 — `annee` retiré (colonne inexistante en prod).
+        // Sprint 10 BUG 2 — `type_jour` retiré (colonne inexistante en prod).
         pays: 'MU',
       }
       // Colonnes optionnelles (mig 139) — best-effort, retombe sans si absentes
@@ -130,16 +126,27 @@ export async function POST(request: Request) {
             error: 'Un jour férié existe déjà pour cette date' + (societe_id ? ' et cette société' : ' (national Maurice)') + '.',
           }, { status: 409 })
         }
-        // Colonne manquante (mig 139 pas appliquée)
-        if (error.code === '42703' && /travail_autorise|majoration_pct/.test(error.message)) {
-          // Retry sans les colonnes optionnelles
-          delete insertRow.travail_autorise
-          delete insertRow.majoration_pct
-          const retry = await supabase.from('jours_feries').insert(insertRow).select().single()
-          if (retry.error) {
-            return NextResponse.json({ error: `Erreur insertion (retry) : ${retry.error.message}`, code: retry.error.code }, { status: 500 })
+        // Sprint 10 BUG 2 — retry defensif si une colonne inconnue apparaît
+        // dans l'erreur. Couvre travail_autorise/majoration_pct (mig 139)
+        // et toute autre colonne optionnelle qu'un env pourrait avoir
+        // désactivée. Le retry strippe la colonne fautive et retente.
+        if (error.code === '42703') {
+          const safeRow: Record<string, unknown> = { ...insertRow }
+          const optionalCols = ['travail_autorise', 'majoration_pct', 'annee', 'type_jour', 'pays']
+          let stripped: string[] = []
+          for (const col of optionalCols) {
+            if (error.message.includes(col) && col in safeRow) {
+              delete safeRow[col]
+              stripped.push(col)
+            }
           }
-          return NextResponse.json({ success: true, jour_ferie: retry.data, warning: 'Migration 139 non appliquée — colonnes travail_autorise/majoration_pct ignorées' })
+          if (stripped.length > 0) {
+            const retry = await supabase.from('jours_feries').insert(safeRow).select().single()
+            if (retry.error) {
+              return NextResponse.json({ error: `Erreur insertion (retry) : ${retry.error.message}`, code: retry.error.code }, { status: 500 })
+            }
+            return NextResponse.json({ success: true, jour_ferie: retry.data, warning: `Colonnes manquantes ignorées : ${stripped.join(', ')}` })
+          }
         }
         return NextResponse.json({
           error: `Erreur insertion : ${error.message}${error.hint ? ` (${error.hint})` : ''}`,

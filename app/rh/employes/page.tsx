@@ -398,6 +398,21 @@ function EditEmployeForm({ emp, onSaved, onClose }: { emp: any; onSaved: () => v
 
 function fmt(n: number) { return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "MUR", maximumFractionDigits: 0 }).format(n) }
 
+// Sprint 10 BUG 3 — calcule le total brut théorique d'un employé :
+// salaire_base + toutes les allowances/primes récurrentes. Utilisé dans
+// les listes pour afficher à la fois "Base" et "Brut" quand il y a un
+// écart, clarifiant pourquoi les bulletins montrent un montant différent
+// du salaire_base.
+function computeTotalBrut(emp: any): number {
+  const base = Number(emp?.salaire_base) || 0
+  const transport = Number(emp?.transport_allowance) || 0
+  const petrol = Number(emp?.petrol_allowance) || 0
+  const primeFixe1 = Number(emp?.prime_fixe_1) || 0
+  const primeFixe2 = Number(emp?.prime_fixe_2) || 0
+  const primeFixe3 = Number(emp?.prime_fixe_3) || 0
+  return base + transport + petrol + primeFixe1 + primeFixe2 + primeFixe3
+}
+
 export default function EmployesPage() {
   const router = useRouter()
   const [employes, setEmployes] = useState<any[]>([])
@@ -645,10 +660,22 @@ export default function EmployesPage() {
                           {getStatusBadge(e)}
                         </div>
                         <p className="text-sm text-gray-500 truncate">{e.poste || "—"}{e.departement ? ` · ${e.departement}` : ""}</p>
-                        <div className="flex items-center gap-2 mt-2">
+                        <div className="flex items-center gap-2 mt-2 flex-wrap">
                           <span className="text-xs text-gray-400 font-mono">{e.code || "—"}</span>
                           <span className="text-xs text-gray-300">|</span>
-                          <span className="text-sm font-medium text-[#0B0F2E]">{fmt(e.salaire_base)}</span>
+                          <span className="text-sm font-medium text-[#0B0F2E]" title="Salaire de base (hors allowances/primes)">{fmt(e.salaire_base)}</span>
+                          {/* Sprint 10 BUG 3 — afficher "Brut: X" uniquement si différent du base */}
+                          {(() => {
+                            const brut = computeTotalBrut(e)
+                            return brut !== Number(e.salaire_base) ? (
+                              <span
+                                className="text-xs text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded"
+                                title="Total brut mensuel = base + transport + petrol + primes fixes"
+                              >
+                                Brut : {fmt(brut)}
+                              </span>
+                            ) : null
+                          })()}
                         </div>
                       </div>
                       <div className="flex flex-col gap-1 shrink-0">
@@ -691,7 +718,20 @@ export default function EmployesPage() {
                         <TableCell>{getStatusBadge(e)}</TableCell>
                         <TableCell className="text-sm text-gray-600">{e.poste||"—"}</TableCell>
                         <TableCell className="text-sm text-gray-500">{e.departement||"—"}</TableCell>
-                        <TableCell className="text-right font-medium text-sm">{fmt(e.salaire_base)}</TableCell>
+                        <TableCell className="text-right text-sm">
+                          {/* Sprint 10 BUG 3 — Base + Brut (si différent) */}
+                          <div className="flex flex-col items-end leading-tight">
+                            <span className="font-medium text-[#0B0F2E]" title="Salaire de base (hors allowances)">{fmt(e.salaire_base)}</span>
+                            {(() => {
+                              const brut = computeTotalBrut(e)
+                              return brut !== Number(e.salaire_base) ? (
+                                <span className="text-[10px] text-emerald-700" title="Total brut mensuel = base + transport + petrol + primes fixes">
+                                  Brut : {fmt(brut)}
+                                </span>
+                              ) : null
+                            })()}
+                          </div>
+                        </TableCell>
                         <TableCell className="text-right pr-5">
                           <div className="flex items-center justify-end gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
                             <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(ev)=>{ev.stopPropagation();router.push(`/rh/employes/${e.id}`)}} title="Voir fiche"><ExternalLink className="w-4 h-4 text-[#0B0F2E]"/></Button>
