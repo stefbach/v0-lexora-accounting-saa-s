@@ -45,6 +45,10 @@ export async function GET(request: Request) {
 
     // Multi-tenant OR self-service: verify user has access
     const hasAccess = await userHasAccessToSociete(user.id, societe_id)
+    // Sprint 10 BUG 5 — si l'user est un employé self-service (pas RH/admin),
+    // on NE doit retourner QUE les plannings publiés. Les brouillons RH ne
+    // doivent pas fuiter côté /salarie.
+    let selfServiceOnly = false
     if (!hasAccess) {
       // Self-service fallback: check if user is an employee of this société
       const { data: selfEmp } = await supabase
@@ -57,6 +61,7 @@ export async function GET(request: Request) {
       if (!selfEmp) {
         return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
       }
+      selfServiceOnly = true
     }
 
     // Find the planning for this societe + periode
@@ -65,6 +70,11 @@ export async function GET(request: Request) {
       .select('*')
       .eq('societe_id', societe_id)
       .order('periode', { ascending: false })
+
+    // Sprint 10 BUG 5 — employé self-service : uniquement plannings publiés
+    if (selfServiceOnly) {
+      planningQuery = planningQuery.eq('statut', 'publie')
+    }
 
     if (periode) {
       // periode can be "2026-04" or "2026-04-01" — try both formats
