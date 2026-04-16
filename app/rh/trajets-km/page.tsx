@@ -133,7 +133,11 @@ export default function TrajetsKmPage() {
 
   useEffect(() => { load() }, [load])
 
-  // Load parametres when société changes
+  // Load parametres when société changes.
+  // Sprint 11 BUG 6 — parametres_km (mig 113) a UNE ligne par société avec
+  // 3 colonnes taux_voiture / taux_moto / taux_velo + plafond_mensuel.
+  // L'ancien code lisait un array et le matchait sur vehicule_type, ce qui
+  // ne correspondait à rien : le pré-remplissage était toujours vide.
   const loadParams = useCallback(async () => {
     if (societe === "all") return
     try {
@@ -143,17 +147,14 @@ export default function TrajetsKmPage() {
         body: JSON.stringify({ action: "parametres", societe_id: societe, mode: "get" }),
       })
       const data = await res.json()
-      const params = data.parametres || []
-      setParametres(params)
-      // Pre-fill form
-      const voiture = params.find((p: Parametre) => p.vehicule_type === "voiture")
-      const moto = params.find((p: Parametre) => p.vehicule_type === "moto")
-      const velo = params.find((p: Parametre) => p.vehicule_type === "velo")
-      if (voiture) setParamVoiture(String(voiture.taux_km))
-      if (moto) setParamMoto(String(moto.taux_km))
-      if (velo) setParamVelo(String(velo.taux_km))
-      const anyPlafond = params.find((p: Parametre) => p.plafond_mensuel)
-      if (anyPlafond) setPlafondMensuel(String(anyPlafond.plafond_mensuel))
+      const row = data.parametres || null
+      setParametres(row ? [row] : [])
+      if (row) {
+        if (row.taux_voiture != null) setParamVoiture(String(row.taux_voiture))
+        if (row.taux_moto != null) setParamMoto(String(row.taux_moto))
+        if (row.taux_velo != null) setParamVelo(String(row.taux_velo))
+        if (row.plafond_mensuel != null) setPlafondMensuel(String(row.plafond_mensuel))
+      }
     } catch (e) {
       console.error(e)
     }
@@ -162,26 +163,30 @@ export default function TrajetsKmPage() {
   useEffect(() => { loadParams() }, [loadParams])
 
   const saveParametres = async () => {
+    // Sprint 11 BUG 6 — un SEUL POST qui porte les 3 taux + plafond.
+    // Avant : la boucle envoyait {vehicule_type, taux_km} — champs ignorés
+    // par l'API qui attend taux_voiture/taux_moto/taux_velo → l'upsert ne
+    // touchait qu'updated_at et les paramètres ne se sauvegardaient pas.
     setSavingParams(true)
     try {
-      const types = [
-        { vehicule_type: "voiture", taux_km: parseFloat(paramVoiture) },
-        { vehicule_type: "moto", taux_km: parseFloat(paramMoto) },
-        { vehicule_type: "velo", taux_km: parseFloat(paramVelo) },
-      ]
-      for (const t of types) {
-        if (isNaN(t.taux_km) || t.taux_km <= 0) continue
-        await fetch("/api/rh/trajets-km", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "parametres",
-            societe_id: societe,
-            vehicule_type: t.vehicule_type,
-            taux_km: t.taux_km,
-            plafond_mensuel: plafondMensuel ? parseFloat(plafondMensuel) : null,
-          }),
-        })
+      const tauxVoiture = parseFloat(paramVoiture)
+      const tauxMoto = parseFloat(paramMoto)
+      const tauxVelo = parseFloat(paramVelo)
+      const res = await fetch("/api/rh/trajets-km", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "parametres",
+          societe_id: societe,
+          taux_voiture: !isNaN(tauxVoiture) && tauxVoiture > 0 ? tauxVoiture : undefined,
+          taux_moto: !isNaN(tauxMoto) && tauxMoto > 0 ? tauxMoto : undefined,
+          taux_velo: !isNaN(tauxVelo) && tauxVelo >= 0 ? tauxVelo : undefined,
+          plafond_mensuel: plafondMensuel ? parseFloat(plafondMensuel) : null,
+        }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error(d.error || `HTTP ${res.status}`)
       }
       setShowParams(false)
       loadParams()
@@ -449,8 +454,19 @@ export default function TrajetsKmPage() {
               <div className="flex items-center gap-3">
                 <Bike className="h-5 w-5 text-gray-500 flex-shrink-0" />
                 <div className="flex-1">
-                  <Label className="text-sm">Taux vélo (Rs/km)</Label>
+                  <Label className="text-sm flex items-center gap-1">
+                    Taux vélo (Rs/km)
+                    <span
+                      className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-gray-600 text-[10px] font-bold cursor-help"
+                      title="Remboursement kilométrique pour les employés venant travailler à vélo. Optionnel — généralement 2 à 3 Rs/km. Mettre 0 pour désactiver."
+                    >
+                      ?
+                    </span>
+                  </Label>
                   <Input type="number" step="0.01" value={paramVelo} onChange={e => setParamVelo(e.target.value)} />
+                  <p className="text-[11px] text-gray-400 mt-0.5">
+                    Pour les employés qui se déplacent à vélo (optionnel).
+                  </p>
                 </div>
               </div>
             </div>

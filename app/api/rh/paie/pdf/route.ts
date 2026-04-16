@@ -56,10 +56,26 @@ async function fetchBulletinData(supabase: any, bulletin: any) {
   const alDroit = mos < 6 ? 0 : mos < 12 ? Math.min(mos - 6, 6) : 22
   const slDroit = mos < 6 ? 0 : mos < 12 ? Math.min(mos - 6, 6) : 15
 
-  // Primes
+  // Primes variables du mois — avec libellé depuis catalogue_primes.
+  // Sprint 11 BUG 3 — on ne retient que les primes approuvées (les brouillons
+  // ne doivent pas apparaître sur le bulletin).
   const { data: primesMois } = await supabase
     .from('primes_variables_mois').select('*, prime:catalogue_primes(libelle, type_prime)')
     .eq('employe_id', bulletin.employe_id).eq('periode', bulletin.periode)
+    .eq('approuve', true)
+
+  // Sprint 11 BUG 7 — frais kilométriques approuvés du mois (mig 037).
+  // Affichés comme ligne séparée "Indemnités kilométriques" au lieu d'être
+  // noyés dans other_refund.
+  let totalFraisKm = 0
+  try {
+    const { data: fraisKm } = await supabase.from('frais_km_mois')
+      .select('montant').eq('employe_id', bulletin.employe_id)
+      .eq('periode', bulletin.periode).eq('approuve', true)
+    totalFraisKm = (fraisKm || []).reduce(
+      (s: number, f: any) => s + (Number(f.montant) || 0), 0
+    )
+  } catch {}
 
   // Seniority
   let anciennete = '—'
@@ -71,7 +87,7 @@ async function fetchBulletinData(supabase: any, bulletin: any) {
     anciennete = y > 0 ? `${y} an(s) ${m} mois` : `${m} mois`
   }
 
-  return { emp, soc, moisLabel, annee, periodeDate, alPris, slPris, alDroit, slDroit, primesMois: primesMois || [], anciennete }
+  return { emp, soc, moisLabel, annee, periodeDate, alPris, slPris, alDroit, slDroit, primesMois: primesMois || [], totalFraisKm, anciennete }
 }
 
 // ─── PDF Document Component ──────────────────────────────────────
@@ -136,13 +152,35 @@ const s = StyleSheet.create({
   otSubValue: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#ea580c', textAlign: 'right', width: 90 },
 })
 
-function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris, slPris, alDroit, slDroit, primesMois, anciennete }: any) {
+function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris, slPris, alDroit, slDroit, primesMois, totalFraisKm, anciennete }: any) {
   const csgPct = Number(bulletin.salaire_brut) > 50000 ? '3%' : '1.5%'
-  const hasPrimes = primesMois.length > 0 || Number(bulletin.special_allowance_1) > 0
-  const totalPrimes = primesMois.length > 0
-    ? primesMois.reduce((s: number, p: any) => s + Number(p.montant || 0), 0)
-    : Number(bulletin.special_allowance_1 || 0) + Number(bulletin.special_allowance_2 || 0) + Number(bulletin.special_allowance_3 || 0)
   const hasOT = Number(bulletin.heures_sup_montant) > 0
+
+  // Sprint 11 BUG 3 — décomposition de special_allowance_1 en lignes labellisées.
+  // special_allowance_1 agrège : primes variables approuvées du mois +
+  // primes fixes récurrentes (employes.prime_fixe_1/2/3) + auto-rules +
+  // surcharge body. Si le bulletin expose uniquement le total, chaque
+  // prime apparaissait sous "Primes du mois" → le patron veut voir les
+  // vrais libellés (ex: ELECTRICITE, LOYER).
+  //
+  // Approche : on rend individuellement :
+  //   1. Primes variables de primes_variables_mois (libellé via catalogue_primes.libelle)
+  //   2. Primes fixes de l'employé (employes.prime_fixe_N / prime_fixe_N_libelle) dont le montant > 0
+  //   3. Un résidu "Primes du mois" = special_allowance_1 - (1) - (2)
+  //      si > 0 (couvre auto-rules + surcharge body non traçables).
+  const sumPrimesVar = (primesMois || []).reduce((s: number, p: any) => s + Number(p.montant || 0), 0)
+  const primesFixes = [1, 2, 3]
+    .map(n => ({
+      n,
+      libelle: (emp?.[`prime_fixe_${n}_libelle`] || '').toString().trim(),
+      montant: Number(emp?.[`prime_fixe_${n}`]) || 0,
+    }))
+    .filter(p => p.montant > 0)
+  const sumPrimesFixes = primesFixes.reduce((s, p) => s + p.montant, 0)
+  const sa1 = Number(bulletin.special_allowance_1 || 0)
+  const residuSa1 = Math.max(0, Math.round((sa1 - sumPrimesVar - sumPrimesFixes) * 100) / 100)
+  const hasPrimes = sa1 > 0 || primesMois.length > 0 || primesFixes.length > 0
+  const totalPrimes = sa1 + Number(bulletin.special_allowance_2 || 0) + Number(bulletin.special_allowance_3 || 0)
 
   const Row = ({ label, value, style: rowStyle }: { label: string; value: string; style?: any }) =>
     React.createElement(View, { style: s.row },
@@ -213,23 +251,44 @@ function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris
         React.createElement(Text, { style: s.otSubLabel }, 'Sous-total heures supplementaires'),
         React.createElement(Text, { style: s.otSubValue }, `${fmt(bulletin.heures_sup_montant)} MUR`)
       ) : null,
-      // Primes
-      ...(primesMois.length > 0
-        ? primesMois.map((p: any, i: number) =>
-            React.createElement(View, { style: s.primeRow, key: `p${i}` },
-              React.createElement(Text, { style: s.primeLabel }, `Prime — ${p.prime?.libelle || p.notes || 'Variable'}${p.quantite > 1 ? ` (x${p.quantite})` : ''}`),
-              React.createElement(Text, { style: s.primeValue }, `${fmt(Number(p.montant))} MUR`)
-            )
-          )
-        : Number(bulletin.special_allowance_1) > 0 ? [React.createElement(Row, { label: 'Primes du mois', value: `${fmt(bulletin.special_allowance_1)} MUR`, key: 'sa1' })] : []
+      // Sprint 11 BUG 3 — primes détaillées :
+      // 1) Primes variables approuvées (libellé via catalogue_primes)
+      ...primesMois.map((p: any, i: number) =>
+        React.createElement(View, { style: s.primeRow, key: `pv${i}` },
+          React.createElement(Text, { style: s.primeLabel }, `Prime — ${p.prime?.libelle || p.notes || 'Variable'}${p.quantite > 1 ? ` (x${p.quantite})` : ''}`),
+          React.createElement(Text, { style: s.primeValue }, `${fmt(Number(p.montant))} MUR`)
+        )
       ),
+      // 2) Primes fixes récurrentes de la fiche employé (libellé libre, ex: ELECTRICITE)
+      ...primesFixes.map((p: any, i: number) =>
+        React.createElement(View, { style: s.primeRow, key: `pf${i}` },
+          React.createElement(Text, { style: s.primeLabel }, `Prime — ${p.libelle || `Prime fixe ${p.n}`}`),
+          React.createElement(Text, { style: s.primeValue }, `${fmt(p.montant)} MUR`)
+        )
+      ),
+      // 3) Résidu non traçable (auto-rules, surcharge body) — affiché seulement si > 0
+      residuSa1 > 0
+        ? React.createElement(Row, { label: 'Primes du mois', value: `${fmt(residuSa1)} MUR`, key: 'sa1res' })
+        : null,
       Number(bulletin.special_allowance_2) > 0 ? React.createElement(Row, { label: 'Allocation speciale 2', value: `${fmt(bulletin.special_allowance_2)} MUR` }) : null,
       Number(bulletin.special_allowance_3) > 0 ? React.createElement(Row, { label: 'Allocation speciale 3', value: `${fmt(bulletin.special_allowance_3)} MUR` }) : null,
       hasPrimes ? React.createElement(View, { style: s.subTotalRow },
         React.createElement(Text, { style: s.subTotalLabel }, 'Sous-total primes'),
         React.createElement(Text, { style: s.subTotalValue }, `${fmt(totalPrimes)} MUR`)
       ) : null,
-      Number(bulletin.other_refund) > 0 ? React.createElement(Row, { label: 'Autres remboursements', value: `${fmt(bulletin.other_refund)} MUR` }) : null,
+      // Sprint 11 BUG 7 — "Indemnités kilométriques" + résidu "Autres remboursements".
+      // bulletin.other_refund = emp.other_refund + frais_km approuvés du mois.
+      // On affiche séparément les frais km (montant depuis frais_km_mois) et le
+      // résidu = other_refund - totalFraisKm (si > 0, couvre emp.other_refund).
+      Number(totalFraisKm) > 0
+        ? React.createElement(Row, { label: 'Indemnités kilométriques', value: `${fmt(Number(totalFraisKm))} MUR`, key: 'frais_km' })
+        : null,
+      (() => {
+        const residOther = Math.max(0, Math.round((Number(bulletin.other_refund || 0) - Number(totalFraisKm || 0)) * 100) / 100)
+        return residOther > 0
+          ? React.createElement(Row, { label: 'Autres remboursements', value: `${fmt(residOther)} MUR`, key: 'other_ref_resid' })
+          : null
+      })(),
       Number(bulletin.eoy_bonus) > 0 ? React.createElement(Row, { label: '13eme mois (EOY Bonus)', value: `${fmt(bulletin.eoy_bonus)} MUR` }) : null,
       Number(bulletin.departure_notice) > 0 ? React.createElement(Row, { label: 'Preavis de depart', value: `${fmt(bulletin.departure_notice)} MUR` }) : null,
       // BRUT total

@@ -127,6 +127,12 @@ export default function PaiePage() {
     } catch { setWorkflow(null) }
   }, [societe, periode])
 
+  // Sprint 11 BUG 1 — DÉCISION PATRON : aucun calcul automatique.
+  // Le chargement de la page ne fait que GET /api/rh/paie (lecture seule,
+  // aucune écriture). La génération des bulletins n'est déclenchée que par
+  // un clic explicite du RH sur "Calculer la paie" (stepper ou empty state).
+  // Ne PAS ajouter d'appel à calculerBatch() depuis un useEffect ou depuis
+  // load() — cela réintroduirait le comportement auto proscrit.
   useEffect(() => { load(); loadWorkflow() }, [load, loadWorkflow])
 
   const doAction = async (action: string, extra?: any) => {
@@ -645,10 +651,28 @@ export default function PaiePage() {
             {loading ? (
               <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin" /></div>
             ) : bulletins.length === 0 ? (
+              // Sprint 11 BUG 1 — empty state avec CTA explicite "Calculer la paie".
+              // Le calcul est MANUEL uniquement (décision patron) — aucun bulletin
+              // n'est généré tant que le RH ne clique pas sur ce bouton.
               <div className="text-center py-12 text-gray-500">
                 <Calculator className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                <p>Aucun bulletin pour cette periode</p>
-                <p className="text-sm mt-1">Selectionnez une societe et lancez le calcul via le processus ci-dessus</p>
+                <p className="font-medium text-gray-700">Aucun bulletin pour cette période</p>
+                <p className="text-sm mt-1 mb-4">
+                  Le calcul est manuel — aucun bulletin ne sera généré automatiquement.
+                </p>
+                <Button
+                  onClick={calculerBatch}
+                  disabled={calculating || societe === "all" || isLocked}
+                  className="bg-[#0B0F2E] text-white hover:bg-[#1a2050]"
+                >
+                  {calculating
+                    ? <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    : <Calculator className="w-4 h-4 mr-2" />}
+                  Calculer la paie
+                </Button>
+                {societe === "all" && (
+                  <p className="text-xs text-amber-600 mt-3">Sélectionnez d'abord une société.</p>
+                )}
               </div>
             ) : (
               <Table>

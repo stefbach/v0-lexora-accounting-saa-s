@@ -93,6 +93,10 @@ export async function GET(request: Request) {
 
     const frais = (entries || []).map((e: any) => {
       const emp = empMap[e.employe_id] || e.employe || {}
+      // Sprint 11 BUG 5 — statut dérivé de la colonne approuve BOOLEAN.
+      // Fallback sur e.statut pour envs legacy qui auraient gardé l'ancien schéma.
+      const statutDerive = e.statut
+        ?? (e.approuve === true ? 'approuve' : 'en_attente')
       return {
         id: e.id,
         employe_id: e.employe_id,
@@ -101,9 +105,11 @@ export async function GET(request: Request) {
         employe_poste: emp.poste || '',
         periode: e.periode,
         km: Number(e.km_parcourus) || 0,
-        tarif: Number(e.tarif_par_km || e.tarif_applique) || Number(rule?.tarif_par_km) || 16,
+        tarif: Number(e.tarif_applique || e.tarif_par_km) || Number(rule?.tarif_par_km) || 16,
         montant: Number(e.montant) || 0,
-        statut: e.statut || 'en_attente',
+        statut: statutDerive,
+        approuve: e.approuve === true,
+        justificatif: e.justificatif || null,
       }
     })
 
@@ -168,8 +174,17 @@ export async function POST(request: Request) {
     }
 
     // ── Enter km for an employee for a period ────────────────────────────────
+    // Sprint 11 BUG 5 — aligner l'INSERT sur le schéma réel (mig 037) :
+    //   - colonne TARIF : tarif_applique (pas tarif_par_km)
+    //   - colonne MONTANT : GENERATED ALWAYS AS (km_parcourus * tarif_applique)
+    //     STORED — NE JAMAIS envoyer dans l'INSERT, sinon 42601/erreur PG.
+    //   - colonne TEXTE : justificatif (pas motif)
+    //   - colonne STATUT : approuve BOOLEAN (pas statut 'en_attente')
+    //   - PAS de colonnes saisi_par/approuve_at/created_at sur frais_km_mois.
+    // Le plafond mensuel est appliqué en capant km_parcourus (puisque
+    // montant est dérivé) au lieu de capper le montant seul.
     if (action === 'saisir') {
-      const { employe_id, periode, km_parcourus, motif, societe_id } = body
+      const { employe_id, periode, km_parcourus, justificatif, motif, societe_id } = body
       if (!employe_id || !periode || km_parcourus === undefined) {
         return NextResponse.json({ error: 'employe_id, periode et km_parcourus requis' }, { status: 400 })
       }
@@ -185,7 +200,7 @@ export async function POST(request: Request) {
         sid = emp?.societe_id
       }
 
-      // Try both table names
+      // Try both table names (legacy fallback)
       let saisieRule: any = null
       const { data: sr1 } = await supabase.from('frais_km_rules').select('tarif_par_km, plafond_mensuel').eq('societe_id', sid).eq('actif', true).order('date_effet', { ascending: false }).limit(1).maybeSingle()
       if (sr1) { saisieRule = sr1 } else {
@@ -193,58 +208,81 @@ export async function POST(request: Request) {
         saisieRule = sr2
       }
 
-      const tarif = saisieRule?.tarif_par_km || 16
-      let montant = Math.round(Number(km_parcourus) * tarif * 100) / 100
-
-      // Apply monthly cap if set
-      if (saisieRule?.plafond_mensuel && montant > saisieRule.plafond_mensuel) {
-        montant = saisieRule.plafond_mensuel
+      const tarif = Number(saisieRule?.tarif_par_km) || 16
+      let kmEffectifs = Number(km_parcourus)
+      // Apply monthly cap on km (puisque montant est GENERATED)
+      const plafond = Number(saisieRule?.plafond_mensuel) || 0
+      if (plafond > 0 && kmEffectifs * tarif > plafond) {
+        kmEffectifs = Math.floor((plafond / tarif) * 100) / 100
       }
 
       const periodeDate = `${periode}-01`
+      const insertRow: Record<string, unknown> = {
+        employe_id,
+        periode: periodeDate,
+        km_parcourus: kmEffectifs,
+        tarif_applique: tarif,
+        justificatif: justificatif || motif || null,
+        approuve: false,
+      }
       const { data, error } = await supabase
         .from('frais_km_mois')
-        .upsert({
-          employe_id,
-          periode: periodeDate,
-          km_parcourus: Number(km_parcourus),
-          tarif_par_km: tarif,
-          montant,
-          motif: motif || null,
-          statut: 'en_attente',
-          saisi_par: user.id,
-          created_at: new Date().toISOString(),
-        }, { onConflict: 'employe_id,periode' })
+        .upsert(insertRow, { onConflict: 'employe_id,periode' })
         .select()
         .single()
 
-      if (error) throw error
+      if (error) {
+        console.error('[frais-km saisir] insert error:', {
+          message: error.message,
+          code: error.code,
+          hint: error.hint,
+          details: error.details,
+        })
+        return NextResponse.json({
+          error: `Erreur saisie frais km : ${error.message}${error.hint ? ` (${error.hint})` : ''}`,
+          code: error.code,
+        }, { status: 500 })
+      }
       return NextResponse.json({
         frais_km: data,
         tarif_applique: tarif,
-        montant_calcule: montant,
+        km_retenus: kmEffectifs,
+        montant_calcule: Number(data?.montant) || Math.round(kmEffectifs * tarif * 100) / 100,
       })
     }
 
     // ── Approve km expense ───────────────────────────────────────────────────
+    // Sprint 11 BUG 5 — colonne approuve BOOLEAN (pas statut). approuve_par
+    // doit pointer sur employes(id) ou null (schéma permissif : UUID sans FK
+    // explicite mais des anciens envs ont la FK vers employes).
     if (action === 'approuver') {
       const { id } = body
       if (!id) {
         return NextResponse.json({ error: 'id requis' }, { status: 400 })
       }
 
+      // Résolution auth_user → employe_id (même pattern que BUG 2)
+      let approuveParEmpId: string | null = null
+      try {
+        const { data: profile } = await supabase
+          .from('profiles').select('employe_id').eq('id', user.id).maybeSingle()
+        approuveParEmpId = profile?.employe_id || null
+      } catch {}
+
       const { data, error } = await supabase
         .from('frais_km_mois')
         .update({
-          statut: 'approuve',
-          approuve_par: user.id,
-          approuve_at: new Date().toISOString(),
+          approuve: true,
+          approuve_par: approuveParEmpId,
         })
         .eq('id', id)
         .select()
         .single()
 
-      if (error) throw error
+      if (error) {
+        console.error('[frais-km approuver] update error:', error.message)
+        return NextResponse.json({ error: error.message }, { status: 500 })
+      }
       return NextResponse.json({ frais_km: data, message: 'Frais kilométriques approuvés' })
     }
 
