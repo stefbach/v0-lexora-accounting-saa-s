@@ -107,16 +107,34 @@ export async function POST(request: Request) {
 
     const supabase = getAdminClient()
 
-    // Try to update regles_planning JSONB column on societes
+    // Sprint 5 BUG C — sauvegarde FIABLE dans la colonne regles_planning
+    // (mig 141). Avant : si la colonne manquait on retournait
+    // {success: true, fallback: true} — l'UI ne savait pas que c'était
+    // perdu en vraie DB. Maintenant on remonte l'erreur honnêtement pour
+    // que l'utilisateur sache s'il doit appliquer la migration.
     const { error } = await supabase
       .from('societes')
       .update({ regles_planning: regles })
       .eq('id', societe_id)
 
     if (error) {
-      // If column doesn't exist, log and still return success (localStorage is the fallback)
-      console.warn('Could not save regles_planning to DB:', error.message)
-      return NextResponse.json({ success: true, fallback: true, message: 'Saved to localStorage only. DB column regles_planning may need to be added.' })
+      console.error('[planning/regles POST] DB save failed:', {
+        message: error.message,
+        code: error.code,
+        hint: error.hint,
+      })
+      // Code 42703 = "column does not exist" → indique explicitement
+      // qu'il faut appliquer la migration 141.
+      if (error.code === '42703' || /regles_planning.*does not exist/i.test(error.message)) {
+        return NextResponse.json({
+          error: 'La colonne societes.regles_planning est manquante en base. Appliquez la migration 141_societes_regles_planning.sql dans Supabase puis réessayez.',
+          code: error.code,
+        }, { status: 500 })
+      }
+      return NextResponse.json({
+        error: `Erreur de sauvegarde : ${error.message}${error.hint ? ` (${error.hint})` : ''}`,
+        code: error.code,
+      }, { status: 500 })
     }
 
     return NextResponse.json({ success: true })
