@@ -42,109 +42,14 @@ interface HolidayDef {
   majoration_pct?: number
 }
 
-// ─── Complete Mauritius Public Holidays Data ───
-
-const FIXED_HOLIDAYS: { month: number; day: number; libelle: string }[] = [
-  { month: 1, day: 1, libelle: "Nouvel An" },
-  { month: 1, day: 2, libelle: "Nouvel An (2e jour)" },
-  { month: 2, day: 1, libelle: "Abolition de l'esclavage" },
-  { month: 3, day: 12, libelle: "Fête de l'Indépendance et de la République" },
-  { month: 5, day: 1, libelle: "Fête du Travail" },
-  { month: 11, day: 2, libelle: "Arrivée des travailleurs engagés" },
-  { month: 12, day: 25, libelle: "Noël" },
-]
-
-const VARIABLE_HOLIDAYS_BY_YEAR: Record<number, { month: number; day: number; libelle: string }[]> = {
-  2025: [
-    { month: 1, day: 14, libelle: "Thaipoosam Cavadee" },
-    { month: 1, day: 29, libelle: "Fête du Printemps Chinois" },
-    { month: 2, day: 26, libelle: "Maha Shivaratree" },
-    { month: 3, day: 14, libelle: "Ougadi" },
-    { month: 3, day: 30, libelle: "Eid-Ul-Fitr" },
-    { month: 8, day: 15, libelle: "Assomption de la Bienheureuse Vierge Marie" },
-    { month: 9, day: 5, libelle: "Ganesh Chaturthi" },
-    { month: 10, day: 20, libelle: "Divali" },
-  ],
-  2026: [
-    { month: 1, day: 2, libelle: "Thaipoosam Cavadee" },
-    { month: 2, day: 17, libelle: "Fête du Printemps Chinois" },
-    { month: 2, day: 15, libelle: "Maha Shivaratree" },
-    { month: 3, day: 20, libelle: "Eid-Ul-Fitr" },
-    { month: 4, day: 3, libelle: "Ougadi" },
-    { month: 8, day: 15, libelle: "Assomption de la Bienheureuse Vierge Marie" },
-    { month: 8, day: 26, libelle: "Ganesh Chaturthi" },
-    { month: 11, day: 8, libelle: "Divali" },
-  ],
-  2027: [
-    { month: 1, day: 21, libelle: "Thaipoosam Cavadee" },
-    { month: 2, day: 6, libelle: "Fête du Printemps Chinois" },
-    { month: 3, day: 5, libelle: "Maha Shivaratree" },
-    { month: 3, day: 10, libelle: "Eid-Ul-Fitr" },
-    { month: 3, day: 23, libelle: "Ougadi" },
-    { month: 8, day: 15, libelle: "Assomption de la Bienheureuse Vierge Marie" },
-    { month: 9, day: 15, libelle: "Ganesh Chaturthi" },
-    { month: 10, day: 28, libelle: "Divali" },
-  ],
-  // Sprint 1 — 2028-2030 ajoutés (audit RH a relevé que 2027 était la
-  // dernière année hardcodée). Dates calculées à partir des calendriers
-  // lunaires (hindou/musulman/chinois) — APPROXIMATIVES. Le gouvernement
-  // mauricien publie chaque année la liste officielle ; vérifier et
-  // corriger ces dates dès publication via /rh/jours-feries (custom add).
-  2028: [
-    { month: 2, day: 9,  libelle: "Thaipoosam Cavadee" },
-    { month: 1, day: 26, libelle: "Fête du Printemps Chinois" },
-    { month: 2, day: 22, libelle: "Maha Shivaratree" },
-    { month: 3, day: 21, libelle: "Eid-Ul-Fitr" },
-    { month: 3, day: 26, libelle: "Ougadi" },
-    { month: 8, day: 15, libelle: "Assomption de la Bienheureuse Vierge Marie" },
-    { month: 9, day: 2,  libelle: "Ganesh Chaturthi" },
-    { month: 10, day: 17, libelle: "Divali" },
-  ],
-  2029: [
-    { month: 1, day: 28, libelle: "Thaipoosam Cavadee" },
-    { month: 2, day: 13, libelle: "Fête du Printemps Chinois" },
-    { month: 2, day: 11, libelle: "Maha Shivaratree" },
-    { month: 3, day: 13, libelle: "Eid-Ul-Fitr" },
-    { month: 4, day: 14, libelle: "Ougadi" },
-    { month: 8, day: 15, libelle: "Assomption de la Bienheureuse Vierge Marie" },
-    { month: 9, day: 23, libelle: "Ganesh Chaturthi" },
-    { month: 11, day: 5, libelle: "Divali" },
-  ],
-  2030: [
-    { month: 1, day: 18, libelle: "Thaipoosam Cavadee" },
-    { month: 2, day: 3,  libelle: "Fête du Printemps Chinois" },
-    { month: 3, day: 2,  libelle: "Maha Shivaratree" },
-    { month: 3, day: 3,  libelle: "Eid-Ul-Fitr" },
-    { month: 4, day: 3,  libelle: "Ougadi" },
-    { month: 8, day: 15, libelle: "Assomption de la Bienheureuse Vierge Marie" },
-    { month: 9, day: 12, libelle: "Ganesh Chaturthi" },
-    { month: 10, day: 26, libelle: "Divali" },
-  ],
-}
-
-function getHolidaysForYear(year: number): HolidayDef[] {
-  const holidays: HolidayDef[] = []
-
-  // Fixed holidays
-  for (const h of FIXED_HOLIDAYS) {
-    const mm = String(h.month).padStart(2, "0")
-    const dd = String(h.day).padStart(2, "0")
-    holidays.push({ date: `${year}-${mm}-${dd}`, libelle: h.libelle, type: "fixe" })
-  }
-
-  // Variable holidays
-  const varHols = VARIABLE_HOLIDAYS_BY_YEAR[year]
-  if (varHols) {
-    for (const h of varHols) {
-      const mm = String(h.month).padStart(2, "0")
-      const dd = String(h.day).padStart(2, "0")
-      holidays.push({ date: `${year}-${mm}-${dd}`, libelle: h.libelle, type: "variable" })
-    }
-  }
-
-  holidays.sort((a, b) => a.date.localeCompare(b.date))
-  return holidays
-}
+// ─── Mauritius Public Holidays ───
+// Sprint 5 FIX 3 — toutes les données jours fériés viennent EXCLUSIVEMENT de la DB
+// (table jours_feries). La liste hardcodée (FIXED_HOLIDAYS, VARIABLE_HOLIDAYS_BY_YEAR)
+// a été supprimée car elle créait des doublons d'affichage quand un libellé en DB
+// différait légèrement du libellé hardcodé (ex. "Nouvel An" vs "Jour de l'An").
+//
+// Ajout / import : utiliser "Importer depuis calendrier Maurice" (Nager.Date)
+// ou "Ajouter un jour férié" manuel. La base est la source de vérité unique.
 
 const VARIABLE_SUGGESTIONS = [
   "Thaipoosam Cavadee",
@@ -505,45 +410,26 @@ export default function JoursFeriesPage() {
 
   useEffect(() => { load() }, [load])
 
-  // Static holidays for the selected year
-  const staticHolidays = useMemo(() => getHolidaysForYear(yearNum), [yearNum])
-
-  // Merge: static holidays + DB custom holidays (avoid duplicates by date+libelle)
-  const allHolidays = useMemo(() => {
+  // Sprint 5 FIX 3 — liste venant UNIQUEMENT de la DB (plus de merge
+  // hardcodé/DB qui créait des doublons). Dédoublonnage défensif sur
+  // (date, libelle) pour couvrir une éventuelle incohérence côté DB.
+  const allHolidays = useMemo<(HolidayDef & { id?: string })[]>(() => {
     const map = new Map<string, HolidayDef & { id?: string }>()
-
-    // Add static first
-    for (const h of staticHolidays) {
-      map.set(`${h.date}|${h.libelle}`, h)
-    }
-
-    // Overlay DB holidays (may override or add new)
     for (const jf of dbHolidays) {
-      const key = `${jf.date}|${jf.libelle}`
-      if (map.has(key)) {
-        // merge with id + Sprint 4 mig 139 flags
-        const existing = map.get(key)!
-        map.set(key, {
-          ...existing,
-          id: jf.id,
-          travail_autorise: jf.travail_autorise === true,
-          majoration_pct: Number(jf.majoration_pct ?? 100),
-        })
-      } else {
-        // custom holiday from DB
-        map.set(key, {
-          date: jf.date,
-          libelle: jf.libelle,
-          type: (jf.type_jour === "fixe" || jf.type_jour === "variable") ? jf.type_jour : "custom",
-          id: jf.id,
-          travail_autorise: jf.travail_autorise === true,
-          majoration_pct: Number(jf.majoration_pct ?? 100),
-        })
-      }
+      const dateStr = String(jf.date).slice(0, 10)
+      const key = `${dateStr}|${jf.libelle}`
+      if (map.has(key)) continue // doublon DB, on garde le premier
+      map.set(key, {
+        date: dateStr,
+        libelle: jf.libelle,
+        type: (jf.type_jour === "fixe" || jf.type_jour === "variable") ? jf.type_jour : "custom",
+        id: jf.id,
+        travail_autorise: jf.travail_autorise === true,
+        majoration_pct: Number(jf.majoration_pct ?? 100),
+      })
     }
-
     return Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date))
-  }, [staticHolidays, dbHolidays])
+  }, [dbHolidays])
 
   // Build holiday date map for calendar
   const holidayDateMap = useMemo(() => {
@@ -559,11 +445,10 @@ export default function JoursFeriesPage() {
     return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`
   }, [])
 
-  // Stats
+  // Stats (tous types viennent de la DB maintenant)
   const fixedCount = allHolidays.filter(h => h.type === "fixe").length
   const variableCount = allHolidays.filter(h => h.type === "variable").length
   const customCount = allHolidays.filter(h => h.type === "custom").length
-  const hasVariableData = VARIABLE_HOLIDAYS_BY_YEAR[yearNum] !== undefined
 
   // Init year with fixed holidays in DB
   const initAnnee = async () => {
@@ -815,13 +700,13 @@ export default function JoursFeriesPage() {
               </div>
             </div>
 
-            {/* ─── Warning if no variable data ─── */}
-            {!hasVariableData && (
+            {/* Sprint 5 FIX 3 — alerte si aucun jour férié en DB pour cette année */}
+            {!loading && allHolidays.length === 0 && (
               <Alert className="border-amber-300 bg-amber-50">
                 <Info className="h-4 w-4 text-amber-600" />
                 <AlertDescription className="text-amber-800 text-sm">
-                  Les dates des jours fériés variables pour {y} ne sont pas encore disponibles.
-                  Ajoutez-les manuellement via le bouton &laquo; Ajouter un jour férié &raquo;.
+                  Aucun jour férié en base pour {y}. Importez depuis le calendrier
+                  officiel Maurice (Nager.Date) ou ajoutez-les manuellement.
                 </AlertDescription>
               </Alert>
             )}
