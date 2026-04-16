@@ -358,17 +358,36 @@ export async function PATCH(request: Request) {
       .single()
 
     if (existing && existing.statut !== 'brouillon' && existing.statut !== 'en_attente') {
-      // Allow status updates (e.g., marking as paid) + societe_id correction (reassignment)
-      // but not full content edits on finalized invoices
-      const allowedUpdates = ['statut', 'mode_paiement', 'paye_par', 'notes', 'societe_id']
+      // Sur une facture finalisée, seuls certains champs métier (non comptables) peuvent changer.
+      // societe_id RETIRÉ de allowedUpdates : le changer sans déplacer les écritures liées
+      // crée des écritures orphelines et pollue la balance de la société d'origine.
+      const allowedUpdates = ['statut', 'mode_paiement', 'paye_par', 'notes']
       const keys = Object.keys(updates)
       const hasDisallowed = keys.some(k => !allowedUpdates.includes(k))
       if (hasDisallowed) {
-        return NextResponse.json({ error: 'Seules les factures brouillon peuvent etre modifiees (sauf statut/mode_paiement/societe)' }, { status: 400 })
+        return NextResponse.json({ error: 'Seules les factures brouillon peuvent etre modifiees (sauf statut/mode_paiement/notes)' }, { status: 400 })
       }
     }
 
-    // If societe_id is changed, also update the linked document record
+    // Déplacement de facture entre sociétés : autorisé UNIQUEMENT si la facture
+    // n'a pas encore d'écritures comptables liées. Sinon on laisserait des écritures
+    // orphelines sur la société d'origine → déséquilibre + contamination visuelle
+    // d'une société par les factures d'une autre.
+    if (updates.societe_id && existing && updates.societe_id !== existing.societe_id) {
+      const { count: ecrituresLiees } = await supabase
+        .from('ecritures_comptables_v2')
+        .select('id', { count: 'exact', head: true })
+        .eq('societe_id', existing.societe_id)
+        .like('ref_folio', `FAC-${id}%`)
+      if ((ecrituresLiees || 0) > 0) {
+        return NextResponse.json({
+          error: `Impossible de déplacer cette facture : ${ecrituresLiees} écriture(s) comptable(s) déjà enregistrée(s). Annulez puis recréez la facture sous la bonne société.`,
+        }, { status: 409 })
+      }
+    }
+
+    // If societe_id is changed (et la vérification ci-dessus a passé),
+    // also update the linked document record
     if (updates.societe_id && existing && updates.societe_id !== existing.societe_id) {
       try {
         // Find old and new dossier
