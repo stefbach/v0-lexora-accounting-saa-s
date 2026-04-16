@@ -504,10 +504,9 @@ export default function JoursFeriesPage() {
           action: "creer",
           date: newDate,
           libelle: newLibelle,
-          // Sprint 6 FIX 1 — 'custom' n'est pas une valeur acceptée par la
-          // CHECK constraint DB. On envoie 'variable' et la distinction
-          // "custom société" se fait via societe_id != null (voir FIX 2).
-          type_jour: newType === 'custom' ? 'variable' : newType,
+          // Sprint 10 BUG 2 — colonne type_jour retirée en prod. On n'envoie
+          // plus ce champ. Le badge fixe/variable/perso se calcule côté UI
+          // à partir de (societe_id, date) — voir computeHolidayType.
           societe_id: societe !== "all" ? societe : null,
         }),
       })
@@ -588,7 +587,7 @@ export default function JoursFeriesPage() {
             action: 'creer',
             date: it.date,
             libelle: it.libelle,
-            type_jour: 'variable',
+            // Sprint 10 BUG 2 — type_jour retiré (colonne inexistante en prod)
             societe_id: societe !== 'all' ? societe : null,
           }),
         })
