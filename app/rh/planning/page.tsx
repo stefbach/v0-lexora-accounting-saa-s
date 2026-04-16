@@ -562,16 +562,41 @@ export default function PlanningPage() {
       setAllEmployes(emps)
       setPublished(planRes.published || false)
 
-      // If first load or société changed, include all employees by default
-      // But if we have planning data, only include those who have entries + current selection
-      const planEmpIds = new Set((planRes.planning || []).map((e: any) => e.employe_id))
-      if (includedEmpIds.size === 0) {
-        // First load: include all if no planning, or only planned ones + all
-        setIncludedEmpIds(new Set(emps.map((e: any) => e.id)))
+      // Sprint 9 BUG 1 — recalcul de la sélection à chaque load.
+      // Avant : on ne setIncludedEmpIds QUE si vide, donc en changeant de
+      // société, includedEmpIds gardait les IDs de la société précédente
+      // → displayedEmps = [] → "Aucun employé sélectionné" alors que la DB
+      // contient bien les assignments. Correction : on construit la
+      // sélection à partir des employés du planning (s'il en existe en DB)
+      // ET des employés actifs de la société, en intersectant avec la
+      // sélection précédente UNIQUEMENT si elle inclut des IDs valides
+      // pour cette société.
+      const empIdsThisSociete = new Set<string>(emps.map((e: any) => e.id as string))
+      const planEmpIds = new Set<string>((planRes.planning || []).map((e: any) => e.employe_id as string))
+      const previousSelection = Array.from(includedEmpIds)
+        .filter(id => empIdsThisSociete.has(id))
+      let nextIncluded: Set<string>
+      if (previousSelection.length > 0) {
+        // L'utilisateur avait une sélection compatible → la garder
+        nextIncluded = new Set<string>(previousSelection)
+      } else if (planEmpIds.size > 0) {
+        // Pas de sélection compatible mais planning DB → afficher
+        // tous les employés assignés (intersection avec employés actifs)
+        const ids: string[] = []
+        planEmpIds.forEach(id => { if (empIdsThisSociete.has(id)) ids.push(id) })
+        nextIncluded = new Set<string>(ids)
+        // Ajouter aussi les employés sans assignment pour permettre
+        // l'édition (sinon on ne peut plus ajouter un nouveau salarié
+        // au planning).
+        empIdsThisSociete.forEach(id => nextIncluded.add(id))
+      } else {
+        // Société sans planning + pas de sélection → tous les employés actifs
+        nextIncluded = new Set<string>(empIdsThisSociete)
       }
+      setIncludedEmpIds(nextIncluded)
 
       // Filter displayed employees
-      const displayedEmps = emps.filter((e: any) => includedEmpIds.size === 0 || includedEmpIds.has(e.id))
+      const displayedEmps = emps.filter((e: any) => nextIncluded.has(e.id))
       setEmployes(displayedEmps)
 
       const grid: Record<string, Record<number, CellData | null>> = {}
