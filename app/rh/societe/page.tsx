@@ -13,6 +13,7 @@ import {
   Loader2, Save, Building2, Phone, Banknote, Settings,
   MapPin, CheckCircle, AlertCircle, FileText, Scale,
   Shield, Download, ChevronDown, ChevronUp, Eye, Upload, ImageIcon,
+  Plus, Trash2, Star,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
@@ -206,6 +207,167 @@ function DetailsTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
   )
 }
 
+// ── Sprint 5 AMÉLIO 8 — Éditeur de contacts multiples (JSONB mig 140) ──
+type Contact = {
+  nom?: string
+  prenom?: string
+  poste?: string
+  email?: string
+  telephone?: string
+  principal?: boolean
+}
+
+function ContactsEditor({
+  initial,
+  onChange,
+}: {
+  initial: Contact[]
+  onChange: (contacts: Contact[]) => void
+}) {
+  const [contacts, setContacts] = useState<Contact[]>(
+    Array.isArray(initial) && initial.length > 0 ? initial : [],
+  )
+
+  const commit = (next: Contact[]) => {
+    setContacts(next)
+    onChange(next)
+  }
+
+  const update = (i: number, patch: Partial<Contact>) => {
+    const next = contacts.map((c, idx) => (idx === i ? { ...c, ...patch } : c))
+    commit(next)
+  }
+
+  const setPrincipal = (i: number) => {
+    // Un seul contact principal à la fois
+    commit(contacts.map((c, idx) => ({ ...c, principal: idx === i })))
+  }
+
+  const addContact = () => {
+    // Le tout premier ajouté est principal par défaut
+    const next = [...contacts, { principal: contacts.length === 0 } as Contact]
+    commit(next)
+  }
+
+  const removeContact = (i: number) => {
+    const next = contacts.filter((_, idx) => idx !== i)
+    // Si on supprime le principal, promouvoir le premier restant
+    if (contacts[i]?.principal && next.length > 0 && !next.some(c => c.principal)) {
+      next[0].principal = true
+    }
+    commit(next)
+  }
+
+  return (
+    <Card className="rounded-2xl border-l-4" style={{ borderLeftColor: NAVY }}>
+      <CardHeader className="pb-2 flex flex-row items-center justify-between">
+        <CardTitle className="text-sm font-semibold" style={{ color: NAVY }}>
+          Personnes de contact
+        </CardTitle>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={addContact}
+          className="h-8"
+        >
+          <Plus className="h-3.5 w-3.5 mr-1" /> Ajouter
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {contacts.length === 0 && (
+          <p className="text-sm text-gray-500 py-4 text-center">
+            Aucun contact renseigné. Cliquez sur « Ajouter » pour créer
+            un contact (CEO, DRH, DAF, etc.).
+          </p>
+        )}
+        {contacts.map((c, i) => (
+          <div
+            key={i}
+            className={`rounded-xl border p-4 space-y-3 ${
+              c.principal ? "border-amber-300 bg-amber-50/40" : "border-gray-200"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {c.principal ? (
+                  <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">
+                    <Star className="h-3 w-3 mr-1 fill-current" /> Contact principal
+                  </Badge>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setPrincipal(i)}
+                    className="h-7 text-xs text-gray-500 hover:text-amber-700"
+                  >
+                    <Star className="h-3 w-3 mr-1" /> Définir comme principal
+                  </Button>
+                )}
+              </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => removeContact(i)}
+                className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+              >
+                <Trash2 className="h-3 w-3 mr-1" /> Supprimer
+              </Button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs text-gray-600 mb-1 block">Nom</Label>
+                <Input
+                  defaultValue={c.nom || ""}
+                  onBlur={e => update(i, { nom: e.target.value })}
+                  className="h-10 text-sm"
+                  placeholder="DUPONT"
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-gray-600 mb-1 block">Prénom</Label>
+                <Input
+                  defaultValue={c.prenom || ""}
+                  onBlur={e => update(i, { prenom: e.target.value })}
+                  className="h-10 text-sm"
+                  placeholder="Jean"
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-gray-600 mb-1 block">Poste</Label>
+                <Input
+                  defaultValue={c.poste || ""}
+                  onBlur={e => update(i, { poste: e.target.value })}
+                  className="h-10 text-sm"
+                  placeholder="CEO, DRH, DAF..."
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-gray-600 mb-1 block">Email</Label>
+                <Input
+                  type="email"
+                  defaultValue={c.email || ""}
+                  onBlur={e => update(i, { email: e.target.value })}
+                  className="h-10 text-sm"
+                  placeholder="jean@example.mu"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <Label className="text-xs text-gray-600 mb-1 block">Téléphone</Label>
+                <Input
+                  defaultValue={c.telephone || ""}
+                  onBlur={e => update(i, { telephone: e.target.value })}
+                  className="h-10 text-sm"
+                  placeholder="+230 5123 4567"
+                />
+              </div>
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  )
+}
+
 // ── CONTACT TAB ────────────────────────────────────────────────────────────────
 function ContactTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
   const f = useRef({ ...data })
@@ -213,15 +375,12 @@ function ContactTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
 
   return (
     <div className="space-y-6">
-      <Card className="rounded-2xl border-l-4" style={{ borderLeftColor: NAVY }}>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold" style={{ color: NAVY }}>Personne de contact</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Field label="Nom" name="contact_name" defaultValue={data.contact_name} placeholder="Stephane Bach" onChange={u} />
-          <Field label="Fonction" name="contact_position" defaultValue={data.contact_position} placeholder="CEO" onChange={u} />
-        </CardContent>
-      </Card>
+      {/* Sprint 5 AMÉLIO 8 — Éditeur multi-contacts (mig 140 contacts JSONB).
+          Remplace les anciens champs contact_name / contact_position uniques. */}
+      <ContactsEditor
+        initial={Array.isArray(data.contacts) ? data.contacts : []}
+        onChange={(contacts) => { f.current.contacts = contacts }}
+      />
 
       <Card className="rounded-2xl border-l-4 border-l-blue-500">
         <CardHeader className="pb-2">

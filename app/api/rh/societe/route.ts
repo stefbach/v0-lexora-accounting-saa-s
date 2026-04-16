@@ -138,8 +138,10 @@ export async function PUT(req: NextRequest) {
       'nom', 'short_name', 'brn', 'numero_tva_mra', 'statut_tva',
       'ern', 'npf_number', 'nature_business', 'secteur_activite',
       'date_incorporation', 'logo_url',
-      // Contact
+      // Contact (legacy)
       'contact_name', 'contact_position',
+      // Sprint 5 AMÉLIO 8 — liste multi-contacts (mig 140 JSONB)
+      'contacts',
       'adresse', 'adresse2', 'ville', 'telephone', 'fax', 'email', 'email_dco',
       'latitude', 'longitude', 'distance_pointage',
       // Payroll settings
