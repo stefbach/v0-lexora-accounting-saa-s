@@ -64,6 +64,19 @@ async function fetchBulletinData(supabase: any, bulletin: any) {
     .eq('employe_id', bulletin.employe_id).eq('periode', bulletin.periode)
     .eq('approuve', true)
 
+  // Sprint 11 BUG 7 — frais kilométriques approuvés du mois (mig 037).
+  // Affichés comme ligne séparée "Indemnités kilométriques" au lieu d'être
+  // noyés dans other_refund.
+  let totalFraisKm = 0
+  try {
+    const { data: fraisKm } = await supabase.from('frais_km_mois')
+      .select('montant').eq('employe_id', bulletin.employe_id)
+      .eq('periode', bulletin.periode).eq('approuve', true)
+    totalFraisKm = (fraisKm || []).reduce(
+      (s: number, f: any) => s + (Number(f.montant) || 0), 0
+    )
+  } catch {}
+
   // Seniority
   let anciennete = '—'
   if (emp?.date_arrivee) {
@@ -74,7 +87,7 @@ async function fetchBulletinData(supabase: any, bulletin: any) {
     anciennete = y > 0 ? `${y} an(s) ${m} mois` : `${m} mois`
   }
 
-  return { emp, soc, moisLabel, annee, periodeDate, alPris, slPris, alDroit, slDroit, primesMois: primesMois || [], anciennete }
+  return { emp, soc, moisLabel, annee, periodeDate, alPris, slPris, alDroit, slDroit, primesMois: primesMois || [], totalFraisKm, anciennete }
 }
 
 // ─── PDF Document Component ──────────────────────────────────────
@@ -139,7 +152,7 @@ const s = StyleSheet.create({
   otSubValue: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#ea580c', textAlign: 'right', width: 90 },
 })
 
-function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris, slPris, alDroit, slDroit, primesMois, anciennete }: any) {
+function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris, slPris, alDroit, slDroit, primesMois, totalFraisKm, anciennete }: any) {
   const csgPct = Number(bulletin.salaire_brut) > 50000 ? '3%' : '1.5%'
   const hasOT = Number(bulletin.heures_sup_montant) > 0
 
@@ -263,7 +276,19 @@ function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris
         React.createElement(Text, { style: s.subTotalLabel }, 'Sous-total primes'),
         React.createElement(Text, { style: s.subTotalValue }, `${fmt(totalPrimes)} MUR`)
       ) : null,
-      Number(bulletin.other_refund) > 0 ? React.createElement(Row, { label: 'Autres remboursements', value: `${fmt(bulletin.other_refund)} MUR` }) : null,
+      // Sprint 11 BUG 7 — "Indemnités kilométriques" + résidu "Autres remboursements".
+      // bulletin.other_refund = emp.other_refund + frais_km approuvés du mois.
+      // On affiche séparément les frais km (montant depuis frais_km_mois) et le
+      // résidu = other_refund - totalFraisKm (si > 0, couvre emp.other_refund).
+      Number(totalFraisKm) > 0
+        ? React.createElement(Row, { label: 'Indemnités kilométriques', value: `${fmt(Number(totalFraisKm))} MUR`, key: 'frais_km' })
+        : null,
+      (() => {
+        const residOther = Math.max(0, Math.round((Number(bulletin.other_refund || 0) - Number(totalFraisKm || 0)) * 100) / 100)
+        return residOther > 0
+          ? React.createElement(Row, { label: 'Autres remboursements', value: `${fmt(residOther)} MUR`, key: 'other_ref_resid' })
+          : null
+      })(),
       Number(bulletin.eoy_bonus) > 0 ? React.createElement(Row, { label: '13eme mois (EOY Bonus)', value: `${fmt(bulletin.eoy_bonus)} MUR` }) : null,
       Number(bulletin.departure_notice) > 0 ? React.createElement(Row, { label: 'Preavis de depart', value: `${fmt(bulletin.departure_notice)} MUR` }) : null,
       // BRUT total

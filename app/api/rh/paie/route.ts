@@ -496,6 +496,22 @@ export async function POST(request: Request) {
       }
       const total_primes = primesMois.reduce((s, p) => s + Number(p.montant || 0), 0)
 
+      // Sprint 11 BUG 7 — intégrer les frais kilométriques approuvés (mig 037).
+      // On somme les montants (colonne GENERATED km_parcourus*tarif_applique)
+      // pour la période et on les ajoute à other_refund.
+      // Si la table est absente en dev, best-effort (0).
+      let total_frais_km_single = 0
+      try {
+        const { data: fraisKm } = await supabase.from('frais_km_mois')
+          .select('montant').eq('employe_id', employe_id)
+          .eq('periode', periodeDate).eq('approuve', true)
+        total_frais_km_single = (fraisKm || []).reduce(
+          (s: number, f: any) => s + (Number(f.montant) || 0), 0
+        )
+      } catch (e: any) {
+        console.warn('[paie calculer] frais_km fetch failed (table absente ?):', e?.message || e)
+      }
+
       // 3. Congés approuvés qui CHEVAUCHENT le mois (cf. fix de calculer_batch).
       const periodeStartSingle = `${periodeStr}-01`
       const periodeEndSingle = lastDayOfMonth(periodeStr)
@@ -613,7 +629,8 @@ export async function POST(request: Request) {
         special_allowance_1: total_primes + primes_fixes_employe + (body.special_allowance_1 || 0),
         special_allowance_2: body.special_allowance_2 || 0,
         special_allowance_3: body.special_allowance_3 || 0,
-        other_refund: body.other_refund || 0,
+        // Sprint 11 BUG 7 — frais km approuvés inclus dans other_refund
+        other_refund: (body.other_refund || 0) + total_frais_km_single,
         eoy_bonus: body.eoy_bonus || 0,
         departure_notice: body.departure_notice || 0,
       }
@@ -887,6 +904,20 @@ export async function POST(request: Request) {
         }
         let total_primes = primesMois.reduce((s, p) => s + Number(p.montant || 0), 0)
 
+        // Sprint 11 BUG 7 — intégrer les frais kilométriques approuvés du mois.
+        // Somme des montants (colonne GENERATED) pour la période/employé.
+        let total_frais_km = 0
+        try {
+          const { data: fraisKm } = await supabase.from('frais_km_mois')
+            .select('montant').eq('employe_id', emp.id)
+            .eq('periode', periodeDate).eq('approuve', true)
+          total_frais_km = (fraisKm || []).reduce(
+            (s: number, f: any) => s + (Number(f.montant) || 0), 0
+          )
+        } catch (e: any) {
+          console.warn('[paie batch] frais_km fetch failed (table absente ?):', e?.message || e)
+        }
+
         // 2b. Primes fixes de la fiche employé (récurrentes chaque mois)
         const primeFixe1 = Number(emp.prime_fixe_1) || 0
         const primeFixe2 = Number(emp.prime_fixe_2) || 0
@@ -1109,6 +1140,8 @@ export async function POST(request: Request) {
           petrol_allowance: Number(emp.petrol_allowance) || 0,
           heures_sup_montant: Math.round(total_ot_montant),
           special_allowance_1: Math.round(total_primes),
+          // Sprint 11 BUG 7 — frais km approuvés inclus dans le brut via other_refund
+          other_refund: (Number(emp.other_refund) || 0) + total_frais_km,
           eoy_bonus: eoy_bonus_montant,
         }
 
@@ -1211,7 +1244,8 @@ export async function POST(request: Request) {
           transport_allowance: isHorsMRA ? 0 : (Number(emp.transport_allowance) || 0),
           petrol_allowance: isHorsMRA ? 0 : (Number(emp.petrol_allowance) || 0),
           increment_salaire: isHorsMRA ? 0 : (Number(emp.increment_salaire) || 0),
-          other_refund: isHorsMRA ? 0 : (Number(emp.other_refund) || 0),
+          // Sprint 11 BUG 7 — other_refund = refund fiche employé + frais km approuvés du mois
+          other_refund: isHorsMRA ? 0 : ((Number(emp.other_refund) || 0) + total_frais_km),
           eoy_bonus: isHorsMRA ? 0 : eoy_bonus_montant,
           // montant_absence holds the TOTAL deduction from absences (unjustified
           // + UL). The breakdown is recorded in `notes` and can be recomputed
