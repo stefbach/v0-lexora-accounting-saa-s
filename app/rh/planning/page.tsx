@@ -174,6 +174,10 @@ export default function PlanningPage() {
   // Confirm dialog for auto-generate
   const [confirmGenOpen, setConfirmGenOpen] = useState(false)
 
+  // Sprint 7 FIX 5 — Dialog de confirmation avant publication (rend
+  // le planning visible par tous les employés de la société).
+  const [confirmPublishOpen, setConfirmPublishOpen] = useState(false)
+
   // Approved leave days: empId -> Map(day -> leave type)
   const [approvedLeaves, setApprovedLeaves] = useState<Record<string, Map<number, string>>>({})
 
@@ -1016,11 +1020,30 @@ export default function PlanningPage() {
                   <Shield className="h-4 w-4 mr-1" /> Regles
                 </Button>
               </Link>
-              <Button variant="outline" size="sm" onClick={() => savePlanning(false)} disabled={saving}>
-                {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Check className="h-4 w-4 mr-1" />} Sauver
+              {/* Sprint 7 FIX 5 — Sauver vs Publier clairement distincts.
+                  Sauver : style outline (secondaire), enregistre en brouillon,
+                  visible uniquement RH. Publier : style solid vert (primaire),
+                  rend le planning visible par tous les employés — confirmation
+                  obligatoire via Dialog pour éviter publication accidentelle. */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => savePlanning(false)}
+                disabled={saving}
+                title="Enregistrer en brouillon — visible uniquement par vous (RH). Les employés ne voient rien tant que vous n'avez pas publié."
+              >
+                {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Check className="h-4 w-4 mr-1" />}
+                Sauver brouillon
               </Button>
-              <Button size="sm" onClick={() => savePlanning(true)} disabled={saving} style={{ backgroundColor: "#D4AF37" }} className="text-white hover:opacity-90">
-                <Send className="h-4 w-4 mr-1" /> Publier
+              <Button
+                size="sm"
+                onClick={() => setConfirmPublishOpen(true)}
+                disabled={saving}
+                className="text-white hover:opacity-90 bg-emerald-600 hover:bg-emerald-700"
+                title="Publier le planning — les employés pourront le consulter sur leur espace (/salarie). Nécessite confirmation."
+              >
+                <Send className="h-4 w-4 mr-1" />
+                Publier aux employés
               </Button>
             </div>
           </div>
@@ -1390,6 +1413,55 @@ export default function PlanningPage() {
       </Dialog>
 
       {/* ── Bulk dialog ── */}
+      {/* Sprint 7 FIX 5 — Dialog confirmation publication */}
+      <Dialog open={confirmPublishOpen} onOpenChange={setConfirmPublishOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle style={{ color: "#0B0F2E" }} className="flex items-center gap-2">
+              <Send className="h-5 w-5 text-emerald-600" />
+              Publier ce planning ?
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-sm">
+            <p className="text-gray-700">
+              En publiant ce planning, <strong>tous les employés concernés</strong> pourront
+              le consulter sur leur espace personnel (<code className="bg-gray-100 px-1 rounded text-xs">/salarie</code>).
+            </p>
+            <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-900">
+              <p className="font-medium mb-1">⚠️ Avant de publier, vérifiez :</p>
+              <ul className="space-y-1 ml-4 list-disc">
+                <li>Toutes les affectations sont correctes</li>
+                <li>Les règles WRA (45h/semaine, repos) sont respectées</li>
+                <li>Aucun conflit avec les congés approuvés</li>
+              </ul>
+            </div>
+            <p className="text-xs text-gray-500">
+              Vous pourrez toujours republier après modification.
+            </p>
+          </div>
+          <div className="flex justify-end gap-2 pt-3 border-t">
+            <Button
+              variant="outline"
+              onClick={() => setConfirmPublishOpen(false)}
+              disabled={saving}
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={async () => {
+                setConfirmPublishOpen(false)
+                await savePlanning(true)
+              }}
+              disabled={saving}
+              className="bg-emerald-600 text-white hover:bg-emerald-700"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Send className="h-4 w-4 mr-1" />}
+              Confirmer la publication
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle style={{ color: "#0B0F2E" }}>Affectation en masse</DialogTitle></DialogHeader>

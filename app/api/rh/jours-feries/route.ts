@@ -96,13 +96,16 @@ export async function POST(request: Request) {
         type_jour = 'variable'
       }
 
-      const annee = new Date(date).getFullYear()
       const insertRow: Record<string, unknown> = {
         date,
         libelle,
         type_jour,
         societe_id: societe_id || null,
-        annee,
+        // Sprint 7 FIX 4 — la colonne `annee` n'existe PAS sur jours_feries
+        // en prod (l'année est dérivée du champ `date`). La tentative
+        // d'INSERT avec `annee` provoquait une erreur 42703
+        //   "Could not find the 'annee' column of 'jours_feries'"
+        // → on retire le champ.
         pays: 'MU',
       }
       // Colonnes optionnelles (mig 139) — best-effort, retombe sans si absentes
@@ -194,11 +197,12 @@ export async function POST(request: Request) {
       const { annee, societe_id } = body
       if (!annee) return NextResponse.json({ error: 'Année requise' }, { status: 400 })
 
+      // Sprint 7 FIX 4 — pas de champ `annee` dans l'INSERT (colonne
+      // inexistante en prod, l'année est dans `date`).
       const fixed = getFixedHolidays(parseInt(annee))
       const rows = fixed.map(h => ({
         ...h,
         societe_id: societe_id || null,
-        annee: parseInt(annee),
         pays: 'MU',
       }))
 
