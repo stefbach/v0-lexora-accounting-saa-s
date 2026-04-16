@@ -4,6 +4,20 @@ import { createClient } from '@supabase/supabase-js'
 
 export const dynamic = 'force-dynamic'
 
+// Sprint 5 BUG D — rôles autorisés à générer la déclaration CSG/NSF MRA.
+// Inclut admin / super_admin / rh / rh_manager / client_admin / direction
+// ET comptable / comptable_dedie (qui génèrent les déclarations fiscales).
+const ALLOWED_ROLES = [
+  'admin',
+  'super_admin',
+  'rh',
+  'rh_manager',
+  'client_admin',
+  'direction',
+  'comptable',
+  'comptable_dedie',
+]
+
 function getAdminClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -20,17 +34,32 @@ export async function POST(request: Request) {
 
     const supabase = getAdminClient()
 
+    // Sprint 5 BUG D — role-check explicite avec 'admin' + message clair.
+    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+    const role = profile?.role || ''
+    if (!ALLOWED_ROLES.includes(role)) {
+      return NextResponse.json({
+        error: `Accès refusé : la génération CSG/NSF MRA est réservée aux rôles ${ALLOWED_ROLES.join(', ')}. Votre rôle : ${role || 'inconnu'}.`,
+      }, { status: 403 })
+    }
+
     const { societe_id, periode } = await request.json()
     if (!societe_id || !periode) return NextResponse.json({ error: 'societe_id et periode requis' }, { status: 400 })
 
-    // LOCK CHECK
-    const { data: unlockedBuls } = await supabase.from('bulletins_paie')
+    // LOCK CHECK — lecture defensive (si erreur on continue, la query
+    // bulletins plus bas renverra 404 explicite si vide).
+    const { data: unlockedBuls, error: lockErr } = await supabase.from('bulletins_paie')
       .select('id').eq('societe_id', societe_id)
       .gte('periode', `${periode}-01`).lte('periode', `${periode}-31`)
       .or('verrouille.is.null,verrouille.eq.false')
       .limit(1)
+    if (lockErr) {
+      console.warn('[csg-mra] lock check error (non-blocking):', lockErr.message)
+    }
     if (unlockedBuls && unlockedBuls.length > 0) {
-      return NextResponse.json({ error: 'Periode non verrouillee. Verrouillez la paie avant de declarer au MRA.' }, { status: 403 })
+      return NextResponse.json({
+        error: `Periode non verrouillee pour ${periode}. Verrouillez d'abord la paie dans /rh/paie (bouton « Verrouiller ») avant de declarer au MRA.`,
+      }, { status: 403 })
     }
 
     // Récupérer la société (inclut ern et tan_societe)
