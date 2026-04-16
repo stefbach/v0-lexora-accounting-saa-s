@@ -114,6 +114,49 @@ export async function POST(request: Request, { params }: Params) {
       })
     }
 
+    // ── 2bis. Sprint 5 AMÉLIO F — Signature authentifiée (employé connecté
+    //          depuis /salarie/contrats, pas besoin de token WhatsApp). ────
+    if (action === 'signer_self') {
+      if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+
+      const adminSupabase = getAdminClient()
+      // Vérifier que l'utilisateur connecté est bien l'employé du contrat
+      const { data: contrat, error: fetchErr } = await adminSupabase
+        .from('contrats_employes')
+        .select('id, employe_id, statut')
+        .eq('id', id)
+        .maybeSingle()
+      if (fetchErr || !contrat) return NextResponse.json({ error: 'Contrat introuvable' }, { status: 404 })
+
+      const { data: emp } = await adminSupabase
+        .from('employes')
+        .select('id, auth_user_id, email')
+        .eq('id', contrat.employe_id)
+        .maybeSingle()
+      const isSelf = !!emp && (emp.auth_user_id === user.id || (!!user.email && emp.email === user.email))
+      if (!isSelf) return NextResponse.json({ error: 'Seul l\'employé concerné peut signer ce contrat' }, { status: 403 })
+      if (contrat.statut === 'signe') return NextResponse.json({ error: 'Contrat déjà signé' }, { status: 409 })
+      if (contrat.statut === 'signe_employe') return NextResponse.json({ error: 'Vous avez déjà signé ce contrat — en attente de contresignature' }, { status: 409 })
+
+      const forwarded = request.headers.get('x-forwarded-for')
+      const ip = forwarded ? forwarded.split(',')[0].trim() : 'inconnue'
+
+      const { data: signed, error: updateErr } = await adminSupabase
+        .from('contrats_employes')
+        .update({
+          statut: 'signe_employe',
+          date_signature_employe: new Date().toISOString(),
+          ip_signature_employe: ip,
+          token_signature: null,
+          token_signature_employe: null,
+        })
+        .eq('id', id)
+        .select()
+        .single()
+      if (updateErr) throw updateErr
+      return NextResponse.json({ message: 'Contrat signé avec succès', contrat: signed })
+    }
+
     // ── 2. Signer avec le token ───────────────────────────────────────────
     if (action === 'signer') {
       const { token } = body

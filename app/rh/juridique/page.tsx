@@ -11,8 +11,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Loader2, FileText, Eye, Download, Printer, CheckCircle, XCircle, AlertCircle, Link2, Copy, CheckCheck } from "lucide-react"
+import { Loader2, FileText, Eye, Download, Printer, CheckCircle, XCircle, AlertCircle, Link2, Copy, CheckCheck, Pencil, Save, Upload, ImageIcon } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { ContractEditor } from "@/components/rh/ContractEditor"
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -65,6 +66,13 @@ export default function JuridiquePage() {
   const [filtStatut, setFiltStatut] = useState("all")
   const [viewContrat, setViewContrat] = useState<any | null>(null)
   const [updatingStatut, setUpdatingStatut] = useState(false)
+
+  // ── Sprint 5 AMÉLIO F — édition + signature dirigeant ──
+  const [editMode, setEditMode] = useState(false)
+  const [editedHtml, setEditedHtml] = useState<string>("")
+  const [sigNom, setSigNom] = useState<string>("")
+  const [sigImage, setSigImage] = useState<string>("") // data URI
+  const [savingEdit, setSavingEdit] = useState(false)
 
   // ── Section 2 : générer contrat ──
   const [genSociete, setGenSociete] = useState("")
@@ -593,8 +601,19 @@ export default function JuridiquePage() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Dialog : voir contrat complet ── */}
-      <Dialog open={!!viewContrat} onOpenChange={open => !open && setViewContrat(null)}>
+      {/* ── Dialog : voir / modifier contrat ── */}
+      <Dialog
+        open={!!viewContrat}
+        onOpenChange={open => {
+          if (!open) {
+            setViewContrat(null)
+            setEditMode(false)
+            setEditedHtml("")
+            setSigNom("")
+            setSigImage("")
+          }
+        }}
+      >
         <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>
@@ -624,12 +643,79 @@ export default function JuridiquePage() {
                   </Button>
                 </a>
               )}
-              {viewContrat?.html_content && (
-                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => imprimerContrat(viewContrat.html_content)}>
+              {(viewContrat?.html_content_modified || viewContrat?.html_content) && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs"
+                  onClick={() => imprimerContrat(viewContrat.html_content_modified || viewContrat.html_content)}
+                >
                   <Printer className="w-3 h-3 mr-1" />Imprimer
                 </Button>
               )}
-              {viewContrat?.statut === "brouillon" && (
+              {/* Sprint 5 AMÉLIO F — bouton Modifier / Enregistrer */}
+              {!editMode ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs"
+                  disabled={!viewContrat || viewContrat.statut === "signe"}
+                  onClick={() => {
+                    if (!viewContrat) return
+                    setEditedHtml(viewContrat.html_content_modified || viewContrat.html_content || "")
+                    setSigNom(viewContrat.signature_nom_complet || "")
+                    setSigImage(viewContrat.signature_image_dirigeant_url || "")
+                    setEditMode(true)
+                  }}
+                >
+                  <Pencil className="w-3 h-3 mr-1" />Modifier
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    disabled={savingEdit}
+                    onClick={() => { setEditMode(false); setEditedHtml(""); setSigNom(""); setSigImage("") }}
+                  >
+                    Annuler
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="h-7 text-xs bg-[#0B0F2E] text-white"
+                    disabled={savingEdit}
+                    onClick={async () => {
+                      if (!viewContrat) return
+                      setSavingEdit(true)
+                      try {
+                        const res = await fetch(`/api/rh/contrats/${viewContrat.id}`, {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            html_content_modified: editedHtml,
+                            signature_nom_complet: sigNom || null,
+                            signature_image_dirigeant_url: sigImage || null,
+                          }),
+                        })
+                        const d = await res.json()
+                        if (!res.ok) { alert(d.error || "Erreur de sauvegarde"); return }
+                        setViewContrat({ ...viewContrat, ...d.contrat })
+                        setEditMode(false)
+                        loadContrats()
+                      } catch (e: any) {
+                        alert("Erreur réseau : " + (e?.message || ""))
+                      } finally {
+                        setSavingEdit(false)
+                      }
+                    }}
+                  >
+                    {savingEdit ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Save className="w-3 h-3 mr-1" />}
+                    Enregistrer
+                  </Button>
+                </>
+              )}
+              {viewContrat?.statut === "brouillon" && !editMode && (
                 <Button
                   size="sm"
                   className="h-7 text-xs bg-[#D4AF37] text-[#0B0F2E] hover:bg-[#D4AF37]/80"
@@ -643,7 +729,7 @@ export default function JuridiquePage() {
                   Envoyer à l'employé
                 </Button>
               )}
-              {viewContrat?.statut === "signe_employe" && (
+              {viewContrat?.statut === "signe_employe" && !editMode && (
                 <Button
                   size="sm"
                   className="h-7 text-xs bg-green-700 text-white hover:bg-green-800"
@@ -659,8 +745,84 @@ export default function JuridiquePage() {
             </div>
           </div>
           <ScrollArea className="flex-1 mt-2">
-            {viewContrat?.html_content ? (
-              <div className="prose prose-sm max-w-none p-4 text-sm text-gray-800" dangerouslySetInnerHTML={{ __html: viewContrat.html_content }} />
+            {editMode ? (
+              <div className="space-y-4 p-2">
+                {/* Sprint 5 AMÉLIO F — éditeur TipTap */}
+                <ContractEditor initialHtml={editedHtml} onChange={setEditedHtml} />
+
+                <div className="rounded-xl border p-4 bg-amber-50/40 space-y-3">
+                  <h3 className="text-sm font-semibold text-amber-900 flex items-center gap-2">
+                    <ImageIcon className="w-4 h-4" /> Signature du dirigeant
+                  </h3>
+                  <p className="text-xs text-amber-800">
+                    Le nom et l'image seront rendus au bas du contrat. Visible à l'employé
+                    au moment de la signature.
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs">Nom du signataire</Label>
+                      <Input
+                        value={sigNom}
+                        onChange={e => setSigNom(e.target.value)}
+                        placeholder="Stephane BACH, CEO"
+                        className="h-9"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Image signature (PNG/JPG)</Label>
+                      <Input
+                        type="file"
+                        accept="image/png,image/jpeg"
+                        className="h-9 text-xs"
+                        onChange={async e => {
+                          const f = e.target.files?.[0]
+                          if (!f) return
+                          if (f.size > 500_000) {
+                            alert("Image trop lourde (> 500 Ko). Compressez avant upload.")
+                            return
+                          }
+                          const reader = new FileReader()
+                          reader.onload = () => setSigImage(typeof reader.result === 'string' ? reader.result : "")
+                          reader.readAsDataURL(f)
+                        }}
+                      />
+                    </div>
+                  </div>
+                  {sigImage && (
+                    <div className="flex items-center gap-3">
+                      <img src={sigImage} alt="Signature" className="h-16 border rounded bg-white p-1" />
+                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setSigImage("")}>
+                        <XCircle className="w-3 h-3 mr-1" />Retirer
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (viewContrat?.html_content_modified || viewContrat?.html_content) ? (
+              <>
+                <div
+                  className="prose prose-sm max-w-none p-4 text-sm text-gray-800"
+                  dangerouslySetInnerHTML={{
+                    __html: viewContrat.html_content_modified || viewContrat.html_content,
+                  }}
+                />
+                {/* Bloc signature dirigeant rendu en bas du contrat */}
+                {(viewContrat?.signature_nom_complet || viewContrat?.signature_image_dirigeant_url) && (
+                  <div className="mx-4 mt-6 mb-4 p-4 border-t bg-gray-50 rounded-lg">
+                    <p className="text-xs text-gray-500 mb-2">Signature de l'employeur</p>
+                    {viewContrat.signature_image_dirigeant_url && (
+                      <img
+                        src={viewContrat.signature_image_dirigeant_url}
+                        alt="Signature dirigeant"
+                        className="h-16 bg-white border p-1 rounded mb-2"
+                      />
+                    )}
+                    {viewContrat.signature_nom_complet && (
+                      <p className="text-sm font-medium text-gray-800">{viewContrat.signature_nom_complet}</p>
+                    )}
+                  </div>
+                )}
+              </>
             ) : (
               <div className="p-6 text-center text-gray-500">
                 <p>Aucun contenu HTML disponible.</p>
