@@ -2841,8 +2841,8 @@ export async function POST(request: Request) {
       if (dossier) {
         const dateEcriture = new Date().toISOString().split('T')[0]
         await supabase.from('ecritures_comptables').insert([
-          { dossier_id: dossier.id, date_ecriture: dateEcriture, journal: 'BNQ', compte: '421000', libelle: `Virement salaire ${nomComplet}`, debit: Math.round(montantNet), credit: 0, lettre: lettreCode },
-          { dossier_id: dossier.id, date_ecriture: dateEcriture, journal: 'BNQ', compte: '512000', libelle: `Virement salaire ${nomComplet}`, debit: 0, credit: Math.round(montantNet), lettre: lettreCode },
+          { dossier_id: dossier.id, date_ecriture: dateEcriture, journal: 'BNQ', compte: '4210', libelle: `Virement salaire ${nomComplet}`, debit: Math.round(montantNet), credit: 0, lettre: lettreCode },
+          { dossier_id: dossier.id, date_ecriture: dateEcriture, journal: 'BNQ', compte: '512', libelle: `Virement salaire ${nomComplet}`, debit: 0, credit: Math.round(montantNet), lettre: lettreCode },
         ])
       }
 

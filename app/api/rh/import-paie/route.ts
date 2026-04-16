@@ -478,23 +478,32 @@ export async function POST(request: Request) {
         const moisLabel = new Date(periodeDate).toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
         console.log(`[import-paie] Compta: basic=${t.basic}, ot=${t.ot}, allow=${t.allowances}, net=${t.net}, csg_s=${t.csg_sal}, csg_p=${t.csg_pat}`)
 
+        // Codes PCM (Plan Comptable Mauricien, migration 018) — canoniques 4 chiffres.
+        // Remplace les anciens codes 6-chiffres fantaisistes (641100, 421000, 431000, 432000…)
+        // qui créaient des comptes dupliqués incohérents avec le PCM officiel.
+        // L'inversion historique Training Levy / PRGF côté charge (645300 ↔ 645400) et dette
+        // (432000 ↔ 432100) est corrigée ici.
         const entries = [
-          // DÉBIT — Salaires et charges
-          { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '641100', libelle: `Salaires de base ${moisLabel}`, debit: Math.round(t.basic), credit: 0 },
-          t.ot > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '641200', libelle: `Heures supplémentaires ${moisLabel}`, debit: Math.round(t.ot), credit: 0 } : null,
-          t.allowances > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '641300', libelle: `Primes et indemnités ${moisLabel}`, debit: Math.round(t.allowances), credit: 0 } : null,
-          t.csg_pat > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '645100', libelle: `CSG patronale ${moisLabel}`, debit: Math.round(t.csg_pat), credit: 0 } : null,
-          t.nsf_pat > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '645200', libelle: `NSF patronal ${moisLabel}`, debit: Math.round(t.nsf_pat), credit: 0 } : null,
-          t.levy > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '645300', libelle: `Training Levy ${moisLabel}`, debit: Math.round(t.levy), credit: 0 } : null,
-          t.prgf > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '645400', libelle: `PRGF ${moisLabel}`, debit: Math.round(t.prgf), credit: 0 } : null,
-          // CRÉDIT — Dettes
-          { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '421000', libelle: `Net à payer ${moisLabel}`, debit: 0, credit: Math.round(t.net) },
-          t.csg_sal + t.csg_pat > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '431000', libelle: `CSG à payer ${moisLabel}`, debit: 0, credit: Math.round(t.csg_sal + t.csg_pat) } : null,
-          t.nsf_sal + t.nsf_pat > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '431100', libelle: `NSF à payer ${moisLabel}`, debit: 0, credit: Math.round(t.nsf_sal + t.nsf_pat) } : null,
-          t.paye > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '444000', libelle: `PAYE à payer ${moisLabel}`, debit: 0, credit: Math.round(t.paye) } : null,
-          t.levy > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '432000', libelle: `Training Levy à payer ${moisLabel}`, debit: 0, credit: Math.round(t.levy) } : null,
-          t.prgf > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '432100', libelle: `PRGF à payer ${moisLabel}`, debit: 0, credit: Math.round(t.prgf) } : null,
-          t.absence > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '641900', libelle: `Retenues absences ${moisLabel}`, debit: Math.round(t.absence), credit: 0 } : null,
+          // DÉBIT — Charges (classe 6)
+          { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '6411', libelle: `Salaires de base ${moisLabel}`, debit: Math.round(t.basic), credit: 0 },
+          t.ot > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '6414', libelle: `Heures supplémentaires ${moisLabel}`, debit: Math.round(t.ot), credit: 0 } : null,
+          t.allowances > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '6415', libelle: `Primes et indemnités ${moisLabel}`, debit: Math.round(t.allowances), credit: 0 } : null,
+          t.csg_pat > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '6451', libelle: `CSG patronale ${moisLabel}`, debit: Math.round(t.csg_pat), credit: 0 } : null,
+          t.nsf_pat > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '6452', libelle: `NSF patronal ${moisLabel}`, debit: Math.round(t.nsf_pat), credit: 0 } : null,
+          t.levy > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '6454', libelle: `Training Levy HRDC ${moisLabel}`, debit: Math.round(t.levy), credit: 0 } : null,
+          t.prgf > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '6453', libelle: `PRGF ${moisLabel}`, debit: Math.round(t.prgf), credit: 0 } : null,
+          // CRÉDIT — Dettes (classe 4)
+          { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '4210', libelle: `Salaires nets à payer ${moisLabel}`, debit: 0, credit: Math.round(t.net) },
+          // CSG : salarié (4311) et patronal (4321) séparés pour respecter le PCM
+          t.csg_sal > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '4311', libelle: `CSG salarié à verser ${moisLabel}`, debit: 0, credit: Math.round(t.csg_sal) } : null,
+          t.csg_pat > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '4321', libelle: `CSG patronal à verser ${moisLabel}`, debit: 0, credit: Math.round(t.csg_pat) } : null,
+          // NSF : salarié (4312) et patronal (4322) séparés
+          t.nsf_sal > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '4312', libelle: `NSF salarié à verser ${moisLabel}`, debit: 0, credit: Math.round(t.nsf_sal) } : null,
+          t.nsf_pat > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '4322', libelle: `NSF patronal à verser ${moisLabel}`, debit: 0, credit: Math.round(t.nsf_pat) } : null,
+          t.paye > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '4330', libelle: `PAYE à reverser MRA ${moisLabel}`, debit: 0, credit: Math.round(t.paye) } : null,
+          t.levy > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '4324', libelle: `Training Levy à verser ${moisLabel}`, debit: 0, credit: Math.round(t.levy) } : null,
+          t.prgf > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '4323', libelle: `PRGF à verser ${moisLabel}`, debit: 0, credit: Math.round(t.prgf) } : null,
+          t.absence > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '6419', libelle: `Retenues absences ${moisLabel}`, debit: Math.round(t.absence), credit: 0 } : null,
           // Provision 13ème mois (YEB) — 1/12 du salaire de base mensuel
           t.basic > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '6416', libelle: `Provision 13ème mois ${moisLabel}`, debit: Math.round(t.basic / 12), credit: 0 } : null,
           t.basic > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '4212', libelle: `Provision 13ème mois à payer ${moisLabel}`, debit: 0, credit: Math.round(t.basic / 12) } : null,
