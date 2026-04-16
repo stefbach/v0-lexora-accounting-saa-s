@@ -261,10 +261,25 @@ function EditEmployeForm({ emp, onSaved, onClose }: { emp: any; onSaved: () => v
           exclure_mra: !!e.exclure_mra,
         }),
       })
-      if (!res.ok) { const d = await res.json(); throw new Error(d.error) }
-      // Sprint 7 FIX 1 — confirmation explicite de la sauvegarde
-      const salaireChanged = Number(emp.salaire_base) !== salaireSaisi
-      toast.success(salaireChanged ? "Salaire mis à jour ✅" : "Fiche employé mise à jour ✅")
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error || `Erreur ${res.status}`)
+      // Sprint 9 BUG 2 — toast contextualisé selon les bulletins propagés.
+      // L'API renvoie bulletins_updated / bulletins_locked du mois courant.
+      if (data.salaire_changed) {
+        const updated = Number(data.bulletins_updated) || 0
+        const locked = Number(data.bulletins_locked) || 0
+        if (updated > 0 && locked > 0) {
+          toast.success(`Salaire mis à jour ✅ ${updated} bulletin(s) du mois recalculé(s) — ${locked} verrouillé(s) inchangé(s).`, { duration: 6000 })
+        } else if (updated > 0) {
+          toast.success(`Salaire mis à jour ✅ ${updated} bulletin(s) non verrouillé(s) du mois recalculé(s).`, { duration: 6000 })
+        } else if (locked > 0) {
+          toast.success(`Salaire mis à jour ✅ ${locked} bulletin(s) verrouillé(s) du mois inchangé(s) (audit historique).`, { duration: 6000 })
+        } else {
+          toast.success("Salaire mis à jour ✅ (aucun bulletin du mois en cours)")
+        }
+      } else {
+        toast.success("Fiche employé mise à jour ✅")
+      }
       onClose(); onSaved()
     } catch (err: any) { toast.error(err.message || "Erreur") }
     finally { setSaving(false) }

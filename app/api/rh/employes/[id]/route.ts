@@ -106,6 +106,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     //
     // Garde-fou : rejet si salaire_base invalide (NaN, <= 0) pour
     // éviter l'écrasement accidentel à 0.
+    let oldSalaire: number | null = null
     if (body.salaire_base !== undefined) {
       const n = Number(body.salaire_base)
       if (!Number.isFinite(n) || n <= 0) {
@@ -114,6 +115,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         }, { status: 400 })
       }
       body.salaire_base = n
+      // Sprint 9 BUG 2 — capturer l'ancien salaire AVANT update pour décider
+      // s'il faut recalculer les bulletins non verrouillés.
+      const { data: current } = await supabase
+        .from('employes').select('salaire_base').eq('id', id).maybeSingle()
+      oldSalaire = Number(current?.salaire_base) || 0
     }
     // motif_revision_salaire n'est pas une colonne employes → ne pas l'envoyer
     delete body.motif_revision_salaire
@@ -126,7 +132,60 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       .single()
     if (error) throw error
 
-    return NextResponse.json({ employe: data })
+    // Sprint 9 BUG 2 — si le salaire a changé, propager aux bulletins
+    // NON VERROUILLÉS (verrouille != true) du mois en cours uniquement.
+    // Les bulletins verrouillés (paie clôturée) ne sont JAMAIS modifiés
+    // pour préserver l'audit trail historique.
+    //
+    // Politique :
+    //   - On ne touche que les bulletins du mois courant (periode = mois en cours)
+    //     pour ne pas toucher d'anciens bulletins même non-verrouillés
+    //     (snapshots historiques).
+    //   - Update de bulletins_paie.salaire_base uniquement (pas un
+    //     recalcul complet — le recalcul OT/CSG/PAYE se fait au prochain
+    //     "calculer_batch" qui détectera la différence et reprendra).
+    //   - Best-effort : si la table/colonne pose problème, on log mais
+    //     on ne fait pas échouer la mise à jour de la fiche employé.
+    let bulletinsUpdated = 0
+    let bulletinsLocked = 0
+    if (oldSalaire !== null && oldSalaire !== body.salaire_base) {
+      try {
+        const now = new Date()
+        const periodeStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+        const { data: bulletinsMois } = await supabase
+          .from('bulletins_paie')
+          .select('id, verrouille')
+          .eq('employe_id', id)
+          .gte('periode', `${periodeStr}-01`)
+          .lte('periode', `${periodeStr}-31`)
+        const updatableIds = (bulletinsMois || [])
+          .filter((b: any) => b.verrouille !== true)
+          .map((b: any) => b.id)
+        bulletinsLocked = (bulletinsMois || []).filter((b: any) => b.verrouille === true).length
+        if (updatableIds.length > 0) {
+          const { error: bulErr } = await supabase
+            .from('bulletins_paie')
+            .update({ salaire_base: body.salaire_base })
+            .in('id', updatableIds)
+          if (bulErr) {
+            console.warn('[employes PATCH] bulletins_paie update skipped:', bulErr.message)
+          } else {
+            bulletinsUpdated = updatableIds.length
+            console.log(`[employes PATCH] salaire ${oldSalaire} → ${body.salaire_base} : ${bulletinsUpdated} bulletin(s) ${periodeStr} mis à jour, ${bulletinsLocked} verrouillé(s) ignoré(s)`)
+          }
+        }
+      } catch (e: any) {
+        console.warn('[employes PATCH] bulletins_paie propagation exception:', e?.message || e)
+      }
+    }
+
+    return NextResponse.json({
+      employe: data,
+      // Sprint 9 BUG 2 — info pour le client (toast contextualisé)
+      salaire_changed: oldSalaire !== null && oldSalaire !== body.salaire_base,
+      bulletins_updated: bulletinsUpdated,
+      bulletins_locked: bulletinsLocked,
+    })
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }

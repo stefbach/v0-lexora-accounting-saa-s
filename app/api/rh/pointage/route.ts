@@ -41,22 +41,47 @@ async function resolveEmployeeFilter(
   // Sprint 5 FIX 1 — exclure employés partis (actif=false OU date_depart).
   // Un ancien salarié ne doit JAMAIS apparaître dans le pointage quotidien
   // (pas de pointages actifs, pas dans la grille manager).
+  // Sprint 9 BUG 8 — manager scope. Récupérer le profil AVANT de
+  // filtrer par société : un manager doit être restreint aux employés
+  // de SON groupe (profile.groupe_gere_id) — pas tous les employés de
+  // la société. RH/admin gardent l'accès complet.
+  const { data: profile } = await supabase.from('profiles')
+    .select('role, societe_id, groupe_gere_id')
+    .eq('id', userId)
+    .maybeSingle()
+  const isManagerScoped = profile?.role === 'manager' && profile?.groupe_gere_id
+
+  // Helper : restreindre un set d'IDs employés au groupe géré par le manager.
+  const applyManagerGroupScope = async (allIds: string[]): Promise<string[]> => {
+    if (!isManagerScoped || allIds.length === 0) return allIds
+    const { data: groupe } = await supabase
+      .from('groupes')
+      .select('membres')
+      .eq('id', profile!.groupe_gere_id)
+      .maybeSingle()
+    const membres = Array.isArray((groupe as any)?.membres) ? (groupe as any).membres : []
+    const memberIds = new Set<string>(
+      membres.map((m: any) => String(m?.employe_id || m?.id || '')).filter(Boolean),
+    )
+    return allIds.filter(id => memberIds.has(id))
+  }
+
   if (societe_id) {
     const { data: emps } = await supabase.from('employes').select('id')
       .eq('societe_id', societe_id)
       .eq('actif', true)
       .is('date_depart', null)
-    return emps?.map(e => e.id) || []
+    const ids = emps?.map(e => e.id) || []
+    return applyManagerGroupScope(ids)
   }
-
-  const { data: profile } = await supabase.from('profiles').select('role, societe_id').eq('id', userId).maybeSingle()
 
   if (profile?.societe_id) {
     const { data: emps } = await supabase.from('employes').select('id')
       .eq('societe_id', profile.societe_id)
       .eq('actif', true)
       .is('date_depart', null)
-    return emps?.map(e => e.id) || []
+    const ids = emps?.map(e => e.id) || []
+    return applyManagerGroupScope(ids)
   }
 
   if (profile?.role && ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'manager', 'direction'].includes(profile.role)) return null
