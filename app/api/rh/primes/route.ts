@@ -132,6 +132,30 @@ export async function POST(request: Request) {
       return NextResponse.json({ prime: data })
     }
 
+    // Sprint 11 BUG 2 — résout l'employe_id du user connecté pour alimenter
+    // les colonnes saisi_par / approuve_par (FK vers employes(id), mig 017).
+    // Avant : on envoyait user.id (auth.users) → violation FK 23503.
+    // Si l'utilisateur connecté n'est pas lié à un employe (admin/comptable
+    // externe), on envoie null — la colonne est nullable.
+    const resolveEmployeId = async (): Promise<string | null> => {
+      try {
+        const { data: profile } = await supabase
+          .from('profiles').select('employe_id').eq('id', user.id).maybeSingle()
+        if (profile?.employe_id) return profile.employe_id
+      } catch (e: any) {
+        console.warn('[primes] resolveEmployeId profiles lookup failed:', e?.message || e)
+      }
+      // Fallback : regarder directement employes.auth_user_id (mig 108)
+      try {
+        const { data: emp } = await supabase
+          .from('employes').select('id').eq('auth_user_id', user.id).maybeSingle()
+        if (emp?.id) return emp.id
+      } catch (e: any) {
+        console.warn('[primes] resolveEmployeId employes fallback failed:', e?.message || e)
+      }
+      return null
+    }
+
     if (action === 'saisir') {
       const { employe_id, prime_id, periode, quantite, montant_force, notes } = body
       if (!employe_id || !prime_id || !periode) return NextResponse.json({ error: 'employe_id, prime_id, periode requis' }, { status: 400 })
@@ -165,11 +189,12 @@ export async function POST(request: Request) {
       }
 
       const periodeDate = `${periode}-01`
+      const saisiParEmpId = await resolveEmployeId()
       const { data, error } = await supabase.from('primes_variables_mois').upsert({
         employe_id, prime_id, periode: periodeDate, quantite: quantite || null,
         montant: Math.round(montant * 100) / 100,
         notes: notes || null,
-        saisi_par: user.id,
+        saisi_par: saisiParEmpId,
         approuve: false,
         integre_paie: false,
       }, { onConflict: 'employe_id,prime_id,periode' }).select().single()
@@ -182,8 +207,9 @@ export async function POST(request: Request) {
 
     if (action === 'approuver') {
       const { id } = body
+      const approuveParEmpId = await resolveEmployeId()
       const { data, error } = await supabase.from('primes_variables_mois')
-        .update({ approuve: true, approuve_par: user.id, approuve_at: new Date().toISOString() })
+        .update({ approuve: true, approuve_par: approuveParEmpId, approuve_at: new Date().toISOString() })
         .eq('id', id).select().single()
       if (error) {
         console.error('[primes POST approuver]', error.message)
