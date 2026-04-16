@@ -854,18 +854,21 @@ export async function POST(request: Request) {
         const { data: empFull } = await supabase.from('employes').select('date_arrivee').eq('id', body.employe_id).maybeSingle()
         const hireDate = empFull?.date_arrivee
 
-        // Calculate months of service for probation check (still BLOCKING:
-        // WRA 2019 interdit le droit à congé en période d'essai, donc même
-        // une bascule UL ne s'applique pas — on refuse).
+        // Sprint 7 FIX 3 — période de carence < 6 mois : NE PLUS bloquer.
+        // On bascule automatiquement en UL (unpaid leave) exactement comme
+        // pour un solde insuffisant. L'employé peut toujours poser son
+        // congé ; il sera simplement non payé et déduit du salaire.
+        // Avertissement clair retourné au client.
+        let monthsService = 99
         if (hireDate) {
           const hire = new Date(hireDate + 'T00:00:00')
           const now = new Date()
-          const monthsService = (now.getFullYear() - hire.getFullYear()) * 12 + (now.getMonth() - hire.getMonth())
-          if (monthsService < 6) {
-            return NextResponse.json({
-              error: `Pas de droit à congé pendant les 6 premiers mois (période de carence WRA 2019). Ancienneté: ${monthsService} mois.`,
-            }, { status: 400 })
-          }
+          monthsService = (now.getFullYear() - hire.getFullYear()) * 12 + (now.getMonth() - hire.getMonth())
+        }
+        if (monthsService < 6) {
+          typeCongeFinal = 'UL'
+          bascule_ul_warning = `Période de carence (${monthsService} mois d'ancienneté / 6 mois requis WRA 2019) — ce congé sera non payé (UL) et déduit du salaire.`
+          console.warn(`[conges] BASCULE UL (carence) — employe=${body.employe_id} type=${body.type_conge} ancienneté=${monthsService}mois demande=${nb_jours}j`)
         }
 
         const entitled = body.type_conge === 'AL'
@@ -873,7 +876,8 @@ export async function POST(request: Request) {
           : calculateSLEntitlement(hireDate, currentYear)
 
         const remaining = entitled - taken
-        if (nb_jours > remaining) {
+        // Sprint 7 FIX 3 — si déjà basculé UL pour carence, skip le check solde
+        if (typeCongeFinal !== 'UL' && nb_jours > remaining) {
           // FIX 2 — bascule UL au lieu de bloquer. Si le solde restant est
           // partiel (>0), on enregistre quand même tout en UL pour ne pas
           // mélanger deux types de congé sur une seule demande (plus simple
