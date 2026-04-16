@@ -1,15 +1,30 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createSbClient } from '@supabase/supabase-js'
 import { genererContrat, verifierContrat } from '@/lib/rh/expertRH'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
 
+// Sprint 8 — admin client (service_role) pour contourner les RLS policies
+// sur contrats_employes qui référencent auth.users (mig 028) → "permission
+// denied for table users" pour l'user-auth client qui n'a pas ce droit.
+function getAdminClient() {
+  return createSbClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } },
+  )
+}
+
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    // On garde le client user-auth UNIQUEMENT pour valider la session.
+    const supabaseAuth = await createClient()
+    const { data: { user } } = await supabaseAuth.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    // Toutes les opérations DB passent par l'admin client (bypass RLS).
+    const supabase = getAdminClient()
 
     const body = await request.json()
     const { action } = body

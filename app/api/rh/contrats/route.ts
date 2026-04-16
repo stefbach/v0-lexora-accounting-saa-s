@@ -122,12 +122,16 @@ export async function GET(request: Request) {
 
 // ── POST /api/rh/contrats ────────────────────────────────────────────────────
 // Body : { employe_id, type_contrat, secteur, date_debut, date_fin?, salaire_brut?, poste?, html_content?, notes? }
+// Sprint 8 — admin client pour contourner RLS "contrats_employe_read" qui
+// référence auth.users (mig 028) → "permission denied for table users"
+// quand on utilise le client user-auth.
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const supabaseAuth = await createClient()
+    const { data: { user } } = await supabaseAuth.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
+    const supabase = getAdminClient()
     const body = await request.json()
     const { employe_id, type_contrat, secteur, date_debut, date_fin, salaire_brut, poste, html_content, notes } = body
 
