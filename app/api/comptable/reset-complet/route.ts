@@ -110,8 +110,24 @@ export async function POST(request: Request) {
 
     const stats: Record<string, number> = {}
 
-    // 1. ÉCRITURES COMPTABLES — toutes, sans filtre ref_folio
+    // Collecter tous les dossier_id de cette société → permet de rattraper les
+    // écritures orphelines où societe_id est NULL mais dossier_id pointe bien vers
+    // un dossier de la société (cas legacy avant le fix du trigger v1→v2).
+    const { data: dossiers } = await supabase
+      .from('dossiers').select('id').eq('societe_id', societe_id)
+    const dossierIds: string[] = (dossiers || []).map((d: any) => d.id)
+
+    // 1. ÉCRITURES COMPTABLES — suppression en 2 passes pour attraper
+    //    a) celles avec societe_id correct
+    //    b) celles avec societe_id NULL mais dossier_id de cette société
     stats.ecritures = await deleteWithCount(supabase, 'ecritures_comptables_v2', { societe_id })
+    if (dossierIds.length > 0) {
+      const { count: orphelines, error: orphErr } = await supabase
+        .from('ecritures_comptables_v2')
+        .delete({ count: 'exact' })
+        .in('dossier_id', dossierIds)
+      if (!orphErr) stats.ecritures += (orphelines || 0)
+    }
 
     // 2. FACTURES (clients + fournisseurs + avoirs)
     stats.factures = await deleteWithCount(supabase, 'factures', { societe_id })
@@ -129,21 +145,32 @@ export async function POST(request: Request) {
       stats.releves = await deleteWithCount(supabase, 'releves_bancaires', { societe_id })
     }
 
-    // 5b. Documents + storage
+    // 5b. Documents + storage (cascade societe_id ET dossier_id pour rattraper
+    //    les documents avec societe_id NULL)
     if (options.documents) {
-      // Lister les storage_path pour suppression du bucket
-      const { data: docsToDelete } = await supabase
-        .from('documents').select('id, storage_path').eq('societe_id', societe_id)
+      // Lister les storage_path (via societe_id OU dossier_id de cette société)
+      let docsQuery = supabase.from('documents').select('id, storage_path')
+      if (dossierIds.length > 0) {
+        docsQuery = docsQuery.or(`societe_id.eq.${societe_id},dossier_id.in.(${dossierIds.join(',')})`)
+      } else {
+        docsQuery = docsQuery.eq('societe_id', societe_id)
+      }
+      const { data: docsToDelete } = await docsQuery
       if (docsToDelete && docsToDelete.length > 0) {
-        const paths = docsToDelete.map(d => d.storage_path).filter(Boolean) as string[]
+        const paths = docsToDelete.map((d: any) => d.storage_path).filter(Boolean) as string[]
         if (paths.length > 0) {
-          // Suppression en batch du bucket storage (best-effort, on ne jette pas si ça échoue)
           await supabase.storage.from('documents').remove(paths).catch((e: any) => {
             console.warn('[reset-complet] storage.remove error:', e?.message)
           })
         }
       }
+      // Supprimer en 2 passes (mêmes critères)
       stats.documents = await deleteWithCount(supabase, 'documents', { societe_id })
+      if (dossierIds.length > 0) {
+        const { count: orphanDocs } = await supabase
+          .from('documents').delete({ count: 'exact' }).in('dossier_id', dossierIds)
+        stats.documents += (orphanDocs || 0)
+      }
     }
 
     // 5c. TVA mensuelle
