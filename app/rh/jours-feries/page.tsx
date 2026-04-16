@@ -78,7 +78,8 @@ function typeBadgeClass(type: string) {
 function typeLabel(type: string) {
   if (type === "fixe") return "Fixe"
   if (type === "variable") return "Variable"
-  return "Personnalisé"
+  // Sprint 6 FIX 2 — clarifier que "custom" = jour propre à une société
+  return "Personnalisé société"
 }
 
 // ─── Mini Calendar Component ───
@@ -410,11 +411,32 @@ export default function JoursFeriesPage() {
 
   useEffect(() => { load() }, [load])
 
-  // Sprint 5 FIX 3 — liste venant UNIQUEMENT de la DB (plus de merge
-  // hardcodé/DB qui créait des doublons). Dédoublonnage défensif sur
-  // (date, libelle) pour couvrir une éventuelle incohérence côté DB.
-  const allHolidays = useMemo<(HolidayDef & { id?: string })[]>(() => {
-    const map = new Map<string, HolidayDef & { id?: string }>()
+  // Sprint 6 FIX 2 — type calculé à partir de (societe_id, date) :
+  //   - societe_id != null → "custom" (Personnalisé société)
+  //   - date ∈ {jours fixes MU} → "fixe"
+  //   - sinon → "variable" (lunaire/religieux, date change chaque année)
+  // Le champ DB type_jour devient secondaire : la CHECK constraint n'autorise
+  // que 'fixe'/'variable' donc elle ne peut pas encoder "custom" (voir FIX 1).
+  //
+  // Jours FIXES Maurice (date identique chaque année) :
+  //   01-01 Nouvel An  |  01-02 Nouvel An 2e jour  |  02-01 Abolition esclavage
+  //   03-12 Fête nationale  |  05-01 Fête du Travail
+  //   08-15 Assomption  |  11-01 Toussaint
+  //   11-02 Arrivée travailleurs engagés  |  12-25 Noël
+  const FIXED_DATES_MMDD = new Set<string>([
+    "01-01", "01-02", "02-01", "03-12", "05-01",
+    "08-15", "11-01", "11-02", "12-25",
+  ])
+  function computeHolidayType(dateStr: string, societe_id: string | null): "fixe" | "variable" | "custom" {
+    if (societe_id) return "custom"
+    const mmdd = dateStr.slice(5, 10) // YYYY-MM-DD → MM-DD
+    return FIXED_DATES_MMDD.has(mmdd) ? "fixe" : "variable"
+  }
+
+  // Sprint 5 FIX 3 + Sprint 6 FIX 2 — liste venant UNIQUEMENT de la DB.
+  // Dédoublonnage défensif sur (date, libelle) + type recalculé.
+  const allHolidays = useMemo<(HolidayDef & { id?: string; societe_id?: string | null })[]>(() => {
+    const map = new Map<string, HolidayDef & { id?: string; societe_id?: string | null }>()
     for (const jf of dbHolidays) {
       const dateStr = String(jf.date).slice(0, 10)
       const key = `${dateStr}|${jf.libelle}`
@@ -422,8 +444,9 @@ export default function JoursFeriesPage() {
       map.set(key, {
         date: dateStr,
         libelle: jf.libelle,
-        type: (jf.type_jour === "fixe" || jf.type_jour === "variable") ? jf.type_jour : "custom",
+        type: computeHolidayType(dateStr, jf.societe_id),
         id: jf.id,
+        societe_id: jf.societe_id,
         travail_autorise: jf.travail_autorise === true,
         majoration_pct: Number(jf.majoration_pct ?? 100),
       })
@@ -481,18 +504,28 @@ export default function JoursFeriesPage() {
           action: "creer",
           date: newDate,
           libelle: newLibelle,
-          type_jour: newType,
+          // Sprint 6 FIX 1 — 'custom' n'est pas une valeur acceptée par la
+          // CHECK constraint DB. On envoie 'variable' et la distinction
+          // "custom société" se fait via societe_id != null (voir FIX 2).
+          type_jour: newType === 'custom' ? 'variable' : newType,
           societe_id: societe !== "all" ? societe : null,
         }),
       })
       const data = await res.json()
-      if (data.success) {
-        setDialogOpen(false)
-        setNewDate("")
-        setNewLibelle("")
-        setNewType("custom")
-        await load()
+      if (!res.ok || !data.success) {
+        // Sprint 6 FIX 1 — surface le VRAI message au lieu de silently ignorer
+        console.error('[jours-feries handleAdd]', res.status, data)
+        alert(`Impossible d'ajouter le jour férié : ${data?.error || `Erreur ${res.status}`}`)
+        return
       }
+      setDialogOpen(false)
+      setNewDate("")
+      setNewLibelle("")
+      setNewType("custom")
+      await load()
+    } catch (e: any) {
+      console.error('[jours-feries handleAdd] exception', e)
+      alert(`Erreur réseau : ${e?.message || 'inconnue'}`)
     } finally {
       setSaving(false)
     }
