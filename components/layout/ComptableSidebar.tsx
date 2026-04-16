@@ -233,7 +233,7 @@ export function ComptableSidebar() {
   }
 
   return (
-    <aside
+    <aside data-lenis-prevent
       className={cn(
         "sticky top-0 flex h-screen flex-col transition-all duration-300",
         collapsed ? "w-16" : "w-64"

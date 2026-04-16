@@ -92,7 +92,7 @@ export function ClientSidebar() {
   }
 
   return (
-    <aside className={cn("sticky top-0 flex h-screen flex-col transition-all duration-300", collapsed ? "w-16" : "w-64")} style={{ backgroundColor: "#0B0F2E" }}>
+    <aside data-lenis-prevent className={cn("sticky top-0 flex h-screen flex-col transition-all duration-300", collapsed ? "w-16" : "w-64")} style={{ backgroundColor: "#0B0F2E" }}>
       <div className="flex h-16 items-center justify-between border-b border-white/10 px-4">
         {!collapsed ? (
           <Link href="/client" className="flex items-center gap-2">

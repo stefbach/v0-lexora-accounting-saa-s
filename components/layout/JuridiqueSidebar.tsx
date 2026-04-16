@@ -25,7 +25,7 @@ export function JuridiqueSidebar() {
   }
 
   return (
-    <aside
+    <aside data-lenis-prevent
       className="w-60 min-h-screen flex flex-col fixed left-0 top-0 bottom-0 z-40"
       style={{
         background:
