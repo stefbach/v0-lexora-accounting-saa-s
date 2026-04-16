@@ -589,13 +589,28 @@ export async function POST(request: Request) {
         salaire_base_mur = Math.round(salaire_base_mur * taux)
       }
 
+      // Sprint 10 BUG 4 — inclure les primes fixes récurrentes (mig 117)
+      // stockées sur employes.prime_fixe_1/2/3. Avant : action `calculer`
+      // (unitaire) ne les lisait PAS alors que `calculer_batch` oui →
+      // incohérence entre les deux paths + CSG sous-évaluée (calculée sur
+      // salaire_brut_base incomplet, restait sous le seuil 50K donc taux
+      // réduit 1.5% au lieu de 3%). Les primes fixes sont des allocations
+      // mensuelles stables (prime fonction, ancienneté, électricité, etc.)
+      // qui s'ajoutent au brut TOUS LES MOIS.
+      const primes_fixes_employe =
+        (Number(emp.prime_fixe_1) || 0) +
+        (Number(emp.prime_fixe_2) || 0) +
+        (Number(emp.prime_fixe_3) || 0)
+
       const elements = {
         salaire_base: salaire_base_mur,
         transport_allowance: Number(emp.transport_allowance) || 0,
         petrol_allowance: Number(emp.petrol_allowance) || 0,
         increment_salaire: body.increment_salaire || 0,
         heures_sup_montant: Math.round(total_ot_montant) + (body.heures_sup_montant || 0),
-        special_allowance_1: total_primes + (body.special_allowance_1 || 0),
+        // special_allowance_1 regroupe : primes variables du mois (total_primes) +
+        // primes fixes récurrentes de la fiche employé + surcharge body éventuelle
+        special_allowance_1: total_primes + primes_fixes_employe + (body.special_allowance_1 || 0),
         special_allowance_2: body.special_allowance_2 || 0,
         special_allowance_3: body.special_allowance_3 || 0,
         other_refund: body.other_refund || 0,
