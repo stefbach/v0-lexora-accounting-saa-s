@@ -86,6 +86,9 @@ const CONGE_CRENEAU: Creneau = {
 
 interface Conflict {
   type: "leave" | "hours"
+  // Sprint 11 BUG 8 — severity distingue erreur bloquante (illégal) et
+  // avertissement légal (heures au-dessus de 45h mais dans la limite OT).
+  severity: "error" | "warning"
   empId: string
   empName: string
   detail: string
@@ -95,6 +98,10 @@ interface Conflict {
 // est lue depuis /api/rh/planning/regles?societe_id=… au mount + à chaque
 // changement de société. Voir state `weeklyLimit` plus bas.
 const WEEKLY_HOURS_LIMIT_DEFAULT = 45
+// Sprint 11 BUG 8 — limite OT hebdomadaire WRA 2019 : max 10h d'OT
+// autorisées au-dessus de 45h → plafond légal effectif 55h/semaine.
+// Entre 45h et 55h → avertissement (OT légal). Au-dessus de 55h → erreur.
+const WEEKLY_OT_LIMIT = 55
 const WEEK_DAY_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
 
 const DEFAULT_CRENEAUX: Creneau[] = [
@@ -223,6 +230,7 @@ export default function PlanningPage() {
           if (cell && cell.creneau_id !== "repos" && cell.creneau_id !== "conge" && !cell.creneau_id?.startsWith("conge_")) {
             result.push({
               type: "leave",
+              severity: "error",
               empId: emp.id,
               empName: `${emp.prenom} ${emp.nom}`,
               detail: `Planifié le ${day}/${month + 1} alors qu'un congé est approuvé`,
@@ -232,23 +240,30 @@ export default function PlanningPage() {
       }
       // Sprint 1 — limite hebdo lue dynamiquement depuis les règles WRA
       // de la société (fallback 45h). Avant: hardcodée à 45.
+      // Sprint 11 BUG 8 — OT légal WRA 2019 : entre 45h et 55h, heures
+      // supplémentaires autorisées → avertissement (jaune). Au-dessus de
+      // 55h, dépassement illégal → erreur (rouge).
       let d = 1
       while (d <= daysInMonth) {
         const weekEnd = Math.min(d + 6, daysInMonth)
         const hours = getWeeklyHours(emp.id, d, weekEnd)
         if (hours > weeklyLimit) {
+          const isOTLegal = hours <= WEEKLY_OT_LIMIT
           result.push({
             type: "hours",
+            severity: isOTLegal ? "warning" : "error",
             empId: emp.id,
             empName: `${emp.prenom} ${emp.nom}`,
-            detail: `Semaine du ${d}/${month + 1}: ${hours}h (limite ${weeklyLimit}h)`,
+            detail: isOTLegal
+              ? `Semaine du ${d}/${month + 1}: ${hours}h — OT légal (dépasse ${weeklyLimit}h mais ≤${WEEKLY_OT_LIMIT}h max WRA)`
+              : `Semaine du ${d}/${month + 1}: ${hours}h > ${WEEKLY_OT_LIMIT}h max WRA (dépassement illégal)`,
           })
         }
         d += 7
       }
     }
     return result
-  }, [employes, planning, approvedLeaves, month, daysInMonth, getWeeklyHours])
+  }, [employes, planning, approvedLeaves, month, daysInMonth, getWeeklyHours, weeklyLimit])
 
   // Helper: check if a specific cell has a conflict
   const cellHasConflict = useCallback((empId: string, day: number): boolean => {
@@ -312,13 +327,28 @@ export default function PlanningPage() {
       const name = `${emp.prenom} ${emp.nom}`
 
       // 1. Weekly hours check
+      // Sprint 11 BUG 8 — OT légal WRA 2019 : au-dessus de maxWeeklyH,
+      // jusqu'à 55h max, c'est un avertissement (OT à payer, pas une
+      // violation bloquante). Au-dessus de 55h, c'est une vraie violation.
       if (maxWeeklyH !== null) {
         let d = 1
         while (d <= daysInMonth) {
           const weekEnd = Math.min(d + 6, daysInMonth)
           const hours = getWeeklyHours(emp.id, d, weekEnd)
           if (hours > maxWeeklyH) {
-            violations.push({ severity: "red", empName: name, empId: emp.id, rule: "Heures semaine", detail: `Semaine du ${d}: ${hours}h / ${maxWeeklyH}h max (WRA Art.14)` })
+            if (hours <= WEEKLY_OT_LIMIT) {
+              violations.push({
+                severity: "orange",
+                empName: name, empId: emp.id, rule: "Heures semaine (OT)",
+                detail: `Semaine du ${d}: ${hours}h — OT légal (dépasse ${maxWeeklyH}h mais ≤${WEEKLY_OT_LIMIT}h max WRA)`,
+              })
+            } else {
+              violations.push({
+                severity: "red",
+                empName: name, empId: emp.id, rule: "Heures semaine",
+                detail: `Semaine du ${d}: ${hours}h > ${WEEKLY_OT_LIMIT}h max WRA (dépassement illégal, Art.14)`,
+              })
+            }
           }
           d += 7
         }
@@ -922,33 +952,63 @@ export default function PlanningPage() {
       </Card>
 
       {/* Conflict alert bar */}
-      {conflicts.length > 0 && (
-        <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg border border-yellow-300 bg-yellow-50">
-          <AlertTriangle className="h-5 w-5 text-yellow-600 shrink-0" />
-          <span className="text-sm font-medium text-yellow-800">
-            {conflicts.length} conflit{conflicts.length > 1 ? "s" : ""} détecté{conflicts.length > 1 ? "s" : ""}
-          </span>
-          <button
-            className="text-sm font-medium underline text-yellow-700 hover:text-yellow-900"
-            onClick={() => setShowConflicts(!showConflicts)}
-          >
-            {showConflicts ? "Masquer" : "Voir détails"}
-          </button>
+      {/* Sprint 11 BUG 8 — différencier erreurs bloquantes (rouge) des
+          avertissements OT légaux (jaune). Compteur séparé + badges +
+          note explicative sur la zone légale 45h→55h. */}
+      {conflicts.length > 0 && (() => {
+        const errors = conflicts.filter(c => c.severity === "error")
+        const warnings = conflicts.filter(c => c.severity === "warning")
+        const hasErrors = errors.length > 0
+        const barBorder = hasErrors ? "border-red-300" : "border-yellow-300"
+        const barBg = hasErrors ? "bg-red-50" : "bg-yellow-50"
+        const iconColor = hasErrors ? "text-red-600" : "text-yellow-600"
+        const textColor = hasErrors ? "text-red-800" : "text-yellow-800"
+        return (
+        <div className={`flex flex-col gap-2 px-4 py-2.5 rounded-lg border ${barBorder} ${barBg}`}>
+          <div className="flex items-center gap-3 flex-wrap">
+            <AlertTriangle className={`h-5 w-5 ${iconColor} shrink-0`} />
+            <span className={`text-sm font-medium ${textColor}`}>
+              {errors.length > 0 && (
+                <><span className="font-bold">{errors.length} erreur{errors.length > 1 ? "s" : ""}</span> (bloquant)</>
+              )}
+              {errors.length > 0 && warnings.length > 0 && <span> — </span>}
+              {warnings.length > 0 && (
+                <>{warnings.length} avertissement{warnings.length > 1 ? "s" : ""} (OT légal)</>
+              )}
+            </span>
+            <button
+              className={`text-sm font-medium underline ${hasErrors ? "text-red-700 hover:text-red-900" : "text-yellow-700 hover:text-yellow-900"}`}
+              onClick={() => setShowConflicts(!showConflicts)}
+            >
+              {showConflicts ? "Masquer" : "Voir détails"}
+            </button>
+          </div>
+          {warnings.length > 0 && !hasErrors && (
+            <p className="text-xs text-yellow-700 italic">
+              Ces heures dépassent {weeklyLimit}h mais restent dans la limite légale OT
+              ({WEEKLY_OT_LIMIT}h max WRA 2019). À payer en heures supplémentaires.
+            </p>
+          )}
           {showConflicts && (
-            <div className="ml-auto flex flex-col gap-1 text-xs text-yellow-800 max-h-32 overflow-y-auto">
+            <div className="flex flex-col gap-1 text-xs max-h-40 overflow-y-auto">
               {conflicts.map((c, i) => (
                 <div key={i} className="flex items-center gap-2">
-                  <Badge className={c.type === "leave" ? "bg-red-100 text-red-700" : "bg-orange-100 text-orange-700"}>
-                    {c.type === "leave" ? "Congé" : "Heures"}
+                  <Badge className={
+                    c.severity === "error"
+                      ? "bg-red-100 text-red-700"
+                      : "bg-orange-100 text-orange-700"
+                  }>
+                    {c.type === "leave" ? "Congé" : c.severity === "warning" ? "OT" : "Heures"}
                   </Badge>
                   <span className="font-medium">{c.empName}</span>
-                  <span>{c.detail}</span>
+                  <span className={c.severity === "error" ? "text-red-800" : "text-yellow-900"}>{c.detail}</span>
                 </div>
               ))}
             </div>
           )}
         </div>
-      )}
+        )
+      })()}
 
       {/* WRA Validation Results */}
       {showValidation && validationResults !== null && (
@@ -1212,7 +1272,10 @@ export default function PlanningPage() {
                   <tbody>
                     {employes.map(emp => {
                       const weekHours = getWeeklyHours(emp.id, currentWeek?.start || 1, currentWeek?.end || 7)
-                      const hoursExceeded = weekHours > weeklyLimit
+                      // Sprint 11 BUG 8 — 3 niveaux : OK / OT légal (jaune) / dépassement illégal (rouge)
+                      const hoursOverLimit = weekHours > weeklyLimit
+                      const hoursIllegal = weekHours > WEEKLY_OT_LIMIT
+                      const hoursExceeded = hoursOverLimit // alias pour compat des refs plus bas
                       return (
                         <tr key={emp.id}>
                           <td className="sticky left-0 bg-white z-10 border px-3 py-2 font-medium">{emp.prenom} {emp.nom}</td>
@@ -1288,10 +1351,23 @@ export default function PlanningPage() {
                               </td>
                             )
                           })}
-                          <td className={`border px-2 py-2 text-center font-bold text-sm ${hoursExceeded ? "bg-red-50 text-red-700" : "bg-gray-50"}`}
-                            title={hoursExceeded ? `Dépassement: ${weekHours}h / ${weeklyLimit}h max` : `${weekHours}h cette semaine`}>
+                          <td className={`border px-2 py-2 text-center font-bold text-sm ${
+                              hoursIllegal
+                                ? "bg-red-50 text-red-700"
+                                : hoursOverLimit
+                                  ? "bg-yellow-50 text-yellow-800"
+                                  : "bg-gray-50"
+                            }`}
+                            title={
+                              hoursIllegal
+                                ? `Dépassement ILLÉGAL : ${weekHours}h > ${WEEKLY_OT_LIMIT}h max WRA`
+                                : hoursOverLimit
+                                  ? `OT légal : ${weekHours}h (base ${weeklyLimit}h + ${weekHours - weeklyLimit}h OT ≤ ${WEEKLY_OT_LIMIT}h max WRA)`
+                                  : `${weekHours}h cette semaine`
+                            }>
                             {weekHours}h
-                            {hoursExceeded && <AlertTriangle className="inline h-3 w-3 text-red-500 ml-1" />}
+                            {hoursIllegal && <AlertTriangle className="inline h-3 w-3 text-red-500 ml-1" />}
+                            {hoursOverLimit && !hoursIllegal && <AlertTriangle className="inline h-3 w-3 text-yellow-500 ml-1" />}
                           </td>
                         </tr>
                       )
