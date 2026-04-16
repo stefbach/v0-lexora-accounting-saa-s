@@ -19,7 +19,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { FileText, Search, Loader2 } from "lucide-react"
+import { FileText, Search, Loader2, Trash2 } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 interface Document {
@@ -225,6 +226,7 @@ export default function AdminDocumentsPage() {
                   <TableHead>Statut</TableHead>
                   <TableHead>Date upload</TableHead>
                   <TableHead>Taille</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -242,11 +244,35 @@ export default function AdminDocumentsPage() {
                     <TableCell>{getStatusBadge(doc.statut)}</TableCell>
                     <TableCell className="text-muted-foreground">{fmtDate(doc.created_at)}</TableCell>
                     <TableCell className="text-muted-foreground">{formatSize(doc.taille)}</TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-[#9F1239] hover:text-[#9F1239] hover:bg-[#9F1239]/5"
+                        title="Supprimer le document (fichier + lignes liées)"
+                        onClick={async () => {
+                          if (!confirm(`Supprimer "${doc.nom_fichier}" ?\n\nCela supprime le fichier du storage ET toutes les écritures/factures/relevés qui y sont liés. Action irréversible.`)) return
+                          try {
+                            const res = await fetch(`/api/documents/${doc.id}`, { method: 'DELETE' })
+                            if (res.ok) {
+                              setDocuments(prev => prev.filter(d => d.id !== doc.id))
+                            } else {
+                              const d = await res.json().catch(() => ({}))
+                              alert(d.error || `Erreur HTTP ${res.status}`)
+                            }
+                          } catch {
+                            alert('Erreur de connexion')
+                          }
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))}
                 {filtered.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                       {search || typeFilter !== "all" || statusFilter !== "all" || societeFilter !== "all"
                         ? "Aucun document trouve pour ces criteres."
                         : "Aucun document sur la plateforme."}

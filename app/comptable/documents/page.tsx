@@ -11,7 +11,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
-import { FileText, Eye, Search, CheckCircle, FolderOpen, Loader2 } from "lucide-react"
+import { FileText, Eye, Search, CheckCircle, FolderOpen, Loader2, Trash2 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 interface Document {
@@ -150,6 +150,28 @@ export default function ComptableDocumentsPage() {
                       <div className="flex gap-1">
                         <Button variant="ghost" size="icon"><Eye className="h-4 w-4" /></Button>
                         {doc.statut === "en_attente" && <Button variant="ghost" size="icon"><CheckCircle className="h-4 w-4 text-green-600" /></Button>}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-[#9F1239] hover:text-[#9F1239] hover:bg-[#9F1239]/5"
+                          title="Supprimer (fichier + écritures/factures/relevés liés)"
+                          onClick={async () => {
+                            if (!confirm(`Supprimer "${doc.nom_fichier}" ?\n\nCela supprime le fichier du storage ET toutes les écritures/factures/relevés qui y sont liés. Action irréversible.`)) return
+                            try {
+                              const res = await fetch(`/api/documents/${doc.id}`, { method: 'DELETE' })
+                              if (res.ok) {
+                                setDocuments(prev => prev.filter(d => d.id !== doc.id))
+                              } else {
+                                const d = await res.json().catch(() => ({}))
+                                alert(d.error || `Erreur HTTP ${res.status}`)
+                              }
+                            } catch {
+                              alert('Erreur de connexion')
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
