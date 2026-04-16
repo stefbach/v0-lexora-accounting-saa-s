@@ -176,7 +176,7 @@ function UploadRow({ upload }: { upload: UploadData }) {
 /*  Full admin view — for client_admin                                 */
 /* ------------------------------------------------------------------ */
 
-function ClientAdminDashboard({ firstName, societe, societeId }: { firstName: string; societe: string; societeId: string | null }) {
+function ClientAdminDashboard({ firstName, societe }: { firstName: string; societe: string }) {
   const [alerts, setAlerts] = useState<AlertData[]>([])
   const [actions, setActions] = useState<ActionData[]>([])
   const [documents, setDocuments] = useState<DocumentData[]>([])
@@ -184,105 +184,79 @@ function ClientAdminDashboard({ firstName, societe, societeId }: { firstName: st
     chiffreAffaires: null, depenses: null, benefice: null, tresorerie: null, tendanceCA: null,
   })
   const [brief, setBrief] = useState<BriefData>({ resume_texte: null, conseil_texte: null })
-  const [briefLoading, setBriefLoading] = useState(true)
   const [loading, setLoading] = useState(true)
 
-  // 1) Fast path: fetch the compact dashboard payload (single call, <2s) and render KPIs.
   useEffect(() => {
-    let cancelled = false
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 55_000)
+    async function fetchDashboardData() {
+      try {
+        const socRes = await fetch("/api/client/societes")
+        const socData = await socRes.json()
+        const societes = socData.societes || []
 
-    const qs = new URLSearchParams()
-    if (societeId) qs.set("societe_id", societeId)
+        if (societes.length > 0) {
+          const firstSociete = societes[0]
+          const societeId = firstSociete.id
+          const now = new Date()
+          const periode = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`
 
-    fetch(`/api/client/dashboard?${qs.toString()}`, { signal: controller.signal })
-      .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
-      .then((d) => {
-        if (cancelled) return
-        const chart = Array.isArray(d.chart) ? d.chart : []
-        // CA trend = comparison of last two months in the 6-month chart
-        let tendanceCA: string | null = null
-        if (chart.length >= 2) {
-          const last = chart[chart.length - 1]?.CA ?? 0
-          const prev = chart[chart.length - 2]?.CA ?? 0
-          if (prev > 0) {
-            const pct = Math.round(((last - prev) / prev) * 100)
-            tendanceCA = `${pct > 0 ? "+" : ""}${pct}% vs mois dernier`
+          const [briefResult, financialResult] = await Promise.allSettled([
+            fetch("/api/brief-client", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                client_id: firstSociete.comptable?.id || "",
+                societe_id: societeId,
+                periode,
+              }),
+            }).then((r) => r.json()),
+            fetch("/api/client/financial").then((r) => r.json()),
+          ])
+
+          if (briefResult.status === "fulfilled") {
+            const briefData = briefResult.value
+            if (briefData.success) {
+              setBrief({
+                resume_texte: briefData.resume_texte || null,
+                conseil_texte: briefData.conseil_texte || null,
+              })
+              if (briefData.alertes && Array.isArray(briefData.alertes)) {
+                setAlerts(
+                  briefData.alertes.map((msg: string, i: number) => ({
+                    id: `ba-${i}`,
+                    niveau: i === 0 ? ("red" as const) : i === 1 ? ("orange" as const) : ("blue" as const),
+                    message: msg,
+                  }))
+                )
+              }
+            }
+          }
+
+          if (financialResult.status === "fulfilled") {
+            const finData = financialResult.value.financial
+            if (finData) {
+              setKpis({
+                chiffreAffaires: finData.totalRevenue ?? null,
+                depenses: finData.totalExpenses ?? null,
+                benefice: finData.resultat ?? null,
+                tresorerie: finData.totalBankMUR ?? null,
+                tendanceCA:
+                  finData.lastMonthRevenue && finData.totalRevenue
+                    ? `${finData.lastMonthRevenue > 0 ? "+" : ""}${Math.round(
+                        ((finData.monthlyRevenue - finData.lastMonthRevenue) / finData.lastMonthRevenue) * 100
+                      )}% vs mois dernier`
+                    : null,
+              })
+            }
           }
         }
-        setKpis({
-          chiffreAffaires: d.currentMonth?.ca ?? null,
-          depenses: d.currentMonth?.depenses ?? null,
-          benefice: d.currentMonth?.benefice ?? null,
-          tresorerie: d.tresorerie?.total_mur ?? null,
-          tendanceCA,
-        })
-        // Seed with non-LLM alerts from the dashboard endpoint (so something shows immediately)
-        const seed: AlertData[] = (d.alertes || []).slice(0, 3).map((a: any, i: number) => ({
-          id: a.id || `ds-${i}`,
-          niveau: a.niveau === "danger" ? "red" : a.niveau === "warning" ? "orange" : "blue",
-          message: a.titre + (a.description ? ` — ${a.description}` : ""),
-        }))
-        if (seed.length > 0) setAlerts(seed)
-        // Documents récents
-        setDocuments((d.documents || []).slice(0, 5).map((doc: any) => ({
-          id: doc.id,
-          nom: doc.nom,
-          date: new Date(doc.date).toLocaleDateString("fr-FR"),
-          statut: doc.statut || "En attente",
-        })))
-      })
-      .catch(() => { /* ignore — UI falls back to "—" */ })
-      .finally(() => {
-        clearTimeout(timer)
-        if (!cancelled) setLoading(false)
-      })
-
-    return () => { cancelled = true; clearTimeout(timer); controller.abort() }
-  }, [societeId])
-
-  // 2) Slow path: fire-and-forget brief-client (LLM). NEVER blocks the UI.
-  useEffect(() => {
-    if (!societeId) { setBriefLoading(false); return }
-    let cancelled = false
-    const now = new Date()
-    const periode = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`
-    const controller = new AbortController()
-    // Long timeout for LLM — it runs independently of the KPIs display
-    const timer = setTimeout(() => controller.abort(), 60_000)
-
-    fetch("/api/brief-client", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ societe_id: societeId, periode }),
-      signal: controller.signal,
-    })
-      .then((r) => r.ok ? r.json() : null)
-      .then((briefData) => {
-        if (cancelled || !briefData?.success) return
-        setBrief({
-          resume_texte: briefData.resume_texte || null,
-          conseil_texte: briefData.conseil_texte || null,
-        })
-        if (Array.isArray(briefData.alertes) && briefData.alertes.length > 0) {
-          setAlerts(
-            briefData.alertes.map((msg: string, i: number) => ({
-              id: `ba-${i}`,
-              niveau: i === 0 ? ("red" as const) : i === 1 ? ("orange" as const) : ("blue" as const),
-              message: msg,
-            }))
-          )
-        }
-      })
-      .catch(() => { /* silent: brief is optional */ })
-      .finally(() => {
-        clearTimeout(timer)
-        if (!cancelled) setBriefLoading(false)
-      })
-
-    return () => { cancelled = true; clearTimeout(timer); controller.abort() }
-  }, [societeId])
+      } catch {
+        /* ignore */
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchDashboardData()
+  }, [])
 
   if (loading) {
     return (
@@ -308,9 +282,7 @@ function ClientAdminDashboard({ firstName, societe, societeId }: { firstName: st
       title={`Bonjour ${firstName}`}
       subtitle={
         brief.resume_texte ||
-        (briefLoading
-          ? "Analyse de votre activité du mois en cours…"
-          : "Voici le résumé de votre activité du mois. Contactez votre comptable pour toute question.")
+        "Les données de votre tableau de bord seront disponibles une fois vos documents traités par votre comptable."
       }
     >
       <div style={{ display: "grid", gap: "24px" }}>
@@ -482,25 +454,18 @@ function ClientAdminDashboard({ firstName, societe, societeId }: { firstName: st
               >
                 Recommandation de votre comptable
               </h3>
-              {briefLoading && !brief.conseil_texte ? (
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", fontFamily: FONT, fontSize: "13px", color: "#475569" }}>
-                  <Loader2 className="animate-spin" size={14} style={{ color: "#A88925" }} />
-                  Analyse en cours…
-                </div>
-              ) : (
-                <p
-                  style={{
-                    margin: 0,
-                    fontFamily: FONT,
-                    fontSize: "14px",
-                    color: "#334155",
-                    lineHeight: 1.7,
-                  }}
-                >
-                  {brief.conseil_texte ||
-                    "Les conseils personnalisés apparaîtront ici une fois vos données analysées par votre comptable."}
-                </p>
-              )}
+              <p
+                style={{
+                  margin: 0,
+                  fontFamily: FONT,
+                  fontSize: "14px",
+                  color: "#334155",
+                  lineHeight: 1.7,
+                }}
+              >
+                {brief.conseil_texte ||
+                  "Les conseils personnalisés apparaîtront ici une fois vos données analysées par votre comptable."}
+              </p>
             </div>
           </div>
         </div>
@@ -691,7 +656,6 @@ function DocumentRow({ doc }: { doc: DocumentData }) {
 export default function ClientDashboard() {
   const { profile, loading } = useProfile()
   const [societe, setSociete] = useState<string>("")
-  const [societeId, setSocieteId] = useState<string | null>(null)
   const [loadingSociete, setLoadingSociete] = useState(true)
 
   useEffect(() => {
@@ -699,10 +663,7 @@ export default function ClientDashboard() {
       .then((r) => r.json())
       .then((data) => {
         const societes = data.societes || []
-        if (societes.length > 0) {
-          setSociete(societes[0].nom || "")
-          setSocieteId(societes[0].id || null)
-        }
+        if (societes.length > 0) setSociete(societes[0].nom || "")
       })
       .catch(() => {})
       .finally(() => setLoadingSociete(false))
@@ -726,5 +687,5 @@ export default function ClientDashboard() {
     return <ClientUserDashboard firstName={firstName} />
   }
 
-  return <ClientAdminDashboard firstName={firstName} societe={societe || "Mon entreprise"} societeId={societeId} />
+  return <ClientAdminDashboard firstName={firstName} societe={societe || "Mon entreprise"} />
 }
