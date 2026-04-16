@@ -819,6 +819,16 @@ export default function EmployesPage() {
                               </span>
                             ) : null
                           })()}
+                          {/* Sprint 12 FEATURE 4 — badge compte Lexora */}
+                          {e.auth_user_id ? (
+                            <span className="text-[10px] text-green-700 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded inline-flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3" /> Compte Lexora
+                            </span>
+                          ) : !e.date_depart ? (
+                            <span className="text-[10px] text-purple-700 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded inline-flex items-center gap-1">
+                              <XCircle className="w-3 h-3" /> Pas de compte
+                            </span>
+                          ) : null}
                         </div>
                       </div>
                       <div className="flex flex-col gap-1 shrink-0">
@@ -846,6 +856,8 @@ export default function EmployesPage() {
                       <TableHead>Poste</TableHead>
                       <TableHead>Departement</TableHead>
                       <TableHead className="text-right">Salaire</TableHead>
+                      {/* Sprint 12 FEATURE 4 — statut compte Lexora */}
+                      <TableHead className="text-center">Compte Lexora</TableHead>
                       <TableHead className="text-right pr-5">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -880,14 +892,31 @@ export default function EmployesPage() {
                             })()}
                           </div>
                         </TableCell>
+                        {/* Sprint 12 FEATURE 4 — statut compte Lexora */}
+                        <TableCell className="text-center">
+                          {e.auth_user_id ? (
+                            <Badge className="bg-green-100 text-green-700 border-green-200 text-[11px] font-medium gap-1">
+                              <CheckCircle2 className="w-3 h-3" />
+                              Actif
+                            </Badge>
+                          ) : !e.date_depart ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-[11px] border-purple-300 text-purple-700 hover:bg-purple-50"
+                              onClick={(ev) => { ev.stopPropagation(); openAccess(e) }}
+                            >
+                              <Key className="w-3 h-3 mr-1" />
+                              Créer
+                            </Button>
+                          ) : (
+                            <span className="text-[11px] text-gray-400">—</span>
+                          )}
+                        </TableCell>
                         <TableCell className="text-right pr-5">
                           <div className="flex items-center justify-end gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
                             <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(ev)=>{ev.stopPropagation();router.push(`/rh/employes/${e.id}`)}} title="Voir fiche"><ExternalLink className="w-4 h-4 text-[#0B0F2E]"/></Button>
                             <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(ev)=>{ev.stopPropagation();openEdit(e)}} title="Modifier"><Pencil className="w-4 h-4 text-[#D4AF37]"/></Button>
-                            {/* Sprint 12 FEATURE 1+4 — bouton conditionnel compte Lexora */}
-                            {!e.auth_user_id ? (
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(ev)=>{ev.stopPropagation();openAccess(e)}} title="Créer le compte Lexora"><Key className="w-4 h-4 text-purple-600"/></Button>
-                            ) : null}
                             <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(ev)=>{ev.stopPropagation();openDelete(e)}} title="Supprimer"><Trash2 className="w-4 h-4 text-red-600"/></Button>
                           </div>
                         </TableCell>
