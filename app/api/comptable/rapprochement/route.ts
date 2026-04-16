@@ -6,6 +6,7 @@ import { runIntelligentRapprochement, buildAliasMap } from '@/lib/accounting/int
 import type { SupplierAlias } from '@/lib/accounting/intelligent-rapprochement'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { lastDayOfMonth } from '@/lib/rh/period'
 import { getTauxChange } from '@/lib/taux-change'
 import { accountClass } from '@/lib/accounting/classification-rules'
 import { validateLettrageGroup } from '@/lib/accounting/accounting-rules'
@@ -2805,7 +2806,7 @@ export async function POST(request: Request) {
           .select('id, salaire_net, salaire_base, periode')
           .eq('employe_id', employe_id)
           .gte('periode', periodeDate)
-          .lte('periode', `${periode}-31`)
+          .lte('periode', lastDayOfMonth(periode))
           .limit(1).maybeSingle()
         bulletin = bul
       }

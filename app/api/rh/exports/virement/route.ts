@@ -8,8 +8,21 @@ import {
   BANQUES_MAURITIUS,
   type LigneBulletin
 } from '@/lib/rh/banques-mauritius'
+import { lastDayOfMonth } from '@/lib/rh/period'
 
 export const dynamic = 'force-dynamic'
+
+// Sprint 5 BUG D — rôles autorisés pour générer les virements bancaires.
+const ALLOWED_ROLES = [
+  'admin',
+  'super_admin',
+  'rh',
+  'rh_manager',
+  'client_admin',
+  'direction',
+  'comptable',
+  'comptable_dedie',
+]
 
 function getAdminClient() {
   return createClient(
@@ -32,6 +45,15 @@ export async function POST(request: Request) {
 
     const supabase = getAdminClient()
 
+    // Sprint 5 BUG D — role-check explicite avec 'admin' inclus
+    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+    const role = profile?.role || ''
+    if (!ALLOWED_ROLES.includes(role)) {
+      return NextResponse.json({
+        error: `Accès refusé : la génération des virements est réservée aux rôles ${ALLOWED_ROLES.join(', ')}. Votre rôle : ${role || 'inconnu'}.`,
+      }, { status: 403 })
+    }
+
     const {
       societe_id,
       periode,               // YYYY-MM
@@ -48,13 +70,18 @@ export async function POST(request: Request) {
 
     // LOCK CHECK: only allow export if period is locked
     const periodeStr = periode.length === 7 ? periode : periode.slice(0, 7)
-    const { data: unlockedBuls } = await supabase.from('bulletins_paie')
+    const { data: unlockedBuls, error: lockErr } = await supabase.from('bulletins_paie')
       .select('id').eq('societe_id', societe_id)
-      .gte('periode', `${periodeStr}-01`).lte('periode', `${periodeStr}-31`)
+      .gte('periode', `${periodeStr}-01`).lte('periode', lastDayOfMonth(periodeStr))
       .or('verrouille.is.null,verrouille.eq.false')
       .limit(1)
+    if (lockErr) {
+      console.warn('[virement] lock check error (non-blocking):', lockErr.message)
+    }
     if (unlockedBuls && unlockedBuls.length > 0) {
-      return NextResponse.json({ error: 'Periode non verrouillee. Verrouillez la paie avant de generer les virements.' }, { status: 403 })
+      return NextResponse.json({
+        error: `Periode non verrouillee pour ${periodeStr}. Verrouillez d'abord la paie dans /rh/paie (bouton « Verrouiller ») avant de generer les virements.`,
+      }, { status: 403 })
     }
 
     // --- 1. Récupérer le compte émetteur employeur ---
@@ -105,7 +132,7 @@ export async function POST(request: Request) {
         .select('*')
         .eq('societe_id', societe_id)
         .gte('periode', `${periode}-01`)
-        .lte('periode', `${periode}-31`)
+        .lte('periode', lastDayOfMonth(periode))
         .in('statut', ['valide', 'paye'])
 
       if (validated && validated.length > 0) {
@@ -117,7 +144,7 @@ export async function POST(request: Request) {
           .select('*')
           .eq('societe_id', societe_id)
           .gte('periode', `${periode}-01`)
-          .lte('periode', `${periode}-31`)
+          .lte('periode', lastDayOfMonth(periode))
         allBulletins = anyStatus || []
       }
     } catch (dbErr: any) {

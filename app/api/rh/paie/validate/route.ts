@@ -45,9 +45,12 @@ export async function POST(request: Request) {
     const supabase = getAdminClient()
 
     // Sprint 2 bug #2 — role-check
+    // Sprint 5 FIX 5 — message explicite au lieu de "Forbidden" cryptique
     const role = await getUserRole(supabase, user.id)
     if (!ALLOWED_ROLES.includes(role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      return NextResponse.json({
+        error: `Accès refusé : le contrôle paie est réservé aux rôles RH/Administrateurs (admin, rh, rh_manager, client_admin, direction). Votre rôle : ${role || 'inconnu'}.`,
+      }, { status: 403 })
     }
 
     const body = await request.json()

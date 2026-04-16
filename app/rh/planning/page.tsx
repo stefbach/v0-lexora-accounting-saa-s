@@ -111,7 +111,13 @@ export default function PlanningPage() {
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth())
   const [societes, setSocietes] = useState<any[]>([])
-  const [societe, setSociete] = useState("all")
+  // Sprint 5 BUG B — persister la sélection société pour ne pas revenir à
+  // "all" après un refresh, ce qui masquait les plannings brouillon de
+  // l'utilisateur et affichait "Sélectionnez une société".
+  const [societe, setSociete] = useState<string>(() => {
+    if (typeof window === "undefined") return "all"
+    try { return localStorage.getItem("rh_planning_societe") || "all" } catch { return "all" }
+  })
   // Sprint 1 — Limite hebdo lue depuis /api/rh/planning/regles (config WRA
   // par société). Fallback 45 si la société n'a pas de règle persistée.
   const [weeklyLimit, setWeeklyLimit] = useState<number>(WEEKLY_HOURS_LIMIT_DEFAULT)
@@ -469,9 +475,27 @@ export default function PlanningPage() {
       const all = [...(d1.societes || []), ...(d2.societes || [])]
       const unique = Array.from(new Map(all.map((s: any) => [s.id, s])).values())
       setSocietes(unique)
-      if (unique.length >= 1) setSociete(unique[0].id)
+      // Sprint 5 BUG B — ne pas écraser une sélection persistée valide.
+      // Fallback sur la première société si la sélection stockée n'est plus
+      // accessible (perte de droits, société supprimée, etc.).
+      if (unique.length >= 1) {
+        setSociete(prev => {
+          const stillValid = prev && prev !== "all" && unique.some((s: any) => s.id === prev)
+          return stillValid ? prev : unique[0].id
+        })
+      }
     })
   }, [])
+
+  // Sprint 5 BUG B — persister la sélection société au changement.
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      if (societe && societe !== "all") {
+        localStorage.setItem("rh_planning_societe", societe)
+      }
+    } catch {}
+  }, [societe])
 
   // Sprint 1 — fetch la limite hebdo depuis les règles WRA persistées de
   // la société. Évite de bloquer l'utilisateur si la règle n'existe pas
@@ -955,7 +979,9 @@ export default function PlanningPage() {
               <Button variant="outline" size="icon" onClick={nextMonth}><ChevronRight className="h-4 w-4" /></Button>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              {published && <Badge className="bg-green-100 text-green-700">Publié</Badge>}
+              {published
+                ? <Badge className="bg-green-100 text-green-700">Publié</Badge>
+                : <Badge className="bg-amber-100 text-amber-700">Brouillon</Badge>}
               {/* View toggle */}
               <div className="inline-flex rounded-lg border overflow-hidden">
                 <button
@@ -1003,7 +1029,24 @@ export default function PlanningPage() {
           {loading ? (
             <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-gray-400" /></div>
           ) : employes.length === 0 ? (
-            <p className="text-center text-gray-400 py-12">Aucun employé. Sélectionnez une société.</p>
+            // Sprint 5 BUG B — message plus précis selon l'état de société.
+            // Avant : "Aucun employé. Sélectionnez une société." même quand
+            // une société était déjà sélectionnée, ce qui masquait les
+            // plannings brouillon existants.
+            <div className="text-center py-12 space-y-2">
+              <p className="text-gray-400">
+                {societe === "all"
+                  ? "Sélectionnez une société pour afficher son planning."
+                  : allEmployes.length === 0
+                    ? "Cette société n'a aucun employé actif. Ajoutez un employé dans /rh/employes pour commencer."
+                    : "Aucun employé sélectionné — cochez-les via le bouton « Filtrer employés »."}
+              </p>
+              {allEmployes.length > 0 && societe !== "all" && (
+                <p className="text-xs text-gray-400">
+                  {allEmployes.length} employé(s) disponible(s) pour cette société.
+                </p>
+              )}
+            </div>
           ) : viewMode === "monthly" ? (
             /* ── Monthly View ── */
             <>

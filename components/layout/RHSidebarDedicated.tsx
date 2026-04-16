@@ -29,7 +29,10 @@ const ALL_LINKS: NavLink[] = [
   { href: '/rh/groupes', label: 'Groupes / Équipes', icon: Users, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
   { href: '/rh/depart', label: 'Gestion départs', icon: UserMinus, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
   { href: '/rh/planning', label: 'Planning', icon: CalendarDays, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'manager'] },
-  { href: '/rh/planning/regles', label: 'Regles planning', icon: Shield, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
+  // Sprint 5 FIX 7 — lien "Regles planning" supprimé du menu : la page
+  // /rh/planning a déjà un bouton "Règles" intégré, le lien sidebar était
+  // redondant et créait de la confusion. La route reste accessible via
+  // le bouton interne de /rh/planning et par URL directe.
   { href: '/rh/geolocalisation', label: 'Carte collaborateurs', icon: MapPin, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'manager'] },
   { href: '/rh/pointage', label: 'Pointage', labelKey: 'hr.time_clock', icon: Clock },
   { href: '/rh/conges', label: 'Absences & Congés', labelKey: 'rh.absences_leave', icon: Calendar },

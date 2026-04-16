@@ -109,12 +109,19 @@ export default function PayrollValidationPage() {
     setErrorBulletins("")
     try {
       const params = new URLSearchParams({ periode, societe_id: societe })
-      const data = await fetch(`/api/rh/paie?${params}`).then(r => r.json())
-      if (data.error) { setErrorBulletins(data.error); return }
+      const res = await fetch(`/api/rh/paie?${params}`)
+      const data = await res.json().catch(() => ({ error: `HTTP ${res.status} — réponse invalide` }))
+      if (!res.ok || data.error) {
+        // Sprint 5 FIX 5 — message d'erreur explicite + logs devtools
+        console.error('[rh/paie/validation] loadBulletins error', res.status, data?.error || data)
+        setErrorBulletins(data.error || `Erreur ${res.status} au chargement des bulletins.`)
+        return
+      }
       setBulletins(data.bulletins || [])
       setTotaux(data.totaux || null)
-    } catch {
-      setErrorBulletins("Erreur lors du chargement des bulletins")
+    } catch (e: any) {
+      console.error('[rh/paie/validation] loadBulletins exception', e)
+      setErrorBulletins(`Erreur réseau lors du chargement : ${e?.message || 'inconnue'}. Vérifiez votre connexion.`)
     } finally {
       setLoadingBulletins(false)
     }
@@ -139,11 +146,18 @@ export default function PayrollValidationPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ societe_id: societe, periode }),
       })
-      const data = await res.json()
-      if (data.error) { setErrorValidation(data.error); return }
+      const data = await res.json().catch(() => ({ error: `HTTP ${res.status} — réponse invalide` }))
+      if (!res.ok || data.error) {
+        // Sprint 5 FIX 5 — logs détaillés + message utile à l'utilisateur.
+        // Avant : "Forbidden" / "Erreur" sans contexte.
+        console.error('[rh/paie/validation] runValidation error', res.status, data?.error || data)
+        setErrorValidation(data.error || `Erreur ${res.status} lors du contrôle prépaie.`)
+        return
+      }
       setValidationResult(data)
-    } catch {
-      setErrorValidation("Erreur réseau lors du contrôle")
+    } catch (e: any) {
+      console.error('[rh/paie/validation] runValidation exception', e)
+      setErrorValidation(`Erreur réseau : ${e?.message || 'inconnue'}. Vérifiez votre connexion et réessayez.`)
     } finally {
       setLoadingValidation(false)
     }

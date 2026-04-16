@@ -5,21 +5,20 @@
  * qui avait relevé qu'aucun /rh/parametres n'existait — seuls /rh/societe et
  * /rh/paie/parametres étaient accessibles, sans hub commun.
  *
- * Cette page n'EFFECTUE aucun paramétrage elle-même : elle agit comme un
- * tableau d'orientation avec une carte par section, chaque carte indiquant
- * brièvement ce qui peut être configuré et redirigeant vers l'écran dédié.
- *
- * Couvert par le redirect /rh/parametres → /rh/societe (next.config.mjs
- * Sprint 1) — ce redirect reste en place car certains liens externes /
- * docs internes pointent encore vers /rh/parametres ; cette page sert de
- * destination canonique pour les nouveaux liens.
+ * Sprint 5 AMÉLIO 9 — Le toggle "Pointage obligatoire" est maintenant
+ * intégré INLINE sur cette page (avant : simple lien vers /rh/societe).
+ * L'utilisateur peut sélectionner une société dans un dropdown puis toggle
+ * sans quitter la page.
  */
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
-  Building2, Banknote, Calendar, Clock, Shield, ArrowRight, Settings,
+  Building2, Banknote, Calendar, Clock, Shield, ArrowRight, Settings, Loader2,
 } from "lucide-react"
 import Link from "next/link"
+import { PointageActifToggle } from "@/components/rh/PointageActifToggle"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -35,6 +34,8 @@ interface Section {
   highlights: string[]
 }
 
+// Sprint 5 AMÉLIO 9 — on a retiré la carte "Pointage obligatoire" de la grille
+// car elle est désormais rendue INLINE en fin de page (composant interactif).
 const SECTIONS: Section[] = [
   {
     title: "Société",
@@ -44,7 +45,7 @@ const SECTIONS: Section[] = [
     bg: "bg-slate-50",
     border: "border-l-slate-500",
     accent: "text-slate-700",
-    highlights: ["BRN, TAN, NPF", "Adresse + GPS", "Compte bancaire principal", "Toggle pointage_actif"],
+    highlights: ["BRN, TAN, NPF", "Adresse + GPS", "Compte bancaire principal", "Contacts multi (CEO, DRH, DAF)"],
   },
   {
     title: "Paie",
@@ -76,23 +77,39 @@ const SECTIONS: Section[] = [
     accent: "text-amber-700",
     highlights: ["45h/semaine max", "9h/jour max (5j) ou 8h (6j)", "1 jour repos minimum", "Taux OT 1.5x / 2x"],
   },
-  {
-    title: "Pointage obligatoire",
-    description: "Active la déduction automatique des absences depuis les pointages. Toggle par société dans l'onglet Société.",
-    href: "/rh/societe",
-    icon: Clock,
-    bg: "bg-orange-50",
-    border: "border-l-orange-500",
-    accent: "text-orange-700",
-    highlights: [
-      "OFF (défaut) — mode test, aucun impact paie",
-      "ON — absences sans pointage déduites du net",
-      "Confirmation requise avant activation",
-    ],
-  },
 ]
 
+interface SocieteLite {
+  id: string
+  nom: string
+  pointage_actif?: boolean
+}
+
 export default function ParametresHubPage() {
+  const [societes, setSocietes] = useState<SocieteLite[]>([])
+  const [selectedSocieteId, setSelectedSocieteId] = useState<string>("")
+  const [loading, setLoading] = useState(true)
+
+  // Charger la liste des sociétés (avec pointage_actif) pour le toggle inline
+  useEffect(() => {
+    setLoading(true)
+    fetch("/api/rh/societe")
+      .then(r => r.json())
+      .then(d => {
+        const list: SocieteLite[] = (d.societes || []).map((s: any) => ({
+          id: s.id,
+          nom: s.nom,
+          pointage_actif: s.pointage_actif === true,
+        }))
+        setSocietes(list)
+        if (list.length > 0) setSelectedSocieteId(list[0].id)
+      })
+      .catch(() => setSocietes([]))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const selectedSociete = societes.find(s => s.id === selectedSocieteId)
+
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-6xl mx-auto">
       <div className="flex items-center gap-3">
@@ -146,6 +163,73 @@ export default function ParametresHubPage() {
           )
         })}
       </div>
+
+      {/* Sprint 5 AMÉLIO 9 — Toggle Pointage obligatoire inline.
+          Avant : simple lien vers /rh/societe (carte statique).
+          Maintenant : sélecteur société + toggle directement actionnable. */}
+      <Card className="rounded-2xl border-l-4 border-l-orange-500">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base font-semibold flex items-center gap-2 text-orange-700">
+            <Clock className="w-5 h-5" /> Pointage obligatoire
+            <Badge variant="outline" className="text-[10px] ml-2">par société</Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-gray-600">
+            Active la déduction automatique des absences depuis les pointages. OFF (défaut) :
+            mode test, aucun impact paie. ON : absences sans pointage ni congé approuvé
+            déduites du net au prochain calcul.
+          </p>
+
+          {loading && (
+            <div className="flex items-center gap-2 text-sm text-gray-500 py-4">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Chargement des sociétés…
+            </div>
+          )}
+
+          {!loading && societes.length === 0 && (
+            <p className="text-sm text-gray-500 py-2">
+              Aucune société accessible. Configurez d'abord une société dans{" "}
+              <Link href="/rh/societe" className="underline font-medium">/rh/societe</Link>.
+            </p>
+          )}
+
+          {!loading && societes.length > 0 && (
+            <>
+              <div className="flex items-center gap-3 flex-wrap">
+                <label className="text-xs text-gray-500 font-medium">Société</label>
+                <Select value={selectedSocieteId} onValueChange={setSelectedSocieteId}>
+                  <SelectTrigger className="w-64 h-10">
+                    <SelectValue placeholder="Sélectionner une société" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {societes.map(s => (
+                      <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {selectedSociete && (
+                // `key` force un remount quand on change de société — le toggle
+                // interne re-sync initial=pointage_actif depuis la sélection.
+                <PointageActifToggle
+                  key={selectedSociete.id}
+                  societeId={selectedSociete.id}
+                  initial={selectedSociete.pointage_actif === true}
+                  withCard={false}
+                  onSaved={(v) => {
+                    setSocietes(prev =>
+                      prev.map(s => (s.id === selectedSociete.id ? { ...s, pointage_actif: v } : s)),
+                    )
+                  }}
+                />
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-900">
         <p className="font-medium mb-1">À noter</p>

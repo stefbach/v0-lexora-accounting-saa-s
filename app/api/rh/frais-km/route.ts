@@ -61,10 +61,14 @@ export async function GET(request: Request) {
     if (employe_id) {
       entryQuery = entryQuery.eq('employe_id', employe_id)
     } else {
+      // Sprint 5 FIX 1 — exclure employés partis des frais km courants.
+      // Les frais historiques restent accessibles via l'employe_id direct.
       const { data: emps } = await supabase
         .from('employes')
         .select('id')
         .eq('societe_id', societe_id)
+        .eq('actif', true)
+        .is('date_depart', null)
       const ids = emps?.map(e => e.id) || []
       if (ids.length > 0) {
         entryQuery = entryQuery.in('employe_id', ids)

@@ -205,11 +205,15 @@ export default function ExportPaiePage() {
       const text = await res.text()
       try { data = JSON.parse(text) } catch { throw new Error(`Reponse non-JSON (${res.status}): ${text.slice(0, 300)}`) }
       if (!res.ok || data.error) {
-        // Sécurité — on log la stack côté console (DevTools) mais on ne
-        // l'affiche JAMAIS à l'utilisateur final. Message UX neutre,
-        // détails techniques accessibles aux dev seulement.
+        // Sprint 5 FIX 6 — afficher le vrai message d'erreur (avant : générique
+        // "Contactez l'administrateur" qui cachait les causes actionnables
+        // comme "Periode non verrouillee" ou "Aucun bulletin").
         if (data.debug_stack) console.error('[exports/virement] server stack:', data.debug_stack)
-        throw new Error(`Une erreur est survenue lors de la génération du virement. Contactez l'administrateur.`)
+        console.error('[exports/virement]', res.status, data?.error || data)
+        if (res.status === 403 && /verrouill/i.test(String(data?.error || ''))) {
+          throw new Error(`⚠️ Verrouillez d'abord la paie de ${periode} dans /rh/paie avant de générer le fichier de virement.`)
+        }
+        throw new Error(data.error || `Erreur ${res.status} lors de la génération du virement.`)
       }
       // Response can have fichiers array or single content
       if (data.fichiers && Array.isArray(data.fichiers)) {
@@ -294,8 +298,16 @@ export default function ExportPaiePage() {
       const textCSG = await res.text()
       try { data = JSON.parse(textCSG) } catch { throw new Error(`Reponse non-JSON CSG (${res.status}): ${textCSG.slice(0, 300)}`) }
       if (!res.ok || data.error) {
+        // Sprint 5 FIX 6 — afficher le VRAI message d'erreur au lieu du
+        // message générique "Contactez l'administrateur" qui cachait les
+        // causes actionnables comme "Periode non verrouillee".
         if (data.debug_stack) console.error('[exports/csg-mra] server stack:', data.debug_stack)
-        throw new Error(`Une erreur est survenue lors de la génération CSG/NSF. Contactez l'administrateur.`)
+        console.error('[exports/csg-mra]', res.status, data?.error || data)
+        // Cas le plus fréquent : paie non verrouillée → message actionnable
+        if (res.status === 403 && /verrouill/i.test(String(data?.error || ''))) {
+          throw new Error(`⚠️ Verrouillez d'abord la paie de ${periode} dans /rh/paie avant de générer la déclaration CSG/NSF.`)
+        }
+        throw new Error(data.error || `Erreur ${res.status} lors de la génération CSG/NSF.`)
       }
 
       // Download recap + detail CSVs
@@ -323,7 +335,15 @@ export default function ExportPaiePage() {
       let data: any
       const textPAYE = await res.text()
       try { data = JSON.parse(textPAYE) } catch { throw new Error(`Reponse non-JSON PAYE (${res.status}): ${textPAYE.slice(0, 200)}`) }
-      if (!res.ok || data.error) throw new Error(`[PAYE ${res.status}] ${data.error || JSON.stringify(data).slice(0, 200)}`)
+      if (!res.ok || data.error) {
+        // Sprint 5 FIX 6 — message explicite "verrouiller la paie" au lieu
+        // du préfixe technique "[PAYE 403]" qui n'aide pas l'utilisateur.
+        console.error('[exports/paye-mra]', res.status, data?.error || data)
+        if (res.status === 403 && /verrouill/i.test(String(data?.error || ''))) {
+          throw new Error(`⚠️ Verrouillez d'abord la paie de ${periode} dans /rh/paie avant de générer le PAYE Return.`)
+        }
+        throw new Error(data.error || `Erreur ${res.status} lors de la génération PAYE.`)
+      }
 
       if (data.recap_csv) downloadFile(data.recap_csv, data.filename_recap || `PAYE_Recap_${periode}.csv`)
       if (data.detail_csv) setTimeout(() => downloadFile(data.detail_csv, data.filename_detail || `PAYE_Detail_${periode}.csv`), 500)

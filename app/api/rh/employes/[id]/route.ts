@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { userHasAccessToEmploye } from '@/lib/rh/access'
+import { lastDayOfMonth } from '@/lib/rh/period'
 
 export const dynamic = 'force-dynamic'
 
@@ -45,20 +46,37 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     // Build pointages query - month-based or last 31 days
     let pointagesQuery = supabase.from('pointages').select('*').eq('employe_id', id).order('date_pointage', { ascending: false })
     if (pointage_mois) {
-      pointagesQuery = pointagesQuery.gte('date_pointage', `${pointage_mois}-01`).lte('date_pointage', `${pointage_mois}-31`)
+      pointagesQuery = pointagesQuery.gte('date_pointage', `${pointage_mois}-01`).lte('date_pointage', lastDayOfMonth(pointage_mois))
     } else {
       pointagesQuery = pointagesQuery.limit(31)
     }
 
-    const [emp, bulletins, conges, soldes, pointages] = await Promise.all([
+    // Sprint 5 FIX 2 — inclure l'historique des révisions salaire.
+    // Best-effort : si la table n'existe pas ou l'accès est refusé on
+    // retourne [] sans bloquer le chargement de la fiche.
+    const historiqueSalairesPromise = supabase.from('historique_salaires')
+      .select('id, salaire_precedent, salaire_nouveau, motif, date_effet, created_at')
+      .eq('employe_id', id)
+      .order('date_effet', { ascending: false })
+      .then(r => r.data || [], () => [])
+
+    const [emp, bulletins, conges, soldes, pointages, historiqueSalaires] = await Promise.all([
       supabase.from('employes').select('*').eq('id', id).single(),
       bulletinQuery,
       congesQuery,
       supabase.from('soldes_conges').select('*').eq('employe_id', id).order('annee', { ascending: false }),
       pointagesQuery,
+      historiqueSalairesPromise,
     ])
 
-    return NextResponse.json({ employe: emp.data, bulletins: bulletins.data, conges: conges.data, soldes: soldes.data, pointages: pointages.data })
+    return NextResponse.json({
+      employe: emp.data,
+      bulletins: bulletins.data,
+      conges: conges.data,
+      soldes: soldes.data,
+      pointages: pointages.data,
+      historique_salaires: historiqueSalaires,
+    })
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
@@ -83,6 +101,30 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     delete body.created_at
     delete body.actif
 
+    // Sprint 5 FIX 2 — tracer les révisions de salaire dans historique_salaires.
+    // Jusqu'ici les changements de salaire_base écrasaient silencieusement la
+    // valeur précédente sans audit. Maintenant on capture le delta avant la
+    // mise à jour pour pouvoir afficher l'historique complet des révisions
+    // dans la fiche employé.
+    let salaireChange: { ancien: number, nouveau: number, motif?: string } | null = null
+    if (body.salaire_base !== undefined) {
+      const newSalaire = Number(body.salaire_base)
+      if (!Number.isNaN(newSalaire) && newSalaire > 0) {
+        const { data: current } = await supabase
+          .from('employes').select('salaire_base').eq('id', id).maybeSingle()
+        const oldSalaire = Number(current?.salaire_base) || 0
+        if (oldSalaire !== newSalaire) {
+          salaireChange = {
+            ancien: oldSalaire,
+            nouveau: newSalaire,
+            motif: typeof body.motif_revision_salaire === 'string' ? body.motif_revision_salaire : undefined,
+          }
+        }
+      }
+    }
+    // motif_revision_salaire n'est pas une colonne employes → ne pas l'envoyer
+    delete body.motif_revision_salaire
+
     const { data, error } = await supabase
       .from('employes')
       .update(body)
@@ -90,6 +132,27 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       .select()
       .single()
     if (error) throw error
+
+    // Insert historique_salaires en best-effort (ne bloque jamais la mise à
+    // jour si la table manque ou si la politique RLS refuse).
+    if (salaireChange) {
+      try {
+        const { data: modifieEmp } = await supabase.from('employes')
+          .select('id').eq('auth_user_id', user.id).maybeSingle()
+        await supabase.from('historique_salaires').insert({
+          employe_id: id,
+          salaire_precedent: salaireChange.ancien,
+          salaire_nouveau: salaireChange.nouveau,
+          motif: salaireChange.motif || 'Révision salaire',
+          date_effet: new Date().toISOString().slice(0, 10),
+          modifie_par: modifieEmp?.id || null,
+        })
+        console.log(`[employes PATCH] salaire révisé: ${salaireChange.ancien} → ${salaireChange.nouveau} MUR (employe=${id})`)
+      } catch (e: any) {
+        console.warn('[employes PATCH] historique_salaires insert skipped:', e?.message || e)
+      }
+    }
+
     return NextResponse.json({ employe: data })
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })

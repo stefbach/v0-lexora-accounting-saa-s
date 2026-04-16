@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { verifyCronSecret } from '@/lib/claude'
 import { envoyerNotification } from '@/lib/notifications'
+import { lastDayOfMonth } from '@/lib/rh/period'
 
 export const dynamic = 'force-dynamic'
 
@@ -67,7 +68,7 @@ export async function GET(request: Request) {
         .eq('societe_id', societe.id)
         .eq('type', 'APS')
         .gte('date_echeance', `${annee}-${String(mois + 1).padStart(2, '0')}-01`)
-        .lte('date_echeance', `${annee}-${String(mois + 1).padStart(2, '0')}-31`)
+        .lte('date_echeance', lastDayOfMonth(`${annee}-${String(mois + 1).padStart(2, '0')}`))
         .eq('statut', 'soumise')
         .maybeSingle()
 

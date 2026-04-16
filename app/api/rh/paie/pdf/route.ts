@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { userHasAccessToEmploye } from '@/lib/rh/access'
+import { lastDayOfMonth } from '@/lib/rh/period'
 import React from 'react'
 import { renderToBuffer, Document, Page, View, Text, StyleSheet, Font } from '@react-pdf/renderer'
 
@@ -337,7 +338,7 @@ export async function GET(request: Request) {
       const periodeMonth = periode.substring(0, 7)
       const { data } = await supabase.from('bulletins_paie').select('*')
         .eq('employe_id', employe_id)
-        .gte('periode', `${periodeMonth}-01`).lte('periode', `${periodeMonth}-31`)
+        .gte('periode', `${periodeMonth}-01`).lte('periode', lastDayOfMonth(periodeMonth))
         .order('periode', { ascending: false }).limit(1).maybeSingle()
       bulletin = data
     }

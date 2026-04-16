@@ -13,8 +13,10 @@ import {
   Loader2, Save, Building2, Phone, Banknote, Settings,
   MapPin, CheckCircle, AlertCircle, FileText, Scale,
   Shield, Download, ChevronDown, ChevronUp, Eye, Upload, ImageIcon,
+  Plus, Trash2, Star,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { PointageActifToggle } from "@/components/rh/PointageActifToggle"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -206,6 +208,167 @@ function DetailsTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
   )
 }
 
+// ── Sprint 5 AMÉLIO 8 — Éditeur de contacts multiples (JSONB mig 140) ──
+type Contact = {
+  nom?: string
+  prenom?: string
+  poste?: string
+  email?: string
+  telephone?: string
+  principal?: boolean
+}
+
+function ContactsEditor({
+  initial,
+  onChange,
+}: {
+  initial: Contact[]
+  onChange: (contacts: Contact[]) => void
+}) {
+  const [contacts, setContacts] = useState<Contact[]>(
+    Array.isArray(initial) && initial.length > 0 ? initial : [],
+  )
+
+  const commit = (next: Contact[]) => {
+    setContacts(next)
+    onChange(next)
+  }
+
+  const update = (i: number, patch: Partial<Contact>) => {
+    const next = contacts.map((c, idx) => (idx === i ? { ...c, ...patch } : c))
+    commit(next)
+  }
+
+  const setPrincipal = (i: number) => {
+    // Un seul contact principal à la fois
+    commit(contacts.map((c, idx) => ({ ...c, principal: idx === i })))
+  }
+
+  const addContact = () => {
+    // Le tout premier ajouté est principal par défaut
+    const next = [...contacts, { principal: contacts.length === 0 } as Contact]
+    commit(next)
+  }
+
+  const removeContact = (i: number) => {
+    const next = contacts.filter((_, idx) => idx !== i)
+    // Si on supprime le principal, promouvoir le premier restant
+    if (contacts[i]?.principal && next.length > 0 && !next.some(c => c.principal)) {
+      next[0].principal = true
+    }
+    commit(next)
+  }
+
+  return (
+    <Card className="rounded-2xl border-l-4" style={{ borderLeftColor: NAVY }}>
+      <CardHeader className="pb-2 flex flex-row items-center justify-between">
+        <CardTitle className="text-sm font-semibold" style={{ color: NAVY }}>
+          Personnes de contact
+        </CardTitle>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={addContact}
+          className="h-8"
+        >
+          <Plus className="h-3.5 w-3.5 mr-1" /> Ajouter
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {contacts.length === 0 && (
+          <p className="text-sm text-gray-500 py-4 text-center">
+            Aucun contact renseigné. Cliquez sur « Ajouter » pour créer
+            un contact (CEO, DRH, DAF, etc.).
+          </p>
+        )}
+        {contacts.map((c, i) => (
+          <div
+            key={i}
+            className={`rounded-xl border p-4 space-y-3 ${
+              c.principal ? "border-amber-300 bg-amber-50/40" : "border-gray-200"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {c.principal ? (
+                  <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">
+                    <Star className="h-3 w-3 mr-1 fill-current" /> Contact principal
+                  </Badge>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setPrincipal(i)}
+                    className="h-7 text-xs text-gray-500 hover:text-amber-700"
+                  >
+                    <Star className="h-3 w-3 mr-1" /> Définir comme principal
+                  </Button>
+                )}
+              </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => removeContact(i)}
+                className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+              >
+                <Trash2 className="h-3 w-3 mr-1" /> Supprimer
+              </Button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs text-gray-600 mb-1 block">Nom</Label>
+                <Input
+                  defaultValue={c.nom || ""}
+                  onBlur={e => update(i, { nom: e.target.value })}
+                  className="h-10 text-sm"
+                  placeholder="DUPONT"
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-gray-600 mb-1 block">Prénom</Label>
+                <Input
+                  defaultValue={c.prenom || ""}
+                  onBlur={e => update(i, { prenom: e.target.value })}
+                  className="h-10 text-sm"
+                  placeholder="Jean"
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-gray-600 mb-1 block">Poste</Label>
+                <Input
+                  defaultValue={c.poste || ""}
+                  onBlur={e => update(i, { poste: e.target.value })}
+                  className="h-10 text-sm"
+                  placeholder="CEO, DRH, DAF..."
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-gray-600 mb-1 block">Email</Label>
+                <Input
+                  type="email"
+                  defaultValue={c.email || ""}
+                  onBlur={e => update(i, { email: e.target.value })}
+                  className="h-10 text-sm"
+                  placeholder="jean@example.mu"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <Label className="text-xs text-gray-600 mb-1 block">Téléphone</Label>
+                <Input
+                  defaultValue={c.telephone || ""}
+                  onBlur={e => update(i, { telephone: e.target.value })}
+                  className="h-10 text-sm"
+                  placeholder="+230 5123 4567"
+                />
+              </div>
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  )
+}
+
 // ── CONTACT TAB ────────────────────────────────────────────────────────────────
 function ContactTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
   const f = useRef({ ...data })
@@ -213,15 +376,12 @@ function ContactTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
 
   return (
     <div className="space-y-6">
-      <Card className="rounded-2xl border-l-4" style={{ borderLeftColor: NAVY }}>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold" style={{ color: NAVY }}>Personne de contact</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Field label="Nom" name="contact_name" defaultValue={data.contact_name} placeholder="Stephane Bach" onChange={u} />
-          <Field label="Fonction" name="contact_position" defaultValue={data.contact_position} placeholder="CEO" onChange={u} />
-        </CardContent>
-      </Card>
+      {/* Sprint 5 AMÉLIO 8 — Éditeur multi-contacts (mig 140 contacts JSONB).
+          Remplace les anciens champs contact_name / contact_position uniques. */}
+      <ContactsEditor
+        initial={Array.isArray(data.contacts) ? data.contacts : []}
+        onChange={(contacts) => { f.current.contacts = contacts }}
+      />
 
       <Card className="rounded-2xl border-l-4 border-l-blue-500">
         <CardHeader className="pb-2">
@@ -262,121 +422,9 @@ function ContactTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
   )
 }
 
-// ── POINTAGE TOGGLE ────────────────────────────────────────────────────────────
-// Activer ce toggle bascule le mode de calcul des absences en paie :
-//   OFF → comportement legacy : aucune déduction auto, l'opérateur saisit
-//          jours_travailles / absences manuellement.
-//   ON  → /api/rh/paie boucle sur les jours ouvrés du mois ; chaque jour
-//          sans pointage NI congé approuvé est compté comme absence
-//          injustifiée et déduit du net.
-// Confirmation obligatoire avant activation pour éviter une bascule
-// accidentelle qui ferait fondre la masse salariale au prochain run.
-function PointageActifToggle({
-  societeId,
-  initial,
-  onSaved,
-}: {
-  societeId: string
-  initial: boolean
-  onSaved: (v: boolean) => void
-}) {
-  const [active, setActive] = useState(initial)
-  const [pendingActivate, setPendingActivate] = useState(false)
-  const [saving, setSaving] = useState(false)
-
-  const persist = async (newValue: boolean) => {
-    setSaving(true)
-    try {
-      const res = await fetch('/api/rh/societe', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: societeId, pointage_actif: newValue }),
-      })
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}))
-        toast.error('Erreur : ' + (d.error || res.statusText))
-        return
-      }
-      setActive(newValue)
-      onSaved(newValue)
-      toast.success(newValue
-        ? '✅ Pointage obligatoire activé — la prochaine paie déduira les absences'
-        : 'Pointage obligatoire désactivé — les pointages restent enregistrés sans impact paie')
-    } catch (e: any) {
-      toast.error('Erreur réseau : ' + (e?.message || ''))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleToggle = (next: boolean) => {
-    if (next) setPendingActivate(true) // confirmer avant ACTIVATION
-    else persist(false)                 // désactivation directe
-  }
-
-  return (
-    <Card className="rounded-2xl border-l-4 border-l-amber-500">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-semibold text-amber-700 flex items-center gap-2">
-          <MapPin className="h-4 w-4" /> Pointage obligatoire
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <p className="text-sm text-gray-600">
-          Activer la déduction automatique des absences basée sur le pointage.
-        </p>
-        <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-900">
-          ⚠️ Une fois activé, tout employé sans pointage <b>ni congé approuvé</b> sera considéré
-          absent ce jour. La déduction s'applique au prochain calcul de paie (action « calculer » ou « calculer_batch »).
-        </div>
-        <div className="flex items-center gap-3 pt-1">
-          <Switch checked={active} disabled={saving} onCheckedChange={handleToggle} />
-          <span className="text-sm font-medium" style={{ color: active ? '#059669' : '#6b7280' }}>
-            {active ? 'Activé — la paie déduira les absences' : 'Désactivé (mode test)'}
-          </span>
-          {saving && <Loader2 className="h-4 w-4 animate-spin text-gray-400" />}
-        </div>
-      </CardContent>
-
-      {/* Confirmation dialog avant ACTIVATION (pas avant désactivation) */}
-      {pendingActivate && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          role="dialog"
-          aria-modal="true"
-        >
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 space-y-4">
-            <h3 className="text-lg font-semibold text-amber-900 flex items-center gap-2">
-              <AlertCircle className="h-5 w-5" /> Activer le pointage obligatoire ?
-            </h3>
-            <p className="text-sm text-gray-700">
-              Êtes-vous sûr ? <b>Tout employé sans pointage</b> sur un jour ouvré, et
-              sans congé approuvé couvrant ce jour, sera considéré <b>absent</b> dès
-              le prochain calcul de paie.
-            </p>
-            <p className="text-xs text-gray-500">
-              Cette bascule est réversible — vous pouvez la couper à tout moment.
-            </p>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setPendingActivate(false)} disabled={saving}>
-                Annuler
-              </Button>
-              <Button
-                onClick={async () => { await persist(true); setPendingActivate(false) }}
-                disabled={saving}
-                style={{ backgroundColor: NAVY }}
-                className="text-white hover:opacity-90"
-              >
-                {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                Confirmer l'activation
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-    </Card>
-  )
-}
+// Sprint 5 AMÉLIO 9 — PointageActifToggle déplacé dans
+// components/rh/PointageActifToggle.tsx pour être réutilisé dans
+// /rh/parametres (inline, sans redirection vers /rh/societe).
 
 // ── BANKING TAB ────────────────────────────────────────────────────────────────
 function BankTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {

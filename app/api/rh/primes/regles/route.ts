@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { lastDayOfMonth } from '@/lib/rh/period'
 
 export const dynamic = 'force-dynamic'
 
@@ -294,7 +295,7 @@ export async function POST(request: Request) {
       const { data: pointages } = await supabase.from('pointages')
         .select('employe_id, date_pointage, heure_entree, absent_justifie')
         .gte('date_pointage', `${periodeStr}-01`)
-        .lte('date_pointage', `${periodeStr}-31`)
+        .lte('date_pointage', lastDayOfMonth(periodeStr))
         .in('employe_id', employes.map(e => e.id))
 
       // Fetch approved leave
@@ -302,7 +303,7 @@ export async function POST(request: Request) {
         .select('employe_id, date_debut, date_fin')
         .eq('statut', 'approuve')
         .gte('date_debut', `${periodeStr}-01`)
-        .lte('date_fin', `${periodeStr}-31`)
+        .lte('date_fin', lastDayOfMonth(periodeStr))
         .in('employe_id', employes.map(e => e.id))
 
       // Build absence counts per employee

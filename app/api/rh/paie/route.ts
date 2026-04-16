@@ -4,19 +4,9 @@ import { createClient as createServerClient } from '@/lib/supabase/server'
 import { calculerBulletin, PARAMS_MRA_DEFAUT } from '@/lib/rh/paie'
 import { getUserSocieteIds, userHasAccessToSociete, userHasAccessToEmploye } from '@/lib/rh/access'
 import { calculateWorkingDays, getWorkingDaysForEmploye, getMauritiusPublicHolidays } from '@/lib/rh/calculateWorkingDays'
+import { lastDayOfMonth } from '@/lib/rh/period'
 
 export const dynamic = 'force-dynamic'
-
-/**
- * Last calendar day of a given YYYY-MM period (handles 28/29/30/31 correctly).
- * `new Date(year, month, 0)` gives the last day of the PREVIOUS month,
- * so passing (year, month) where month is 1-indexed gives us what we want.
- */
-function lastDayOfMonth(periodeStr: string): string {
-  const [y, m] = periodeStr.split('-').map(n => parseInt(n, 10))
-  const last = new Date(y, m, 0).getDate()
-  return `${periodeStr}-${String(last).padStart(2, '0')}`
-}
 
 /**
  * Count working days (using the employee's working_days pattern + MU
@@ -145,28 +135,60 @@ function calcOT(hEntree: string, hSortie: string, ferieDay: boolean, planningHou
 }
 
 export async function GET(request: Request) {
+  // Sprint 5 BUG A — traçabilité étape par étape pour identifier la
+  // ligne qui provoque le 500. Les logs apparaissent dans Vercel Functions.
+  const step = (label: string, extra?: any) =>
+    console.log(`[paie GET] ${label}`, extra !== undefined ? extra : '')
   try {
+    step('START')
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    step('step1: auth OK', { userId: user.id })
     const supabase = getAdminClient()
 
     const { searchParams } = new URL(request.url)
     const employe_id = searchParams.get('employe_id')
     const periode = searchParams.get('periode')
     const societe_id = searchParams.get('societe_id')
+    step('step2: params', { periode, societe_id, employe_id })
 
-    // Multi-tenant: verify access
+    // Multi-tenant: verify access — wrap in try/catch pour éviter 500 si
+    // une table de mapping (profiles/dossiers/user_societes/...) manque.
+    // En cas d'exception, on refuse l'accès plutôt que de casser la page.
     if (societe_id) {
-      const hasAccess = await userHasAccessToSociete(user.id, societe_id)
+      let hasAccess = false
+      try {
+        hasAccess = await userHasAccessToSociete(user.id, societe_id)
+      } catch (e: any) {
+        console.error('[paie GET] userHasAccessToSociete exception:', e?.message || e)
+        return NextResponse.json({ error: `Erreur contrôle d'accès : ${e?.message || 'inconnue'}` }, { status: 500 })
+      }
+      step('step3: userHasAccessToSociete', { societe_id, hasAccess })
       if (!hasAccess) return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
     }
     if (employe_id && !societe_id) {
-      const hasAccess = await userHasAccessToEmploye(user.id, employe_id)
+      let hasAccess = false
+      try {
+        hasAccess = await userHasAccessToEmploye(user.id, employe_id)
+      } catch (e: any) {
+        console.error('[paie GET] userHasAccessToEmploye exception:', e?.message || e)
+        return NextResponse.json({ error: `Erreur contrôle d'accès : ${e?.message || 'inconnue'}` }, { status: 500 })
+      }
+      step('step3b: userHasAccessToEmploye', { employe_id, hasAccess })
       if (!hasAccess) return NextResponse.json({ error: 'Accès refusé à cet employé' }, { status: 403 })
     }
     // If neither societe_id nor employe_id, restrict to accessible societes
-    const accessibleIds = (!societe_id && !employe_id) ? await getUserSocieteIds(user.id) : []
+    let accessibleIds: string[] = []
+    if (!societe_id && !employe_id) {
+      try {
+        accessibleIds = await getUserSocieteIds(user.id)
+      } catch (e: any) {
+        console.error('[paie GET] getUserSocieteIds exception:', e?.message || e)
+        accessibleIds = []
+      }
+    }
+    step('step4: accessibleIds count', accessibleIds.length)
     if (!societe_id && !employe_id && accessibleIds.length === 0) {
       return NextResponse.json({ bulletins: [], totaux: {}, nb: 0 })
     }
@@ -178,26 +200,59 @@ export async function GET(request: Request) {
       .order('periode', { ascending: false })
 
     if (employe_id) query = query.eq('employe_id', employe_id)
-    if (periode) query = query.gte('periode', `${periode}-01`).lte('periode', `${periode}-31`)
+    if (periode) query = query.gte('periode', `${periode}-01`).lte('periode', lastDayOfMonth(periode!))
     if (societe_id) {
       query = query.eq('societe_id', societe_id)
     } else if (!employe_id && accessibleIds.length > 0) {
       query = query.in('societe_id', accessibleIds)
     }
 
+    step('step5: bulletins query starting')
     const { data, error } = await query
     if (error) {
-      console.error('[paie GET] query error:', error.message)
-      throw error
+      // Sprint 5 BUG A — renvoyer tous les détails Postgres pour debug
+      // (code SQL, hint, details) au lieu juste du message tronqué.
+      console.error('[paie GET] bulletins_paie query error:', {
+        message: error.message,
+        code: error.code,
+        hint: error.hint,
+        details: error.details,
+      })
+      return NextResponse.json({
+        error: `Erreur bulletins_paie: ${error.message}${error.hint ? ` (${error.hint})` : ''}`,
+        code: error.code,
+        hint: error.hint,
+      }, { status: 500 })
     }
+    step('step6: bulletins fetched', { count: (data || []).length })
 
     // Enrich with employee names (separate query)
+    // Sprint 5 FIX 4 — lecture defensive : si `code_employe` ou
+    // `devise_salaire` manquent (anciens envs sans migration 039/044), on
+    // retombe sur une requête minimale. Évite un 500 au chargement de la
+    // page /rh/paie juste pour un enrichissement cosmétique.
     const empIds = [...new Set((data || []).map(b => b.employe_id))]
+    step('step7: enrich employees starting', { empIds: empIds.length })
     let empMap: Record<string, any> = {}
     if (empIds.length > 0) {
-      const { data: emps } = await supabase.from('employes').select('id, code_employe, nom, prenom, poste, devise_salaire').in('id', empIds)
-      for (const e of emps || []) empMap[e.id] = { code: e.code_employe, nom: e.nom, prenom: e.prenom, poste: e.poste, devise_salaire: e.devise_salaire }
+      try {
+        const { data: emps, error: empErr } = await supabase.from('employes')
+          .select('id, code_employe, nom, prenom, poste, devise_salaire').in('id', empIds)
+        if (empErr) {
+          console.warn('[paie GET] enrich employes failed (full select):', empErr.message)
+          // Fallback minimal
+          const { data: empsFb } = await supabase.from('employes')
+            .select('id, nom, prenom, poste').in('id', empIds)
+          for (const e of empsFb || []) empMap[e.id] = { code: null, nom: e.nom, prenom: e.prenom, poste: e.poste, devise_salaire: 'MUR' }
+        } else {
+          for (const e of emps || []) empMap[e.id] = { code: e.code_employe, nom: e.nom, prenom: e.prenom, poste: e.poste, devise_salaire: e.devise_salaire }
+        }
+      } catch (e: any) {
+        console.warn('[paie GET] enrich employes exception:', e?.message || e)
+      }
     }
+
+    step('step8: enrichment done', { empMapSize: Object.keys(empMap).length })
 
     // salaire_brut is a GENERATED column in PostgreSQL:
     // = salaire_base + increment + OT + transport + petrol + special_1 + special_2 + special_3 + other + eoy + departure
@@ -242,11 +297,12 @@ export async function GET(request: Request) {
       }
     })
 
+    step('step9: computing totaux')
     const totaux = {
-      masse_salariale_brute: enriched.reduce((s, b) => s + Number(b.salaire_brut), 0),
+      masse_salariale_brute: enriched.reduce((s, b) => s + (Number(b.salaire_brut) || 0), 0),
       masse_salariale_nette: enriched.reduce((s, b) => s + (Number(b.salaire_net) || 0), 0),
-      total_charges_patronales: enriched.reduce((s, b) => s + Number(b.total_charges_patronales), 0),
-      cout_total_employeur: enriched.reduce((s, b) => s + Number(b.cout_total_employeur), 0),
+      total_charges_patronales: enriched.reduce((s, b) => s + (Number(b.total_charges_patronales) || 0), 0),
+      cout_total_employeur: enriched.reduce((s, b) => s + (Number(b.cout_total_employeur) || 0), 0),
       total_refacture: enriched.reduce((s, b) => s + (Number(b.montant_refacture_mur) || 0), 0),
     }
 
@@ -272,9 +328,26 @@ export async function GET(request: Request) {
       }
     }
 
+    step('step10: DONE', { bulletins: enriched.length, pointage_actif })
     return NextResponse.json({ bulletins: enriched, totaux, nb: enriched.length, pointage_actif })
-  } catch (e: unknown) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
+  } catch (e: any) {
+    // Sprint 5 BUG A — logger la stack complète + le nom de l'erreur pour
+    // identifier la ligne qui throw. Renvoyer aussi stack dans la réponse
+    // (dev only) pour aider au debug depuis les devtools.
+    console.error('[paie GET] EXCEPTION caught', {
+      name: e?.name,
+      message: e?.message,
+      code: e?.code,
+      hint: e?.hint,
+      details: e?.details,
+      stack: e?.stack?.split('\n').slice(0, 5).join(' | '),
+    })
+    return NextResponse.json({
+      error: e instanceof Error ? e.message : 'Erreur',
+      code: e?.code,
+      hint: e?.hint,
+      details: e?.details,
+    }, { status: 500 })
   }
 }
 
@@ -354,14 +427,14 @@ export async function POST(request: Request) {
       const { data: pointagesMois } = await supabase.from('pointages')
         .select('*').eq('employe_id', employe_id)
         .gte('date_pointage', `${periodeStr}-01`)
-        .lte('date_pointage', `${periodeStr}-31`)
+        .lte('date_pointage', lastDayOfMonth(periodeStr))
 
       // Bug 4 fix: fetch planning assignments for this employee+period to determine planned hours
       const { data: planAssignments } = await supabase.from('planning_assignments')
         .select('date, shift_code, heures_prevues, est_repos')
         .eq('employe_id', employe_id)
         .gte('date', `${periodeStr}-01`)
-        .lte('date', `${periodeStr}-31`)
+        .lte('date', lastDayOfMonth(periodeStr))
       const planMap: Record<string, { heures_prevues: number; est_repos: boolean }> = {}
       for (const pa of planAssignments || []) {
         planMap[pa.date] = { heures_prevues: Number(pa.heures_prevues) || 8, est_repos: pa.est_repos }
@@ -635,7 +708,7 @@ export async function POST(request: Request) {
       // LOCK GUARD: check if period is locked
       const { data: existingLocked } = await supabase.from('bulletins_paie')
         .select('id').eq('societe_id', societe_id)
-        .gte('periode', `${periodeStr}-01`).lte('periode', `${periodeStr}-31`)
+        .gte('periode', `${periodeStr}-01`).lte('periode', lastDayOfMonth(periodeStr))
         .eq('verrouille', true).limit(1)
       if (existingLocked && existingLocked.length > 0) {
         return NextResponse.json({ error: 'Période verrouillée — impossible de recalculer. Déverrouillez d\'abord.', bulletins: [], nb: 0 }, { status: 403 })
@@ -725,14 +798,14 @@ export async function POST(request: Request) {
         // 1. OT depuis pointages
         const { data: pointagesMois } = await supabase.from('pointages')
           .select('*').eq('employe_id', emp.id)
-          .gte('date_pointage', `${periodeStr}-01`).lte('date_pointage', `${periodeStr}-31`)
+          .gte('date_pointage', `${periodeStr}-01`).lte('date_pointage', lastDayOfMonth(periodeStr))
 
         // Bug 4 fix: fetch planning assignments for this employee+period
         const { data: planAssignments } = await supabase.from('planning_assignments')
           .select('date, shift_code, heures_prevues, est_repos')
           .eq('employe_id', emp.id)
           .gte('date', `${periodeStr}-01`)
-          .lte('date', `${periodeStr}-31`)
+          .lte('date', lastDayOfMonth(periodeStr))
         const planMap: Record<string, { heures_prevues: number; est_repos: boolean }> = {}
         for (const pa of planAssignments || []) {
           planMap[pa.date] = { heures_prevues: Number(pa.heures_prevues) || 8, est_repos: pa.est_repos }
@@ -1308,7 +1381,7 @@ export async function POST(request: Request) {
         bulletin = data
       } else {
         const { data: fuzzy } = await supabase.from('bulletins_paie')
-          .select('id, verrouille').eq('employe_id', employe_id).gte('periode', `${periodeStr}-01`).lte('periode', `${periodeStr}-31`).maybeSingle()
+          .select('id, verrouille').eq('employe_id', employe_id).gte('periode', `${periodeStr}-01`).lte('periode', lastDayOfMonth(periodeStr)).maybeSingle()
         if (fuzzy) {
           if (fuzzy.verrouille) return NextResponse.json({ error: 'Bulletin verrouillé — modification impossible' }, { status: 403 })
           const { data, error } = await supabase.from('bulletins_paie')
@@ -1330,7 +1403,7 @@ export async function POST(request: Request) {
       const { data: buls, error: bErr } = await supabase.from('bulletins_paie')
         .select('id, verrouille, statut')
         .eq('societe_id', sid)
-        .gte('periode', `${periodeStr}-01`).lte('periode', `${periodeStr}-31`)
+        .gte('periode', `${periodeStr}-01`).lte('periode', lastDayOfMonth(periodeStr))
       if (bErr) throw bErr
       const toValidate = (buls || []).filter(b => b.statut === 'brouillon' && !b.verrouille)
       if (toValidate.length === 0) return NextResponse.json({ error: 'Aucun bulletin brouillon à valider', nb: 0 })
@@ -1356,7 +1429,7 @@ export async function POST(request: Request) {
       const { data: buls } = await supabase.from('bulletins_paie')
         .select('id, statut, verrouille')
         .eq('societe_id', sid)
-        .gte('periode', `${periodeStr}-01`).lte('periode', `${periodeStr}-31`)
+        .gte('periode', `${periodeStr}-01`).lte('periode', lastDayOfMonth(periodeStr))
       const nonValides = (buls || []).filter(b => b.statut !== 'valide' && !b.verrouille)
       if (nonValides.length > 0) {
         return NextResponse.json({ error: `${nonValides.length} bulletin(s) non validé(s). Validez tous les bulletins avant de verrouiller.` }, { status: 400 })
@@ -1393,7 +1466,7 @@ export async function POST(request: Request) {
       const { error: uErr } = await supabase.from('bulletins_paie')
         .update({ verrouille: false, date_verrouillage: null, verrouille_par: null, statut: 'brouillon' })
         .eq('societe_id', sid)
-        .gte('periode', `${periodeStr}-01`).lte('periode', `${periodeStr}-31`)
+        .gte('periode', `${periodeStr}-01`).lte('periode', lastDayOfMonth(periodeStr))
       if (uErr) throw uErr
       await supabase.from('paie_periodes_lock').upsert({
         societe_id: sid, periode: `${periodeStr}-01`,
@@ -1419,7 +1492,7 @@ export async function POST(request: Request) {
       const { data: buls } = await supabase.from('bulletins_paie')
         .select('id, statut, verrouille, comptabilise')
         .eq('societe_id', sid)
-        .gte('periode', `${periodeStr}-01`).lte('periode', `${periodeStr}-31`)
+        .gte('periode', `${periodeStr}-01`).lte('periode', lastDayOfMonth(periodeStr))
       const total = (buls || []).length
       const brouillons = (buls || []).filter(b => b.statut === 'brouillon').length
       const valides = (buls || []).filter(b => b.statut === 'valide').length
@@ -1431,12 +1504,12 @@ export async function POST(request: Request) {
       // Pointage count for the month
       const { count: pointageCount } = await supabase.from('pointages')
         .select('id', { count: 'exact', head: true })
-        .gte('date_pointage', `${periodeStr}-01`).lte('date_pointage', `${periodeStr}-31`)
+        .gte('date_pointage', `${periodeStr}-01`).lte('date_pointage', lastDayOfMonth(periodeStr))
       // OT: check if any bulletin has heures_sup_montant > 0 (OT computed)
       const { data: bulsFull } = await supabase.from('bulletins_paie')
         .select('id, heures_sup_montant, special_allowance_1')
         .eq('societe_id', sid)
-        .gte('periode', `${periodeStr}-01`).lte('periode', `${periodeStr}-31`)
+        .gte('periode', `${periodeStr}-01`).lte('periode', lastDayOfMonth(periodeStr))
       const hasOT = (bulsFull || []).some(b => Number(b.heures_sup_montant) > 0)
       const hasPrimes = (bulsFull || []).some(b => Number(b.special_allowance_1) > 0)
       // Primes count for the month

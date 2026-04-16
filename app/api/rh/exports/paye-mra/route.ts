@@ -1,8 +1,21 @@
 import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
+import { lastDayOfMonth } from '@/lib/rh/period'
 
 export const dynamic = 'force-dynamic'
+
+// Sprint 5 BUG D — rôles autorisés pour la déclaration PAYE MRA.
+const ALLOWED_ROLES = [
+  'admin',
+  'super_admin',
+  'rh',
+  'rh_manager',
+  'client_admin',
+  'direction',
+  'comptable',
+  'comptable_dedie',
+]
 
 function getAdminClient() {
   return createClient(
@@ -20,17 +33,31 @@ export async function POST(request: Request) {
 
     const supabase = getAdminClient()
 
+    // Sprint 5 BUG D — role-check explicite avec 'admin' inclus
+    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+    const role = profile?.role || ''
+    if (!ALLOWED_ROLES.includes(role)) {
+      return NextResponse.json({
+        error: `Accès refusé : la génération PAYE Return MRA est réservée aux rôles ${ALLOWED_ROLES.join(', ')}. Votre rôle : ${role || 'inconnu'}.`,
+      }, { status: 403 })
+    }
+
     const { societe_id, periode } = await request.json()
     if (!societe_id || !periode) return NextResponse.json({ error: 'societe_id et periode requis' }, { status: 400 })
 
-    // LOCK CHECK
-    const { data: unlockedBuls } = await supabase.from('bulletins_paie')
+    // LOCK CHECK — lecture defensive
+    const { data: unlockedBuls, error: lockErr } = await supabase.from('bulletins_paie')
       .select('id').eq('societe_id', societe_id)
-      .gte('periode', `${periode}-01`).lte('periode', `${periode}-31`)
+      .gte('periode', `${periode}-01`).lte('periode', lastDayOfMonth(periode))
       .or('verrouille.is.null,verrouille.eq.false')
       .limit(1)
+    if (lockErr) {
+      console.warn('[paye-mra] lock check error (non-blocking):', lockErr.message)
+    }
     if (unlockedBuls && unlockedBuls.length > 0) {
-      return NextResponse.json({ error: 'Periode non verrouillee. Verrouillez la paie avant de declarer au MRA.' }, { status: 403 })
+      return NextResponse.json({
+        error: `Periode non verrouillee pour ${periode}. Verrouillez d'abord la paie dans /rh/paie (bouton « Verrouiller ») avant de declarer au MRA.`,
+      }, { status: 403 })
     }
 
     const { data: societe } = await supabase.from('societes').select('*').eq('id', societe_id).single()
@@ -41,7 +68,7 @@ export async function POST(request: Request) {
       .select('*')
       .eq('societe_id', societe_id)
       .gte('periode', `${periode}-01`)
-      .lte('periode', `${periode}-31`)
+      .lte('periode', lastDayOfMonth(periode))
 
     if (error) throw error
     if (!bulletins || bulletins.length === 0) return NextResponse.json({ error: 'Aucun bulletin pour cette période' }, { status: 404 })

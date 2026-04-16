@@ -219,13 +219,21 @@ function EditEmployeForm({ emp, onSaved, onClose }: { emp: any; onSaved: () => v
   const u = (k: string, v: any) => setE((p: any) => ({ ...p, [k]: v }))
 
   const handleSave = async () => {
+    // Sprint 5 FIX 2 — protection salaire : empêcher d'envoyer 0 par erreur
+    // si l'utilisateur efface le champ puis save. Avant : parseFloat('') || 0
+    // écrasait silencieusement le salaire à 0 en DB.
+    const salaireSaisi = parseFloat(e.salaire_base)
+    if (!Number.isFinite(salaireSaisi) || salaireSaisi <= 0) {
+      alert("Salaire invalide. Renseignez un montant > 0 ou annulez l'édition.")
+      return
+    }
     setSaving(true)
     try {
       const res = await fetch(`/api/rh/employes/${e.id}`, {
         method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           nom: e.nom, prenom: e.prenom, poste: e.poste, email: e.email, telephone: e.telephone,
-          salaire_base: parseFloat(e.salaire_base) || 0,
+          salaire_base: salaireSaisi,
           transport_allowance: parseFloat(e.transport_allowance) || 0,
           petrol_allowance: parseFloat(e.petrol_allowance) || 0,
           date_arrivee: e.date_arrivee, date_depart: e.date_depart || null,

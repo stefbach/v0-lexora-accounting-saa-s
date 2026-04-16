@@ -33,7 +33,11 @@ export async function GET(request: Request) {
       if (periode) query = query.eq('periode', `${periode}-01`)
       if (employe_id) query = query.eq('employe_id', employe_id)
       if (societe_id) {
-        const { data: emps } = await supabase.from('employes').select('id').eq('societe_id', societe_id)
+        // Sprint 5 FIX 1 — exclure employés partis (actif=false OU date_depart)
+        const { data: emps } = await supabase.from('employes').select('id')
+          .eq('societe_id', societe_id)
+          .eq('actif', true)
+          .is('date_depart', null)
         const ids = emps?.map(e => e.id) || []
         if (ids.length) query = query.in('employe_id', ids)
         else return NextResponse.json({ primes: [], nb: 0 })
@@ -200,8 +204,13 @@ export async function POST(request: Request) {
       }
 
       // Fetch all employees of the societe for matching
+      // Sprint 5 FIX 1 — exclure employés partis de l'import (un ancien salarié
+      // ne doit pas recevoir de prime variable ; garder seulement les actifs).
       const { data: employes } = await supabase.from('employes')
-        .select('id, nom, prenom, code, common_name').eq('societe_id', societe_id)
+        .select('id, nom, prenom, code, common_name')
+        .eq('societe_id', societe_id)
+        .eq('actif', true)
+        .is('date_depart', null)
       if (!employes || employes.length === 0) {
         return NextResponse.json({ error: 'Aucun employe trouve pour cette societe' }, { status: 404 })
       }
