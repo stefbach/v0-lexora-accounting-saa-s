@@ -741,6 +741,22 @@ export default function EmployesPage() {
             <CreateEmployeForm societes={societes} onCreated={load} onClose={() => setDialogOpen(false)} />
           </DialogContent>
         </Dialog>
+        {/* Sprint 12 FEATURE 3 — créer comptes en masse */}
+        {(() => {
+          const missing = employes.filter(e => !e.auth_user_id && !e.date_depart).length
+          if (missing === 0) return null
+          return (
+            <Button
+              variant="outline"
+              className="border-purple-300 text-purple-700 hover:bg-purple-50 rounded-xl h-10"
+              onClick={openBulkCreate}
+              title={`${missing} employé(s) sans compte`}
+            >
+              <Mail className="w-4 h-4 mr-2" />
+              Créer {missing} compte(s) manquant(s)
+            </Button>
+          )
+        })()}
         </div>
       </div>
 
@@ -982,6 +998,197 @@ export default function EmployesPage() {
               </div>
               <p className="text-xs text-gray-500">Communiquez ces identifiants à l'employé de manière sécurisée.</p>
               <Button variant="outline" className="w-full" onClick={() => { setAccessOpen(false); setAccessResult(null) }}>Fermer</Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Sprint 12 FEATURE 3 — Dialog création comptes en masse */}
+      <Dialog open={bulkOpen} onOpenChange={o => { setBulkOpen(o); if (!o) setBulkResults(null) }}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-[#0B0F2E]">
+              <Mail className="w-5 h-5 text-purple-600" />
+              Créer les comptes Lexora manquants
+            </DialogTitle>
+          </DialogHeader>
+
+          {!bulkResults && (
+            <div className="space-y-4 pt-2">
+              <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg text-sm text-purple-900">
+                Sélectionnez les employés à créer en lot. Seuls les employés avec un email,
+                sans compte actif, et en poste apparaissent ci-dessous.
+              </div>
+
+              {/* Mode mot de passe */}
+              <div className="space-y-2 border rounded-lg p-3">
+                <div className="flex items-center gap-4">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="radio"
+                      checked={!bulkUsePerEmp}
+                      onChange={() => setBulkUsePerEmp(false)}
+                    />
+                    <span>Mot de passe par défaut (commun à tous)</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="radio"
+                      checked={bulkUsePerEmp}
+                      onChange={() => setBulkUsePerEmp(true)}
+                    />
+                    <span>Un mot de passe par employé</span>
+                  </label>
+                </div>
+                {!bulkUsePerEmp && (
+                  <div className="flex gap-2">
+                    <Input
+                      value={bulkDefaultPwd}
+                      onChange={(ev) => setBulkDefaultPwd(ev.target.value)}
+                      className="font-mono"
+                      placeholder="Lexora2026!"
+                    />
+                    <Button variant="outline" size="sm" onClick={() => setBulkDefaultPwd(genPwd())}>Générer</Button>
+                  </div>
+                )}
+                <p className="text-[11px] text-amber-700 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" />
+                  Notez le(s) mot(s) de passe avant de lancer — ils ne seront plus affichés après.
+                </p>
+              </div>
+
+              {/* Liste des employés éligibles */}
+              {(() => {
+                const eligibles = employes.filter(e => !e.auth_user_id && !e.date_depart)
+                if (eligibles.length === 0) {
+                  return (
+                    <div className="text-center py-8 text-gray-500">
+                      <CheckCircle2 className="w-10 h-10 mx-auto mb-2 text-green-500" />
+                      Tous les employés actifs ont déjà un compte Lexora.
+                    </div>
+                  )
+                }
+                const allSelected = eligibles.every(e => bulkSelected.has(e.id))
+                return (
+                  <div className="border rounded-lg max-h-[300px] overflow-y-auto">
+                    <div className="sticky top-0 bg-gray-50 border-b px-3 py-2 flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        onChange={(ev) => {
+                          if (ev.target.checked) {
+                            setBulkSelected(new Set(eligibles.map(e => e.id)))
+                          } else {
+                            setBulkSelected(new Set())
+                          }
+                        }}
+                      />
+                      <span className="text-sm font-medium">
+                        {bulkSelected.size} / {eligibles.length} sélectionné(s)
+                      </span>
+                    </div>
+                    {eligibles.map(e => {
+                      const hasEmail = !!e.email
+                      const checked = bulkSelected.has(e.id)
+                      return (
+                        <div key={e.id} className={`flex items-center gap-2 px-3 py-2 border-b last:border-0 ${!hasEmail ? "bg-red-50/40" : ""}`}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={!hasEmail}
+                            onChange={(ev) => {
+                              setBulkSelected(prev => {
+                                const next = new Set(prev)
+                                if (ev.target.checked) next.add(e.id)
+                                else next.delete(e.id)
+                                return next
+                              })
+                            }}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">{e.prenom} {e.nom}</p>
+                            <p className="text-xs text-gray-500 truncate">
+                              {hasEmail ? e.email : <span className="text-red-600">Email manquant — renseignez avant création</span>}
+                            </p>
+                          </div>
+                          {bulkUsePerEmp && hasEmail && checked && (
+                            <Input
+                              className="font-mono w-40 h-8 text-sm"
+                              placeholder="Mot de passe"
+                              value={bulkPerEmpPwd[e.id] ?? ""}
+                              onChange={(ev) => setBulkPerEmpPwd(p => ({ ...p, [e.id]: ev.target.value }))}
+                            />
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
+
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => setBulkOpen(false)}>Annuler</Button>
+                <Button
+                  onClick={handleBulkCreate}
+                  disabled={
+                    bulkSaving ||
+                    bulkSelected.size === 0 ||
+                    (!bulkUsePerEmp && (!bulkDefaultPwd || bulkDefaultPwd.length < 6))
+                  }
+                  className="flex-1 bg-[#0B0F2E] text-white"
+                >
+                  {bulkSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Key className="w-4 h-4 mr-2" />}
+                  Créer les comptes sélectionnés
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {bulkResults && (
+            <div className="space-y-3 pt-2">
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="p-3 bg-green-50 border border-green-200 rounded">
+                  <p className="text-2xl font-bold text-green-700">{bulkResults.filter(r => r.status === "created").length}</p>
+                  <p className="text-xs text-green-700">Créés</p>
+                </div>
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded">
+                  <p className="text-2xl font-bold text-blue-700">{bulkResults.filter(r => r.status === "already_linked").length}</p>
+                  <p className="text-xs text-blue-700">Déjà liés</p>
+                </div>
+                <div className="p-3 bg-red-50 border border-red-200 rounded">
+                  <p className="text-2xl font-bold text-red-700">{bulkResults.filter(r => r.status === "error").length}</p>
+                  <p className="text-xs text-red-700">Erreurs</p>
+                </div>
+              </div>
+              <div className="border rounded-lg max-h-[300px] overflow-y-auto">
+                {bulkResults.map((r, i) => {
+                  const emp = employes.find(e => e.id === r.employe_id)
+                  return (
+                    <div key={i} className="flex items-center gap-2 px-3 py-2 border-b last:border-0">
+                      {r.status === "created" && <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />}
+                      {r.status === "already_linked" && <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />}
+                      {r.status === "error" && <XCircle className="w-4 h-4 text-red-600 shrink-0" />}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">
+                          {emp ? `${emp.prenom} ${emp.nom}` : r.employe_id}
+                        </p>
+                        {r.status === "error" && (
+                          <p className="text-xs text-red-700 truncate">{r.error}</p>
+                        )}
+                        {r.status === "already_linked" && (
+                          <p className="text-xs text-blue-700">Compte déjà existant</p>
+                        )}
+                        {r.status === "created" && r.email && (
+                          <p className="text-xs text-green-700 truncate">✅ {r.email}</p>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              <Button className="w-full bg-[#0B0F2E] text-white" onClick={() => setBulkOpen(false)}>
+                Fermer
+              </Button>
             </div>
           )}
         </DialogContent>
