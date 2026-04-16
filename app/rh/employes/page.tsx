@@ -213,10 +213,27 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
 }
 
 // ── Composant formulaire édition (state isolé) ──
+// Sprint 7 FIX 1 — sections claires (Identité / Rémunération / Contrat /
+// Administratif / Bancaire) + nouveaux champs editable : working_days,
+// exclure_mra. Principe : tout ce qui est modifiable en DB est accessible
+// depuis la fiche. Le salaire est mis en avant dans une carte dédiée.
+const WORKING_DAYS_DEFAULT = { mon: true, tue: true, wed: true, thu: true, fri: true, sat: false, sun: false }
+const DAY_LABELS: Record<string, string> = {
+  mon: "Lun", tue: "Mar", wed: "Mer", thu: "Jeu", fri: "Ven", sat: "Sam", sun: "Dim",
+}
+
 function EditEmployeForm({ emp, onSaved, onClose }: { emp: any; onSaved: () => void; onClose: () => void }) {
-  const [e, setE] = useState({ ...emp })
+  const [e, setE] = useState({
+    ...emp,
+    // Normalisation working_days (peut être JSONB depuis la DB ou undefined)
+    working_days: emp.working_days && typeof emp.working_days === "object"
+      ? { ...WORKING_DAYS_DEFAULT, ...emp.working_days }
+      : WORKING_DAYS_DEFAULT,
+  })
   const [saving, setSaving] = useState(false)
   const u = (k: string, v: any) => setE((p: any) => ({ ...p, [k]: v }))
+  const toggleDay = (day: string) =>
+    setE((p: any) => ({ ...p, working_days: { ...p.working_days, [day]: !p.working_days?.[day] } }))
 
   const handleSave = async () => {
     // Sprint 5 FIX 2 — protection salaire : empêcher d'envoyer 0 par erreur
@@ -224,7 +241,7 @@ function EditEmployeForm({ emp, onSaved, onClose }: { emp: any; onSaved: () => v
     // écrasait silencieusement le salaire à 0 en DB.
     const salaireSaisi = parseFloat(e.salaire_base)
     if (!Number.isFinite(salaireSaisi) || salaireSaisi <= 0) {
-      alert("Salaire invalide. Renseignez un montant > 0 ou annulez l'édition.")
+      toast.error("Salaire invalide — renseignez un montant > 0")
       return
     }
     setSaving(true)
@@ -239,37 +256,126 @@ function EditEmployeForm({ emp, onSaved, onClose }: { emp: any; onSaved: () => v
           date_arrivee: e.date_arrivee, date_depart: e.date_depart || null,
           role: e.role, csg_categorie: e.csg_categorie, bank_name: e.bank_name, bank_account: e.bank_account,
           nic_number: e.nic_number, tan_number: e.tan_number, iban: e.iban, devise_salaire: e.devise_salaire,
+          // Sprint 7 FIX 1 — nouveaux champs editable
+          working_days: e.working_days,
+          exclure_mra: !!e.exclure_mra,
         }),
       })
       if (!res.ok) { const d = await res.json(); throw new Error(d.error) }
+      // Sprint 7 FIX 1 — confirmation explicite de la sauvegarde
+      const salaireChanged = Number(emp.salaire_base) !== salaireSaisi
+      toast.success(salaireChanged ? "Salaire mis à jour ✅" : "Fiche employé mise à jour ✅")
       onClose(); onSaved()
-    } catch (err: any) { alert(err.message || "Erreur") }
+    } catch (err: any) { toast.error(err.message || "Erreur") }
     finally { setSaving(false) }
   }
 
+  const SectionHeader = ({ children }: { children: React.ReactNode }) => (
+    <div className="col-span-2 text-xs font-bold uppercase tracking-wide text-[#0B0F2E] mt-2 pb-1 border-b border-gray-200">
+      {children}
+    </div>
+  )
+
   return (
     <div className="grid grid-cols-2 gap-3 py-2">
+      {/* ── Identité ── */}
+      <SectionHeader>Identité</SectionHeader>
       <div><Label>Nom *</Label><Input value={e.nom||""} onChange={ev=>u("nom",ev.target.value)}/></div>
       <div><Label>Prénom *</Label><Input value={e.prenom||""} onChange={ev=>u("prenom",ev.target.value)}/></div>
-      <div><Label>Poste</Label><Input value={e.poste||""} onChange={ev=>u("poste",ev.target.value)}/></div>
       <div><Label>Email</Label><Input type="email" value={e.email||""} onChange={ev=>u("email",ev.target.value)}/></div>
       <div><Label>Téléphone</Label><Input value={e.telephone||""} onChange={ev=>u("telephone",ev.target.value)}/></div>
-      <div><Label>Rôle</Label><Select value={e.role||"salarie"} onValueChange={v=>u("role",v)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{["salarie","manager","rh","admin","direction"].map(r=><SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent></Select></div>
-      <div><Label>Salaire base *</Label><Input type="number" value={e.salaire_base||""} onChange={ev=>u("salaire_base",ev.target.value)}/></div>
-      <div><Label>Devise</Label><Select value={e.devise_salaire||"MUR"} onValueChange={v=>u("devise_salaire",v)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{["MUR","EUR","USD","GBP"].map(d=><SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select></div>
-      <div><Label>Transport</Label><Input type="number" value={e.transport_allowance||""} onChange={ev=>u("transport_allowance",ev.target.value)}/></div>
-      <div><Label>Petrol</Label><Input type="number" value={e.petrol_allowance||""} onChange={ev=>u("petrol_allowance",ev.target.value)}/></div>
-      <div><Label>Date arrivée</Label><Input type="date" value={e.date_arrivee?.split("T")[0]||""} onChange={ev=>u("date_arrivee",ev.target.value)}/></div>
-      <div><Label>Date départ</Label><Input type="date" value={e.date_depart?.split("T")[0]||""} onChange={ev=>u("date_depart",ev.target.value)}/></div>
       <div><Label>NIC</Label><Input value={e.nic_number||""} onChange={ev=>u("nic_number",ev.target.value)}/></div>
       <div><Label>TAN</Label><Input value={e.tan_number||""} onChange={ev=>u("tan_number",ev.target.value)}/></div>
-      <div><Label>CSG</Label><Select value={e.csg_categorie||"A"} onValueChange={v=>u("csg_categorie",v)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="A">A</SelectItem><SelectItem value="B">B</SelectItem></SelectContent></Select></div>
+
+      {/* ── Contrat / Poste ── */}
+      <SectionHeader>Contrat & Poste</SectionHeader>
+      <div><Label>Poste</Label><Input value={e.poste||""} onChange={ev=>u("poste",ev.target.value)}/></div>
+      <div><Label>Rôle</Label><Select value={e.role||"salarie"} onValueChange={v=>u("role",v)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{["salarie","manager","rh","admin","direction"].map(r=><SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent></Select></div>
+      <div><Label>Date arrivée</Label><Input type="date" value={e.date_arrivee?.split("T")[0]||""} onChange={ev=>u("date_arrivee",ev.target.value)}/></div>
+      <div><Label>Date départ</Label><Input type="date" value={e.date_depart?.split("T")[0]||""} onChange={ev=>u("date_depart",ev.target.value)}/></div>
+      <div className="col-span-2">
+        <Label>Jours travaillés <span className="text-xs text-gray-400 font-normal">(pour calcul pointage / congés)</span></Label>
+        <div className="flex gap-1 mt-1 flex-wrap">
+          {Object.keys(DAY_LABELS).map(day => (
+            <button
+              key={day}
+              type="button"
+              onClick={() => toggleDay(day)}
+              className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${
+                e.working_days?.[day]
+                  ? "bg-[#0B0F2E] text-white border-[#0B0F2E]"
+                  : "bg-white text-gray-500 border-gray-300 hover:border-gray-400"
+              }`}
+            >
+              {DAY_LABELS[day]}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Rémunération (FIX 1 — mise en avant) ── */}
+      <SectionHeader>💰 Rémunération</SectionHeader>
+      <div className="col-span-2 rounded-lg bg-amber-50/50 border border-amber-200 p-3 space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label className="font-semibold text-[#0B0F2E]">Salaire de base *</Label>
+            <Input
+              type="number"
+              value={e.salaire_base||""}
+              onChange={ev=>u("salaire_base",ev.target.value)}
+              className="font-mono text-base h-11 border-amber-300 focus:border-amber-500"
+              placeholder="Ex: 60000"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Actuel : <span className="font-mono">{Number(emp.salaire_base || 0).toLocaleString("fr-FR")} {emp.devise_salaire || "MUR"}</span>
+              {Number(e.salaire_base) !== Number(emp.salaire_base) && (
+                <span className="text-amber-700 ml-2">→ <span className="font-mono">{Number(e.salaire_base || 0).toLocaleString("fr-FR")} {e.devise_salaire || "MUR"}</span> (modifié)</span>
+              )}
+            </p>
+          </div>
+          <div>
+            <Label>Devise</Label>
+            <Select value={e.devise_salaire||"MUR"} onValueChange={v=>u("devise_salaire",v)}>
+              <SelectTrigger><SelectValue/></SelectTrigger>
+              <SelectContent>{["MUR","EUR","USD","GBP"].map(d=><SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Transport (indemnité)</Label>
+            <Input type="number" value={e.transport_allowance||""} onChange={ev=>u("transport_allowance",ev.target.value)}/>
+          </div>
+          <div>
+            <Label>Petrol (indemnité)</Label>
+            <Input type="number" value={e.petrol_allowance||""} onChange={ev=>u("petrol_allowance",ev.target.value)}/>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Fiscal & Bancaire ── */}
+      <SectionHeader>Fiscal & Bancaire</SectionHeader>
+      <div><Label>Catégorie CSG</Label><Select value={e.csg_categorie||"A"} onValueChange={v=>u("csg_categorie",v)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="A">A</SelectItem><SelectItem value="B">B</SelectItem></SelectContent></Select></div>
+      <div className="flex items-center gap-2 pt-5">
+        <input
+          id="exclure_mra"
+          type="checkbox"
+          checked={!!e.exclure_mra}
+          onChange={ev => u("exclure_mra", ev.target.checked)}
+          className="h-4 w-4"
+        />
+        <Label htmlFor="exclure_mra" className="cursor-pointer">
+          Exclure des déclarations MRA
+          <span className="block text-xs text-gray-500 font-normal">Ne figure pas dans CSG/NSF/PAYE Return</span>
+        </Label>
+      </div>
       <div><Label>Banque</Label><Select value={e.bank_name||""} onValueChange={v=>u("bank_name",v)}><SelectTrigger><SelectValue placeholder="Choisir..."/></SelectTrigger><SelectContent>{BANQUES_MAURITIUS.map(b=><SelectItem key={b.code} value={b.code}>{b.nom}</SelectItem>)}</SelectContent></Select></div>
       <div><Label>N° compte</Label><Input value={e.bank_account||""} onChange={ev=>u("bank_account",ev.target.value)}/></div>
-      <div><Label>IBAN</Label><Input value={e.iban||""} onChange={ev=>u("iban",ev.target.value)}/></div>
-      <DialogFooter className="col-span-2">
+      <div className="col-span-2"><Label>IBAN</Label><Input value={e.iban||""} onChange={ev=>u("iban",ev.target.value)}/></div>
+
+      <DialogFooter className="col-span-2 pt-4">
         <Button variant="outline" onClick={onClose}>Annuler</Button>
-        <Button onClick={handleSave} disabled={saving} className="bg-[#0B0F2E] text-white">{saving&&<Loader2 className="w-4 h-4 animate-spin mr-2"/>}Enregistrer</Button>
+        <Button onClick={handleSave} disabled={saving} className="bg-[#0B0F2E] text-white">
+          {saving&&<Loader2 className="w-4 h-4 animate-spin mr-2"/>}Enregistrer
+        </Button>
       </DialogFooter>
     </div>
   )
