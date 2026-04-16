@@ -123,7 +123,19 @@ export async function GET(request: Request) {
       const accessibleIds = await getUserSocieteIds(user.id)
       if (accessibleIds.length === 0) return NextResponse.json({ history: [] })
 
-      const { data } = await supabase.from('bulletins_paie').select('periode, salaire_base, salaire_net, total_charges_patronales').eq('source', 'import_excel').in('societe_id', accessibleIds).order('periode', { ascending: false })
+      // Sprint 9 BUG 4 — honorer le param societe_id (UI envoie toujours
+      // ce param). Avant : filtre uniquement sur accessibleIds, donc tous
+      // les bulletins de toutes les sociétés étaient retournés.
+      const filterSocieteHist = searchParams.get('societe_id')
+      let queryHist = supabase.from('bulletins_paie')
+        .select('periode, salaire_base, salaire_net, total_charges_patronales')
+        .eq('source', 'import_excel')
+      if (filterSocieteHist && accessibleIds.includes(filterSocieteHist)) {
+        queryHist = queryHist.eq('societe_id', filterSocieteHist)
+      } else {
+        queryHist = queryHist.in('societe_id', accessibleIds)
+      }
+      const { data } = await queryHist.order('periode', { ascending: false })
       const groups: Record<string, any> = {}
       for (const b of data || []) {
         const p = b.periode
@@ -142,7 +154,16 @@ export async function GET(request: Request) {
       // Multi-tenant: filter by accessible societes
       const accessibleIdsDetail = await getUserSocieteIds(user.id)
       if (accessibleIdsDetail.length === 0) return NextResponse.json({ bulletins: [] })
-      const { data } = await supabase.from('bulletins_paie').select('*').eq('source', 'import_excel').eq('periode', periode).in('societe_id', accessibleIdsDetail)
+      // Sprint 9 BUG 4 — honorer le param societe_id pour le détail.
+      const filterSocieteDetail = searchParams.get('societe_id')
+      let queryDetail = supabase.from('bulletins_paie')
+        .select('*').eq('source', 'import_excel').eq('periode', periode)
+      if (filterSocieteDetail && accessibleIdsDetail.includes(filterSocieteDetail)) {
+        queryDetail = queryDetail.eq('societe_id', filterSocieteDetail)
+      } else {
+        queryDetail = queryDetail.in('societe_id', accessibleIdsDetail)
+      }
+      const { data } = await queryDetail
       const empIds = [...new Set((data || []).map(b => b.employe_id))]
       let empMap: Record<string, any> = {}
       if (empIds.length > 0) {
