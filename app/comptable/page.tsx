@@ -32,12 +32,23 @@ import {
   ChevronRight,
   Clock,
   UserCheck,
-  Briefcase,
+  ArrowRight,
 } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useProfile } from "@/hooks/use-profile"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
+const BLUE = "#4191FF"
+const SECONDARY = "#4A5490"
+
+const panelStyle = {
+  border: "1px solid #D8DFED",
+  borderRadius: 18,
+  background: "linear-gradient(180deg, #FFFFFF 0%, #F7F9FF 100%)",
+  boxShadow:
+    "0 1px 2px rgba(15,23,42,0.04), 0 18px 40px -24px rgba(15,23,42,0.16), inset 0 1px 0 rgba(255,255,255,0.9)",
+}
 
 interface Client {
   id: string
@@ -181,344 +192,339 @@ export default function ComptableDashboardPage() {
 
   const totalSocietes = new Set(dossiers.map((d) => d.societe_id)).size
 
+  const kpis = [
+    { label: "Clients",              value: clients.length, icon: Users,         strong: "#4191FF", dark: "#1D5FC4" },
+    { label: "Societes gerees",      value: totalSocietes,  icon: Building2,     strong: "#D4AF37", dark: "#A88925" },
+    { label: "Documents en attente", value: pendingDocs,    icon: FileText,      strong: "#2ECC8A", dark: "#1F9B68" },
+    { label: "Alertes critiques",    value: alertCount,     icon: AlertTriangle, strong: "#E25555", dark: "#B93B3B" },
+  ]
+
+  const now = new Date()
+  const dateFr = now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+
   return (
-    <div className="flex-1 overflow-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <div
-          className="flex h-10 w-10 items-center justify-center rounded-lg"
-          style={{ backgroundColor: GOLD }}
-        >
-          <Briefcase className="h-5 w-5" style={{ color: NAVY }} />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>
-            Cabinet Comptable
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {profile?.full_name || ""}{" "}
-            {isDedie ? "-- Assistant Comptable" : "-- Expert-Comptable"}
-          </p>
-        </div>
-      </div>
-
-      {/* KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="pt-6 overflow-x-auto">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Clients</p>
-                <p className="text-3xl font-bold mt-1" style={{ color: NAVY }}>
-                  {loading ? (
-                    <Loader2 className="h-6 w-6 animate-spin" />
-                  ) : (
-                    clients.length
-                  )}
-                </p>
-              </div>
-              <div
-                className="flex h-12 w-12 items-center justify-center rounded-lg"
-                style={{ backgroundColor: `${GOLD}20` }}
-              >
-                <Users className="h-6 w-6" style={{ color: GOLD }} />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6 overflow-x-auto">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Societes gerees</p>
-                <p className="text-3xl font-bold mt-1" style={{ color: NAVY }}>
-                  {loading ? (
-                    <Loader2 className="h-6 w-6 animate-spin" />
-                  ) : (
-                    totalSocietes
-                  )}
-                </p>
-              </div>
-              <div
-                className="flex h-12 w-12 items-center justify-center rounded-lg"
-                style={{ backgroundColor: `${GOLD}20` }}
-              >
-                <Building2 className="h-6 w-6" style={{ color: GOLD }} />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6 overflow-x-auto">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Documents en attente
-                </p>
-                <p className="text-3xl font-bold mt-1" style={{ color: NAVY }}>
-                  {loading ? (
-                    <Loader2 className="h-6 w-6 animate-spin" />
-                  ) : (
-                    pendingDocs
-                  )}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {pendingDocs > 0
-                    ? "En attente de traitement"
-                    : "Aucun document en attente"}
-                </p>
-              </div>
-              <div
-                className="flex h-12 w-12 items-center justify-center rounded-lg"
-                style={{ backgroundColor: `${GOLD}20` }}
-              >
-                <FileText className="h-6 w-6" style={{ color: GOLD }} />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6 overflow-x-auto">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Alertes critiques
-                </p>
-                <p className="text-3xl font-bold mt-1" style={{ color: NAVY }}>
-                  {loading ? (
-                    <Loader2 className="h-6 w-6 animate-spin" />
-                  ) : (
-                    alertCount
-                  )}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {alertCount > 0 ? "A traiter" : "Aucune alerte"}
-                </p>
-              </div>
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-red-50">
-                <AlertTriangle className="h-6 w-6 text-red-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Client table */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle
-            className="flex items-center gap-2"
-            style={{ color: NAVY }}
-          >
-            <Users className="h-5 w-5" />
-            Portefeuille clients
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col sm:flex-row gap-3 mb-4">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Rechercher un client..."
-                className="pl-9"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+    <ClientPageShell
+      breadcrumbs={[{ label: "Cabinet Comptable", href: "/comptable" }, { label: "Tableau de bord" }]}
+      kicker={`${isDedie ? "Assistant Comptable" : "Expert-Comptable"} · ${dateFr}`}
+      title="Cabinet Comptable"
+      subtitle={`${profile?.full_name || "Bienvenue"} — Supervisez votre portefeuille clients, les dossiers en cours et les alertes réglementaires IFRS.`}
+    >
+      <div className="space-y-6 max-w-[1400px] mx-auto">
+        {/* KPIs — premium pattern */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {kpis.map(k => (
+            <article
+              key={k.label}
+              className="relative overflow-hidden group transition-all duration-200 hover:-translate-y-1"
+              style={{
+                background: "linear-gradient(180deg, #FFFFFF 0%, #F7F9FF 100%)",
+                border: "1px solid #D8DFED",
+                borderRadius: "16px",
+                boxShadow:
+                  "0 1px 2px rgba(15,23,42,0.04), 0 18px 40px -24px rgba(15,23,42,0.16), inset 0 1px 0 rgba(255,255,255,0.9)",
+              }}
+            >
+              <span
+                aria-hidden="true"
+                className="absolute inset-x-0 top-0 h-[3px]"
+                style={{ background: `linear-gradient(90deg, ${k.strong} 0%, ${k.strong}33 100%)` }}
               />
-            </div>
-            {!isDedie && assistants.length > 0 && (
-              <Select value={filterCollab} onValueChange={setFilterCollab}>
-                <SelectTrigger className="w-[220px]">
-                  <SelectValue placeholder="Filtrer par collaborateur" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tous les clients</SelectItem>
-                  <SelectItem value="non_assigne">Non assigne</SelectItem>
-                  {assistants.map((a) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.full_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </div>
+              <span
+                aria-hidden="true"
+                style={{
+                  position: "absolute",
+                  top: "-60px",
+                  right: "-60px",
+                  width: "160px",
+                  height: "160px",
+                  borderRadius: "50%",
+                  background: `radial-gradient(circle, ${k.strong}22 0%, transparent 70%)`,
+                  pointerEvents: "none",
+                }}
+              />
+              <div className="relative p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div
+                    aria-hidden="true"
+                    className="flex h-11 w-11 items-center justify-center rounded-xl"
+                    style={{
+                      background: `linear-gradient(135deg, ${k.strong}22 0%, ${k.strong}08 100%)`,
+                      border: `1px solid ${k.strong}44`,
+                      boxShadow: `0 10px 24px -10px ${k.strong}55, inset 0 1px 0 rgba(255,255,255,0.4)`,
+                      color: k.dark,
+                    }}
+                  >
+                    <k.icon className="w-5 h-5" strokeWidth={1.8} />
+                  </div>
+                </div>
+                <p
+                  className="text-[11px] font-bold uppercase"
+                  style={{ color: "#475569", letterSpacing: "0.08em" }}
+                >
+                  {k.label}
+                </p>
+                <p
+                  className="text-2xl font-bold mt-1"
+                  style={{
+                    color: NAVY,
+                    fontFamily: "Poppins, sans-serif",
+                    letterSpacing: "-0.02em",
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {loading ? <Loader2 className="h-6 w-6 animate-spin" /> : k.value}
+                </p>
+              </div>
+            </article>
+          ))}
+        </div>
 
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-          ) : filteredClients.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
-              <Users className="h-10 w-10 text-muted-foreground/40 mb-3" />
-              <p className="text-sm">Aucun client trouve.</p>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Societes</TableHead>
-                  <TableHead>Docs en attente</TableHead>
-                  <TableHead>Derniere activite</TableHead>
-                  <TableHead>Assigne a</TableHead>
-                  <TableHead></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredClients.map((client) => {
-                  const clientSocietes = getClientSocietes(client.id)
-                  const collabName = getAssignedCollabName(client.id)
-                  return (
-                    <TableRow
-                      key={client.id}
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() =>
-                        router.push(`/comptable/clients/${client.id}`)
-                      }
-                    >
-                      <TableCell>
-                        <p className="font-medium">{client.full_name}</p>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {client.email}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="outline"
-                          style={{ borderColor: GOLD, color: NAVY }}
-                        >
-                          {clientSocietes.length}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="outline"
-                          className="text-xs bg-gray-50"
-                        >
-                          --
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        <div className="flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          {new Date(client.created_at).toLocaleDateString(
-                            "fr-FR",
-                            {
-                              day: "2-digit",
-                              month: "short",
-                              year: "numeric",
-                            }
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {collabName ? (
-                          <Badge
-                            variant="outline"
-                            className="text-xs"
-                            style={{ borderColor: GOLD, color: NAVY }}
-                          >
-                            {collabName}
-                          </Badge>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">
-                            Non assigne
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Button variant="ghost" size="sm" asChild>
-                          <Link href={`/comptable/clients/${client.id}`}>
-                            <ChevronRight className="h-4 w-4" />
-                          </Link>
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Mon equipe section -- only for comptable, not comptable_dedie */}
-      {!isDedie && (
-        <Card>
+        {/* Client table */}
+        <Card style={panelStyle}>
           <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle
-                className="flex items-center gap-2"
-                style={{ color: NAVY }}
+            <div className="flex items-center gap-2">
+              <div
+                className="flex h-8 w-8 items-center justify-center rounded-lg"
+                style={{
+                  background: `linear-gradient(135deg, ${BLUE}22 0%, ${BLUE}08 100%)`,
+                  border: `1px solid ${BLUE}44`,
+                  color: "#1D5FC4",
+                }}
               >
-                <UserCheck className="h-5 w-5" />
-                Mon equipe
+                <Users className="h-4 w-4" />
+              </div>
+              <CardTitle className="text-sm font-semibold" style={{ color: NAVY, fontFamily: "Poppins, sans-serif" }}>
+                Portefeuille clients
               </CardTitle>
-              <Link href="/comptable/equipe">
-                <Button variant="outline" size="sm" className="text-xs">
-                  Gerer
-                </Button>
-              </Link>
             </div>
           </CardHeader>
           <CardContent>
-            {loading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <div className="flex flex-col sm:flex-row gap-3 mb-4">
+              <div className="relative flex-1 max-w-sm">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Rechercher un client..."
+                  className="pl-9"
+                  style={{ borderColor: "#D8DFED", borderRadius: 10 }}
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
               </div>
-            ) : assistants.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
-                <UserCheck className="h-10 w-10 text-muted-foreground/40 mb-3" />
-                <p className="text-sm font-medium">Aucun collaborateur</p>
-                <p className="text-xs mt-1">
-                  Ajoutez des collaborateurs depuis la page Mon Equipe.
-                </p>
-                <Link href="/comptable/equipe">
-                  <Button
-                    size="sm"
-                    className="mt-3 text-white"
-                    style={{ backgroundColor: GOLD }}
-                  >
-                    Ajouter un collaborateur
-                  </Button>
-                </Link>
+              {!isDedie && assistants.length > 0 && (
+                <Select value={filterCollab} onValueChange={setFilterCollab}>
+                  <SelectTrigger className="w-[220px]" style={{ borderColor: "#D8DFED", borderRadius: 10 }}>
+                    <SelectValue placeholder="Filtrer par collaborateur" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tous les clients</SelectItem>
+                    <SelectItem value="non_assigne">Non assigne</SelectItem>
+                    {assistants.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.full_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : filteredClients.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
+                <Users className="h-10 w-10 text-muted-foreground/40 mb-3" />
+                <p className="text-sm">Aucun client trouve.</p>
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Collaborateur</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Clients assignes</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {assistants.map((a) => (
-                    <TableRow key={a.id}>
-                      <TableCell className="font-medium">
-                        {a.full_name}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {a.email}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="outline"
-                          style={{ borderColor: GOLD, color: NAVY }}
-                        >
-                          {a.assignedClientCount} client
-                          {a.assignedClientCount !== 1 ? "s" : ""}
-                        </Badge>
-                      </TableCell>
+              <div className="rounded-lg overflow-hidden" style={{ border: "1px solid #E4E9F4" }}>
+                <Table>
+                  <TableHeader>
+                    <TableRow style={{ background: "linear-gradient(180deg, #F8FAFF 0%, #F1F5FC 100%)" }}>
+                      <TableHead style={{ color: SECONDARY, fontWeight: 600 }}>Client</TableHead>
+                      <TableHead style={{ color: SECONDARY, fontWeight: 600 }}>Email</TableHead>
+                      <TableHead style={{ color: SECONDARY, fontWeight: 600 }}>Societes</TableHead>
+                      <TableHead style={{ color: SECONDARY, fontWeight: 600 }}>Docs en attente</TableHead>
+                      <TableHead style={{ color: SECONDARY, fontWeight: 600 }}>Derniere activite</TableHead>
+                      <TableHead style={{ color: SECONDARY, fontWeight: 600 }}>Assigne a</TableHead>
+                      <TableHead></TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredClients.map((client) => {
+                      const clientSocietes = getClientSocietes(client.id)
+                      const collabName = getAssignedCollabName(client.id)
+                      return (
+                        <TableRow
+                          key={client.id}
+                          className="cursor-pointer hover:bg-[#F8FAFF]/60 transition-colors"
+                          onClick={() =>
+                            router.push(`/comptable/clients/${client.id}`)
+                          }
+                        >
+                          <TableCell>
+                            <p className="font-medium" style={{ color: NAVY }}>{client.full_name}</p>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {client.email}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant="outline"
+                              style={{ borderColor: GOLD, color: NAVY }}
+                            >
+                              {clientSocietes.length}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant="outline"
+                              className="text-xs bg-gray-50"
+                            >
+                              --
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            <div className="flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {new Date(client.created_at).toLocaleDateString(
+                                "fr-FR",
+                                {
+                                  day: "2-digit",
+                                  month: "short",
+                                  year: "numeric",
+                                }
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {collabName ? (
+                              <Badge
+                                variant="outline"
+                                className="text-xs"
+                                style={{ borderColor: GOLD, color: NAVY }}
+                              >
+                                {collabName}
+                              </Badge>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">
+                                Non assigne
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Button variant="ghost" size="sm" asChild>
+                              <Link href={`/comptable/clients/${client.id}`}>
+                                <ChevronRight className="h-4 w-4" />
+                              </Link>
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </CardContent>
         </Card>
-      )}
-    </div>
+
+        {/* Mon equipe section -- only for comptable, not comptable_dedie */}
+        {!isDedie && (
+          <Card style={panelStyle}>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div
+                    className="flex h-8 w-8 items-center justify-center rounded-lg"
+                    style={{
+                      background: `linear-gradient(135deg, ${GOLD}22 0%, ${GOLD}08 100%)`,
+                      border: `1px solid ${GOLD}44`,
+                      color: "#A88925",
+                    }}
+                  >
+                    <UserCheck className="h-4 w-4" />
+                  </div>
+                  <CardTitle className="text-sm font-semibold" style={{ color: NAVY, fontFamily: "Poppins, sans-serif" }}>
+                    Mon equipe
+                  </CardTitle>
+                </div>
+                <Link href="/comptable/equipe">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs gap-1"
+                    style={{ borderColor: "#D8DFED", color: NAVY }}
+                  >
+                    Gerer <ArrowRight className="w-3 h-3" />
+                  </Button>
+                </Link>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : assistants.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
+                  <UserCheck className="h-10 w-10 text-muted-foreground/40 mb-3" />
+                  <p className="text-sm font-medium">Aucun collaborateur</p>
+                  <p className="text-xs mt-1">
+                    Ajoutez des collaborateurs depuis la page Mon Equipe.
+                  </p>
+                  <Link href="/comptable/equipe">
+                    <Button
+                      size="sm"
+                      className="mt-3 text-[#0B0F2E] font-semibold"
+                      style={{
+                        background: "linear-gradient(135deg, #D4AF37 0%, #E4C547 100%)",
+                        boxShadow: "0 6px 16px -6px rgba(212,175,55,0.55), inset 0 1px 0 rgba(255,255,255,0.4)",
+                      }}
+                    >
+                      Ajouter un collaborateur
+                    </Button>
+                  </Link>
+                </div>
+              ) : (
+                <div className="rounded-lg overflow-hidden" style={{ border: "1px solid #E4E9F4" }}>
+                  <Table>
+                    <TableHeader>
+                      <TableRow style={{ background: "linear-gradient(180deg, #F8FAFF 0%, #F1F5FC 100%)" }}>
+                        <TableHead style={{ color: SECONDARY, fontWeight: 600 }}>Collaborateur</TableHead>
+                        <TableHead style={{ color: SECONDARY, fontWeight: 600 }}>Email</TableHead>
+                        <TableHead style={{ color: SECONDARY, fontWeight: 600 }}>Clients assignes</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {assistants.map((a) => (
+                        <TableRow key={a.id}>
+                          <TableCell className="font-medium" style={{ color: NAVY }}>
+                            {a.full_name}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {a.email}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant="outline"
+                              style={{ borderColor: GOLD, color: NAVY }}
+                            >
+                              {a.assignedClientCount} client
+                              {a.assignedClientCount !== 1 ? "s" : ""}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </ClientPageShell>
   )
 }

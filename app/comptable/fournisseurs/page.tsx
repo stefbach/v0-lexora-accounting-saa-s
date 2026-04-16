@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Search, Plus, Loader2, ShoppingCart, TrendingDown, Clock, AlertCircle } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 interface Facture {
   id: string
@@ -120,7 +121,8 @@ export default function FournisseursPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[#0B0F2E]">Fournisseurs</h1>
@@ -272,5 +274,6 @@ export default function FournisseursPage() {
         </CardContent>
       </Card>
     </div>
+    </ClientPageShell>
   )
 }

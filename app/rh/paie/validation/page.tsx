@@ -10,6 +10,7 @@ import {
   Loader2, CheckCircle2, AlertTriangle, XCircle, Play, FileCheck,
   Users, TrendingUp, TrendingDown, Building2, ShieldCheck
 } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -178,7 +179,8 @@ export default function PayrollValidationPage() {
   const nbBrouillons = bulletins.filter(b => b.statut === "brouillon").length
 
   return (
-    <div className="p-6 space-y-6">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
@@ -536,5 +538,6 @@ export default function PayrollValidationPage() {
         </CardContent>
       </Card>
     </div>
+    </ClientPageShell>
   )
 }

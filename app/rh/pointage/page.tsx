@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Loader2, Clock, LogIn, LogOut, Users, Calendar, ChevronLeft, ChevronRight, X, AlertTriangle, CheckCircle, Coffee } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -519,7 +520,8 @@ export default function PointagePage() {
   // Render
   // ---------------------------------------------------------------------------
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-8 space-y-6 max-w-6xl mx-auto">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6 max-w-6xl mx-auto">
       {/* Migration 135 — bandeau état du toggle pointage_actif (par société) */}
       {societeId && pointageActif === false && (
         <div className="rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-900 flex items-start gap-3">
@@ -546,6 +548,7 @@ export default function PointagePage() {
           </div>
         </div>
       )}
+
 
       {/* TOP SECTION: Clock + Punch buttons */}
       <Card className="border-0 shadow-lg overflow-hidden">
@@ -990,5 +993,6 @@ export default function PointagePage() {
         Actualisation automatique toutes les 30 secondes
       </p>
     </div>
+    </ClientPageShell>
   )
 }

@@ -14,6 +14,7 @@ import {
   Umbrella, XCircle, Heart, Users, Gavel, Trophy, Scale, BookOpen,
   AlertCircle, CheckCircle2, Briefcase, FileText, HeartPulse
 } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -308,7 +309,8 @@ export default function CongesParametresPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 space-y-6 max-w-[1400px] mx-auto">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6 max-w-[1400px] mx-auto">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
@@ -557,5 +559,6 @@ export default function CongesParametresPage() {
         </DialogContent>
       </Dialog>
     </div>
+    </ClientPageShell>
   )
 }

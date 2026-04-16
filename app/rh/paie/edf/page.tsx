@@ -15,6 +15,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow
 } from '@/components/ui/table'
 import { FileSpreadsheet, RefreshCw, CheckCircle2, Clock, AlertTriangle } from 'lucide-react'
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -189,7 +190,8 @@ export default function EDFPage() {
     : 0
 
   return (
-    <div className="p-6 space-y-6 max-w-5xl mx-auto">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6 max-w-5xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -447,5 +449,6 @@ export default function EDFPage() {
         </Card>
       )}
     </div>
+    </ClientPageShell>
   )
 }

@@ -10,6 +10,7 @@ import {
   Loader2, Download, Banknote, FileText, CheckCircle,
   AlertTriangle, Clock, Building2, Users, Wallet, FileCheck
 } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -339,7 +340,8 @@ export default function ExportPaiePage() {
   }
 
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6 max-w-7xl mx-auto">
       {/* Alert banner */}
       {alertMsg && (
         <div
@@ -801,5 +803,6 @@ export default function ExportPaiePage() {
         </TabsContent>
       </Tabs>
     </div>
+    </ClientPageShell>
   )
 }

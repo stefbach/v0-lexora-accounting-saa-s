@@ -18,6 +18,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import { Plus, Search, Loader2, Users, Building2, Link } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 interface UserProfile {
   id: string
@@ -253,7 +254,8 @@ export default function AdminClientsPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>Clients</h1>
         <p className="text-muted-foreground">Gestion des clients et sociétés de la plateforme</p>
@@ -492,5 +494,6 @@ export default function AdminClientsPage() {
         </DialogContent>
       </Dialog>
     </div>
+    </ClientPageShell>
   )
 }

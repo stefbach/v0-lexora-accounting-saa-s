@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Loader2, Download, CreditCard, Building2, AlertTriangle, CheckCircle2, Users, FileText } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 const BANQUES_LABELS: Record<string, string> = {
   MCB: "Mauritius Commercial Bank",
@@ -193,7 +194,8 @@ export default function ExportVirementPage() {
   const formatFichier = FORMAT_LABELS[banqueEmettrice] || FORMAT_LABELS["DEFAULT"]
 
   return (
-    <div className="p-6 space-y-6 max-w-5xl">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6 max-w-5xl">
       <div>
         <h1 className="text-2xl font-bold text-[#0B0F2E]">Export Virements Salaires</h1>
         <p className="text-sm text-gray-500">Le format du fichier est automatiquement adapté à la banque de l'entreprise</p>
@@ -396,5 +398,6 @@ export default function ExportVirementPage() {
         </div>
       )}
     </div>
+    </ClientPageShell>
   )
 }

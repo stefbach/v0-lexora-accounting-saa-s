@@ -15,6 +15,7 @@ import {
   ChevronDown, ChevronRight, Lock,
 } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -532,7 +533,8 @@ export default function ComptableEquipePage() {
   const clientsWithSocietes = getClientsWithSocietes()
 
   return (
-    <div className="flex-1 overflow-auto p-6 space-y-6">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6">
 
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -1030,5 +1032,6 @@ export default function ComptableEquipePage() {
         </DialogContent>
       </Dialog>
     </div>
+    </ClientPageShell>
   )
 }

@@ -4,8 +4,9 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import {
-  Users, UserCog, Building2, FileText, Briefcase, Loader2
+  Users, UserCog, Building2, FileText, Briefcase, Loader2, ArrowRight, Activity
 } from 'lucide-react'
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 
@@ -47,7 +48,21 @@ const ROLE_LABELS: Record<string, string> = {
   employe: 'Employe',
 }
 
+const NAVY = "#0B0F2E"
+const GOLD = "#D4AF37"
+const BLUE = "#4191FF"
+const SECONDARY = "#4A5490"
+
 const fmtDate = (d: string) => new Date(d).toLocaleDateString('fr-FR')
+
+// Premium card style
+const panelStyle = {
+  border: "1px solid #D8DFED",
+  borderRadius: 18,
+  background: "linear-gradient(180deg, #FFFFFF 0%, #F7F9FF 100%)",
+  boxShadow:
+    "0 1px 2px rgba(15,23,42,0.04), 0 18px 40px -24px rgba(15,23,42,0.16), inset 0 1px 0 rgba(255,255,255,0.9)",
+}
 
 export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true)
@@ -165,163 +180,286 @@ export default function AdminDashboardPage() {
   }, [])
 
   const kpiCards = [
-    { titre: 'Total utilisateurs', valeur: totalUsers, icon: Users, color: '#0B0F2E', href: '/admin/users' },
-    { titre: 'Total clients', valeur: totalClients, icon: Briefcase, color: '#D4AF37', href: '/admin/clients' },
-    { titre: 'Total comptables', valeur: totalComptables, icon: UserCog, color: '#2563eb', href: '/admin/comptables' },
-    { titre: 'Total societes', valeur: totalSocietes, icon: Building2, color: '#16a34a', href: '/admin/societes' },
-    { titre: 'Stockage documents', valeur: totalDocuments, icon: FileText, color: '#7c3aed', href: '/admin/documents' },
+    { titre: 'Total utilisateurs', valeur: totalUsers,      icon: Users,     strong: "#4191FF", dark: "#1D5FC4", href: '/admin/users' },
+    { titre: 'Total clients',      valeur: totalClients,    icon: Briefcase, strong: "#D4AF37", dark: "#A88925", href: '/admin/clients' },
+    { titre: 'Total comptables',   valeur: totalComptables, icon: UserCog,   strong: "#8B5CF6", dark: "#6D3EE0", href: '/admin/comptables' },
+    { titre: 'Total societes',     valeur: totalSocietes,   icon: Building2, strong: "#2ECC8A", dark: "#1F9B68", href: '/admin/societes' },
+    { titre: 'Documents stockes',  valeur: totalDocuments,  icon: FileText,  strong: "#E25555", dark: "#B93B3B", href: '/admin/documents' },
   ]
 
-  if (loading) {
-    return (
-      <div className="p-6 space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: '#0B0F2E' }}>Tableau de bord administrateur</h1>
-          <p className="text-muted-foreground mt-1">Chargement...</p>
-        </div>
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin" style={{ color: '#0B0F2E' }} />
-        </div>
-      </div>
-    )
-  }
+  const now = new Date()
+  const dateFr = now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold" style={{ color: '#0B0F2E' }}>
-          Tableau de bord administrateur
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Gestion de la plateforme Lexora —{' '}
-          {new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-        </p>
-      </div>
+    <ClientPageShell
+      breadcrumbs={[{ label: "Administration", href: "/admin" }, { label: "Tableau de bord" }]}
+      kicker={`Administration · ${dateFr}`}
+      title="Pilotage de la plateforme"
+      subtitle="Vision consolidée des utilisateurs, cabinets, clients et volumétrie documentaire. Supervisez l'activité globale de Lexora en temps réel."
+    >
+      <div className="space-y-6 max-w-[1400px] mx-auto">
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="h-8 w-8 animate-spin" style={{ color: NAVY }} />
+          </div>
+        ) : (
+          <>
+            {/* KPI Cards — premium pattern */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+              {kpiCards.map(card => (
+                <Link key={card.titre} href={card.href} className="group">
+                  <article
+                    className="relative overflow-hidden h-full cursor-pointer transition-all duration-200 group-hover:-translate-y-1"
+                    style={{
+                      background: "linear-gradient(180deg, #FFFFFF 0%, #F7F9FF 100%)",
+                      border: "1px solid #D8DFED",
+                      borderRadius: "16px",
+                      boxShadow:
+                        "0 1px 2px rgba(15,23,42,0.04), 0 18px 40px -24px rgba(15,23,42,0.16), inset 0 1px 0 rgba(255,255,255,0.9)",
+                    }}
+                  >
+                    {/* Top accent stripe */}
+                    <span
+                      aria-hidden="true"
+                      className="absolute inset-x-0 top-0 h-[3px]"
+                      style={{ background: `linear-gradient(90deg, ${card.strong} 0%, ${card.strong}33 100%)` }}
+                    />
+                    {/* Corner glow */}
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        position: "absolute",
+                        top: "-60px",
+                        right: "-60px",
+                        width: "160px",
+                        height: "160px",
+                        borderRadius: "50%",
+                        background: `radial-gradient(circle, ${card.strong}22 0%, transparent 70%)`,
+                        pointerEvents: "none",
+                      }}
+                    />
+                    <div className="relative p-5">
+                      <div className="flex items-center justify-between mb-4">
+                        <div
+                          aria-hidden="true"
+                          className="flex h-11 w-11 items-center justify-center rounded-xl"
+                          style={{
+                            background: `linear-gradient(135deg, ${card.strong}22 0%, ${card.strong}08 100%)`,
+                            border: `1px solid ${card.strong}44`,
+                            boxShadow: `0 10px 24px -10px ${card.strong}55, inset 0 1px 0 rgba(255,255,255,0.4)`,
+                            color: card.dark,
+                          }}
+                        >
+                          <card.icon className="w-5 h-5" strokeWidth={1.8} />
+                        </div>
+                        <ArrowRight
+                          className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-all duration-200 group-hover:translate-x-1"
+                          style={{ color: card.dark }}
+                        />
+                      </div>
+                      <p
+                        className="text-[11px] font-bold uppercase"
+                        style={{ color: "#475569", letterSpacing: "0.08em" }}
+                      >
+                        {card.titre}
+                      </p>
+                      <p
+                        className="text-2xl font-bold mt-1"
+                        style={{
+                          color: NAVY,
+                          fontFamily: "Poppins, sans-serif",
+                          letterSpacing: "-0.02em",
+                          fontVariantNumeric: "tabular-nums",
+                        }}
+                      >
+                        {card.valeur}
+                      </p>
+                    </div>
+                  </article>
+                </Link>
+              ))}
+            </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
-        {kpiCards.map(card => (
-          <Link key={card.titre} href={card.href}>
-            <Card className="hover:shadow-md transition-shadow cursor-pointer">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">{card.titre}</CardTitle>
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: card.color + '20' }}>
-                  <card.icon className="h-5 w-5" style={{ color: card.color }} />
+            {/* KPI par comptable + KPI par client */}
+            <div className="grid gap-4 md:grid-cols-2">
+              {/* Par comptable */}
+              <Card style={panelStyle}>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="flex h-8 w-8 items-center justify-center rounded-lg"
+                        style={{
+                          background: `linear-gradient(135deg, ${GOLD}22 0%, ${GOLD}08 100%)`,
+                          border: `1px solid ${GOLD}44`,
+                          color: "#A88925",
+                        }}
+                      >
+                        <UserCog className="h-4 w-4" />
+                      </div>
+                      <CardTitle className="text-sm font-semibold" style={{ color: NAVY, fontFamily: "Poppins, sans-serif" }}>
+                        KPI par comptable
+                      </CardTitle>
+                    </div>
+                    <Badge variant="outline" className="text-xs" style={{ borderColor: "#D8DFED", color: SECONDARY }}>
+                      {comptableKpis.length}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {comptableKpis.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-4 text-center">Aucun comptable enregistre</p>
+                  ) : (
+                    <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
+                      {comptableKpis.map(c => (
+                        <div
+                          key={c.id}
+                          className="flex items-center justify-between p-3 rounded-lg transition-colors hover:bg-white"
+                          style={{
+                            background: "linear-gradient(180deg, #F8FAFF 0%, #F1F5FC 100%)",
+                            border: "1px solid #E4E9F4",
+                          }}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium truncate" style={{ color: NAVY }}>{c.full_name}</p>
+                            <p className="text-xs text-muted-foreground truncate">{c.email}</p>
+                          </div>
+                          <div className="flex items-center gap-2 ml-3 shrink-0">
+                            <Badge variant="outline" className="text-xs" style={{ borderColor: GOLD, color: NAVY }}>
+                              {c.nb_clients} client{c.nb_clients !== 1 ? 's' : ''}
+                            </Badge>
+                            <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                              {c.nb_documents} doc{c.nb_documents !== 1 ? 's' : ''}
+                            </Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Par client */}
+              <Card style={panelStyle}>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="flex h-8 w-8 items-center justify-center rounded-lg"
+                        style={{
+                          background: `linear-gradient(135deg, ${BLUE}22 0%, ${BLUE}08 100%)`,
+                          border: `1px solid ${BLUE}44`,
+                          color: "#1D5FC4",
+                        }}
+                      >
+                        <Briefcase className="h-4 w-4" />
+                      </div>
+                      <CardTitle className="text-sm font-semibold" style={{ color: NAVY, fontFamily: "Poppins, sans-serif" }}>
+                        KPI par client
+                      </CardTitle>
+                    </div>
+                    <Badge variant="outline" className="text-xs" style={{ borderColor: "#D8DFED", color: SECONDARY }}>
+                      {clientKpis.length}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {clientKpis.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-4 text-center">Aucun client enregistre</p>
+                  ) : (
+                    <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
+                      {clientKpis.map(c => (
+                        <div
+                          key={c.id}
+                          className="flex items-center justify-between p-3 rounded-lg transition-colors hover:bg-white"
+                          style={{
+                            background: "linear-gradient(180deg, #F8FAFF 0%, #F1F5FC 100%)",
+                            border: "1px solid #E4E9F4",
+                          }}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium truncate" style={{ color: NAVY }}>{c.full_name}</p>
+                            <p className="text-xs text-muted-foreground truncate">{c.email}</p>
+                          </div>
+                          <div className="flex items-center gap-2 ml-3 shrink-0">
+                            <Badge variant="outline" className="text-xs" style={{ borderColor: GOLD, color: NAVY }}>
+                              {c.nb_societes} societe{c.nb_societes !== 1 ? 's' : ''}
+                            </Badge>
+                            <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
+                              {c.nb_documents} doc{c.nb_documents !== 1 ? 's' : ''}
+                            </Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Recent user creations */}
+            <Card style={panelStyle}>
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
+                  <div
+                    className="flex h-8 w-8 items-center justify-center rounded-lg"
+                    style={{
+                      background: `linear-gradient(135deg, #2ECC8A22 0%, #2ECC8A08 100%)`,
+                      border: `1px solid #2ECC8A44`,
+                      color: "#1F9B68",
+                    }}
+                  >
+                    <Activity className="h-4 w-4" />
+                  </div>
+                  <CardTitle className="text-sm font-semibold" style={{ color: NAVY, fontFamily: "Poppins, sans-serif" }}>
+                    Derniers comptes crees
+                  </CardTitle>
                 </div>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-bold" style={{ color: '#0B0F2E' }}>{card.valeur}</p>
+                {recentUsers.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">Aucun utilisateur</p>
+                ) : (
+                  <div className="space-y-2">
+                    {recentUsers.map(u => (
+                      <div
+                        key={u.id}
+                        className="flex items-center justify-between p-3 rounded-lg"
+                        style={{
+                          background: "linear-gradient(180deg, #F8FAFF 0%, #F1F5FC 100%)",
+                          border: "1px solid #E4E9F4",
+                        }}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div
+                            className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-xs flex-shrink-0"
+                            style={{
+                              background: `linear-gradient(135deg, ${NAVY} 0%, #1a2151 100%)`,
+                              boxShadow: `0 6px 16px -6px rgba(11,15,46,0.45), inset 0 1px 0 rgba(255,255,255,0.1)`,
+                            }}
+                          >
+                            {(u.full_name || u.email).slice(0, 2).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate" style={{ color: NAVY }}>{u.full_name || '—'}</p>
+                            <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 ml-3 shrink-0">
+                          <Badge variant="outline" className="text-xs" style={{ borderColor: GOLD, color: NAVY }}>
+                            {ROLE_LABELS[u.role] || u.role}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">{fmtDate(u.created_at)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
-          </Link>
-        ))}
+          </>
+        )}
       </div>
-
-      {/* KPI par comptable + KPI par client */}
-      <div className="grid gap-4 md:grid-cols-2">
-        {/* Par comptable */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <UserCog className="h-5 w-5" style={{ color: '#D4AF37' }} />
-              <CardTitle className="text-sm">KPI par comptable</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {comptableKpis.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">Aucun comptable enregistre</p>
-            ) : (
-              <div className="space-y-3">
-                {comptableKpis.map(c => (
-                  <div key={c.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate">{c.full_name}</p>
-                      <p className="text-xs text-muted-foreground truncate">{c.email}</p>
-                    </div>
-                    <div className="flex items-center gap-2 ml-3 shrink-0">
-                      <Badge variant="outline" className="text-xs">
-                        {c.nb_clients} client{c.nb_clients !== 1 ? 's' : ''}
-                      </Badge>
-                      <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
-                        {c.nb_documents} doc{c.nb_documents !== 1 ? 's' : ''}
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Par client */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Briefcase className="h-5 w-5" style={{ color: '#D4AF37' }} />
-              <CardTitle className="text-sm">KPI par client</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {clientKpis.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">Aucun client enregistre</p>
-            ) : (
-              <div className="space-y-3 max-h-[400px] overflow-y-auto">
-                {clientKpis.map(c => (
-                  <div key={c.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate">{c.full_name}</p>
-                      <p className="text-xs text-muted-foreground truncate">{c.email}</p>
-                    </div>
-                    <div className="flex items-center gap-2 ml-3 shrink-0">
-                      <Badge variant="outline" className="text-xs">
-                        {c.nb_societes} societe{c.nb_societes !== 1 ? 's' : ''}
-                      </Badge>
-                      <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
-                        {c.nb_documents} doc{c.nb_documents !== 1 ? 's' : ''}
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Recent user creations */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Users className="h-5 w-5" style={{ color: '#D4AF37' }} />
-            <CardTitle className="text-sm">Derniers comptes crees</CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {recentUsers.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4 text-center">Aucun utilisateur</p>
-          ) : (
-            <div className="space-y-2">
-              {recentUsers.map(u => (
-                <div key={u.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-9 h-9 rounded-full bg-[#0B0F2E] flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
-                      {(u.full_name || u.email).slice(0, 2).toUpperCase()}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{u.full_name || '—'}</p>
-                      <p className="text-xs text-muted-foreground truncate">{u.email}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 ml-3 shrink-0">
-                    <Badge variant="outline" className="text-xs">{ROLE_LABELS[u.role] || u.role}</Badge>
-                    <span className="text-xs text-muted-foreground">{fmtDate(u.created_at)}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+    </ClientPageShell>
   )
 }

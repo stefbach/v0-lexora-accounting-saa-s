@@ -45,6 +45,38 @@
   --sidebar-accent-foreground: #E8EAFC;
   --sidebar-border: #1E2760;
   --sidebar-ring: #4191FF;
+
+  /* ─── Motion tokens (UI/UX Pro Max) ─────────── */
+  --ease-out:       cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out:    cubic-bezier(0.76, 0, 0.24, 1);
+  --ease-spring:    cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out-expo:  cubic-bezier(0.16, 1, 0.3, 1);
+
+  --duration-fast:    150ms;
+  --duration-normal:  300ms;
+  --duration-slow:    600ms;
+  --duration-slower:  1000ms;
+
+  /* ─── Shadows / glows ───────────────────────── */
+  --shadow-sm:        0 1px 3px rgba(11,15,46,0.06);
+  --shadow-md:        0 4px 24px rgba(11,15,46,0.10);
+  --shadow-lg:        0 20px 60px -20px rgba(11,15,46,0.25);
+  --shadow-glow-blue: 0 0 40px rgba(65,145,255,0.30);
+  --shadow-glow-gold: 0 0 40px rgba(212,175,55,0.30);
+
+  /* ─── Layout / spacing ──────────────────────── */
+  --space-section:    clamp(80px, 12vw, 160px);
+  --container-max:    1280px;
+
+  /* ─── Z-index scale ─────────────────────────── */
+  --z-base:     0;
+  --z-raised:   10;
+  --z-overlay:  40;
+  --z-nav:      50;
+  --z-progress: 60;
+  --z-modal:    200;
+  --z-toast:    300;
+  --z-cursor:   9999;
 }
 
 .dark {
@@ -139,4 +171,51 @@
 }
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* UI/UX Pro Max — accessibility & motion                              */
+/* ------------------------------------------------------------------ */
+
+/* focus-states (rule §1): visible 2px focus ring on every interactive  */
+/* element, using the design-system ring token.                         */
+*:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Skip animations and transitions when user requests reduced motion.  */
+/* reduced-motion (rule §1): covers CSS-based animations. Framer Motion */
+/* primitives also call useReducedMotion() to bail out.                 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Smooth anchor navigation by default (respects reduced-motion above). */
+html {
+  scroll-behavior: smooth;
+}
+
+/* ------------------------------------------------------------------ */
+/* Reusable keyframes for accent animations                            */
+/* ------------------------------------------------------------------ */
+
+/* Rotating conic-gradient ring behind an icon tile (hover state). */
+@keyframes lexora-ring-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Slow float for decorative elements. */
+@keyframes lexora-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
 }

@@ -42,9 +42,24 @@ export async function updateSession(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Public routes that don't require authentication
-  const publicRoutes = ['/', '/auth/login', '/login', '/redirect', '/tarifs']
+  const publicRoutes = [
+    '/',
+    '/auth/login',
+    '/login',
+    '/redirect',
+    '/tarifs',
+    // Public-facing legal pages
+    '/mentions-legales',
+    '/cgu',
+    '/cgv',
+    '/protection-donnees',
+    // Public lead-capture form
+    '/inscription',
+    // Public contract-signing flow (signed link URL)
+    '/signer-contrat',
+  ]
   const isPublicRoute = publicRoutes.some(
-    (route) => pathname === route
+    (route) => pathname === route || pathname.startsWith(route + '/')
   ) || pathname.startsWith('/api/')
 
   // Protected routes requiring authentication (explicit list for clarity)

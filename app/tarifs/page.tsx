@@ -7,8 +7,23 @@ import { getLocale, setLocale, type Locale } from "@/lib/i18n"
 import {
   FileSearch, BookOpen, FileText, Users, Landmark, BellRing,
   HeartPulse, TrendingUp, Zap, ShieldCheck, Check, Minus,
-  Camera,
+  Camera, Sparkles, Crown,
 } from "lucide-react"
+import { motion, useReducedMotion } from "framer-motion"
+import {
+  Reveal,
+  StaggerGroup,
+  StaggerItem,
+  HoverLift,
+  PressableWrap,
+  FadeSlide,
+  ShineSweep,
+} from "@/components/ui/motion"
+import { NeuralNetworkScene } from "@/components/NeuralNetworkScene"
+import { ParticleField } from "@/components/ParticleField"
+import { ScrollProgress } from "@/components/ScrollProgress"
+import { AnimatedCounter } from "@/components/AnimatedCounter"
+import { PricingOrb3DLazy } from "@/components/3d/PricingOrb3DLoader"
 
 /* ------------------------------------------------------------------ */
 /*  Design tokens                                                      */
@@ -584,34 +599,91 @@ function TierCard({
   return (
     <div style={{
       backgroundColor: C.cardBg,
-      border: ctaPrimary ? `2px solid ${C.gold}` : `1px solid ${C.navyBorder}`,
-      borderRadius: "16px", padding: "28px 24px",
+      border: ctaPrimary ? `1px solid ${C.gold}` : `1px solid ${C.navyBorder}`,
+      borderRadius: "18px", padding: "28px 24px",
       display: "flex", flexDirection: "column",
       position: "relative", overflow: "hidden",
+      boxShadow: ctaPrimary
+        ? `0 24px 60px -24px ${C.gold}66, 0 0 0 1px ${C.gold}40`
+        : "0 1px 3px rgba(0,0,0,0.20)",
     }}>
+      {/* Gradient accent stripe at top */}
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute", top: 0, left: 0, right: 0, height: "3px",
+          background: ctaPrimary
+            ? `linear-gradient(90deg, ${C.gold} 0%, ${C.goldLight} 50%, ${C.gold} 100%)`
+            : `linear-gradient(90deg, ${badgeColor} 0%, ${badgeColor}33 100%)`,
+        }}
+      />
+
+      {/* Ambient glow for popular tier */}
+      {ctaPrimary && (
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute", top: 0, left: 0, right: 0, height: "60%",
+            pointerEvents: "none",
+            background: `radial-gradient(ellipse 100% 50% at 50% 0%, ${C.gold}12 0%, transparent 70%)`,
+          }}
+        />
+      )}
+
+      {/* Shine sweep on popular tier — continuous premium feel */}
+      {ctaPrimary && <ShineSweep color="rgba(212,175,55,0.14)" duration={4} />}
+
+      {/* Crown on popular tier */}
+      {ctaPrimary && (
+        <div style={{
+          position: "absolute", top: "12px", right: "12px",
+          display: "inline-flex", alignItems: "center", gap: "4px",
+          fontSize: "10px", fontWeight: 700, letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          backgroundColor: C.gold, color: C.bg,
+          padding: "4px 10px", borderRadius: "999px",
+          fontFamily: FONT,
+        }}>
+          <Crown style={{ width: 10, height: 10 }} aria-hidden="true" />
+          <span>Top</span>
+        </div>
+      )}
+
       {/* Badge */}
       <span style={{
-        display: "inline-block", fontSize: "11px", fontWeight: 600,
-        color: badgeColor, backgroundColor: `${badgeColor}18`,
+        position: "relative",
+        display: "inline-block", fontSize: "11px", fontWeight: 700,
+        color: badgeColor, backgroundColor: `${badgeColor}1C`,
+        border: `1px solid ${badgeColor}40`,
         padding: "4px 12px", borderRadius: "999px", alignSelf: "flex-start",
-        letterSpacing: "0.03em", textTransform: "uppercase", marginBottom: "16px",
+        letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: "18px",
       }}>{badge}</span>
 
       {/* Name & desc */}
-      <h3 style={{ color: C.white, fontSize: "20px", fontWeight: 700, margin: "0 0 6px", fontFamily: FONT }}>{name}</h3>
-      <p style={{ color: C.muted, fontSize: "13px", lineHeight: 1.5, margin: "0 0 12px" }}>{desc}</p>
+      <h3 style={{ position: "relative", color: C.white, fontSize: "22px", fontWeight: 700, margin: "0 0 6px", fontFamily: FONT, letterSpacing: "-0.01em" }}>{name}</h3>
+      <p style={{ position: "relative", color: C.muted, fontSize: "13px", lineHeight: 1.55, margin: "0 0 14px" }}>{desc}</p>
       <span style={{
-        display: "inline-block", fontSize: "12px", color: C.blue,
-        backgroundColor: `${C.blue}15`, padding: "4px 10px", borderRadius: "8px",
-        alignSelf: "flex-start", marginBottom: "20px",
+        position: "relative",
+        display: "inline-block", fontSize: "12px", fontWeight: 500, color: C.blue,
+        backgroundColor: `${C.blue}15`, padding: "5px 10px", borderRadius: "8px",
+        alignSelf: "flex-start", marginBottom: "22px",
       }}>{criteria}</span>
 
-      {/* Price */}
-      <div style={{ marginBottom: "6px" }}>
-        <span style={{ color: C.gold, fontSize: "36px", fontWeight: 800, lineHeight: 1 }}>
-          MRs {fmt(price)}
+      {/* Price — count-up animation when scrolled into view */}
+      <div style={{ position: "relative", marginBottom: "6px", display: "flex", alignItems: "baseline", gap: "6px" }}>
+        <span style={{
+          color: C.gold, fontSize: "40px", fontWeight: 800, lineHeight: 1,
+          fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em",
+        }}>
+          <AnimatedCounter
+            value={price}
+            prefix="MRs "
+            duration={1.2}
+            format={(n) => fmt(Math.round(n))}
+            ariaLabel={`MRs ${fmt(price)} ${txt.perMonth}`}
+          />
         </span>
-        <span style={{ color: C.muted, fontSize: "14px", marginLeft: "4px" }}>{txt.perMonth}</span>
+        <span style={{ color: C.muted, fontSize: "14px" }}>{txt.perMonth}</span>
       </div>
       {billing === "annual" && (
         <span style={{ color: C.green, fontSize: "12px", fontWeight: 600 }}>{txt.annualLabel}</span>
@@ -674,13 +746,21 @@ function TierCard({
 
       {/* CTA */}
       <button style={{
-        width: "100%", padding: "14px", borderRadius: "10px",
+        position: "relative",
+        width: "100%", padding: "14px", borderRadius: "12px",
         fontWeight: 700, fontSize: "14px", cursor: "pointer",
         border: ctaPrimary ? "none" : `1px solid ${C.navyBorder}`,
         backgroundColor: ctaPrimary ? C.gold : "transparent",
-        color: ctaPrimary ? C.bg : C.white, transition: "all 0.2s",
+        color: ctaPrimary ? C.bg : C.white,
+        transition: "transform 0.18s ease-out, box-shadow 0.18s ease-out",
+        boxShadow: ctaPrimary ? `0 8px 20px -8px ${C.gold}80` : "none",
         fontFamily: FONT,
-      }}>
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.transform = "scale(1.02)" }}
+      onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)" }}
+      onMouseDown={(e) => { e.currentTarget.style.transform = "scale(0.98)" }}
+      onMouseUp={(e) => { e.currentTarget.style.transform = "scale(1.02)" }}
+      >
         {ctaLabel}
       </button>
     </div>
@@ -811,28 +891,87 @@ export default function TarifsPage() {
     ))
   }
 
-  /* Calculator logic — aligned with tier card prices */
-  const calcPaieTier = (): { price: number; tier: string; range: string } => {
-    if (employees <= 5) return { price: 1700, tier: "Solo", range: "1–5" }
-    if (employees <= 25) return { price: 2700, tier: txt.tierNames[1], range: "6–25" }
-    if (employees <= 100) return { price: 6700, tier: "PME", range: "26–100" }
-    return { price: 14500, tier: txt.tierNames[3], range: "100+" }
+  /* ------------------------------------------------------------------
+   * Calculator logic — per-employee for Paie, transaction-based for Compta
+   * ------------------------------------------------------------------
+   * Paie pricing is PURE per-employee (no flat platform fee). The rate
+   * is tiered so larger companies benefit from a volume discount, but
+   * the total always equals the sum of the marginal rate paid for each
+   * headcount. Adding 1 employee changes the total by exactly the rate
+   * in the current tier — no bracket jumps.
+   *
+   * Floor price: Rs 250/mois — even a solo setup (1 employee) pays
+   * at least Rs 250. This is the "prix plancher RH".
+   *
+   * Compta is transaction-based (we estimate ~10 tx per employee per
+   * month) and maps to one of four plans (50/200/500/unlimited tx).
+   * Bundle = Paie + Compta with a 20 % discount. */
+
+  const PAIE_FLOOR = 250 // minimum monthly Paie price
+  const PAIE_TIERS: { upTo: number; rate: number }[] = [
+    { upTo: 5,        rate: 250 }, // entry rate — 1 emp = Rs 250 (floor)
+    { upTo: 15,       rate: 180 },
+    { upTo: 50,       rate: 120 },
+    { upTo: 100,      rate: 90  },
+    { upTo: Infinity, rate: 70  },
+  ]
+
+  function computePaiePrice(emp: number): number {
+    if (emp <= 0) return PAIE_FLOOR
+    let price = 0
+    let remaining = emp
+    let from = 1
+    for (const tier of PAIE_TIERS) {
+      if (remaining <= 0) break
+      const tierSize = tier.upTo - from + 1
+      const count = Math.min(remaining, tierSize)
+      price += count * tier.rate
+      remaining -= count
+      from = tier.upTo + 1
+    }
+    return Math.max(PAIE_FLOOR, Math.round(price))
   }
-  const calcComptaTier = (): { price: number; tier: string } => {
-    if (employees <= 5) return { price: 1500, tier: "Solo" }
-    if (employees <= 25) return { price: 3500, tier: txt.tierNames[1] }
-    if (employees <= 100) return { price: 6500, tier: "PME" }
-    return { price: 12000, tier: txt.tierNames[3] }
+
+  function paieTierLabel(emp: number): { tier: string; range: string } {
+    if (emp <= 3)  return { tier: "Solo",              range: "1–3 sal." }
+    if (emp <= 15) return { tier: txt.tierNames[1],    range: "4–15 sal." }
+    if (emp <= 50) return { tier: "PME",               range: "16–50 sal." }
+    return            { tier: txt.tierNames[3],        range: "51+ sal." }
   }
-  const calcBundleTier = (): { price: number; saving: number } => {
-    if (employees <= 5) return { price: 2720, saving: 1700 + 1500 - 2720 }
-    if (employees <= 25) return { price: 4960, saving: 2700 + 3500 - 4960 }
-    if (employees <= 100) return { price: 10560, saving: 6700 + 6500 - 10560 }
-    return { price: 21200, saving: 14500 + 12000 - 21200 }
+
+  function computeComptaPrice(emp: number): { price: number; tier: string; tx: string } {
+    // ~10 transactions per employee per month as a working estimate.
+    const estTx = Math.max(20, emp * 10)
+    if (estTx <= 50)  return { price: 1500,  tier: "Solo",           tx: "≤ 50 txn/mois" }
+    if (estTx <= 200) return { price: 3500,  tier: txt.tierNames[1], tx: "≤ 200 txn/mois" }
+    if (estTx <= 500) return { price: 6500,  tier: "PME",            tx: "≤ 500 txn/mois" }
+    return            { price: 12000, tier: txt.tierNames[3], tx: locale === "fr" ? "Transactions illimitées" : "Unlimited transactions" }
   }
-  const calcPaiePrice = (): number => calcPaieTier().price
-  const calcComptaPrice = (): number => calcComptaTier().price
-  const calcBundlePrice = (): number => calcBundleTier().price
+
+  const BUNDLE_DISCOUNT = 0.20 // 20%
+
+  function computeBundlePrice(emp: number): { price: number; saving: number } {
+    const paie = computePaiePrice(emp)
+    const compta = computeComptaPrice(emp).price
+    const raw = paie + compta
+    const price = Math.round(raw * (1 - BUNDLE_DISCOUNT))
+    return { price, saving: raw - price }
+  }
+
+  const calcPaiePrice   = (): number => computePaiePrice(employees)
+  const calcComptaPrice = (): number => computeComptaPrice(employees).price
+  const calcBundlePrice = (): number => computeBundlePrice(employees).price
+
+  const calcPaieTier    = (): { price: number; tier: string; range: string } => ({
+    price: computePaiePrice(employees),
+    ...paieTierLabel(employees),
+  })
+  const calcComptaTier  = (): { price: number; tier: string } => {
+    const c = computeComptaPrice(employees)
+    return { price: c.price, tier: c.tier }
+  }
+  const calcBundleTier  = (): { price: number; saving: number } => computeBundlePrice(employees)
+
   const getCalcPrice = (): number => {
     const mp = calcTab === "paie" ? calcPaiePrice() : calcTab === "compta" ? calcComptaPrice() : calcBundlePrice()
     return calcBilling === "annual" ? annualPrice(mp) : mp
@@ -842,6 +981,30 @@ export default function TarifsPage() {
     if (employees <= 50) return txt.calcFeatsMed
     return txt.calcFeatsLarge
   }
+
+  /* Build a breakdown of the Paie price by volume tier, so the UI can
+   * show exactly how the total is composed (e.g.: 5 × Rs 250 + 10 × Rs 180). */
+  function paieBreakdown(emp: number): { label: string; count: number; rate: number; subtotal: number }[] {
+    if (emp <= 0) return []
+    const rows: { label: string; count: number; rate: number; subtotal: number }[] = []
+    let remaining = emp
+    let from = 1
+    for (const tier of PAIE_TIERS) {
+      if (remaining <= 0) break
+      const upToDisplay = tier.upTo === Infinity ? "+" : `${tier.upTo}`
+      const tierSize = tier.upTo - from + 1
+      const count = Math.min(remaining, tierSize)
+      const label = tier.upTo === Infinity ? `${from}${upToDisplay}` : `${from}–${upToDisplay}`
+      rows.push({ label, count, rate: tier.rate, subtotal: count * tier.rate })
+      remaining -= count
+      from = tier.upTo + 1
+    }
+    return rows
+  }
+
+  // Per-employee average (only meaningful for Paie/Bundle).
+  const perEmpPaie = employees > 0 ? Math.round(calcPaiePrice() / employees) : 0
+  const perEmpBundle = employees > 0 ? Math.round(calcBundlePrice() / employees) : 0
 
   /* Slider fill % */
   const sliderPercent = ((employees - 1) / 199) * 100
@@ -858,6 +1021,7 @@ export default function TarifsPage() {
 
   return (
     <div style={{ backgroundColor: C.bg, minHeight: "100vh", fontFamily: FONT }}>
+      <ScrollProgress />
 
       {/* ============================================================= */}
       {/* 1. NAVBAR                                                      */}
@@ -910,113 +1074,267 @@ export default function TarifsPage() {
       </nav>
 
       {/* ============================================================= */}
-      {/* 2. HERO                                                        */}
+      {/* 2. HERO — modern with live particle field + gradient accent     */}
       {/* ============================================================= */}
-      <section style={{ textAlign: "center", padding: "64px 24px 40px" }}>
-        <span style={{
-          display: "inline-block", fontSize: "12px", fontWeight: 600,
-          color: C.gold, backgroundColor: `${C.gold}15`,
-          padding: "6px 16px", borderRadius: "999px",
-          letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: "20px",
-        }}>{txt.eyebrow}</span>
-        <h1 style={{
-          color: C.white, fontSize: "clamp(28px, 4vw, 48px)", fontWeight: 800,
-          lineHeight: 1.15, margin: "0 auto 8px", maxWidth: "800px", fontFamily: FONT,
-        }}>
-          {txt.heroTitle}
-        </h1>
-        <h2 style={{
-          color: C.gold, fontSize: "clamp(22px, 3vw, 36px)", fontWeight: 700,
-          lineHeight: 1.2, margin: "0 auto 20px", maxWidth: "800px", fontFamily: FONT,
-        }}>
-          {txt.heroTitle2}
-        </h2>
-        <p style={{
-          color: C.muted, fontSize: "16px", lineHeight: 1.6,
-          maxWidth: "640px", margin: "0 auto 32px",
-        }}>{txt.heroSub}</p>
-
-        {/* Billing toggle */}
-        <div style={{
-          display: "inline-flex", borderRadius: "12px",
-          backgroundColor: C.navy, border: `1px solid ${C.navyBorder}`, padding: "4px",
-          position: "relative",
-        }}>
-          {(["monthly", "annual"] as const).map((mode) => (
-            <button key={mode} onClick={() => setBilling(mode)} style={{
-              padding: "10px 24px", borderRadius: "8px", fontSize: "14px",
-              fontWeight: 600, cursor: "pointer", border: "none",
-              backgroundColor: billing === mode ? C.gold : "transparent",
-              color: billing === mode ? C.bg : C.muted,
-              transition: "all 0.2s", fontFamily: FONT,
-            }}>
-              {mode === "monthly" ? txt.monthly : txt.annual}
-            </button>
-          ))}
-          {billing === "annual" && (
-            <span style={{
-              position: "absolute", top: "-10px", right: "-10px",
-              backgroundColor: C.green, color: C.bg, fontSize: "10px",
-              fontWeight: 700, padding: "2px 8px", borderRadius: "999px",
-            }}>{txt.annualLabel}</span>
-          )}
+      <section style={{ position: "relative", textAlign: "center", padding: "72px 24px 48px", overflow: "hidden" }}>
+        {/* Live particle field */}
+        <div
+          aria-hidden="true"
+          style={{ position: "absolute", inset: 0, pointerEvents: "none", opacity: 0.55 }}
+        >
+          <ParticleField
+            density={0.8}
+            color="rgba(212,175,55,0.55)"
+            linkColor="rgba(212,175,55,0.18)"
+            linkDistance={140}
+            speed={0.22}
+          />
         </div>
+        {/* Ambient gradient glow */}
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute", inset: 0, pointerEvents: "none",
+            backgroundImage:
+              `radial-gradient(ellipse 50% 40% at 50% 0%, ${C.gold}18 0%, transparent 70%), radial-gradient(ellipse 40% 30% at 50% 100%, ${C.blue}14 0%, transparent 70%)`,
+          }}
+        />
+
+        <div style={{ position: "relative", maxWidth: "960px", margin: "0 auto" }}>
+          {/* 3D wireframe orb overlay — evokes "3e millénaire" */}
+          <div
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              inset: "-60px 0 0 0",
+              height: "360px",
+              pointerEvents: "none",
+              opacity: 0.55,
+              mixBlendMode: "screen",
+            }}
+          >
+            <PricingOrb3DLazy height={360} />
+          </div>
+
+          <FadeSlide delay={0} y={14}>
+            <span style={{
+              display: "inline-flex", alignItems: "center", gap: "8px",
+              fontSize: "11px", fontWeight: 700,
+              color: C.gold, backgroundColor: `${C.gold}14`,
+              border: `1px solid ${C.gold}35`,
+              padding: "6px 16px", borderRadius: "999px",
+              letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "24px",
+            }}>
+              <Sparkles style={{ width: 12, height: 12 }} aria-hidden="true" />
+              {txt.eyebrow}
+            </span>
+          </FadeSlide>
+          <FadeSlide delay={0.08} y={18}>
+            <h1 style={{
+              color: C.white, fontSize: "clamp(32px, 5vw, 56px)", fontWeight: 800,
+              lineHeight: 1.1, margin: "0 auto 12px", maxWidth: "820px", fontFamily: FONT,
+              letterSpacing: "-0.02em",
+            }}>
+              {txt.heroTitle}
+            </h1>
+          </FadeSlide>
+          <FadeSlide delay={0.16} y={18}>
+            <h2 style={{
+              fontSize: "clamp(22px, 3.2vw, 38px)", fontWeight: 700,
+              lineHeight: 1.2, margin: "0 auto 22px", maxWidth: "820px", fontFamily: FONT,
+              letterSpacing: "-0.01em",
+              backgroundImage: `linear-gradient(90deg, ${C.gold} 0%, ${C.goldLight} 50%, ${C.blue} 100%)`,
+              WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent",
+            }}>
+              {txt.heroTitle2}
+            </h2>
+          </FadeSlide>
+          <FadeSlide delay={0.24} y={14}>
+            <p style={{
+              color: C.muted, fontSize: "16px", lineHeight: 1.65,
+              maxWidth: "680px", margin: "0 auto 32px",
+            }}>{txt.heroSub}</p>
+          </FadeSlide>
+        </div>
+
+        {/* Billing toggle — animated entrance + motion on active pill */}
+        <FadeSlide delay={0.32} y={10}>
+          <div style={{
+            display: "inline-flex", borderRadius: "14px",
+            backgroundColor: C.navy, border: `1px solid ${C.navyBorder}`, padding: "5px",
+            position: "relative",
+            boxShadow: `0 8px 24px -8px rgba(0,0,0,0.30)`,
+          }}>
+            {(["monthly", "annual"] as const).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => setBilling(mode)}
+                aria-pressed={billing === mode}
+                style={{
+                  padding: "11px 28px", borderRadius: "10px", fontSize: "14px",
+                  fontWeight: 600, cursor: "pointer", border: "none",
+                  backgroundColor: billing === mode ? C.gold : "transparent",
+                  color: billing === mode ? C.bg : C.muted,
+                  transition: "all 0.25s ease-out", fontFamily: FONT,
+                  boxShadow: billing === mode ? `0 4px 12px -4px ${C.gold}60` : "none",
+                }}
+              >
+                {mode === "monthly" ? txt.monthly : txt.annual}
+              </button>
+            ))}
+            {billing === "annual" && (
+              <motion.span
+                initial={{ opacity: 0, y: -4, scale: 0.8 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+                style={{
+                  position: "absolute", top: "-11px", right: "-12px",
+                  backgroundColor: C.green, color: C.bg, fontSize: "10px",
+                  fontWeight: 700, padding: "3px 10px", borderRadius: "999px",
+                  boxShadow: `0 4px 12px -2px ${C.green}60`,
+                }}
+              >{txt.annualLabel}</motion.span>
+            )}
+          </div>
+        </FadeSlide>
       </section>
 
       {/* ============================================================= */}
-      {/* 3. MODULES SECTION                                             */}
+      {/* 3. MODULES SECTION — modern cards with accent stripe + stagger  */}
       {/* ============================================================= */}
       <section id="modules" style={{ maxWidth: "1280px", margin: "0 auto", padding: "48px 24px" }}>
-        <div style={{ textAlign: "center", marginBottom: "40px" }}>
-          <h2 style={{ color: C.white, fontSize: "28px", fontWeight: 800, margin: "0 0 8px", fontFamily: FONT }}>
-            {txt.modulesTitle}
-          </h2>
-          <p style={{ color: C.muted, fontSize: "15px" }}>{txt.modulesSub}</p>
-        </div>
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
-          gap: "20px",
-        }}>
-          {modules.map((m) => (
-            <div key={m.name} style={{
-              backgroundColor: C.cardBg, border: `1px solid ${C.navyBorder}`,
-              borderRadius: "12px", padding: "24px",
+        <Reveal>
+          <div style={{ textAlign: "center", marginBottom: "48px" }}>
+            <span style={{
+              display: "inline-flex", alignItems: "center", gap: "8px",
+              fontSize: "11px", fontWeight: 700,
+              color: C.blue, backgroundColor: `${C.blue}12`,
+              border: `1px solid ${C.blue}30`,
+              padding: "6px 16px", borderRadius: "999px",
+              letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "18px",
+              fontFamily: FONT,
             }}>
-              <div style={{
-                width: "44px", height: "44px", borderRadius: "10px",
-                backgroundColor: `${m.color}15`, display: "flex", alignItems: "center", justifyContent: "center",
-                marginBottom: "16px", color: m.color,
-              }}>{m.icon}</div>
-              <h3 style={{ color: C.white, fontSize: "16px", fontWeight: 700, margin: "0 0 12px", fontFamily: FONT }}>{m.name}</h3>
-              {m.feats.map((f, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: "8px", marginBottom: "6px", fontSize: "13px", color: C.muted }}>
-                  <Check className="w-4 h-4 flex-shrink-0" style={{ color: m.color, marginTop: "1px" }} />
-                  <span>{f}</span>
-                </div>
-              ))}
-            </div>
-          ))}
-          {/* TIBOK card - green themed */}
-          <div style={{
-            backgroundColor: `${C.green}08`, border: `1px solid ${C.green}30`,
-            borderRadius: "12px", padding: "24px",
-          }}>
-            <div style={{
-              width: "44px", height: "44px", borderRadius: "10px",
-              backgroundColor: `${C.green}15`, display: "flex", alignItems: "center", justifyContent: "center",
-              marginBottom: "16px", color: C.green,
-            }}><HeartPulse className="w-6 h-6" /></div>
-            <h3 style={{ color: C.green, fontSize: "16px", fontWeight: 700, margin: "0 0 4px", fontFamily: FONT }}>{txt.mod7}</h3>
-            <p style={{ color: C.green, fontSize: "12px", fontWeight: 500, margin: "0 0 12px", opacity: 0.8 }}>{txt.mod7sub}</p>
-            {txt.mod7f.map((f, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: "8px", marginBottom: "6px", fontSize: "13px", color: C.green }}>
-                <Check className="w-4 h-4 flex-shrink-0" style={{ marginTop: "1px" }} />
-                <span>{f}</span>
-              </div>
-            ))}
+              <Zap style={{ width: 12, height: 12 }} aria-hidden="true" />
+              {locale === "fr" ? "Tout inclus" : "All included"}
+            </span>
+            <h2 style={{
+              color: C.white, fontSize: "clamp(28px, 3.4vw, 40px)", fontWeight: 800,
+              margin: "0 0 10px", fontFamily: FONT, letterSpacing: "-0.02em",
+            }}>
+              {txt.modulesTitle}
+            </h2>
+            <p style={{ color: C.muted, fontSize: "15px", maxWidth: "640px", margin: "0 auto", lineHeight: 1.65 }}>
+              {txt.modulesSub}
+            </p>
           </div>
-        </div>
+        </Reveal>
+
+        <StaggerGroup
+          className=""
+          staggerMs={60}
+        >
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+            gap: "20px",
+          }}>
+            {modules.map((m, idx) => (
+              <StaggerItem key={m.name}>
+                <HoverLift lift={5} className="h-full">
+                  <div style={{
+                    position: "relative",
+                    backgroundColor: C.cardBg, border: `1px solid ${C.navyBorder}`,
+                    borderRadius: "16px", padding: "26px 24px",
+                    height: "100%",
+                    overflow: "hidden",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.20)",
+                  }}>
+                    {/* Accent stripe */}
+                    <div
+                      aria-hidden="true"
+                      style={{
+                        position: "absolute", top: 0, left: 0, right: 0, height: "2px",
+                        background: `linear-gradient(90deg, ${m.color} 0%, ${m.color}33 100%)`,
+                      }}
+                    />
+                    {/* Module number */}
+                    <div style={{
+                      position: "absolute", top: 22, right: 22,
+                      fontSize: "11px", fontWeight: 700, letterSpacing: "0.1em",
+                      color: "rgba(248,246,241,0.18)",
+                      fontFamily: FONT, fontVariantNumeric: "tabular-nums",
+                    }}>
+                      {String(idx + 1).padStart(2, "0")}
+                    </div>
+                    <div style={{
+                      position: "relative",
+                      width: "48px", height: "48px", borderRadius: "12px",
+                      backgroundColor: `${m.color}15`, display: "flex", alignItems: "center", justifyContent: "center",
+                      marginBottom: "18px", color: m.color,
+                      border: `1px solid ${m.color}25`,
+                      boxShadow: `0 8px 20px -8px ${m.color}40`,
+                    }}>{m.icon}</div>
+                    <h3 style={{ color: C.white, fontSize: "17px", fontWeight: 700, margin: "0 0 14px", fontFamily: FONT, letterSpacing: "-0.01em" }}>{m.name}</h3>
+                    {m.feats.map((f, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: "10px", marginBottom: "8px", fontSize: "13px", color: C.muted, lineHeight: 1.55 }}>
+                        <span style={{
+                          display: "inline-flex", alignItems: "center", justifyContent: "center",
+                          flexShrink: 0, width: "16px", height: "16px", borderRadius: "50%",
+                          backgroundColor: `${m.color}20`, color: m.color, marginTop: "1px",
+                        }}>
+                          <Check style={{ width: 10, height: 10 }} strokeWidth={3} />
+                        </span>
+                        <span>{f}</span>
+                      </div>
+                    ))}
+                  </div>
+                </HoverLift>
+              </StaggerItem>
+            ))}
+            {/* TIBOK card - green themed with premium accents */}
+            <StaggerItem>
+              <HoverLift lift={5} className="h-full">
+                <div style={{
+                  position: "relative",
+                  backgroundColor: `${C.green}0A`, border: `1px solid ${C.green}40`,
+                  borderRadius: "16px", padding: "26px 24px",
+                  height: "100%",
+                  overflow: "hidden",
+                  boxShadow: `0 8px 24px -12px ${C.green}30`,
+                }}>
+                  <div
+                    aria-hidden="true"
+                    style={{
+                      position: "absolute", top: 0, left: 0, right: 0, height: "2px",
+                      background: `linear-gradient(90deg, ${C.green} 0%, ${C.green}33 100%)`,
+                    }}
+                  />
+                  <div style={{
+                    width: "48px", height: "48px", borderRadius: "12px",
+                    backgroundColor: `${C.green}15`, display: "flex", alignItems: "center", justifyContent: "center",
+                    marginBottom: "18px", color: C.green,
+                    border: `1px solid ${C.green}30`,
+                    boxShadow: `0 8px 20px -8px ${C.green}50`,
+                  }}><HeartPulse className="w-6 h-6" /></div>
+                  <h3 style={{ color: C.green, fontSize: "17px", fontWeight: 700, margin: "0 0 4px", fontFamily: FONT, letterSpacing: "-0.01em" }}>{txt.mod7}</h3>
+                  <p style={{ color: C.green, fontSize: "12px", fontWeight: 500, margin: "0 0 14px", opacity: 0.8 }}>{txt.mod7sub}</p>
+                  {txt.mod7f.map((f, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: "10px", marginBottom: "8px", fontSize: "13px", color: C.green, lineHeight: 1.55 }}>
+                      <span style={{
+                        display: "inline-flex", alignItems: "center", justifyContent: "center",
+                        flexShrink: 0, width: "16px", height: "16px", borderRadius: "50%",
+                        backgroundColor: `${C.green}20`, marginTop: "1px",
+                      }}>
+                        <Check style={{ width: 10, height: 10 }} strokeWidth={3} />
+                      </span>
+                      <span>{f}</span>
+                    </div>
+                  ))}
+                </div>
+              </HoverLift>
+            </StaggerItem>
+          </div>
+        </StaggerGroup>
       </section>
 
       {/* ============================================================= */}
@@ -1095,13 +1413,24 @@ export default function TarifsPage() {
 
         {/* Cards or Matrix */}
         {activeTab !== "matrix" ? (
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-            gap: "24px",
-          }}>
-            {buildCards()}
-          </div>
+          <StaggerGroup
+            staggerMs={80}
+            key={activeTab /* re-run stagger when user switches tabs */}
+          >
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+              gap: "24px",
+            }}>
+              {buildCards().map((card, i) => (
+                <StaggerItem key={i}>
+                  <HoverLift lift={6} className="h-full">
+                    {card}
+                  </HoverLift>
+                </StaggerItem>
+              ))}
+            </div>
+          </StaggerGroup>
         ) : (
           <div style={{
             backgroundColor: C.cardBg, borderRadius: "16px",
@@ -1202,49 +1531,102 @@ export default function TarifsPage() {
                 {calcTab === "paie" ? calcPaieTier().tier : calcTab === "compta" ? calcComptaTier().tier : "Pack ERP"}
               </span>
               <span style={{ color: C.muted, fontSize: "12px" }}>
-                {calcTab === "paie" ? `${calcPaieTier().range} ${locale === "fr" ? "salariés" : "employees"}` :
-                 calcTab === "compta" ? (employees <= 50 ? `≤ ${employees <= 5 ? 50 : employees <= 25 ? 200 : 500} txn/${locale === "fr" ? "mois" : "mo"}` : (locale === "fr" ? "Transactions illimitées" : "Unlimited transactions")) :
-                 (locale === "fr" ? "Compta + RH + TIBOK" : "Accounting + HR + TIBOK")}
+                {calcTab === "paie"
+                  ? `${employees} ${locale === "fr" ? (employees > 1 ? "salariés" : "salarié") : (employees > 1 ? "employees" : "employee")}`
+                  : calcTab === "compta"
+                    ? computeComptaPrice(employees).tx
+                    : (locale === "fr" ? "Compta + RH + TIBOK" : "Accounting + HR + TIBOK")}
               </span>
             </div>
 
             {/* Formula display */}
             {calcTab === "paie" && (
-              <div style={{ color: C.muted, fontSize: "13px", lineHeight: 2 }}>
-                <div>{locale === "fr" ? "Formule" : "Plan"} <span style={{ color: C.white, fontWeight: 600 }}>{calcPaieTier().tier}</span> ({calcPaieTier().range} {locale === "fr" ? "sal." : "emp."})</div>
-                <div style={{ color: C.gold, fontWeight: 700, fontSize: "18px", marginTop: "4px" }}>
-                  MRs {fmt(calcPaiePrice())} <span style={{ fontSize: "13px", fontWeight: 400, color: C.muted }}>{txt.perMonth}</span>
+              <div style={{ color: C.muted, fontSize: "13px", lineHeight: 1.9 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                  <span>
+                    {locale === "fr"
+                      ? <>Calcul <span style={{ color: C.white, fontWeight: 600 }}>par salarié</span> — tarif dégressif au volume</>
+                      : <>Priced <span style={{ color: C.white, fontWeight: 600 }}>per employee</span> — volume discount</>}
+                  </span>
                 </div>
-                {employees > 5 && <div style={{ fontSize: "12px", color: C.muted, marginTop: "4px" }}>{locale === "fr" ? "Inclut TIBOK Corporate santé salariés" : "Includes TIBOK Corporate employee health"}</div>}
+                {paieBreakdown(employees).map((row) => (
+                  <div key={row.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: "2px" }}>
+                    <span style={{ fontVariantNumeric: "tabular-nums" }}>
+                      {row.count} × {locale === "fr" ? "sal." : "emp."} <span style={{ opacity: 0.7 }}>({row.label})</span> @ MRs {row.rate}
+                    </span>
+                    <span style={{ color: C.white, fontVariantNumeric: "tabular-nums" }}>
+                      MRs {fmt(row.subtotal)}
+                    </span>
+                  </div>
+                ))}
+                <div style={{ height: "1px", backgroundColor: C.navyBorder, margin: "8px 0" }} />
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                  <span style={{ fontWeight: 600, color: C.white }}>Total</span>
+                  <span style={{ color: C.gold, fontWeight: 700, fontSize: "18px", fontVariantNumeric: "tabular-nums" }}>
+                    MRs {fmt(calcPaiePrice())} <span style={{ fontSize: "13px", fontWeight: 400, color: C.muted }}>{txt.perMonth}</span>
+                  </span>
+                </div>
+                {employees > 0 && (
+                  <div style={{ fontSize: "12px", color: C.muted, marginTop: "4px", fontVariantNumeric: "tabular-nums" }}>
+                    ≈ MRs {fmt(perEmpPaie)} {locale === "fr" ? "/ salarié / mois" : "/ employee / month"} · {locale === "fr" ? "plancher MRs 250 · TIBOK inclus" : "floor MRs 250 · TIBOK included"}
+                  </div>
+                )}
               </div>
             )}
             {calcTab === "compta" && (
-              <div style={{ color: C.muted, fontSize: "13px", lineHeight: 2 }}>
-                <div>{locale === "fr" ? "Formule" : "Plan"} <span style={{ color: C.white, fontWeight: 600 }}>{calcComptaTier().tier}</span></div>
-                <div style={{ color: C.gold, fontWeight: 700, fontSize: "18px", marginTop: "4px" }}>
-                  MRs {fmt(calcComptaPrice())} <span style={{ fontSize: "13px", fontWeight: 400, color: C.muted }}>{txt.perMonth}</span>
+              <div style={{ color: C.muted, fontSize: "13px", lineHeight: 1.9 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                  <span>
+                    {locale === "fr"
+                      ? <>Estimation <span style={{ color: C.white, fontWeight: 600 }}>par volume de transactions</span></>
+                      : <>Based on <span style={{ color: C.white, fontWeight: 600 }}>transaction volume</span></>}
+                  </span>
                 </div>
-              </div>
-            )}
-            {calcTab === "bundle" && (
-              <div style={{ color: C.muted, fontSize: "13px", lineHeight: 2 }}>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span>RH & Paie + TIBOK</span>
-                  <span style={{ color: C.white, fontWeight: 600 }}>MRs {fmt(calcPaiePrice())}</span>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: "2px" }}>
+                  <span>{locale === "fr" ? "Estimation (≈10 txn / salarié)" : "Estimate (~10 tx / emp)"}</span>
+                  <span style={{ color: C.white, fontVariantNumeric: "tabular-nums" }}>
+                    {fmt(Math.max(20, employees * 10))} {locale === "fr" ? "txn/mois" : "tx/mo"}
+                  </span>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span>{locale === "fr" ? "Comptabilité" : "Accounting"}</span>
-                  <span style={{ color: C.white, fontWeight: 600 }}>MRs {fmt(calcComptaPrice())}</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", color: C.green, fontWeight: 600, marginTop: "4px" }}>
-                  <span>{locale === "fr" ? "Remise Pack −20%" : "Bundle discount −20%"}</span>
-                  <span>− MRs {fmt(calcPaiePrice() + calcComptaPrice() - calcBundlePrice())}</span>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                  <span>{locale === "fr" ? "Formule" : "Plan"}</span>
+                  <span style={{ color: C.white, fontWeight: 600 }}>{calcComptaTier().tier}</span>
                 </div>
                 <div style={{ height: "1px", backgroundColor: C.navyBorder, margin: "8px 0" }} />
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
                   <span style={{ fontWeight: 600, color: C.white }}>Total</span>
-                  <span style={{ color: C.gold, fontWeight: 700, fontSize: "18px" }}>MRs {fmt(calcBundlePrice())} <span style={{ fontSize: "13px", fontWeight: 400, color: C.muted }}>{txt.perMonth}</span></span>
+                  <span style={{ color: C.gold, fontWeight: 700, fontSize: "18px", fontVariantNumeric: "tabular-nums" }}>
+                    MRs {fmt(calcComptaPrice())} <span style={{ fontSize: "13px", fontWeight: 400, color: C.muted }}>{txt.perMonth}</span>
+                  </span>
                 </div>
+              </div>
+            )}
+            {calcTab === "bundle" && (
+              <div style={{ color: C.muted, fontSize: "13px", lineHeight: 1.9 }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span>
+                    RH & Paie ({employees} {locale === "fr" ? "sal." : "emp."})
+                  </span>
+                  <span style={{ color: C.white, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>MRs {fmt(calcPaiePrice())}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span>{locale === "fr" ? "Comptabilité" : "Accounting"}</span>
+                  <span style={{ color: C.white, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>MRs {fmt(calcComptaPrice())}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", color: C.green, fontWeight: 600, marginTop: "4px" }}>
+                  <span>{locale === "fr" ? "Remise Pack −20%" : "Bundle discount −20%"}</span>
+                  <span style={{ fontVariantNumeric: "tabular-nums" }}>− MRs {fmt(calcPaiePrice() + calcComptaPrice() - calcBundlePrice())}</span>
+                </div>
+                <div style={{ height: "1px", backgroundColor: C.navyBorder, margin: "8px 0" }} />
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                  <span style={{ fontWeight: 600, color: C.white }}>Total</span>
+                  <span style={{ color: C.gold, fontWeight: 700, fontSize: "18px", fontVariantNumeric: "tabular-nums" }}>MRs {fmt(calcBundlePrice())} <span style={{ fontSize: "13px", fontWeight: 400, color: C.muted }}>{txt.perMonth}</span></span>
+                </div>
+                {employees > 0 && (
+                  <div style={{ fontSize: "12px", color: C.muted, marginTop: "4px", fontVariantNumeric: "tabular-nums" }}>
+                    ≈ MRs {fmt(perEmpBundle)} {locale === "fr" ? "/ salarié / mois" : "/ employee / month"}
+                  </div>
+                )}
               </div>
             )}
 
@@ -1337,34 +1719,63 @@ export default function TarifsPage() {
       </section>
 
       {/* ============================================================= */}
-      {/* 11. BOTTOM CTA                                                 */}
+      {/* 11. BOTTOM CTA — live particles + scale press on buttons        */}
       {/* ============================================================= */}
-      <section style={{ textAlign: "center", padding: "80px 24px" }}>
-        <h2 style={{
-          color: C.white, fontSize: "clamp(24px, 3vw, 36px)", fontWeight: 800,
-          margin: "0 auto 24px", maxWidth: "700px", fontFamily: FONT,
-        }}>
-          {txt.ctaTitle}
-        </h2>
-        <div style={{ display: "flex", gap: "16px", justifyContent: "center", flexWrap: "wrap", marginBottom: "32px" }}>
-          <Link href="/auth/login" style={{
-            display: "inline-block", padding: "14px 32px", borderRadius: "10px",
-            fontWeight: 700, fontSize: "15px", backgroundColor: C.gold, color: C.bg,
-            textDecoration: "none", fontFamily: FONT,
-          }}>{txt.ctaBtn1}</Link>
-          <Link href="/auth/login" style={{
-            display: "inline-block", padding: "14px 32px", borderRadius: "10px",
-            fontWeight: 700, fontSize: "15px", backgroundColor: "transparent",
-            color: C.white, border: `1px solid ${C.navyBorder}`,
-            textDecoration: "none", fontFamily: FONT,
-          }}>{txt.ctaBtn2}</Link>
+      <section style={{ position: "relative", textAlign: "center", padding: "80px 24px", overflow: "hidden" }}>
+        <div
+          aria-hidden="true"
+          style={{ position: "absolute", inset: 0, pointerEvents: "none", opacity: 0.4 }}
+        >
+          <ParticleField
+            density={0.6}
+            color="rgba(65,145,255,0.55)"
+            linkColor="rgba(65,145,255,0.18)"
+            linkDistance={150}
+            speed={0.22}
+          />
         </div>
-        <div style={{ display: "flex", gap: "16px 32px", justifyContent: "center", flexWrap: "wrap" }}>
-          {txt.ctaTrust.map((t, i) => (
-            <span key={i} style={{ color: C.muted, fontSize: "13px", display: "flex", alignItems: "center", gap: "6px" }}>
-              <Check className="w-4 h-4 inline-block" style={{ color: C.green }} /> {t}
-            </span>
-          ))}
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute", inset: 0, pointerEvents: "none",
+            backgroundImage: `radial-gradient(ellipse 50% 50% at 50% 50%, ${C.gold}12 0%, transparent 70%)`,
+          }}
+        />
+        <div style={{ position: "relative" }}>
+          <Reveal>
+            <h2 style={{
+              color: C.white, fontSize: "clamp(28px, 3.6vw, 44px)", fontWeight: 800,
+              margin: "0 auto 28px", maxWidth: "760px", fontFamily: FONT,
+              letterSpacing: "-0.02em",
+            }}>
+              {txt.ctaTitle}
+            </h2>
+            <div style={{ display: "flex", gap: "16px", justifyContent: "center", flexWrap: "wrap", marginBottom: "32px" }}>
+              <PressableWrap>
+                <Link href="/auth/login" style={{
+                  display: "inline-block", padding: "15px 34px", borderRadius: "12px",
+                  fontWeight: 700, fontSize: "15px", backgroundColor: C.gold, color: C.bg,
+                  textDecoration: "none", fontFamily: FONT,
+                  boxShadow: `0 12px 28px -10px ${C.gold}80`,
+                }}>{txt.ctaBtn1}</Link>
+              </PressableWrap>
+              <PressableWrap>
+                <Link href="/auth/login" style={{
+                  display: "inline-block", padding: "15px 34px", borderRadius: "12px",
+                  fontWeight: 700, fontSize: "15px", backgroundColor: "rgba(248,246,241,0.04)",
+                  color: C.white, border: `1px solid ${C.navyBorder}`,
+                  textDecoration: "none", fontFamily: FONT,
+                }}>{txt.ctaBtn2}</Link>
+              </PressableWrap>
+            </div>
+            <div style={{ display: "flex", gap: "16px 32px", justifyContent: "center", flexWrap: "wrap" }}>
+              {txt.ctaTrust.map((tx, i) => (
+                <span key={i} style={{ color: C.muted, fontSize: "13px", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <Check className="w-4 h-4 inline-block" style={{ color: C.green }} /> {tx}
+                </span>
+              ))}
+            </div>
+          </Reveal>
         </div>
       </section>
 

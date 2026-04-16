@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Switch } from "@/components/ui/switch"
 import { Loader2, Plus, Trash2, Edit2, Eye, EyeOff, Megaphone, AlertTriangle, PartyPopper, Clock, Info } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -115,10 +116,11 @@ export default function AnnoncesPage() {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-4xl mx-auto">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Annonces & Communications</h1>
+          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Annonces &amp; Communications</h1>
           <p className="text-sm text-gray-500">Publiez des annonces visibles par tous les employés</p>
         </div>
         <div className="flex gap-3 items-center">
@@ -248,5 +250,6 @@ export default function AnnoncesPage() {
         </DialogContent>
       </Dialog>
     </div>
+    </ClientPageShell>
   )
 }

@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Switch } from "@/components/ui/switch"
 import { ChevronDown, ChevronRight, FileText, Calculator, Receipt, Users as UsersIcon, Scale, BarChart3, UserCheck } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 interface ModulesUtilisateur {
   documents?: boolean
@@ -195,7 +196,8 @@ export default function UsersPage() {
   const stats = ROLES.map(r => ({ ...r, count: users.filter(u => u.role === r.value).length }))
 
   return (
-    <div className="p-6 space-y-6">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[#0B0F2E]">Utilisateurs</h1>
@@ -350,5 +352,6 @@ export default function UsersPage() {
         </div>
       )}
     </div>
+    </ClientPageShell>
   )
 }

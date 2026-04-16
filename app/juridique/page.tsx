@@ -1,10 +1,12 @@
 "use client"
 import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 export default function JuridiquePage() {
   return (
-    <div className="p-6 space-y-6">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-[#0B0F2E]">Module Juridique</h1>
         <p className="text-sm text-gray-500">Gestion des contrats, conformité et documents juridiques</p>
@@ -28,5 +30,6 @@ export default function JuridiquePage() {
         ))}
       </div>
     </div>
+    </ClientPageShell>
   )
 }

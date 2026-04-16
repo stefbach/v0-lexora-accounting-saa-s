@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Loader2, Search, RefreshCw, Landmark, Download, AlertCircle } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 function fmt(n: number, devise?: string) {
   const formatted = new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
@@ -128,7 +129,8 @@ export default function ComptableBanquePage() {
   const nonRaprochees = transactions.filter(t => !t.tiers || t.statut?.includes("non_identifie")).length
 
   return (
-    <div className="p-6 space-y-6">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[#0B0F2E]">Banque & Relevés</h1>
@@ -416,5 +418,6 @@ export default function ComptableBanquePage() {
         </>
       )}
     </div>
+    </ClientPageShell>
   )
 }

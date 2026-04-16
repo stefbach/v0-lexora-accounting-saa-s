@@ -22,6 +22,7 @@ import {
   Clock, Download, ChevronRight, Lock, AlertTriangle, Building2, RefreshCw, Camera, Pencil,
   User,
 } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -426,7 +427,8 @@ export default function AssistantPage() {
   const unassignedCount = documents.filter(d => !d.societe_detectee).length
 
   return (
-    <div className="flex-1 overflow-auto p-4 pt-14 md:pt-6 md:p-6 lg:p-8 space-y-6">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Espace Assistant</h1>
@@ -928,6 +930,7 @@ export default function AssistantPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+      </div>
+    </ClientPageShell>
   )
 }

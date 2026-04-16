@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { Shield, Clock, Moon, Coffee, Users, TrendingUp, RotateCcw, Save, ArrowLeft, Info } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import Link from "next/link"
 
 // ─── Types ──────────────────────────────────────────────────────────
@@ -147,7 +148,8 @@ export default function ReglesPage() {
   const categories = ["heures", "repos", "ot", "equipe"] as const
 
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-5xl mx-auto">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6 max-w-5xl mx-auto">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -280,5 +282,6 @@ export default function ReglesPage() {
         </Button>
       </div>
     </div>
+    </ClientPageShell>
   )
 }

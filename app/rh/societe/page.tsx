@@ -14,6 +14,7 @@ import {
   MapPin, CheckCircle, AlertCircle, FileText, Scale,
   Shield, Download, ChevronDown, ChevronUp, Eye, Upload, ImageIcon,
 } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -1115,7 +1116,8 @@ export default function SocieteSettingsPage() {
   }
 
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-6xl mx-auto">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6 max-w-6xl mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
@@ -1190,5 +1192,6 @@ export default function SocieteSettingsPage() {
         )}
       </div>
     </div>
+    </ClientPageShell>
   )
 }

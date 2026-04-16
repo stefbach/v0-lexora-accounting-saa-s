@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Plus, Trash2, Eye, Save, Lock, Download, ArrowLeft, FileText, User, ListOrdered, Calculator, CreditCard, StickyNote, Palette, Check, FileWarning, FileMinus, Wand2 } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 interface LigneFacture { id: string; description: string; unite: string; quantite: number; prix_unitaire: number; taux_tva: number; montant_ht: number }
 interface InvoiceClient { id: string; nom: string; entreprise: string; adresse: string; email: string; telephone: string; vat_number: string; devise: string; conditions_paiement: number; offshore: boolean }
@@ -233,7 +234,8 @@ export default function NouvelleFacturePage() {
   const handleDownloadPDF = () => { saveToSession(); const w = window.open("/client/facture-preview?print=true", "_blank"); if (w) w.addEventListener("afterprint", () => w.close()) }
 
   return (
-    <div className="pb-28 max-w-5xl mx-auto p-6 space-y-6">
+    <ClientPageShell hideHero disableParticles>
+    <div className="pb-28 max-w-5xl mx-auto space-y-6">
       {/* Header bar */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -595,6 +597,7 @@ export default function NouvelleFacturePage() {
         </div>
       </div>
     </div>
+    </ClientPageShell>
   )
 }
 

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Loader2, Users, TrendingUp, Download } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 interface Societe { id: string; nom: string }
 
@@ -60,7 +61,8 @@ export default function SalairesPage() {
   const totalChargesPatronales = Object.values(chargesSociales).reduce((s, v) => s + v, 0)
 
   return (
-    <div className="p-6 space-y-6">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[#0B0F2E]">Salaires & Charges Sociales</h1>
@@ -177,5 +179,6 @@ export default function SalairesPage() {
         </>
       )}
     </div>
+    </ClientPageShell>
   )
 }

@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, Users } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 const NAVY = "#0B0F2E"
 function fmt(n: number) { return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(n) }
@@ -79,17 +80,19 @@ export default function SalairesComptaPage() {
   const totalCharges = periodes.reduce((s, p) => s + (p.charges || 0), 0)
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Salaires — Plan comptable</h1>
-          <p className="text-sm text-gray-500">Écritures comptables des salaires et charges patronales (Journal SAL)</p>
-        </div>
+    <ClientPageShell
+      breadcrumbs={[{ label: "Espace client", href: "/client" }, { label: "Salaires (Compta)" }]}
+      kicker="Comptabilité"
+      title="Salaires — Plan comptable"
+      subtitle="Écritures comptables des salaires et charges patronales (Journal SAL)."
+      actions={
         <Select value={societe} onValueChange={setSociete}>
           <SelectTrigger className="w-[220px]"><SelectValue placeholder="Société" /></SelectTrigger>
           <SelectContent>{societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent>
         </Select>
-      </div>
+      }
+    >
+      <div className="space-y-6">
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card><CardContent className="p-4 text-center">
@@ -231,6 +234,7 @@ export default function SalairesComptaPage() {
           </Card>
         </>
       )}
-    </div>
+      </div>
+    </ClientPageShell>
   )
 }

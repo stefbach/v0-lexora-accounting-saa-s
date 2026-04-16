@@ -144,7 +144,7 @@ function stBadge(s: string) {
   return <Badge variant="outline">{s}</Badge>
 }
 
-function EmptyTab({ icon: Icon, message, detail }: { icon: React.ElementType; message: string; detail: string }) {
+function EmptyTab({ icon: Icon, message, detail }: { icon: React.ComponentType<{ className?: string }>; message: string; detail: string }) {
   return (
     <Card>
       <CardContent className="flex flex-col items-center gap-3 py-16 text-muted-foreground">

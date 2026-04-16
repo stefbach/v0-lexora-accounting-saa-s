@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { Send, Loader2, Bot, User, Trash2 } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -103,7 +104,8 @@ export default function ChatCLARAPage() {
   ]
 
   return (
-    <div className="p-6 flex flex-col h-[calc(100vh-2rem)]">
+    <ClientPageShell hideHero disableParticles>
+    <div className="flex flex-col h-[calc(100vh-6rem)]">
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2" style={{ color: NAVY }}>
@@ -185,5 +187,6 @@ export default function ChatCLARAPage() {
         </div>
       </Card>
     </div>
+    </ClientPageShell>
   )
 }

@@ -9,6 +9,7 @@ import {
   MessageSquare, Upload, CalendarDays, Briefcase, Bell,
   AlertCircle, FileWarning, UserX, ChevronRight
 } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import MonEspacePersonnel from "@/components/rh/MonEspacePersonnel"
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from "recharts"
@@ -216,42 +217,62 @@ export default function RHDashboard() {
   }, [societe, periode])
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: PAGE_BG }}>
-      <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold" style={{ color: NAVY, fontFamily: "Poppins, sans-serif" }}>Gestion des Ressources Humaines</h1>
-            <p className="text-sm mt-0.5" style={{ color: SECONDARY }}>{new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
-          </div>
-          <Select value={societe} onValueChange={setSociete}>
-            <SelectTrigger className="w-52" style={{ borderColor: CARD_BORDER, borderRadius: 12 }}><SelectValue placeholder="Toutes societes" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Toutes les societes</SelectItem>
-              {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-
+    <ClientPageShell
+      breadcrumbs={[{ label: "RH · Paie", href: "/rh" }, { label: "Tableau de bord" }]}
+      kicker={`RH & Paie · ${new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}`}
+      title="Tableau de bord RH"
+      subtitle="Vue consolidée de votre équipe, des absences, des bulletins et des échéances MRA. Conforme WRA 2019."
+      actions={
+        <Select value={societe} onValueChange={setSociete}>
+          <SelectTrigger className="w-56" style={{ borderColor: "#D8DFED", borderRadius: 10 }}>
+            <SelectValue placeholder="Toutes sociétés" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Toutes les sociétés</SelectItem>
+            {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      }
+    >
+      <div className="space-y-6 max-w-[1400px] mx-auto">
         {/* TÂCHE 7 — Mon espace personnel (rendu uniquement si l'user RH
             a une fiche employé liée ; sinon le composant retourne null). */}
         <MonEspacePersonnel />
 
-        {/* Tabs */}
-        <div className="flex gap-1 overflow-x-auto" style={{ borderBottom: `1px solid ${CARD_BORDER}` }}>
+        {/* Tabs — modern pill design */}
+        <div
+          className="flex gap-1 overflow-x-auto p-1.5 rounded-xl"
+          style={{
+            background: "linear-gradient(180deg, #FFFFFF 0%, #F7F9FF 100%)",
+            border: "1px solid #D8DFED",
+            boxShadow:
+              "0 1px 2px rgba(15,23,42,0.04), 0 8px 20px -12px rgba(15,23,42,0.10)",
+          }}
+        >
           {TABS.map(t => {
             const Icon = TAB_ICONS[t.id]
+            const isActive = tab === t.id
             return (
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                  tab === t.id
-                    ? "border-[#0B0F2E] text-[#0B0F2E]"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                }`}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all duration-200"
+                style={
+                  isActive
+                    ? {
+                        background: "linear-gradient(135deg, #D4AF37 0%, #E4C547 100%)",
+                        color: "#0B0F2E",
+                        boxShadow:
+                          "0 6px 16px -6px rgba(212,175,55,0.55), inset 0 1px 0 rgba(255,255,255,0.4)",
+                      }
+                    : {
+                        color: "#475569",
+                        background: "transparent",
+                      }
+                }
               >
-                <Icon className="w-4 h-4" />{t.label}
+                <Icon className="w-4 h-4" />
+                {t.label}
               </button>
             )
           })}
@@ -265,7 +286,7 @@ export default function RHDashboard() {
         {tab === "paie" && <PaieTab />}
         {tab === "parametres" && <ParametresTab />}
       </div>
-    </div>
+    </ClientPageShell>
   )
 }
 
@@ -462,13 +483,21 @@ function ChartTooltip({ active, payload, label, isCurrency }: any) {
 }
 
 function DashboardTab({ stats, loading, chartData, deptData }: { stats: any; loading: boolean; chartData: any[]; deptData: any[] }) {
-  const cardStyle = { border: `1px solid ${CARD_BORDER}`, borderRadius: 12, background: "#FFFFFF" }
+  // Premium panel style aligned with the homepage + /client — layered
+  // shadows + subtle gradient instead of flat white.
+  const cardStyle = {
+    border: "1px solid #D8DFED",
+    borderRadius: 18,
+    background: "linear-gradient(180deg, #FFFFFF 0%, #F7F9FF 100%)",
+    boxShadow:
+      "0 1px 2px rgba(15,23,42,0.04), 0 18px 40px -24px rgba(15,23,42,0.16), inset 0 1px 0 rgba(255,255,255,0.9)",
+  }
 
   const kpis = [
-    { label: "Employes actifs", value: stats.nb_employes, icon: Users, color: "#4191FF", bg: "#EBF3FF", href: "/rh/employes", isCurrency: false },
-    { label: "Masse salariale brute", value: stats.masse_salariale, icon: Banknote, color: "#10B981", bg: "#ECFDF5", href: "/rh/paie", isCurrency: true },
-    { label: "Charges patronales", value: stats.charges_patronales, icon: CreditCard, color: "#F59E0B", bg: "#FFF7ED", href: "/rh/paie", isCurrency: true },
-    { label: "Absences ce mois", value: stats.conges_attente, icon: Calendar, color: "#EF4444", bg: "#FEF2F2", href: "/rh/conges", isCurrency: false },
+    { label: "Employés actifs",      value: stats.nb_employes,        icon: Users,      strong: "#4191FF", dark: "#1D5FC4", href: "/rh/employes", isCurrency: false },
+    { label: "Masse salariale brute", value: stats.masse_salariale,   icon: Banknote,   strong: "#2ECC8A", dark: "#1F9B68", href: "/rh/paie",     isCurrency: true  },
+    { label: "Charges patronales",   value: stats.charges_patronales, icon: CreditCard, strong: "#D4AF37", dark: "#A88925", href: "/rh/paie",     isCurrency: true  },
+    { label: "Absences ce mois",     value: stats.conges_attente,     icon: Calendar,   strong: "#E25555", dark: "#B93B3B", href: "/rh/conges",   isCurrency: false },
   ]
 
   return (
@@ -478,32 +507,81 @@ function DashboardTab({ stats, loading, chartData, deptData }: { stats: any; loa
         {/* KPI Cards */}
         <div className="lg:col-span-3 grid grid-cols-2 md:grid-cols-4 gap-4">
           {kpis.map(k => (
-            <Link key={k.label} href={k.href}>
-              <Card
-                className="hover:shadow-lg transition-all cursor-pointer group"
-                style={cardStyle}
+            <Link key={k.label} href={k.href} className="group">
+              <article
+                className="relative overflow-hidden h-full cursor-pointer transition-all duration-200 group-hover:-translate-y-1"
+                style={{
+                  background:
+                    "linear-gradient(180deg, #FFFFFF 0%, #F7F9FF 100%)",
+                  border: "1px solid #D8DFED",
+                  borderRadius: "16px",
+                  boxShadow:
+                    "0 1px 2px rgba(15,23,42,0.04), 0 18px 40px -24px rgba(15,23,42,0.16), inset 0 1px 0 rgba(255,255,255,0.9)",
+                }}
               >
-                <CardContent className="p-5">
-                  <div className="flex items-center justify-between mb-3">
+                {/* Top accent stripe */}
+                <span
+                  aria-hidden="true"
+                  className="absolute inset-x-0 top-0 h-[3px]"
+                  style={{ background: `linear-gradient(90deg, ${k.strong} 0%, ${k.strong}33 100%)` }}
+                />
+                {/* Corner glow */}
+                <span
+                  aria-hidden="true"
+                  style={{
+                    position: "absolute",
+                    top: "-60px",
+                    right: "-60px",
+                    width: "160px",
+                    height: "160px",
+                    borderRadius: "50%",
+                    background: `radial-gradient(circle, ${k.strong}22 0%, transparent 70%)`,
+                    pointerEvents: "none",
+                  }}
+                />
+                <div className="relative p-5">
+                  <div className="flex items-center justify-between mb-4">
                     <div
-                      className="w-10 h-10 rounded-lg flex items-center justify-center"
-                      style={{ backgroundColor: k.bg }}
+                      aria-hidden="true"
+                      className="flex h-11 w-11 items-center justify-center rounded-xl"
+                      style={{
+                        background: `linear-gradient(135deg, ${k.strong}22 0%, ${k.strong}08 100%)`,
+                        border: `1px solid ${k.strong}44`,
+                        boxShadow: `0 10px 24px -10px ${k.strong}55, inset 0 1px 0 rgba(255,255,255,0.4)`,
+                        color: k.dark,
+                      }}
                     >
-                      <k.icon className="w-5 h-5" style={{ color: k.color }} />
+                      <k.icon className="w-5 h-5" strokeWidth={1.8} />
                     </div>
-                    <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: GOLD }} />
+                    <ArrowRight
+                      className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-all duration-200 group-hover:translate-x-1"
+                      style={{ color: k.dark }}
+                    />
                   </div>
-                  <p className="text-xs uppercase tracking-wide" style={{ color: SECONDARY }}>{k.label}</p>
-                  <p className="text-xl font-bold mt-1" style={{ color: NAVY, fontFamily: "Poppins, sans-serif" }}>
+                  <p
+                    className="text-[11px] font-bold uppercase"
+                    style={{ color: "#475569", letterSpacing: "0.08em" }}
+                  >
+                    {k.label}
+                  </p>
+                  <p
+                    className="text-2xl font-bold mt-1"
+                    style={{
+                      color: "#0B0F2E",
+                      fontFamily: "Poppins, sans-serif",
+                      letterSpacing: "-0.02em",
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
                     <AnimatedKPIValue value={k.value} isCurrency={k.isCurrency} loading={loading} />
                   </p>
-                </CardContent>
-              </Card>
+                </div>
+              </article>
             </Link>
           ))}
         </div>
 
-        {/* Alerts sidebar - visible on desktop, stacks below on mobile */}
+        {/* Alerts sidebar */}
         <div className="lg:col-span-1">
           <SmartAlertsPanel stats={stats} />
         </div>

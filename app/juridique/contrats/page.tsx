@@ -14,6 +14,7 @@ import {
   Download, Copy, CheckCircle, Lock, AlertCircle, Loader2,
   Shield, Scale, Globe, Save, Trash2, FileSignature
 } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -252,7 +253,8 @@ export default function ContratsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <ClientPageShell hideHero disableParticles>
+    <div className="min-h-screen bg-gray-50">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
@@ -644,5 +646,6 @@ export default function ContratsPage() {
         </Card>
       </div>
     </div>
+    </ClientPageShell>
   )
 }

@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Label } from "@/components/ui/label"
 import { Search, Loader2, FileText, AlertTriangle, Download, User, Trash2, Building2, AlertCircle, RefreshCw, Wrench, CheckCircle2, Globe, MapPin } from "lucide-react"
 import { toast } from "sonner"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import * as XLSX from "xlsx"
 import { MonthPicker } from "@/components/ui/MonthPicker"
 
@@ -263,17 +264,13 @@ export default function ClientFournisseursPage() {
   }
 
   return (
-    <div className="flex-1 overflow-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>
-            Factures fournisseurs
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Suivi des factures fournisseurs et paiements
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+    <ClientPageShell
+      breadcrumbs={[{ label: "Espace client", href: "/client" }, { label: "Fournisseurs" }]}
+      kicker="Comptabilité"
+      title="Factures fournisseurs"
+      subtitle="Suivi des factures fournisseurs, paiements, lettrage automatique et rapprochement 401."
+      actions={
+        <>
           <Select value={societe} onValueChange={setSociete}>
             <SelectTrigger className="w-[220px]"><SelectValue placeholder="Société" /></SelectTrigger>
             <SelectContent>{societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent>
@@ -281,7 +278,11 @@ export default function ClientFournisseursPage() {
           <Button variant="outline" onClick={handleExport} disabled={filtered.length === 0}>
             <Download className="w-4 h-4 mr-2" />Exporter
           </Button>
-        </div>
+        </>
+      }
+    >
+      <div className="space-y-6">
+        <div className="hidden">{/* placeholder — original header moved into shell */}
       </div>
 
       {/* Month navigator */}
@@ -592,6 +593,7 @@ export default function ClientFournisseursPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+      </div>
+    </ClientPageShell>
   )
 }

@@ -23,6 +23,10 @@ import {
   ShieldAlert,
 } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { ClientPanel, ClientEmpty } from "@/components/client/ClientKit"
+
+const FONT = "'Poppins', sans-serif"
 
 interface AlertItem {
   id: string
@@ -110,25 +114,46 @@ export default function AlertesPage() {
 
   if (profile?.role === "client_user") {
     return (
-      <div className="p-6 flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-        <h1 className="text-xl font-bold" style={{ color: "#0B0F2E" }}>
-          Acces non autorise
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Vous n&apos;avez pas la permission d&apos;acceder a cette page.
-        </p>
-        <Link href="/client/upload" className="text-sm underline" style={{ color: "#D4AF37" }}>
-          Retour a l&apos;envoi de documents
-        </Link>
-      </div>
+      <ClientPageShell
+        breadcrumbs={[{ label: "Espace client", href: "/client" }, { label: "Alertes" }]}
+        title="Accès non autorisé"
+        subtitle="Vous n'avez pas la permission d'accéder à cette page."
+      >
+        <ClientEmpty
+          icon={ShieldAlert}
+          title="Accès réservé"
+          description="Cette section est visible pour les administrateurs et utilisateurs avancés uniquement."
+          accent="orange"
+          action={
+            <Link
+              href="/client"
+              style={{
+                display: "inline-block",
+                padding: "10px 20px",
+                borderRadius: "10px",
+                background: "linear-gradient(135deg, #D4AF37 0%, #E4C547 100%)",
+                color: "#0B0F2E",
+                fontWeight: 700,
+                fontSize: "13px",
+                textDecoration: "none",
+                fontFamily: FONT,
+              }}
+            >
+              Retour au tableau de bord
+            </Link>
+          }
+        />
+      </ClientPageShell>
     )
   }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#D4AF37" }} />
-      </div>
+      <ClientPageShell hideHero disableParticles>
+        <div style={{ display: "flex", justifyContent: "center", padding: "120px 0" }}>
+          <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#D4AF37" }} />
+        </div>
+      </ClientPageShell>
     )
   }
 
@@ -251,65 +276,65 @@ export default function AlertesPage() {
     )
   }
 
+  const totalCount = alerts.filter((a) => !a.archivee).length
+
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>
-          Mes Alertes
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Restez informe de tout ce qui concerne votre comptabilite.
-        </p>
-      </div>
+    <ClientPageShell
+      breadcrumbs={[{ label: "Espace client", href: "/client" }, { label: "Alertes" }]}
+      kicker={`${totalCount} ${totalCount > 1 ? "alertes actives" : "alerte active"}`}
+      title="Mes alertes"
+      subtitle="Restez informé de tout ce qui concerne votre comptabilité — échéances, impayés, documents manquants, points de vigilance."
+    >
+      <div style={{ display: "grid", gap: "18px" }}>
+        <ClientPanel padded={false}>
+          <div style={{ padding: "14px 18px" }}>
+            <Tabs value={filter} onValueChange={setFilter}>
+              <TabsList style={{ background: "transparent", padding: 0, gap: "4px", flexWrap: "wrap" }}>
+                <TabsTrigger value="toutes">Toutes</TabsTrigger>
+                <TabsTrigger value="non_lues">Non lues ({nonLuesCount})</TabsTrigger>
+                <TabsTrigger value="urgent">Urgent ({urgentCount})</TabsTrigger>
+                <TabsTrigger value="attention">Attention ({attentionCount})</TabsTrigger>
+                <TabsTrigger value="info">Info ({infoCount})</TabsTrigger>
+                <TabsTrigger value="archives">Archives</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+        </ClientPanel>
 
-      <Tabs value={filter} onValueChange={setFilter}>
-        <TabsList>
-          <TabsTrigger value="toutes">
-            Toutes
-          </TabsTrigger>
-          <TabsTrigger value="non_lues">
-            Non lues ({nonLuesCount})
-          </TabsTrigger>
-          <TabsTrigger value="urgent">
-            Urgent ({urgentCount})
-          </TabsTrigger>
-          <TabsTrigger value="attention">
-            Attention ({attentionCount})
-          </TabsTrigger>
-          <TabsTrigger value="info">
-            Info ({infoCount})
-          </TabsTrigger>
-          <TabsTrigger value="archives">
-            Archives
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
-
-      <div className="space-y-6">
-        {showGrouped ? (
-          <>
-            {renderGroupedAlerts("Urgent", urgentAlerts, "#EF4444")}
-            {renderGroupedAlerts("Attention requise", attentionAlerts, "#F97316")}
-            {renderGroupedAlerts("Information", infoAlerts, "#3B82F6")}
-            {filteredAlerts.length === 0 && (
-              <div className="text-center py-12">
-                <Bell className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
-                <p className="text-muted-foreground">Aucune alerte pour le moment.</p>
-              </div>
-            )}
-          </>
-        ) : (
-          <>
-            {filteredAlerts.map(renderAlertCard)}
-            {filteredAlerts.length === 0 && (
-              <div className="text-center py-12">
-                <Bell className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
-                <p className="text-muted-foreground">Aucune alerte pour le moment.</p>
-              </div>
-            )}
-          </>
-        )}
+        <div style={{ display: "grid", gap: "16px" }}>
+          {showGrouped ? (
+            <>
+              {renderGroupedAlerts("Urgent", urgentAlerts, "#EF4444")}
+              {renderGroupedAlerts("Attention requise", attentionAlerts, "#F97316")}
+              {renderGroupedAlerts("Information", infoAlerts, "#3B82F6")}
+              {filteredAlerts.length === 0 && (
+                <ClientEmpty
+                  icon={Bell}
+                  title="Aucune alerte"
+                  description="Tout est sous contrôle. Les nouvelles alertes apparaîtront ici dès que votre comptable en créera."
+                  accent="green"
+                />
+              )}
+            </>
+          ) : (
+            <>
+              {filteredAlerts.length > 0 && (
+                <div style={{ display: "grid", gap: "10px" }}>
+                  {filteredAlerts.map(renderAlertCard)}
+                </div>
+              )}
+              {filteredAlerts.length === 0 && (
+                <ClientEmpty
+                  icon={Bell}
+                  title="Aucune alerte"
+                  description="Aucune alerte ne correspond à ce filtre."
+                  accent="blue"
+                />
+              )}
+            </>
+          )}
+        </div>
       </div>
-    </div>
+    </ClientPageShell>
   )
 }

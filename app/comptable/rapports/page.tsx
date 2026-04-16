@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, Plus, Package, TrendingDown, AlertCircle, Download } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 const CATEGORIES = [
   { value: "materiel_informatique", label: "Matériel informatique (50%)" },
@@ -100,7 +101,8 @@ export default function ImmobilisationsPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[#0B0F2E]">Immobilisations (FAR)</h1>
@@ -261,5 +263,6 @@ export default function ImmobilisationsPage() {
         </CardContent>
       </Card>
     </div>
+    </ClientPageShell>
   )
 }

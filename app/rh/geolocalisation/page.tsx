@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
 import { Loader2, MapPin, Users, Navigation, Truck, RefreshCw, Clock, Coffee, Send, Bot, Sparkles, Lightbulb, TrendingUp, AlertTriangle, Route, Zap, Brain, CheckCircle2 } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -487,7 +488,8 @@ export default function GeolocalisationPage() {
   const [filterTime, setFilterTime] = useState<string>("all")
 
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -991,5 +993,6 @@ export default function GeolocalisationPage() {
         </CardContent>
       </Card>
     </div>
+    </ClientPageShell>
   )
 }

@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 interface Comptable {
   id: string
@@ -100,7 +101,8 @@ export default function AdminComptablesPage() {
   const totalDocsEnAttente = assignations.reduce((s, a) => s + (a.docs_en_attente || 0), 0)
 
   return (
-    <div className="p-6 space-y-6">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[#0B0F2E]">Gestion des Comptables</h1>
@@ -227,5 +229,6 @@ export default function AdminComptablesPage() {
         </div>
       )}
     </div>
+    </ClientPageShell>
   )
 }

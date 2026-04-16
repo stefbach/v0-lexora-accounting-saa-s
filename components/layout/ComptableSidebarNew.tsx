@@ -232,16 +232,30 @@ export function ComptableSidebarNew() {
 
   return (
     <>
-      {/* Mobile hamburger */}
+      {/* Mobile trigger — glassmorphic pill */}
       <button
         onClick={() => setMobileOpen(true)}
-        className="fixed top-4 left-4 z-50 md:hidden bg-[#0B0F2E] text-white p-2 rounded-lg shadow-lg"
+        aria-label="Ouvrir la navigation"
+        className="fixed top-4 left-4 z-50 md:hidden inline-flex items-center gap-2 rounded-full px-3 py-2 text-white shadow-lg backdrop-blur"
+        style={{
+          backgroundColor: "rgba(16,24,71,0.85)",
+          border: "1px solid rgba(212,175,55,0.35)",
+          boxShadow: "0 8px 20px -8px rgba(0,0,0,0.5)",
+        }}
       >
-        <Menu className="w-5 h-5" />
+        <Menu className="w-4 h-4" />
+        <span
+          aria-hidden="true"
+          className="h-2 w-2 rounded-full"
+          style={{ backgroundColor: "#D4AF37", boxShadow: "0 0 8px #D4AF37" }}
+        />
       </button>
 
       {mobileOpen && (
-        <div onClick={() => setMobileOpen(false)} className="fixed inset-0 bg-black/50 z-40 md:hidden" />
+        <div
+          onClick={() => setMobileOpen(false)}
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden"
+        />
       )}
 
       <aside
@@ -251,27 +265,54 @@ export function ComptableSidebarNew() {
           mobileOpen ? "translate-x-0" : "-translate-x-full",
           "md:translate-x-0"
         )}
-        style={{ backgroundColor: NAVY }}
+        style={{
+          background:
+            "radial-gradient(ellipse 140% 50% at 50% 0%, rgba(65,145,255,0.10) 0%, transparent 70%), radial-gradient(ellipse 140% 40% at 50% 100%, rgba(212,175,55,0.08) 0%, transparent 70%), #0B0F2E",
+          borderRight: "1px solid rgba(212,175,55,0.12)",
+          fontFamily: "'Poppins', sans-serif",
+        }}
       >
-        {/* Mobile close */}
-        <button onClick={() => setMobileOpen(false)} className="absolute top-4 right-4 md:hidden text-white/60 hover:text-white z-10">
+        <button
+          onClick={() => setMobileOpen(false)}
+          className="absolute top-4 right-4 md:hidden text-white/60 hover:text-white z-10"
+          aria-label="Fermer"
+        >
           <X className="w-5 h-5" />
         </button>
 
-        {/* Logo */}
-        <div className="flex h-16 items-center justify-between border-b border-white/10 px-4 flex-shrink-0">
+        {/* Logo block */}
+        <div
+          className="flex h-20 items-center justify-between px-5 flex-shrink-0"
+          style={{ borderBottom: "1px solid rgba(232,234,252,0.06)" }}
+        >
           {!collapsed ? (
-            <Link href="/comptable" className="flex items-center gap-2">
-              <div className="flex flex-col min-w-0">
-                <div className="flex items-baseline">
-                  <span className="text-base font-bold" style={{ color: "#E8EAFC", letterSpacing: "0.04em", fontFamily: "'Poppins', sans-serif" }}>LE</span>
-                  <span className="text-base font-bold" style={{ color: GOLD, letterSpacing: "0.04em", fontFamily: "'Poppins', sans-serif" }}>X</span>
-                  <span className="text-base font-bold" style={{ color: "#E8EAFC", letterSpacing: "0.04em", fontFamily: "'Poppins', sans-serif" }}>ORA</span>
-                </div>
-                <span className="text-[10px] font-light tracking-wider truncate" style={{ color: "#4A5490" }}>
-                  {roleLabel}
+            <Link href="/comptable" className="flex flex-col">
+              <div className="flex items-baseline">
+                <span className="text-lg font-bold" style={{ color: "#E8EAFC", letterSpacing: "0.04em" }}>LE</span>
+                <span className="text-lg font-bold" style={{ color: GOLD, letterSpacing: "0.04em" }}>X</span>
+                <span className="text-lg font-bold" style={{ color: "#E8EAFC", letterSpacing: "0.04em" }}>ORA</span>
+                <span className="ml-2 relative flex h-2 w-2" aria-hidden="true">
+                  <span
+                    className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75"
+                    style={{ backgroundColor: "#2ECC8A" }}
+                  />
+                  <span
+                    className="relative inline-flex h-2 w-2 rounded-full"
+                    style={{ backgroundColor: "#2ECC8A", boxShadow: "0 0 6px #2ECC8A" }}
+                  />
                 </span>
               </div>
+              <div
+                className="mt-1 h-[2px] w-12 rounded-full"
+                aria-hidden="true"
+                style={{ background: "linear-gradient(90deg, #D4AF37 0%, transparent 100%)" }}
+              />
+              <span
+                className="mt-1 text-[10px] font-bold uppercase tracking-[0.18em] truncate"
+                style={{ color: "#A8AFC7" }}
+              >
+                {roleLabel}
+              </span>
             </Link>
           ) : (
             <div className="mx-auto flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: "#141C4A", border: "1px solid #1E2760" }}>
@@ -280,20 +321,32 @@ export function ComptableSidebarNew() {
           )}
         </div>
 
-        {/* Context banner: "Retour cabinet" when in client context */}
+        {/* Context banner: "Retour cabinet" */}
         {isClientContext && !collapsed && (
           <Link
             href="/comptable"
-            className="flex items-center gap-2 px-4 py-2.5 border-b border-white/10 text-white/70 hover:text-white hover:bg-white/5 transition-colors flex-shrink-0"
+            className="flex items-center gap-2 mx-3 mt-3 px-3 py-2 rounded-xl transition-colors flex-shrink-0"
+            style={{
+              color: GOLD,
+              border: "1px solid rgba(212,175,55,0.30)",
+              background:
+                "linear-gradient(135deg, rgba(212,175,55,0.08) 0%, rgba(212,175,55,0.02) 100%)",
+            }}
           >
-            <ArrowLeft className="w-4 h-4 flex-shrink-0" style={{ color: GOLD }} />
-            <span className="text-xs font-semibold" style={{ color: GOLD }}>Retour espace cabinet</span>
+            <ArrowLeft className="w-4 h-4 flex-shrink-0" />
+            <span className="text-xs font-semibold">Retour espace cabinet</span>
           </Link>
         )}
 
         {/* Société context banner */}
         {hasSociete && !collapsed && (
-          <div className="flex items-center gap-2 px-4 py-2 border-b border-white/10 flex-shrink-0" style={{ backgroundColor: `${GOLD}18` }}>
+          <div
+            className="mx-3 mt-3 flex items-center gap-2 px-3 py-2 rounded-xl flex-shrink-0"
+            style={{
+              backgroundColor: `${GOLD}1F`,
+              border: `1px solid ${GOLD}44`,
+            }}
+          >
             <Building2 className="w-3.5 h-3.5 flex-shrink-0" style={{ color: GOLD }} />
             <span className="text-xs font-semibold truncate" style={{ color: GOLD }}>
               {societeName || societeId}
@@ -303,28 +356,39 @@ export function ComptableSidebarNew() {
         )}
 
         {/* Navigation */}
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+        <nav className="flex-1 px-3 py-3 space-y-3 overflow-y-auto">
           {sections.map(section => {
             const isSectionCollapsed = collapsedSections.includes(section.title)
             const hasActive = section.items.some(i => isActive(i.href))
 
             return (
-              <div key={section.title} className="mb-1">
+              <div key={section.title}>
                 {!collapsed && (
                   <button
                     onClick={() => toggleSection(section.title)}
-                    className={cn(
-                      "w-full flex items-center justify-between px-2 py-1.5 text-xs font-semibold uppercase tracking-wider rounded transition-colors",
-                      hasActive ? "text-[#D4AF37]" : "text-white/40 hover:text-white/70"
-                    )}
+                    className="group w-full flex items-center justify-between px-2 py-1.5 text-[10px] font-bold uppercase rounded-md transition-colors"
+                    style={{
+                      color: hasActive ? GOLD : "#6B7390",
+                      letterSpacing: "0.18em",
+                    }}
                   >
-                    <span className="truncate text-left">{section.title}</span>
+                    <span className="flex items-center gap-2">
+                      <span
+                        aria-hidden="true"
+                        className="h-1 w-1 rounded-full"
+                        style={{
+                          backgroundColor: hasActive ? GOLD : "rgba(212,175,55,0.28)",
+                          boxShadow: hasActive ? `0 0 4px ${GOLD}` : "none",
+                        }}
+                      />
+                      <span className="truncate">{section.title}</span>
+                    </span>
                     {isSectionCollapsed ? <ChevronRight className="w-3 h-3 flex-shrink-0" /> : <ChevronDown className="w-3 h-3 flex-shrink-0" />}
                   </button>
                 )}
 
                 {(!isSectionCollapsed || collapsed) && (
-                  <div className={cn("space-y-0.5", !collapsed && "ml-1")}>
+                  <div className="mt-1 space-y-0.5">
                     {section.items.map(item => {
                       const Icon = item.icon
                       const active = isActive(item.href)
@@ -334,14 +398,43 @@ export function ComptableSidebarNew() {
                           href={item.href}
                           title={collapsed ? item.label : undefined}
                           className={cn(
-                            "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors",
-                            active ? "font-semibold" : "text-white/70 hover:bg-white/10 hover:text-white",
+                            "group relative flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-all duration-200",
+                            active ? "font-semibold" : "text-white/70 hover:text-white",
                             collapsed && "justify-center"
                           )}
-                          style={active ? { backgroundColor: GOLD, color: NAVY } : undefined}
+                          style={
+                            active
+                              ? {
+                                  background: "linear-gradient(135deg, #D4AF37 0%, #E4C547 100%)",
+                                  color: NAVY,
+                                  boxShadow:
+                                    "0 8px 24px -8px rgba(212,175,55,0.55), inset 0 1px 0 rgba(255,255,255,0.4)",
+                                }
+                              : undefined
+                          }
                         >
-                          <Icon className="w-4 h-4 flex-shrink-0" />
-                          {!collapsed && <span className="truncate">{item.label}</span>}
+                          {!active && (
+                            <span
+                              aria-hidden="true"
+                              className="absolute inset-0 rounded-xl opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+                              style={{
+                                background:
+                                  "linear-gradient(135deg, rgba(65,145,255,0.14) 0%, rgba(232,234,252,0.06) 100%)",
+                              }}
+                            />
+                          )}
+                          {active && !collapsed && (
+                            <span
+                              aria-hidden="true"
+                              className="absolute -left-1 top-1/2 -translate-y-1/2 h-5 w-1 rounded-full"
+                              style={{
+                                backgroundColor: NAVY,
+                                boxShadow: "0 0 8px rgba(11,15,46,0.6)",
+                              }}
+                            />
+                          )}
+                          <Icon className="w-4 h-4 flex-shrink-0 relative" />
+                          {!collapsed && <span className="truncate relative">{item.label}</span>}
                         </Link>
                       )
                     })}
@@ -353,7 +446,10 @@ export function ComptableSidebarNew() {
         </nav>
 
         {/* Footer */}
-        <div className="border-t border-white/10 p-3 flex-shrink-0 space-y-1">
+        <div
+          className="p-3 flex-shrink-0 space-y-1"
+          style={{ borderTop: "1px solid rgba(232,234,252,0.06)" }}
+        >
           {!collapsed && (
             <div className="flex justify-center mb-2">
               <LanguageSwitcher />
@@ -377,9 +473,11 @@ export function ComptableSidebarNew() {
           <Link
             href="/profil"
             className={cn(
-              "flex items-center gap-2.5 px-3 py-2 rounded-lg text-white/50 hover:bg-white/10 hover:text-white text-sm transition-colors",
+              "flex items-center gap-2.5 px-3 py-2 rounded-xl text-white/60 hover:text-white text-sm transition-all",
               collapsed && "justify-center"
             )}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(232,234,252,0.06)" }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent" }}
           >
             <Settings className="w-4 h-4 flex-shrink-0" />
             {!collapsed && <span>Mon Profil</span>}
@@ -388,9 +486,18 @@ export function ComptableSidebarNew() {
           <button
             onClick={handleSignOut}
             className={cn(
-              "flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-white/50 hover:bg-red-500/20 hover:text-red-400 text-sm transition-colors",
+              "flex w-full items-center gap-2.5 px-3 py-2 rounded-xl text-sm transition-all",
               collapsed && "justify-center"
             )}
+            style={{ color: "#A8AFC7" }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = "rgba(239,68,68,0.14)"
+              e.currentTarget.style.color = "#FCA5A5"
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = "transparent"
+              e.currentTarget.style.color = "#A8AFC7"
+            }}
           >
             <LogOut className="w-4 h-4 flex-shrink-0" />
             {!collapsed && <span>Déconnexion</span>}

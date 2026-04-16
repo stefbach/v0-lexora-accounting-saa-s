@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, Calculator, Download, FileText, BookOpen, AlertTriangle, CheckCircle, Lock, Unlock, ShieldCheck, ArrowRight, Clock, CreditCard, FileSpreadsheet, Receipt, Pencil, X, Save, RefreshCw } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 function fmt(n: number) { return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "MUR", maximumFractionDigits: 0 }).format(n) }
@@ -380,13 +381,14 @@ export default function PaiePage() {
   }
 
   return (
+    <ClientPageShell hideHero disableParticles>
     <TooltipProvider>
-      <div className="p-6 space-y-6">
+      <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Processus de paie</h1>
-            <p className="text-sm text-gray-500">Calcul, validation, verrouillage et exports</p>
+            <p className="text-sm text-gray-500">Calcul, validation, verrouillage et exports PAYE · CSG · NSF</p>
           </div>
         </div>
 
@@ -1008,5 +1010,6 @@ export default function PaiePage() {
         </Card>
       </div>
     </TooltipProvider>
+    </ClientPageShell>
   )
 }

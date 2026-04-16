@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Users, Clock, Calendar, AlertTriangle, CheckCircle, UserX, Coffee, TrendingUp, Loader2 } from "lucide-react"
 import MonEspacePersonnel from "@/components/rh/MonEspacePersonnel"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -98,13 +99,13 @@ export default function ManagerDashboard() {
   for (const b of filteredBalances) balanceMap.set(b.employe_id, b)
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Tableau de bord Manager</h1>
-          <p className="text-gray-500 text-sm">Suivi de votre équipe en temps réel</p>
-        </div>
-        <div className="flex items-center gap-2">
+    <ClientPageShell
+      breadcrumbs={[{ label: "RH · Paie", href: "/rh" }, { label: "Manager" }]}
+      kicker={`Mon équipe · ${employes.length} ${employes.length > 1 ? "collaborateurs" : "collaborateur"}`}
+      title="Tableau de bord Manager"
+      subtitle="Suivi temps réel de votre équipe — présence, pointage, congés, alertes de certificats médicaux et soldes de jours."
+      actions={
+        <>
           <Select value={societe} onValueChange={setSociete}>
             <SelectTrigger className="w-[180px]"><SelectValue placeholder="Société" /></SelectTrigger>
             <SelectContent>
@@ -120,8 +121,10 @@ export default function ManagerDashboard() {
               </SelectContent>
             </Select>
           )}
-        </div>
-      </div>
+        </>
+      }
+    >
+    <div className="space-y-6">
 
       {/* TÂCHE 7 — Mon espace personnel (rendu uniquement si le manager
           a une fiche employé liée — il l'a presque toujours). */}
@@ -307,5 +310,6 @@ export default function ManagerDashboard() {
         </>
       )}
     </div>
+    </ClientPageShell>
   )
 }

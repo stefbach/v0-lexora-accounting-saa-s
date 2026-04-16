@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 interface SocieteClient {
   id: string
@@ -36,7 +37,8 @@ export default function MesClientsPage() {
   const totalDossiers = societes.reduce((s, c) => s + (c.nb_dossiers_en_cours || 0), 0)
 
   return (
-    <div className="p-6 space-y-6">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-[#0B0F2E]">Mes Clients</h1>
         <p className="text-sm text-gray-500">Sociétés dont vous êtes le comptable</p>
@@ -122,5 +124,6 @@ export default function MesClientsPage() {
         </div>
       )}
     </div>
+    </ClientPageShell>
   )
 }

@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, Upload, FileSpreadsheet, CheckCircle, AlertTriangle, Download, Users, Banknote, ChevronDown } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -139,7 +140,8 @@ export default function ImportPaiePage() {
   }), { basic: 0, brut: 0, net: 0, charges: 0, csg: 0, nsf: 0, paye: 0, deductions: 0, ot: 0 })
 
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-6xl mx-auto">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Import Paie Excel</h1>
@@ -428,5 +430,6 @@ export default function ImportPaiePage() {
         </CardContent>
       </Card>
     </div>
+    </ClientPageShell>
   )
 }

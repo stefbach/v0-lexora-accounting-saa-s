@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Loader2, Car, Bike, Navigation, CheckCircle, XCircle, Settings, TrendingUp, Route, DollarSign, Save } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -215,7 +216,8 @@ export default function TrajetsKmPage() {
   const currentParamVelo = parametres.find(p => p.vehicule_type === "velo")
 
   return (
-    <div className="p-4 md:p-6 space-y-4">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -564,5 +566,6 @@ export default function TrajetsKmPage() {
         </DialogContent>
       </Dialog>
     </div>
+    </ClientPageShell>
   )
 }

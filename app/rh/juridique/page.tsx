@@ -12,6 +12,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Loader2, FileText, Eye, Download, Printer, CheckCircle, XCircle, AlertCircle, Link2, Copy, CheckCheck } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -275,7 +276,8 @@ export default function JuridiquePage() {
 
   // ── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6 max-w-7xl mx-auto">
       <div>
         <h1 className="text-2xl font-bold text-[#0B0F2E]">Module Juridique</h1>
         <p className="text-sm text-gray-500">Contrats de travail — Droit mauricien (WRA 2019, Companies Act 2001)</p>
@@ -669,6 +671,7 @@ export default function JuridiquePage() {
         </DialogContent>
       </Dialog>
     </div>
+    </ClientPageShell>
   )
 }
 

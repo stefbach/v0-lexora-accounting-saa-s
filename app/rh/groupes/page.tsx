@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, Plus, Trash2, Users, UserPlus, X, Check, ChevronRight, Pencil, Crown } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -151,7 +152,8 @@ export default function GroupesPage() {
   }
 
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-4xl mx-auto">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Groupes</h1>
@@ -350,5 +352,6 @@ export default function GroupesPage() {
         </div>
       )}
     </div>
+    </ClientPageShell>
   )
 }

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AlertTriangle, Bell, Calendar, Shield, Clock, CheckCircle, Loader2, RefreshCw, Search } from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 interface Alerte {
   id: string
@@ -149,7 +150,8 @@ export default function ComptableAlertesPage() {
   }, [data, dismissed])
 
   return (
-    <div className="flex-1 overflow-auto p-6 space-y-6">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -379,5 +381,6 @@ export default function ComptableAlertesPage() {
         </p>
       )}
     </div>
+    </ClientPageShell>
   )
 }
