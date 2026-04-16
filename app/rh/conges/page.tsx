@@ -778,6 +778,17 @@ export default function CongesPage() {
         employe_id: "", type_conge: "AL", date_debut: "", date_fin: "", motif: "",
         demi_journee: false, matin_ou_apres_midi: 'matin',
       })
+      // Sprint 9 BUG 3 — afficher le warning bascule UL retourné par l'API
+      // (carence < 6 mois OU solde insuffisant) au lieu de fermer
+      // silencieusement. L'utilisateur DOIT voir que son congé est devenu
+      // un Unpaid Leave.
+      if (data.bascule_ul && data.warning) {
+        setToast(`⚠ ${data.warning}`)
+        setTimeout(() => setToast(null), 8000)
+      } else {
+        setToast(`Congé créé — ${data.conge?.type_conge || 'OK'}`)
+        setTimeout(() => setToast(null), 3500)
+      }
       // Reload current tab data
       if (tab === "dashboard") loadBalances()
       if (tab === "demandes") loadDemandes()
