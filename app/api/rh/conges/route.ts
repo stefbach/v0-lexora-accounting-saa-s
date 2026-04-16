@@ -401,10 +401,16 @@ export async function GET(request: Request) {
     }
 
     // 2) Get employees for those societes
+    // Filtre: uniquement employés actifs non-partis (WRA 2019 — un employé
+    // avec date_depart ne peut plus prendre de congé ; un employé actif=false
+    // est désactivé même sans date_depart). Les employés partis restent
+    // visibles dans /rh/depart et /rh/historique-paie uniquement.
     const { data: emps } = await supabase
       .from('employes')
-      .select('id, nom, prenom, poste, societe_id, date_arrivee, gender, actif')
+      .select('id, nom, prenom, poste, societe_id, date_arrivee, gender, actif, date_depart')
       .in('societe_id', societeIds)
+      .eq('actif', true)
+      .is('date_depart', null)
     const employees = emps || []
     const employeeIds = employees.map((e: any) => e.id)
 

@@ -175,7 +175,11 @@ export default function PointagePage() {
     fetch(`/api/rh/employes?societe_id=${societeId}`)
       .then((r) => r.json())
       .then((d) => {
-        const list: Employe[] = d.employes || []
+        // Défense en profondeur — employés actifs non-partis seulement.
+        // Un ancien salarié ne doit pas pouvoir pointer.
+        const list: Employe[] = (d.employes || []).filter(
+          (e: any) => e.actif !== false && !e.date_depart
+        )
         setEmployes(list.sort((a, b) => `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`)))
       })
       .catch(console.error)

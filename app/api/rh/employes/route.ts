@@ -23,7 +23,6 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const societe_id = searchParams.get('societe_id')
     const search = searchParams.get('search')
-    const actifs = searchParams.get('actifs') !== 'false'
 
     // Build query
     let query = supabase.from('employes').select('*').order('nom')
@@ -39,15 +38,21 @@ export async function GET(request: Request) {
       }
     }
     // Filter by departure status
+    // Par défaut : n'afficher QUE les employés actifs non-partis.
+    // Les employés avec actif=false OU date_depart!=null ne doivent
+    // PAS apparaître dans les listes opérationnelles (conges, paie,
+    // pointage, planning, exports courants). Ils restent visibles via :
+    //   - statut=sortis        → UNIQUEMENT les employés partis
+    //   - statut=tous / statut=all → les deux (ex. vue RH /rh/employes)
     const statut = searchParams.get('statut')
-    if (statut === 'presents') {
-      query = query.is('date_depart', null)
-    } else if (statut === 'sortis') {
+    if (statut === 'sortis') {
       query = query.not('date_depart', 'is', null)
-    }
-    // Legacy: if actifs param is used (backwards compat)
-    else if (actifs) {
-      // Don't filter — show all by default for backwards compat
+    } else if (statut === 'tous' || statut === 'all') {
+      // Pas de filtre — usage réservé aux vues historiques/admin.
+    } else {
+      // Default (inclut statut='presents' pour rétrocompat) :
+      // actifs=true ET date_depart IS NULL.
+      query = query.eq('actif', true).is('date_depart', null)
     }
 
     if (search) query = query.or(`nom.ilike.%${search}%,prenom.ilike.%${search}%,poste.ilike.%${search}%`)

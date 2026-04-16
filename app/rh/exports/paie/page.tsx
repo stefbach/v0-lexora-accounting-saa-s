@@ -115,17 +115,23 @@ export default function ExportPaiePage() {
         fetch(`/api/rh/paie?societe_id=${societe}&periode=${periode}`).then(r => r.json()).catch(() => ({ bulletins: [] })),
       ])
 
-      const emps: Employe[] = (empRes.employes || []).map((e: any) => ({
-        id: e.id,
-        nom: e.nom || "",
-        prenom: e.prenom || "",
-        poste: e.poste,
-        bank_name: e.bank_name || "",
-        bank_account: e.bank_account || e.iban || "",
-        bank_code: e.bank_code || "",
-        mode_paiement: e.mode_paiement || "bulk",
-        inclus_mra: e.inclus_mra !== false,
-      }))
+      // Défense en profondeur — un ancien salarié (actif=false OU
+      // date_depart!=null) ne doit pas apparaître dans les exports courants
+      // (virement, CSG, PAYE). Ses bulletins historiques restent dans
+      // /rh/historique-paie.
+      const emps: Employe[] = (empRes.employes || [])
+        .filter((e: any) => e.actif !== false && !e.date_depart)
+        .map((e: any) => ({
+          id: e.id,
+          nom: e.nom || "",
+          prenom: e.prenom || "",
+          poste: e.poste,
+          bank_name: e.bank_name || "",
+          bank_account: e.bank_account || e.iban || "",
+          bank_code: e.bank_code || "",
+          mode_paiement: e.mode_paiement || "bulk",
+          inclus_mra: e.inclus_mra !== false,
+        }))
       setEmployes(emps.sort((a, b) => `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`)))
 
       const buls: Bulletin[] = (bulRes.bulletins || []).map((b: any) => ({

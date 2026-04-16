@@ -548,7 +548,14 @@ export default function CongesPage() {
     try {
       const res = await fetch(`/api/rh/employes${societe !== "all" ? `?societe_id=${societe}` : ""}`)
       const data = await res.json()
-      setEmployes(data.employes || [])
+      // Défense en profondeur : même si l'API filtre déjà les employés
+      // partis (actif=false OU date_depart!=null), on re-filtre côté
+      // client pour garantir qu'aucun ancien salarié n'apparaisse dans
+      // les listes de congés.
+      const actifs = (data.employes || []).filter(
+        (e: any) => e.actif !== false && !e.date_depart
+      )
+      setEmployes(actifs)
     } catch (e) { console.error(e) }
   }, [societe])
 

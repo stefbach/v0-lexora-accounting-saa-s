@@ -525,7 +525,12 @@ export default function PlanningPage() {
       }
       setApprovedLeaves(leaveMap)
       setGroupes(grpRes.groupes || [])
-      const emps = (empRes.employes || []).sort((a: any, b: any) => `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`))
+      // Défense en profondeur — n'affiche que les employés actifs
+      // non-partis (l'API filtre déjà, mais on re-filtre côté client pour
+      // éviter qu'un ancien salarié apparaisse dans le planning).
+      const emps = (empRes.employes || [])
+        .filter((e: any) => e.actif !== false && !e.date_depart)
+        .sort((a: any, b: any) => `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`))
       setAllEmployes(emps)
       setPublished(planRes.published || false)
 
