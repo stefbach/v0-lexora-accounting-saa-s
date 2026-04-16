@@ -253,6 +253,15 @@ function EditEmployeForm({ emp, onSaved, onClose }: { emp: any; onSaved: () => v
           salaire_base: salaireSaisi,
           transport_allowance: parseFloat(e.transport_allowance) || 0,
           petrol_allowance: parseFloat(e.petrol_allowance) || 0,
+          // Feature — Compensations & Allowances (mig 040 + 117)
+          phone_allowance: parseFloat(e.phone_allowance) || 0,
+          daily_bus_fare: parseFloat(e.daily_bus_fare) || 0,
+          prime_fixe_1: parseFloat(e.prime_fixe_1) || 0,
+          prime_fixe_1_libelle: (e.prime_fixe_1_libelle || "").toString().trim(),
+          prime_fixe_2: parseFloat(e.prime_fixe_2) || 0,
+          prime_fixe_2_libelle: (e.prime_fixe_2_libelle || "").toString().trim(),
+          prime_fixe_3: parseFloat(e.prime_fixe_3) || 0,
+          prime_fixe_3_libelle: (e.prime_fixe_3_libelle || "").toString().trim(),
           date_arrivee: e.date_arrivee, date_depart: e.date_depart || null,
           role: e.role, csg_categorie: e.csg_categorie, bank_name: e.bank_name, bank_account: e.bank_account,
           nic_number: e.nic_number, tan_number: e.tan_number, iban: e.iban, devise_salaire: e.devise_salaire,
@@ -355,13 +364,62 @@ function EditEmployeForm({ emp, onSaved, onClose }: { emp: any; onSaved: () => v
               <SelectContent>{["MUR","EUR","USD","GBP"].map(d=><SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
             </Select>
           </div>
+        </div>
+      </div>
+
+      {/* ── Compensations & Allowances ── */}
+      <SectionHeader>🧾 Compensations & Allowances</SectionHeader>
+      <div className="col-span-2 rounded-lg bg-slate-50 border border-slate-200 p-3 space-y-3">
+        <p className="text-xs text-gray-500 -mt-1">
+          Montants mensuels inclus dans le salaire brut et repris sur le bulletin de paie.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
           <div>
-            <Label>Transport (indemnité)</Label>
-            <Input type="number" value={e.transport_allowance||""} onChange={ev=>u("transport_allowance",ev.target.value)}/>
+            <Label>Transport</Label>
+            <Input type="number" min="0" step="0.01" value={e.transport_allowance??""}
+              onChange={ev=>u("transport_allowance",ev.target.value)} placeholder="0"/>
           </div>
           <div>
-            <Label>Petrol (indemnité)</Label>
-            <Input type="number" value={e.petrol_allowance||""} onChange={ev=>u("petrol_allowance",ev.target.value)}/>
+            <Label>Essence / Carburant</Label>
+            <Input type="number" min="0" step="0.01" value={e.petrol_allowance??""}
+              onChange={ev=>u("petrol_allowance",ev.target.value)} placeholder="0"/>
+          </div>
+          <div>
+            <Label>Téléphone</Label>
+            <Input type="number" min="0" step="0.01" value={e.phone_allowance??""}
+              onChange={ev=>u("phone_allowance",ev.target.value)} placeholder="0"/>
+          </div>
+          <div>
+            <Label>Bus quotidien <span className="text-xs text-gray-400 font-normal">(par jour)</span></Label>
+            <Input type="number" min="0" step="0.01" value={e.daily_bus_fare??""}
+              onChange={ev=>u("daily_bus_fare",ev.target.value)} placeholder="0"/>
+          </div>
+        </div>
+
+        {/* Primes personnalisées — libellé libre + montant (mig 117) */}
+        <div className="pt-2 border-t border-slate-200">
+          <p className="text-xs font-semibold text-[#0B0F2E] mb-2">Primes personnalisées</p>
+          <div className="space-y-2">
+            {[1,2,3].map(n => {
+              const libKey = `prime_fixe_${n}_libelle`
+              const montantKey = `prime_fixe_${n}`
+              return (
+                <div key={n} className="grid grid-cols-[1fr_140px] gap-2">
+                  <Input
+                    value={e[libKey]||""}
+                    onChange={ev=>u(libKey,ev.target.value)}
+                    placeholder={`Libellé prime ${n} (ex: Electricity, Loyer...)`}
+                  />
+                  <Input
+                    type="number" min="0" step="0.01"
+                    value={e[montantKey]??""}
+                    onChange={ev=>u(montantKey,ev.target.value)}
+                    placeholder="Montant MUR"
+                    className="font-mono"
+                  />
+                </div>
+              )
+            })}
           </div>
         </div>
       </div>
