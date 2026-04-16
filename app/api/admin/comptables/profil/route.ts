@@ -39,22 +39,29 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const id = new URL(request.url).searchParams.get('id')
-    if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
+    const url = new URL(request.url)
+    const id = url.searchParams.get('id')
+    const user_id = url.searchParams.get('user_id')
+    if (!id && !user_id) {
+      return NextResponse.json({ error: 'id ou user_id requis' }, { status: 400 })
+    }
 
-    const { data, error } = await supabase
+    // Sprint 4 TÂCHE 5 — lookup par comptables.id OU par auth.users.id.
+    // L'UI /admin/comptables liste les users (role=comptable), le user_id
+    // est plus pratique que de d'abord résoudre comptables.id.
+    let query = supabase
       .from('comptables')
-      .select('id, nom_complet, email, type, type_comptable, employe_id, societe_cabinet, notes, actif')
-      .eq('id', id)
-      .maybeSingle()
+      .select('id, user_id, nom_complet, email, type, type_comptable, employe_id, societe_cabinet, notes, actif')
+    if (id) query = query.eq('id', id)
+    else if (user_id) query = query.eq('user_id', user_id)
+    const { data, error } = await query.maybeSingle()
     if (error) {
       // Si la mig 137 n'est pas appliquée, retombons sur les colonnes legacy
       if (/type_comptable|employe_id|societe_cabinet/.test(error.message)) {
-        const fallback = await supabase
-          .from('comptables')
-          .select('id, nom_complet, email, type, actif')
-          .eq('id', id)
-          .maybeSingle()
+        let fb = supabase.from('comptables').select('id, user_id, nom_complet, email, type, actif')
+        if (id) fb = fb.eq('id', id)
+        else if (user_id) fb = fb.eq('user_id', user_id)
+        const fallback = await fb.maybeSingle()
         if (fallback.error) return NextResponse.json({ error: fallback.error.message }, { status: 500 })
         return NextResponse.json({ comptable: fallback.data, schema_fallback: true })
       }
@@ -79,8 +86,8 @@ export async function PATCH(request: Request) {
     }
 
     const body = await request.json()
-    const { id, type_comptable, employe_id, societe_cabinet, notes } = body
-    if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
+    const { id, user_id, type_comptable, employe_id, societe_cabinet, notes } = body
+    if (!id && !user_id) return NextResponse.json({ error: 'id ou user_id requis' }, { status: 400 })
 
     // Whitelist defensive — on n'accepte que les valeurs prévues
     const allowedTypes = ['interne', 'externe', 'dedie']
@@ -110,12 +117,42 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: 'aucun champ à mettre à jour' }, { status: 400 })
     }
 
-    const { data, error } = await supabase
-      .from('comptables')
-      .update(updates)
-      .eq('id', id)
-      .select('id, nom_complet, email, type, type_comptable, employe_id, societe_cabinet, notes')
-      .maybeSingle()
+    // Sprint 4 TÂCHE 5 — si user_id fourni et pas de row comptables
+    // existante, on UPSERT (cas d'un user role=comptable jamais injecté
+    // dans la table legacy comptables). Pour `id` on suppose que la row
+    // existe déjà.
+    let data: any = null
+    let error: any = null
+    if (id) {
+      const res = await supabase.from('comptables').update(updates).eq('id', id)
+        .select('id, user_id, nom_complet, email, type, type_comptable, employe_id, societe_cabinet, notes')
+        .maybeSingle()
+      data = res.data; error = res.error
+    } else if (user_id) {
+      // Vérifie existence
+      const existing = await supabase.from('comptables').select('id').eq('user_id', user_id).maybeSingle()
+      if (existing.data) {
+        const res = await supabase.from('comptables').update(updates).eq('user_id', user_id)
+          .select('id, user_id, nom_complet, email, type, type_comptable, employe_id, societe_cabinet, notes')
+          .maybeSingle()
+        data = res.data; error = res.error
+      } else {
+        // Insert minimal row (nom_complet/email récupérés depuis profiles).
+        const { data: prof } = await supabase.from('profiles')
+          .select('full_name, email').eq('id', user_id).maybeSingle()
+        const res = await supabase.from('comptables')
+          .insert({
+            user_id,
+            nom_complet: prof?.full_name || 'Comptable',
+            email: prof?.email || '',
+            actif: true,
+            ...updates,
+          })
+          .select('id, user_id, nom_complet, email, type, type_comptable, employe_id, societe_cabinet, notes')
+          .maybeSingle()
+        data = res.data; error = res.error
+      }
+    }
     if (error) {
       // Si mig 137 pas déployée, message clair
       if (/type_comptable|employe_id|societe_cabinet/.test(error.message)) {

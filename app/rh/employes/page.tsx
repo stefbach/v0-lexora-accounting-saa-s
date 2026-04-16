@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Search, Plus, Loader2, Users, Upload, Download, FileSpreadsheet, Pencil, ExternalLink, UserPlus, Key, User, Briefcase, Banknote, Building2, Trash2, AlertTriangle } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { BANQUES_MAURITIUS } from "@/lib/rh/banques-mauritius"
+import { toast } from "sonner"
 
 /* ── Section card for grouped form fields ── */
 function FormSection({ icon, title, color, children }: { icon: React.ReactNode; title: string; color: string; children: React.ReactNode }) {
@@ -83,6 +84,18 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
     try {
       const res = await fetch("/api/rh/employes", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ ...form, salaire_base: parseFloat(form.salaire_base), transport_allowance: parseFloat(form.transport_allowance)||0, petrol_allowance: parseFloat(form.petrol_allowance)||0 }) })
       if (!res.ok) { const d = await res.json(); throw new Error(d.error) }
+      // Sprint 4 TÂCHE 6 — feedback selon contrat_status renvoyé par l'API
+      const body = await res.json().catch(() => ({}))
+      const status = body?.contrat_status as string | undefined
+      if (status === 'created') {
+        toast.success(`Employé créé. 📄 Contrat brouillon généré — voir /rh/juridique`, { duration: 5000 })
+      } else if (status === 'no_template') {
+        toast.warning(`Employé créé. ⚠️ Aucun template disponible — créer le contrat manuellement via /rh/juridique`, { duration: 6000 })
+      } else if (status === 'failed') {
+        toast.warning(`Employé créé. ⚠️ Génération contrat échouée — à créer manuellement`, { duration: 6000 })
+      } else {
+        toast.success('Employé créé.')
+      }
       onClose(); onCreated()
     } catch (e: unknown) { setErrors({ _global: e instanceof Error ? e.message : "Erreur" }) }
     finally { setSaving(false) }

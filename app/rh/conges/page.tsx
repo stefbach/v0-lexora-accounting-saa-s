@@ -165,11 +165,21 @@ function formatDate(d: string) {
 }
 
 function statusDot(color: string) {
+  // Sprint 4 TÂCHE 4 — sémantique des points (WRA 2019) :
+  //   🟢 vert   = employé éligible plein droit (>= 12 mois) + solde AL >= 5
+  //   🟡 orange = en période d'essai (3-12 mois, droit au prorata)
+  //               ou solde AL < 5 jours (alerte faible)
+  //   🔴 rouge  = pas éligible (< 3 mois carence WRA 2019)
+  //               ou solde AL épuisé (= 0)
   const cls =
     color === "green" ? "bg-green-500" :
     color === "orange" ? "bg-orange-400" :
     "bg-red-500"
-  return <span className={`inline-block w-3 h-3 rounded-full ${cls}`} />
+  const title =
+    color === "green" ? "Éligible (≥12 mois) avec solde AL suffisant" :
+    color === "orange" ? "Période d'essai (3-12 mois) ou solde AL < 5 j" :
+    "Carence WRA (< 3 mois) ou solde AL épuisé"
+  return <span className={`inline-block w-3 h-3 rounded-full ${cls}`} title={title} />
 }
 
 // ─── Approval Steps Component ───────────────────────────────────

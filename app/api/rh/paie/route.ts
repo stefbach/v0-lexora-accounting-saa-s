@@ -435,8 +435,13 @@ export async function POST(request: Request) {
       let joursFeriesSetSingle = new Set<string>()
       try {
         const { data: feriesRowsSingle } = await supabase.from('jours_feries')
-          .select('date').gte('date', `${periodeYearSingle}-01-01`).lte('date', `${periodeYearSingle}-12-31`)
-        joursFeriesSetSingle = new Set((feriesRowsSingle || []).map((r: any) => String(r.date).slice(0, 10)))
+          .select('date, travail_autorise').gte('date', `${periodeYearSingle}-01-01`).lte('date', `${periodeYearSingle}-12-31`)
+        // Sprint 4 — exclure travail_autorise=true (jours fériés ouvrables).
+        joursFeriesSetSingle = new Set(
+          (feriesRowsSingle || [])
+            .filter((r: any) => !r.travail_autorise)
+            .map((r: any) => String(r.date).slice(0, 10)),
+        )
       } catch {}
       if (joursFeriesSetSingle.size === 0) joursFeriesSetSingle = getMauritiusPublicHolidays(periodeYearSingle)
 
@@ -861,8 +866,13 @@ export async function POST(request: Request) {
         let joursFeriesSet = new Set<string>()
         try {
           const { data: feriesRows } = await supabase.from('jours_feries')
-            .select('date').gte('date', `${periodeYear}-01-01`).lte('date', `${periodeYear}-12-31`)
-          joursFeriesSet = new Set((feriesRows || []).map((r: any) => String(r.date).slice(0, 10)))
+            .select('date, travail_autorise').gte('date', `${periodeYear}-01-01`).lte('date', `${periodeYear}-12-31`)
+          // Sprint 4 — exclure travail_autorise=true (jours ouvrables avec majoration).
+          joursFeriesSet = new Set(
+            (feriesRows || [])
+              .filter((r: any) => !r.travail_autorise)
+              .map((r: any) => String(r.date).slice(0, 10)),
+          )
         } catch {}
         if (joursFeriesSet.size === 0) joursFeriesSet = getMauritiusPublicHolidays(periodeYear)
 
