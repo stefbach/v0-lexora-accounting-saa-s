@@ -655,9 +655,10 @@ Voulez-vous vraiment continuer ?`
         setAssociesCandidates(ccData.candidates || [])
         setLegalAlerts(ccData.legal_alerts || [])
       }
-      // Charger les employes pour le picker NDF
+      // Charger les employes pour le picker NDF (remboursement note de frais)
+      // Route: /api/rh/employes?societe_id=...  (pas /api/comptable/equipe qui n'existe pas)
       try {
-        const empRes = await fetch(`/api/comptable/equipe?societe_id=${societeId}`).catch(() => null)
+        const empRes = await fetch(`/api/rh/employes?societe_id=${societeId}`).catch(() => null)
         if (empRes?.ok) {
           const empData = await empRes.json()
           setEmployes(empData.employes || empData.membres || [])
@@ -774,8 +775,13 @@ Voulez-vous vraiment continuer ?`
   }
 
   const handleManualLink = async (tx: any, target: any, type: "facture" | "ecriture") => {
+    // Garde: sans tx bancaire réelle (releve_id + id), l'API renvoie 400 "releve_id requis".
+    if (!tx?.releve_id || !tx?.id) {
+      setToast({ type: 'error', message: "Aucune transaction bancaire sélectionnée. Importez le relevé ou utilisez \"Marquer payée\"." })
+      return
+    }
     try {
-      await fetch("/api/comptable/rapprochement", {
+      const res = await fetch("/api/comptable/rapprochement", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "lettrer_manuel", transaction_id: tx.id, releve_id: tx.releve_id,
@@ -784,13 +790,23 @@ Voulez-vous vraiment continuer ?`
           societe_id: societeId,
         }),
       })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setToast({ type: 'error', message: `❌ ${d.error || `HTTP ${res.status}`}` })
+        return
+      }
       setLinkDialog(null); load()
-    } catch { alert("Erreur lettrage") }
+    } catch { setToast({ type: 'error', message: "Erreur réseau lors du lettrage" }) }
   }
 
   // Lettrage multi-facture : 1 transaction bancaire vs N factures
   const handleManualLinkMulti = async (tx: any, factures: any[]) => {
     if (!societeId || factures.length === 0) return
+    // Garde: sans tx bancaire réelle (releve_id + id), l'API renvoie 400 "releve_id requis".
+    if (!tx?.releve_id || !tx?.id) {
+      setToast({ type: 'error', message: "Aucune transaction bancaire sélectionnée. Importez le relevé ou utilisez \"Marquer payée\"." })
+      return
+    }
     const ids = factures.map(f => f.id)
     try {
       const res = await fetch("/api/comptable/rapprochement", {
@@ -1680,11 +1696,22 @@ Voulez-vous vraiment continuer ?`
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => {
                                 setDialogTab('factures')
+                                // Chercher une transaction bancaire correspondant à ce montant (±5%)
                                 const prefill = unmatched.find((t: any) =>
                                   Number(t.debit) > 0 &&
                                   Math.abs(Number(t.debit) - (Number(f.montant_ttc) || 0)) < (Number(f.montant_ttc) || 1) * 0.05
                                 )
-                                setLinkDialog(prefill || { preselected_facture_id: f.id, libelle: f.tiers, date: f.date_facture, debit: Number(f.montant_ttc), credit: 0, devise: f.devise, tiers_detecte: f.tiers })
+                                // Si aucune tx bancaire correspondante n'existe, l'ancienne version ouvrait un dialog avec
+                                // un objet synthétique sans releve_id → le POST /lettrer_manuel renvoyait 400.
+                                // On avertit proprement et on suggère "Marquer payée" à la place.
+                                if (!prefill) {
+                                  setToast({
+                                    type: 'error',
+                                    message: `Aucune transaction bancaire ~${fmt(Number(f.montant_ttc) || 0)} ${f.devise || 'MUR'}. Utilisez "Marquer payée" ou importez le relevé bancaire correspondant.`,
+                                  })
+                                  return
+                                }
+                                setLinkDialog(prefill)
                               }} className="gap-2">
                                 <Link2 className="w-4 h-4 text-blue-600" />
                                 <div className="flex flex-col">
