@@ -1696,18 +1696,32 @@ Voulez-vous vraiment continuer ?`
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => {
                                 setDialogTab('factures')
-                                // Chercher une transaction bancaire correspondant à ce montant (±5%)
-                                const prefill = unmatched.find((t: any) =>
-                                  Number(t.debit) > 0 &&
-                                  Math.abs(Number(t.debit) - (Number(f.montant_ttc) || 0)) < (Number(f.montant_ttc) || 1) * 0.05
-                                )
-                                // Si aucune tx bancaire correspondante n'existe, l'ancienne version ouvrait un dialog avec
-                                // un objet synthétique sans releve_id → le POST /lettrer_manuel renvoyait 400.
-                                // On avertit proprement et on suggère "Marquer payée" à la place.
+                                const fTTC = Number(f.montant_ttc) || 0
+                                const fMUR = Number(f.montant_mur) || fTTC
+                                const fDevise = (f.devise || 'MUR').toUpperCase()
+                                // Chercher une tx bancaire correspondant à cette facture — recherche LARGE:
+                                // 1. Toutes les transactions du mois (pas seulement unmatched)
+                                // 2. Tolérance 10% (couvre TDS, frais bancaires, conversion de devise)
+                                // 3. Match en devise native si même devise, sinon fallback MUR
+                                const findTx = (pool: any[]) => pool.find((t: any) => {
+                                  const tDebit = Number(t.debit) || 0
+                                  if (tDebit <= 0) return false
+                                  const tDevise = (t.devise || 'MUR').toUpperCase()
+                                  if (tDevise === fDevise && fTTC > 0) {
+                                    return Math.abs(tDebit - fTTC) / fTTC < 0.10
+                                  }
+                                  // Devise différente → comparer en MUR (tx est déjà en devise native dans debit)
+                                  if (fMUR > 0) {
+                                    return Math.abs(tDebit - fMUR) / fMUR < 0.10
+                                  }
+                                  return false
+                                })
+                                // Priorité: unmatched > all transactions (au cas où la tx aurait été auto-classifiée par erreur)
+                                const prefill = findTx(unmatched) || findTx(transactions)
                                 if (!prefill) {
                                   setToast({
                                     type: 'error',
-                                    message: `Aucune transaction bancaire ~${fmt(Number(f.montant_ttc) || 0)} ${f.devise || 'MUR'}. Utilisez "Marquer payée" ou importez le relevé bancaire correspondant.`,
+                                    message: `Aucune transaction bancaire ~${fmt(fTTC)} ${fDevise} (±10%). Vérifiez que le relevé bancaire correspondant est bien importé ou utilisez "Marquer payée".`,
                                   })
                                   return
                                 }
