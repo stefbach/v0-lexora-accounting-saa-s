@@ -12,7 +12,8 @@ import {
   Users, UserPlus, Shield, Building2, Mail, Phone, Pencil,
   ToggleLeft, ToggleRight, Copy, RefreshCw, Search, ChevronDown,
   ChevronUp, ChevronRight, Calendar, ArrowUpDown, X, Check,
-  FileText, Calculator, Receipt, Scale, BarChart3, UserCheck
+  FileText, Calculator, Receipt, Scale, BarChart3, UserCheck,
+  Key, Eye, EyeOff, AlertTriangle, Loader2
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
@@ -229,6 +230,14 @@ export default function UtilisateursPage() {
   const [detailUser, setDetailUser] = useState<User | null>(null)
   const [editUser, setEditUser] = useState<User | null>(null)
 
+  // Sprint 12 FEATURE 2 — dialog changement mot de passe
+  const [pwdOpen, setPwdOpen] = useState(false)
+  const [pwdUser, setPwdUser] = useState<User | null>(null)
+  const [pwdValue, setPwdValue] = useState("")
+  const [pwdVisible, setPwdVisible] = useState(true)
+  const [pwdSaving, setPwdSaving] = useState(false)
+  const [pwdSuccess, setPwdSuccess] = useState(false)
+
   // Create form
   const [saving, setSaving] = useState(false)
   const [lastPassword, setLastPassword] = useState("")
@@ -408,6 +417,36 @@ export default function UtilisateursPage() {
       body: JSON.stringify({ user_id: user.id, actif: newActif }),
     })
     load()
+  }
+
+  // Sprint 12 FEATURE 2 — changement mot de passe
+  const openPasswordDialog = (user: User) => {
+    setPwdUser(user)
+    setPwdValue(genPassword())
+    setPwdVisible(true)
+    setPwdSuccess(false)
+    setPwdOpen(true)
+  }
+
+  const handleChangePassword = async () => {
+    if (!pwdUser) return
+    if (!pwdValue || pwdValue.length < 6) { alert("Mot de passe requis (min 6 caractères)"); return }
+    if (!confirm(`Confirmer le changement de mot de passe pour ${pwdUser.full_name || pwdUser.email} ?\n\nLe nouveau mot de passe prendra effet immédiatement.`)) {
+      return
+    }
+    setPwdSaving(true)
+    try {
+      const res = await fetch(`/api/admin/users/${pwdUser.id}/password`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: pwdValue }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { alert("Erreur: " + (data.error || `HTTP ${res.status}`)); return }
+      // Afficher écran de confirmation avec le mot de passe à communiquer.
+      setPwdSuccess(true)
+    } catch { alert("Erreur réseau") }
+    finally { setPwdSaving(false) }
   }
 
   const handleSort = (field: "full_name" | "role" | "created_at") => {
@@ -721,6 +760,10 @@ export default function UtilisateursPage() {
                             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(user)} title="Modifier">
                               <Pencil className="w-4 h-4 text-gray-500" />
                             </Button>
+                            {/* Sprint 12 FEATURE 2 — changer mot de passe */}
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openPasswordDialog(user)} title="Changer le mot de passe">
+                              <Key className="w-4 h-4 text-purple-600" />
+                            </Button>
                             <Button
                               variant="ghost"
                               size="icon"
@@ -860,6 +903,94 @@ export default function UtilisateursPage() {
               <Button onClick={handleEdit} disabled={editSaving || !editForm.full_name || !editForm.email} className="w-full bg-[#0B0F2E] hover:bg-[#2a3d66]">
                 {editSaving ? "Enregistrement..." : "Enregistrer les modifications"}
               </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Sprint 12 FEATURE 2 — Dialog changement mot de passe */}
+      <Dialog open={pwdOpen} onOpenChange={(o) => { setPwdOpen(o); if (!o) { setPwdUser(null); setPwdValue(""); setPwdSuccess(false) } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-[#0B0F2E]">
+              <Key className="w-5 h-5 text-purple-600" />
+              Changer le mot de passe
+            </DialogTitle>
+          </DialogHeader>
+          {pwdUser && !pwdSuccess && (
+            <div className="space-y-4 pt-2">
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <p className="font-medium">{pwdUser.full_name || "—"}</p>
+                <p className="text-sm text-gray-500">{pwdUser.email}</p>
+              </div>
+              <div>
+                <Label>Nouveau mot de passe</Label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Input
+                      type={pwdVisible ? "text" : "password"}
+                      value={pwdValue}
+                      onChange={(e) => setPwdValue(e.target.value)}
+                      className="font-mono pr-10"
+                      placeholder="Mot de passe..."
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setPwdVisible((v) => !v)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                      title={pwdVisible ? "Masquer" : "Afficher"}
+                    >
+                      {pwdVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => setPwdValue(genPassword())} title="Générer automatiquement">
+                    Générer
+                  </Button>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Minimum 6 caractères.</p>
+              </div>
+              <div className="p-3 rounded bg-amber-50 border border-amber-200 flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-800">
+                  <span className="font-semibold">Important :</span> le nouveau mot de passe remplace
+                  l'ancien immédiatement. Communiquez-le par un canal sécurisé — il ne sera plus visible
+                  après la confirmation.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => setPwdOpen(false)}>Annuler</Button>
+                <Button
+                  onClick={handleChangePassword}
+                  disabled={pwdSaving || !pwdValue || pwdValue.length < 6}
+                  className="flex-1 bg-[#0B0F2E] text-white hover:bg-[#2a3d66]"
+                >
+                  {pwdSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Key className="w-4 h-4 mr-2" />}
+                  Enregistrer
+                </Button>
+              </div>
+            </div>
+          )}
+          {pwdUser && pwdSuccess && (
+            <div className="space-y-4 pt-2">
+              <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                <p className="font-semibold text-green-800 mb-2 flex items-center gap-2">
+                  <Check className="w-4 h-4" />
+                  Mot de passe modifié
+                </p>
+                <div className="space-y-1">
+                  <p className="text-sm">Utilisateur : <span className="font-semibold">{pwdUser.full_name || pwdUser.email}</span></p>
+                  <p className="text-sm">Email : <span className="font-mono font-bold">{pwdUser.email}</span></p>
+                  <p className="text-sm">Nouveau mot de passe : <span className="font-mono font-bold text-lg">{pwdValue}</span></p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => copyToClipboard(pwdValue)}>
+                  <Copy className="w-4 h-4 mr-2" /> Copier
+                </Button>
+                <Button className="flex-1 bg-[#0B0F2E] text-white" onClick={() => setPwdOpen(false)}>
+                  Fermer
+                </Button>
+              </div>
             </div>
           )}
         </DialogContent>
