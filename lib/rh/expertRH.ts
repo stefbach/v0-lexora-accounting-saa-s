@@ -12,6 +12,10 @@ export async function genererContrat(params: {
   salaire: number; date_debut: string; date_fin?: string; langue?: string;
   societe_nom?: string; societe_brn?: string; societe_adresse?: string;
   employe_nic?: string; employe_dob?: string;
+  // Sprint 6 FIX 4 — nouveaux paramètres pour la génération enrichie
+  heures_semaine?: number;
+  periode_essai?: number; // jours (0 si pas de période d'essai)
+  signataire_nom_complet?: string; // ex. "Stephane BACH, CEO"
 }): Promise<string> {
   const { remplirTemplate, getTemplate } = await import('./contratsTemplates');
   const template = getTemplate(params.type, params.secteur);
@@ -29,6 +33,9 @@ export async function genererContrat(params: {
     date_debut:      params.date_debut,
     date_fin:        params.date_fin,
     lieu_travail:    params.societe_adresse || 'Port Louis, Mauritius',
+    heures_semaine:  params.heures_semaine,
+    periode_essai:   params.periode_essai,
+    signataire_nom_complet: params.signataire_nom_complet,
   });
 }
 

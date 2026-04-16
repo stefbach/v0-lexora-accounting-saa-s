@@ -220,14 +220,20 @@ type Contact = {
 
 function ContactsEditor({
   initial,
+  societeId,
   onChange,
 }: {
   initial: Contact[]
+  societeId: string
   onChange: (contacts: Contact[]) => void
 }) {
   const [contacts, setContacts] = useState<Contact[]>(
     Array.isArray(initial) && initial.length > 0 ? initial : [],
   )
+  // Sprint 6 FIX 3 — mode lecture/édition par contact.
+  // Contacts existants (depuis DB) = lecture. Nouveaux contacts = édition.
+  const [editingIdx, setEditingIdx] = useState<Set<number>>(new Set())
+  const [savingIdx, setSavingIdx] = useState<number | null>(null)
 
   const commit = (next: Contact[]) => {
     setContacts(next)
@@ -245,9 +251,10 @@ function ContactsEditor({
   }
 
   const addContact = () => {
-    // Le tout premier ajouté est principal par défaut
+    // Le tout premier ajouté est principal par défaut. Nouveau = mode édition.
     const next = [...contacts, { principal: contacts.length === 0 } as Contact]
     commit(next)
+    setEditingIdx(prev => new Set([...prev, contacts.length]))
   }
 
   const removeContact = (i: number) => {
@@ -257,6 +264,64 @@ function ContactsEditor({
       next[0].principal = true
     }
     commit(next)
+    // Retirer de editingIdx + re-indexer
+    setEditingIdx(prev => {
+      const s = new Set<number>()
+      prev.forEach(idx => { if (idx < i) s.add(idx); else if (idx > i) s.add(idx - 1) })
+      return s
+    })
+    // Persister côté DB la suppression (seulement si le contact avait été enregistré)
+    void saveContactsToDb(next, i, 'delete')
+  }
+
+  const startEdit = (i: number) => {
+    setEditingIdx(prev => new Set([...prev, i]))
+  }
+
+  // Sprint 6 FIX 3 — save DB par contact (envoie le tableau complet).
+  // On PUT toute la société avec les contacts mis à jour.
+  const saveContactsToDb = async (nextContacts: Contact[], idxTouched: number, op: 'save' | 'delete' = 'save') => {
+    if (!societeId) {
+      if (op === 'save') toast.error('ID société manquant')
+      return
+    }
+    if (op === 'save') setSavingIdx(idxTouched)
+    try {
+      const res = await fetch('/api/rh/societe', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: societeId, contacts: nextContacts }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        toast.error(`Erreur : ${d.error || res.statusText}`)
+        return
+      }
+      if (op === 'save') {
+        toast.success('Contact enregistré ✅')
+        setEditingIdx(prev => {
+          const s = new Set(prev)
+          s.delete(idxTouched)
+          return s
+        })
+      } else {
+        toast.success('Contact supprimé')
+      }
+    } catch (e: any) {
+      toast.error(`Erreur réseau : ${e?.message || ''}`)
+    } finally {
+      if (op === 'save') setSavingIdx(null)
+    }
+  }
+
+  const handleSaveContact = (i: number) => {
+    // Validation minimale : nom ou prénom requis
+    const c = contacts[i]
+    if (!c.nom?.trim() && !c.prenom?.trim()) {
+      toast.error('Nom ou prénom requis')
+      return
+    }
+    void saveContactsToDb(contacts, i, 'save')
   }
 
   return (
@@ -281,89 +346,178 @@ function ContactsEditor({
             un contact (CEO, DRH, DAF, etc.).
           </p>
         )}
-        {contacts.map((c, i) => (
-          <div
-            key={i}
-            className={`rounded-xl border p-4 space-y-3 ${
-              c.principal ? "border-amber-300 bg-amber-50/40" : "border-gray-200"
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                {c.principal ? (
-                  <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">
-                    <Star className="h-3 w-3 mr-1 fill-current" /> Contact principal
-                  </Badge>
-                ) : (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setPrincipal(i)}
-                    className="h-7 text-xs text-gray-500 hover:text-amber-700"
-                  >
-                    <Star className="h-3 w-3 mr-1" /> Définir comme principal
-                  </Button>
-                )}
-              </div>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => removeContact(i)}
-                className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
-              >
-                <Trash2 className="h-3 w-3 mr-1" /> Supprimer
-              </Button>
+        {contacts.map((c, i) => {
+          const isEditing = editingIdx.has(i)
+          const isSaving = savingIdx === i
+          return (
+            <div
+              key={i}
+              className={`rounded-xl border p-4 space-y-3 ${
+                c.principal ? "border-amber-300 bg-amber-50/40" : "border-gray-200"
+              }`}
+            >
+              {/* ── Mode LECTURE ── */}
+              {!isEditing && (
+                <div className="space-y-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold" style={{ color: NAVY }}>
+                        {[c.prenom, c.nom].filter(Boolean).join(' ') || <span className="italic text-gray-400">Sans nom</span>}
+                        {c.poste && <span className="font-normal text-gray-600"> — {c.poste}</span>}
+                      </p>
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-gray-600">
+                        {c.email && (
+                          <span className="flex items-center gap-1">
+                            <span aria-hidden>📧</span>
+                            <a href={`mailto:${c.email}`} className="underline hover:text-blue-600 break-all">{c.email}</a>
+                          </span>
+                        )}
+                        {c.telephone && (
+                          <span className="flex items-center gap-1">
+                            <span aria-hidden>📞</span>
+                            <a href={`tel:${c.telephone.replace(/\s+/g, '')}`} className="hover:text-blue-600">{c.telephone}</a>
+                          </span>
+                        )}
+                      </div>
+                      {c.principal && (
+                        <Badge className="mt-2 bg-amber-100 text-amber-800 hover:bg-amber-100">
+                          <Star className="h-3 w-3 mr-1 fill-current" /> Contact principal
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {!c.principal && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setPrincipal(i)
+                            void saveContactsToDb(
+                              contacts.map((x, idx) => ({ ...x, principal: idx === i })),
+                              i, 'save',
+                            )
+                          }}
+                          className="h-7 text-xs text-gray-500 hover:text-amber-700"
+                          title="Définir comme principal"
+                        >
+                          <Star className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => startEdit(i)}
+                        className="h-7 text-xs text-gray-600 hover:text-[#0B0F2E]"
+                      >
+                        <span aria-hidden>✏️</span> Modifier
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => removeContact(i)}
+                        className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-1" /> Supprimer
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Mode ÉDITION ── */}
+              {isEditing && (
+                <>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {c.principal ? (
+                        <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">
+                          <Star className="h-3 w-3 mr-1 fill-current" /> Contact principal
+                        </Badge>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setPrincipal(i)}
+                          className="h-7 text-xs text-gray-500 hover:text-amber-700"
+                        >
+                          <Star className="h-3 w-3 mr-1" /> Définir comme principal
+                        </Button>
+                      )}
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => removeContact(i)}
+                      className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                    >
+                      <Trash2 className="h-3 w-3 mr-1" /> Supprimer
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs text-gray-600 mb-1 block">Nom</Label>
+                      <Input
+                        defaultValue={c.nom || ""}
+                        onBlur={e => update(i, { nom: e.target.value })}
+                        className="h-10 text-sm"
+                        placeholder="DUPONT"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-gray-600 mb-1 block">Prénom</Label>
+                      <Input
+                        defaultValue={c.prenom || ""}
+                        onBlur={e => update(i, { prenom: e.target.value })}
+                        className="h-10 text-sm"
+                        placeholder="Jean"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-gray-600 mb-1 block">Poste</Label>
+                      <Input
+                        defaultValue={c.poste || ""}
+                        onBlur={e => update(i, { poste: e.target.value })}
+                        className="h-10 text-sm"
+                        placeholder="CEO, DRH, DAF..."
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-gray-600 mb-1 block">Email</Label>
+                      <Input
+                        type="email"
+                        defaultValue={c.email || ""}
+                        onBlur={e => update(i, { email: e.target.value })}
+                        className="h-10 text-sm"
+                        placeholder="jean@example.mu"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <Label className="text-xs text-gray-600 mb-1 block">Téléphone</Label>
+                      <Input
+                        defaultValue={c.telephone || ""}
+                        onBlur={e => update(i, { telephone: e.target.value })}
+                        className="h-10 text-sm"
+                        placeholder="+230 5123 4567"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2 pt-1">
+                    <Button
+                      size="sm"
+                      onClick={() => handleSaveContact(i)}
+                      disabled={isSaving}
+                      style={{ backgroundColor: NAVY }}
+                      className="text-white hover:opacity-90"
+                    >
+                      {isSaving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1" />}
+                      Enregistrer
+                    </Button>
+                  </div>
+                </>
+              )}
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs text-gray-600 mb-1 block">Nom</Label>
-                <Input
-                  defaultValue={c.nom || ""}
-                  onBlur={e => update(i, { nom: e.target.value })}
-                  className="h-10 text-sm"
-                  placeholder="DUPONT"
-                />
-              </div>
-              <div>
-                <Label className="text-xs text-gray-600 mb-1 block">Prénom</Label>
-                <Input
-                  defaultValue={c.prenom || ""}
-                  onBlur={e => update(i, { prenom: e.target.value })}
-                  className="h-10 text-sm"
-                  placeholder="Jean"
-                />
-              </div>
-              <div>
-                <Label className="text-xs text-gray-600 mb-1 block">Poste</Label>
-                <Input
-                  defaultValue={c.poste || ""}
-                  onBlur={e => update(i, { poste: e.target.value })}
-                  className="h-10 text-sm"
-                  placeholder="CEO, DRH, DAF..."
-                />
-              </div>
-              <div>
-                <Label className="text-xs text-gray-600 mb-1 block">Email</Label>
-                <Input
-                  type="email"
-                  defaultValue={c.email || ""}
-                  onBlur={e => update(i, { email: e.target.value })}
-                  className="h-10 text-sm"
-                  placeholder="jean@example.mu"
-                />
-              </div>
-              <div className="md:col-span-2">
-                <Label className="text-xs text-gray-600 mb-1 block">Téléphone</Label>
-                <Input
-                  defaultValue={c.telephone || ""}
-                  onBlur={e => update(i, { telephone: e.target.value })}
-                  className="h-10 text-sm"
-                  placeholder="+230 5123 4567"
-                />
-              </div>
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </CardContent>
     </Card>
   )
@@ -377,9 +531,10 @@ function ContactTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
   return (
     <div className="space-y-6">
       {/* Sprint 5 AMÉLIO 8 — Éditeur multi-contacts (mig 140 contacts JSONB).
-          Remplace les anciens champs contact_name / contact_position uniques. */}
+          Sprint 6 FIX 3 — mode lecture/édition par contact + save DB par contact. */}
       <ContactsEditor
         initial={Array.isArray(data.contacts) ? data.contacts : []}
+        societeId={data.id}
         onChange={(contacts) => { f.current.contacts = contacts }}
       />
 

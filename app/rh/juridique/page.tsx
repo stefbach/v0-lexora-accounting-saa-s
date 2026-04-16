@@ -75,10 +75,15 @@ export default function JuridiquePage() {
   const [savingEdit, setSavingEdit] = useState(false)
 
   // ── Section 2 : générer contrat ──
+  // Sprint 6 FIX 4 — champs enrichis : poste éditable, horaires, période d'essai
   const [genSociete, setGenSociete] = useState("")
   const [genForm, setGenForm] = useState({
     employe_id: "", type: "CDI", secteur: "general",
     date_debut: "", date_fin: "", salaire: "",
+    poste: "",
+    heures_semaine: "45",
+    periode_essai_oui: true,
+    periode_essai_jours: "90",
   })
   const [generating, setGenerating] = useState(false)
   const [genResult, setGenResult] = useState<string | null>(null)
@@ -125,16 +130,33 @@ export default function JuridiquePage() {
 
   useEffect(() => { loadContrats() }, [loadContrats])
 
-  // ── Pré-remplissage salaire depuis fiche employé ──
+  // ── Pré-remplissage depuis fiche employé (Sprint 6 FIX 4 : +poste, +date_debut) ──
   useEffect(() => {
     const emp = employes.find(e => e.id === genForm.employe_id)
-    if (emp?.salaire_base) setGenForm(f => ({ ...f, salaire: String(emp.salaire_base) }))
+    if (!emp) return
+    setGenForm(f => {
+      const next = { ...f }
+      if (emp.salaire_base && !next.salaire) next.salaire = String(emp.salaire_base)
+      if (emp.poste && !next.poste) next.poste = emp.poste
+      if (emp.date_arrivee && !next.date_debut) next.date_debut = String(emp.date_arrivee).slice(0, 10)
+      return next
+    })
   }, [genForm.employe_id, employes])
 
-  // ── Générer contrat ──
+  // Sprint 6 FIX 4 — pré-remplissage horaires depuis la société
+  useEffect(() => {
+    if (!genSociete) return
+    const soc = societes.find(s => s.id === genSociete)
+    if (soc?.heures_semaine) {
+      setGenForm(f => ({ ...f, heures_semaine: String(soc.heures_semaine) }))
+    }
+  }, [genSociete, societes])
+
+  // ── Générer contrat (Sprint 6 FIX 4 — champs enrichis) ──
   const genererContrat = async () => {
     const emp = employes.find(e => e.id === genForm.employe_id)
     if (!emp || !genForm.date_debut || !genForm.salaire) { alert("Champs requis : Employé, Date début, Salaire"); return }
+    if (!genForm.poste) { alert("Poste requis (pré-rempli depuis la fiche employé — vérifiez le champ)"); return }
     setGenerating(true); setGenResult(null); setSavedId(null)
     try {
       const res = await fetch("/api/juridique", {
@@ -143,15 +165,41 @@ export default function JuridiquePage() {
         body: JSON.stringify({
           action: "generer_contrat",
           societe_id: genSociete,
-          ...genForm,
+          employe_id: genForm.employe_id,
+          type: genForm.type,
+          secteur: genForm.secteur,
+          date_debut: genForm.date_debut,
+          date_fin: genForm.date_fin || null,
           employe_nom: `${emp.prenom} ${emp.nom}`,
-          poste: emp.poste,
+          poste: genForm.poste,  // éditable depuis le formulaire (plus emp.poste hardcodé)
           salaire: parseFloat(genForm.salaire),
+          heures_semaine: parseInt(genForm.heures_semaine, 10) || 45,
+          periode_essai_oui: genForm.periode_essai_oui,
+          periode_essai_jours: genForm.periode_essai_oui
+            ? (parseInt(genForm.periode_essai_jours, 10) || 90)
+            : 0,
         })
       })
       const data = await res.json()
-      setGenResult(data.html || data.contrat || "Erreur génération")
-    } catch { setGenResult("Erreur lors de la génération") }
+      if (!res.ok || data?.error) {
+        console.error('[juridique genererContrat]', res.status, data)
+        alert(`Erreur génération : ${data?.error || `HTTP ${res.status}`}`)
+        setGenResult(null)
+        return
+      }
+      setGenResult(data.html || "Erreur génération")
+      // Sprint 6 FIX 4 — le contrat est déjà inséré en DB par /api/juridique
+      // (avec signature_nom_complet pré-rempli depuis societe.contacts principal).
+      // On refresh la liste des contrats pour afficher le nouveau immédiatement.
+      if (data.contrat?.id) {
+        setSavedId(data.contrat.id)
+        loadContrats()
+      }
+    } catch (e: any) {
+      console.error('[juridique genererContrat] exception', e)
+      alert(`Erreur réseau : ${e?.message || ''}`)
+      setGenResult(null)
+    }
     finally { setGenerating(false) }
   }
 
@@ -440,6 +488,15 @@ export default function JuridiquePage() {
                     <SelectContent>{SECTEURS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
+                {/* Sprint 6 FIX 4 — Poste éditable (pré-rempli depuis fiche employé) */}
+                <div>
+                  <Label>Poste *</Label>
+                  <Input
+                    value={genForm.poste}
+                    onChange={e => setGenForm(f => ({ ...f, poste: e.target.value }))}
+                    placeholder="Ex: Développeur, Comptable..."
+                  />
+                </div>
                 <div>
                   <Label>Date de début *</Label>
                   <Input type="date" value={genForm.date_debut} onChange={e => setGenForm(f => ({ ...f, date_debut: e.target.value }))} />
@@ -454,6 +511,46 @@ export default function JuridiquePage() {
                   <Label>Salaire brut (MUR) *</Label>
                   <Input type="number" value={genForm.salaire} onChange={e => setGenForm(f => ({ ...f, salaire: e.target.value }))} placeholder="Ex: 45000" />
                 </div>
+                {/* Sprint 6 FIX 4 — Horaires semaine */}
+                <div>
+                  <Label>Heures / semaine</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={60}
+                    value={genForm.heures_semaine}
+                    onChange={e => setGenForm(f => ({ ...f, heures_semaine: e.target.value }))}
+                    placeholder="45"
+                  />
+                </div>
+              </div>
+
+              {/* Sprint 6 FIX 4 — Période d'essai */}
+              <div className="flex flex-wrap items-center gap-4 rounded-lg bg-slate-50 border p-3">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={genForm.periode_essai_oui}
+                    onChange={e => setGenForm(f => ({ ...f, periode_essai_oui: e.target.checked }))}
+                    className="h-4 w-4"
+                  />
+                  <span className="font-medium text-[#0B0F2E]">Période d'essai</span>
+                </label>
+                {genForm.periode_essai_oui && (
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs text-gray-600">Durée :</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={365}
+                      value={genForm.periode_essai_jours}
+                      onChange={e => setGenForm(f => ({ ...f, periode_essai_jours: e.target.value }))}
+                      className="w-24 h-9"
+                    />
+                    <span className="text-xs text-gray-600">jours</span>
+                    <span className="text-xs text-gray-400">(défaut 90j — WRA 2019 max 180j)</span>
+                  </div>
+                )}
               </div>
 
               <Button

@@ -76,23 +76,73 @@ export async function POST(request: Request) {
     const { action } = body
 
     // ---- CREATE ----
+    // Sprint 6 FIX 1 — le frontend envoie type_jour='custom' pour les jours
+    // personnalisés société, mais la CHECK constraint DB (mig 105) n'autorise
+    // QUE 'fixe' ou 'variable' → INSERT en 500. On normalise :
+    //   - type_jour='custom' + societe_id NULL → 'variable' (fallback)
+    //   - type_jour='custom' + societe_id != NULL → 'variable'
+    //     (la nature custom est portée par societe_id, pas par type_jour)
+    //   - autres valeurs non autorisées → 'variable' par défaut.
+    // Du coup le badge UI se calcule ensuite à partir de (societe_id, date)
+    // et non plus de type_jour seul (voir FIX 2).
     if (action === 'creer') {
-      const { date, libelle, type_jour, societe_id } = body
+      const { date, libelle, societe_id, travail_autorise, majoration_pct } = body
+      let { type_jour } = body
       if (!date || !libelle) {
         return NextResponse.json({ error: 'Date et libellé requis' }, { status: 400 })
       }
+      // Normalisation type_jour pour respecter la CHECK constraint DB
+      if (type_jour !== 'fixe' && type_jour !== 'variable') {
+        type_jour = 'variable'
+      }
 
       const annee = new Date(date).getFullYear()
-      const { data, error } = await supabase.from('jours_feries').insert({
+      const insertRow: Record<string, unknown> = {
         date,
         libelle,
-        type_jour: type_jour || 'variable',
+        type_jour,
         societe_id: societe_id || null,
         annee,
         pays: 'MU',
-      }).select().single()
+      }
+      // Colonnes optionnelles (mig 139) — best-effort, retombe sans si absentes
+      if (travail_autorise !== undefined) insertRow.travail_autorise = !!travail_autorise
+      if (majoration_pct !== undefined) {
+        const pct = Number(majoration_pct)
+        if (Number.isFinite(pct) && pct >= 0 && pct <= 1000) insertRow.majoration_pct = pct
+      }
 
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      const { data, error } = await supabase.from('jours_feries').insert(insertRow).select().single()
+
+      if (error) {
+        console.error('[jours-feries POST creer] insert error:', {
+          message: error.message,
+          code: error.code,
+          hint: error.hint,
+          details: error.details,
+        })
+        // Doublon UNIQUE(date, societe_id) — mig 139
+        if (error.code === '23505' || /duplicate|already exists|unique/i.test(error.message)) {
+          return NextResponse.json({
+            error: 'Un jour férié existe déjà pour cette date' + (societe_id ? ' et cette société' : ' (national Maurice)') + '.',
+          }, { status: 409 })
+        }
+        // Colonne manquante (mig 139 pas appliquée)
+        if (error.code === '42703' && /travail_autorise|majoration_pct/.test(error.message)) {
+          // Retry sans les colonnes optionnelles
+          delete insertRow.travail_autorise
+          delete insertRow.majoration_pct
+          const retry = await supabase.from('jours_feries').insert(insertRow).select().single()
+          if (retry.error) {
+            return NextResponse.json({ error: `Erreur insertion (retry) : ${retry.error.message}`, code: retry.error.code }, { status: 500 })
+          }
+          return NextResponse.json({ success: true, jour_ferie: retry.data, warning: 'Migration 139 non appliquée — colonnes travail_autorise/majoration_pct ignorées' })
+        }
+        return NextResponse.json({
+          error: `Erreur insertion : ${error.message}${error.hint ? ` (${error.hint})` : ''}`,
+          code: error.code,
+        }, { status: 500 })
+      }
       return NextResponse.json({ success: true, jour_ferie: data })
     }
 

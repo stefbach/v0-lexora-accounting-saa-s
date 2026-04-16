@@ -27,12 +27,14 @@ export interface ParamsContrat {
   heures_semaine?: number;
   clauses_speciales?: string[];
   motif_cdd?: string; // CDD : motif obligatoire WRA
+  // Sprint 6 FIX 4 — nom du signataire côté employeur (dirigeant)
+  signataire_nom_complet?: string;
 }
 
 // Remplir les variables du template
 export function remplirTemplate(template: string, params: ParamsContrat): string {
   const date = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-  return template
+  let out = template
     .replace(/{{societe_nom}}/g, params.societe_nom)
     .replace(/{{societe_brn}}/g, params.societe_brn)
     .replace(/{{societe_adresse}}/g, params.societe_adresse)
@@ -46,11 +48,36 @@ export function remplirTemplate(template: string, params: ParamsContrat): string
     .replace(/{{salaire_base}}/g, params.salaire_base.toLocaleString('fr-FR'))
     .replace(/{{date_debut}}/g, params.date_debut)
     .replace(/{{date_fin}}/g, params.date_fin || '')
-    .replace(/{{periode_essai}}/g, String(params.periode_essai || 90))
+    .replace(/{{periode_essai}}/g, String(params.periode_essai ?? 90))
     .replace(/{{lieu_travail}}/g, params.lieu_travail)
     .replace(/{{heures_semaine}}/g, String(params.heures_semaine || 45))
     .replace(/{{motif_cdd}}/g, params.motif_cdd || '')
+    .replace(/{{signataire_nom_complet}}/g, params.signataire_nom_complet || '')
     .replace(/{{date_generation}}/g, date);
+
+  // Sprint 6 FIX 4 — injection automatique du nom du signataire sous le
+  // bloc signature employeur. On détecte le texte "Signature & Cachet" (ou
+  // "Signature & Stamp") juste après la ligne de signature, et on insère
+  // le nom juste au-dessus. Si le template contient déjà
+  // {{signataire_nom_complet}}, le remplacement plus haut a déjà eu lieu
+  // donc ce bloc est no-op. Sinon : injection bidule post-template.
+  if (params.signataire_nom_complet && !/{{signataire_nom_complet}}/.test(template)) {
+    const signatureLabel = `<p style="font-size: 11px; color: #555; margin: 2px 0 0 0;">${params.signataire_nom_complet}</p>`
+    // Insère au-dessus de "Signature & Cachet" / "Signature & Stamp"
+    out = out.replace(
+      /(<p[^>]*>\s*Signature\s*&amp;\s*(?:Cachet|Stamp))/i,
+      `${signatureLabel}$1`,
+    )
+    // Fallback : si le pattern ci-dessus n'a pas matché (texte unescaped), essaie avec &
+    if (!out.includes(params.signataire_nom_complet)) {
+      out = out.replace(
+        /(<p[^>]*>\s*Signature\s*&\s*(?:Cachet|Stamp))/i,
+        `${signatureLabel}$1`,
+      )
+    }
+  }
+
+  return out;
 }
 
 export function getTemplate(type: string, secteur: string): string {
