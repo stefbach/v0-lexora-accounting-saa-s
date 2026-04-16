@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
+import { lastDayOfMonth } from '@/lib/rh/period'
 
 export const dynamic = 'force-dynamic'
 
@@ -50,7 +51,7 @@ export async function POST(request: Request) {
     // bulletins plus bas renverra 404 explicite si vide).
     const { data: unlockedBuls, error: lockErr } = await supabase.from('bulletins_paie')
       .select('id').eq('societe_id', societe_id)
-      .gte('periode', `${periode}-01`).lte('periode', `${periode}-31`)
+      .gte('periode', `${periode}-01`).lte('periode', lastDayOfMonth(periode))
       .or('verrouille.is.null,verrouille.eq.false')
       .limit(1)
     if (lockErr) {
@@ -71,7 +72,7 @@ export async function POST(request: Request) {
       .select('*')
       .eq('societe_id', societe_id)
       .gte('periode', `${periode}-01`)
-      .lte('periode', `${periode}-31`)
+      .lte('periode', lastDayOfMonth(periode))
 
     if (error) {
       console.error('[csg-mra] DB error bulletins:', error.message, error.details)

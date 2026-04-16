@@ -8,6 +8,7 @@ import {
   BANQUES_MAURITIUS,
   type LigneBulletin
 } from '@/lib/rh/banques-mauritius'
+import { lastDayOfMonth } from '@/lib/rh/period'
 
 export const dynamic = 'force-dynamic'
 
@@ -71,7 +72,7 @@ export async function POST(request: Request) {
     const periodeStr = periode.length === 7 ? periode : periode.slice(0, 7)
     const { data: unlockedBuls, error: lockErr } = await supabase.from('bulletins_paie')
       .select('id').eq('societe_id', societe_id)
-      .gte('periode', `${periodeStr}-01`).lte('periode', `${periodeStr}-31`)
+      .gte('periode', `${periodeStr}-01`).lte('periode', lastDayOfMonth(periodeStr))
       .or('verrouille.is.null,verrouille.eq.false')
       .limit(1)
     if (lockErr) {
@@ -131,7 +132,7 @@ export async function POST(request: Request) {
         .select('*')
         .eq('societe_id', societe_id)
         .gte('periode', `${periode}-01`)
-        .lte('periode', `${periode}-31`)
+        .lte('periode', lastDayOfMonth(periode))
         .in('statut', ['valide', 'paye'])
 
       if (validated && validated.length > 0) {
@@ -143,7 +144,7 @@ export async function POST(request: Request) {
           .select('*')
           .eq('societe_id', societe_id)
           .gte('periode', `${periode}-01`)
-          .lte('periode', `${periode}-31`)
+          .lte('periode', lastDayOfMonth(periode))
         allBulletins = anyStatus || []
       }
     } catch (dbErr: any) {

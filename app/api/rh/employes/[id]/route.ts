@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { userHasAccessToEmploye } from '@/lib/rh/access'
+import { lastDayOfMonth } from '@/lib/rh/period'
 
 export const dynamic = 'force-dynamic'
 
@@ -45,7 +46,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     // Build pointages query - month-based or last 31 days
     let pointagesQuery = supabase.from('pointages').select('*').eq('employe_id', id).order('date_pointage', { ascending: false })
     if (pointage_mois) {
-      pointagesQuery = pointagesQuery.gte('date_pointage', `${pointage_mois}-01`).lte('date_pointage', `${pointage_mois}-31`)
+      pointagesQuery = pointagesQuery.gte('date_pointage', `${pointage_mois}-01`).lte('date_pointage', lastDayOfMonth(pointage_mois))
     } else {
       pointagesQuery = pointagesQuery.limit(31)
     }

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
+import { lastDayOfMonth } from '@/lib/rh/period'
 
 export const dynamic = 'force-dynamic'
 
@@ -47,7 +48,7 @@ export async function POST(request: Request) {
     // LOCK CHECK — lecture defensive
     const { data: unlockedBuls, error: lockErr } = await supabase.from('bulletins_paie')
       .select('id').eq('societe_id', societe_id)
-      .gte('periode', `${periode}-01`).lte('periode', `${periode}-31`)
+      .gte('periode', `${periode}-01`).lte('periode', lastDayOfMonth(periode))
       .or('verrouille.is.null,verrouille.eq.false')
       .limit(1)
     if (lockErr) {
@@ -67,7 +68,7 @@ export async function POST(request: Request) {
       .select('*')
       .eq('societe_id', societe_id)
       .gte('periode', `${periode}-01`)
-      .lte('periode', `${periode}-31`)
+      .lte('periode', lastDayOfMonth(periode))
 
     if (error) throw error
     if (!bulletins || bulletins.length === 0) return NextResponse.json({ error: 'Aucun bulletin pour cette période' }, { status: 404 })
