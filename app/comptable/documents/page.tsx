@@ -57,6 +57,39 @@ export default function ComptableDocumentsPage() {
   const [statusFilter, setStatusFilter] = useState("all")
   const [documents, setDocuments] = useState<Document[]>([])
   const [loading, setLoading] = useState(true)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  const handleBulkDelete = async (visibleIds: string[]) => {
+    const ids = Array.from(selectedIds).filter(id => visibleIds.includes(id))
+    if (ids.length === 0) return
+    if (!confirm(`Supprimer ${ids.length} document(s) sélectionné(s) ?\n\nCela supprime les fichiers du storage ET toutes les écritures/factures/relevés liés. Action irréversible.`)) return
+    setBulkDeleting(true)
+    try {
+      const res = await fetch('/api/documents/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      })
+      const data = await res.json()
+      if (!res.ok) { alert(data.error || `Erreur HTTP ${res.status}`); return }
+      setDocuments(prev => prev.filter(d => !data.deleted?.includes(d.id)))
+      setSelectedIds(new Set())
+      if (data.failed_count > 0) alert(`${data.deleted_count} supprimés, ${data.failed_count} échecs.`)
+    } catch {
+      alert('Erreur de connexion')
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
 
   const fetchDocuments = useCallback(async () => {
     try {
@@ -118,6 +151,30 @@ export default function ComptableDocumentsPage() {
         </Select>
       </div>
 
+      {/* Bulk actions toolbar */}
+      {selectedIds.size > 0 && (
+        <div className="sticky top-0 z-20 flex items-center justify-between gap-3 rounded-lg border border-[#9F1239]/30 bg-[#9F1239]/5 px-4 py-3 shadow-sm mb-3">
+          <div className="text-sm">
+            <span className="font-semibold text-[#0B0F2E]">{selectedIds.size}</span>
+            <span className="text-gray-600"> document{selectedIds.size > 1 ? 's' : ''} sélectionné{selectedIds.size > 1 ? 's' : ''}</span>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())} disabled={bulkDeleting}>
+              Tout désélectionner
+            </Button>
+            <Button
+              size="sm"
+              className="gap-2 bg-[#9F1239] hover:bg-[#9F1239]/90 text-white"
+              onClick={() => handleBulkDelete(filtered.map(d => d.id))}
+              disabled={bulkDeleting}
+            >
+              {bulkDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              Supprimer {selectedIds.size}
+            </Button>
+          </div>
+        </div>
+      )}
+
       <Card>
         <CardContent className="p-0">
           {loading ? (
@@ -128,6 +185,18 @@ export default function ComptableDocumentsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 cursor-pointer"
+                      title="Tout (dé)sélectionner"
+                      checked={filtered.length > 0 && filtered.every(d => selectedIds.has(d.id))}
+                      onChange={(e) => {
+                        if (e.target.checked) setSelectedIds(new Set(filtered.map(d => d.id)))
+                        else setSelectedIds(new Set())
+                      }}
+                    />
+                  </TableHead>
                   <TableHead>Fichier</TableHead>
                   <TableHead>Client</TableHead>
                   <TableHead>Societe</TableHead>
@@ -139,7 +208,15 @@ export default function ComptableDocumentsPage() {
               </TableHeader>
               <TableBody>
                 {filtered.map((doc) => (
-                  <TableRow key={doc.id}>
+                  <TableRow key={doc.id} className={selectedIds.has(doc.id) ? "bg-[#D4AF37]/5" : undefined}>
+                    <TableCell>
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 cursor-pointer"
+                        checked={selectedIds.has(doc.id)}
+                        onChange={() => toggleSelect(doc.id)}
+                      />
+                    </TableCell>
                     <TableCell className="font-medium"><div className="flex items-center gap-2"><FileText className="h-4 w-4 text-muted-foreground" />{doc.nom_fichier}</div></TableCell>
                     <TableCell>{doc.client_name}</TableCell>
                     <TableCell>{doc.societe_nom}</TableCell>
