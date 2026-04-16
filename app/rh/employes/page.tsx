@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Search, Plus, Loader2, Users, Upload, Download, FileSpreadsheet, Pencil, ExternalLink, UserPlus, Key, User, Briefcase, Banknote, Building2, Trash2, AlertTriangle } from "lucide-react"
+import { Search, Plus, Loader2, Users, Upload, Download, FileSpreadsheet, Pencil, ExternalLink, UserPlus, Key, User, Briefcase, Banknote, Building2, Trash2, AlertTriangle, Eye, EyeOff, Mail, CheckCircle2, XCircle } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { BANQUES_MAURITIUS } from "@/lib/rh/banques-mauritius"
 import { toast } from "sonner"
@@ -494,6 +494,17 @@ export default function EmployesPage() {
   const [accessPassword, setAccessPassword] = useState("")
   const [accessSaving, setAccessSaving] = useState(false)
   const [accessResult, setAccessResult] = useState<{email:string;password:string}|null>(null)
+  // Sprint 12 FEATURE 1 — toggle visibilité mot de passe
+  const [accessPasswordVisible, setAccessPasswordVisible] = useState(true)
+
+  // Sprint 12 FEATURE 3 — création comptes en masse
+  const [bulkOpen, setBulkOpen] = useState(false)
+  const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set())
+  const [bulkDefaultPwd, setBulkDefaultPwd] = useState("")
+  const [bulkPerEmpPwd, setBulkPerEmpPwd] = useState<Record<string, string>>({})
+  const [bulkUsePerEmp, setBulkUsePerEmp] = useState(false)
+  const [bulkSaving, setBulkSaving] = useState(false)
+  const [bulkResults, setBulkResults] = useState<{employe_id:string;status:string;error?:string;email?:string}[]|null>(null)
 
   const genPwd = () => { const c = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"; let p = ""; for (let i = 0; i < 10; i++) p += c[Math.floor(Math.random() * c.length)]; return p }
 
@@ -509,23 +520,81 @@ export default function EmployesPage() {
     if (!accessEmp || !accessEmp.email) { alert("L'employé doit avoir un email"); return }
     setAccessSaving(true)
     try {
-      const res = await fetch("/api/admin/users", {
+      // Sprint 12 FEATURE 1 — pour le rôle "employe" on utilise l'endpoint
+      // dédié qui lie correctement employes.auth_user_id + profiles.employe_id.
+      // Pour les autres rôles (admin/comptable/...) on garde le flux legacy
+      // qui crée des dossiers / user_societes selon le rôle.
+      if (accessRole === "employe") {
+        const res = await fetch("/api/admin/create-user-employee", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            employe_id: accessEmp.id,
+            password: accessPassword,
+          }),
+        })
+        const data = await res.json()
+        if (!res.ok || data.error) {
+          alert("Erreur: " + (data.error || `HTTP ${res.status}`))
+        } else {
+          setAccessResult({ email: data.result?.email || accessEmp.email, password: accessPassword })
+          load()
+        }
+      } else {
+        const res = await fetch("/api/admin/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: accessEmp.email,
+            password: accessPassword,
+            full_name: `${accessEmp.prenom} ${accessEmp.nom}`,
+            role: accessRole,
+            societe_id: accessEmp.societe_id,
+            phone: accessEmp.telephone || null,
+          }),
+        })
+        const data = await res.json()
+        if (data.error) { alert("Erreur: " + data.error) }
+        else { setAccessResult({ email: accessEmp.email, password: accessPassword }); load() }
+      }
+    } catch { alert("Erreur réseau") }
+    setAccessSaving(false)
+  }
+
+  // Sprint 12 FEATURE 3 — ouverture du dialog bulk + init sélection par défaut
+  const openBulkCreate = () => {
+    const withoutAccount = employes.filter(e => !e.auth_user_id && !e.date_depart)
+    setBulkSelected(new Set(withoutAccount.map(e => e.id)))
+    setBulkDefaultPwd(genPwd())
+    setBulkPerEmpPwd({})
+    setBulkUsePerEmp(false)
+    setBulkResults(null)
+    setBulkOpen(true)
+  }
+
+  const handleBulkCreate = async () => {
+    const selected = employes.filter(e => bulkSelected.has(e.id))
+    if (selected.length === 0) { alert("Aucun employé sélectionné"); return }
+    setBulkSaving(true)
+    try {
+      const res = await fetch("/api/admin/create-user-employee", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: accessEmp.email,
-          password: accessPassword,
-          full_name: `${accessEmp.prenom} ${accessEmp.nom}`,
-          role: accessRole,
-          societe_id: accessEmp.societe_id,
-          phone: accessEmp.telephone || null,
+          bulk: true,
+          default_password: bulkUsePerEmp ? undefined : bulkDefaultPwd,
+          employes: selected.map(e => ({
+            employe_id: e.id,
+            password: bulkUsePerEmp ? (bulkPerEmpPwd[e.id] || bulkDefaultPwd) : bulkDefaultPwd,
+          })),
         }),
       })
       const data = await res.json()
-      if (data.error) { alert("Erreur: " + data.error) }
-      else { setAccessResult({ email: accessEmp.email, password: accessPassword }) }
+      if (!res.ok) { alert("Erreur: " + (data.error || `HTTP ${res.status}`)); return }
+      setBulkResults(data.results || [])
+      load()
     } catch { alert("Erreur réseau") }
-    setAccessSaving(false)
+    finally { setBulkSaving(false) }
   }
 
   const [editOpen, setEditOpen] = useState(false)
@@ -738,7 +807,12 @@ export default function EmployesPage() {
                       </div>
                       <div className="flex flex-col gap-1 shrink-0">
                         <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(ev)=>{ev.stopPropagation();openEdit(e)}} title="Modifier"><Pencil className="w-4 h-4 text-[#D4AF37]"/></Button>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(ev)=>{ev.stopPropagation();openAccess(e)}} title="Creer acces"><Key className="w-4 h-4 text-purple-600"/></Button>
+                        {/* Sprint 12 FEATURE 1+4 — bouton conditionnel compte Lexora */}
+                        {!e.auth_user_id ? (
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(ev)=>{ev.stopPropagation();openAccess(e)}} title="Créer le compte Lexora"><Key className="w-4 h-4 text-purple-600"/></Button>
+                        ) : (
+                          <span title="Compte Lexora actif" className="h-8 w-8 inline-flex items-center justify-center"><CheckCircle2 className="w-4 h-4 text-green-600"/></span>
+                        )}
                         <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(ev)=>{ev.stopPropagation();openDelete(e)}} title="Supprimer"><Trash2 className="w-4 h-4 text-red-600"/></Button>
                       </div>
                     </div>
@@ -794,7 +868,10 @@ export default function EmployesPage() {
                           <div className="flex items-center justify-end gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
                             <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(ev)=>{ev.stopPropagation();router.push(`/rh/employes/${e.id}`)}} title="Voir fiche"><ExternalLink className="w-4 h-4 text-[#0B0F2E]"/></Button>
                             <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(ev)=>{ev.stopPropagation();openEdit(e)}} title="Modifier"><Pencil className="w-4 h-4 text-[#D4AF37]"/></Button>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(ev)=>{ev.stopPropagation();openAccess(e)}} title="Creer acces utilisateur"><Key className="w-4 h-4 text-purple-600"/></Button>
+                            {/* Sprint 12 FEATURE 1+4 — bouton conditionnel compte Lexora */}
+                            {!e.auth_user_id ? (
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(ev)=>{ev.stopPropagation();openAccess(e)}} title="Créer le compte Lexora"><Key className="w-4 h-4 text-purple-600"/></Button>
+                            ) : null}
                             <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(ev)=>{ev.stopPropagation();openDelete(e)}} title="Supprimer"><Trash2 className="w-4 h-4 text-red-600"/></Button>
                           </div>
                         </TableCell>
@@ -852,17 +929,44 @@ export default function EmployesPage() {
                 </Select>
               </div>
               <div>
-                <Label>Mot de passe généré</Label>
+                <Label>Mot de passe</Label>
                 <div className="flex gap-2">
-                  <Input value={accessPassword} readOnly className="font-mono bg-gray-50" />
-                  <Button variant="outline" size="sm" onClick={() => setAccessPassword(genPwd())}>Régénérer</Button>
+                  <div className="relative flex-1">
+                    <Input
+                      type={accessPasswordVisible ? "text" : "password"}
+                      value={accessPassword}
+                      onChange={e => setAccessPassword(e.target.value)}
+                      className="font-mono pr-10"
+                      placeholder="Mot de passe..."
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setAccessPasswordVisible(v => !v)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                      title={accessPasswordVisible ? "Masquer" : "Afficher"}
+                    >
+                      {accessPasswordVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => setAccessPassword(genPwd())} title="Générer automatiquement">
+                    Générer
+                  </Button>
                 </div>
-                <p className="text-xs text-orange-600 mt-1">Notez ce mot de passe avant de confirmer</p>
+                <div className="mt-2 p-2 rounded bg-amber-50 border border-amber-200 flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <p className="text-xs text-amber-800">
+                    <span className="font-semibold">Important :</span> communiquez ce mot de passe à l'employé
+                    par un canal sécurisé (en main propre, SMS). Il ne sera plus visible après confirmation.
+                  </p>
+                </div>
               </div>
-              <Button onClick={handleCreateAccess} disabled={accessSaving || !accessEmp.email}
-                className="w-full bg-[#0B0F2E] text-white">
-                {accessSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <UserPlus className="w-4 h-4 mr-2" />}
-                Créer le compte
+              <Button
+                onClick={handleCreateAccess}
+                disabled={accessSaving || !accessEmp.email || !accessPassword || accessPassword.length < 6}
+                className="w-full bg-[#0B0F2E] text-white"
+              >
+                {accessSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Key className="w-4 h-4 mr-2" />}
+                {accessRole === "employe" ? "Créer le compte Lexora" : "Créer le compte"}
               </Button>
             </div>
           )}
