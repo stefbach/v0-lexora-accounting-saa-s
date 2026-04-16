@@ -79,7 +79,6 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
     `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`
   )
   const [documents, setDocuments] = useState<any[]>([])
-  const [simulatorGross, setSimulatorGross] = useState<string>("")
   const photoInputRef = useRef<HTMLInputElement>(null)
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -642,61 +641,9 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
             </CardContent>
           </Card>
 
-          {/* Simulateur Net */}
-          <Card className="rounded-2xl shadow-sm border-0 overflow-hidden">
-            <div className="bg-gradient-to-r from-[#D4AF37]/15 via-[#D4AF37]/10 to-[#D4AF37]/5">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}>
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#D4AF37] to-[#D4AF37]/70 flex items-center justify-center">
-                    <CreditCard className="w-4 h-4 text-white" />
-                  </div>
-                  <span>Simulateur Net</span>
-                  <span className="ml-auto text-[10px] font-normal text-[#D4AF37] bg-[#D4AF37]/15 px-2.5 py-1 rounded-full border border-[#D4AF37]/20">Estimation</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label className="text-xs text-gray-600 mb-1">Salaire brut mensuel (MUR)</Label>
-                  <Input
-                    type="number"
-                    placeholder="Ex: 45000"
-                    value={simulatorGross}
-                    onChange={e => setSimulatorGross(e.target.value)}
-                    className="h-11 border-[#D4AF37]/30 focus-visible:ring-[#D4AF37]/40 bg-white"
-                  />
-                </div>
-                {simulatorGross && parseFloat(simulatorGross) > 0 && (() => {
-                  const gross = parseFloat(simulatorGross)
-                  const csgRate = gross <= 50000 ? 0.015 : 0.03
-                  const csg = gross * csgRate
-                  const nsf = gross * 0.015
-                  const net = gross - csg - nsf
-                  return (
-                    <div className="bg-white/80 backdrop-blur-sm border border-[#D4AF37]/20 rounded-xl p-5 space-y-3">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">Brut</span>
-                        <span className="font-medium">{fmt(gross)}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">CSG salarié ({(csgRate * 100).toFixed(1)}%)</span>
-                        <span className="text-red-500">- {fmt(csg)}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">NSF salarié (1.5%)</span>
-                        <span className="text-red-500">- {fmt(nsf)}</span>
-                      </div>
-                      <div className="border-t border-[#D4AF37]/20 pt-3 mt-3">
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm font-bold text-[#0B0F2E]">Net estimé</span>
-                          <span className="text-2xl font-bold text-[#D4AF37]">{fmt(net)}</span>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })()}
-              </CardContent>
-            </div>
-          </Card>
+          {/* Sprint 11 BUG 9A — Simulateur Net supprimé (décision patron :
+              inutile et confus sur la fiche employé ; une éventuelle
+              simulation paie sera ailleurs). */}
 
           <SaveBtn />
         </TabsContent>
