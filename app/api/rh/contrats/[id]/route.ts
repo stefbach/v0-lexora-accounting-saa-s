@@ -69,12 +69,15 @@ export async function GET(_request: Request, { params }: Params) {
 // ── PATCH /api/rh/contrats/[id] ──────────────────────────────────────────────
 // Body standard : { statut?, date_signature?, notes?, html_content? }
 // Body contresigner : { action: 'contresigner' } → signature dirigeant authentifié
+// Sprint 8 — admin client pour contourner RLS qui référence auth.users
+// (même cause que POST/INSERT, cf. mig 028 contrats_employe_read).
 export async function PATCH(request: Request, { params }: Params) {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const supabaseAuth = await createClient()
+    const { data: { user } } = await supabaseAuth.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
+    const supabase = getAdminClient()
     const { id } = await params
     const body = await request.json()
 
