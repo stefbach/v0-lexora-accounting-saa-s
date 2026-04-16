@@ -18,9 +18,20 @@ function getAdminClient() {
 
 const MOIS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"]
 
+// Sprint 7 FIX 6 — PDF affichait "19/170" au lieu de "19 170".
+// Cause : Intl.NumberFormat('fr-FR') utilise par défaut un narrow NBSP
+// (U+202F, ou NBSP classique U+00A0 selon la version ICU) comme
+// séparateur de milliers. La police Helvetica embarquée par
+// @react-pdf/renderer ne sait pas rendre ces caractères Unicode spéciaux
+// et les remplace par '/' dans le PDF final. Solution : normaliser
+// TOUS les espaces Unicode non-sécables vers un espace ASCII (U+0020)
+// juste après le format — garde le format locale, force le rendu propre.
 function fmt(n: number | null | undefined): string {
   if (!n && n !== 0) return "0"
-  return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(n)
+  return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 })
+    .format(n)
+    // U+00A0 (NBSP), U+202F (narrow NBSP), U+2009 (thin space)
+    .replace(/[\u00A0\u202F\u2009]/g, ' ')
 }
 
 // ─── Shared data fetcher ──────────────────────────────────────────
