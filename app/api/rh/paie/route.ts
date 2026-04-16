@@ -163,6 +163,102 @@ export async function GET(request: Request) {
     const societe_id = searchParams.get('societe_id')
     step('step2: params', { periode, societe_id, employe_id })
 
+    // ── Sprint 5 BUG A — endpoint diagnostique TEMPORAIRE ─────────────────
+    // Usage : /api/rh/paie?debug=true&societe_id=...&periode=...
+    // Teste chaque table en isolation pour identifier laquelle échoue.
+    // À SUPPRIMER une fois le bug identifié + corrigé.
+    if (searchParams.get('debug') === 'true') {
+      const results: Record<string, any> = { societe_id, periode }
+      try {
+        // Step 1 — bulletins_paie
+        const q1 = societe_id && periode
+          ? await supabase.from('bulletins_paie')
+              .select('*')
+              .eq('societe_id', societe_id)
+              .gte('periode', `${periode}-01`)
+              .lte('periode', `${periode}-31`)
+              .limit(1)
+          : await supabase.from('bulletins_paie').select('*').limit(1)
+        results.step1_bulletins_paie = q1.error
+          ? { ERROR: true, message: q1.error.message, code: q1.error.code, hint: q1.error.hint, details: q1.error.details }
+          : { ok: true, count: (q1.data || []).length, sample_keys: q1.data?.[0] ? Object.keys(q1.data[0]).sort() : [] }
+
+        // Step 2 — employes (avec actif, date_depart, code_employe, devise_salaire)
+        const q2 = await supabase.from('employes')
+          .select('id, nom, prenom, actif, date_depart, code_employe, devise_salaire')
+          .limit(1)
+        results.step2_employes = q2.error
+          ? { ERROR: true, message: q2.error.message, code: q2.error.code, hint: q2.error.hint, details: q2.error.details }
+          : { ok: true, count: (q2.data || []).length }
+
+        // Step 3 — societes (avec pointage_actif + regles_planning + contacts)
+        const q3 = await supabase.from('societes')
+          .select('id, nom, pointage_actif, regles_planning, contacts')
+          .limit(1)
+        results.step3_societes = q3.error
+          ? { ERROR: true, message: q3.error.message, code: q3.error.code, hint: q3.error.hint, details: q3.error.details }
+          : { ok: true, count: (q3.data || []).length }
+
+        // Step 4 — parametres_paie_mra
+        const q4 = await supabase.from('parametres_paie_mra').select('*').limit(1)
+        results.step4_parametres_paie_mra = q4.error
+          ? { ERROR: true, message: q4.error.message, code: q4.error.code, hint: q4.error.hint, details: q4.error.details }
+          : { ok: true, count: (q4.data || []).length, sample_keys: q4.data?.[0] ? Object.keys(q4.data[0]).sort() : [] }
+
+        // Step 5 — profiles (colonnes lues par lib/rh/access.ts)
+        const q5 = await supabase.from('profiles').select('id, role, societe_id, client_id').eq('id', user.id).maybeSingle()
+        results.step5_profiles = q5.error
+          ? { ERROR: true, message: q5.error.message, code: q5.error.code, hint: q5.error.hint, details: q5.error.details }
+          : { ok: true, profile: q5.data }
+
+        // Step 6 — userHasAccessToSociete (le check qui gate l'accès)
+        if (societe_id) {
+          try {
+            const hasAccess = await userHasAccessToSociete(user.id, societe_id)
+            results.step6_userHasAccessToSociete = { ok: true, hasAccess }
+          } catch (e: any) {
+            results.step6_userHasAccessToSociete = { ERROR: true, message: e?.message || String(e), stack: e?.stack?.split('\n').slice(0, 3) }
+          }
+        }
+
+        // Step 7 — enrichment employés (full SELECT comme le code production)
+        if (societe_id) {
+          const q7 = await supabase.from('employes')
+            .select('id, code_employe, nom, prenom, poste, devise_salaire')
+            .eq('societe_id', societe_id)
+            .limit(1)
+          results.step7_enrich_employes_full = q7.error
+            ? { ERROR: true, message: q7.error.message, code: q7.error.code, hint: q7.error.hint }
+            : { ok: true, count: (q7.data || []).length }
+        }
+
+        // Step 8 — la query exacte du prod (bulletins_paie + enrichissement)
+        if (societe_id && periode) {
+          const q8 = await supabase.from('bulletins_paie')
+            .select('*')
+            .eq('societe_id', societe_id)
+            .gte('periode', `${periode}-01`)
+            .lte('periode', `${periode}-31`)
+            .order('periode', { ascending: false })
+          results.step8_prod_query = q8.error
+            ? { ERROR: true, message: q8.error.message, code: q8.error.code, hint: q8.error.hint, details: q8.error.details }
+            : { ok: true, count: (q8.data || []).length }
+        }
+
+        return NextResponse.json({ success: true, ...results })
+      } catch (e: any) {
+        return NextResponse.json({
+          step: 'catch',
+          error: e?.message || String(e),
+          name: e?.name,
+          code: e?.code,
+          stack: e?.stack?.split('\n').slice(0, 8),
+          partial_results: results,
+        }, { status: 500 })
+      }
+    }
+    // ── Fin endpoint debug ────────────────────────────────────────────────
+
     // Multi-tenant: verify access — wrap in try/catch pour éviter 500 si
     // une table de mapping (profiles/dossiers/user_societes/...) manque.
     // En cas d'exception, on refuse l'accès plutôt que de casser la page.
