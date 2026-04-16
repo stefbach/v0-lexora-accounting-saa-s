@@ -1,14 +1,17 @@
 "use client"
 import React, { useState, useEffect, useCallback } from "react"
+import { useSearchParams, useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Calculator, Download, FileText, BookOpen, AlertTriangle, CheckCircle, Lock, Unlock, ShieldCheck, ArrowRight, Clock, CreditCard, FileSpreadsheet, Receipt, Pencil, X, Save, RefreshCw } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Loader2, Calculator, Download, FileText, BookOpen, AlertTriangle, CheckCircle, Lock, Unlock, ShieldCheck, ArrowRight, Clock, CreditCard, FileSpreadsheet, Receipt, Pencil, X, Save, RefreshCw, History } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { PaieValidationPanel } from "@/components/rh/PaieValidationPanel"
 
 function fmt(n: number) { return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "MUR", maximumFractionDigits: 0 }).format(n) }
 const STATUT_COLORS: Record<string, string> = {
@@ -49,6 +52,28 @@ export default function PaiePage() {
   // Comptabilisation
   const [comptabilisationLoading, setComptabilisationLoading] = useState(false)
   const [comptabilisationResult, setComptabilisationResult] = useState<string | null>(null)
+
+  // Sprint 12 FEATURE 5 — onglet actif synchronisé avec URL ?tab=
+  // Valeurs : "bulletins" (défaut) | "validation" | "historique"
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const tabParam = searchParams.get("tab")
+  const initialTab = tabParam === "validation" || tabParam === "historique" ? tabParam : "bulletins"
+  const [activeTab, setActiveTab] = useState<string>(initialTab)
+  useEffect(() => {
+    // Resync si l'URL change (back/forward)
+    const t = searchParams.get("tab")
+    if (t === "validation" || t === "historique") setActiveTab(t)
+    else setActiveTab("bulletins")
+  }, [searchParams])
+  const changeTab = (t: string) => {
+    setActiveTab(t)
+    const sp = new URLSearchParams(Array.from(searchParams.entries()))
+    if (t === "bulletins") sp.delete("tab")
+    else sp.set("tab", t)
+    const qs = sp.toString()
+    router.replace(qs ? `/rh/paie?${qs}` : "/rh/paie", { scroll: false })
+  }
 
   useEffect(() => {
     Promise.all([
@@ -484,6 +509,16 @@ export default function PaiePage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Sprint 12 FEATURE 5 — onglets Bulletins / Validation / Historique */}
+        <Tabs value={activeTab} onValueChange={changeTab}>
+          <TabsList>
+            <TabsTrigger value="bulletins" className="gap-2"><Calculator className="w-4 h-4" />Bulletins</TabsTrigger>
+            <TabsTrigger value="validation" className="gap-2"><ShieldCheck className="w-4 h-4" />Validation</TabsTrigger>
+            <TabsTrigger value="historique" className="gap-2"><History className="w-4 h-4" />Historique</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="bulletins" className="space-y-6 mt-4">
 
         {/* ═══ WORKFLOW STEPPER ═══ */}
         {societe !== "all" && (
@@ -1063,6 +1098,88 @@ export default function PaiePage() {
             )}
           </CardContent>
         </Card>
+
+          </TabsContent>
+
+          {/* Sprint 12 FEATURE 5 — onglet Validation : contrôle prépaie */}
+          <TabsContent value="validation" className="space-y-6 mt-4">
+            {societe === "all" ? (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-center gap-3 text-sm text-amber-800">
+                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+                <p>Sélectionnez une société ci-dessus avant de lancer le contrôle prépaie.</p>
+              </div>
+            ) : (
+              <PaieValidationPanel societe={societe} periode={periode} onValidated={load} />
+            )}
+          </TabsContent>
+
+          {/* Sprint 12 FEATURE 5 — onglet Historique : périodes verrouillées */}
+          <TabsContent value="historique" className="space-y-4 mt-4">
+            {(() => {
+              const locked = bulletins.filter(b => b.verrouille === true)
+              const byPeriod = locked.reduce<Record<string, typeof locked>>((acc, b) => {
+                const p = (b.periode || "").slice(0, 7)
+                if (!acc[p]) acc[p] = []
+                acc[p].push(b)
+                return acc
+              }, {})
+              const periods = Object.keys(byPeriod).sort((a, b) => b.localeCompare(a))
+              if (periods.length === 0) {
+                return (
+                  <div className="text-center py-12 text-gray-400">
+                    <History className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                    <p className="font-medium">Aucune période verrouillée pour cette société</p>
+                    <p className="text-xs mt-1">
+                      Les périodes apparaissent ici après verrouillage depuis l'onglet Bulletins.
+                    </p>
+                  </div>
+                )
+              }
+              return (
+                <div className="space-y-3">
+                  {periods.map(p => {
+                    const items = byPeriod[p]
+                    const d = new Date(p + "-15")
+                    const label = d.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
+                    const totalNet = items.reduce((s, b) => s + (Number(b.salaire_net) || 0), 0)
+                    const totalBrut = items.reduce((s, b) => s + (Number(b.salaire_brut) || 0), 0)
+                    return (
+                      <Card key={p}>
+                        <CardHeader className="pb-2">
+                          <div className="flex items-center justify-between flex-wrap gap-2">
+                            <CardTitle className="text-base flex items-center gap-2" style={{ color: NAVY }}>
+                              <Lock className="w-4 h-4 text-red-600" />
+                              {label.charAt(0).toUpperCase() + label.slice(1)}
+                              <Badge className="bg-gray-100 text-gray-700 text-[10px]">Verrouillé</Badge>
+                            </CardTitle>
+                            <div className="flex gap-2 text-xs">
+                              <span className="text-gray-500">{items.length} bulletin(s)</span>
+                              <span className="text-gray-300">·</span>
+                              <span>Brut {fmt(totalBrut)}</span>
+                              <span className="text-gray-300">·</span>
+                              <span className="font-semibold text-green-700">Net {fmt(totalNet)}</span>
+                            </div>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                          <div className="flex gap-2 flex-wrap">
+                            <Button size="sm" variant="outline" onClick={() => setPeriode(p)}>
+                              Voir les bulletins
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => window.open(`/api/rh/exports/virement?societe_id=${societe}&periode=${p}&format=json`, "_blank")}>
+                              <Download className="w-3.5 h-3.5 mr-1" />
+                              Export virements
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )
+                  })}
+                </div>
+              )
+            })()}
+          </TabsContent>
+        </Tabs>
       </div>
     </TooltipProvider>
     </ClientPageShell>
