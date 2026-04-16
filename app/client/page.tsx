@@ -191,7 +191,7 @@ function ClientAdminDashboard({ firstName, societe, societeId }: { firstName: st
   useEffect(() => {
     let cancelled = false
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 25_000)
+    const timer = setTimeout(() => controller.abort(), 55_000)
 
     const qs = new URLSearchParams()
     if (societeId) qs.set("societe_id", societeId)

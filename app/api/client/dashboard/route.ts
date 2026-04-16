@@ -31,7 +31,7 @@ import { NextResponse } from 'next/server'
 import { getTauxChange } from '@/lib/taux-change'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 30
+export const maxDuration = 60
 
 function getAdminClient() {
   return createClient(
@@ -39,6 +39,32 @@ function getAdminClient() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
+}
+
+/**
+ * Fetch all rows from a PostgREST query that may exceed the default 1000-row
+ * page size. We call the same `builder` factory in pages of `pageSize` rows
+ * and stop once we get fewer than a page. Essential for the écritures query,
+ * where 12 months of a busy SME can easily exceed 1000 rows and silently
+ * truncate our aggregations to 0.
+ */
+async function fetchAllPages<T>(
+  builder: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: any }>,
+  pageSize = 1000,
+  hardLimit = 50_000
+): Promise<T[]> {
+  const out: T[] = []
+  let from = 0
+  while (from < hardLimit) {
+    const to = Math.min(from + pageSize - 1, hardLimit - 1)
+    const { data, error } = await builder(from, to)
+    if (error) throw error
+    const rows = data || []
+    out.push(...rows)
+    if (rows.length < pageSize) break
+    from += pageSize
+  }
+  return out
 }
 
 function convertToMUR(amount: number, devise: string, rates: Record<string, number>): number {
@@ -113,8 +139,13 @@ export async function GET(request: Request) {
       ;(viaCS || []).forEach((r: any) => { if (r.societes) map.set(r.societes.id, r.societes) })
       ;(viaDossiers || []).forEach((d: any) => { if (d.societes) map.set(d.societes.id, d.societes) })
       societesVisible = Array.from(map.values())
+    } else if (['rh', 'juridique', 'employe', 'manager', 'direction'].includes(role)) {
+      if (profile?.societe_id) {
+        const { data } = await supabase.from('societes').select('id, nom, brn, statut').eq('id', profile.societe_id)
+        societesVisible = data || []
+      }
     } else {
-      // client_admin / client_user / client_assistant
+      // client_admin / client_user / client_assistant (and unknown fallback)
       const [{ data: owned }, { data: dossiers }, { data: userSocietes }] = await Promise.all([
         supabase.from('societes').select('id, nom, brn, statut').eq('created_by', user.id),
         supabase.from('dossiers').select('societe_id, societes(id, nom, brn, statut)').eq('client_id', user.id),
@@ -125,6 +156,14 @@ export async function GET(request: Request) {
       ;(dossiers || []).forEach((d: any) => { if (d.societes) map.set(d.societes.id, d.societes) })
       ;(userSocietes || []).forEach((u: any) => { if (u.societes) map.set(u.societes.id, u.societes) })
       societesVisible = Array.from(map.values())
+      // Last-resort fallback: unknown role but user may still be linked to societés via dossiers.
+      // Matches the behavior of /api/client/societes.
+      if (societesVisible.length === 0 && !role) {
+        const { data: viaDossiers } = await supabase
+          .from('dossiers').select('societes(id, nom, brn, statut)').eq('client_id', user.id)
+        ;(viaDossiers || []).forEach((d: any) => { if (d.societes) map.set(d.societes.id, d.societes) })
+        societesVisible = Array.from(map.values())
+      }
     }
 
     const allSocieteIds = societesVisible.map(s => s.id)
@@ -176,26 +215,32 @@ export async function GET(request: Request) {
     const in7days = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
 
     const [
-      { data: ecritures },
+      ecritures,
       { data: facturesMoisCible },
       { data: facturesEcheances },
       { data: comptesBank },
       { data: recentDocs },
     ] = await Promise.all([
-      // ONE query for all écritures in our wide window (chart + exercise)
-      supabase
-        .from('ecritures_comptables_v2')
-        .select('numero_compte, date_ecriture, debit_mur, credit_mur, journal')
-        .in('societe_id', targetSocieteIds)
-        .gte('date_ecriture', fetchDebut)
-        .lte('date_ecriture', fetchFin),
+      // Paginated écritures fetch — Supabase caps at 1000 rows per request.
+      // On a busy SME, 12 months of écritures easily exceed that and would
+      // silently truncate our totals.
+      fetchAllPages<any>((from, to) =>
+        supabase
+          .from('ecritures_comptables_v2')
+          .select('numero_compte, date_ecriture, debit_mur, credit_mur, journal')
+          .in('societe_id', targetSocieteIds)
+          .gte('date_ecriture', fetchDebut)
+          .lte('date_ecriture', fetchFin)
+          .range(from, to)
+      ),
       // Factures of the target month (for échéances 30j count)
       supabase
         .from('factures')
         .select('id, tiers, montant_mur, montant_ttc, devise, statut, type_facture, date_facture, date_echeance')
         .in('societe_id', targetSocieteIds)
         .gte('date_facture', targetMoisDebut)
-        .lte('date_facture', targetMoisFin),
+        .lte('date_facture', targetMoisFin)
+        .limit(500),
       // Factures impayées avec échéance entre hier et +30j (pour alertes retard/proche)
       supabase
         .from('factures')

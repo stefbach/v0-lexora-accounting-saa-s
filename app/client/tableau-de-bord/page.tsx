@@ -77,9 +77,9 @@ export default function TableauDeBord() {
     if (selected && selected !== "all") qs.set("societe_id", selected)
     qs.set("mois", mois)
 
-    // Abort after 25s to show a friendly error instead of a hang
+    // Abort after 55s (matches server maxDuration=60) to show a friendly error
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 25_000)
+    const timer = setTimeout(() => controller.abort(), 55_000)
 
     fetch(`/api/client/dashboard?${qs.toString()}`, { signal: controller.signal })
       .then(async r => {
