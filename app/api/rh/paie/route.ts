@@ -192,11 +192,28 @@ export async function GET(request: Request) {
     }
 
     // Enrich with employee names (separate query)
+    // Sprint 5 FIX 4 — lecture defensive : si `code_employe` ou
+    // `devise_salaire` manquent (anciens envs sans migration 039/044), on
+    // retombe sur une requête minimale. Évite un 500 au chargement de la
+    // page /rh/paie juste pour un enrichissement cosmétique.
     const empIds = [...new Set((data || []).map(b => b.employe_id))]
     let empMap: Record<string, any> = {}
     if (empIds.length > 0) {
-      const { data: emps } = await supabase.from('employes').select('id, code_employe, nom, prenom, poste, devise_salaire').in('id', empIds)
-      for (const e of emps || []) empMap[e.id] = { code: e.code_employe, nom: e.nom, prenom: e.prenom, poste: e.poste, devise_salaire: e.devise_salaire }
+      try {
+        const { data: emps, error: empErr } = await supabase.from('employes')
+          .select('id, code_employe, nom, prenom, poste, devise_salaire').in('id', empIds)
+        if (empErr) {
+          console.warn('[paie GET] enrich employes failed (full select):', empErr.message)
+          // Fallback minimal
+          const { data: empsFb } = await supabase.from('employes')
+            .select('id, nom, prenom, poste').in('id', empIds)
+          for (const e of empsFb || []) empMap[e.id] = { code: null, nom: e.nom, prenom: e.prenom, poste: e.poste, devise_salaire: 'MUR' }
+        } else {
+          for (const e of emps || []) empMap[e.id] = { code: e.code_employe, nom: e.nom, prenom: e.prenom, poste: e.poste, devise_salaire: e.devise_salaire }
+        }
+      } catch (e: any) {
+        console.warn('[paie GET] enrich employes exception:', e?.message || e)
+      }
     }
 
     // salaire_brut is a GENERATED column in PostgreSQL:

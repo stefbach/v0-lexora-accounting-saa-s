@@ -42,6 +42,10 @@ export default function PaiePage() {
   const [workflow, setWorkflow] = useState<any>(null)
   const [audit, setAudit] = useState<any[]>([])
 
+  // Sprint 5 FIX 4 — erreur de chargement non-bloquante (remplace l'alert
+  // agressif qui gâchait l'UX et empêchait de voir la page).
+  const [loadError, setLoadError] = useState<string | null>(null)
+
   // Comptabilisation
   const [comptabilisationLoading, setComptabilisationLoading] = useState(false)
   const [comptabilisationResult, setComptabilisationResult] = useState<string | null>(null)
@@ -78,24 +82,34 @@ export default function PaiePage() {
   const load = useCallback(async () => {
     if (!periodeReady || !periode) return
     setLoading(true)
+    setLoadError(null)
     try {
       const params = new URLSearchParams({ periode })
       if (societe !== "all") params.set("societe_id", societe)
-      const data = await fetch(`/api/rh/paie?${params}`).then(r => r.json())
-      if (data?.error) throw new Error(data.error)
+      const res = await fetch(`/api/rh/paie?${params}`)
+      const data = await res.json().catch(() => ({ error: `HTTP ${res.status} — réponse invalide` }))
+      if (!res.ok || data?.error) {
+        // Sprint 5 FIX 4 — message d'erreur non-bloquant (banner inline
+        // au lieu d'alert qui cassait l'UX + cachait le reste de la page).
+        // Log détaillé pour debug Vercel.
+        console.error('[rh/paie] load error', res.status, data?.error || data)
+        setLoadError(data?.error || `Erreur ${res.status} au chargement de la paie. Essayez une autre période ou contactez l'administrateur.`)
+        setBulletins([])
+        setTotaux({})
+        setPointageActif(null)
+        return
+      }
       setBulletins(data.bulletins || [])
       setTotaux(data.totaux || {})
       // Migration 135 — toggle pointage_actif renvoyé par /api/rh/paie
       // pour piloter le bandeau d'info en haut de la page.
       setPointageActif(data.pointage_actif ?? null)
     } catch (e: any) {
-      // Sprint 1 — avant : silent console.error → l'utilisateur voyait
-      // un tableau vide sans comprendre pourquoi. Maintenant : on garde
-      // le tableau vide mais on remonte une erreur visible.
+      console.error('[rh/paie] load exception', e)
+      setLoadError(`Erreur réseau : ${e?.message || 'inconnue'}. Vérifiez votre connexion et réessayez.`)
       setBulletins([])
       setTotaux({})
       setPointageActif(null)
-      alert(`Erreur de chargement de la paie : ${e?.message || 'inconnue'}. Réessayez ou contactez l'administrateur.`)
     } finally { setLoading(false) }
   }, [societe, periode, periodeReady])
 
@@ -391,6 +405,23 @@ export default function PaiePage() {
             <p className="text-sm text-gray-500">Calcul, validation, verrouillage et exports PAYE · CSG · NSF</p>
           </div>
         </div>
+
+        {/* Sprint 5 FIX 4 — banner d'erreur non-bloquant (remplace l'alert) */}
+        {loadError && (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0 text-red-600" />
+              <div>
+                <p className="font-medium">Erreur de chargement</p>
+                <p className="text-xs text-red-800 mt-0.5">{loadError}</p>
+              </div>
+            </div>
+            <Button size="sm" variant="outline" onClick={() => { setLoadError(null); load() }}>
+              <RefreshCw className="w-3.5 h-3.5 mr-1" />
+              Réessayer
+            </Button>
+          </div>
+        )}
 
         {/* Migration 135 — bandeau état du toggle pointage_actif */}
         {societe !== "all" && pointageActif === false && (
