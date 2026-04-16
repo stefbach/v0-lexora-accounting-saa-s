@@ -38,15 +38,24 @@ async function resolveEmployeeFilter(
   userId: string,
   societe_id: string | null
 ): Promise<string[] | null> {
+  // Sprint 5 FIX 1 — exclure employés partis (actif=false OU date_depart).
+  // Un ancien salarié ne doit JAMAIS apparaître dans le pointage quotidien
+  // (pas de pointages actifs, pas dans la grille manager).
   if (societe_id) {
-    const { data: emps } = await supabase.from('employes').select('id').eq('societe_id', societe_id)
+    const { data: emps } = await supabase.from('employes').select('id')
+      .eq('societe_id', societe_id)
+      .eq('actif', true)
+      .is('date_depart', null)
     return emps?.map(e => e.id) || []
   }
 
   const { data: profile } = await supabase.from('profiles').select('role, societe_id').eq('id', userId).maybeSingle()
 
   if (profile?.societe_id) {
-    const { data: emps } = await supabase.from('employes').select('id').eq('societe_id', profile.societe_id)
+    const { data: emps } = await supabase.from('employes').select('id')
+      .eq('societe_id', profile.societe_id)
+      .eq('actif', true)
+      .is('date_depart', null)
     return emps?.map(e => e.id) || []
   }
 
@@ -57,7 +66,10 @@ async function resolveEmployeeFilter(
   const sIds = [...new Set([...(dossiers || []).map(d => d.societe_id), ...(owned || []).map(s => s.id)])].filter(Boolean)
 
   if (sIds.length > 0) {
-    const { data: emps } = await supabase.from('employes').select('id').in('societe_id', sIds)
+    const { data: emps } = await supabase.from('employes').select('id')
+      .in('societe_id', sIds)
+      .eq('actif', true)
+      .is('date_depart', null)
     return emps?.map(e => e.id) || []
   }
 
