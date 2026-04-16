@@ -127,7 +127,7 @@ export function AdminSidebarUnified() {
   }
 
   return (
-    <aside className="w-64 bg-[#0B0F2E] min-h-screen flex flex-col fixed left-0 top-0 bottom-0 z-40 overflow-y-auto">
+    <aside data-lenis-prevent className="w-64 bg-[#0B0F2E] min-h-screen flex flex-col fixed left-0 top-0 bottom-0 z-40 overflow-y-auto">
       {/* Logo */}
       <div className="p-4 border-b border-white/10 flex-shrink-0">
         <Link href="/admin" className="flex items-center gap-2">

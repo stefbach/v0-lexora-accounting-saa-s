@@ -77,6 +77,34 @@ export function LenisProvider({ children }: { children: React.ReactNode }) {
       touchMultiplier: 1.6,
       // Keep native touch scroll on mobile (iOS already has inertia).
       syncTouch: false,
+      // Bug global scroll — Lenis prenait le contrôle de TOUTE la page et
+      // volait les events wheel destinés aux containers scrollables enfants
+      // (sidebar, dialogs, popovers), cassant leur scroll indépendant.
+      //
+      // `prevent` est appelé pour chaque élément sous le curseur lors d'un
+      // wheel event : si on retourne true pour N'IMPORTE QUEL ancêtre, Lenis
+      // laisse le scroll natif s'appliquer sur cet élément. Règles :
+      //
+      //   1. Opt-out explicite via `data-lenis-prevent` (sidebar, tables,
+      //      drawers custom — tagger côté composant).
+      //   2. Tous les overlays Radix (Dialog, Popover, DropdownMenu,
+      //      HoverCard, Tooltip, AlertDialog, Sheet, ScrollArea) exposent
+      //      `[role="dialog" | "menu" | "listbox" | "tooltip"]` OU
+      //      `[data-radix-scroll-area-viewport]` — auto-détection.
+      //   3. Les éléments form interactifs (select natif, input type="number"
+      //      avec scroll) ne sont pas concernés car Lenis ignore déjà par
+      //      défaut les events sur <input>, <select>, <textarea>.
+      prevent: (node: HTMLElement) => {
+        if (!node) return false
+        if (node.closest('[data-lenis-prevent]')) return true
+        if (node.closest('[role="dialog"]')) return true
+        if (node.closest('[role="menu"]')) return true
+        if (node.closest('[role="listbox"]')) return true
+        if (node.closest('[role="tooltip"]')) return true
+        if (node.closest('[data-radix-scroll-area-viewport]')) return true
+        if (node.closest('[data-radix-popper-content-wrapper]')) return true
+        return false
+      },
     })
 
     // Keep GSAP ScrollTrigger aware of Lenis's smoothed scroll position.

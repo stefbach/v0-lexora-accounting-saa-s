@@ -258,7 +258,7 @@ export function ComptableSidebarNew() {
         />
       )}
 
-      <aside
+      <aside data-lenis-prevent
         className={cn(
           "fixed left-0 top-0 bottom-0 z-50 flex flex-col transition-all duration-300 overflow-y-auto",
           collapsed ? "w-16" : "w-64",

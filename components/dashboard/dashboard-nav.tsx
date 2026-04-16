@@ -57,7 +57,7 @@ export function DashboardNav() {
   const roleLabel = isAdmin ? "Admin" : isAccountant ? "Accountant" : isClient ? "Client" : "Dashboard"
 
   return (
-    <aside
+    <aside data-lenis-prevent
       className={cn(
         "sticky top-0 flex h-screen flex-col border-r border-sidebar-border bg-sidebar transition-all duration-300",
         collapsed ? "w-16" : "w-64"
