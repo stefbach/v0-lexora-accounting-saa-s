@@ -75,6 +75,10 @@ export interface ResultatPaie {
   // Emoluments detail
   total_emoluments: number
   salary_compensation_montant: number
+  // NIT (Negative Income Tax, Finance Act 2024)
+  nit_eligible: boolean
+  nit_montant: number
+  paye_brut: number
 }
 
 export function calculerBulletin(
@@ -141,7 +145,14 @@ export function calculerBulletin(
       payeAnnuel += (salaireAnnuel - params.paye_seuil_taux_2) * params.paye_taux_2
     }
   }
-  const paye = Math.round(payeAnnuel / 12)
+  const payeBrut = Math.round(payeAnnuel / 12)
+
+  // Sprint 14 FIX 6 — NIT (Negative Income Tax, Finance Act 2024).
+  // Crédit d'impôt pour les bas salaires — réduit le PAYE dû. Si NIT ≥
+  // PAYE, PAYE = 0 (pas de crédit négatif versé, juste exonération).
+  const nit = calculerNIT(salaire_brut_base)
+  const paye = Math.max(0, payeBrut - nit.montant)
+  const nit_applique = nit.eligible ? Math.min(nit.montant, payeBrut) : 0
 
   const total_deductions = csg_salarie + csg_bonus + nsf_salarie + paye
   const salaire_net = salaire_brut - total_deductions
@@ -194,6 +205,10 @@ export function calculerBulletin(
     montant_refacture_mur: Math.round(montant_refacture_mur * 100) / 100,
     total_emoluments: Math.round(total_emoluments * 100) / 100,
     salary_compensation_montant: Math.round(salary_compensation_montant * 100) / 100,
+    // Sprint 14 FIX 6 — NIT (Negative Income Tax)
+    nit_eligible: nit.eligible,
+    nit_montant: Math.round(nit_applique * 100) / 100,
+    paye_brut: Math.round(payeBrut * 100) / 100,
   }
 }
 
