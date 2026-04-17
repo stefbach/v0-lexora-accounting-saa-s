@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { getUserSocieteIds } from '@/lib/rh/access'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,12 +20,15 @@ export async function GET(request: Request) {
 
     const supabase = getAdminClient()
     const { searchParams } = new URL(request.url)
-    const societe_id = searchParams.get('societe_id')
+    let societe_id = searchParams.get('societe_id')
     const employe_id = searchParams.get('employe_id')
-    const periode = searchParams.get('periode') // YYYY-MM
+    const periode = searchParams.get('periode')
 
+    // Si pas de societe_id, utiliser la première société accessible
     if (!societe_id) {
-      return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
+      const accessible = await getUserSocieteIds(user.id)
+      if (accessible.length > 0) societe_id = accessible[0]
+      else return NextResponse.json({ rule: null, frais: [], tarif_km: 4, entries: [], total: 0 })
     }
 
     // Fetch km rule — try both table names (frais_km_rules or frais_km_regles)
@@ -51,10 +55,10 @@ export async function GET(request: Request) {
       rule = r2
     }
 
-    // Fetch monthly entries
+    // Fetch monthly entries — pas de FK join (peut crasher RLS)
     let entryQuery = supabase
       .from('frais_km_mois')
-      .select('*, employe:employes(nom, prenom, poste)')
+      .select('*')
       .order('periode', { ascending: false })
 
     // Filter by employees of this société
@@ -217,11 +221,14 @@ export async function POST(request: Request) {
       }
 
       const periodeDate = `${periode}-01`
+      // montant calculé manuellement (la colonne n'est PAS GENERATED en prod)
+      const montantCalcule = Math.round(kmEffectifs * tarif * 100) / 100
       const insertRow: Record<string, unknown> = {
         employe_id,
         periode: periodeDate,
         km_parcourus: kmEffectifs,
         tarif_applique: tarif,
+        montant: montantCalcule,
         justificatif: justificatif || motif || null,
         approuve: false,
       }
