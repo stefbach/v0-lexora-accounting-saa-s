@@ -1,5 +1,5 @@
 "use client"
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { toast } from "sonner"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -8,8 +8,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
-import { Loader2, CheckCircle, Save } from "lucide-react"
+import { Loader2, CheckCircle, Save, Camera } from "lucide-react"
 import { NAVY, GOLD, BLUE, GREEN } from "../shared/constants"
+
+const MAX_AVATAR_BYTES = 2 * 1024 * 1024 // 2 MB
+const ACCEPTED_AVATAR_TYPES = ["image/jpeg", "image/png", "image/webp"]
 
 // Ma fiche — composant isolé (pas de re-render parent).
 // Extrait du monolithe page.tsx pendant le sprint-salarie V0.1.
@@ -18,9 +21,67 @@ export function MaFicheTab({ employe, onUpdated }: { employe: any; onUpdated: ()
   const [f, setF] = useState({ ...employe })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
   const u = (k: string, v: any) => setF((p: any) => ({ ...p, [k]: v }))
 
   const initials = [employe.prenom, employe.nom].filter(Boolean).map((n: string) => n[0]).join("").toUpperCase() || "?"
+  const currentPhoto = photoPreview || employe.photo_url || null
+
+  const handlePhotoPick = () => fileInputRef.current?.click()
+
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!ACCEPTED_AVATAR_TYPES.includes(file.type)) {
+      toast.error("Format non supporté", { description: "Images JPG, PNG ou WebP uniquement." })
+      return
+    }
+    if (file.size > MAX_AVATAR_BYTES) {
+      toast.error("Fichier trop volumineux", { description: "2 Mo maximum." })
+      return
+    }
+
+    // Aperçu local immédiat
+    const objectUrl = URL.createObjectURL(file)
+    setPhotoPreview(objectUrl)
+
+    setUploadingPhoto(true)
+    try {
+      const form = new FormData()
+      form.append("photo", file)
+      // TODO(RH agent) — endpoint POST /api/rh/employes/me/photo en cours
+      // de création sur fix/sprint-rh-securite (sprint weekend). Quand il
+      // existera, il doit renvoyer { photo_url } après upload vers
+      // Supabase Storage (bucket avatars/) et PATCH employes.photo_url.
+      const res = await fetch("/api/rh/employes/me/photo", { method: "POST", body: form })
+      if (!res.ok) {
+        if (res.status === 404) {
+          toast.warning("Upload photo en cours de déploiement", {
+            description: "L'endpoint serveur est en cours de livraison. Aperçu local visible uniquement.",
+          })
+        } else {
+          const data = await res.json().catch(() => ({}))
+          toast.error("Erreur upload", { description: data.error || `HTTP ${res.status}` })
+          setPhotoPreview(null)
+        }
+        return
+      }
+      const data = await res.json()
+      if (data.photo_url) {
+        setPhotoPreview(null) // on laisse l'URL du serveur prendre le relais
+        onUpdated()
+        toast.success("Photo mise à jour")
+      }
+    } catch {
+      toast.error("Erreur réseau")
+      setPhotoPreview(null)
+    } finally {
+      setUploadingPhoto(false)
+      if (fileInputRef.current) fileInputRef.current.value = ""
+    }
+  }
 
   const handleSave = async () => {
     setSaving(true); setSaved(false)
@@ -57,18 +118,41 @@ export function MaFicheTab({ employe, onUpdated }: { employe: any; onUpdated: ()
 
       <Card className="rounded-2xl shadow-sm overflow-hidden">
         <CardContent className="flex flex-col items-center py-8 gap-3">
-          <div className="rounded-full p-1" style={{ background: `linear-gradient(135deg, ${GOLD}, ${GOLD}88)` }}>
-            <Avatar className="w-20 h-20 border-2 border-white">
-              {employe.photo_url && <AvatarImage src={employe.photo_url} alt={employe.prenom} />}
-              <AvatarFallback className="text-2xl font-bold text-white" style={{ backgroundColor: NAVY }}>{initials}</AvatarFallback>
-            </Avatar>
+          <div className="relative">
+            <div className="rounded-full p-1" style={{ background: `linear-gradient(135deg, ${GOLD}, ${GOLD}88)` }}>
+              <Avatar className="w-20 h-20 border-2 border-white">
+                {currentPhoto && <AvatarImage src={currentPhoto} alt={employe.prenom} />}
+                <AvatarFallback className="text-2xl font-bold text-white" style={{ backgroundColor: NAVY }}>{initials}</AvatarFallback>
+              </Avatar>
+            </div>
+            <button
+              type="button"
+              onClick={handlePhotoPick}
+              disabled={uploadingPhoto}
+              aria-label="Changer ma photo"
+              className="absolute -bottom-1 -right-1 h-8 w-8 rounded-full bg-white border shadow-md flex items-center justify-center hover:scale-105 active:scale-95 transition-transform disabled:opacity-50"
+              style={{ borderColor: GOLD }}
+            >
+              {uploadingPhoto ? (
+                <Loader2 className="h-4 w-4 animate-spin" style={{ color: GOLD }} />
+              ) : (
+                <Camera className="h-4 w-4" style={{ color: GOLD }} />
+              )}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={ACCEPTED_AVATAR_TYPES.join(",")}
+              className="hidden"
+              onChange={handlePhotoChange}
+            />
           </div>
           <div className="text-center space-y-1">
             <h2 className="text-xl font-bold" style={{ color: NAVY }}>{[employe.prenom, employe.nom].filter(Boolean).join(" ") || "Mon profil"}</h2>
             <p className="text-sm text-gray-500">{employe.poste || "Employé"}</p>
             <Badge variant="outline" className="text-xs font-mono" style={{ borderColor: GOLD, color: GOLD }}>{employe.code_employe || employe.code || "—"}</Badge>
           </div>
-          <p className="text-xs text-gray-400 mt-1">Modifier mes infos</p>
+          <p className="text-xs text-gray-400 mt-1">Cliquez sur l&apos;appareil photo pour changer votre avatar</p>
         </CardContent>
       </Card>
 
