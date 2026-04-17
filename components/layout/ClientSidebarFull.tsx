@@ -7,6 +7,7 @@ import { useProfile } from "@/hooks/use-profile"
 import { useState, useEffect } from "react"
 import { t, getLocale } from "@/lib/i18n"
 import { LanguageSwitcher } from "@/components/LanguageSwitcher"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import {
   LayoutDashboard, Building2, FileText, BookOpen, Banknote,
   Receipt, Calculator, BarChart3, TrendingUp, Target,
@@ -168,6 +169,7 @@ export function ClientSidebarFull() {
   const pathname = usePathname()
   const router = useRouter()
   const { profile } = useProfile()
+  const { societe, societes, societeId, clearSociete } = useSocieteActive()
   const locale = getLocale()
   const [collapsed, setCollapsed] = useState<string[]>([])
   const [activeModules, setActiveModules] = useState<ActiveModules>(DEFAULT_MODULES)
@@ -176,54 +178,48 @@ export function ClientSidebarFull() {
   // Close sidebar on navigation
   useEffect(() => { setMobileOpen(false) }, [pathname])
 
-  // Fetch modules_actifs from the user's first societe, then intersect with user permissions
+  // Re-compute active modules from the ACTIVE société (not societes[0])
+  // intersected with the per-user permissions.
   useEffect(() => {
-    const loadModules = async () => {
-      try {
-        const res = await fetch("/api/client/societes")
-        if (!res.ok) return
-        const data = await res.json()
-        const societes = data.societes || []
-
-        // Step 1: societe plan modules (what the company's plan allows)
-        let planModules: ActiveModules = { ...DEFAULT_MODULES }
-        if (societes.length > 0 && societes[0].modules_actifs) {
-          const m = societes[0].modules_actifs
-          planModules = {
-            comptabilite: m.comptabilite !== false,
-            rh: m.rh !== false,
-            juridique: m.juridique !== false,
-            facturation: m.facturation !== false,
-            documents: m.documents !== false,
-            fiscal: m.fiscal !== false,
-            etats_financiers: m.etats_financiers !== false,
-            employe_portal: m.employe_portal !== false,
-          }
-        }
-
-        // Step 2: per-user permissions (from profile.modules_utilisateur)
-        // If NULL, use role-based defaults; if set, use the explicit values
-        const userModules: UserModules = profile?.modules_utilisateur
-          ? profile.modules_utilisateur
-          : getUserDefaultModules(profile?.role || "client_user")
-
-        // Step 3: intersection — module visible only if BOTH plan allows AND user has permission
-        setActiveModules({
-          comptabilite: planModules.comptabilite && (userModules.comptabilite !== false),
-          rh: planModules.rh && (userModules.rh !== false),
-          juridique: planModules.juridique,
-          facturation: planModules.facturation && (userModules.facturation !== false),
-          documents: planModules.documents && (userModules.documents !== false),
-          fiscal: planModules.fiscal && (userModules.fiscal !== false),
-          etats_financiers: planModules.etats_financiers && (userModules.etats_financiers !== false),
-          employe_portal: planModules.employe_portal && (userModules.employe_portal !== false),
-        })
-      } catch {
-        // Keep defaults if fetch fails
+    // Step 1: société plan modules (what the active company's plan allows)
+    let planModules: ActiveModules = { ...DEFAULT_MODULES }
+    if (societe?.modules_actifs) {
+      const m = societe.modules_actifs
+      planModules = {
+        comptabilite: m.comptabilite !== false,
+        rh: m.rh !== false,
+        juridique: m.juridique !== false,
+        facturation: m.facturation !== false,
+        documents: m.documents !== false,
+        fiscal: m.fiscal !== false,
+        etats_financiers: m.etats_financiers !== false,
+        employe_portal: m.employe_portal !== false,
       }
     }
-    loadModules()
-  }, [profile])
+
+    // Step 2: per-user permissions (from profile.modules_utilisateur)
+    // If NULL, use role-based defaults; if set, use the explicit values
+    const userModules: UserModules = profile?.modules_utilisateur
+      ? profile.modules_utilisateur
+      : getUserDefaultModules(profile?.role || "client_user")
+
+    // Step 3: intersection — module visible only if BOTH plan allows AND user has permission
+    setActiveModules({
+      comptabilite: planModules.comptabilite && (userModules.comptabilite !== false),
+      rh: planModules.rh && (userModules.rh !== false),
+      juridique: planModules.juridique,
+      facturation: planModules.facturation && (userModules.facturation !== false),
+      documents: planModules.documents && (userModules.documents !== false),
+      fiscal: planModules.fiscal && (userModules.fiscal !== false),
+      etats_financiers: planModules.etats_financiers && (userModules.etats_financiers !== false),
+      employe_portal: planModules.employe_portal && (userModules.employe_portal !== false),
+    })
+  }, [profile, societe, societeId])
+
+  const handleChangeSociete = () => {
+    clearSociete()
+    router.push("/client/select-societe")
+  }
 
   const toggle = (s: string) =>
     setCollapsed(p => p.includes(s) ? p.filter(x => x !== s) : [...p, s])
@@ -343,6 +339,54 @@ export function ClientSidebarFull() {
             </div>
           </Link>
         </div>
+
+        {/* Société active — bloc info + bouton "Changer" si ≥ 2 sociétés */}
+        {societe && (
+          <div
+            className="mx-3 mt-3 p-3 rounded-xl flex-shrink-0"
+            style={{
+              background:
+                "linear-gradient(180deg, rgba(212,175,55,0.08) 0%, rgba(212,175,55,0.02) 100%)",
+              border: "1px solid rgba(212,175,55,0.25)",
+            }}
+          >
+            <div
+              className="text-[9px] font-bold uppercase mb-1"
+              style={{ color: "#D4AF37", letterSpacing: "0.18em" }}
+            >
+              Société active
+            </div>
+            <div
+              className="text-sm font-semibold truncate"
+              style={{ color: "#E8EAFC" }}
+              title={societe.nom}
+            >
+              {societe.nom}
+            </div>
+            {societe.brn && (
+              <div
+                className="text-[10px] mt-0.5 font-mono truncate"
+                style={{ color: "#A8AFC7" }}
+              >
+                BRN {societe.brn}
+              </div>
+            )}
+            {societes.length > 1 && (
+              <button
+                type="button"
+                onClick={handleChangeSociete}
+                className="mt-2 w-full text-[11px] font-semibold py-1.5 px-2 rounded-md transition-colors"
+                style={{
+                  color: "#0B0F2E",
+                  background: "linear-gradient(135deg, #D4AF37 0%, #E4C547 100%)",
+                  boxShadow: "0 6px 14px -6px rgba(212,175,55,0.55)",
+                }}
+              >
+                Changer de société →
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Navigation */}
         <nav className="flex-1 px-3 py-4 space-y-3">

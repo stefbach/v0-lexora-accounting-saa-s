@@ -5,7 +5,16 @@ import { SocieteActiveProvider } from "@/components/client/SocieteActiveProvider
 import { useProfile } from "@/hooks/use-profile"
 import { Loader2 } from "lucide-react"
 
-const CLIENT_ROLES = new Set(["client_admin", "client_user", "client_assistant"])
+// Roles that see the ClientSidebarFull AND must have access to
+// useSocieteActive(). Admins are included so they can preview /client
+// without the sidebar hook crashing.
+const SIDEBAR_FULL_ROLES = new Set([
+  "client_admin",
+  "client_user",
+  "client_assistant",
+  "admin",
+  "super_admin",
+])
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const { profile, loading } = useProfile()
@@ -22,7 +31,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   // and DO NOT wrap with SocieteActiveProvider — they use the
   // /comptable/clients/[clientId]/[societeId] flow instead.
   const isComptable = profile?.role === "comptable" || profile?.role === "comptable_dedie"
-  const isClientRole = profile ? CLIENT_ROLES.has(profile.role) : false
+  const needsProvider = profile ? SIDEBAR_FULL_ROLES.has(profile.role) : false
 
   const shell = (
     <div className="flex min-h-screen bg-gray-50">
@@ -31,7 +40,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     </div>
   )
 
-  if (isClientRole) {
+  if (needsProvider) {
     return <SocieteActiveProvider>{shell}</SocieteActiveProvider>
   }
 
