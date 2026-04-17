@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Bell, CreditCard, Calendar, CalendarPlus, Coffee, FileText, HeartPulse, LogIn, LogOut } from "lucide-react"
 import { NAVY, GOLD, BLUE, GREEN, MONTH_NAMES_FR } from "../shared/constants"
 import { fmt, fmtH, lastDayOfMonth } from "../shared/helpers"
+import { useEffect, useState } from "react"
 
 type Router = ReturnType<typeof useRouter>
 
@@ -42,6 +43,18 @@ export function DashboardTab({
   const hasExit = !!pointageToday?.heure_sortie
   const onPause = pointageToday?.heure_pause_debut && !pointageToday?.heure_pause_fin
 
+  // V3.5 — bannière "contrat à signer" tirée du même endpoint
+  // que la sidebar pour cohérence.
+  const [contratsASigner, setContratsASigner] = useState(0)
+  useEffect(() => {
+    let cancelled = false
+    fetch("/api/salarie/notifications")
+      .then(r => r.ok ? r.json() : { contrats_a_signer: 0 })
+      .then(d => { if (!cancelled) setContratsASigner(Number(d.contrats_a_signer) || 0) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+
   const notifications: { icon: typeof Bell; text: string; time: string }[] = []
   if (lastBulletin) {
     const per = lastBulletin.periode || ""
@@ -52,6 +65,25 @@ export function DashboardTab({
 
   return (
     <div className="space-y-4">
+      {contratsASigner > 0 && (
+        <Card className="overflow-hidden rounded-xl shadow-sm border-0" style={{ background: `linear-gradient(135deg, ${GOLD}15, ${GOLD}08)`, borderLeft: `4px solid ${GOLD}` }}>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${GOLD}25` }}>
+              <FileText className="h-5 w-5" style={{ color: GOLD }} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold" style={{ color: NAVY }}>
+                {contratsASigner === 1 ? "Un contrat vous attend" : `${contratsASigner} contrats vous attendent`}
+              </p>
+              <p className="text-xs text-gray-500">Merci de le{contratsASigner > 1 ? "s" : ""} relire et signer depuis l&apos;onglet « Contrats ».</p>
+            </div>
+            <Button size="sm" onClick={() => router.push("/salarie#contrats")} style={{ backgroundColor: GOLD, color: NAVY }} className="shrink-0 h-9 font-semibold">
+              Signer
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {estimatedNet > 0 && (
         <Card className="overflow-hidden rounded-xl shadow-sm" style={{ border: `2px solid ${GOLD}30` }}>
           <CardContent className="p-4 md:p-5">
