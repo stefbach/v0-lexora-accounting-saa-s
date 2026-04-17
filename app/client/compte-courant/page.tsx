@@ -11,14 +11,14 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, Plus, Users, ArrowUpRight, ArrowDownLeft, Wallet, RefreshCw, ChevronLeft } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 
 function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 function formatDate(d: string) { return d ? new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" }) : "--" }
 
 export default function CompteCourantPage() {
+  const { societeId } = useSocieteActive()
   const [loading, setLoading] = useState(true)
-  const [societeId, setSocieteId] = useState<string | null>(null)
-  const [societes, setSocietes] = useState<any[]>([])
   const [comptes, setComptes] = useState<any[]>([])
   const [mouvements, setMouvements] = useState<any[]>([])
   const [totalSolde, setTotalSolde] = useState(0)
@@ -49,14 +49,6 @@ export default function CompteCourantPage() {
   const [formRembMontant, setFormRembMontant] = useState("")
   const [formRembDesc, setFormRembDesc] = useState("")
   const [formRembDate, setFormRembDate] = useState("")
-
-  useEffect(() => {
-    fetch("/api/client/societes").then(r => r.json()).then(d => {
-      const s = d.societes || []
-      setSocietes(s)
-      if (s.length > 0) setSocieteId(s[0].id)
-    })
-  }, [])
 
   const load = useCallback(async () => {
     if (!societeId) return
@@ -165,12 +157,6 @@ export default function CompteCourantPage() {
             <Button variant="ghost" size="sm" onClick={() => setSelectedCompte(null)}>
               <ChevronLeft className="w-4 h-4 mr-1" /> Retour
             </Button>
-          )}
-          {societes.length > 0 && (
-            <Select value={societeId || ""} onValueChange={setSocieteId}>
-              <SelectTrigger className="w-48"><SelectValue placeholder="Société..." /></SelectTrigger>
-              <SelectContent>{societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent>
-            </Select>
           )}
           <Button variant="outline" onClick={load}><RefreshCw className="w-4 h-4 mr-2" />Actualiser</Button>
           <Button onClick={() => setAvanceDialog(true)} className="bg-[#D4AF37] text-[#0B0F2E] hover:bg-[#D4AF37]/90">
