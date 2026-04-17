@@ -746,7 +746,7 @@ export async function POST(request: Request) {
       if (!body.employe_id || !body.type_conge || !body.date_debut || !body.date_fin)
         return NextResponse.json({ error: 'Champs requis manquants' }, { status: 400 })
 
-      const { data: emp } = await supabase.from('employes').select('id, societe_id, gender, genre, auth_user_id, email').eq('id', body.employe_id).maybeSingle()
+      const { data: emp } = await supabase.from('employes').select('id, societe_id, gender, genre, auth_user_id, email, date_arrivee').eq('id', body.employe_id).maybeSingle()
       if (!emp) {
         return NextResponse.json({ error: 'Employe non trouve' }, { status: 404 })
       }
@@ -868,6 +868,22 @@ export async function POST(request: Request) {
         const calendarDays = Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
         if (calendarDays > 112) {
           return NextResponse.json({ error: 'Maternity Leave: maximum 16 weeks (112 calendar days) per WRA 2019 Section 52' }, { status: 400 })
+        }
+        // Sprint 15 FIX 2 — WRA Art. 45 : congé maternité 100% salaire dû
+        // uniquement après 12 mois de service continu. Avant 12 mois,
+        // l'employeur n'est pas obligé de maintenir 100% — on avertit mais
+        // on ne bloque pas (le RH confirme en connaissance de cause via le
+        // flag force_mat_avant_12m envoyé par l'UI au 2ème essai).
+        const hireDateMat = emp.date_arrivee ? new Date(String(emp.date_arrivee) + 'T00:00:00') : null
+        const moisServiceMat = hireDateMat
+          ? Math.max(0, (new Date().getFullYear() - hireDateMat.getFullYear()) * 12 + (new Date().getMonth() - hireDateMat.getMonth()))
+          : 99
+        if (moisServiceMat < 12 && !body.force_mat_avant_12m) {
+          return NextResponse.json({
+            error: `Ancienneté insuffisante pour congé maternité 100% (${moisServiceMat} mois, minimum 12 mois requis — WRA Art. 45). Confirmez pour accorder quand même.`,
+            code: 'MAT_ANCIENNETE_INSUFFISANTE',
+            mois_service: moisServiceMat,
+          }, { status: 422 })
         }
       }
       if (body.type_conge === 'PAT') {
