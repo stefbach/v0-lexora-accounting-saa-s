@@ -165,23 +165,44 @@ export function ContratsTab({ employe }: { employe: any }) {
           {signError && (
             <div className="border-t pt-2 text-xs text-red-700 bg-red-50 rounded px-3 py-2">{signError}</div>
           )}
-          <div className="border-t pt-3 flex items-center justify-between">
-            <p className="text-xs text-gray-500">
-              En signant, vous acceptez les termes du contrat. Votre signature a valeur juridique
-              (Electronic Transactions Act 2000 — Maurice).
-            </p>
-            <div className="flex gap-2">
+          <div className="border-t pt-3 flex items-center justify-between gap-3 flex-wrap">
+            {viewing?.statut === "brouillon" ? (
+              <p className="text-xs text-gray-500 flex-1 min-w-[200px]">
+                En signant, vous acceptez les termes du contrat. Votre signature a valeur juridique
+                (Electronic Transactions Act 2000 — Maurice).
+              </p>
+            ) : viewing?.statut === "signe_employe" ? (
+              <p className="text-xs flex-1 min-w-[200px]" style={{ color: "#2563EB" }}>
+                ✓ Vous avez signé ce contrat{viewing?.date_signature_employe ? ` le ${new Date(viewing.date_signature_employe).toLocaleDateString("fr-FR")}` : ""}.
+                En attente de la contresignature de l&apos;employeur.
+              </p>
+            ) : viewing?.statut === "signe" ? (
+              <p className="text-xs flex-1 min-w-[200px]" style={{ color: "#059669" }}>
+                ✓✓ Contrat intégralement signé (employé + employeur).
+              </p>
+            ) : (
+              <p className="text-xs text-gray-500 flex-1 min-w-[200px]">
+                Ce contrat n&apos;est plus disponible pour la signature.
+              </p>
+            )}
+            <div className="flex gap-2 shrink-0">
               <Button variant="outline" size="sm" onClick={() => setViewing(null)}>Fermer</Button>
               {viewing?.statut === "brouillon" && (
                 <Button
                   size="sm"
                   onClick={handleSign}
-                  disabled={signing}
+                  disabled={signing || viewing?.statut !== "brouillon"}
                   style={{ backgroundColor: GOLD, color: NAVY }}
                   className="hover:opacity-90 font-semibold"
                 >
                   {signing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle className="w-4 h-4 mr-2" />}
                   Signer le contrat
+                </Button>
+              )}
+              {viewing?.statut === "signe_employe" && (
+                <Button size="sm" disabled className="font-semibold opacity-70">
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  Déjà signé
                 </Button>
               )}
             </div>
