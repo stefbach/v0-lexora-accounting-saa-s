@@ -112,7 +112,6 @@ const CLIENT_SECTIONS: NavSection[] = [
     title: "États Financiers",
     items: [
       { href: "/client/bilan", label: "Bilan & P&L", icon: BookOpen },
-      { href: "/client/previsionnel", label: "Prévisionnel", icon: TrendingUp },
       { href: "/client/echeances", label: "Échéances", icon: CalendarDays },
     ],
   },

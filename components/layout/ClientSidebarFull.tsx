@@ -10,7 +10,7 @@ import { LanguageSwitcher } from "@/components/LanguageSwitcher"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import {
   LayoutDashboard, Building2, FileText, BookOpen, Banknote,
-  Receipt, Calculator, BarChart3, TrendingUp, Target,
+  Receipt, Calculator, BarChart3, Target,
   Users, Clock, CreditCard, Gavel, Scale, Bell,
   Settings, LogOut, ChevronDown, ChevronRight, FileSpreadsheet,
   Globe, Lightbulb, ClipboardList, Download, Upload, Calendar,
@@ -122,7 +122,6 @@ const MENU: MenuSection[] = [
     items: [
       { href: "/client/bilan", label: "Bilan & P&L", labelKey: "fin.balance_sheet", icon: BookOpen },
       { href: "/client/grand-livre", label: "Grand Livre", labelKey: "fin.general_ledger", icon: BookOpen },
-      { href: "/client/previsionnel", label: "Prévisionnel", labelKey: "fin.forecast", icon: TrendingUp },
       { href: "/client/echeances", label: "Échéances", labelKey: "fin.deadlines", icon: CalendarDays },
     ]
   },
