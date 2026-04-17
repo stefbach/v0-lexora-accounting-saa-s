@@ -3127,6 +3127,7 @@ export async function POST(request: Request) {
 
       const { data: dossier, error: dossierErr } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
       let nbEcritures = 0
+      let nbEcrituresSupprimees = 0
       let ecrituresError: string | null = null
       let ecrituresAlreadyExisted = false
       if (!dossier) {
@@ -3142,6 +3143,34 @@ export async function POST(request: Request) {
         // ref_folio determinISTE pour cette tx specifique (releve_id complet + txIdx)
         // Permet la detection idempotente du doublon = re-click sur la meme tx.
         const refFolio = `CL-${releve_id}-${txIdx}`
+
+        // ── RECLASSIFICATION : supprimer les anciennes écritures AVANT d'insérer ──
+        // Quand l'utilisateur corrige une classification, les écritures de l'ancienne
+        // classification (ref_folio CL-xxx ou ancien code lettre) doivent disparaître.
+        // Sinon le compte comptable précédent (ex: 4312 charges sociales) reste pollué
+        // avec un montant fantôme.
+        const oldLettre = txs[txIdx]?.lettre || null
+        // 1) Supprimer par ref_folio exact (reclassification du même CL-xxx)
+        const { count: delByFolio } = await supabase
+          .from('ecritures_comptables_v2')
+          .delete({ count: 'exact' })
+          .eq('societe_id', societe_id)
+          .eq('ref_folio', refFolio)
+        nbEcrituresSupprimees += (delByFolio || 0)
+        // 2) Supprimer par ancien code lettre (CLS005, CL7xxx… de la classification précédente)
+        if (oldLettre && oldLettre !== code) {
+          const { count: delByLettre } = await supabase
+            .from('ecritures_comptables_v2')
+            .delete({ count: 'exact' })
+            .eq('societe_id', societe_id)
+            .eq('lettre', oldLettre)
+            .eq('journal', 'BNQ')
+          nbEcrituresSupprimees += (delByLettre || 0)
+        }
+        if (nbEcrituresSupprimees > 0) {
+          console.log(`[classer_transaction] ${nbEcrituresSupprimees} anciennes ecritures supprimees (ref_folio=${refFolio}, lettre=${oldLettre})`)
+        }
+
         const ecrituresPayload = [
           {
             dossier_id: dossier.id, societe_id, date_ecriture: tx.date || new Date().toISOString().split('T')[0],
