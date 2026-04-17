@@ -388,45 +388,70 @@ export function ClientSidebarFull() {
           </div>
         )}
 
-        {/* Navigation */}
-        <nav className="flex-1 px-3 py-4 space-y-3">
-          {visibleMenu.map(({ section, sectionKey, items }) => {
-            const sectionLabel = sectionKey ? t(sectionKey, locale) : section
-            const isCollapsed = collapsed.includes(section)
-            const hasActive = items.some(i => isActive(i.href))
-            return (
-              <div key={section}>
-                <button
-                  onClick={() => toggle(section)}
-                  aria-expanded={!isCollapsed}
-                  className="group w-full flex items-center justify-between px-2 py-1.5 text-[10px] font-bold uppercase rounded-md transition-colors"
-                  style={{
-                    color: hasActive ? "#D4AF37" : "#6B7390",
-                    letterSpacing: "0.18em",
-                  }}
-                >
-                  <span className="flex items-center gap-2">
-                    <span
-                      aria-hidden="true"
-                      className="h-1 w-1 rounded-full transition-colors"
-                      style={{
-                        backgroundColor: hasActive ? "#D4AF37" : "rgba(212,175,55,0.28)",
-                        boxShadow: hasActive ? "0 0 4px #D4AF37" : "none",
-                      }}
-                    />
-                    {sectionLabel}
-                  </span>
-                  {isCollapsed ? (
-                    <ChevronRight className="w-3 h-3" />
-                  ) : (
-                    <ChevronDown className="w-3 h-3" />
-                  )}
-                </button>
-                {!isCollapsed && (
-                  <div className="mt-1 space-y-0.5">
-                    {items.map(item => {
-                      const vRoles = (item as any).visibleForRoles
-                      if (vRoles && (!profile?.role || !vRoles.includes(profile.role))) return null
+        {/* Mode "aucune société active": on cache le menu et on invite à
+            en sélectionner une. Affiché notamment sur /client/select-societe. */}
+        {!societeId ? (
+          <div className="flex-1 flex items-center justify-center px-6 py-10">
+            <div className="text-center">
+              <div
+                aria-hidden="true"
+                className="mx-auto mb-3 inline-flex items-center justify-center w-10 h-10 rounded-full"
+                style={{
+                  background: "rgba(232,234,252,0.04)",
+                  border: "1px solid rgba(232,234,252,0.08)",
+                  color: "#6B7390",
+                }}
+              >
+                <Building2 className="w-5 h-5" />
+              </div>
+              <p
+                className="text-[11px] leading-relaxed"
+                style={{ color: "#6B7390" }}
+              >
+                Sélectionnez une société pour accéder à l&apos;espace
+              </p>
+            </div>
+          </div>
+        ) : (
+          /* Navigation */
+          <nav className="flex-1 px-3 py-4 space-y-3">
+            {visibleMenu.map(({ section, sectionKey, items }) => {
+              const sectionLabel = sectionKey ? t(sectionKey, locale) : section
+              const isCollapsed = collapsed.includes(section)
+              const hasActive = items.some(i => isActive(i.href))
+              return (
+                <div key={section}>
+                  <button
+                    onClick={() => toggle(section)}
+                    aria-expanded={!isCollapsed}
+                    className="group w-full flex items-center justify-between px-2 py-1.5 text-[10px] font-bold uppercase rounded-md transition-colors"
+                    style={{
+                      color: hasActive ? "#D4AF37" : "#6B7390",
+                      letterSpacing: "0.18em",
+                    }}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span
+                        aria-hidden="true"
+                        className="h-1 w-1 rounded-full transition-colors"
+                        style={{
+                          backgroundColor: hasActive ? "#D4AF37" : "rgba(212,175,55,0.28)",
+                          boxShadow: hasActive ? "0 0 4px #D4AF37" : "none",
+                        }}
+                      />
+                      {sectionLabel}
+                    </span>
+                    {isCollapsed ? (
+                      <ChevronRight className="w-3 h-3" />
+                    ) : (
+                      <ChevronDown className="w-3 h-3" />
+                    )}
+                  </button>
+                  {!isCollapsed && (
+                    <div className="mt-1 space-y-0.5">
+                      {items.map(item => {
+                        const vRoles = (item as any).visibleForRoles
+                        if (vRoles && (!profile?.role || !vRoles.includes(profile.role))) return null
                       const Icon = item.icon
                       const active = isActive(item.href)
                       const itemLabel = item.labelKey ? t(item.labelKey, locale) : item.label
@@ -488,7 +513,8 @@ export function ClientSidebarFull() {
               </div>
             )
           })}
-        </nav>
+          </nav>
+        )}
 
         {/* Footer — language + logout with refined hover */}
         <div
