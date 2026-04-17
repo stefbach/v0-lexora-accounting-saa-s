@@ -140,7 +140,7 @@ export default function ClientRapprochementPage() {
   //   'aclasser' → unmatched (à traiter)
   //   'classees' → confirmées + auto-classées + virements internes
   //   'verifier' → rapprochées sans pièce comptable (paidNoInvoice)
-  const [transactionTab, setTransactionTab] = useState<'aclasser' | 'classees' | 'verifier'>('aclasser')
+  const [transactionTab, setTransactionTab] = useState<'aclasser' | 'classees' | 'verifier' | 'fournisseurs'>('fournisseurs')
 
   // Pagination for the "À classer" tab list.
   const [unmatchedPage, setUnmatchedPage] = useState(1)
@@ -1889,6 +1889,7 @@ Voulez-vous vraiment continuer ?`
           ════════════════════════════════════════════════════════════════ */}
       <div className="flex gap-1 border-b border-gray-200">
         {([
+          { id: 'fournisseurs' as const, icon: '📊', label: 'Par fournisseur', count: 0, color: 'border-[#D4AF37] text-[#A88925]' },
           { id: 'aclasser' as const, icon: '📋', label: 'À classer', count: unmatched.length, color: 'border-orange-500 text-orange-700' },
           { id: 'classees' as const, icon: '✅', label: 'Classées', count: matchedWithInvoice.length + classifiedAuto.length + interne.length, color: 'border-green-500 text-green-700' },
           { id: 'verifier' as const, icon: '⚠️', label: 'À vérifier', count: paidNoInvoice.length, color: 'border-amber-500 text-amber-700' },
@@ -2207,6 +2208,220 @@ Voulez-vous vraiment continuer ?`
           </Card>
         </details>
       )}
+
+      {/* SECTION — Vue par fournisseur */}
+      {transactionTab === 'fournisseurs' && (() => {
+        const allFacs = (data?.factures || []) as any[]
+        const unpaidFacs = allFacs.filter((f: any) => f.statut !== 'paye' && f.statut !== 'annule' && f.type_facture !== 'client')
+
+        // Grouper par tiers normalisé + mois
+        const groupMap = new Map<string, { tiers: string; tiersNorm: string; mois: string; factures: any[]; total: number; devise: string }>()
+        for (const f of unpaidFacs) {
+          const tiersRaw = f.tiers || 'Inconnu'
+          const tiersNorm = tiersRaw.toLowerCase().replace(/\b(ltd|limited|sarl|sas|sa|co|inc)\b/gi, '').replace(/[.,;:()/\\'\-"]/g, ' ').replace(/\s+/g, ' ').trim()
+          const mois = (f.date_facture || '').substring(0, 7) || 'sans-date'
+          const key = `${tiersNorm}__${mois}`
+          if (!groupMap.has(key)) {
+            groupMap.set(key, { tiers: tiersRaw, tiersNorm, mois, factures: [], total: 0, devise: f.devise || 'MUR' })
+          }
+          const g = groupMap.get(key)!
+          g.factures.push(f)
+          g.total += Number(f.montant_ttc) || 0
+        }
+
+        const groupes = Array.from(groupMap.values()).sort((a, b) => b.mois.localeCompare(a.mois) || b.total - a.total)
+
+        // Pour chaque groupe, chercher la meilleure tx bancaire correspondante
+        const allTx = transactions.filter((t: any) => t.statut === 'non_identifie' && Number(t.debit) > 0)
+        const usedTxIds = new Set<string>()
+
+        const groupesWithMatch = groupes.map(g => {
+          let bestTx: any = null
+          let bestScore = -1
+          const gTotal = g.total
+
+          for (const tx of allTx) {
+            if (usedTxIds.has(tx.id)) continue
+            const txAmt = Number(tx.debit) || 0
+            if (txAmt === 0) continue
+
+            // Score basé sur : écart montant + similarité tiers + proximité date
+            const amtDiff = Math.abs(txAmt - gTotal) / Math.max(gTotal, 1)
+            if (amtDiff > 0.15) continue // écart > 15% = pas pertinent
+
+            const txTiers = (tx.tiers_detecte || tx.libelle || '').toLowerCase()
+            const tiersWords = g.tiersNorm.split(/\s+/).filter((w: string) => w.length >= 3)
+            const matchedWords = tiersWords.filter((w: string) => txTiers.includes(w))
+            const tiersSim = tiersWords.length > 0 ? matchedWords.length / tiersWords.length : 0
+
+            let score = 0
+            if (amtDiff < 0.005) score += 50  // exact
+            else if (amtDiff < 0.03) score += 40 // très proche
+            else if (amtDiff < 0.08) score += 25 // TDS probable
+            else score += 10
+
+            score += tiersSim * 40 // bonus tiers
+
+            // Bonus date (tx dans le même mois ou mois suivant)
+            if (g.mois !== 'sans-date' && tx.date) {
+              const txMois = (tx.date || '').substring(0, 7)
+              if (txMois === g.mois) score += 10
+              else {
+                const gDate = new Date(g.mois + '-15')
+                const tDate = new Date(tx.date)
+                const daysDiff = Math.abs((tDate.getTime() - gDate.getTime()) / 86400000)
+                if (daysDiff <= 45) score += 5
+              }
+            }
+
+            if (score > bestScore) {
+              bestScore = score
+              bestTx = { ...tx, score, amtDiff, tiersSim }
+            }
+          }
+
+          if (bestTx && bestScore >= 20) {
+            usedTxIds.add(bestTx.id)
+          }
+
+          const matchLevel = !bestTx || bestScore < 20 ? 'none'
+            : bestTx.amtDiff < 0.03 && bestTx.tiersSim > 0.3 ? 'exact'
+            : bestTx.amtDiff < 0.10 ? 'approximatif'
+            : 'none'
+
+          return { ...g, bestTx: bestScore >= 20 ? bestTx : null, matchLevel }
+        })
+
+        const MOIS_FR: Record<string, string> = {
+          '01': 'Janvier', '02': 'Février', '03': 'Mars', '04': 'Avril',
+          '05': 'Mai', '06': 'Juin', '07': 'Juillet', '08': 'Août',
+          '09': 'Septembre', '10': 'Octobre', '11': 'Novembre', '12': 'Décembre'
+        }
+        const fmtMois = (m: string) => {
+          const [y, mm] = m.split('-')
+          return `${MOIS_FR[mm] || mm} ${y}`
+        }
+
+        return (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-[#0B0F2E] flex items-center gap-2 text-base">
+                <span>📊</span> Rapprochement par fournisseur
+                <span className="text-xs font-normal text-gray-400 ml-auto">
+                  {groupes.length} groupe{groupes.length > 1 ? 's' : ''} · {unpaidFacs.length} facture{unpaidFacs.length > 1 ? 's' : ''} en attente
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0 overflow-x-auto">
+              {groupes.length === 0 ? (
+                <div className="text-center py-12 text-gray-500 text-sm">Aucune facture fournisseur en attente</div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Fournisseur</TableHead>
+                      <TableHead>Mois</TableHead>
+                      <TableHead className="text-center">Factures</TableHead>
+                      <TableHead className="text-right">Total dû</TableHead>
+                      <TableHead>Paiement trouvé</TableHead>
+                      <TableHead className="text-right">Montant tx</TableHead>
+                      <TableHead className="text-center">Écart</TableHead>
+                      <TableHead>Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {groupesWithMatch.map((g, gi) => {
+                      const tx = g.bestTx
+                      const borderCls = g.matchLevel === 'exact' ? 'border-l-4 border-l-[#0F766E] bg-[#0F766E]/5'
+                        : g.matchLevel === 'approximatif' ? 'border-l-4 border-l-[#D4AF37] bg-[#D4AF37]/5'
+                        : ''
+                      return (
+                        <TableRow key={gi} className={borderCls}>
+                          <TableCell className="font-medium text-sm text-[#0B0F2E]">{g.tiers}</TableCell>
+                          <TableCell className="text-sm text-gray-600">{g.mois !== 'sans-date' ? fmtMois(g.mois) : '—'}</TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="outline" className="text-xs">{g.factures.length}</Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-mono font-semibold text-sm">
+                            {fmt(g.total)} <span className="text-xs text-gray-400">{g.devise}</span>
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {tx ? (
+                              <div>
+                                <div className="font-medium text-[#0B0F2E] truncate max-w-[200px]" title={tx.libelle}>{tx.tiers_detecte || tx.libelle?.substring(0, 30) || '—'}</div>
+                                <div className="text-[10px] text-gray-400">{formatDate(tx.date)}</div>
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 text-xs">❌ Pas trouvé</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-sm">
+                            {tx ? (
+                              <span className={g.matchLevel === 'exact' ? 'text-[#0F766E] font-semibold' : g.matchLevel === 'approximatif' ? 'text-[#A88925]' : ''}>
+                                {fmt(Number(tx.debit))} {tx.devise || ''}
+                              </span>
+                            ) : '—'}
+                          </TableCell>
+                          <TableCell className="text-center text-xs">
+                            {tx ? (
+                              <Badge className={
+                                g.matchLevel === 'exact' ? 'bg-[#0F766E]/10 text-[#0F766E] border-[#0F766E]/30' :
+                                g.matchLevel === 'approximatif' ? 'bg-[#D4AF37]/10 text-[#A88925] border-[#D4AF37]/30' :
+                                'bg-gray-100 text-gray-500'
+                              }>
+                                {tx.amtDiff < 0.005 ? '✓ exact' : `${(tx.amtDiff * 100).toFixed(1)}%`}
+                              </Badge>
+                            ) : '—'}
+                          </TableCell>
+                          <TableCell>
+                            {tx && g.matchLevel !== 'none' ? (
+                              <div className="flex gap-1">
+                                <Button
+                                  size="sm"
+                                  className="h-7 text-xs bg-[#0F766E] hover:bg-[#0F766E]/90 text-white"
+                                  onClick={() => {
+                                    if (g.factures.length === 1) {
+                                      handleManualLink(tx, g.factures[0], 'facture')
+                                    } else {
+                                      handleManualLinkMulti(tx, g.factures)
+                                    }
+                                  }}
+                                >
+                                  Valider
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 text-xs"
+                                  onClick={() => { setDialogTab('factures'); setLettrageTiersFilter(g.tiers); setSelectedFactureIds(new Set()); setLinkDialog(tx) }}
+                                >
+                                  Détail
+                                </Button>
+                              </div>
+                            ) : (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={() => {
+                                  const fakeTx = { id: 'pick', libelle: g.tiers, tiers_detecte: g.tiers, debit: g.total, credit: 0, devise: g.devise }
+                                  setPickTxForFacture(g.factures[0])
+                                }}
+                              >
+                                Chercher
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        )
+      })()}
 
       {/* SECTION 4 — Transactions à classer — onglet "À classer" */}
       {transactionTab === 'aclasser' && (
