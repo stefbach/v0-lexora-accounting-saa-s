@@ -48,12 +48,29 @@ function FormField({ label, required, children, className }: { label: string; re
 const inputClass = "h-11 rounded-xl"
 const selectTriggerClass = "h-11 rounded-xl"
 
+// Générateur de mot de passe partagé entre CreateEmployeForm et le flux
+// bulk/access de EmployesPage. 10 chars alphanum sans caractères ambigus.
+function genPwd() {
+  const c = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"
+  let p = ""
+  for (let i = 0; i < 10; i++) p += c[Math.floor(Math.random() * c.length)]
+  return p
+}
+
 // ── Composant formulaire creation (state isole = pas de re-render parent) ──
 function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; onCreated: () => void; onClose: () => void }) {
   const [form, setForm] = useState({ societe_id:"",nom:"",prenom:"",poste:"",email:"",telephone:"",salaire_base:"",transport_allowance:"0",petrol_allowance:"0",date_arrivee:"",role:"salarie",csg_categorie:"A",bank_account:"",bank_name:"",nic:"",tan:"",iban:"",genre:"",date_naissance:"",departement:"",type_contrat:"CDI",devise_salaire:"MUR" })
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const u = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
+
+  // Section "Accès Lexora" — création optionnelle du compte auth en même
+  // temps que la fiche employé. Si toggle ON, un second POST vers
+  // /api/admin/create-user-employee est enchaîné après la création réussie
+  // de l'employé.
+  const [createAccess, setCreateAccess] = useState(false)
+  const [accessPwd, setAccessPwd] = useState(() => genPwd())
+  const [pwdVisible, setPwdVisible] = useState(true)
 
   const validate = () => {
     const errs: Record<string, string> = {}
@@ -74,6 +91,11 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
       const okMu = /^\+230\d{7,8}$/.test(cleaned) || /^\d{7,8}$/.test(cleaned)
       if (!okMu) errs.telephone = "Format invalide. Attendu : +230 XXXX XXXX ou XXXX XXXX"
     }
+    // Validation compte Lexora : si toggle ON → email + password ≥ 6 chars
+    if (createAccess) {
+      if (!form.email) errs.email = errs.email || "Email requis pour créer un compte Lexora"
+      if (!accessPwd || accessPwd.length < 6) errs._access = "Mot de passe ≥ 6 caractères requis"
+    }
     setErrors(errs)
     return Object.keys(errs).length === 0
   }
@@ -87,15 +109,41 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
       // Sprint 4 TÂCHE 6 — feedback selon contrat_status renvoyé par l'API
       const body = await res.json().catch(() => ({}))
       const status = body?.contrat_status as string | undefined
+      const employeId = body?.employe?.id as string | undefined
+
+      // Base toast selon contrat_status (fiche employé)
       if (status === 'created') {
         toast.success(`Employé créé. 📄 Contrat brouillon généré — voir /rh/juridique`, { duration: 5000 })
       } else if (status === 'no_template') {
         toast.warning(`Employé créé. ⚠️ Aucun template disponible — créer le contrat manuellement via /rh/juridique`, { duration: 6000 })
       } else if (status === 'failed') {
         toast.warning(`Employé créé. ⚠️ Génération contrat échouée — à créer manuellement`, { duration: 6000 })
-      } else {
-        toast.success('Employé créé.')
+      } else if (!createAccess) {
+        toast.success('✅ Employé créé. Compte Lexora à créer plus tard.')
       }
+
+      // Création optionnelle du compte Lexora — enchaînée après la fiche
+      // pour avoir l'employe_id en DB. Un échec du compte n'annule PAS
+      // la fiche employé (déjà créée) — on notifie en warning et l'admin
+      // peut recréer le compte plus tard via le bouton "Créer le compte Lexora".
+      if (createAccess && employeId) {
+        try {
+          const accessRes = await fetch("/api/admin/create-user-employee", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ employe_id: employeId, password: accessPwd }),
+          })
+          const accessData = await accessRes.json().catch(() => ({}))
+          if (!accessRes.ok || accessData.error) {
+            toast.warning(`Employé créé. ⚠️ Compte Lexora non créé : ${accessData.error || `HTTP ${accessRes.status}`}. Réessayez via le bouton "Créer le compte Lexora".`, { duration: 8000 })
+          } else {
+            toast.success(`✅ Employé créé + compte Lexora activé (${form.email})`, { duration: 6000 })
+          }
+        } catch (e: any) {
+          toast.warning(`Employé créé. ⚠️ Compte Lexora non créé : ${e?.message || 'erreur réseau'}. Réessayez plus tard.`, { duration: 8000 })
+        }
+      }
+
       onClose(); onCreated()
     } catch (e: unknown) { setErrors({ _global: e instanceof Error ? e.message : "Erreur" }) }
     finally { setSaving(false) }
@@ -198,6 +246,78 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
         <FormField label="IBAN" className="sm:col-span-2">
           <Input className={inputClass} value={form.iban} onChange={e=>u("iban",e.target.value)} placeholder="MU17BOMM..."/>
         </FormField>
+      </FormSection>
+
+      {/* Accès Lexora — création optionnelle du compte auth */}
+      <FormSection icon={<Key className="w-4 h-4 text-purple-600" />} title="Accès Lexora" color="#9333EA">
+        <div className="sm:col-span-2 space-y-3">
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              className="mt-1 w-4 h-4 accent-purple-600 shrink-0"
+              checked={createAccess}
+              onChange={e => setCreateAccess(e.target.checked)}
+            />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-[#0B0F2E]">
+                Créer un accès Lexora pour cet employé
+              </p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                L'employé pourra se connecter au portail pour consulter ses bulletins, poser des congés, etc. Peut être créé plus tard si besoin.
+              </p>
+            </div>
+          </label>
+
+          {createAccess && (
+            <div className="space-y-3 pl-7">
+              <div>
+                <Label className="text-xs font-medium text-gray-600 mb-1 block">Email de connexion</Label>
+                <Input
+                  className={`${inputClass} bg-gray-50`}
+                  value={form.email}
+                  readOnly
+                  placeholder="Renseignez l'email dans la section Identité"
+                />
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Identifiant = email de l'employé (éditable dans la section Identité).
+                </p>
+              </div>
+              <div>
+                <Label className="text-xs font-medium text-gray-600 mb-1 block">Mot de passe</Label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Input
+                      type={pwdVisible ? "text" : "password"}
+                      value={accessPwd}
+                      onChange={e => setAccessPwd(e.target.value)}
+                      className={`${inputClass} font-mono pr-10`}
+                      placeholder="Mot de passe..."
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setPwdVisible(v => !v)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                      title={pwdVisible ? "Masquer" : "Afficher"}
+                    >
+                      {pwdVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setAccessPwd(genPwd())}>
+                    Générer
+                  </Button>
+                </div>
+                {errors._access && <p className="text-xs text-red-500 mt-1">{errors._access}</p>}
+              </div>
+              <div className="flex items-start gap-2 p-2 rounded bg-amber-50 border border-amber-200">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-800">
+                  <span className="font-semibold">Important :</span> communiquez ce mot de passe
+                  à l'employé par un canal sécurisé. Il ne sera plus visible après la création.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
       </FormSection>
 
       {/* Actions */}
@@ -506,7 +626,7 @@ export default function EmployesPage() {
   const [bulkSaving, setBulkSaving] = useState(false)
   const [bulkResults, setBulkResults] = useState<{employe_id:string;status:string;error?:string;email?:string}[]|null>(null)
 
-  const genPwd = () => { const c = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"; let p = ""; for (let i = 0; i < 10; i++) p += c[Math.floor(Math.random() * c.length)]; return p }
+  // genPwd déplacé au scope module (réutilisé dans CreateEmployeForm)
 
   const openAccess = (emp: any) => {
     setAccessEmp(emp)
