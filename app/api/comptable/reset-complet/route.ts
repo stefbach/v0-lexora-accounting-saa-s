@@ -202,7 +202,6 @@ export async function POST(request: Request) {
       .update({ solde_actuel: 0 })
       .eq('societe_id', societe_id)
       .neq('solde_actuel', 0)
-      .select('id', { count: 'exact', head: true })
     stats.comptes_bancaires_solde_reset = nbComptesReset || 0
 
     // 8. Immobilisations — garde par défaut (ne touche que si demandé)
