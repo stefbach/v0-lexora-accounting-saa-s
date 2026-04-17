@@ -374,21 +374,63 @@ export async function PATCH(request: Request) {
     // Tenant isolation: le caller doit avoir accès à la société de la facture
     await assertSocieteAccess(supabase, user.id, existing.societe_id)
 
-    // On bannit explicitement les réassignations de société via PATCH
-    if ('societe_id' in updates && updates.societe_id !== existing.societe_id) {
-      return NextResponse.json({ error: 'Réassignation de société non autorisée' }, { status: 400 })
-    }
-    // Purge défensive: si le client essaie quand même de passer societe_id = identique,
-    // on retire la clé du payload pour ne jamais la pousser dans l'UPDATE
-    delete updates.societe_id
-
     if (existing.statut !== 'brouillon' && existing.statut !== 'en_attente') {
-      // Allow only status-related updates on finalized invoices
+      // Sur une facture finalisée, seuls certains champs métier (non comptables) peuvent changer.
+      // societe_id RETIRÉ de allowedUpdates : le changer sans déplacer les écritures liées
+      // crée des écritures orphelines et pollue la balance de la société d'origine.
       const allowedUpdates = ['statut', 'mode_paiement', 'paye_par', 'notes']
       const keys = Object.keys(updates)
       const hasDisallowed = keys.some(k => !allowedUpdates.includes(k))
       if (hasDisallowed) {
         return NextResponse.json({ error: 'Seules les factures brouillon peuvent etre modifiees (sauf statut/mode_paiement/notes)' }, { status: 400 })
+      }
+    }
+
+    // Déplacement de facture entre sociétés : autorisé UNIQUEMENT si la facture
+    // n'a pas encore d'écritures comptables liées. Sinon on laisserait des écritures
+    // orphelines sur la société d'origine → déséquilibre + contamination visuelle
+    // d'une société par les factures d'une autre.
+    if (updates.societe_id && updates.societe_id !== existing.societe_id) {
+      // Tenant isolation sur la société CIBLE aussi
+      await assertSocieteAccess(supabase, user.id, updates.societe_id)
+
+      const { count: ecrituresLiees } = await supabase
+        .from('ecritures_comptables_v2')
+        .select('id', { count: 'exact', head: true })
+        .eq('societe_id', existing.societe_id)
+        .like('ref_folio', `FAC-${id}%`)
+      if ((ecrituresLiees || 0) > 0) {
+        return NextResponse.json({
+          error: `Impossible de déplacer cette facture : ${ecrituresLiees} écriture(s) comptable(s) déjà enregistrée(s). Annulez puis recréez la facture sous la bonne société.`,
+        }, { status: 409 })
+      }
+    }
+
+    // If societe_id is changed (et la vérification ci-dessus a passé),
+    // also update the linked document record
+    if (updates.societe_id && updates.societe_id !== existing.societe_id) {
+      try {
+        // Find old and new dossier
+        const { data: newDossier } = await supabase
+          .from('dossiers').select('id').eq('societe_id', updates.societe_id).limit(1).maybeSingle()
+        const { data: newSoc } = await supabase
+          .from('societes').select('nom').eq('id', updates.societe_id).maybeSingle()
+        if (newDossier?.id) {
+          // Find the linked document by n8n_result.facture_id
+          const { data: linkedDocs } = await supabase
+            .from('documents')
+            .select('id, n8n_result')
+            .contains('n8n_result', { facture_id: id })
+          for (const doc of linkedDocs || []) {
+            await supabase.from('documents').update({
+              dossier_id: newDossier.id,
+              societe_detectee: newSoc?.nom || null,
+            }).eq('id', doc.id)
+          }
+          console.log(`[factures PATCH] Reassigned facture ${id} and ${linkedDocs?.length || 0} linked document(s) to societe ${updates.societe_id}`)
+        }
+      } catch (e: any) {
+        console.warn('[factures PATCH] Failed to update linked document societe:', e.message)
       }
     }
 
