@@ -1159,6 +1159,15 @@ export default function CongesPage() {
                                     <span title="Imposé par la société" className={b.al_impose_societe && b.al_impose_societe > 0 ? "text-amber-700 font-medium" : ""}>soc: {b.al_impose_societe ?? 0}</span>
                                   </span>
                                 )}
+                                {/* Sprint 13 BUG 2 — indication visuelle si une partie
+                                    a basculé en UL (solde AL insuffisant au moment
+                                    de poser). al_pris reste le compteur de suivi
+                                    global indépendant du solde. */}
+                                {(b as any).al_bascule_ul && (b as any).al_bascule_ul > 0 && (
+                                  <span className="text-[9px] text-amber-700 mt-0.5" title="Jours posés mais basculés en Unpaid Leave (solde AL insuffisant)">
+                                    dont {(b as any).al_bascule_ul}j UL
+                                  </span>
+                                )}
                               </div>
                             )}
                           </TableCell>

@@ -423,35 +423,73 @@ export async function GET(request: Request) {
       const now = new Date()
       const currentYear = now.getFullYear()
 
-      // Get all approved leave requests for current year
+      // Sprint 13 BUG 2 — récupérer AUSSI les demandes en_attente pour
+      // calculer "AL pris" (compteur de suivi) indépendamment du solde.
+      // Les statuts 'approuve' et 'en_attente' comptent tous deux comme
+      // "congés posés" côté planning. Le solde al_solde reste basé sur
+      // les AL approuvés uniquement (les pending ne déduisent pas encore).
       const { data: congesData } = await supabase
         .from('demandes_conges')
         .select('*')
         .in('employe_id', employeeIds)
-        .eq('statut', 'approuve')
+        .in('statut', ['approuve', 'en_attente'])
         .gte('date_debut', `${currentYear}-01-01`)
         .lte('date_debut', `${currentYear}-12-31`)
 
       const conges = congesData || []
 
-      // Get all SL records (approved) for consecutive check
-      const allSl = conges.filter((c: any) => c.type_conge === 'SL')
+      // Sprint 13 BUG 2 — marker de bascule UL posé par POST action=creer
+      // quand le solde AL est insuffisant : motif contient "[Auto-bascule UL]"
+      // et "Solde Local Leave insuffisant". Pour le compteur "AL pris"
+      // (suivi des jours réellement posés), on récupère ces UL-from-AL
+      // pour les agréger avec les vrais AL.
+      const isBasculeAlToUl = (c: any): boolean =>
+        c?.type_conge === 'UL'
+        && typeof c?.motif === 'string'
+        && c.motif.includes('[Auto-bascule UL]')
+        && /Solde\s+Local\s+Leave\s+insuffisant/i.test(c.motif)
+
+      // Get all SL records (approuvés) pour consecutive check
+      const allSl = conges.filter((c: any) => c.type_conge === 'SL' && c.statut === 'approuve')
 
       // Build balances per employee
       const balances = employees.map((emp: any) => {
         const empConges = conges.filter((c: any) => c.employe_id === emp.id)
-        const empAlConges = empConges.filter((c: any) => c.type_conge === 'AL')
-        const alTaken = empAlConges.reduce((sum: number, c: any) => sum + (c.nb_jours || 0), 0)
+
+        // AL posés (compteur de suivi) = vrais AL + UL-from-AL bascule,
+        // tous statuts (approuve OU en_attente), INDÉPENDANT du solde.
+        const empAlPosés = empConges.filter((c: any) =>
+          c.type_conge === 'AL' || isBasculeAlToUl(c)
+        )
+        const alTaken = empAlPosés.reduce((sum: number, c: any) => sum + (c.nb_jours || 0), 0)
+
+        // AL réellement déduits du droit = AL pur ET approuvés uniquement
+        // (les pending ne baissent pas encore, les UL-from-AL n'ont JAMAIS
+        // été déduits du droit puisqu'ils ont basculé en UL).
+        const empAlReels = empConges.filter((c: any) =>
+          c.type_conge === 'AL' && c.statut === 'approuve'
+        )
+        const alDeduitsDuDroit = empAlReels.reduce((sum: number, c: any) => sum + (c.nb_jours || 0), 0)
+
         // Split AL days between company-imposed and employee-chosen.
-        const alImposeSociete = empAlConges
+        // Basé sur les AL posés (compteur de suivi) pour que le split
+        // reste cohérent avec al_pris affiché.
+        const alImposeSociete = empAlPosés
           .filter((c: any) => c.impose_par_societe === true)
           .reduce((sum: number, c: any) => sum + (c.nb_jours || 0), 0)
         const alImposeEmploye = alTaken - alImposeSociete
-        const slTaken = empConges.filter((c: any) => c.type_conge === 'SL').reduce((sum: number, c: any) => sum + (c.nb_jours || 0), 0)
+
+        // SL posés (même logique indépendante du solde)
+        const empSlPosés = empConges.filter((c: any) => c.type_conge === 'SL')
+        const slTaken = empSlPosés.reduce((sum: number, c: any) => sum + (c.nb_jours || 0), 0)
+        const empSlReels = empSlPosés.filter((c: any) => c.statut === 'approuve')
+        const slDeduitsDuDroit = empSlReels.reduce((sum: number, c: any) => sum + (c.nb_jours || 0), 0)
+
         const alEntitled = calculateALEntitlement(emp.date_arrivee, currentYear)
         const slEntitled = calculateSLEntitlement(emp.date_arrivee, currentYear)
-        const alBalance = alEntitled - alTaken
-        const slBalance = slEntitled - slTaken
+        // al_solde = droit - AL réellement déduits (pending et UL-from-AL exclus)
+        const alBalance = alEntitled - alDeduitsDuDroit
+        const slBalance = slEntitled - slDeduitsDuDroit
 
         // Sick certificate alert
         const empSl = allSl.filter((c: any) => c.employe_id === emp.id)
@@ -491,6 +529,13 @@ export async function GET(request: Request) {
           statusColor = 'orange'
         }
 
+        // Sprint 13 BUG 2 — détails de bascule UL pour transparence UI.
+        // Permet au RH de voir le nombre de jours AL basculés en UL
+        // (carence) vs les vrais AL déduits du solde.
+        const alBasculeUl = empAlPosés
+          .filter((c: any) => isBasculeAlToUl(c))
+          .reduce((sum: number, c: any) => sum + (c.nb_jours || 0), 0)
+
         return {
           employe_id: emp.id,
           nom: emp.nom,
@@ -500,13 +545,19 @@ export async function GET(request: Request) {
           gender: emp.gender,
           date_arrivee: emp.date_arrivee,
           al_droit: alEntitled,
+          // Sprint 13 BUG 2 — al_pris = compteur de suivi indépendant du solde.
+          // Inclut AL + UL-from-AL (bascule carence), approuvés et en attente.
           al_pris: alTaken,
           al_impose_societe: Math.round(alImposeSociete * 100) / 100,
           al_impose_employe: Math.round(alImposeEmploye * 100) / 100,
           al_solde: alBalance,
+          // Détails pour UI (ex: distinguer les jours vraiment décomptés du solde)
+          al_deduits: Math.round(alDeduitsDuDroit * 100) / 100,
+          al_bascule_ul: Math.round(alBasculeUl * 100) / 100,
           sl_droit: slEntitled,
           sl_pris: slTaken,
           sl_solde: slBalance,
+          sl_deduits: Math.round(slDeduitsDuDroit * 100) / 100,
           status_color: statusColor,
           sick_cert_alert: sickCertAlert,
         }
