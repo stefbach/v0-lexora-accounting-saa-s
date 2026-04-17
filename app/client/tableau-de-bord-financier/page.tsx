@@ -1,40 +1,29 @@
 "use client"
-import { useState, useEffect, useCallback } from "react"
+import { useState, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2, TrendingUp, TrendingDown, DollarSign, Users, RefreshCw, BarChart2, Brain } from "lucide-react"
+import { Loader2, TrendingUp, TrendingDown, Brain } from "lucide-react"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 
 function fmt(n: number) { return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(n).replace("€","MUR") }
 function pct(n: number) { return `${n >= 0 ? "+" : ""}${n.toFixed(1)}%` }
 
 export default function TableauDeBordFinancierPage() {
+  const { societeId } = useSocieteActive()
   const [data, setData] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
-  const [societes, setSocietes] = useState<any[]>([])
-  const [societe, setSociete] = useState("")
   const [periode, setPeriode] = useState(new Date().toISOString().slice(0,7))
 
-  useEffect(() => {
-    fetch("/api/client/societes").then(r => r.json()).then(d => {
-      const socs = d.societes || []
-      setSocietes(socs)
-      if (socs.length > 0) setSociete(socs[0].id)
-    })
-    setLoading(false)
-  }, [])
-
   const generer = useCallback(async () => {
-    if (!societe) return
+    if (!societeId) return
     setGenerating(true)
     try {
-      const res = await fetch("/api/generer-tableau-de-bord", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ societe_id: societe, periode, type_periode: "mensuel" }) })
+      const res = await fetch("/api/generer-tableau-de-bord", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ societe_id: societeId, periode, type_periode: "mensuel" }) })
       const d = await res.json()
       setData(d)
     } catch (e) { console.error(e) }
     finally { setGenerating(false) }
-  }, [societe, periode])
+  }, [societeId, periode])
 
   const kpis = data?.dashboard?.kpis || []
   const recommandations = data?.dashboard?.recommandations || []
@@ -46,12 +35,8 @@ export default function TableauDeBordFinancierPage() {
         <div><h1 className="text-2xl font-bold text-[#0B0F2E]">Tableau de bord financier</h1>
         <p className="text-sm text-gray-500">Analyse IA de vos indicateurs clés</p></div>
         <div className="flex gap-2">
-          <Select value={societe} onValueChange={setSociete}>
-            <SelectTrigger className="w-48"><SelectValue placeholder="Société..."/></SelectTrigger>
-            <SelectContent>{societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent>
-          </Select>
           <input type="month" value={periode} onChange={e => setPeriode(e.target.value)} className="border rounded px-3 py-2 text-sm"/>
-          <Button onClick={generer} disabled={generating || !societe} className="bg-[#0B0F2E] text-white gap-1">
+          <Button onClick={generer} disabled={generating || !societeId} className="bg-[#0B0F2E] text-white gap-1">
             {generating ? <Loader2 className="w-4 h-4 animate-spin"/> : <Brain className="w-4 h-4"/>}
             Analyser avec IA
           </Button>
