@@ -454,15 +454,26 @@ export async function GET(request: Request) {
       const conges = congesData || []
 
       // Sprint 13 BUG 2 — marker de bascule UL posé par POST action=creer
-      // quand le solde AL est insuffisant : motif contient "[Auto-bascule UL]"
-      // et "Solde Local Leave insuffisant". Pour le compteur "AL pris"
-      // (suivi des jours réellement posés), on récupère ces UL-from-AL
-      // pour les agréger avec les vrais AL.
+      // quand le solde AL est insuffisant OU pendant la période de carence.
+      // motif contient toujours "[Auto-bascule UL]". Pour le compteur
+      // "AL pris" on récupère ces UL-from-AL pour les agréger.
+      //
+      // Deux cas produisent ce tag :
+      //   1. Solde insuffisant : "Solde Local Leave insuffisant..."
+      //   2. Carence < 6 mois : "Période de carence..."
+      // → On simplifie : tout UL avec "[Auto-bascule UL]" est un AL basculé
+      //   SAUF si le motif mentionne "Sick Leave" (bascule SL→UL).
       const isBasculeAlToUl = (c: any): boolean =>
         c?.type_conge === 'UL'
         && typeof c?.motif === 'string'
         && c.motif.includes('[Auto-bascule UL]')
-        && /Solde\s+Local\s+Leave\s+insuffisant/i.test(c.motif)
+        && !/Sick\s+Leave/i.test(c.motif)
+
+      const isBasculeSlToUl = (c: any): boolean =>
+        c?.type_conge === 'UL'
+        && typeof c?.motif === 'string'
+        && c.motif.includes('[Auto-bascule UL]')
+        && /Sick\s+Leave/i.test(c.motif)
 
       // Get all SL records (approuvés) pour consecutive check
       const allSl = conges.filter((c: any) => c.type_conge === 'SL' && c.statut === 'approuve')
@@ -494,10 +505,14 @@ export async function GET(request: Request) {
           .reduce((sum: number, c: any) => sum + (c.nb_jours || 0), 0)
         const alImposeEmploye = alTaken - alImposeSociete
 
-        // SL posés (même logique indépendante du solde)
-        const empSlPosés = empConges.filter((c: any) => c.type_conge === 'SL')
+        // SL posés (même logique — inclut UL-from-SL bascule)
+        const empSlPosés = empConges.filter((c: any) =>
+          c.type_conge === 'SL' || isBasculeSlToUl(c)
+        )
         const slTaken = empSlPosés.reduce((sum: number, c: any) => sum + (c.nb_jours || 0), 0)
-        const empSlReels = empSlPosés.filter((c: any) => c.statut === 'approuve')
+        const empSlReels = empSlPosés.filter((c: any) =>
+          c.type_conge === 'SL' && c.statut === 'approuve'
+        )
         const slDeduitsDuDroit = empSlReels.reduce((sum: number, c: any) => sum + (c.nb_jours || 0), 0)
 
         const alEntitled = calculateALEntitlement(emp.date_arrivee, currentYear)
