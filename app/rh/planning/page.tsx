@@ -426,6 +426,40 @@ export default function PlanningPage() {
           }
         }
       }
+
+      // 7. Sprint 14 FIX 3 — Repos inter-journées 11h minimum (WRA Art. 19).
+      // Pour chaque paire de jours consécutifs, calculer le temps de repos
+      // entre la fin du shift jour J et le début du shift jour J+1.
+      // Si < 11h → ERREUR bloquante (pas un simple avertissement).
+      for (let d = 1; d < daysInMonth; d++) {
+        const cellD = planning[emp.id]?.[d]
+        const cellD1 = planning[emp.id]?.[d + 1]
+        const isWorkD = cellD && cellD.heure_fin && cellD.creneau_id !== "repos" && cellD.creneau_id !== "conge" && !cellD.creneau_id?.startsWith("conge_")
+        const isWorkD1 = cellD1 && cellD1.heure_debut && cellD1.creneau_id !== "repos" && cellD1.creneau_id !== "conge" && !cellD1.creneau_id?.startsWith("conge_")
+        if (isWorkD && isWorkD1) {
+          const [fh, fm] = cellD.heure_fin.split(":").map(Number)
+          const [sh, sm] = cellD.heure_debut.split(":").map(Number)
+          const [nh, nm] = cellD1.heure_debut.split(":").map(Number)
+          const endMins = fh * 60 + (fm || 0)
+          const startMins = sh * 60 + (sm || 0)
+          const nextStartMins = nh * 60 + (nm || 0)
+          // Shift crosses midnight if heure_fin ≤ heure_debut (ex: 22:00→06:00)
+          const crossesMidnight = endMins <= startMins
+          const restMins = crossesMidnight
+            ? (nextStartMins - endMins) // end is on day d+1, next start also on day d+1
+            : ((24 * 60 - endMins) + nextStartMins) // end is on day d, next start on day d+1
+          const restH = Math.round(restMins / 6) / 10 // round to 0.1h
+          if (restMins < 11 * 60) {
+            violations.push({
+              severity: "red",
+              empName: name,
+              empId: emp.id,
+              rule: "Repos inter-journées",
+              detail: `Jour ${d}→${d + 1}: ${restH}h de repos (min 11h, WRA Art. 19). Fin ${cellD.heure_fin} → Début ${cellD1.heure_debut}`,
+            })
+          }
+        }
+      }
     }
 
     // 7. Team absence percentage per day
