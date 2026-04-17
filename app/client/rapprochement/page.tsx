@@ -2289,8 +2289,8 @@ Voulez-vous vraiment continuer ?`
           return { tx, proposal }
         })
 
-        const withMatch = txWithProposals.filter(t => t.proposal)
-        const withoutMatch = txWithProposals.filter(t => !t.proposal)
+        const withMatch = txWithProposals.filter((t: any) => t.proposal)
+        const withoutMatch = txWithProposals.filter((t: any) => !t.proposal)
 
         return (
           <Card>
