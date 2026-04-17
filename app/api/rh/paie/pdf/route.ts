@@ -381,38 +381,9 @@ function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris
         )
       ),
 
-      // ─── Charges Patronales ─────────────────────
-      React.createElement(View, { style: s.patronalBox },
-        React.createElement(Text, { style: s.patronalTitle }, 'Charges patronales (information)'),
-        React.createElement(View, { style: s.patronalRow },
-          React.createElement(Text, { style: s.patronalLabel }, 'CSG Patronal (6%)'),
-          React.createElement(Text, { style: s.patronalValue }, `${fmt(bulletin.csg_patronal)} MUR`)
-        ),
-        Number(bulletin.csg_patronal_bonus) > 0 ? React.createElement(View, { style: s.patronalRow },
-          React.createElement(Text, { style: s.patronalLabel }, 'CSG patronal sur bonus (6%)'),
-          React.createElement(Text, { style: s.patronalValue }, `${fmt(bulletin.csg_patronal_bonus)} MUR`)
-        ) : null,
-        React.createElement(View, { style: s.patronalRow },
-          React.createElement(Text, { style: s.patronalLabel }, 'NSF Patronal (2.5%)'),
-          React.createElement(Text, { style: s.patronalValue }, `${fmt(bulletin.nsf_patronal)} MUR`)
-        ),
-        React.createElement(View, { style: s.patronalRow },
-          React.createElement(Text, { style: s.patronalLabel }, 'Training Levy HRDC (1%)'),
-          React.createElement(Text, { style: s.patronalValue }, `${fmt(bulletin.training_levy)} MUR`)
-        ),
-        React.createElement(View, { style: s.patronalRow },
-          React.createElement(Text, { style: s.patronalLabel }, `PRGF (4.50 MUR x ${bulletin.jours_travailles || 26} jours)`),
-          React.createElement(Text, { style: s.patronalValue }, `${fmt(bulletin.prgf)} MUR`)
-        ),
-        React.createElement(View, { style: [s.patronalRow, s.patronalTotal] },
-          React.createElement(Text, { style: [s.patronalLabel, { fontFamily: 'Helvetica-Bold', color: '#0B0F2E' }] }, 'Total charges patronales'),
-          React.createElement(Text, { style: [s.patronalValue, { fontFamily: 'Helvetica-Bold', color: '#0B0F2E' }] }, `${fmt(bulletin.total_charges_patronales)} MUR`)
-        ),
-        React.createElement(View, { style: [s.patronalRow, s.patronalTotal] },
-          React.createElement(Text, { style: [s.patronalLabel, { fontFamily: 'Helvetica-Bold', color: '#0B0F2E' }] }, 'COUT TOTAL EMPLOYEUR'),
-          React.createElement(Text, { style: [s.patronalValue, { fontFamily: 'Helvetica-Bold', color: '#0B0F2E' }] }, `${fmt(Number(bulletin.salaire_brut) + Number(bulletin.total_charges_patronales))} MUR`)
-        )
-      ),
+      // ─── Charges patronales supprimées du PDF employé ──────────
+      // Ces données restent visibles dans /rh/paie (admin), exports
+      // comptables et dashboard RH — mais ne concernent pas l'employé.
 
       // ─── Footer ─────────────────────────────────
       React.createElement(View, { style: s.footer },
