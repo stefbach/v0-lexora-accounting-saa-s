@@ -122,6 +122,17 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           error: 'salaire_base invalide — valeur > 0 requise pour éviter d\'écraser le salaire à 0',
         }, { status: 400 })
       }
+      // Salaire minimum (Finance Act 2024 : 16 500 MUR)
+      if (n < 16500 && !body.exclure_mra) {
+        // Vérifier si l'employé est exclure_mra avant de bloquer
+        const { data: currentEmp } = await supabase.from('employes')
+          .select('exclure_mra').eq('id', id).maybeSingle()
+        if (!currentEmp?.exclure_mra) {
+          return NextResponse.json({
+            error: `Salaire inférieur au minimum légal (${n} MUR < 16 500 MUR — Finance Act 2024).`,
+          }, { status: 400 })
+        }
+      }
       body.salaire_base = n
       // Sprint 9 BUG 2 — capturer l'ancien salaire AVANT update pour décider
       // s'il faut recalculer les bulletins non verrouillés.

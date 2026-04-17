@@ -260,6 +260,12 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
         <FormField label="Salaire de base" required>
           <Input className={inputClass} type="number" value={form.salaire_base} onChange={e=>u("salaire_base",e.target.value)} placeholder="35 000"/>
           {fieldErr("salaire_base")}
+          {form.salaire_base && parseFloat(form.salaire_base) > 0 && parseFloat(form.salaire_base) < 16500 && (
+            <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+              <AlertTriangle className="w-3 h-3" />
+              Inférieur au minimum légal (16 500 MUR — Finance Act 2024)
+            </p>
+          )}
         </FormField>
         <FormField label="Devise">
           <Select value={form.devise_salaire} onValueChange={v=>u("devise_salaire",v)}><SelectTrigger className={selectTriggerClass}><SelectValue/></SelectTrigger><SelectContent>{["MUR","EUR","USD","GBP"].map(d=><SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select>

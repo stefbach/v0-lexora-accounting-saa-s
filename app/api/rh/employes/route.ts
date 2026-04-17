@@ -93,15 +93,35 @@ export async function POST(request: Request) {
     }
     delete body.role
 
-    // Générer code employé
-    const { count, error: countErr } = await supabase.from('employes')
-      .select('*', { count: 'exact', head: true }).eq('societe_id', body.societe_id)
-    if (countErr) {
-      console.error('[employes POST] count error:', countErr.message, countErr.code, countErr.details)
-      return NextResponse.json({ error: `Erreur comptage employés: ${countErr.message}`, code: countErr.code }, { status: 500 })
+    // Générer code employé — MAX existant + 1 pour éviter collision 23505.
+    // L'ancien code (count+1 par société) produisait 000013/000014 qui
+    // pouvaient déjà exister si des codes avaient été attribués manuellement
+    // (ex: 444) ou importés.
+    let nextCode = '000001'
+    try {
+      const { data: allCodes } = await supabase.from('employes')
+        .select('code').not('code', 'is', null)
+      if (allCodes && allCodes.length > 0) {
+        const maxNum = Math.max(
+          0,
+          ...allCodes.map((e: any) => parseInt(e.code, 10)).filter((n: number) => !isNaN(n))
+        )
+        nextCode = String(maxNum + 1).padStart(6, '0')
+      }
+    } catch (e: any) {
+      console.warn('[employes POST] max code lookup failed, using timestamp fallback:', e?.message)
+      nextCode = String(Date.now()).slice(-6)
     }
-    body.code = String((count || 0) + 1).padStart(6, '0')
+    body.code = nextCode
     step('code generated', { code: body.code })
+
+    // Validation salaire minimum (Finance Act 2024 : 16 500 MUR)
+    const salaireBase = Number(body.salaire_base) || 0
+    if (salaireBase > 0 && salaireBase < 16500 && !body.exclure_mra) {
+      return NextResponse.json({
+        error: `Salaire inférieur au minimum légal (${salaireBase} MUR < 16 500 MUR — Finance Act 2024). Corrigez le salaire ou cochez "Exclure des déclarations MRA" si c'est un consultant/freelance.`,
+      }, { status: 400 })
+    }
 
     // Sprint — INSERT résilient au schéma : si une colonne n'existe pas en
     // prod (mig 040 / 117 non appliquée), on strip la colonne mentionnée
@@ -130,7 +150,6 @@ export async function POST(request: Request) {
       })
       // 42703 = undefined_column — strip la colonne mentionnée et retry
       if (res.error.code === '42703') {
-        // Postgres message typique : "column \"phone_allowance\" of relation \"employes\" does not exist"
         const match = res.error.message.match(/column "([^"]+)" of relation/)
           || res.error.message.match(/column ([a-z_]+) does not exist/i)
         const col = match?.[1]
@@ -139,6 +158,13 @@ export async function POST(request: Request) {
           strippedCols.push(col)
           continue
         }
+      }
+      // 23505 = unique_violation (duplicate code) — incrémenter le code et retry
+      if (res.error.code === '23505' && /code/.test(res.error.message || res.error.details || '')) {
+        const currentCode = parseInt(insertBody.code, 10) || 0
+        insertBody.code = String(currentCode + 1).padStart(6, '0')
+        console.warn(`[employes POST] duplicate code, retrying with ${insertBody.code}`)
+        continue
       }
       break // autre erreur non récupérable
     }
