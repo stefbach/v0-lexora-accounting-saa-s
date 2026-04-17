@@ -5,39 +5,21 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, Users } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 
 const NAVY = "#0B0F2E"
 function fmt(n: number) { return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(n) }
 
 export default function SalairesComptaPage() {
-  const [societes, setSocietes] = useState<any[]>([])
-  const [societe, setSociete] = useState("")
+  const { societeId } = useSocieteActive()
   const [loading, setLoading] = useState(false)
   const [periodes, setPeriodes] = useState<any[]>([])
 
-  useEffect(() => {
-    Promise.all([
-      fetch("/api/client/societes").then(r => r.json()).catch(() => ({ societes: [] })),
-      fetch("/api/comptable/societes").then(r => r.json()).catch(() => ({ societes: [] })),
-    ]).then(([d1, d2]) => {
-      const all = [...(d1.societes || []), ...(d2.societes || [])]
-      const unique = Array.from(new Map(all.map((s: any) => [s.id, s])).values())
-      setSocietes(unique)
-      if (unique.length >= 1) {
-        setSociete(unique[0].id)
-      }
-      // If no sociétés found, ensure we are not stuck in a loading state
-      if (unique.length === 0) {
-        setLoading(false)
-      }
-    })
-  }, [])
-
   const load = useCallback(async () => {
-    if (!societe) return
+    if (!societeId) return
     setLoading(true)
     try {
-      const res = await fetch(`/api/rh/paie?societe_id=${societe}`)
+      const res = await fetch(`/api/rh/paie?societe_id=${societeId}`)
       const data = await res.json()
       const allBulletins = data.bulletins || []
 
@@ -64,7 +46,7 @@ export default function SalairesComptaPage() {
       setPeriodes(Object.values(groups).sort((a: any, b: any) => b.periode.localeCompare(a.periode)))
     } catch {}
     setLoading(false)
-  }, [societe])
+  }, [societeId])
 
   useEffect(() => { load() }, [load])
 
@@ -85,12 +67,6 @@ export default function SalairesComptaPage() {
       kicker="Comptabilité"
       title="Salaires — Plan comptable"
       subtitle="Écritures comptables des salaires et charges patronales (Journal SAL)."
-      actions={
-        <Select value={societe} onValueChange={setSociete}>
-          <SelectTrigger className="w-[220px]"><SelectValue placeholder="Société" /></SelectTrigger>
-          <SelectContent>{societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent>
-        </Select>
-      }
     >
       <div className="space-y-6">
 
