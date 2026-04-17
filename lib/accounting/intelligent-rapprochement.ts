@@ -901,7 +901,7 @@ function matchByAmountFallback(
 
       const delay = daysBetween(f.date_facture || '', tx.date)
       // Similarité textuelle entre tiers tx et tiers facture (bonus si noms proches)
-      const tiersSim = tiersSimilarity(tx.tiers_detecte || tx.libelle || '', f.tiers || '')
+      const tiersSim = advancedTiersScore(tx.tiers_detecte || tx.libelle || '', f.tiers || '')
 
       candidates.push({ f, diff, delay, tiersSim })
     }
