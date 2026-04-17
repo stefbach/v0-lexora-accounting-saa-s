@@ -483,33 +483,40 @@ export async function POST(request: Request) {
         // qui créaient des comptes dupliqués incohérents avec le PCM officiel.
         // L'inversion historique Training Levy / PRGF côté charge (645300 ↔ 645400) et dette
         // (432000 ↔ 432100) est corrigée ici.
+        const refFolio = `SAL-${periodeDate.slice(0, 7)}`
+        const socId = societe_id || null
+        const mkEntry = (compte: string, libelle: string, debit: number, credit: number) => ({
+          societe_id: socId, dossier_id: dossier.id, date_ecriture: periodeDate,
+          journal: 'SAL', ref_folio: refFolio, numero_compte: compte, libelle,
+          debit_mur: debit, credit_mur: credit,
+        })
         const entries = [
           // DÉBIT — Charges (classe 6)
-          { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '6411', libelle: `Salaires de base ${moisLabel}`, debit: Math.round(t.basic), credit: 0 },
-          t.ot > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '6414', libelle: `Heures supplémentaires ${moisLabel}`, debit: Math.round(t.ot), credit: 0 } : null,
-          t.allowances > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '6415', libelle: `Primes et indemnités ${moisLabel}`, debit: Math.round(t.allowances), credit: 0 } : null,
-          t.csg_pat > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '6451', libelle: `CSG patronale ${moisLabel}`, debit: Math.round(t.csg_pat), credit: 0 } : null,
-          t.nsf_pat > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '6452', libelle: `NSF patronal ${moisLabel}`, debit: Math.round(t.nsf_pat), credit: 0 } : null,
-          t.levy > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '6454', libelle: `Training Levy HRDC ${moisLabel}`, debit: Math.round(t.levy), credit: 0 } : null,
-          t.prgf > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '6453', libelle: `PRGF ${moisLabel}`, debit: Math.round(t.prgf), credit: 0 } : null,
+          mkEntry('6411', `Salaires de base ${moisLabel}`, Math.round(t.basic), 0),
+          t.ot > 0 ? mkEntry('6414', `Heures supplémentaires ${moisLabel}`, Math.round(t.ot), 0) : null,
+          t.allowances > 0 ? mkEntry('6415', `Primes et indemnités ${moisLabel}`, Math.round(t.allowances), 0) : null,
+          t.csg_pat > 0 ? mkEntry('6451', `CSG patronale ${moisLabel}`, Math.round(t.csg_pat), 0) : null,
+          t.nsf_pat > 0 ? mkEntry('6452', `NSF patronal ${moisLabel}`, Math.round(t.nsf_pat), 0) : null,
+          t.levy > 0 ? mkEntry('6454', `Training Levy HRDC ${moisLabel}`, Math.round(t.levy), 0) : null,
+          t.prgf > 0 ? mkEntry('6453', `PRGF ${moisLabel}`, Math.round(t.prgf), 0) : null,
           // CRÉDIT — Dettes (classe 4)
-          { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '4210', libelle: `Salaires nets à payer ${moisLabel}`, debit: 0, credit: Math.round(t.net) },
-          // CSG : salarié (4311) et patronal (4321) séparés pour respecter le PCM
-          t.csg_sal > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '4311', libelle: `CSG salarié à verser ${moisLabel}`, debit: 0, credit: Math.round(t.csg_sal) } : null,
-          t.csg_pat > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '4321', libelle: `CSG patronal à verser ${moisLabel}`, debit: 0, credit: Math.round(t.csg_pat) } : null,
-          // NSF : salarié (4312) et patronal (4322) séparés
-          t.nsf_sal > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '4312', libelle: `NSF salarié à verser ${moisLabel}`, debit: 0, credit: Math.round(t.nsf_sal) } : null,
-          t.nsf_pat > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '4322', libelle: `NSF patronal à verser ${moisLabel}`, debit: 0, credit: Math.round(t.nsf_pat) } : null,
-          t.paye > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '4330', libelle: `PAYE à reverser MRA ${moisLabel}`, debit: 0, credit: Math.round(t.paye) } : null,
-          t.levy > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '4324', libelle: `Training Levy à verser ${moisLabel}`, debit: 0, credit: Math.round(t.levy) } : null,
-          t.prgf > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '4323', libelle: `PRGF à verser ${moisLabel}`, debit: 0, credit: Math.round(t.prgf) } : null,
-          t.absence > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '6419', libelle: `Retenues absences ${moisLabel}`, debit: Math.round(t.absence), credit: 0 } : null,
+          mkEntry('4210', `Salaires nets à payer ${moisLabel}`, 0, Math.round(t.net)),
+          t.csg_sal > 0 ? mkEntry('4311', `CSG salarié à verser ${moisLabel}`, 0, Math.round(t.csg_sal)) : null,
+          t.csg_pat > 0 ? mkEntry('4321', `CSG patronal à verser ${moisLabel}`, 0, Math.round(t.csg_pat)) : null,
+          t.nsf_sal > 0 ? mkEntry('4312', `NSF salarié à verser ${moisLabel}`, 0, Math.round(t.nsf_sal)) : null,
+          t.nsf_pat > 0 ? mkEntry('4322', `NSF patronal à verser ${moisLabel}`, 0, Math.round(t.nsf_pat)) : null,
+          t.paye > 0 ? mkEntry('4330', `PAYE à reverser MRA ${moisLabel}`, 0, Math.round(t.paye)) : null,
+          t.levy > 0 ? mkEntry('4324', `Training Levy à verser ${moisLabel}`, 0, Math.round(t.levy)) : null,
+          t.prgf > 0 ? mkEntry('4323', `PRGF à verser ${moisLabel}`, 0, Math.round(t.prgf)) : null,
+          t.absence > 0 ? mkEntry('6419', `Retenues absences ${moisLabel}`, Math.round(t.absence), 0) : null,
           // Provision 13ème mois (YEB) — 1/12 du salaire de base mensuel
-          t.basic > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '6416', libelle: `Provision 13ème mois ${moisLabel}`, debit: Math.round(t.basic / 12), credit: 0 } : null,
-          t.basic > 0 ? { dossier_id: dossier.id, date_ecriture: periodeDate, journal: 'SAL', compte: '4212', libelle: `Provision 13ème mois à payer ${moisLabel}`, debit: 0, credit: Math.round(t.basic / 12) } : null,
+          t.basic > 0 ? mkEntry('6416', `Provision 13ème mois ${moisLabel}`, Math.round(t.basic / 12), 0) : null,
+          t.basic > 0 ? mkEntry('4212', `Provision 13ème mois à payer ${moisLabel}`, 0, Math.round(t.basic / 12)) : null,
         ].filter(Boolean) as any[]
 
-        const { error: comptaErr } = await supabase.from('ecritures_comptables').insert(entries)
+        // Insert directement dans ecritures_comptables_v2 (pas la vue v1 qui
+        // a un trigger INSTEAD OF cassé sur ref_folio).
+        const { error: comptaErr } = await supabase.from('ecritures_comptables_v2').insert(entries)
         if (comptaErr) {
           console.error('[import-paie] compta insert failed:', comptaErr.message)
           errors.push(`Compta: ${comptaErr.message}`)
