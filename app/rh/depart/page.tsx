@@ -359,6 +359,17 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
             >
               📋 Attestation fin contrat
             </Button>
+            {/* Sprint 16 FIX 4 — Déclaration Workfare TUB (licenciement économique) */}
+            {breakdown?.type_depart === 'licenciement' && (
+              <Button
+                variant="outline"
+                onClick={() => window.open(`/api/rh/depart/workfare?employe_id=${breakdown?.employe?.id}`, '_blank')}
+                className="border-red-300 text-red-700"
+                type="button"
+              >
+                🏛️ Déclaration Workfare TUB
+              </Button>
+            )}
             <Button
               onClick={onConfirm}
               disabled={confirming}
