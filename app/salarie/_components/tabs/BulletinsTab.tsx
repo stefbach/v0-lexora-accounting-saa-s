@@ -1,4 +1,5 @@
 "use client"
+import { useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -6,8 +7,13 @@ import { Eye, Download } from "lucide-react"
 import { NAVY, GOLD, BLUE, GREEN } from "../shared/constants"
 import { fmt } from "../shared/helpers"
 
-// Extrait du monolithe page.tsx pendant le sprint-salarie V0.1.
-// Iso-fonctionnel.
+// Sprint salarie V2.2 — UI pagination côté salarié. Affiche 10 bulletins
+// par page avec tri desc sur 'periode' (les plus récents d'abord). Dès
+// que l'API /api/rh/paie?action=list accepte ?page=&limit=, la
+// pagination côté serveur prendra le relais sans changer l'UI (voir
+// TODO ci-dessous). Pour l'instant on slice le tableau déjà reçu.
+const PAGE_SIZE = 10
+
 export function BulletinsTab({
   bulletins, employe, onMarkRead,
 }: {
@@ -15,14 +21,28 @@ export function BulletinsTab({
   employe: any
   onMarkRead: () => void
 }) {
+  const [page, setPage] = useState(0)
+
+  // Tri desc par periode (YYYY-MM lexicographique fonctionne).
+  const sorted = [...bulletins].sort((a: any, b: any) =>
+    String(b.periode || "").localeCompare(String(a.periode || ""))
+  )
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE))
+  const visible = sorted.slice(0, (page + 1) * PAGE_SIZE)
+  const hasMore = visible.length < sorted.length
+
+  // TODO(RH agent) — quand GET /api/rh/paie?action=list supporte
+  // ?page=&limit=, remplacer le slice local par un fetch paginé tiré
+  // ici plutôt que dans le parent. Aucune régression côté UI.
+
   return (
     <div>
       <h2 className="text-xl font-bold mb-4" style={{ color: NAVY }}>Mes bulletins de salaire</h2>
-      {bulletins.length === 0 ? (
+      {sorted.length === 0 ? (
         <Card className="rounded-xl shadow-sm"><CardContent><p className="text-gray-400 text-center py-8">Aucun bulletin disponible</p></CardContent></Card>
       ) : (
         <div className="space-y-3">
-          {bulletins.map((b: any) => {
+          {visible.map((b: any) => {
             const isRead = !!b.lu_le
             const periodeLabel = new Date((b.periode || "2025-01") + "T12:00:00").toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
             return (
@@ -61,6 +81,16 @@ export function BulletinsTab({
               </Card>
             )
           })}
+          {hasMore && (
+            <div className="flex justify-center pt-2">
+              <Button variant="outline" onClick={() => setPage(p => p + 1)} className="rounded-xl">
+                Voir plus ({sorted.length - visible.length} restants)
+              </Button>
+            </div>
+          )}
+          {!hasMore && sorted.length > PAGE_SIZE && (
+            <p className="text-xs text-gray-400 text-center pt-1">{sorted.length} bulletins affichés</p>
+          )}
         </div>
       )}
     </div>
