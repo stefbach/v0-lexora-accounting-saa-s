@@ -210,7 +210,10 @@ function ApprovalSteps({ niveau, approvals }: { niveau: number; approvals?: Appr
           </div>
         ))}
       </div>
-      {approvals && approvals.length > 0 && (
+      {/* Sprint 16 fix — approuve_par est JSONB DEFAULT '[]' mais peut
+          contenir une chaîne ou un objet si des données legacy existent.
+          Guard Array.isArray pour éviter s.map crash. */}
+      {Array.isArray(approvals) && approvals.length > 0 && (
         <div className="mt-1 space-y-0.5">
           {approvals.map((a, i) => (
             <p key={i} className="text-[10px] text-gray-500">
