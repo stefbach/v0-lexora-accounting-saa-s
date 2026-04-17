@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import {
+  assertSocieteAccess,
+  mapSocieteAccessError,
+  ResourceNotFoundError,
+} from '@/lib/supabase/assert-societe-access'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,6 +29,8 @@ export async function GET(request: Request) {
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
 
     const supabase = getAdminClient()
+    await assertSocieteAccess(supabase, user.id, societe_id)
+
     const { data, error } = await supabase
       .from('investissements_previsionnel')
       .select('*')
@@ -36,6 +43,8 @@ export async function GET(request: Request) {
       credits: (data || []).filter(d => d.type === 'credit'),
     })
   } catch (e: unknown) {
+    const mapped = mapSocieteAccessError(e)
+    if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -55,8 +64,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'societe_id, type, libelle requis' }, { status: 400 })
     }
 
+    await assertSocieteAccess(supabase, user.id, societe_id)
+
     if (id) {
-      // Update
+      // Update — verify the existing row belongs to the asserted société too
+      const { data: existing } = await supabase
+        .from('investissements_previsionnel')
+        .select('societe_id')
+        .eq('id', id)
+        .maybeSingle()
+      if (!existing) throw new ResourceNotFoundError('Investissement introuvable')
+      if (existing.societe_id !== societe_id) {
+        await assertSocieteAccess(supabase, user.id, existing.societe_id as string)
+      }
       const { data, error } = await supabase
         .from('investissements_previsionnel')
         .update({ libelle, montant, date_debut, mensualite, taux_interet, capital_restant, banque, notes, updated_at: new Date().toISOString() })
@@ -76,6 +96,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ item: data }, { status: 201 })
     }
   } catch (e: unknown) {
+    const mapped = mapSocieteAccessError(e)
+    if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -92,10 +114,22 @@ export async function DELETE(request: Request) {
     if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
 
     const supabase = getAdminClient()
+
+    // Fetch to resolve societe_id, then assert access
+    const { data: existing } = await supabase
+      .from('investissements_previsionnel')
+      .select('societe_id')
+      .eq('id', id)
+      .maybeSingle()
+    if (!existing) throw new ResourceNotFoundError('Investissement introuvable')
+    await assertSocieteAccess(supabase, user.id, existing.societe_id as string)
+
     const { error } = await supabase.from('investissements_previsionnel').delete().eq('id', id)
     if (error) throw error
     return NextResponse.json({ success: true })
   } catch (e: unknown) {
+    const mapped = mapSocieteAccessError(e)
+    if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
