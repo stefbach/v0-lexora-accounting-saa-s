@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -58,12 +59,11 @@ function addDays(d: string, days: number) {
 
 export default function ClientFacturesPage() {
   const router = useRouter()
+  const { societeId } = useSocieteActive()
   const [factures, setFactures] = useState<Facture[]>([])
-  const [societes, setSocietes] = useState<Societe[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [filterStatut, setFilterStatut] = useState("all")
-  const [selectedSociete, setSelectedSociete] = useState("")
   const [activeTab, setActiveTab] = useState("factures")
 
   // Recurring templates
@@ -116,21 +116,12 @@ export default function ClientFacturesPage() {
     }
   }
 
-  const fetchData = useCallback(async (societeId?: string) => {
+  const fetchData = useCallback(async () => {
+    if (!societeId) { setLoading(false); return }
     setLoading(true)
     try {
-      const finUrl = societeId && societeId !== "all"
-        ? `/api/client/financial?societe_id=${societeId}`
-        : "/api/client/financial"
-      const [socRes, facRes] = await Promise.all([
-        fetch("/api/client/societes"),
-        fetch(finUrl),
-      ])
-      const socData = await socRes.json()
-      const finData = await facRes.json()
-      const socs = socData.societes || []
-      setSocietes(socs)
-      if (socs.length > 0 && !selectedSociete) setSelectedSociete(socs[0].id)
+      const finRes = await fetch(`/api/client/financial?societe_id=${societeId}`)
+      const finData = await finRes.json()
       const allFactures = finData.financial?.factures || []
       setFactures(allFactures.filter((f: Facture) => f.type_facture === 'client'))
     } catch { }
@@ -143,9 +134,9 @@ export default function ClientFacturesPage() {
       const c = localStorage.getItem("lexora_invoice_clients")
       if (c) setClients(JSON.parse(c))
     } catch { }
-  }, [selectedSociete])
+  }, [societeId])
 
-  useEffect(() => { fetchData(selectedSociete) }, [selectedSociete])
+  useEffect(() => { fetchData() }, [fetchData])
 
   const filtered = factures.filter(f => {
     const matchSearch = !search ||
@@ -182,35 +173,9 @@ export default function ClientFacturesPage() {
     } catch (e: any) { alert("Erreur reseau: " + (e.message || "")) }
   }
 
-  // Reassign invoice to a different societe
-  const [reassignOpen, setReassignOpen] = useState(false)
-  const [reassignFacture, setReassignFacture] = useState<Facture | null>(null)
-  const [reassignSocieteId, setReassignSocieteId] = useState("")
-  const [reassignSaving, setReassignSaving] = useState(false)
-
-  const openReassign = (f: Facture) => {
-    setReassignFacture(f)
-    setReassignSocieteId(f.societe_id)
-    setReassignOpen(true)
-  }
-
-  const saveReassign = async () => {
-    if (!reassignFacture || !reassignSocieteId) return
-    if (reassignSocieteId === reassignFacture.societe_id) { setReassignOpen(false); return }
-    setReassignSaving(true)
-    try {
-      const res = await fetch("/api/client/factures", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: reassignFacture.id, societe_id: reassignSocieteId }),
-      })
-      const data = await res.json()
-      if (!res.ok) { alert(data.error || "Erreur"); return }
-      setReassignOpen(false)
-      fetchData()
-    } catch (e: any) { alert("Erreur reseau: " + (e.message || "")) }
-    finally { setReassignSaving(false) }
-  }
+  // NOTE: La réassignation de facture entre sociétés a été retirée en Phase 0.5
+  // (/api/client/factures PATCH interdit désormais le changement de societe_id).
+  // En mode mono-société actif, chaque facture reste attachée à sa société d'origine.
 
   // ── Recurring ──
   const saveRecurring = () => {
@@ -255,7 +220,6 @@ export default function ClientFacturesPage() {
     if (generatedPreview.length === 0) return
     setGenerating(true)
     const settings = JSON.parse(localStorage.getItem("lexora_invoice_settings") || "{}")
-    const societeId = societes[0]?.id
     if (!societeId) { setGenerating(false); return }
 
     let nextNum = settings.prochain_numero || 1
@@ -320,15 +284,6 @@ export default function ClientFacturesPage() {
       subtitle="Gestion des créances clients avec IRN, QR Code MRA, multi-devises et facturation récurrente."
       actions={
         <>
-          {societes.length > 0 && (
-            <Select value={selectedSociete} onValueChange={setSelectedSociete}>
-              <SelectTrigger className="w-[200px]"><SelectValue placeholder="Société" /></SelectTrigger>
-              <SelectContent>
-                {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
-                {societes.length > 1 && <SelectItem value="all">Toutes les sociétés</SelectItem>}
-              </SelectContent>
-            </Select>
-          )}
           <Button variant="outline" onClick={() => router.push("/client/facturation-settings")}><Settings className="w-4 h-4 mr-2" />Paramètres</Button>
           <Button
             onClick={() => router.push("/client/nouvelle-facture")}
@@ -453,7 +408,6 @@ export default function ClientFacturesPage() {
                                 <Download className="w-4 h-4" />
                               </Button>
                             </a>
-                            <Button variant="ghost" size="sm" onClick={() => openReassign(f)} title="Changer de societe" className="text-amber-600 hover:text-amber-700"><Building2 className="w-4 h-4" /></Button>
                             <Button variant="ghost" size="sm" onClick={() => handleDelete(f)} className="text-red-500 hover:text-red-700" title="Supprimer"><Trash2 className="w-4 h-4" /></Button>
                           </div>
                         </TableCell>
@@ -657,54 +611,6 @@ export default function ClientFacturesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Reassign société dialog */}
-      <Dialog open={reassignOpen} onOpenChange={setReassignOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Building2 className="w-5 h-5 text-amber-600" />
-              Changer de societe
-            </DialogTitle>
-          </DialogHeader>
-          {reassignFacture && (
-            <div className="space-y-4 py-2">
-              <div className="p-3 bg-gray-50 rounded-lg text-sm">
-                <p><strong>Facture :</strong> {reassignFacture.numero_facture || "—"}</p>
-                <p><strong>Client :</strong> {reassignFacture.tiers || "—"}</p>
-                <p><strong>Montant :</strong> {fmt(reassignFacture.montant_ttc)} {reassignFacture.devise}</p>
-              </div>
-              <div>
-                <Label>Societe actuelle</Label>
-                <p className="text-sm text-gray-500 mt-1">
-                  {societes.find(s => s.id === reassignFacture.societe_id)?.nom || "Inconnue"}
-                </p>
-              </div>
-              <div>
-                <Label>Reassigner vers</Label>
-                <Select value={reassignSocieteId} onValueChange={setReassignSocieteId}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="Choisir une societe..." /></SelectTrigger>
-                  <SelectContent>
-                    {societes.map(s => (
-                      <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <p className="text-xs text-amber-600 flex items-start gap-1">
-                <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
-                La facture et le document numerise associe seront deplaces vers la nouvelle societe.
-              </p>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setReassignOpen(false)}>Annuler</Button>
-            <Button onClick={saveReassign} disabled={reassignSaving || !reassignSocieteId} className="bg-[#0B0F2E] text-white">
-              {reassignSaving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-              Reassigner
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </ClientPageShell>
   )
 }

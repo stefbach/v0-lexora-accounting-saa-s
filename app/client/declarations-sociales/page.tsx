@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Loader2, Download, Printer, CheckCircle, Users, FileText, Building2
 } from "lucide-react"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -57,8 +58,7 @@ interface DeclarationRow {
 }
 
 export default function DeclarationsSocialesPage() {
-  const [societes, setSocietes] = useState<Societe[]>([])
-  const [selectedSociete, setSelectedSociete] = useState("")
+  const { societeId } = useSocieteActive()
   const [periode, setPeriode] = useState(() => {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
@@ -68,25 +68,14 @@ export default function DeclarationsSocialesPage() {
   const [loading, setLoading] = useState(false)
   const [validated, setValidated] = useState(false)
 
-  useEffect(() => {
-    fetch("/api/client/societes")
-      .then(r => r.json())
-      .then(d => {
-        const list = d.societes || d.data || []
-        setSocietes(list)
-        if (list.length > 0 && !selectedSociete) setSelectedSociete(list[0].id)
-      })
-      .catch(() => setSocietes([]))
-  }, [])
-
   const fetchData = useCallback(async () => {
-    if (!selectedSociete) return
+    if (!societeId) return
     setLoading(true)
     setValidated(false)
     try {
       const [bRes, eRes] = await Promise.all([
-        fetch(`/api/rh/paie?societe_id=${selectedSociete}&periode=${periode}`),
-        fetch(`/api/rh/employes?societe_id=${selectedSociete}`),
+        fetch(`/api/rh/paie?societe_id=${societeId}&periode=${periode}`),
+        fetch(`/api/rh/employes?societe_id=${societeId}`),
       ])
       const bJson = await bRes.json()
       const eJson = await eRes.json()
@@ -98,7 +87,7 @@ export default function DeclarationsSocialesPage() {
     } finally {
       setLoading(false)
     }
-  }, [selectedSociete, periode])
+  }, [societeId, periode])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -159,16 +148,6 @@ export default function DeclarationsSocialesPage() {
           <p className="text-sm text-gray-500 mt-1">NSF / CSG / Training Levy -- Declaration mensuelle</p>
         </div>
         <div className="flex items-center gap-3">
-          <Select value={selectedSociete} onValueChange={setSelectedSociete}>
-            <SelectTrigger className="w-[220px] h-9">
-              <SelectValue placeholder="Societe" />
-            </SelectTrigger>
-            <SelectContent>
-              {societes.map(s => (
-                <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           <Input type="month" value={periode} onChange={e => setPeriode(e.target.value)} className="h-9 w-[160px]" />
         </div>
       </div>

@@ -1,17 +1,10 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { getAdminClient } from '@/lib/supabase/admin'
 import { upsertTiersManual } from '@/lib/tiers-annuaire'
+import { assertSocieteAccess, mapSocieteAccessError } from '@/lib/supabase/assert-societe-access'
 
 export const dynamic = 'force-dynamic'
-
-function getAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-}
 
 // POST /api/client/tiers-offshore
 // Body: { tiers: string, societe_id: string, est_offshore: boolean }
@@ -36,6 +29,9 @@ export async function POST(request: Request) {
     }
 
     const supabase = getAdminClient()
+
+    // Tenant isolation: vérifier l'accès du caller à la société AVANT toute mutation
+    await assertSocieteAccess(supabase, user.id, societe_id)
 
     // 1. Update all factures for this tiers + societe_id
     const { error: factureErr, count } = await supabase
@@ -62,6 +58,8 @@ export async function POST(request: Request) {
       tiers_annuaire: tiersRecord,
     })
   } catch (e: unknown) {
+    const mapped = mapSocieteAccessError(e)
+    if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
     console.error('[tiers-offshore] error:', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }

@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { RequireRole, NON_CLIENT_USER_ROLES } from "@/components/client/RequireRole"
 import {
   Card,
   CardContent,
@@ -32,13 +34,14 @@ interface Societe {
 
 export default function ProfilPage() {
   const { profile, loading } = useProfile()
+  const { societe: activeSociete, loading: societeLoading } = useSocieteActive()
 
   const [fullName, setFullName] = useState("")
   const [email, setEmail] = useState("")
   const [phone, setPhone] = useState("")
 
-  const [societe, setSociete] = useState<Societe | null>(null)
-  const [loadingSociete, setLoadingSociete] = useState(true)
+  const societe = activeSociete as Societe | null
+  const loadingSociete = societeLoading
 
   const [notifEmail, setNotifEmail] = useState(true)
   const [notifWhatsapp, setNotifWhatsapp] = useState(true)
@@ -55,25 +58,6 @@ export default function ProfilPage() {
     }
   }, [profile])
 
-  // Fetch societe data
-  useEffect(() => {
-    async function fetchSociete() {
-      try {
-        const res = await fetch("/api/client/societes")
-        if (res.ok) {
-          const data = await res.json()
-          if (data.societes && data.societes.length > 0) {
-            setSociete(data.societes[0])
-          }
-        }
-      } catch {
-        console.error("Failed to fetch societe")
-      } finally {
-        setLoadingSociete(false)
-      }
-    }
-    fetchSociete()
-  }, [])
 
   if (loading) {
     return (
@@ -84,19 +68,7 @@ export default function ProfilPage() {
   }
 
   if (profile?.role === "client_user") {
-    return (
-      <div className="p-6 flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-        <h1 className="text-xl font-bold" style={{ color: "#0B0F2E" }}>
-          Acc&egrave;s non autoris&eacute;
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Vous n&apos;avez pas la permission d&apos;acc&eacute;der &agrave; cette page.
-        </p>
-        <Link href="/client/upload" className="text-sm underline" style={{ color: "#D4AF37" }}>
-          Retour &agrave; l&apos;envoi de documents
-        </Link>
-      </div>
-    )
+    return <RequireRole roles={NON_CLIENT_USER_ROLES}>{null}</RequireRole>
   }
 
   return (

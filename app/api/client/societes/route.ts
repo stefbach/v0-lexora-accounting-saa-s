@@ -1,12 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
-import { createClient as adminClient } from '@supabase/supabase-js'
+import { getAdminClient as getAdmin } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
-
-function getAdmin() {
-  return adminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-    auth: { autoRefreshToken: false, persistSession: false }
-  })
-}
+import { assertSocieteAccess, mapSocieteAccessError } from '@/lib/supabase/assert-societe-access'
 
 export async function GET() {
   try {
@@ -179,6 +174,10 @@ export async function PATCH(request: Request) {
     if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
     const body = await request.json()
     const admin = getAdmin()
+
+    // Tenant isolation: vérifier l'accès du caller à la société
+    await assertSocieteAccess(admin, user.id, id)
+
     const updateData: Record<string, unknown> = {}
     if (body.nom !== undefined) updateData.nom = body.nom
     if (body.brn !== undefined) updateData.brn = body.brn || null
@@ -193,6 +192,8 @@ export async function PATCH(request: Request) {
     if (error) throw error
     return NextResponse.json({ societe: data })
   } catch (e: unknown) {
+    const mapped = mapSocieteAccessError(e)
+    if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

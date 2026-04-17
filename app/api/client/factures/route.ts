@@ -1,14 +1,13 @@
 import { NextResponse } from 'next/server'
-import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
+import { getAdminClient } from '@/lib/supabase/admin'
 import { createEcrituresForFacture as createEcrituresShared } from '@/lib/accounting/ecritures-factures'
-
-function getAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !serviceKey) throw new Error('Missing Supabase admin credentials')
-  return createSupabaseClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
-}
+import {
+  assertSocieteAccess,
+  getAccessibleSocieteIds,
+  mapSocieteAccessError,
+  ResourceNotFoundError,
+} from '@/lib/supabase/assert-societe-access'
 
 export const dynamic = 'force-dynamic'
 
@@ -124,15 +123,9 @@ export async function GET(request: Request) {
     const societe_id = searchParams.get('societe_id')
 
     // Tenant isolation — verify user has access to the requested societe_id
+    // (unified helper, includes user_societes + dossiers + created_by branches)
     if (societe_id) {
-      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-      if (!['admin', 'super_admin'].includes(profile?.role || '')) {
-        const { data: userSocietes } = await supabase.from('user_societes').select('societe_id').eq('user_id', user.id)
-        const allowedIds = userSocietes?.map(s => s.societe_id) || []
-        if (!allowedIds.includes(societe_id)) {
-          return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-        }
-      }
+      await assertSocieteAccess(supabase, user.id, societe_id)
     }
     const statut = searchParams.get('statut')
     const client = searchParams.get('client')
@@ -147,7 +140,21 @@ export async function GET(request: Request) {
       .order('date_facture', { ascending: false })
       .limit(limit)
 
-    if (societe_id) query = query.eq('societe_id', societe_id)
+    if (societe_id) {
+      query = query.eq('societe_id', societe_id)
+    } else {
+      // Pas de filtre explicite → on restreint aux sociétés accessibles du caller
+      // (admin/super_admin voient tout)
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+      const role = profile?.role ?? ''
+      if (!['admin', 'super_admin'].includes(role)) {
+        const accessible = await getAccessibleSocieteIds(supabase, user.id)
+        if (accessible.length === 0) {
+          return NextResponse.json({ factures: [], totaux: { total_ht: 0, total_tva: 0, total_ttc: 0, total_mur: 0, nb_factures: 0, nb_en_attente: 0, nb_retard: 0 } })
+        }
+        query = query.in('societe_id', accessible)
+      }
+    }
     if (statut && statut !== 'all') query = query.eq('statut', statut)
     if (client) query = query.ilike('tiers', `%${client}%`)
     if (date_debut) query = query.gte('date_facture', date_debut)
@@ -168,6 +175,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ factures: data || [], totaux })
   } catch (e: unknown) {
+    const mapped = mapSocieteAccessError(e)
+    if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -195,6 +204,8 @@ export async function POST(request: Request) {
     if (!societe_id || !date_facture) {
       return NextResponse.json({ error: 'societe_id et date_facture requis' }, { status: 400 })
     }
+
+    await assertSocieteAccess(supabase, user.id, societe_id)
 
     // For devis: force statut='devis' (not en_attente) — no GL entries
     const statut: string = type_document === 'devis'
@@ -334,6 +345,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ facture: data }, { status: 201 })
   } catch (e: unknown) {
+    const mapped = mapSocieteAccessError(e)
+    if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -350,26 +363,52 @@ export async function PATCH(request: Request) {
 
     if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
 
-    // Fetch existing invoice for status transition check
+    // Fetch existing invoice for status transition check + access verification
     const { data: existing } = await supabase
       .from('factures')
       .select('*')
       .eq('id', id)
       .single()
+    if (!existing) throw new ResourceNotFoundError('Facture introuvable')
 
-    if (existing && existing.statut !== 'brouillon' && existing.statut !== 'en_attente') {
-      // Allow status updates (e.g., marking as paid) + societe_id correction (reassignment)
-      // but not full content edits on finalized invoices
-      const allowedUpdates = ['statut', 'mode_paiement', 'paye_par', 'notes', 'societe_id']
+    // Tenant isolation: le caller doit avoir accès à la société de la facture
+    await assertSocieteAccess(supabase, user.id, existing.societe_id)
+
+    if (existing.statut !== 'brouillon' && existing.statut !== 'en_attente') {
+      // Sur une facture finalisée, seuls certains champs métier (non comptables) peuvent changer.
+      // societe_id RETIRÉ de allowedUpdates : le changer sans déplacer les écritures liées
+      // crée des écritures orphelines et pollue la balance de la société d'origine.
+      const allowedUpdates = ['statut', 'mode_paiement', 'paye_par', 'notes']
       const keys = Object.keys(updates)
       const hasDisallowed = keys.some(k => !allowedUpdates.includes(k))
       if (hasDisallowed) {
-        return NextResponse.json({ error: 'Seules les factures brouillon peuvent etre modifiees (sauf statut/mode_paiement/societe)' }, { status: 400 })
+        return NextResponse.json({ error: 'Seules les factures brouillon peuvent etre modifiees (sauf statut/mode_paiement/notes)' }, { status: 400 })
       }
     }
 
-    // If societe_id is changed, also update the linked document record
-    if (updates.societe_id && existing && updates.societe_id !== existing.societe_id) {
+    // Déplacement de facture entre sociétés : autorisé UNIQUEMENT si la facture
+    // n'a pas encore d'écritures comptables liées. Sinon on laisserait des écritures
+    // orphelines sur la société d'origine → déséquilibre + contamination visuelle
+    // d'une société par les factures d'une autre.
+    if (updates.societe_id && updates.societe_id !== existing.societe_id) {
+      // Tenant isolation sur la société CIBLE aussi
+      await assertSocieteAccess(supabase, user.id, updates.societe_id)
+
+      const { count: ecrituresLiees } = await supabase
+        .from('ecritures_comptables_v2')
+        .select('id', { count: 'exact', head: true })
+        .eq('societe_id', existing.societe_id)
+        .like('ref_folio', `FAC-${id}%`)
+      if ((ecrituresLiees || 0) > 0) {
+        return NextResponse.json({
+          error: `Impossible de déplacer cette facture : ${ecrituresLiees} écriture(s) comptable(s) déjà enregistrée(s). Annulez puis recréez la facture sous la bonne société.`,
+        }, { status: 409 })
+      }
+    }
+
+    // If societe_id is changed (et la vérification ci-dessus a passé),
+    // also update the linked document record
+    if (updates.societe_id && updates.societe_id !== existing.societe_id) {
       try {
         // Find old and new dossier
         const { data: newDossier } = await supabase
@@ -437,6 +476,8 @@ export async function PATCH(request: Request) {
 
     return NextResponse.json({ facture: data })
   } catch (e: unknown) {
+    const mapped = mapSocieteAccessError(e)
+    if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -460,6 +501,9 @@ export async function DELETE(request: Request) {
       .single()
 
     if (!existing) return NextResponse.json({ error: 'Facture introuvable' }, { status: 404 })
+
+    // Tenant isolation avant toute suppression
+    await assertSocieteAccess(supabase, user.id, existing.societe_id)
 
     // Non-drafts require force=1 (confirmed delete with cascade)
     if (existing.statut !== 'brouillon' && !force) {
@@ -500,6 +544,8 @@ export async function DELETE(request: Request) {
     if (error) throw error
     return NextResponse.json({ success: true })
   } catch (e: unknown) {
+    const mapped = mapSocieteAccessError(e)
+    if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

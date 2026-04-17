@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { MessageSquare, Mail, Bell, CheckCircle, AlertCircle, Clock } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
+import { RequireRole, NON_CLIENT_USER_ROLES } from "@/components/client/RequireRole"
 import Link from "next/link"
 
 interface NotificationItem {
@@ -84,16 +85,7 @@ export default function NotificationsPage() {
   const [filter, setFilter] = useState("tous")
 
   if (profile?.role === "client_user") {
-    return (
-      <div className="p-6 flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-        <h1 className="text-xl font-bold" style={{ color: "#0B0F2E" }}>
-          Vous n&apos;avez pas acc&egrave;s &agrave; cette section
-        </h1>
-        <Link href="/client" className="text-sm underline" style={{ color: "#D4AF37" }}>
-          Retour au tableau de bord
-        </Link>
-      </div>
-    )
+    return <RequireRole roles={NON_CLIENT_USER_ROLES}>{null}</RequireRole>
   }
 
   const filteredNotifications = notifications.filter((n) => {

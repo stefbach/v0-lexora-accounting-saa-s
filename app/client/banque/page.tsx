@@ -14,6 +14,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Search, Landmark, AlertCircle, Clock, RefreshCw, Loader2, Building2, X, Pencil } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { useProfile } from "@/hooks/use-profile"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { RequireRole, NON_CLIENT_USER_ROLES } from "@/components/client/RequireRole"
 import { MonthPicker } from "@/components/ui/MonthPicker"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
@@ -55,8 +57,7 @@ export default function ClientBanquePage() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [selectedSociete, setSelectedSociete] = useState("")
-  const [availableSocietes, setAvailableSocietes] = useState<any[]>([])
+  const { societeId } = useSocieteActive()
   const [selectedCompte, setSelectedCompte] = useState("all")
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
@@ -67,25 +68,14 @@ export default function ClientBanquePage() {
   const [selectedMois, setSelectedMois] = useState<string | null>(null)
   const { profile } = useProfile()
 
-  async function fetchData(societeId?: string) {
+  async function fetchData() {
+    if (!societeId) { setData(null); return }
     try {
       setError(null)
-      const url = societeId && societeId !== "all"
-        ? `/api/client/financial?societe_id=${societeId}`
-        : "/api/client/financial"
-      const res = await fetch(url)
+      const res = await fetch(`/api/client/financial?societe_id=${societeId}`)
       if (res.ok) {
         const json = await res.json()
         setData(json.financial)
-        // Preserve the full societes list from the initial unfiltered load
-        const socs = json.financial?.availableSocietes ?? []
-        if (socs.length > 0 && availableSocietes.length === 0) {
-          setAvailableSocietes(socs)
-          // Set default to first société if not already set
-          if (!societeId || societeId === "" || societeId === "all") {
-            setSelectedSociete(socs[0].id)
-          }
-        }
       } else {
         setData(null)
         setError("Erreur de chargement des données bancaires.")
@@ -99,12 +89,13 @@ export default function ClientBanquePage() {
   useEffect(() => {
     setLoading(true)
     setSelectedCompte("all")
-    fetchData(selectedSociete).finally(() => setLoading(false))
-  }, [selectedSociete])
+    fetchData().finally(() => setLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [societeId])
 
   async function handleRefresh() {
     setRefreshing(true)
-    await fetchData(selectedSociete)
+    await fetchData()
     setRefreshing(false)
   }
 
@@ -121,24 +112,13 @@ export default function ClientBanquePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: accId, nom_compte: newNom }),
       })
-      await fetchData(selectedSociete)
+      await fetchData()
     } catch { /* silent */ }
     setEditingCompte(null)
   }
 
   if (profile?.role === "client_user") {
-    return (
-      <div className="p-6">
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground">Vous n&apos;avez pas accès à cette section.</p>
-            <Link href="/client" className="text-sm underline mt-4 inline-block" style={{ color: "#D4AF37" }}>
-              Retour au tableau de bord
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
-    )
+    return <RequireRole roles={NON_CLIENT_USER_ROLES}>{null}</RequireRole>
   }
 
   if (loading) {
@@ -156,7 +136,7 @@ export default function ClientBanquePage() {
           <CardContent className="py-12 text-center space-y-4">
             <AlertCircle className="h-8 w-8 mx-auto text-red-500" />
             <p className="text-muted-foreground">{error}</p>
-            <Button variant="outline" onClick={() => { setLoading(true); fetchData(selectedSociete).finally(() => setLoading(false)) }}>
+            <Button variant="outline" onClick={() => { setLoading(true); fetchData().finally(() => setLoading(false)) }}>
               Réessayer
             </Button>
           </CardContent>
@@ -254,18 +234,6 @@ export default function ClientBanquePage() {
       subtitle="Suivi en temps réel de vos comptes, import des relevés et rapprochement automatique des opérations."
       actions={
         <>
-          {availableSocietes.length > 0 && (
-            <div className="flex items-center gap-2">
-              <Building2 className="h-4 w-4 text-muted-foreground" />
-              <Select value={selectedSociete} onValueChange={setSelectedSociete}>
-                <SelectTrigger className="w-[200px] h-9"><SelectValue placeholder="Société" /></SelectTrigger>
-                <SelectContent>
-                  {availableSocietes.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
-                  {availableSocietes.length > 1 && <SelectItem value="all">Toutes les sociétés</SelectItem>}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
           <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
             <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
             Actualiser

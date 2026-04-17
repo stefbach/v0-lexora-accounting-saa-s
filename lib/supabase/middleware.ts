@@ -142,6 +142,26 @@ export async function updateSession(request: NextRequest) {
         return NextResponse.redirect(url)
       }
 
+      // Mono-société enforcement: pour les rôles client, si pas de cookie
+      // `active_societe_id`, renvoyer vers /client/select-societe.
+      // Les comptables / admins ne sont pas concernés (flow séparé).
+      if (isClientRoute && ['client_admin', 'client_user', 'client_assistant'].includes(role)) {
+        const hasActiveSociete = !!request.cookies.get('active_societe_id')?.value
+        const bypassPaths = [
+          '/client/select-societe',
+          '/client/societes', // CRUD liste — doit rester multi
+          '/client/profil',
+          '/client/notifications',
+        ]
+        const isBypassed = bypassPaths.some(p => pathname === p || pathname.startsWith(p + '/'))
+        if (!hasActiveSociete && !isBypassed) {
+          const url = request.nextUrl.clone()
+          url.pathname = '/client/select-societe'
+          url.search = ''
+          return NextResponse.redirect(url)
+        }
+      }
+
       // Salarié portal: employees only, plus admins/HR for support views.
       // We also allow users whose profile carries an employe_id back-link
       // even if the role column is empty (migration 108/109 link arrived

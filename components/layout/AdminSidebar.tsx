@@ -18,6 +18,7 @@ import {
   LogOut,
   Menu,
   X,
+  ShieldAlert,
 } from "lucide-react"
 
 const MENU = [
@@ -37,6 +38,7 @@ const MENU = [
     section: "Parametres", sectionKey: "admin.settings_section",
     items: [
       { href: "/admin/parametres", label: "Configuration", labelKey: "admin.configuration", icon: Settings },
+      { href: "/admin/reset-societe", label: "Reset société", labelKey: "admin.reset_societe", icon: ShieldAlert, danger: true },
     ],
   },
 ]
@@ -147,7 +149,7 @@ export function AdminSidebar() {
                         href={item.href}
                         className={cn(
                           "group relative flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-all duration-200",
-                          active ? "text-[#0B0F2E] font-semibold" : "text-white/70 hover:text-white"
+                          active ? "text-[#0B0F2E] font-semibold" : item.danger ? "text-[#FCA5A5] hover:text-white" : "text-white/70 hover:text-white"
                         )}
                         style={
                           active

@@ -1,16 +1,9 @@
-import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { getAdminClient } from '@/lib/supabase/admin'
+import { assertSocieteAccess, mapSocieteAccessError } from '@/lib/supabase/assert-societe-access'
 import { NextRequest, NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
-
-function getAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-}
 
 const VALID_ROLES = ['admin', 'super_admin', 'client_admin', 'client_user', 'client_assistant', 'comptable', 'comptable_dedie', 'rh', 'juridique', 'employe', 'manager', 'direction']
 
@@ -58,6 +51,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get('user_id')
     const action = searchParams.get('action')
+    const requestedSocieteId = searchParams.get('societe_id')
 
     // Sub-action: get societe_ids for a specific user
     if (userId && action === 'societes') {
@@ -66,6 +60,51 @@ export async function GET(request: NextRequest) {
     }
 
     const isGlobalAdmin = ['admin', 'super_admin'].includes(authUser.role)
+
+    // Si un societe_id explicite est fourni, on scope aux users de CETTE société
+    // (filet mono-société pour /client/utilisateurs). On vérifie l'accès du caller.
+    if (requestedSocieteId) {
+      if (!isGlobalAdmin) {
+        await assertSocieteAccess(supabase, authUser.id, requestedSocieteId)
+      }
+
+      const linkedIds = new Set<string>()
+      // Users liés via user_societes
+      const { data: us } = await supabase
+        .from('user_societes').select('user_id').eq('societe_id', requestedSocieteId)
+      for (const l of us || []) if (l.user_id) linkedIds.add(l.user_id as string)
+      // Users dont profiles.societe_id matche
+      const { data: pu } = await supabase
+        .from('profiles').select('id').eq('societe_id', requestedSocieteId)
+      for (const p of pu || []) linkedIds.add(p.id)
+      // Users qui ont créé cette société
+      const { data: owners } = await supabase
+        .from('societes').select('created_by').eq('id', requestedSocieteId).maybeSingle()
+      if (owners?.created_by) linkedIds.add(owners.created_by as string)
+      // Toujours inclure soi-même si on a accès à cette société
+      linkedIds.add(authUser.id)
+
+      if (linkedIds.size === 0) {
+        return NextResponse.json({ users: [] })
+      }
+      const scopedIds = [...linkedIds]
+      const { data, error } = await supabase
+        .from('profiles').select('*').in('id', scopedIds).order('created_at', { ascending: false })
+      if (error) throw error
+
+      const societeIds = [...new Set((data || []).map((u: any) => u.societe_id).filter(Boolean))]
+      const societeMap: Record<string, string> = {}
+      if (societeIds.length > 0) {
+        const { data: societes } = await supabase.from('societes').select('id, nom').in('id', societeIds)
+        ;(societes || []).forEach((s: any) => { societeMap[s.id] = s.nom })
+      }
+      const users = (data || []).map((u: any) => ({
+        ...u,
+        actif: u.is_active !== false,
+        societe_nom: u.societe_id ? societeMap[u.societe_id] || null : null,
+      }))
+      return NextResponse.json({ users })
+    }
 
     let userIds: string[] | null = null // null = all users
 
@@ -123,6 +162,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ users })
   } catch (e: unknown) {
+    const mapped = mapSocieteAccessError(e)
+    if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

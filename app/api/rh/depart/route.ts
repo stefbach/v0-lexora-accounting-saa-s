@@ -424,7 +424,7 @@ export async function POST(request: Request) {
                 societe_id: emp.societe_id,
                 date_ecriture: date_depart,
                 journal: 'SAL',
-                compte: '641000',
+                compte: '641', // PCM canonique : parent « Rémunérations du personnel »
                 libelle: `Solde tout compte — ${emp.prenom} ${emp.nom}`,
                 debit: salaireSansIndemnite,
                 credit: 0,
@@ -435,7 +435,7 @@ export async function POST(request: Request) {
                 societe_id: emp.societe_id,
                 date_ecriture: date_depart,
                 journal: 'SAL',
-                compte: '421000',
+                compte: '4210', // PCM canonique : « Salaires nets à payer »
                 libelle: `Solde tout compte — ${emp.prenom} ${emp.nom}`,
                 debit: 0,
                 credit: totalBrut,
@@ -450,7 +450,7 @@ export async function POST(request: Request) {
                 societe_id: emp.societe_id,
                 date_ecriture: date_depart,
                 journal: 'SAL',
-                compte: '641700',
+                compte: '6417', // PCM canonique : « 13ème mois / Indemnités »
                 libelle: `Indemnité licenciement — ${emp.prenom} ${emp.nom}`,
                 debit: severanceMontant,
                 credit: 0,

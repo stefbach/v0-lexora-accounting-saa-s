@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Loader2, RefreshCw, Link2, Unlink, Zap, CheckCircle2, AlertCircle, Users, Search, ChevronDown, ChevronUp, Sparkles, Send, Bot, Wrench, X, Target, BrainCircuit, BarChart3 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { Progress } from "@/components/ui/progress"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
@@ -22,6 +23,24 @@ import { PeriodeBar } from "@/components/rapprochement/PeriodeBar"
 import { BalanceComptes } from "@/components/rapprochement/BalanceComptes"
 
 function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
+
+const CLASSIFICATION_CHOICES = [
+  { code: 'fournisseur',            label: 'Fournisseur',              compte: '401' },
+  { code: 'frais_bancaires',        label: 'Frais bancaires',          compte: '627' },
+  { code: 'paiement_mra',           label: 'Paiement MRA (impôts)',    compte: '447' },
+  { code: 'charge_sociale',         label: 'Charges sociales (CSG/NSF)', compte: '431' },
+  { code: 'salaire',                label: 'Salaire net',              compte: '4210' },
+  { code: 'compte_courant_associe', label: 'Compte courant associé',   compte: '455' },
+  { code: 'avance_personnel',       label: 'Avance au personnel',      compte: '425' },
+  { code: 'virement_interne',       label: 'Virement interne',         compte: '580' },
+  { code: 'loyer',                  label: 'Loyer / charges locatives', compte: '613' },
+  { code: 'assurance',              label: 'Assurance',                compte: '616' },
+  { code: 'honoraires',             label: 'Honoraires / comptable',   compte: '622' },
+  { code: 'telecom',                label: 'Télécom / internet',       compte: '626' },
+  { code: 'impot_taxe',             label: 'Impôts et taxes',          compte: '635' },
+  { code: 'charge_diverse',         label: 'Charge diverse',           compte: '658' },
+  { code: 'autre',                  label: 'À classer plus tard',      compte: '471' },
+] as const
 function formatDate(d: string) { return d ? new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" }) : "—" }
 
 function TruncatedCell({ text, className }: { text: string; className?: string }) {
@@ -45,11 +64,13 @@ export default function ClientRapprochementPage() {
   const [autoStep, setAutoStep] = useState("")
   const [autoResult, setAutoResult] = useState<{ matched: number; total: number; interne: number; frais_bancaires: number; salaire_bulk: number; mra: number; not_matched: number; total_classified: number; matches: any[] } | null>(null)
   const [linkDialog, setLinkDialog] = useState<any>(null)
+  // Picker de transaction depuis la facture : si aucun prefill ne matche, on ouvre cette
+  // modale qui liste toutes les tx bancaires du mois, classées par proximité de montant.
+  const [pickTxForFacture, setPickTxForFacture] = useState<any>(null)
   // Multi-facture lettrage : checkboxes selectionnees + filtre tiers
   const [selectedFactureIds, setSelectedFactureIds] = useState<Set<string>>(new Set())
   const [lettrageTiersFilter, setLettrageTiersFilter] = useState("")
-  const [societeId, setSocieteId] = useState<string | null>(null)
-  const [societes, setSocietes] = useState<any[]>([])
+  const { societeId } = useSocieteActive()
   const [payeParAssocie, setPayeParAssocie] = useState(false)
   const [payeParType, setPayeParType] = useState("associe")
   const [payeParNom, setPayeParNom] = useState("")
@@ -624,18 +645,6 @@ Voulez-vous vraiment continuer ?`
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatMessages])
 
-  // Get sociétés
-  useEffect(() => {
-    Promise.all([
-      fetch("/api/client/societes").then(r => r.json()).catch(() => ({ societes: [] })),
-      fetch("/api/comptable/societes").then(r => r.json()).catch(() => ({ societes: [] })),
-    ]).then(([d1, d2]) => {
-      const all = [...(d1.societes || []), ...(d2.societes || [])]
-      const unique = Array.from(new Map(all.map((s: any) => [s.id, s])).values())
-      setSocietes(unique)
-      if (unique.length > 0) setSocieteId(unique[0].id)
-    })
-  }, [])
 
   const load = useCallback(async () => {
     if (!societeId) return
@@ -655,9 +664,10 @@ Voulez-vous vraiment continuer ?`
         setAssociesCandidates(ccData.candidates || [])
         setLegalAlerts(ccData.legal_alerts || [])
       }
-      // Charger les employes pour le picker NDF
+      // Charger les employes pour le picker NDF (remboursement note de frais)
+      // Route: /api/rh/employes?societe_id=...  (pas /api/comptable/equipe qui n'existe pas)
       try {
-        const empRes = await fetch(`/api/comptable/equipe?societe_id=${societeId}`).catch(() => null)
+        const empRes = await fetch(`/api/rh/employes?societe_id=${societeId}`).catch(() => null)
         if (empRes?.ok) {
           const empData = await empRes.json()
           setEmployes(empData.employes || empData.membres || [])
@@ -774,8 +784,13 @@ Voulez-vous vraiment continuer ?`
   }
 
   const handleManualLink = async (tx: any, target: any, type: "facture" | "ecriture") => {
+    // Garde: sans tx bancaire réelle (releve_id + id), l'API renvoie 400 "releve_id requis".
+    if (!tx?.releve_id || !tx?.id) {
+      setToast({ type: 'error', message: "Aucune transaction bancaire sélectionnée. Importez le relevé ou utilisez \"Marquer payée\"." })
+      return
+    }
     try {
-      await fetch("/api/comptable/rapprochement", {
+      const res = await fetch("/api/comptable/rapprochement", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "lettrer_manuel", transaction_id: tx.id, releve_id: tx.releve_id,
@@ -784,13 +799,23 @@ Voulez-vous vraiment continuer ?`
           societe_id: societeId,
         }),
       })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setToast({ type: 'error', message: `❌ ${d.error || `HTTP ${res.status}`}` })
+        return
+      }
       setLinkDialog(null); load()
-    } catch { alert("Erreur lettrage") }
+    } catch { setToast({ type: 'error', message: "Erreur réseau lors du lettrage" }) }
   }
 
   // Lettrage multi-facture : 1 transaction bancaire vs N factures
   const handleManualLinkMulti = async (tx: any, factures: any[]) => {
     if (!societeId || factures.length === 0) return
+    // Garde: sans tx bancaire réelle (releve_id + id), l'API renvoie 400 "releve_id requis".
+    if (!tx?.releve_id || !tx?.id) {
+      setToast({ type: 'error', message: "Aucune transaction bancaire sélectionnée. Importez le relevé ou utilisez \"Marquer payée\"." })
+      return
+    }
     const ids = factures.map(f => f.id)
     try {
       const res = await fetch("/api/comptable/rapprochement", {
@@ -1254,14 +1279,6 @@ Voulez-vous vraiment continuer ?`
           <p className="text-sm text-gray-500">Rapprocher les transactions avec les factures et ecritures</p>
         </div>
         <div className="flex gap-2 items-center">
-          {societes.length > 0 && (
-            <Select value={societeId || ""} onValueChange={v => setSocieteId(v)}>
-              <SelectTrigger className="w-[220px]"><SelectValue placeholder="Société" /></SelectTrigger>
-              <SelectContent>
-                {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          )}
           <Button variant="outline" onClick={load}><RefreshCw className="w-4 h-4 mr-2" />Actualiser</Button>
           <Button onClick={handleResetAll} disabled={resetting || !societeId} variant="outline" className="border-red-300 text-red-600 hover:bg-red-50">
             {resetting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Unlink className="w-4 h-4 mr-2" />}
@@ -1549,8 +1566,9 @@ Voulez-vous vraiment continuer ?`
               f, status: 'paye',
               label: '✅ Payé',
               badgeCls: 'bg-green-100 text-green-700 border-green-200',
-              // FIX 5 — priorité date facture.rapproche_date puis date tx
-              payDate: f.rapproche_date || f.rapproche_tx_date || null,
+              // FIX 5 — afficher la date RÉELLE de la transaction bancaire (rapproche_tx_date),
+              // pas la date à laquelle le lettrage a été enregistré (rapproche_date = aujourd'hui).
+              payDate: f.rapproche_tx_date || f.rapproche_date || null,
               txLibelle: f.rapproche_tx_libelle || null,
             }
           }
@@ -1680,11 +1698,26 @@ Voulez-vous vraiment continuer ?`
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => {
                                 setDialogTab('factures')
-                                const prefill = unmatched.find((t: any) =>
-                                  Number(t.debit) > 0 &&
-                                  Math.abs(Number(t.debit) - (Number(f.montant_ttc) || 0)) < (Number(f.montant_ttc) || 1) * 0.05
-                                )
-                                setLinkDialog(prefill || { preselected_facture_id: f.id, libelle: f.tiers, date: f.date_facture, debit: Number(f.montant_ttc), credit: 0, devise: f.devise, tiers_detecte: f.tiers })
+                                const fTTC = Number(f.montant_ttc) || 0
+                                const fMUR = Number(f.montant_mur) || fTTC
+                                const fDevise = (f.devise || 'MUR').toUpperCase()
+                                // Chercher une tx bancaire correspondant à cette facture (±10%)
+                                const findTx = (pool: any[]) => pool.find((t: any) => {
+                                  const tDebit = Number(t.debit) || 0
+                                  if (tDebit <= 0) return false
+                                  const tDevise = (t.devise || 'MUR').toUpperCase()
+                                  if (tDevise === fDevise && fTTC > 0) return Math.abs(tDebit - fTTC) / fTTC < 0.10
+                                  if (fMUR > 0) return Math.abs(tDebit - fMUR) / fMUR < 0.10
+                                  return false
+                                })
+                                const prefill = findTx(unmatched) || findTx(transactions)
+                                if (prefill) {
+                                  // Match net → on ouvre directement le dialog de lettrage habituel avec cette tx
+                                  setLinkDialog(prefill)
+                                } else {
+                                  // Pas de match net → on ouvre le picker pour choisir une tx manuellement
+                                  setPickTxForFacture(f)
+                                }
                               }} className="gap-2">
                                 <Link2 className="w-4 h-4 text-blue-600" />
                                 <div className="flex flex-col">
@@ -1810,7 +1843,7 @@ Voulez-vous vraiment continuer ?`
           </CardHeader>
           <CardContent className="p-0 overflow-x-auto">
             <Table>
-              <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Libellé</TableHead><TableHead className="text-right">Montant</TableHead><TableHead>Tiers</TableHead><TableHead>Type</TableHead><TableHead>Lettre</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Libellé</TableHead><TableHead className="text-right">Montant</TableHead><TableHead>Tiers</TableHead><TableHead>Type</TableHead><TableHead>Lettre</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
               <TableBody>
                 {classifiedAuto.map((tx: any) => (
                   <TableRow key={tx.id} className="bg-blue-50/30">
@@ -1820,6 +1853,33 @@ Voulez-vous vraiment continuer ?`
                     <TableCell className="text-sm">{tx.tiers_detecte || "—"}</TableCell>
                     <TableCell><Badge className="bg-blue-100 text-blue-700 text-[10px]">{tx.matched_type?.replace(/_/g, ' ') || '—'}</Badge></TableCell>
                     <TableCell><Badge className="bg-blue-100 text-blue-700"><CheckCircle2 className="w-3 h-3" /></Badge></TableCell>
+                    <TableCell>
+                      {tx.releve_id && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-blue-700 hover:text-blue-900">
+                              Modifier <ChevronDown className="w-3 h-3" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-80">
+                            <DropdownMenuLabel className="text-xs">Corriger la classification (le système apprend)</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            {CLASSIFICATION_CHOICES.map(c => (
+                              <DropdownMenuItem key={c.code} onClick={() => handleClasserTx(tx, c.code, false)}>
+                                <span className="text-xs font-mono text-gray-500 mr-2">{c.compte}</span>{c.label}
+                              </DropdownMenuItem>
+                            ))}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuLabel className="text-xs text-amber-700">⚡ Corriger + propager à toutes les tx du même tiers</DropdownMenuLabel>
+                            {CLASSIFICATION_CHOICES.map(c => (
+                              <DropdownMenuItem key={`prop-${c.code}`} onClick={() => handleClasserTx(tx, c.code, true)}>
+                                <span className="text-xs font-mono text-gray-500 mr-2">{c.compte}</span>{c.label} <span className="ml-auto text-[10px] text-amber-600">(propager)</span>
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -1870,16 +1930,7 @@ Voulez-vous vraiment continuer ?`
                                   && norm(o.tiers_detecte || o.tiers || '') === myTiers
                                 ).length
                               : 0
-                            const classifications = [
-                              { code: 'frais_bancaires',        label: 'Frais bancaires',         compte: '627' },
-                              { code: 'paiement_mra',           label: 'Paiement MRA (impôts)',   compte: '447' },
-                              { code: 'salaire',                label: 'Salaire net',             compte: '421' },
-                              { code: 'compte_courant_associe', label: 'Compte courant associé',  compte: '455' },
-                              { code: 'avance_personnel',       label: 'Avance au personnel',     compte: '425' },
-                              { code: 'virement_interne',       label: 'Virement interne',        compte: '580' },
-                              { code: 'charge_diverse',         label: 'Charge diverse',          compte: '658' },
-                              { code: 'autre',                  label: 'À classer plus tard',     compte: '471' },
-                            ]
+                            const classifications = CLASSIFICATION_CHOICES
                             return (
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
@@ -2676,6 +2727,92 @@ Voulez-vous vraiment continuer ?`
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Picker de transaction bancaire depuis une facture
+          S'ouvre quand aucun match auto ±10% n'est trouvé : l'utilisateur voit TOUTES les tx
+          du mois (classées par proximité de montant) et en choisit une manuellement. */}
+      <Dialog open={!!pickTxForFacture} onOpenChange={(o) => { if (!o) setPickTxForFacture(null) }}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Choisir une transaction bancaire</DialogTitle>
+          </DialogHeader>
+          {pickTxForFacture && (() => {
+            const f = pickTxForFacture
+            const fTTC = Number(f.montant_ttc) || 0
+            const fMUR = Number(f.montant_mur) || fTTC
+            const fDevise = (f.devise || 'MUR').toUpperCase()
+            // Tri: tx en débit d'abord, puis par proximité de montant avec la facture
+            const pool = [...transactions].filter((t: any) => (Number(t.debit) || 0) > 0)
+            const scored = pool.map((t: any) => {
+              const tDebit = Number(t.debit) || 0
+              const tDevise = (t.devise || 'MUR').toUpperCase()
+              const refAmount = tDevise === fDevise ? fTTC : fMUR
+              const diffPct = refAmount > 0 ? Math.abs(tDebit - refAmount) / refAmount : 999
+              return { tx: t, diffPct }
+            }).sort((a, b) => a.diffPct - b.diffPct)
+            return (
+              <div className="space-y-3">
+                <div className="text-xs text-gray-600 bg-gray-50 rounded-lg p-3 border">
+                  <div className="font-semibold text-[#0B0F2E]">Facture à lettrer</div>
+                  <div className="mt-1">{f.tiers || 'Fournisseur'} — {f.numero_facture || f.id}</div>
+                  <div className="mt-0.5">{formatDate(f.date_facture)} — <span className="font-mono font-semibold">{fmt(fTTC)} {fDevise}</span></div>
+                </div>
+                {scored.length === 0 ? (
+                  <div className="text-sm text-gray-500 text-center py-6">
+                    Aucune transaction en débit pour la période sélectionnée.<br />
+                    Vérifiez que le relevé bancaire est bien importé.
+                  </div>
+                ) : (
+                  <>
+                    <div className="text-xs text-gray-500">
+                      {scored.length} transaction{scored.length > 1 ? 's' : ''} — triée{scored.length > 1 ? 's' : ''} par proximité de montant.
+                    </div>
+                    <div className="space-y-1.5 max-h-[50vh] overflow-y-auto">
+                      {scored.slice(0, 100).map(({ tx, diffPct }: any) => {
+                        const matchLevel = diffPct < 0.01 ? 'exact' : diffPct < 0.10 ? 'close' : diffPct < 0.30 ? 'far' : 'verydifferent'
+                        const borderCls = matchLevel === 'exact' ? 'border-[#0F766E] bg-[#0F766E]/5'
+                          : matchLevel === 'close' ? 'border-[#D4AF37] bg-[#D4AF37]/5'
+                          : matchLevel === 'far' ? 'border-gray-200 bg-white'
+                          : 'border-gray-100 bg-gray-50/50'
+                        return (
+                          <button
+                            key={tx.id}
+                            type="button"
+                            onClick={() => {
+                              setLinkDialog(tx)
+                              setPickTxForFacture(null)
+                              setDialogTab('factures')
+                            }}
+                            className={`w-full text-left px-3 py-2 rounded-lg border ${borderCls} hover:border-[#0B0F2E] hover:shadow-sm transition-all`}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0 flex-1">
+                                <div className="text-sm font-medium text-[#0B0F2E] truncate">{tx.libelle || '—'}</div>
+                                <div className="text-[11px] text-gray-500">
+                                  {formatDate(tx.date)}
+                                  {tx.tiers_detecte && ` • ${tx.tiers_detecte}`}
+                                </div>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <div className="text-sm font-mono font-semibold text-[#9F1239]">
+                                  -{fmt(Number(tx.debit) || 0)} {(tx.devise || 'MUR').toUpperCase()}
+                                </div>
+                                <div className="text-[10px] text-gray-400">
+                                  {matchLevel === 'exact' ? '✓ exact' : `écart ${(diffPct * 100).toFixed(1)}%`}
+                                </div>
+                              </div>
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+            )
+          })()}
         </DialogContent>
       </Dialog>
 

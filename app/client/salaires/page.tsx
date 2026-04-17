@@ -1,6 +1,8 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { RequireRole, NON_CLIENT_USER_ROLES } from "@/components/client/RequireRole"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -61,8 +63,7 @@ interface Bulletin {
 
 export default function ClientSalairesPage() {
   const { profile, loading: profileLoading } = useProfile()
-  const [societes, setSocietes] = useState<Societe[]>([])
-  const [selectedSociete, setSelectedSociete] = useState<string>("")
+  const { societeId, societe } = useSocieteActive()
   const [employes, setEmployes] = useState<Employe[]>([])
   const [bulletins, setBulletins] = useState<Bulletin[]>([])
   const [totaux, setTotaux] = useState<any>(null)
@@ -93,28 +94,15 @@ export default function ClientSalairesPage() {
   const [comptabilising, setComptabilising] = useState(false)
   const [prevBulletins, setPrevBulletins] = useState<Bulletin[]>([])
 
-  // Fetch societes
-  useEffect(() => {
-    fetch("/api/client/societes")
-      .then((r) => r.json())
-      .then((json) => {
-        const list = json.societes || json.data || []
-        setSocietes(list)
-        if (list.length > 0 && !selectedSociete) {
-          setSelectedSociete(list[0].id)
-        }
-      })
-      .catch(() => setSocietes([]))
-  }, [])
 
   // Fetch bulletins and employees when societe or periode changes
   const fetchData = useCallback(async () => {
-    if (!selectedSociete) return
+    if (!societeId) return
     setFetching(true)
     try {
       const [bulletinsRes, employesRes] = await Promise.all([
-        fetch(`/api/rh/paie?societe_id=${selectedSociete}&periode=${selectedPeriode}`),
-        fetch(`/api/rh/employes?societe_id=${selectedSociete}`),
+        fetch(`/api/rh/paie?societe_id=${societeId}&periode=${selectedPeriode}`),
+        fetch(`/api/rh/employes?societe_id=${societeId}`),
       ])
       const bulletinsJson = await bulletinsRes.json()
       const employesJson = await employesRes.json()
@@ -126,7 +114,7 @@ export default function ClientSalairesPage() {
         const [y, m] = selectedPeriode.split("-").map(Number)
         const prevDate = new Date(y, m - 2, 1)
         const prevPeriode = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, "0")}`
-        const prevRes = await fetch(`/api/rh/paie?societe_id=${selectedSociete}&periode=${prevPeriode}`)
+        const prevRes = await fetch(`/api/rh/paie?societe_id=${societeId}&periode=${prevPeriode}`)
         const prevJson = await prevRes.json()
         setPrevBulletins(prevJson.bulletins || [])
       } catch { setPrevBulletins([]) }
@@ -137,7 +125,7 @@ export default function ClientSalairesPage() {
     } finally {
       setFetching(false)
     }
-  }, [selectedSociete, selectedPeriode])
+  }, [societeId, selectedPeriode])
 
   useEffect(() => {
     fetchData()
@@ -155,7 +143,7 @@ export default function ClientSalairesPage() {
 
   // Batch calculation
   async function handleCalculerPaie() {
-    if (!selectedSociete || !selectedPeriode) return
+    if (!societeId || !selectedPeriode) return
     setCalculating(true)
     try {
       const res = await fetch("/api/rh/paie", {
@@ -163,7 +151,7 @@ export default function ClientSalairesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "calculer_batch",
-          societe_id: selectedSociete,
+          societe_id: societeId,
           periode: selectedPeriode,
         }),
       })
@@ -205,7 +193,7 @@ export default function ClientSalairesPage() {
 
   // Export functions
   async function handleExport(type: string) {
-    if (!selectedSociete || !selectedPeriode) return
+    if (!societeId || !selectedPeriode) return
     setExportLoading(type)
     try {
       const endpoint = type === "csg" ? "/api/rh/exports/csg-mra" :
@@ -214,7 +202,7 @@ export default function ClientSalairesPage() {
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ societe_id: selectedSociete, periode: selectedPeriode }),
+        body: JSON.stringify({ societe_id: societeId, periode: selectedPeriode }),
       })
       const json = await res.json()
       if (json.error) {
@@ -245,14 +233,14 @@ export default function ClientSalairesPage() {
 
   // Comptabiliser — generate ecritures_comptables from validated bulletins
   async function handleComptabiliser() {
-    if (!selectedSociete || !selectedPeriode) return
+    if (!societeId || !selectedPeriode) return
     if (!confirm("Comptabiliser les bulletins validés pour cette période ? Les écritures SAL/OD-PAIE seront générées.")) return
     setComptabilising(true)
     try {
       const res = await fetch("/api/rh/paie/comptabiliser", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ all_periode: true, societe_id: selectedSociete, periode: selectedPeriode }),
+        body: JSON.stringify({ all_periode: true, societe_id: societeId, periode: selectedPeriode }),
       })
       const json = await res.json()
       if (json.error) {
@@ -267,13 +255,13 @@ export default function ClientSalairesPage() {
 
   // Import payroll
   async function handleImport() {
-    if (!importFile || !selectedSociete || !selectedPeriode) return
+    if (!importFile || !societeId || !selectedPeriode) return
     setImportLoading(true)
     setImportResult(null)
     try {
       const formData = new FormData()
       formData.append("file", importFile)
-      formData.append("societe_id", selectedSociete)
+      formData.append("societe_id", societeId)
       formData.append("periode", selectedPeriode)
       const res = await fetch("/api/rh/paie/import", { method: "POST", body: formData })
       const json = await res.json()
@@ -300,7 +288,7 @@ export default function ClientSalairesPage() {
   }
 
   async function handleCloturerPeriode() {
-    if (!selectedSociete || !selectedPeriode) return
+    if (!societeId || !selectedPeriode) return
     if (!confirm("Cloturer la periode ? Les bulletins ne pourront plus etre modifies.")) return
     setPeriodClosing(true)
     try {
@@ -353,15 +341,7 @@ export default function ClientSalairesPage() {
   }
 
   if (profile?.role === "client_user") {
-    return (
-      <div className="p-6">
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground">Vous n&apos;avez pas acc&egrave;s &agrave; cette section.</p>
-          </CardContent>
-        </Card>
-      </div>
-    )
+    return <RequireRole roles={NON_CLIENT_USER_ROLES}>{null}</RequireRole>
   }
 
   // Workflow steps computation
@@ -409,21 +389,6 @@ export default function ClientSalairesPage() {
       subtitle="Bulletins de paie, calcul PAYE · CSG · NSF et exports MRA. Conforme WRA 2019."
       actions={
         <>
-          {societes.length > 0 && (
-            <div className="flex items-center gap-2">
-              <Building2 className="h-4 w-4 text-muted-foreground" />
-              <Select value={selectedSociete} onValueChange={setSelectedSociete}>
-                <SelectTrigger className="w-[220px] h-9">
-                  <SelectValue placeholder="Sélectionner une société" />
-                </SelectTrigger>
-                <SelectContent>
-                  {societes.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
           <MonthPicker value={selectedPeriode} onChange={v => { if (v) setSelectedPeriode(v) }} showTout={false} />
         </>
       }
@@ -732,7 +697,7 @@ export default function ClientSalairesPage() {
               <div className="flex items-center gap-4">
                 <div className="text-sm">
                   <span className="text-muted-foreground">Soci&eacute;t&eacute; :</span>{" "}
-                  <strong>{societes.find((s) => s.id === selectedSociete)?.nom || "---"}</strong>
+                  <strong>{societe?.nom || "---"}</strong>
                 </div>
                 <div className="text-sm">
                   <span className="text-muted-foreground">P&eacute;riode :</span>{" "}
@@ -745,7 +710,7 @@ export default function ClientSalairesPage() {
               </div>
               <Button
                 onClick={handleCalculerPaie}
-                disabled={calculating || !selectedSociete || periodClosed}
+                disabled={calculating || !societeId || periodClosed}
                 style={{ backgroundColor: "#0B0F2E" }}
                 className="text-white"
               >
@@ -874,7 +839,7 @@ export default function ClientSalairesPage() {
                   </p>
                   <Button
                     onClick={handleImport}
-                    disabled={!importFile || importLoading || !selectedSociete}
+                    disabled={!importFile || importLoading || !societeId}
                     style={{ backgroundColor: "#D4AF37" }}
                     className="text-white w-full"
                   >

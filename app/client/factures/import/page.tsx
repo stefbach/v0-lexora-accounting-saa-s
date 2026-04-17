@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Upload, Download, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, Trash2 } from "lucide-react"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 
 interface ParsedRow {
   tiers: string
@@ -78,23 +79,12 @@ function parseCSV(text: string): ParsedRow[] {
 }
 
 export default function ImportFacturesPage() {
-  const [societes, setSocietes] = useState<any[]>([])
-  const [societeId, setSocieteId] = useState<string | null>(null)
+  const { societeId } = useSocieteActive()
   const [rows, setRows] = useState<ParsedRow[]>([])
   const [fileName, setFileName] = useState("")
   const [importing, setImporting] = useState(false)
   const [result, setResult] = useState<any>(null)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
-
-  useEffect(() => {
-    fetch("/api/comptable/societes")
-      .then(r => r.json())
-      .then(d => {
-        setSocietes(d.societes || [])
-        if ((d.societes || []).length > 0) setSocieteId(d.societes[0].id)
-      })
-      .catch(() => {})
-  }, [])
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -186,14 +176,6 @@ export default function ImportFacturesPage() {
             </span>
           </div>
           <div className="flex gap-2 items-center flex-wrap">
-            {societes.length > 0 && (
-              <Select value={societeId || ""} onValueChange={setSocieteId}>
-                <SelectTrigger className="w-[240px]"><SelectValue placeholder="Société" /></SelectTrigger>
-                <SelectContent>
-                  {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            )}
             <label className="flex items-center gap-2 px-3 py-1.5 border rounded cursor-pointer hover:bg-slate-50 text-sm">
               <Upload className="w-4 h-4" />
               <span>{fileName || 'Choisir un CSV'}</span>

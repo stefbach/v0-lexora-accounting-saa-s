@@ -82,9 +82,15 @@ export async function GET(request: Request) {
       if (!aggregat[c]) {
         const pc = planMap[c]
         const classe = c[0] || '?'
+        // Priorité : plan_comptable (libellé canonique) > nom_compte (souvent pollué par
+        // le libellé du parent, ex « Rémunérations du personnel » sur 6411/6412/6413/…)
+        // > fallback « Compte <code> » pour éviter les libellés trompeurs.
+        const libelleResolved = pc?.libelle
+          || (e.nom_compte && e.nom_compte !== 'Rémunérations du personnel' ? e.nom_compte : null)
+          || `Compte ${c}`
         aggregat[c] = {
           numero_compte: c,
-          libelle: pc?.libelle || e.nom_compte || c,
+          libelle: libelleResolved,
           type_compte: pc?.type_compte || (['6'].includes(classe) ? 'charge' : ['7'].includes(classe) ? 'produit' : 'bilan'),
           sens_normal: pc?.sens_normal || (['1','4','5','7'].includes(classe) ? 'C' : 'D'),
           classe,

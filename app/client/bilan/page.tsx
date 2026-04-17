@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useProfile } from "@/hooks/use-profile"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { RequireRole, NON_CLIENT_USER_ROLES } from "@/components/client/RequireRole"
 import { Loader2, Building2, Download, Calendar, Upload, FileText, CheckCircle, AlertCircle } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -294,11 +296,10 @@ function ProfitLossTable({ data, prevData, exercice, prevExercice }: { data: any
 
 export default function BilanPage() {
   const { profile, loading } = useProfile()
+  const { societeId, societe } = useSocieteActive()
   const [data, setData] = useState<any>(null)
   const [prevData, setPrevData] = useState<any>(null)
   const [fetching, setFetching] = useState(true)
-  const [selectedSociete, setSelectedSociete] = useState<string>("")
-  const [societes, setSocietes] = useState<{ id: string; nom: string; brn?: string; adresse?: string; numero_tva_mra?: string; date_incorporation?: string; capital_social?: number; [key: string]: any }[]>([])
   const [exercice, setExercice] = useState<string>("")
   const [prevExercice, setPrevExercice] = useState<string>("")
   const [availableExercices, setAvailableExercices] = useState<string[]>([])
@@ -314,18 +315,6 @@ export default function BilanPage() {
   const [importMessage, setImportMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Fetch ALL sociétés the user has access to (same pattern as banque page)
-  useEffect(() => {
-    Promise.all([
-      fetch("/api/client/societes").then(r => r.json()).catch(() => ({ societes: [] })),
-      fetch("/api/comptable/societes").then(r => r.json()).catch(() => ({ societes: [] })),
-    ]).then(([d1, d2]) => {
-      const all = [...(d1.societes || []), ...(d2.societes || [])]
-      const unique = Array.from(new Map(all.map((s: any) => [s.id, s])).values()) as { id: string; nom: string }[]
-      setSocietes(unique)
-      if (unique.length > 0 && !selectedSociete) setSelectedSociete(unique[0].id)
-    })
-  }, [])
 
   // Load prior year OCR data from localStorage
   useEffect(() => {
@@ -345,7 +334,7 @@ export default function BilanPage() {
     try {
       const formData = new FormData()
       formData.append("file", file)
-      if (selectedSociete && selectedSociete !== "all") formData.append("societe_id", selectedSociete)
+      if (societeId) formData.append("societe_id", societeId)
       formData.append("hint", "Bilan comptable - Balance Sheet - Profit & Loss - Financial Statements Mauritius")
       const res = await fetch("/api/documents/upload", { method: "POST", body: formData })
       if (!res.ok) {
@@ -386,9 +375,10 @@ export default function BilanPage() {
   }
 
   useEffect(() => {
+    if (!societeId) { setFetching(false); return }
     setFetching(true)
     const params = new URLSearchParams()
-    if (selectedSociete && selectedSociete !== "all") params.set("societe_id", selectedSociete)
+    params.set("societe_id", societeId)
     if (viewMode === "mensuel" && selectedMonth) {
       const [y, m] = selectedMonth.split("-").map(Number)
       const lastDay = new Date(y, m, 0).getDate()
@@ -412,7 +402,7 @@ export default function BilanPage() {
         // Fetch previous year data
         if (prevEx) {
           const prevParams = new URLSearchParams()
-          if (selectedSociete && selectedSociete !== "all") prevParams.set("societe_id", selectedSociete)
+          prevParams.set("societe_id", societeId)
           prevParams.set("exercice", prevEx)
           fetch(`/api/client/financial?${prevParams.toString()}`)
             .then(r => r.json())
@@ -425,7 +415,7 @@ export default function BilanPage() {
         }
       })
       .catch(() => { setData(null); setPrevData(null); setFetching(false) })
-  }, [selectedSociete, exercice, viewMode, selectedMonth])
+  }, [societeId, exercice, viewMode, selectedMonth])
 
   if (loading || fetching) {
     return (
@@ -436,17 +426,7 @@ export default function BilanPage() {
   }
 
   if (profile?.role === "client_user") {
-    return (
-      <div className="p-6 flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-        <h1 className="text-xl font-bold">Acces non autorise</h1>
-        <p className="text-sm text-muted-foreground">
-          Vous n&apos;avez pas la permission d&apos;acceder a cette page.
-        </p>
-        <Link href="/client/documents" className="text-sm underline text-blue-600">
-          Retour aux documents
-        </Link>
-      </div>
-    )
+    return <RequireRole roles={NON_CLIENT_USER_ROLES}>{null}</RequireRole>
   }
 
   const totalRevenue = data?.totalRevenue ?? 0
@@ -455,8 +435,8 @@ export default function BilanPage() {
   const totalLiabilitiesAndEquity = (data?.capitauxPropres ?? 0) + (totalRevenue - totalExpenses) + (data?.dettesFournisseurs ?? 0) + (data?.dettesFiscales ?? 0) + (data?.dettesSociales ?? 0)
   const hasData = totalRevenue !== 0 || totalExpenses !== 0 || totalAssets !== 0 || totalLiabilitiesAndEquity !== 0
 
-  const selectedSoc = societes.find(s => s.id === selectedSociete) || societes[0] || null
-  const selectedSocieteName = selectedSoc?.nom || "Consolidé"
+  const selectedSoc = societe as (typeof societe & { adresse?: string; numero_tva_mra?: string; date_incorporation?: string; capital_social?: number }) | null
+  const selectedSocieteName = selectedSoc?.nom || "—"
   const missingFields: string[] = []
   if (selectedSoc) {
     if (!selectedSoc.date_incorporation) missingFields.push("Date d'incorporation")
@@ -491,27 +471,13 @@ export default function BilanPage() {
         <div className="p-3 rounded-lg bg-orange-50 border border-orange-200 text-sm text-orange-800 no-print">
           <p className="font-medium flex items-center gap-2"><AlertCircle className="w-4 h-4" />Informations manquantes pour le bilan légal :</p>
           <ul className="list-disc ml-8 mt-1 text-xs">{missingFields.map(f => <li key={f}>{f}</li>)}</ul>
-          <p className="text-xs mt-1">Complétez ces informations dans <Link href={`/client/societe?id=${selectedSociete}`} className="underline">Fiche Société</Link>.</p>
+          <p className="text-xs mt-1">Complétez ces informations dans <Link href={`/client/societe?id=${societeId}`} className="underline">Fiche Société</Link>.</p>
         </div>
       )}
 
       {/* Top bar: filter + download */}
       <div className="flex items-center justify-between flex-wrap gap-4 no-print">
         <div className="flex items-center gap-3">
-          {societes.length > 0 && (
-            <div className="flex items-center gap-2">
-              <Building2 className="h-4 w-4 text-muted-foreground" />
-              <Select value={selectedSociete} onValueChange={setSelectedSociete}>
-                <SelectTrigger className="w-[220px] h-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
-                  {societes.length > 1 && <SelectItem value="all">Toutes les societes</SelectItem>}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
           <div className="flex items-center gap-2">
             <div className="flex rounded-lg border overflow-hidden">
               <button onClick={() => setViewMode("exercice")} className={`px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === "exercice" ? "bg-[#0B0F2E] text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>Exercice</button>
@@ -627,7 +593,7 @@ export default function BilanPage() {
           {/* Bilan content (for PDF export) */}
           <div id="bilan-content">
             <div className="hidden print:block mb-4">
-              <h2 className="text-lg font-bold" style={{ color: "#0B0F2E" }}>{societes.find(s => s.id === selectedSociete)?.nom || ""}</h2>
+              <h2 className="text-lg font-bold" style={{ color: "#0B0F2E" }}>{societe?.nom || ""}</h2>
               <p className="text-sm text-gray-500">Bilan — {viewMode === "mensuel" ? selectedMonth : `Exercice ${exercice}`}</p>
               <p className="text-xs text-gray-400">Préparé conformément aux IFRS pour PME (Companies Act 2001 — Maurice)</p>
             </div>

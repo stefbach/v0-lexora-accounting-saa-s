@@ -1,15 +1,8 @@
-import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { getAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 import { getTauxChange } from '@/lib/taux-change'
-
-function getAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    (process.env.SUPABASE_SERVICE_ROLE_KEY)!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-}
+import { assertSocieteAccess, mapSocieteAccessError } from '@/lib/supabase/assert-societe-access'
 
 function convertToMUR(amount: number, devise: string, rates: Record<string, number>): number {
   if (!devise || devise === 'MUR') return amount
@@ -53,9 +46,15 @@ export async function GET(request: Request) {
       targetClientId = requestedClientId
     }
 
-    // Get client's dossiers
-    const { data: dossiers } = await supabase
+    // Get client's dossiers, optionally filtered by société
+    const requestedSocieteId = searchParams.get('societe_id')
+    if (requestedSocieteId) {
+      await assertSocieteAccess(supabase, user.id, requestedSocieteId)
+    }
+    let dossierQuery = supabase
       .from('dossiers').select('id, societe_id').eq('client_id', targetClientId)
+    if (requestedSocieteId) dossierQuery = dossierQuery.eq('societe_id', requestedSocieteId)
+    const { data: dossiers } = await dossierQuery
 
     if (!dossiers || dossiers.length === 0) {
       return NextResponse.json({ alertes: [] })
@@ -226,6 +225,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ alertes })
   } catch (e: unknown) {
+    const mapped = mapSocieteAccessError(e)
+    if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
     console.error('Alertes API error:', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }

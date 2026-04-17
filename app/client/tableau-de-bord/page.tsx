@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useProfile } from "@/hooks/use-profile"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -59,8 +60,7 @@ function getMonthRange(mois: string): { debut: string; fin: string } {
 export default function TableauDeBord() {
   const { profile, loading: profileLoading } = useProfile()
   const router = useRouter()
-  const [societes, setSocietes] = useState<Societe[]>([])
-  const [selected, setSelected] = useState<string>("")
+  const { societeId, societe, societes } = useSocieteActive()
   const [loading, setLoading] = useState(true)
 
   const now = new Date()
@@ -76,18 +76,11 @@ export default function TableauDeBord() {
   const [chartData, setChartData] = useState<any[]>([])
   const [alertes, setAlertes] = useState<Alerte[]>([])
 
-  useEffect(() => {
-    fetch("/api/client/societes").then(r => r.json()).then(d => {
-      setSocietes(d.societes || [])
-      if (d.societes?.length > 0) setSelected(d.societes[0].id)
-    })
-  }, [])
-
   // Fetch KPIs + chart data
   useEffect(() => {
-    if (!selected) return
+    if (!societeId) { setLoading(false); return }
     setLoading(true)
-    const base = selected !== "all" ? `societe_id=${selected}&` : ""
+    const base = `societe_id=${societeId}&`
 
     const exMatch = exercice.match(/^(\d{4})-(\d{4})$/)
     const exDebut = exMatch ? `${exMatch[1]}-07-01` : ""
@@ -212,7 +205,7 @@ export default function TableauDeBord() {
       setChartData(cd)
       setLoading(false)
     })
-  }, [selected, mois, exercice])
+  }, [societeId, mois, exercice])
 
   // Redirect assistant
   useEffect(() => {
@@ -262,38 +255,15 @@ export default function TableauDeBord() {
           <h1 className="text-2xl font-bold text-[#0B0F2E]">Bonjour {profile?.full_name?.split(" ")[0] || ""}</h1>
           <p className="text-gray-500 text-sm mt-0.5 capitalize">{formatMoisLabel(mois)}</p>
         </div>
-        {societes.length > 0 && (
-          <Select value={selected} onValueChange={setSelected}>
-            <SelectTrigger className="w-full sm:w-56"><SelectValue placeholder="Société" /></SelectTrigger>
-            <SelectContent>
-              {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
-              {societes.length > 1 && <SelectItem value="all">Toutes mes sociétés</SelectItem>}
-            </SelectContent>
-          </Select>
-        )}
-        {societes.length === 1 && (
+        {societe && (
           <div className="text-right">
-            <p className="font-semibold text-[#0B0F2E]">{societes[0].nom}</p>
-            {societes[0].brn && <p className="text-xs text-gray-400">BRN : {societes[0].brn}</p>}
+            <p className="font-semibold text-[#0B0F2E]">{societe.nom}</p>
+            {societe.brn && <p className="text-xs text-gray-400">BRN : {societe.brn}</p>}
           </div>
         )}
       </div>
 
-      {/* Onboarding */}
-      {societes.length === 0 && (
-        <Card className="border-2 border-dashed border-[#D4AF37]/40 bg-[#D4AF37]/5">
-          <CardContent className="p-8 text-center space-y-4">
-            <Building2 className="w-12 h-12 mx-auto text-[#D4AF37]" />
-            <div>
-              <p className="text-lg font-bold text-[#0B0F2E]">Bienvenue sur LEXORA</p>
-              <p className="text-sm text-gray-500 mt-1">Commencez par créer votre société pour accéder à tous les modules.</p>
-            </div>
-            <Link href="/client/societes"><Button className="bg-[#0B0F2E]"><Plus className="w-4 h-4 mr-2" /> Créer ma société</Button></Link>
-          </CardContent>
-        </Card>
-      )}
-
-      {societes.length > 0 && (
+      {societeId && (
         <>
           {/* ROW 1: Ce mois — 7 KPIs */}
           <div className="space-y-2">
@@ -310,16 +280,16 @@ export default function TableauDeBord() {
             </div>
             {loading ? skeleton(7) : monthly ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
-                <KpiCard label="CA du mois" value={monthly.totalRevenue} icon={TrendingUp} color="text-green-600" bg="bg-green-50" />
-                <KpiCard label="Dépenses du mois" value={monthly.totalExpenses} icon={Receipt} color="text-red-500" bg="bg-red-50" />
-                <KpiCard label="Bénéfice du mois" value={monthly.resultat} icon={TrendingUp} color={monthly.resultat >= 0 ? "text-green-600" : "text-red-500"} bg={monthly.resultat >= 0 ? "bg-green-50" : "bg-red-50"} />
+                <KpiCard label="CA du mois" value={monthly.totalRevenue} icon={TrendingUp} color="text-[#A88925]" bg="bg-[#D4AF37]/10" />
+                <KpiCard label="Dépenses du mois" value={monthly.totalExpenses} icon={Receipt} color="text-[#9F1239]" bg="bg-[#9F1239]/10" />
+                <KpiCard label="Bénéfice du mois" value={monthly.resultat} icon={TrendingUp} color={monthly.resultat >= 0 ? "text-[#0F766E]" : "text-[#9F1239]"} bg={monthly.resultat >= 0 ? "bg-[#0F766E]/10" : "bg-[#9F1239]/10"} />
                 <Card>
                   <CardContent className="p-4">
-                    <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center mb-2">
-                      <Banknote className="w-4 h-4 text-blue-600" />
+                    <div className="w-8 h-8 rounded-lg bg-[#0B0F2E]/8 flex items-center justify-center mb-2">
+                      <Banknote className="w-4 h-4 text-[#0B0F2E]" />
                     </div>
                     <p className="text-xs text-gray-500">Trésorerie</p>
-                    <p className="text-lg font-bold text-blue-600 mt-0.5">{tresorerie.totalBankMUR !== 0 ? fmt(tresorerie.totalBankMUR) : <span className="text-sm text-gray-400 font-normal">Pas de données</span>}</p>
+                    <p className="text-lg font-bold text-[#0B0F2E] mt-0.5">{tresorerie.totalBankMUR !== 0 ? fmt(tresorerie.totalBankMUR) : <span className="text-sm text-gray-400 font-normal">Pas de données</span>}</p>
                     {tresorerie.comptes.length > 0 && (
                       <div className="mt-1 space-y-0.5">
                         {tresorerie.comptes.slice(0, 3).map((c, i) => (
@@ -329,17 +299,17 @@ export default function TableauDeBord() {
                     )}
                   </CardContent>
                 </Card>
-                <KpiCard label="TVA nette" value={monthly.tvaNette} icon={Receipt} color="text-purple-600" bg="bg-purple-50" />
-                <KpiCard label="Masse salariale" valueStr={isCurrentMonth ? "Mois en cours" : undefined} value={isCurrentMonth ? undefined : monthly.salaires} icon={Users} color="text-orange-600" bg="bg-orange-50" />
+                <KpiCard label="TVA nette" value={monthly.tvaNette} icon={Receipt} color="text-[#A88925]" bg="bg-[#D4AF37]/10" />
+                <KpiCard label="Masse salariale" valueStr={isCurrentMonth ? "Mois en cours" : undefined} value={isCurrentMonth ? undefined : monthly.salaires} icon={Users} color="text-slate-600" bg="bg-slate-100" />
                 <Card className="cursor-pointer" onClick={() => document.getElementById('alertes-section')?.scrollIntoView({ behavior: 'smooth' })}>
                   <CardContent className="p-4">
                     {(() => {
                       const nbDanger = alertes.filter(a => a.niveau === 'danger').length
                       const nbWarning = alertes.filter(a => a.niveau === 'warning').length
                       const total = nbDanger + nbWarning
-                      const bg = nbDanger > 0 ? "bg-red-50" : nbWarning > 0 ? "bg-orange-50" : "bg-green-50"
-                      const iconColor = nbDanger > 0 ? "text-red-600" : nbWarning > 0 ? "text-orange-600" : "text-green-600"
-                      const textColor = nbDanger > 0 ? "text-red-600" : nbWarning > 0 ? "text-orange-600" : "text-green-600"
+                      const bg = nbDanger > 0 ? "bg-[#9F1239]/10" : nbWarning > 0 ? "bg-[#D4AF37]/10" : "bg-[#0F766E]/10"
+                      const iconColor = nbDanger > 0 ? "text-[#9F1239]" : nbWarning > 0 ? "text-[#A88925]" : "text-[#0F766E]"
+                      const textColor = nbDanger > 0 ? "text-[#9F1239]" : nbWarning > 0 ? "text-[#A88925]" : "text-[#0F766E]"
                       return <>
                         <div className={`w-8 h-8 rounded-lg ${bg} flex items-center justify-center mb-2`}>
                           <Bell className={`w-4 h-4 ${iconColor}`} />
@@ -374,16 +344,16 @@ export default function TableauDeBord() {
             </div>
             {loading ? skeleton(4) : exerciseData ? (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <KpiCard label="CA exercice" value={exerciseData.totalRevenue} icon={TrendingUp} color="text-green-600" bg="bg-green-50" />
-                <KpiCard label="Dépenses exercice" value={exerciseData.totalExpenses} icon={Receipt} color="text-red-500" bg="bg-red-50" />
-                <KpiCard label="Résultat net" value={exerciseData.resultat} icon={TrendingUp} color={exerciseData.resultat >= 0 ? "text-green-600" : "text-red-500"} bg={exerciseData.resultat >= 0 ? "bg-green-50" : "bg-red-50"} />
+                <KpiCard label="CA exercice" value={exerciseData.totalRevenue} icon={TrendingUp} color="text-[#A88925]" bg="bg-[#D4AF37]/10" />
+                <KpiCard label="Dépenses exercice" value={exerciseData.totalExpenses} icon={Receipt} color="text-[#9F1239]" bg="bg-[#9F1239]/10" />
+                <KpiCard label="Résultat net" value={exerciseData.resultat} icon={TrendingUp} color={exerciseData.resultat >= 0 ? "text-[#0F766E]" : "text-[#9F1239]"} bg={exerciseData.resultat >= 0 ? "bg-[#0F766E]/10" : "bg-[#9F1239]/10"} />
                 <Card>
                   <CardContent className="p-4">
-                    <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center mb-2">
-                      <Banknote className="w-4 h-4 text-blue-600" />
+                    <div className="w-8 h-8 rounded-lg bg-[#0B0F2E]/8 flex items-center justify-center mb-2">
+                      <Banknote className="w-4 h-4 text-[#0B0F2E]" />
                     </div>
                     <p className="text-xs text-gray-500">Trésorerie</p>
-                    <p className="text-lg font-bold text-blue-600 mt-0.5">{tresorerie.totalBankMUR !== 0 ? fmt(tresorerie.totalBankMUR) : <span className="text-sm text-gray-400 font-normal">Pas de données</span>}</p>
+                    <p className="text-lg font-bold text-[#0B0F2E] mt-0.5">{tresorerie.totalBankMUR !== 0 ? fmt(tresorerie.totalBankMUR) : <span className="text-sm text-gray-400 font-normal">Pas de données</span>}</p>
                     {tresorerie.comptes.length > 0 && (
                       <div className="mt-1 space-y-0.5">
                         {tresorerie.comptes.slice(0, 3).map((c, i) => (
@@ -410,9 +380,9 @@ export default function TableauDeBord() {
                     <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
                     <Tooltip formatter={(v: number) => fmt(v)} />
                     <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Bar dataKey="CA" fill="#16a34a" radius={[3, 3, 0, 0]} />
-                    <Bar dataKey="Dépenses" fill="#ef4444" radius={[3, 3, 0, 0]} />
-                    <Bar dataKey="Résultat" fill="#3b82f6" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="CA" fill="#D4AF37" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="Dépenses" fill="#9F1239" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="Résultat" fill="#0B0F2E" radius={[3, 3, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -425,8 +395,8 @@ export default function TableauDeBord() {
               <Bell className="w-4 h-4" /> Alertes & Rappels
             </h2>
             {alertes.length === 0 ? (
-              <Card className="border-green-200 bg-green-50">
-                <CardContent className="p-4 text-center text-sm text-green-700">
+              <Card className="border-[#0F766E]/30 bg-[#0F766E]/5">
+                <CardContent className="p-4 text-center text-sm text-[#0F766E]">
                   Aucune alerte — tout est en ordre
                 </CardContent>
               </Card>
@@ -439,10 +409,10 @@ export default function TableauDeBord() {
                   })
                   .slice(0, 5)
                   .map(a => {
-                    const borderColor = a.niveau === 'danger' ? 'border-l-red-500' : a.niveau === 'warning' ? 'border-l-orange-400' : 'border-l-blue-400'
-                    const bgColor = a.niveau === 'danger' ? 'bg-red-50/50' : a.niveau === 'warning' ? 'bg-orange-50/50' : 'bg-blue-50/50'
+                    const borderColor = a.niveau === 'danger' ? 'border-l-[#9F1239]' : a.niveau === 'warning' ? 'border-l-[#D4AF37]' : 'border-l-[#0B0F2E]'
+                    const bgColor = a.niveau === 'danger' ? 'bg-[#9F1239]/5' : a.niveau === 'warning' ? 'bg-[#D4AF37]/5' : 'bg-[#0B0F2E]/5'
                     const Icon = a.niveau === 'danger' ? AlertTriangle : a.niveau === 'warning' ? Bell : Info
-                    const iconColor = a.niveau === 'danger' ? 'text-red-500' : a.niveau === 'warning' ? 'text-orange-500' : 'text-blue-500'
+                    const iconColor = a.niveau === 'danger' ? 'text-[#9F1239]' : a.niveau === 'warning' ? 'text-[#A88925]' : 'text-[#0B0F2E]'
                     return (
                       <Card key={a.id} className={`border-l-4 ${borderColor} ${bgColor}`}>
                         <CardContent className="p-3 flex items-center justify-between">
@@ -486,7 +456,7 @@ export default function TableauDeBord() {
                 </Link>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {societes.map(s => (
+                {societes.map((s: any) => (
                   <Card key={s.id} className="border-l-4 border-l-[#0B0F2E]">
                     <CardContent className="p-4 flex items-center justify-between">
                       <div>

@@ -10,13 +10,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { FileCheck2, Plus, Lock, CheckCircle2, AlertCircle, Loader2, Trash2, Calendar } from "lucide-react"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 
 function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 function formatDate(d: string) { return d ? new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" }) : "—" }
 
 export default function RapprochementMensuelPage() {
-  const [societes, setSocietes] = useState<any[]>([])
-  const [societeId, setSocieteId] = useState<string>("")
+  const { societeId } = useSocieteActive()
   const [comptesBancaires, setComptesBancaires] = useState<any[]>([])
   const [compteId, setCompteId] = useState<string>("")
   const [periodEnd, setPeriodEnd] = useState<string>(new Date().toISOString().slice(0, 10))
@@ -27,19 +27,6 @@ export default function RapprochementMensuelPage() {
   const [loading, setLoading] = useState(false)
   const [showAddItem, setShowAddItem] = useState<"bank" | "compta" | null>(null)
   const [newItem, setNewItem] = useState({ nature: "", amount: "", category: "", date_operation: "", description: "" })
-
-  // Sociétés
-  useEffect(() => {
-    Promise.all([
-      fetch("/api/client/societes").then(r => r.json()).catch(() => ({ societes: [] })),
-      fetch("/api/comptable/societes").then(r => r.json()).catch(() => ({ societes: [] })),
-    ]).then(([d1, d2]) => {
-      const all = [...(d1.societes || []), ...(d2.societes || [])]
-      const unique = Array.from(new Map(all.map((s: any) => [s.id, s])).values())
-      setSocietes(unique)
-      if (unique.length > 0) setSocieteId(unique[0].id)
-    })
-  }, [])
 
   // Comptes bancaires
   useEffect(() => {
@@ -158,15 +145,8 @@ export default function RapprochementMensuelPage() {
         <p className="text-sm text-gray-500">Tableau officiel deux colonnes avec workflow validation DAF</p>
       </div>
 
-      {/* Société / Compte */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <div>
-          <Label>Société</Label>
-          <Select value={societeId} onValueChange={setSocieteId}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>{societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent>
-          </Select>
-        </div>
+      {/* Compte */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
           <Label>Compte bancaire</Label>
           <Select value={compteId} onValueChange={setCompteId}>

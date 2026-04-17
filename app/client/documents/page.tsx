@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useProfile } from "@/hooks/use-profile"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -18,7 +19,7 @@ import {
 import { Input } from "@/components/ui/input"
 import {
   Upload, FolderOpen, Loader2, FileText, CheckCircle, Search, X,
-  Clock, Download, ChevronRight, Lock, AlertTriangle, Building2, RefreshCw, Camera, Pencil,
+  Clock, Download, ChevronRight, Lock, AlertTriangle, Building2, RefreshCw, Camera, Pencil, Trash2,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
@@ -124,15 +125,54 @@ function getDocsForFolder(docs: Document[], folderKey: string): Document[] {
 
 export default function ClientDocumentsPage() {
   const { profile } = useProfile()
+  const { societeId, societe, societes: providerSocietes, switchSociete } = useSocieteActive()
+  // `societes` reconstruit au format { id: string, nom: string } attendu par les helpers
+  // de cette page (normalizeSocieteName, getSocieteBadgeStyle, Select de reassignment).
+  // Nb: dans ce shape, `id` == `societe_id` (pas dossier_id — l'ancien mapping dossier
+  // →société n'est plus nécessaire car l'upload route résout le dossier via societe_id).
+  const societes = providerSocietes
+    .filter((s: any) => !s.nom?.endsWith("— Personnel") && !s.nom?.endsWith("— En attente"))
+    .map((s: any) => ({ id: s.id, nom: s.nom }))
   const [documents, setDocuments] = useState<Document[]>([])
   const [loading, setLoading] = useState(true)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return
+    if (!confirm(`Supprimer ${ids.length} document(s) sélectionné(s) ?\n\nCela supprime les fichiers du storage ET toutes les écritures/factures/relevés liés. Action irréversible.`)) return
+    setBulkDeleting(true)
+    try {
+      const res = await fetch('/api/documents/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      })
+      const data = await res.json()
+      if (!res.ok) { alert(data.error || `Erreur HTTP ${res.status}`); return }
+      setDocuments(prev => prev.filter(d => !data.deleted?.includes(d.id)))
+      setSelectedIds(new Set())
+      if (data.failed_count > 0) alert(`${data.deleted_count} supprimés, ${data.failed_count} échecs.`)
+    } catch {
+      alert('Erreur de connexion')
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
   const [uploading, setUploading] = useState(false)
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [dragActive, setDragActive] = useState(false)
-  const [societeId, setSocieteId] = useState<string | null>(null)
-  const [societes, setSocietes] = useState<{ id: string; nom: string; societe_id: string }[]>([])
-  const [selectedUploadSociete, setSelectedUploadSociete] = useState<string>("auto")
   const [selectedFolder, setSelectedFolder] = useState("recent")
   const [docSearch, setDocSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
@@ -152,8 +192,14 @@ export default function ClientDocumentsPage() {
   const [confirmSocDoc, setConfirmSocDoc] = useState<{ id: string; filename: string; detected: string | null } | null>(null)
   const [confirmSocId, setConfirmSocId] = useState("")
   const [confirmSocSaving, setConfirmSocSaving] = useState(false)
-  // Société filter
-  const [filterSociete, setFilterSociete] = useState("all")
+  // OCR mismatch dialog: document uploadé sur la société active mais l'OCR
+  // suggère une autre société accessible. L'utilisateur choisit:
+  // (a) switch active société + réassigner, (b) garder, (c) annuler (= garder).
+  const [mismatchDoc, setMismatchDoc] = useState<{
+    id: string; filename: string; detectedName: string;
+    targetSocieteId: string; targetSocieteNom: string;
+  } | null>(null)
+  const [mismatchSaving, setMismatchSaving] = useState(false)
   // Type document filter
   const [typeFilter, setTypeFilter] = useState("all")
   // "Sans facture" toggle — show only docs needing reprocess or invoices without linked facture
@@ -181,41 +227,6 @@ export default function ClientDocumentsPage() {
   useEffect(() => {
     async function init() {
       try {
-        // Get all sociétés for this client
-        const dosRes = await fetch("/api/admin/dossiers")
-        const dosData = await dosRes.json()
-        const myDossiers = (dosData.dossiers || []).filter((d: any) => d.client_id === profile?.id)
-
-        // Load société names from multiple sources
-        const socRes = await fetch("/api/admin/societes")
-        const socData = await socRes.json()
-        const allSocietes = (socData.societes || [])
-
-        if (myDossiers.length > 0) {
-          setSocieteId(myDossiers[0].societe_id)
-          const linked = myDossiers
-            .map((d: any) => {
-              const soc = allSocietes.find((s: any) => s.id === d.societe_id)
-              return soc ? { id: d.id, nom: soc.nom, societe_id: d.societe_id } : null
-            })
-            .filter(Boolean)
-            .filter((s: any) => !s.nom.endsWith("— Personnel") && !s.nom.endsWith("— En attente"))
-          setSocietes(linked)
-        }
-
-        // Fallback for assistant/user roles: fetch from user_societes via client API
-        if (!myDossiers.length || societes.length === 0) {
-          const clientSocRes = await fetch("/api/client/societes")
-          const clientSocData = await clientSocRes.json()
-          const clientSocs = (clientSocData.societes || [])
-            .filter((s: any) => !s.nom?.endsWith("— Personnel") && !s.nom?.endsWith("— En attente"))
-            .map((s: any) => ({ id: s.id, nom: s.nom, societe_id: s.id }))
-          if (clientSocs.length > 0) {
-            setSocietes(clientSocs)
-            if (!societeId) setSocieteId(clientSocs[0].societe_id)
-          }
-        }
-
         await fetchDocuments()
       } catch {
         console.error("Failed to init")
@@ -233,44 +244,30 @@ export default function ClientDocumentsPage() {
     return () => clearInterval(interval)
   }, [profile?.id, fetchDocuments])
 
-  const autoProvision = async (): Promise<string | null> => {
-    if (!profile) return null
-    try {
-      const socRes = await fetch("/api/admin/societes", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nom: `${profile.full_name || profile.email} — Personnel`, brn: null, numero_tva_mra: null, statut_tva: false }),
-      })
-      const socData = await socRes.json()
-      if (!socRes.ok || !socData.societe?.id) return null
-
-      await fetch("/api/admin/dossiers", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ client_id: profile.id, societe_id: socData.societe.id, comptable_id: null }),
-      })
-
-      setSocieteId(socData.societe.id)
-      return socData.societe.id
-    } catch {
-      return null
-    }
+  // Cherche, parmi les sociétés accessibles, celle dont le nom matche le texte
+  // détecté par OCR. Retourne null si aucun match (ou si la société détectée
+  // est celle actuellement active).
+  const findMatchingAccessibleSociete = (detected: string | null): { id: string; nom: string } | null => {
+    if (!detected || detected === "INCONNU") return null
+    const low = detected.toLowerCase()
+    const match = societes.find(s =>
+      s.nom.toLowerCase().includes(low) || low.includes(s.nom.toLowerCase())
+    )
+    if (!match) return null
+    if (match.id === societeId) return null // c'est la société active, pas d'avertissement
+    return match
   }
 
   const handleUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return
 
-    // Determine which société to use
-    let uploadSocieteId = selectedUploadSociete !== "auto"
-      ? selectedUploadSociete
-      : societeId
-
-    if (!uploadSocieteId) {
-      uploadSocieteId = await autoProvision()
-      if (!uploadSocieteId) {
-        setUploadError("Impossible de créer votre espace personnel. Contactez votre comptable.")
-        setTimeout(() => setUploadError(null), 5000)
-        return
-      }
+    // En mode mono-société: l'upload cible TOUJOURS la société active.
+    if (!societeId) {
+      setUploadError("Aucune société active. Retournez à /client/select-societe.")
+      setTimeout(() => setUploadError(null), 5000)
+      return
     }
+    const uploadSocieteId = societeId
 
     setUploading(true)
     setUploadSuccess(null)
@@ -286,32 +283,30 @@ export default function ClientDocumentsPage() {
         const data = await res.json()
         if (res.ok && data.document) {
           const doc = data.document
-          const detectedSociete = doc.societe_detectee
-          const isAutoMode = selectedUploadSociete === "auto"
+          const detectedSociete: string | null = doc.societe_detectee
 
           // Handle needs_confirmation response
           if (data.needs_confirmation) {
             setConfirmSocDoc({ id: doc.id, filename: file.name, detected: data.societe_detectee })
-            setConfirmSocId(societes.length > 0 ? societes[0].societe_id : "")
+            setConfirmSocId(societes.length > 0 ? societes[0].id : "")
             setUploadSuccess(`${file.name} envoyé — veuillez confirmer la société.`)
           } else if (doc.statut === "traite" && doc.type_document) {
             const folderLabel = FOLDERS.find(f => f.key === doc.type_document)?.label || doc.type_document
 
-            // Check if AI detected a société that doesn't match any known ones
-            if (isAutoMode && detectedSociete && detectedSociete !== "INCONNU" && societes.length > 1) {
-              const matched = societes.find(s =>
-                s.nom.toLowerCase().includes(detectedSociete.toLowerCase()) ||
-                detectedSociete.toLowerCase().includes(s.nom.toLowerCase())
-              )
-              if (!matched) {
-                // Show reassignment dialog
-                setReassignDoc({ id: doc.id, nom_fichier: file.name })
-                setUploadSuccess(`${file.name} classé dans "${folderLabel}". Société détectée : "${detectedSociete}" — veuillez confirmer la société.`)
-              } else {
-                setUploadSuccess(`${file.name} classé dans "${folderLabel}" pour ${matched.nom}`)
-              }
+            // Filet anti-mauvais-rattachement: OCR a détecté une AUTRE société
+            // accessible → on propose à l'utilisateur de réassigner.
+            const mismatch = findMatchingAccessibleSociete(detectedSociete)
+            if (mismatch) {
+              setMismatchDoc({
+                id: doc.id,
+                filename: file.name,
+                detectedName: detectedSociete || "",
+                targetSocieteId: mismatch.id,
+                targetSocieteNom: mismatch.nom,
+              })
+              setUploadSuccess(`${file.name} classé dans "${folderLabel}" — OCR suggère ${mismatch.nom}.`)
             } else {
-              setUploadSuccess(`${file.name} analysé et classé dans "${folderLabel}" !`)
+              setUploadSuccess(`${file.name} classé dans "${folderLabel}" !`)
             }
           // Auto-reanalyze "autre" documents with low confidence
           if (doc.type_document === "autre") {
@@ -354,31 +349,20 @@ export default function ClientDocumentsPage() {
   const handleReassign = async () => {
     if (!reassignDoc || !reassignSocieteId) return
     try {
-      // Find the dossier_id for the target société + client
-      const dosRes = await fetch("/api/admin/dossiers")
-      const dosData = await dosRes.json()
-      const targetDossier = (dosData.dossiers || []).find(
-        (d: any) => d.societe_id === reassignSocieteId && d.client_id === profile?.id
-      )
-      if (targetDossier) {
-        // Call PATCH /api/documents/[id] to update dossier_id
-        const patchRes = await fetch(`/api/documents/${reassignDoc.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            societe_id: reassignSocieteId,
-            dossier_id: targetDossier.id,
-            corrige_manuellement: true,
-          }),
-        })
-        if (patchRes.ok) {
-          setUploadSuccess(`Document réassigné avec succès à la société sélectionnée.`)
-        } else {
-          const errData = await patchRes.json()
-          setUploadError(errData.error || "Erreur lors de la réassignation")
-        }
+      // PATCH /api/documents/[id] résout lui-même le dossier depuis societe_id.
+      const patchRes = await fetch(`/api/documents/${reassignDoc.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          societe_id: reassignSocieteId,
+          corrige_manuellement: true,
+        }),
+      })
+      if (patchRes.ok) {
+        setUploadSuccess(`Document réassigné avec succès à la société sélectionnée.`)
       } else {
-        setUploadError("Dossier introuvable pour cette société")
+        const errData = await patchRes.json()
+        setUploadError(errData.error || "Erreur lors de la réassignation")
       }
     } catch {
       setUploadError("Erreur lors de la réassignation")
@@ -402,19 +386,9 @@ export default function ClientDocumentsPage() {
 
   const currentFolder = FOLDERS.find(f => f.key === selectedFolder) || FOLDERS[0]
 
-  // Filter by selected société if not "auto"
-  const filteredDocuments = selectedUploadSociete === "auto"
-    ? documents
-    : documents.filter(d => {
-        // Match by societe_detectee or by dossier's société
-        const matchSociete = d.societe_detectee && societes.some(s =>
-          s.societe_id === selectedUploadSociete &&
-          (d.societe_detectee?.toLowerCase().includes(s.nom.toLowerCase().split(' ')[0]) || s.nom.toLowerCase().includes(d.societe_detectee?.toLowerCase() || ''))
-        )
-        // Also check dossier_id belongs to the selected société
-        const matchDossier = societes.some(s => s.societe_id === selectedUploadSociete && s.id === (d as any).dossier_id)
-        return matchSociete || matchDossier || !d.societe_detectee
-      })
+  // En mode mono-société: `/api/client/documents` renvoie déjà uniquement les
+  // documents accessibles au caller. Pas de filtrage par UI supplémentaire.
+  const filteredDocuments = documents
 
   // Helper — does this doc need reprocessing (sans facture)?
   const docNeedsReprocess = (d: Document) => {
@@ -437,14 +411,6 @@ export default function ClientDocumentsPage() {
     if (statusFilter !== "all" && d.statut !== statusFilter) return false
     if (typeFilter !== "all" && d.type_document !== typeFilter) return false
     if (sansFactureOnly && !docNeedsReprocess(d)) return false
-    if (filterSociete !== "all") {
-      const socName = societes.find(s => s.societe_id === filterSociete)?.nom
-      if (socName && d.societe_detectee) {
-        if (!d.societe_detectee.toLowerCase().includes(socName.toLowerCase().split(' ')[0])) return false
-      } else if (!d.societe_detectee) {
-        return false
-      }
-    }
     return true
   })
   const currentDocs = allCurrentDocs.slice(0, visibleCount)
@@ -460,21 +426,16 @@ export default function ClientDocumentsPage() {
       title="Mes Documents"
       subtitle="Déposez vos factures, reçus et relevés — l'OCR extrait les données et les classe automatiquement par société et par nature."
     >
-      {/* Société selector — optional */}
-      {societes.length > 0 && (
+      {/* Bandeau info: les documents seront uploadés sur la société active */}
+      {societe && (
         <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg border bg-muted/30">
           <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
-          <span className="text-sm font-medium" style={{ color: NAVY }}>Société (optionnel)</span>
-          <Select value={selectedUploadSociete} onValueChange={setSelectedUploadSociete}>
-            <SelectTrigger className="w-full sm:w-[280px] h-9"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="auto">Toutes les sociétés — détection auto</SelectItem>
-              {societes.map(s => <SelectItem key={s.societe_id} value={s.societe_id}>{s.nom}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          {selectedUploadSociete === "auto" && (
-            <span className="text-xs text-muted-foreground">Laissez vide pour détection automatique</span>
-          )}
+          <span className="text-sm" style={{ color: NAVY }}>
+            Upload sur : <strong>{societe.nom}</strong>
+          </span>
+          <span className="text-xs text-muted-foreground">
+            Si un document concerne une autre société, changez de société dans la barre latérale avant d&apos;uploader.
+          </span>
         </div>
       )}
 
@@ -520,7 +481,7 @@ export default function ClientDocumentsPage() {
 
       {/* Document counter */}
       <div className="flex items-center gap-3 text-xs text-gray-400 px-2">
-        <span>{filteredDocuments.length} document(s) {selectedUploadSociete !== "auto" ? "(filtré par société)" : "(toutes sociétés)"}</span>
+        <span>{filteredDocuments.length} document(s)</span>
         {unassignedCount > 0 && (
           <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-xs">{unassignedCount} non assigné{unassignedCount > 1 ? "s" : ""}</Badge>
         )}
@@ -570,6 +531,30 @@ export default function ClientDocumentsPage() {
       </div>
 
       {/* Selected folder content */}
+      {/* Bulk actions toolbar — affichée uniquement quand ≥1 ligne sélectionnée */}
+      {selectedIds.size > 0 && (
+        <div className="sticky top-0 z-20 flex items-center justify-between gap-3 rounded-lg border border-[#9F1239]/30 bg-[#9F1239]/5 px-4 py-3 shadow-sm mb-3">
+          <div className="text-sm">
+            <span className="font-semibold text-[#0B0F2E]">{selectedIds.size}</span>
+            <span className="text-gray-600"> document{selectedIds.size > 1 ? 's' : ''} sélectionné{selectedIds.size > 1 ? 's' : ''}</span>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())} disabled={bulkDeleting}>
+              Tout désélectionner
+            </Button>
+            <Button
+              size="sm"
+              className="gap-2 bg-[#9F1239] hover:bg-[#9F1239]/90 text-white"
+              onClick={handleBulkDelete}
+              disabled={bulkDeleting}
+            >
+              {bulkDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              Supprimer {selectedIds.size}
+            </Button>
+          </div>
+        </div>
+      )}
+
       <Card>
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
@@ -610,15 +595,6 @@ export default function ClientDocumentsPage() {
               <SelectItem value="autre">Autre</SelectItem>
             </SelectContent>
           </Select>
-          {societes.length > 0 && (
-            <Select value={filterSociete} onValueChange={setFilterSociete}>
-              <SelectTrigger className="w-[180px] h-8 text-sm"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {societes.map(s => <SelectItem key={s.societe_id} value={s.societe_id}>{s.nom}</SelectItem>)}
-                <SelectItem value="all">Toutes sociétés</SelectItem>
-              </SelectContent>
-            </Select>
-          )}
           <Button
             variant={sansFactureOnly ? "default" : "outline"}
             size="sm"
@@ -664,8 +640,8 @@ export default function ClientDocumentsPage() {
                 : `Tout retraiter (${allCurrentDocs.length})`}
             </Button>
           )}
-          {(docSearch || statusFilter !== "all" || typeFilter !== "all" || filterSociete !== "all" || sansFactureOnly) && (
-            <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setDocSearch(""); setStatusFilter("all"); setTypeFilter("all"); setFilterSociete("all"); setSansFactureOnly(false) }}>Effacer</Button>
+          {(docSearch || statusFilter !== "all" || typeFilter !== "all" || sansFactureOnly) && (
+            <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setDocSearch(""); setStatusFilter("all"); setTypeFilter("all"); setSansFactureOnly(false) }}>Effacer</Button>
           )}
         </div>
         <CardContent className="p-0">
@@ -673,6 +649,18 @@ export default function ClientDocumentsPage() {
           <Table className="min-w-[900px]">
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 cursor-pointer"
+                    title="Tout (dé)sélectionner"
+                    checked={currentDocs.length > 0 && currentDocs.every(d => selectedIds.has(d.id))}
+                    onChange={(e) => {
+                      if (e.target.checked) setSelectedIds(new Set(currentDocs.map(d => d.id)))
+                      else setSelectedIds(new Set())
+                    }}
+                  />
+                </TableHead>
                 <TableHead>Fichier</TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead>Société</TableHead>
@@ -686,7 +674,15 @@ export default function ClientDocumentsPage() {
               {currentDocs.map((doc) => {
                 const confiance = doc.confiance_type ?? doc.n8n_result?.routing?.confiance_type ?? null
                 return (
-                <TableRow key={doc.id}>
+                <TableRow key={doc.id} className={selectedIds.has(doc.id) ? "bg-[#D4AF37]/5" : undefined}>
+                  <TableCell>
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 cursor-pointer"
+                      checked={selectedIds.has(doc.id)}
+                      onChange={() => toggleSelect(doc.id)}
+                    />
+                  </TableCell>
                   <TableCell className="flex items-center gap-2">
                     <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
                     <Link
@@ -704,7 +700,7 @@ export default function ClientDocumentsPage() {
                       <div className="flex items-center gap-1">
                         <Select value={reassigningSocValue} onValueChange={async (v) => {
                           setReassigningSocValue(v)
-                          const reassignSocName = societes.find(s => s.societe_id === v)?.nom || null
+                          const reassignSocName = societes.find(s => s.id === v)?.nom || null
                           try {
                             await fetch(`/api/documents/${doc.id}`, {
                               method: "PATCH", headers: { "Content-Type": "application/json" },
@@ -716,7 +712,7 @@ export default function ClientDocumentsPage() {
                         }}>
                           <SelectTrigger className="h-7 text-xs w-[160px]"><SelectValue placeholder="Choisir..." /></SelectTrigger>
                           <SelectContent>
-                            {societes.map(s => <SelectItem key={s.societe_id} value={s.societe_id}>{s.nom}</SelectItem>)}
+                            {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
                           </SelectContent>
                         </Select>
                         <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setReassigningSocDocId(null)}>
@@ -813,7 +809,7 @@ export default function ClientDocumentsPage() {
               })}
               {currentDocs.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-12">
+                  <TableCell colSpan={8} className="text-center py-12">
                     <FileText className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
                     <p className="text-muted-foreground">Aucun document dans ce dossier.</p>
                   </TableCell>
@@ -852,7 +848,7 @@ export default function ClientDocumentsPage() {
             <Select value={confirmSocId} onValueChange={setConfirmSocId}>
               <SelectTrigger><SelectValue placeholder="Sélectionner la société..." /></SelectTrigger>
               <SelectContent>
-                {societes.map(s => <SelectItem key={s.societe_id} value={s.societe_id}>{s.nom}</SelectItem>)}
+                {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -866,7 +862,7 @@ export default function ClientDocumentsPage() {
                 setConfirmSocSaving(true)
                 try {
                   // Reassign société + update societe_detectee to the real name
-                  const confirmedSocName = societes.find(s => s.societe_id === confirmSocId)?.nom || null
+                  const confirmedSocName = societes.find(s => s.id === confirmSocId)?.nom || null
                   await fetch(`/api/documents/${confirmSocDoc.id}`, {
                     method: "PATCH", headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
@@ -905,7 +901,7 @@ export default function ClientDocumentsPage() {
             <Select value={reassignSocieteId} onValueChange={setReassignSocieteId}>
               <SelectTrigger><SelectValue placeholder="Sélectionner une société" /></SelectTrigger>
               <SelectContent>
-                {societes.map(s => <SelectItem key={s.societe_id} value={s.societe_id}>{s.nom}</SelectItem>)}
+                {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -988,6 +984,80 @@ export default function ClientDocumentsPage() {
               }}
             >
               Retraiter
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* OCR mismatch dialog — le document est uploadé sur la société active
+          mais l'OCR suggère une autre société accessible. */}
+      <Dialog open={!!mismatchDoc} onOpenChange={(o) => { if (!o) setMismatchDoc(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>OCR suggère une autre société</DialogTitle>
+            <DialogDescription>
+              Le document <strong>{mismatchDoc?.filename}</strong> vient d&apos;être uploadé sur <strong>{societe?.nom}</strong>,
+              mais l&apos;analyse OCR a détecté <strong>{mismatchDoc?.detectedName}</strong> qui correspond à la société <strong>{mismatchDoc?.targetSocieteNom}</strong>.
+              Que souhaitez-vous faire ?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex flex-col gap-2 sm:flex-col sm:space-x-0">
+            <Button
+              style={{ backgroundColor: GOLD, color: NAVY }}
+              disabled={mismatchSaving}
+              onClick={async () => {
+                if (!mismatchDoc) return
+                setMismatchSaving(true)
+                try {
+                  await fetch(`/api/documents/${mismatchDoc.id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      societe_id: mismatchDoc.targetSocieteId,
+                      societe_detectee: mismatchDoc.targetSocieteNom,
+                      corrige_manuellement: true,
+                    }),
+                  })
+                  // Switch active société + navigate refresh
+                  switchSociete(mismatchDoc.targetSocieteId)
+                  setUploadSuccess(`Document réassigné sur ${mismatchDoc.targetSocieteNom}. Société active changée.`)
+                } catch {
+                  setUploadError("Erreur lors de la réassignation.")
+                } finally {
+                  setMismatchSaving(false)
+                  setMismatchDoc(null)
+                  await fetchDocuments()
+                }
+              }}
+            >
+              Changer de société et déplacer le document
+            </Button>
+            <Button
+              variant="outline"
+              disabled={mismatchSaving}
+              onClick={() => { setMismatchDoc(null) }}
+            >
+              Garder sur {societe?.nom}
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={mismatchSaving}
+              onClick={async () => {
+                if (!mismatchDoc) return
+                setMismatchSaving(true)
+                try {
+                  await fetch(`/api/documents/${mismatchDoc.id}`, { method: "DELETE" })
+                  setUploadSuccess(`Document supprimé.`)
+                } catch { /* silent */ }
+                finally {
+                  setMismatchSaving(false)
+                  setMismatchDoc(null)
+                  await fetchDocuments()
+                }
+              }}
+              className="text-red-600 hover:text-red-700"
+            >
+              Annuler (supprimer le document)
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -13,6 +13,8 @@ import {
   AlertTriangle, Banknote, Users, DollarSign
 } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { RequireRole, NON_CLIENT_USER_ROLES } from "@/components/client/RequireRole"
 import { calculerPRGF, calculerNIT, PARAMS_MRA_DEFAUT } from "@/lib/rh/paie"
 
 function fmt(n: number) {
@@ -79,8 +81,7 @@ function getPeriodeLabel(periode: string): string {
 
 export default function RapportsStatutairesPage() {
   const { profile, loading: profileLoading } = useProfile()
-  const [societes, setSocietes] = useState<Societe[]>([])
-  const [selectedSociete, setSelectedSociete] = useState("")
+  const { societeId } = useSocieteActive()
   const [selectedPeriode, setSelectedPeriode] = useState(() => {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
@@ -90,28 +91,14 @@ export default function RapportsStatutairesPage() {
   const [fetching, setFetching] = useState(true)
   const [activeTab, setActiveTab] = useState("paye")
 
-  // Fetch societes
-  useEffect(() => {
-    fetch("/api/client/societes")
-      .then((r) => r.json())
-      .then((json) => {
-        const list = json.societes || json.data || []
-        setSocietes(list)
-        if (list.length > 0 && !selectedSociete) {
-          setSelectedSociete(list[0].id)
-        }
-      })
-      .catch(() => setSocietes([]))
-  }, [])
-
   // Fetch data
   const fetchData = useCallback(async () => {
-    if (!selectedSociete) return
+    if (!societeId) return
     setFetching(true)
     try {
       const [bulletinsRes, employesRes] = await Promise.all([
-        fetch(`/api/rh/paie?societe_id=${selectedSociete}&periode=${selectedPeriode}`),
-        fetch(`/api/rh/employes?societe_id=${selectedSociete}`),
+        fetch(`/api/rh/paie?societe_id=${societeId}&periode=${selectedPeriode}`),
+        fetch(`/api/rh/employes?societe_id=${societeId}`),
       ])
       const bulletinsJson = await bulletinsRes.json()
       const employesJson = await employesRes.json()
@@ -123,7 +110,7 @@ export default function RapportsStatutairesPage() {
     } finally {
       setFetching(false)
     }
-  }, [selectedSociete, selectedPeriode])
+  }, [societeId, selectedPeriode])
 
   useEffect(() => {
     fetchData()
@@ -297,15 +284,7 @@ export default function RapportsStatutairesPage() {
   }
 
   if (profile?.role === "client_user") {
-    return (
-      <div className="p-6">
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground">Acces non autorise.</p>
-          </CardContent>
-        </Card>
-      </div>
-    )
+    return <RequireRole roles={NON_CLIENT_USER_ROLES}>{null}</RequireRole>
   }
 
   return (
@@ -321,21 +300,6 @@ export default function RapportsStatutairesPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {societes.length > 0 && (
-            <div className="flex items-center gap-2">
-              <Building2 className="h-4 w-4 text-muted-foreground" />
-              <Select value={selectedSociete} onValueChange={setSelectedSociete}>
-                <SelectTrigger className="w-[220px] h-9">
-                  <SelectValue placeholder="Selectionner une societe" />
-                </SelectTrigger>
-                <SelectContent>
-                  {societes.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
           <Input
             type="month"
             value={selectedPeriode}

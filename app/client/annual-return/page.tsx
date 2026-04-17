@@ -13,6 +13,8 @@ import {
   DollarSign, BarChart3, CheckCircle, AlertTriangle, AlertCircle, Upload, FileText
 } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { RequireRole, NON_CLIENT_USER_ROLES } from "@/components/client/RequireRole"
 import Link from "next/link"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
@@ -139,8 +141,7 @@ const DEFAULT_DATA: AnnualReturnData = {
 
 export default function AnnualReturnPage() {
   const { profile, loading: profileLoading } = useProfile()
-  const [societes, setSocietes] = useState<Societe[]>([])
-  const [selectedSociete, setSelectedSociete] = useState<string>("")
+  const { societeId, societe, societes } = useSocieteActive()
   const [annee, setAnnee] = useState<number>(new Date().getFullYear())
   const [data, setData] = useState<AnnualReturnData>({ ...DEFAULT_DATA })
   const [fetching, setFetching] = useState(true)
@@ -157,7 +158,7 @@ export default function AnnualReturnPage() {
     try {
       const formData = new FormData()
       formData.append("file", file)
-      if (selectedSociete) formData.append("societe_id", selectedSociete)
+      if (societeId) formData.append("societe_id", societeId)
       formData.append("hint", "Annual Return - Companies Act - Registrar of Companies Mauritius")
       const res = await fetch("/api/documents/upload", { method: "POST", body: formData })
       if (res.ok) {
@@ -209,23 +210,9 @@ export default function AnnualReturnPage() {
     }
   }
 
-  // Fetch societes
-  useEffect(() => {
-    fetch("/api/client/societes")
-      .then(r => r.json())
-      .then(json => {
-        const list = json.societes || []
-        setSocietes(list)
-        if (list.length === 1) setSelectedSociete(list[0].id)
-        else if (list.length > 1) setSelectedSociete(list[0].id)
-      })
-      .catch(() => setSocietes([]))
-      .finally(() => setFetching(false))
-  }, [])
-
   // Fetch data when societe is selected
   const fetchAllData = useCallback(async () => {
-    if (!selectedSociete) return
+    if (!societeId) return
     setFetching(true)
     setError(null)
 
@@ -235,12 +222,12 @@ export default function AnnualReturnPage() {
       const prevExercice = `${annee - 2}-${annee - 1}`
 
       const [arRes, dirRes, shRes, finRes, prevFinRes, prevArRes] = await Promise.all([
-        fetch(`/api/comptable/roc/annual-return?societe_id=${selectedSociete}&annee=${annee}`).then(r => r.json()),
-        fetch(`/api/comptable/roc/administrateurs?societe_id=${selectedSociete}&actif=true`).then(r => r.json()),
-        fetch(`/api/comptable/roc/actionnaires?societe_id=${selectedSociete}&actif=true`).then(r => r.json()),
-        fetch(`/api/client/financial?societe_id=${selectedSociete}&exercice=${exercice}`).then(r => r.json()).catch(() => ({ financial: null })),
-        fetch(`/api/client/financial?societe_id=${selectedSociete}&exercice=${prevExercice}`).then(r => r.json()).catch(() => ({ financial: null })),
-        fetch(`/api/comptable/roc/annual-return?societe_id=${selectedSociete}&annee=${annee - 1}`).then(r => r.json()).catch(() => ({})),
+        fetch(`/api/comptable/roc/annual-return?societe_id=${societeId}&annee=${annee}`).then(r => r.json()),
+        fetch(`/api/comptable/roc/administrateurs?societe_id=${societeId}&actif=true`).then(r => r.json()),
+        fetch(`/api/comptable/roc/actionnaires?societe_id=${societeId}&actif=true`).then(r => r.json()),
+        fetch(`/api/client/financial?societe_id=${societeId}&exercice=${exercice}`).then(r => r.json()).catch(() => ({ financial: null })),
+        fetch(`/api/client/financial?societe_id=${societeId}&exercice=${prevExercice}`).then(r => r.json()).catch(() => ({ financial: null })),
+        fetch(`/api/comptable/roc/annual-return?societe_id=${societeId}&annee=${annee - 1}`).then(r => r.json()).catch(() => ({})),
       ])
 
       // Set prior year financials for comparative display
@@ -258,7 +245,7 @@ export default function AnnualReturnPage() {
         setPriorYear(null)
       }
 
-      const soc = societes.find(s => s.id === selectedSociete)
+      const soc = societe as (typeof societe & { registered_office?: string | null; capital_social?: number | null }) | null
       const ar = arRes.annual_returns?.[0]
       const directors: Director[] = dirRes.administrateurs || []
       const shareholders: Shareholder[] = shRes.actionnaires || []
@@ -332,15 +319,15 @@ export default function AnnualReturnPage() {
     } finally {
       setFetching(false)
     }
-  }, [selectedSociete, annee, societes])
+  }, [societeId, annee, societes])
 
   useEffect(() => {
-    if (selectedSociete) fetchAllData()
-  }, [selectedSociete, annee, fetchAllData])
+    if (societeId) fetchAllData()
+  }, [societeId, annee, fetchAllData])
 
   // Save handler
   const handleSave = async () => {
-    if (!selectedSociete) return
+    if (!societeId) return
     setSaving(true)
     setSaved(false)
     setError(null)
@@ -350,7 +337,7 @@ export default function AnnualReturnPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          societe_id: selectedSociete,
+          societe_id: societeId,
           annee,
           date_agm: data.date_agm || null,
           date_soumission: data.date_annual_return || null,
@@ -441,7 +428,7 @@ export default function AnnualReturnPage() {
   }
 
   // Loading state
-  if (profileLoading || (fetching && societes.length === 0)) {
+  if (profileLoading || (fetching && !societeId)) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="h-8 w-8 animate-spin" style={{ color: GOLD }} />
@@ -451,16 +438,7 @@ export default function AnnualReturnPage() {
 
   // Access control
   if (profile?.role === "client_user") {
-    return (
-      <div className="p-6 flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-        <h1 className="text-xl font-bold" style={{ color: NAVY }}>
-          Vous n&apos;avez pas acc&egrave;s &agrave; cette section
-        </h1>
-        <Link href="/client" className="text-sm underline" style={{ color: GOLD }}>
-          Retour au tableau de bord
-        </Link>
-      </div>
-    )
+    return <RequireRole roles={NON_CLIENT_USER_ROLES}>{null}</RequireRole>
   }
 
   const currentYear = new Date().getFullYear()
@@ -483,18 +461,6 @@ export default function AnnualReturnPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {societes.length > 1 && (
-            <Select value={selectedSociete} onValueChange={setSelectedSociete}>
-              <SelectTrigger className="w-[220px]">
-                <SelectValue placeholder="Choisir une societe" />
-              </SelectTrigger>
-              <SelectContent>
-                {societes.map(s => (
-                  <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
           <Select value={String(annee)} onValueChange={v => setAnnee(Number(v))}>
             <SelectTrigger className="w-[120px]">
               <SelectValue />
@@ -507,7 +473,7 @@ export default function AnnualReturnPage() {
           </Select>
           <Button
             onClick={handleSave}
-            disabled={saving || !selectedSociete}
+            disabled={saving || !societeId}
             style={{ backgroundColor: NAVY }}
             className="text-white hover:opacity-90"
           >

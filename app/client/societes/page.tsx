@@ -302,7 +302,7 @@ function SocieteCard({ societe: s, index, onEdit }: { societe: Societe; index: n
         >
           <QuickLink href={`/client/documents?societe_id=${s.id}`} icon={FileText} label="Documents" accent="#4191FF" />
           <QuickLink href={`/rh/employes?societe_id=${s.id}`} icon={Users} label="Employés" accent="#D4AF37" />
-          <QuickLink href={`/client/mes-comptes?societe_id=${s.id}`} icon={BookOpen} label="Grand Livre" accent="#2ECC8A" />
+          <QuickLink href={`/client/grand-livre?societe_id=${s.id}`} icon={BookOpen} label="Grand Livre" accent="#2ECC8A" />
         </div>
       </div>
     </ClientPanel>

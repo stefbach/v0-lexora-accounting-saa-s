@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/tabs"
 import { Calculator, FileText, Save, Download, Loader2, Upload, CheckCircle, AlertCircle } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -59,10 +60,9 @@ const ISIC_SECTORS = [
 ]
 
 export default function ITForm3Page() {
+  const { societeId, societe } = useSocieteActive()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [societes, setSocietes] = useState<any[]>([])
-  const [selectedSociete, setSelectedSociete] = useState("")
 
   // Company details
   const [companyName, setCompanyName] = useState("")
@@ -137,29 +137,23 @@ export default function ITForm3Page() {
         const exercice = `${yearNum - 1}-${yearNum}`
         const prevExercice = `${yearNum - 2}-${yearNum - 1}`
 
-        const socParam = selectedSociete ? `&societe_id=${selectedSociete}` : ""
-        const [socRes, finRes, prevFinRes, priorFormRes] = await Promise.all([
-          fetch("/api/client/societes", { signal: controller.signal }),
+        if (!societeId) return
+        const socParam = `&societe_id=${societeId}`
+        const [finRes, prevFinRes, priorFormRes] = await Promise.all([
           fetch(`/api/client/financial?exercice=${exercice}${socParam}`, { signal: controller.signal }),
           fetch(`/api/client/financial?exercice=${prevExercice}${socParam}`, { signal: controller.signal }).catch(() => null),
-          selectedSociete ? fetch(`/api/comptable/it-form3?societe_id=${selectedSociete}&exercice=${prevExercice}`, { signal: controller.signal }).catch(() => null) : Promise.resolve(null),
+          fetch(`/api/comptable/it-form3?societe_id=${societeId}&exercice=${prevExercice}`, { signal: controller.signal }).catch(() => null),
         ])
 
         if (controller.signal.aborted) return
 
-        if (socRes.ok) {
-          const socData = await socRes.json()
-          const allSoc = socData.societes || (Array.isArray(socData) ? socData : [socData])
-          setSocietes(allSoc)
-          const soc = selectedSociete ? allSoc.find((s: any) => s.id === selectedSociete) : allSoc[0]
-          if (soc) {
-            if (!selectedSociete) setSelectedSociete(soc.id)
-            setCompanyName(soc.nom || soc.name || "")
-            setBrn(soc.brn || "")
-            setTan(soc.numero_tva_mra || soc.tan || "")
-            setEmail(soc.email || "")
-            setPhone(soc.telephone || soc.phone || "")
-          }
+        const soc = societe as (typeof societe & { name?: string; tan?: string; phone?: string }) | null
+        if (soc) {
+          setCompanyName(soc.nom || soc.name || "")
+          setBrn(soc.brn || "")
+          setTan(soc.numero_tva_mra || soc.tan || "")
+          setEmail(soc.email || "")
+          setPhone(soc.telephone || soc.phone || "")
         }
 
         if (finRes && finRes.ok) {
@@ -209,7 +203,7 @@ export default function ITForm3Page() {
     }
     fetchData()
     return () => { controller.abort(); clearTimeout(safetyTimeout) }
-  }, [assessmentYear, selectedSociete])
+  }, [assessmentYear, societeId])
 
   const handleImportPdf = async (file: File) => {
     setImportingPdf(true)
@@ -282,12 +276,12 @@ export default function ITForm3Page() {
   }
 
   const handleSave = async () => {
-    if (!selectedSociete) { alert("Sélectionnez une société"); return }
+    if (!societeId) { alert("Sélectionnez une société"); return }
     setSaving(true)
     try {
       const yearNum = parseInt(assessmentYear)
       const payload = {
-        societe_id: selectedSociete,
+        societe_id: societeId,
         exercice: `${yearNum - 1}-${yearNum}`,
         companyName,
         brn,
@@ -333,12 +327,6 @@ export default function ITForm3Page() {
       subtitle="Mauritius Revenue Authority — Déclaration d'impôt sur le revenu des sociétés. Exercice juillet-juin, date limite 31 décembre, taux 15%."
       actions={
         <>
-          {societes.length > 1 && (
-            <Select value={selectedSociete} onValueChange={setSelectedSociete}>
-              <SelectTrigger className="w-[220px]"><SelectValue placeholder="Société" /></SelectTrigger>
-              <SelectContent>{societes.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent>
-            </Select>
-          )}
           <Badge className="text-sm px-3 py-1" style={{ backgroundColor: GOLD, color: NAVY }}>
             Assessment Year {assessmentYear}
           </Badge>
@@ -798,7 +786,7 @@ export default function ITForm3Page() {
               const R = ({ l, v }: { l: string; v: string }) => (
                 <View style={s.row}><Text style={s.label}>{l}</Text><Text style={s.val}>{v}</Text></View>
               )
-              const socData = societes.find((x: any) => x.id === selectedSociete)
+              const socData = societe
               const doc = (
                 <Document>
                   <Page size="A4" style={s.page}>

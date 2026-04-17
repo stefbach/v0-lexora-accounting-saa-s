@@ -7,9 +7,10 @@ import { useProfile } from "@/hooks/use-profile"
 import { useState, useEffect } from "react"
 import { t, getLocale } from "@/lib/i18n"
 import { LanguageSwitcher } from "@/components/LanguageSwitcher"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import {
   LayoutDashboard, Building2, FileText, BookOpen, Banknote,
-  Receipt, Calculator, BarChart3, TrendingUp, Target,
+  Receipt, Calculator, BarChart3, Target,
   Users, Clock, CreditCard, Gavel, Scale, Bell,
   Settings, LogOut, ChevronDown, ChevronRight, FileSpreadsheet,
   Globe, Lightbulb, ClipboardList, Download, Upload, Calendar,
@@ -121,7 +122,6 @@ const MENU: MenuSection[] = [
     items: [
       { href: "/client/bilan", label: "Bilan & P&L", labelKey: "fin.balance_sheet", icon: BookOpen },
       { href: "/client/grand-livre", label: "Grand Livre", labelKey: "fin.general_ledger", icon: BookOpen },
-      { href: "/client/previsionnel", label: "Prévisionnel", labelKey: "fin.forecast", icon: TrendingUp },
       { href: "/client/echeances", label: "Échéances", labelKey: "fin.deadlines", icon: CalendarDays },
     ]
   },
@@ -168,6 +168,7 @@ export function ClientSidebarFull() {
   const pathname = usePathname()
   const router = useRouter()
   const { profile } = useProfile()
+  const { societe, societes, societeId, clearSociete } = useSocieteActive()
   const locale = getLocale()
   const [collapsed, setCollapsed] = useState<string[]>([])
   const [activeModules, setActiveModules] = useState<ActiveModules>(DEFAULT_MODULES)
@@ -176,54 +177,48 @@ export function ClientSidebarFull() {
   // Close sidebar on navigation
   useEffect(() => { setMobileOpen(false) }, [pathname])
 
-  // Fetch modules_actifs from the user's first societe, then intersect with user permissions
+  // Re-compute active modules from the ACTIVE société (not societes[0])
+  // intersected with the per-user permissions.
   useEffect(() => {
-    const loadModules = async () => {
-      try {
-        const res = await fetch("/api/client/societes")
-        if (!res.ok) return
-        const data = await res.json()
-        const societes = data.societes || []
-
-        // Step 1: societe plan modules (what the company's plan allows)
-        let planModules: ActiveModules = { ...DEFAULT_MODULES }
-        if (societes.length > 0 && societes[0].modules_actifs) {
-          const m = societes[0].modules_actifs
-          planModules = {
-            comptabilite: m.comptabilite !== false,
-            rh: m.rh !== false,
-            juridique: m.juridique !== false,
-            facturation: m.facturation !== false,
-            documents: m.documents !== false,
-            fiscal: m.fiscal !== false,
-            etats_financiers: m.etats_financiers !== false,
-            employe_portal: m.employe_portal !== false,
-          }
-        }
-
-        // Step 2: per-user permissions (from profile.modules_utilisateur)
-        // If NULL, use role-based defaults; if set, use the explicit values
-        const userModules: UserModules = profile?.modules_utilisateur
-          ? profile.modules_utilisateur
-          : getUserDefaultModules(profile?.role || "client_user")
-
-        // Step 3: intersection — module visible only if BOTH plan allows AND user has permission
-        setActiveModules({
-          comptabilite: planModules.comptabilite && (userModules.comptabilite !== false),
-          rh: planModules.rh && (userModules.rh !== false),
-          juridique: planModules.juridique,
-          facturation: planModules.facturation && (userModules.facturation !== false),
-          documents: planModules.documents && (userModules.documents !== false),
-          fiscal: planModules.fiscal && (userModules.fiscal !== false),
-          etats_financiers: planModules.etats_financiers && (userModules.etats_financiers !== false),
-          employe_portal: planModules.employe_portal && (userModules.employe_portal !== false),
-        })
-      } catch {
-        // Keep defaults if fetch fails
+    // Step 1: société plan modules (what the active company's plan allows)
+    let planModules: ActiveModules = { ...DEFAULT_MODULES }
+    if (societe?.modules_actifs) {
+      const m = societe.modules_actifs
+      planModules = {
+        comptabilite: m.comptabilite !== false,
+        rh: m.rh !== false,
+        juridique: m.juridique !== false,
+        facturation: m.facturation !== false,
+        documents: m.documents !== false,
+        fiscal: m.fiscal !== false,
+        etats_financiers: m.etats_financiers !== false,
+        employe_portal: m.employe_portal !== false,
       }
     }
-    loadModules()
-  }, [profile])
+
+    // Step 2: per-user permissions (from profile.modules_utilisateur)
+    // If NULL, use role-based defaults; if set, use the explicit values
+    const userModules: UserModules = profile?.modules_utilisateur
+      ? profile.modules_utilisateur
+      : getUserDefaultModules(profile?.role || "client_user")
+
+    // Step 3: intersection — module visible only if BOTH plan allows AND user has permission
+    setActiveModules({
+      comptabilite: planModules.comptabilite && (userModules.comptabilite !== false),
+      rh: planModules.rh && (userModules.rh !== false),
+      juridique: planModules.juridique,
+      facturation: planModules.facturation && (userModules.facturation !== false),
+      documents: planModules.documents && (userModules.documents !== false),
+      fiscal: planModules.fiscal && (userModules.fiscal !== false),
+      etats_financiers: planModules.etats_financiers && (userModules.etats_financiers !== false),
+      employe_portal: planModules.employe_portal && (userModules.employe_portal !== false),
+    })
+  }, [profile, societe, societeId])
+
+  const handleChangeSociete = () => {
+    clearSociete()
+    router.push("/client/select-societe")
+  }
 
   const toggle = (s: string) =>
     setCollapsed(p => p.includes(s) ? p.filter(x => x !== s) : [...p, s])
@@ -344,45 +339,118 @@ export function ClientSidebarFull() {
           </Link>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 px-3 py-4 space-y-3">
-          {visibleMenu.map(({ section, sectionKey, items }) => {
-            const sectionLabel = sectionKey ? t(sectionKey, locale) : section
-            const isCollapsed = collapsed.includes(section)
-            const hasActive = items.some(i => isActive(i.href))
-            return (
-              <div key={section}>
-                <button
-                  onClick={() => toggle(section)}
-                  aria-expanded={!isCollapsed}
-                  className="group w-full flex items-center justify-between px-2 py-1.5 text-[10px] font-bold uppercase rounded-md transition-colors"
-                  style={{
-                    color: hasActive ? "#D4AF37" : "#6B7390",
-                    letterSpacing: "0.18em",
-                  }}
-                >
-                  <span className="flex items-center gap-2">
-                    <span
-                      aria-hidden="true"
-                      className="h-1 w-1 rounded-full transition-colors"
-                      style={{
-                        backgroundColor: hasActive ? "#D4AF37" : "rgba(212,175,55,0.28)",
-                        boxShadow: hasActive ? "0 0 4px #D4AF37" : "none",
-                      }}
-                    />
-                    {sectionLabel}
-                  </span>
-                  {isCollapsed ? (
-                    <ChevronRight className="w-3 h-3" />
-                  ) : (
-                    <ChevronDown className="w-3 h-3" />
-                  )}
-                </button>
-                {!isCollapsed && (
-                  <div className="mt-1 space-y-0.5">
-                    {items.map(item => {
-                      const vRoles = (item as any).visibleForRoles
-                      if (vRoles && (!profile?.role || !vRoles.includes(profile.role))) return null
+        {/* Société active — bloc info + bouton "Changer" si ≥ 2 sociétés */}
+        {societe && (
+          <div
+            className="mx-3 mt-3 p-3 rounded-xl flex-shrink-0"
+            style={{
+              background:
+                "linear-gradient(180deg, rgba(212,175,55,0.08) 0%, rgba(212,175,55,0.02) 100%)",
+              border: "1px solid rgba(212,175,55,0.25)",
+            }}
+          >
+            <div
+              className="text-[9px] font-bold uppercase mb-1"
+              style={{ color: "#D4AF37", letterSpacing: "0.18em" }}
+            >
+              Société active
+            </div>
+            <div
+              className="text-sm font-semibold truncate"
+              style={{ color: "#E8EAFC" }}
+              title={societe.nom}
+            >
+              {societe.nom}
+            </div>
+            {societe.brn && (
+              <div
+                className="text-[10px] mt-0.5 font-mono truncate"
+                style={{ color: "#A8AFC7" }}
+              >
+                BRN {societe.brn}
+              </div>
+            )}
+            {societes.length > 1 && (
+              <button
+                type="button"
+                onClick={handleChangeSociete}
+                className="mt-2 w-full text-[11px] font-semibold py-1.5 px-2 rounded-md transition-colors"
+                style={{
+                  color: "#0B0F2E",
+                  background: "linear-gradient(135deg, #D4AF37 0%, #E4C547 100%)",
+                  boxShadow: "0 6px 14px -6px rgba(212,175,55,0.55)",
+                }}
+              >
+                Changer de société →
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Mode "aucune société active": on cache le menu et on invite à
+            en sélectionner une. Affiché notamment sur /client/select-societe. */}
+        {!societeId ? (
+          <div className="flex-1 flex items-center justify-center px-6 py-10">
+            <div className="text-center">
+              <div
+                aria-hidden="true"
+                className="mx-auto mb-3 inline-flex items-center justify-center w-10 h-10 rounded-full"
+                style={{
+                  background: "rgba(232,234,252,0.04)",
+                  border: "1px solid rgba(232,234,252,0.08)",
+                  color: "#6B7390",
+                }}
+              >
+                <Building2 className="w-5 h-5" />
+              </div>
+              <p
+                className="text-[11px] leading-relaxed"
+                style={{ color: "#6B7390" }}
+              >
+                Sélectionnez une société pour accéder à l&apos;espace
+              </p>
+            </div>
+          </div>
+        ) : (
+          /* Navigation */
+          <nav className="flex-1 px-3 py-4 space-y-3">
+            {visibleMenu.map(({ section, sectionKey, items }) => {
+              const sectionLabel = sectionKey ? t(sectionKey, locale) : section
+              const isCollapsed = collapsed.includes(section)
+              const hasActive = items.some(i => isActive(i.href))
+              return (
+                <div key={section}>
+                  <button
+                    onClick={() => toggle(section)}
+                    aria-expanded={!isCollapsed}
+                    className="group w-full flex items-center justify-between px-2 py-1.5 text-[10px] font-bold uppercase rounded-md transition-colors"
+                    style={{
+                      color: hasActive ? "#D4AF37" : "#6B7390",
+                      letterSpacing: "0.18em",
+                    }}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span
+                        aria-hidden="true"
+                        className="h-1 w-1 rounded-full transition-colors"
+                        style={{
+                          backgroundColor: hasActive ? "#D4AF37" : "rgba(212,175,55,0.28)",
+                          boxShadow: hasActive ? "0 0 4px #D4AF37" : "none",
+                        }}
+                      />
+                      {sectionLabel}
+                    </span>
+                    {isCollapsed ? (
+                      <ChevronRight className="w-3 h-3" />
+                    ) : (
+                      <ChevronDown className="w-3 h-3" />
+                    )}
+                  </button>
+                  {!isCollapsed && (
+                    <div className="mt-1 space-y-0.5">
+                      {items.map(item => {
+                        const vRoles = (item as any).visibleForRoles
+                        if (vRoles && (!profile?.role || !vRoles.includes(profile.role))) return null
                       const Icon = item.icon
                       const active = isActive(item.href)
                       const itemLabel = item.labelKey ? t(item.labelKey, locale) : item.label
@@ -444,7 +512,8 @@ export function ClientSidebarFull() {
               </div>
             )
           })}
-        </nav>
+          </nav>
+        )}
 
         {/* Footer — language + logout with refined hover */}
         <div

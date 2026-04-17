@@ -1,18 +1,15 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { getAdminClient } from '@/lib/supabase/admin'
 import { CLAUDE_CONFIG } from '@/lib/ai/prompts'
+import {
+  assertFactureAccess,
+  assertSocieteAccess,
+  mapSocieteAccessError,
+} from '@/lib/supabase/assert-societe-access'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
-
-function getAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-}
 
 // POST /api/client/echeances/extract-batch
 // Extracts date_echeance from PDFs for factures that don't have one
@@ -29,6 +26,8 @@ export async function POST(request: Request) {
     // Action: apply +30 days to all factures without date_echeance
     if (action === 'apply_30_days') {
       if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
+
+      await assertSocieteAccess(supabase, user.id, societe_id)
 
       let q = supabase.from('factures').select('id, date_facture')
         .eq('societe_id', societe_id).is('date_echeance', null)
@@ -51,6 +50,8 @@ export async function POST(request: Request) {
     if (action === 'extract_one') {
       const { facture_id } = body
       if (!facture_id) return NextResponse.json({ error: 'facture_id requis' }, { status: 400 })
+
+      await assertFactureAccess(supabase, user.id, facture_id)
 
       const { data: facture } = await supabase.from('factures').select('id, document_id').eq('id', facture_id).single()
       if (!facture?.document_id) return NextResponse.json({ found: false, reason: 'no_document' })
@@ -99,6 +100,8 @@ export async function POST(request: Request) {
 
     // Action: batch extract date_echeance from PDFs via Claude (legacy)
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
+
+    await assertSocieteAccess(supabase, user.id, societe_id)
 
     // Get factures without date_echeance that have a linked document
     let extractQ = supabase.from('factures').select('id, document_id, tiers, montant_ttc')
@@ -189,6 +192,8 @@ export async function POST(request: Request) {
       errors,
     })
   } catch (e: unknown) {
+    const mapped = mapSocieteAccessError(e)
+    if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

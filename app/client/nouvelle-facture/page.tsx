@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Plus, Trash2, Eye, Save, Lock, Download, ArrowLeft, FileText, User, ListOrdered, Calculator, CreditCard, StickyNote, Palette, Check, FileWarning, FileMinus, Wand2 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 
 interface LigneFacture { id: string; description: string; unite: string; quantite: number; prix_unitaire: number; taux_tva: number; montant_ht: number }
 interface InvoiceClient { id: string; nom: string; entreprise: string; adresse: string; email: string; telephone: string; vat_number: string; devise: string; conditions_paiement: number; offshore: boolean }
@@ -45,11 +46,10 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 export default function NouvelleFacturePage() {
   const router = useRouter()
+  const { societeId } = useSocieteActive()
   const [settings, setSettings] = useState<CompanySettings | null>(null)
   const [clients, setClients] = useState<InvoiceClient[]>([])
   const [catalogue, setCatalogue] = useState<CatalogueItem[]>([])
-  const [societes, setSocietes] = useState<Societe[]>([])
-  const [societeId, setSocieteId] = useState("")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [typeDocument, setTypeDocument] = useState<"facture" | "avoir" | "note_debit" | "devis">("facture")
@@ -99,10 +99,6 @@ export default function NouvelleFacturePage() {
       const tc = localStorage.getItem("lexora_invoice_template_colors")
       if (tc) { try { const parsed = JSON.parse(tc); if (parsed.primaire) setAccentColor(parsed.primaire) } catch { /* ignore */ } }
     } catch { /* ignore */ }
-    fetch("/api/client/societes").then(r => r.json()).then(d => {
-      setSocietes(d.societes || [])
-      if (d.societes?.length > 0) setSocieteId(d.societes[0].id)
-    }).catch(() => {})
     // Charger les templates depuis la DB
     fetch("/api/client/facture-template").then(r => r.json()).then(d => {
       setTemplates(d.templates || [])
@@ -359,8 +355,7 @@ export default function NouvelleFacturePage() {
       <Card className="border-t-4 border-t-[#0B0F2E]">
         <CardHeader className="pb-2"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><FileText className="w-4 h-4" />Informations facture</CardTitle></CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <Field label="Societe"><Sel value={societeId} onValueChange={setSocieteId} placeholder="Choisir...">{societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</Sel></Field>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Field label="N. Facture"><Input value={numeroFacture} onChange={e => setNumeroFacture(e.target.value)} className="font-mono" /></Field>
             <Field label="Date facture"><Input type="date" value={dateFacture} onChange={e => { setDateFacture(e.target.value); if (echeancePreset > 0) setDateEcheance(addDays(e.target.value, echeancePreset)) }} /></Field>
             <Field label="Date echeance"><Input type="date" value={dateEcheance} onChange={e => { setDateEcheance(e.target.value); setEcheancePreset(-1) }} /></Field>

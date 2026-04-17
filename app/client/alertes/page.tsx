@@ -23,6 +23,8 @@ import {
   ShieldAlert,
 } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { RequireRole, NON_CLIENT_USER_ROLES } from "@/components/client/RequireRole"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { ClientPanel, ClientEmpty } from "@/components/client/ClientKit"
 
@@ -82,14 +84,16 @@ function formatMUR(n: number) {
 
 export default function AlertesPage() {
   const { profile } = useProfile()
+  const { societeId } = useSocieteActive()
   const [filter, setFilter] = useState("toutes")
   const [alerts, setAlerts] = useState<AlertItem[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function fetchAlerts() {
+      if (!societeId) { setLoading(false); return }
       try {
-        const res = await fetch("/api/client/alertes")
+        const res = await fetch(`/api/client/alertes?societe_id=${societeId}`)
         if (res.ok) {
           const data = await res.json()
           if (Array.isArray(data.alertes)) {
@@ -110,41 +114,10 @@ export default function AlertesPage() {
     }
 
     fetchAlerts()
-  }, [])
+  }, [societeId])
 
   if (profile?.role === "client_user") {
-    return (
-      <ClientPageShell
-        breadcrumbs={[{ label: "Espace client", href: "/client" }, { label: "Alertes" }]}
-        title="Accès non autorisé"
-        subtitle="Vous n'avez pas la permission d'accéder à cette page."
-      >
-        <ClientEmpty
-          icon={ShieldAlert}
-          title="Accès réservé"
-          description="Cette section est visible pour les administrateurs et utilisateurs avancés uniquement."
-          accent="orange"
-          action={
-            <Link
-              href="/client"
-              style={{
-                display: "inline-block",
-                padding: "10px 20px",
-                borderRadius: "10px",
-                background: "linear-gradient(135deg, #D4AF37 0%, #E4C547 100%)",
-                color: "#0B0F2E",
-                fontWeight: 700,
-                fontSize: "13px",
-                textDecoration: "none",
-                fontFamily: FONT,
-              }}
-            >
-              Retour au tableau de bord
-            </Link>
-          }
-        />
-      </ClientPageShell>
-    )
+    return <RequireRole roles={NON_CLIENT_USER_ROLES}>{null}</RequireRole>
   }
 
   if (loading) {

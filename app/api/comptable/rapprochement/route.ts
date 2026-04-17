@@ -2841,8 +2841,8 @@ export async function POST(request: Request) {
       if (dossier) {
         const dateEcriture = new Date().toISOString().split('T')[0]
         await supabase.from('ecritures_comptables').insert([
-          { dossier_id: dossier.id, date_ecriture: dateEcriture, journal: 'BNQ', compte: '421000', libelle: `Virement salaire ${nomComplet}`, debit: Math.round(montantNet), credit: 0, lettre: lettreCode },
-          { dossier_id: dossier.id, date_ecriture: dateEcriture, journal: 'BNQ', compte: '512000', libelle: `Virement salaire ${nomComplet}`, debit: 0, credit: Math.round(montantNet), lettre: lettreCode },
+          { dossier_id: dossier.id, date_ecriture: dateEcriture, journal: 'BNQ', compte: '4210', libelle: `Virement salaire ${nomComplet}`, debit: Math.round(montantNet), credit: 0, lettre: lettreCode },
+          { dossier_id: dossier.id, date_ecriture: dateEcriture, journal: 'BNQ', compte: '512', libelle: `Virement salaire ${nomComplet}`, debit: 0, credit: Math.round(montantNet), lettre: lettreCode },
         ])
       }
 
@@ -3111,15 +3111,23 @@ export async function POST(request: Request) {
         charge_diverse: '658',
         paiement_mra: '447',
         frais_bancaires: '627',
-        salaire: '421',
+        salaire: '4210',
         virement_interne: '580',
         remboursement_personnel: '108',
+        fournisseur: '401',
+        charge_sociale: '431',
+        loyer: '613',
+        assurance: '616',
+        honoraires: '622',
+        telecom: '626',
+        impot_taxe: '635',
         autre: '471',
       }
       const compte = CLASSE_COMPTES[classification] || '471'
 
       const { data: dossier, error: dossierErr } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
       let nbEcritures = 0
+      let nbEcrituresSupprimees = 0
       let ecrituresError: string | null = null
       let ecrituresAlreadyExisted = false
       if (!dossier) {
@@ -3135,6 +3143,34 @@ export async function POST(request: Request) {
         // ref_folio determinISTE pour cette tx specifique (releve_id complet + txIdx)
         // Permet la detection idempotente du doublon = re-click sur la meme tx.
         const refFolio = `CL-${releve_id}-${txIdx}`
+
+        // ── RECLASSIFICATION : supprimer les anciennes écritures AVANT d'insérer ──
+        // Quand l'utilisateur corrige une classification, les écritures de l'ancienne
+        // classification (ref_folio CL-xxx ou ancien code lettre) doivent disparaître.
+        // Sinon le compte comptable précédent (ex: 4312 charges sociales) reste pollué
+        // avec un montant fantôme.
+        const oldLettre = txs[txIdx]?.lettre || null
+        // 1) Supprimer par ref_folio exact (reclassification du même CL-xxx)
+        const { count: delByFolio } = await supabase
+          .from('ecritures_comptables_v2')
+          .delete({ count: 'exact' })
+          .eq('societe_id', societe_id)
+          .eq('ref_folio', refFolio)
+        nbEcrituresSupprimees += (delByFolio || 0)
+        // 2) Supprimer par ancien code lettre (CLS005, CL7xxx… de la classification précédente)
+        if (oldLettre && oldLettre !== code) {
+          const { count: delByLettre } = await supabase
+            .from('ecritures_comptables_v2')
+            .delete({ count: 'exact' })
+            .eq('societe_id', societe_id)
+            .eq('lettre', oldLettre)
+            .eq('journal', 'BNQ')
+          nbEcrituresSupprimees += (delByLettre || 0)
+        }
+        if (nbEcrituresSupprimees > 0) {
+          console.log(`[classer_transaction] ${nbEcrituresSupprimees} anciennes ecritures supprimees (ref_folio=${refFolio}, lettre=${oldLettre})`)
+        }
+
         const ecrituresPayload = [
           {
             dossier_id: dossier.id, societe_id, date_ecriture: tx.date || new Date().toISOString().split('T')[0],
