@@ -82,6 +82,17 @@ export async function POST(request: Request) {
     if (!body.societe_id || !body.nom || !body.prenom || !body.salaire_base)
       return NextResponse.json({ error: 'Champs requis manquants' }, { status: 400 })
 
+    // Renommer body.role → body.role_rh (colonne réelle employes.role_rh en
+    // prod, cf. mig 017_pointage_conges_chat). La colonne "role" existe dans
+    // certains envs (mig 015/017_pointeuse) mais pas partout — le renommage
+    // évite la 42703 et garantit que le rôle RH est stocké au bon endroit.
+    // profiles.role (rôle Lexora auth) est un champ différent géré par
+    // /api/admin/create-user-employee, pas ici.
+    if (body.role && !body.role_rh) {
+      body.role_rh = body.role
+    }
+    delete body.role
+
     // Générer code employé
     const { count, error: countErr } = await supabase.from('employes')
       .select('*', { count: 'exact', head: true }).eq('societe_id', body.societe_id)

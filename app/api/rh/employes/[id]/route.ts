@@ -97,6 +97,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     delete body.created_at
     delete body.actif
 
+    // Même renommage que POST : role (envoyé par certains clients legacy)
+    // → role_rh (colonne réelle en prod). profiles.role est un autre champ
+    // géré séparément — pas ici.
+    if (body.role && !body.role_rh) {
+      body.role_rh = body.role
+    }
+    delete body.role
+
     // Sprint 7 FIX 2 — suppression du tracking historique_salaires
     // (table inexistante en prod causait 500 silencieux qui bloquait
     // parfois le PATCH). On accepte simplement la mise à jour de

@@ -59,7 +59,7 @@ function genPwd() {
 
 // ── Composant formulaire creation (state isole = pas de re-render parent) ──
 function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; onCreated: () => void; onClose: () => void }) {
-  const [form, setForm] = useState({ societe_id:"",nom:"",prenom:"",poste:"",email:"",telephone:"",salaire_base:"",transport_allowance:"0",petrol_allowance:"0",phone_allowance:"0",daily_bus_fare:"0",date_arrivee:"",role:"salarie",csg_categorie:"A",bank_account:"",bank_name:"",nic:"",tan:"",iban:"",genre:"",date_naissance:"",departement:"",type_contrat:"CDI",devise_salaire:"MUR" })
+  const [form, setForm] = useState({ societe_id:"",nom:"",prenom:"",poste:"",email:"",telephone:"",salaire_base:"",transport_allowance:"0",petrol_allowance:"0",phone_allowance:"0",daily_bus_fare:"0",date_arrivee:"",role_rh:"salarie",csg_categorie:"A",bank_account:"",bank_name:"",nic:"",tan:"",iban:"",genre:"",date_naissance:"",departement:"",type_contrat:"CDI",devise_salaire:"MUR" })
   // Primes fixes personnalisées (libellé + montant), capées à 3 (mig 117).
   // Mappées au submit vers prime_fixe_1/2/3 + prime_fixe_*_libelle.
   const [primesFixes, setPrimesFixes] = useState<{ libelle: string; montant: string }[]>([])
@@ -196,7 +196,10 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
           {fieldErr("societe_id")}
         </FormField>
         <FormField label="Role">
-          <Select value={form.role} onValueChange={v=>u("role",v)}><SelectTrigger className={selectTriggerClass}><SelectValue/></SelectTrigger><SelectContent>{["salarie","manager","rh","admin","direction"].map(r=><SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent></Select>
+          {/* Champ RH (employes.role_rh). À ne pas confondre avec le rôle
+              Lexora qui vit dans profiles.role et est câblé séparément
+              via le toggle "Accès Lexora" plus bas. */}
+          <Select value={form.role_rh} onValueChange={v=>u("role_rh",v)}><SelectTrigger className={selectTriggerClass}><SelectValue/></SelectTrigger><SelectContent>{["salarie","manager","rh","admin","direction"].map(r=><SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent></Select>
         </FormField>
       </FormSection>
 
@@ -534,7 +537,9 @@ function EditEmployeForm({ emp, onSaved, onClose }: { emp: any; onSaved: () => v
           prime_fixe_3: parseFloat(e.prime_fixe_3) || 0,
           prime_fixe_3_libelle: (e.prime_fixe_3_libelle || "").toString().trim(),
           date_arrivee: e.date_arrivee, date_depart: e.date_depart || null,
-          role: e.role, csg_categorie: e.csg_categorie, bank_name: e.bank_name, bank_account: e.bank_account,
+          // role_rh = rôle RH (salarie/manager/...). À ne pas confondre avec
+          // profiles.role qui porte le rôle Lexora (employe/client_admin/…).
+          role_rh: e.role_rh || e.role, csg_categorie: e.csg_categorie, bank_name: e.bank_name, bank_account: e.bank_account,
           nic_number: e.nic_number, tan_number: e.tan_number, iban: e.iban, devise_salaire: e.devise_salaire,
           // Sprint 7 FIX 1 — nouveaux champs editable
           working_days: e.working_days,
@@ -585,7 +590,7 @@ function EditEmployeForm({ emp, onSaved, onClose }: { emp: any; onSaved: () => v
       {/* ── Contrat / Poste ── */}
       <SectionHeader>Contrat & Poste</SectionHeader>
       <div><Label>Poste</Label><Input value={e.poste||""} onChange={ev=>u("poste",ev.target.value)}/></div>
-      <div><Label>Rôle</Label><Select value={e.role||"salarie"} onValueChange={v=>u("role",v)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{["salarie","manager","rh","admin","direction"].map(r=><SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent></Select></div>
+      <div><Label>Rôle</Label><Select value={e.role_rh||e.role||"salarie"} onValueChange={v=>u("role_rh",v)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{["salarie","manager","rh","admin","direction"].map(r=><SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent></Select></div>
       <div><Label>Date arrivée</Label><Input type="date" value={e.date_arrivee?.split("T")[0]||""} onChange={ev=>u("date_arrivee",ev.target.value)}/></div>
       <div><Label>Date départ</Label><Input type="date" value={e.date_depart?.split("T")[0]||""} onChange={ev=>u("date_depart",ev.target.value)}/></div>
       <div className="col-span-2">
