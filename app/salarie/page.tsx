@@ -1,5 +1,6 @@
 "use client"
 import React, { useState, useEffect, useCallback } from "react"
+import { usePathname, useSearchParams, useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -1044,6 +1045,9 @@ function DocumentsTab({ employe: _employe }: { employe: any }) {
 }
 
 export default function EspaceEmployePage() {
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<Tab>("dashboard")
   const [employe, setEmploye] = useState<any>(null)
@@ -1073,20 +1077,22 @@ export default function EspaceEmployePage() {
     }
     applyHash()
     window.addEventListener("hashchange", applyHash)
-    return () => window.removeEventListener("hashchange", applyHash)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-  // When the user clicks the in-page tab bar, keep the URL in sync so the
-  // sidebar highlight follows.
-  useEffect(() => {
-    if (typeof window === "undefined") return
-    const desired = `#${tab}`
-    if (window.location.hash !== desired) {
-      history.replaceState(null, "", `/salarie${desired}`)
-      // Fire hashchange so the sidebar's own hashchange listener updates.
-      window.dispatchEvent(new HashChangeEvent("hashchange"))
+    // Fallback: Next 14 App Router doesn't always fire hashchange nor
+    // update pathname/searchParams on <Link> hash-only clicks. Catch
+    // those clicks at the document level and replay applyHash() once
+    // the browser has written the new hash into the URL.
+    const onSidebarClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null
+      if (!target?.closest?.('a[href^="/salarie#"]')) return
+      requestAnimationFrame(applyHash)
     }
-  }, [tab])
+    document.addEventListener("click", onSidebarClick)
+    return () => {
+      window.removeEventListener("hashchange", applyHash)
+      document.removeEventListener("click", onSidebarClick)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname, searchParams])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -1257,7 +1263,7 @@ export default function EspaceEmployePage() {
             { id: "contrats" as Tab, label: "Mes contrats", icon: FileText },
             { id: "documents" as Tab, label: "Documents", icon: FolderOpen },
           ]).map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)}
+            <button key={t.id} onClick={() => router.push(`/salarie#${t.id}`)}
               className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm rounded-lg transition-all duration-200 ${tab === t.id ? "text-white font-medium shadow-md" : "text-gray-500 hover:bg-gray-50"}`}
               style={tab === t.id ? { backgroundColor: NAVY } : {}}>
               <t.icon className="h-4 w-4" />{t.label}
@@ -1453,10 +1459,10 @@ export default function EspaceEmployePage() {
               {/* Quick actions grid */}
               <div className="grid grid-cols-2 gap-3">
                 {([
-                  { icon: FileText, label: "Mes bulletins", onClick: () => setTab("bulletins"), color: BLUE, bg: `linear-gradient(135deg, ${BLUE}08, ${BLUE}15)` },
-                  { icon: CalendarPlus, label: "Demander un conge", onClick: () => setTab("conges"), color: GREEN, bg: `linear-gradient(135deg, ${GREEN}08, ${GREEN}15)` },
-                  { icon: HeartPulse, label: "Mon Espace Sante", onClick: () => setTab("sante"), color: "#7c3aed", bg: "linear-gradient(135deg, #7c3aed08, #7c3aed15)" },
-                  { icon: Calendar, label: "Mon planning", onClick: () => setTab("planning"), color: GOLD, bg: `linear-gradient(135deg, ${GOLD}08, ${GOLD}15)` },
+                  { icon: FileText, label: "Mes bulletins", onClick: () => router.push("/salarie#bulletins"), color: BLUE, bg: `linear-gradient(135deg, ${BLUE}08, ${BLUE}15)` },
+                  { icon: CalendarPlus, label: "Demander un conge", onClick: () => router.push("/salarie#conges"), color: GREEN, bg: `linear-gradient(135deg, ${GREEN}08, ${GREEN}15)` },
+                  { icon: HeartPulse, label: "Mon Espace Sante", onClick: () => router.push("/salarie#sante"), color: "#7c3aed", bg: "linear-gradient(135deg, #7c3aed08, #7c3aed15)" },
+                  { icon: Calendar, label: "Mon planning", onClick: () => router.push("/salarie#planning"), color: GOLD, bg: `linear-gradient(135deg, ${GOLD}08, ${GOLD}15)` },
                 ] as const).map((action, i) => (
                   <Card key={i}
                     className="cursor-pointer rounded-xl shadow-sm transition-all duration-200 hover:shadow-md active:scale-[0.97] border-0"
@@ -2081,7 +2087,7 @@ export default function EspaceEmployePage() {
               { id: "trajets" as Tab, label: "Trajets km", icon: Car },
               { id: "documents" as Tab, label: "Documents", icon: FolderOpen },
             ]).map(t => (
-              <button key={t.id} onClick={() => { setTab(t.id); setMobileMenuOpen(false) }}
+              <button key={t.id} onClick={() => { router.push(`/salarie#${t.id}`); setMobileMenuOpen(false) }}
                 className="w-full flex items-center gap-3 px-3 py-3.5 rounded-xl text-left transition-all duration-200 active:scale-[0.98]"
                 style={tab === t.id ? { backgroundColor: `${NAVY}08`, color: NAVY } : { color: "#6b7280" }}>
                 <div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: tab === t.id ? `${GOLD}15` : "#f3f4f6" }}>
@@ -2124,7 +2130,7 @@ export default function EspaceEmployePage() {
               <button key={t.id}
                 onClick={() => {
                   if (isMore) { setMobileMenuOpen(v => !v) }
-                  else { setTab(t.id as Tab); setMobileMenuOpen(false) }
+                  else { router.push(`/salarie#${t.id}`); setMobileMenuOpen(false) }
                 }}
                 className="flex flex-col items-center justify-center gap-1 min-w-[56px] py-1.5 transition-all duration-200 active:scale-95"
               >
