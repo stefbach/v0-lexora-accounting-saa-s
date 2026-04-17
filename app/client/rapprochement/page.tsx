@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Loader2, RefreshCw, Link2, Unlink, Zap, CheckCircle2, AlertCircle, Users, Search, ChevronDown, ChevronUp, Sparkles, Send, Bot, Wrench, X, Target, BrainCircuit, BarChart3 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { Progress } from "@/components/ui/progress"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
@@ -48,8 +49,7 @@ export default function ClientRapprochementPage() {
   // Multi-facture lettrage : checkboxes selectionnees + filtre tiers
   const [selectedFactureIds, setSelectedFactureIds] = useState<Set<string>>(new Set())
   const [lettrageTiersFilter, setLettrageTiersFilter] = useState("")
-  const [societeId, setSocieteId] = useState<string | null>(null)
-  const [societes, setSocietes] = useState<any[]>([])
+  const { societeId } = useSocieteActive()
   const [payeParAssocie, setPayeParAssocie] = useState(false)
   const [payeParType, setPayeParType] = useState("associe")
   const [payeParNom, setPayeParNom] = useState("")
@@ -624,18 +624,6 @@ Voulez-vous vraiment continuer ?`
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatMessages])
 
-  // Get sociétés
-  useEffect(() => {
-    Promise.all([
-      fetch("/api/client/societes").then(r => r.json()).catch(() => ({ societes: [] })),
-      fetch("/api/comptable/societes").then(r => r.json()).catch(() => ({ societes: [] })),
-    ]).then(([d1, d2]) => {
-      const all = [...(d1.societes || []), ...(d2.societes || [])]
-      const unique = Array.from(new Map(all.map((s: any) => [s.id, s])).values())
-      setSocietes(unique)
-      if (unique.length > 0) setSocieteId(unique[0].id)
-    })
-  }, [])
 
   const load = useCallback(async () => {
     if (!societeId) return
@@ -1254,14 +1242,6 @@ Voulez-vous vraiment continuer ?`
           <p className="text-sm text-gray-500">Rapprocher les transactions avec les factures et ecritures</p>
         </div>
         <div className="flex gap-2 items-center">
-          {societes.length > 0 && (
-            <Select value={societeId || ""} onValueChange={v => setSocieteId(v)}>
-              <SelectTrigger className="w-[220px]"><SelectValue placeholder="Société" /></SelectTrigger>
-              <SelectContent>
-                {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          )}
           <Button variant="outline" onClick={load}><RefreshCw className="w-4 h-4 mr-2" />Actualiser</Button>
           <Button onClick={handleResetAll} disabled={resetting || !societeId} variant="outline" className="border-red-300 text-red-600 hover:bg-red-50">
             {resetting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Unlink className="w-4 h-4 mr-2" />}
