@@ -66,6 +66,16 @@ export async function POST(request: Request) {
     // Récupérer la société (inclut ern et tan_societe)
     const { data: societe } = await supabase.from('societes').select('*').eq('id', societe_id).single()
 
+    // Sprint 14 FIX 4 — Validation ERN format MRA (8 chiffres).
+    // MRA rejette tout fichier avec ERN invalide → pénalités.
+    const ernRaw = (societe?.ern || '').toString().trim()
+    if (!ernRaw || !/^\d{8}$/.test(ernRaw)) {
+      return NextResponse.json({
+        error: `ERN manquant ou invalide pour "${societe?.nom || 'société inconnue'}". Format requis : 8 chiffres (ex: 12345678). À corriger dans /rh/societe avant l'export.`,
+        ern_actuel: ernRaw || null,
+      }, { status: 400 })
+    }
+
     // Fetch bulletins (no FK join — avoids schema cache issues)
     const { data: bulletins, error } = await supabase
       .from('bulletins_paie')
@@ -87,19 +97,35 @@ export async function POST(request: Request) {
       : { data: [] }
     const empMap = new Map((employes || []).map((e: any) => [e.id, e]))
 
+    // Sprint 14 FIX 4 — détecter les TAN manquants/invalides avant export.
+    // On les exclut du CSV avec un warning retourné au client.
+    const tanWarnings: string[] = []
+    const isValidTan = (tan: string | null | undefined): boolean => {
+      const s = (tan || '').toString().trim()
+      return s.length >= 8 && s.length <= 12
+    }
+
     // Calculs totaux
     let total_masse_salariale = 0, total_csg_sal = 0, total_csg_pat = 0
     let total_nsf_sal = 0, total_nsf_pat = 0, total_training = 0, total_prgf = 0
+    let excludedMra = 0, excludedTan = 0
 
     // CSV Détail par employé
     const detailLines: string[] = [
-      'Code;Nom;Prénom;NIC;Salaire_Brut;CSG_Sal;CSG_Pat;NSF_Sal;NSF_Pat;Training_Levy;PRGF'
+      'Code;Nom;Prénom;NIC;TAN;Salaire_Brut;CSG_Sal;CSG_Pat;NSF_Sal;NSF_Pat;Training_Levy;PRGF'
     ]
 
     for (const b of bulletins) {
       const emp = empMap.get(b.employe_id)
-      // Skip employees excluded from MRA (hors champs)
-      if (emp?.exclure_mra) continue
+      if (emp?.exclure_mra) { excludedMra++; continue }
+      // Sprint 14 FIX 4 — TAN check. On n'exclut PAS l'employé (le montant
+      // CSG/NSF est dû même sans TAN) mais on warn le client pour qu'il
+      // corrige avant soumission effective au MRA.
+      const empTan = (emp?.tan_number || emp?.tan || '').toString().trim()
+      if (!isValidTan(empTan)) {
+        tanWarnings.push(`${emp?.prenom || '?'} ${emp?.nom || '?'} (code ${emp?.code || '?'})`)
+        excludedTan++
+      }
       const sb = Number(b.salaire_brut) || 0
       const csg_sal = Number(b.csg_salarie) || 0
       const csg_bon = Number(b.csg_bonus) || 0
@@ -122,7 +148,8 @@ export async function POST(request: Request) {
         emp?.code || '',
         emp?.nom || '',
         emp?.prenom || '',
-        emp?.nic_number || '',
+        emp?.nic_number || emp?.nic || '',
+        empTan || 'TAN_MANQUANT',
         sb.toFixed(2),
         (csg_sal + csg_bon).toFixed(2),
         (csg_pat + csg_pat_bon).toFixed(2),
@@ -135,15 +162,14 @@ export async function POST(request: Request) {
 
     const total_mra = total_csg_sal + total_csg_pat + total_nsf_sal + total_nsf_pat + total_training + total_prgf
 
-    // ERN : fallback explicite avec BRN si ERN manquant
-    const ern_csv = societe?.ern || `[ERN_MANQUANT_-_BRN:${societe?.brn || '?'}]`
-    const ernComment = !societe?.ern ? ' # ATTENTION: ERN manquant — à renseigner dans la fiche société' : ''
+    // Sprint 14 FIX 4 — ERN déjà validé plus haut (8 chiffres).
+    const ern_csv = ernRaw
 
     // CSV Récapitulatif
     const recapLines = [
       'ERN;Période;Nb_Employés;Masse_Salariale;CSG_Salarié;CSG_Patronal;NSF_Salarié;NSF_Patronal;Training_Levy;PRGF;Total_MRA',
       [
-        ern_csv + ernComment,
+        ern_csv,
         periode,
         bulletins.length,
         total_masse_salariale.toFixed(2),
@@ -178,8 +204,13 @@ export async function POST(request: Request) {
       detail_csv: detailLines.join('\n'),
       totaux: { total_masse_salariale, total_csg_sal, total_csg_pat, total_nsf_sal, total_nsf_pat, total_training, total_prgf, total_mra },
       nb_employes: bulletins.length,
+      excluded_mra: excludedMra,
       societe: societe?.nom,
+      ern: ernRaw,
       periode,
+      // Sprint 14 FIX 4 — warnings TAN pour l'UI
+      tan_warnings: tanWarnings.length > 0 ? tanWarnings : undefined,
+      tan_warnings_count: excludedTan,
       filename_recap: `CSG_NSF_Recap_${societe?.nom?.replace(/\s+/g, '_')}_${periode}.csv`,
       filename_detail: `CSG_NSF_Detail_${societe?.nom?.replace(/\s+/g, '_')}_${periode}.csv`,
     })

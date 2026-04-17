@@ -62,6 +62,15 @@ export async function POST(request: Request) {
 
     const { data: societe } = await supabase.from('societes').select('*').eq('id', societe_id).single()
 
+    // Sprint 14 FIX 4 — Validation ERN format MRA (8 chiffres).
+    const ernRaw = (societe?.ern || '').toString().trim()
+    if (!ernRaw || !/^\d{8}$/.test(ernRaw)) {
+      return NextResponse.json({
+        error: `ERN manquant ou invalide pour "${societe?.nom || 'société inconnue'}". Format requis : 8 chiffres (ex: 12345678). À corriger dans /rh/societe avant l'export PAYE.`,
+        ern_actuel: ernRaw || null,
+      }, { status: 400 })
+    }
+
     // Fetch bulletins (no FK join — avoids schema cache issues)
     const { data: bulletins, error } = await supabase
       .from('bulletins_paie')
