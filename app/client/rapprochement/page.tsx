@@ -960,6 +960,41 @@ Voulez-vous vraiment continuer ?`
     } catch { alert("Erreur") }
   }
 
+  // ── Annuler le paiement d'une ou plusieurs factures ──────────────
+  // Remet la facture en "en_attente", clear les champs rapproche_*, et
+  // délettrer la transaction bancaire associée s'il y en a une.
+  const [annulationEnCours, setAnnulationEnCours] = useState(false)
+  const [selectedFacturesForAnnulation, setSelectedFacturesForAnnulation] = useState<Set<string>>(new Set())
+
+  const handleAnnulerPaiement = async (factureIds: string[]) => {
+    if (factureIds.length === 0) return
+    if (!confirm(`Annuler le paiement de ${factureIds.length} facture(s) ?\n\nLes factures repasseront en "en attente" et les transactions bancaires associées seront délettrées.`)) return
+    setAnnulationEnCours(true)
+    try {
+      const res = await fetch("/api/comptable/rapprochement", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "annuler_paiement_factures",
+          societe_id: societeId,
+          facture_ids: factureIds,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setToast({ type: 'error', message: data.error || `Erreur HTTP ${res.status}` })
+      } else {
+        setToast({ type: 'success', message: `✓ ${data.nb_factures_reset || factureIds.length} facture(s) remise(s) en attente` })
+        setSelectedFacturesForAnnulation(new Set())
+        await load()
+      }
+    } catch (e: any) {
+      setToast({ type: 'error', message: e.message || 'Erreur réseau' })
+    } finally {
+      setAnnulationEnCours(false)
+    }
+  }
+
   const handlePayeParAssocie = async (facture: any) => {
     if (!societeId || !payeParNom) return
     try {
@@ -1638,6 +1673,30 @@ Voulez-vous vraiment continuer ?`
                   {rows.length} facture{rows.length > 1 ? 's' : ''}
                 </span>
               </CardTitle>
+              {/* Barre d'annulation en masse — visible quand ≥1 facture payée est cochée */}
+              {selectedFacturesForAnnulation.size > 0 && (
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-[#9F1239]/30 bg-[#9F1239]/5 px-3 py-2 mt-2">
+                  <span className="text-sm">
+                    <span className="font-semibold text-[#0B0F2E]">{selectedFacturesForAnnulation.size}</span>
+                    <span className="text-gray-600"> facture{selectedFacturesForAnnulation.size > 1 ? 's' : ''} sélectionnée{selectedFacturesForAnnulation.size > 1 ? 's' : ''}</span>
+                  </span>
+                  <div className="flex gap-2">
+                    <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setSelectedFacturesForAnnulation(new Set())} disabled={annulationEnCours}>
+                      Désélectionner
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="h-7 gap-1 bg-[#9F1239] hover:bg-[#9F1239]/90 text-white text-xs"
+                      onClick={() => handleAnnulerPaiement(Array.from(selectedFacturesForAnnulation))}
+                      disabled={annulationEnCours}
+                    >
+                      {annulationEnCours ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                      Remettre en attente ({selectedFacturesForAnnulation.size})
+                    </Button>
+                  </div>
+                </div>
+              )}
+              </CardTitle>
               <div className="flex flex-wrap gap-3 text-xs text-gray-500 pt-1">
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" />{counts.paye} payées</span>
                 {counts.missingReleve > 0 && <span className="flex items-center gap-1 text-orange-700"><span className="w-2 h-2 rounded-full bg-orange-500" />{counts.missingReleve} relevé manquant</span>}
@@ -1699,6 +1758,30 @@ Voulez-vous vraiment continuer ?`
                         ) : '—'}
                       </TableCell>
                       <TableCell>
+                        {status === 'paye' && (
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="checkbox"
+                              className="h-3.5 w-3.5 cursor-pointer"
+                              checked={selectedFacturesForAnnulation.has(f.id)}
+                              onChange={() => {
+                                setSelectedFacturesForAnnulation(prev => {
+                                  const next = new Set(prev)
+                                  if (next.has(f.id)) next.delete(f.id); else next.add(f.id)
+                                  return next
+                                })
+                              }}
+                            />
+                            <Button
+                              variant="ghost" size="sm"
+                              className="h-7 text-xs text-[#9F1239] hover:bg-[#9F1239]/5"
+                              onClick={() => handleAnnulerPaiement([f.id])}
+                              disabled={annulationEnCours}
+                            >
+                              Annuler
+                            </Button>
+                          </div>
+                        )}
                         {status !== 'paye' && (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>

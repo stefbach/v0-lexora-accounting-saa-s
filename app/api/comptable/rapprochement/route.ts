@@ -3765,6 +3765,75 @@ export async function POST(request: Request) {
       })
     }
 
+    // ── annuler_paiement_factures : remettre N factures en "en_attente" ──
+    // Remet le statut, clear rapproche_*, et délettrer les tx bancaires associées.
+    // C'est l'équivalent UI du SQL « UPDATE factures SET statut='en_attente' WHERE id IN (...) »
+    if (action === 'annuler_paiement_factures') {
+      const { societe_id: socId, facture_ids } = body
+      if (!socId || !Array.isArray(facture_ids) || facture_ids.length === 0) {
+        return NextResponse.json({ error: 'societe_id et facture_ids[] requis' }, { status: 400 })
+      }
+
+      // 1. Récupérer les factures avec leurs infos de rapprochement
+      const { data: facsToReset } = await supabase
+        .from('factures')
+        .select('id, rapproche_releve_id, rapproche_transaction_idx, statut')
+        .in('id', facture_ids)
+        .eq('societe_id', socId)
+
+      // 2. Remettre les factures en attente
+      const { error: resetErr } = await supabase
+        .from('factures')
+        .update({
+          statut: 'en_attente',
+          rapproche_releve_id: null,
+          rapproche_transaction_idx: null,
+          rapproche_date: null,
+          rapproche_source: null,
+        })
+        .in('id', facture_ids)
+        .eq('societe_id', socId)
+
+      if (resetErr) {
+        return NextResponse.json({ error: resetErr.message }, { status: 500 })
+      }
+
+      // 3. Délettrer les transactions bancaires associées
+      let txReset = 0
+      const releveUpdates = new Map<string, { releve_id: string; indices: number[] }>()
+      for (const f of facsToReset || []) {
+        if (f.rapproche_releve_id && f.rapproche_transaction_idx != null) {
+          const key = f.rapproche_releve_id
+          if (!releveUpdates.has(key)) releveUpdates.set(key, { releve_id: key, indices: [] })
+          releveUpdates.get(key)!.indices.push(Number(f.rapproche_transaction_idx))
+        }
+      }
+      for (const { releve_id: rId, indices } of releveUpdates.values()) {
+        const { data: rel } = await supabase
+          .from('releves_bancaires').select('id, transactions_json').eq('id', rId).single()
+        if (!rel?.transactions_json) continue
+        const txs = [...rel.transactions_json]
+        let changed = false
+        for (const idx of indices) {
+          if (idx < txs.length && txs[idx]) {
+            const { lettre, facture_id, facture_ids: fids, matched_type, match_confidence, note, rapproche_at, rapprochement_multi, nb_factures, ecart_montant, ...rest } = txs[idx]
+            txs[idx] = { ...rest, statut: 'non_identifie' }
+            changed = true
+            txReset++
+          }
+        }
+        if (changed) {
+          await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', rId)
+        }
+      }
+
+      return NextResponse.json({
+        ok: true,
+        nb_factures_reset: (facsToReset || []).length,
+        nb_tx_delettrees: txReset,
+      })
+    }
+
     return NextResponse.json({ error: 'Action inconnue' }, { status: 400 })
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
