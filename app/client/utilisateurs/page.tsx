@@ -16,6 +16,7 @@ import {
   Key, Eye, EyeOff, AlertTriangle, Loader2
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -212,8 +213,9 @@ function StatusBadge({ actif }: { actif?: boolean }) {
 // Main page
 // ---------------------------------------------------------------------------
 export default function UtilisateursPage() {
+  const { societes: providerSocietes } = useSocieteActive()
+  const societes = providerSocietes as any as Societe[]
   const [users, setUsers] = useState<User[]>([])
-  const [societes, setSocietes] = useState<Societe[]>([])
   const [loading, setLoading] = useState(true)
 
   // Filters
@@ -261,12 +263,8 @@ export default function UtilisateursPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [u, s] = await Promise.all([
-        fetch("/api/client/users").then((r) => r.json()),
-        fetch("/api/client/societes").then((r) => r.json()),
-      ])
+      const u = await fetch("/api/client/users").then((r) => r.json())
       setUsers(u.users || [])
-      setSocietes(s.societes || [])
     } catch {
       // silent
     }
