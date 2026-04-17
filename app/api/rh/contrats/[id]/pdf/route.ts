@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient as createServerClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
+import { userHasAccessToEmploye } from '@/lib/rh/access'
 import React from 'react'
-import { renderToBuffer, Document, Page, View, Text, StyleSheet } from '@react-pdf/renderer'
+import { renderToBuffer, Document, Page, View, Text, Image, StyleSheet } from '@react-pdf/renderer'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,30 +42,35 @@ function formatMontant(n: number | null | undefined): string {
 
 type Params = { params: Promise<{ id: string }> }
 
+function getAdminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } },
+  )
+}
+
 export async function GET(_request: Request, { params }: Params) {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const supabaseAuth = await createServerClient()
+    const { data: { user } } = await supabaseAuth.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
+    // Sprint 16 FIX 1 — admin client (bypass RLS) + queries séparées
+    // (pas de FK join qui casse sur auth.users ref, Sprint 8 pattern).
+    const supabase = getAdminClient()
     const { id } = await params
 
     const { data: contrat, error } = await supabase
-      .from('contrats_employes')
-      .select(`
-        *,
-        employe:employes (
-          id, prenom, nom, poste, email,
-          societe:societes ( id, nom, ern )
-        )
-      `)
-      .eq('id', id)
-      .single()
-
+      .from('contrats_employes').select('*').eq('id', id).maybeSingle()
     if (error || !contrat) return NextResponse.json({ error: 'Contrat introuvable' }, { status: 404 })
 
-    const emp = contrat.employe as any
-    const soc = emp?.societe as any
+    const { data: emp } = contrat.employe_id
+      ? await supabase.from('employes').select('id, prenom, nom, poste, email, nic_number, nic, societe_id').eq('id', contrat.employe_id).maybeSingle()
+      : { data: null }
+    const { data: soc } = emp?.societe_id
+      ? await supabase.from('societes').select('id, nom, ern, brn, adresse, telephone').eq('id', emp.societe_id).maybeSingle()
+      : { data: null }
     const today = new Date()
     const dateGeneration = `${today.getDate()} ${MOIS_FR[today.getMonth()]} ${today.getFullYear()}`
 
@@ -137,17 +144,27 @@ export async function GET(_request: Request, { params }: Params) {
           React.createElement(Text, { style: styles.clause }, contrat.notes)
         ),
 
-        // Bloc signatures
+        // Sprint 16 FIX 1 — Bloc signatures avec image signature dirigeant
         React.createElement(View, { style: styles.signatureBlock },
           React.createElement(View, { style: styles.signatureBox },
             React.createElement(Text, { style: styles.signatureLabel }, "L'Employeur"),
-            React.createElement(Text, { style: styles.signatureLabel }, soc?.nom || ''),
-            contrat.date_signature && React.createElement(Text, { style: styles.signatureDate }, `Signé le ${formatDate(contrat.date_signature)}`)
+            // Image signature dirigeant si data URI disponible
+            contrat.signature_image_dirigeant_url
+              ? React.createElement(Image, { src: contrat.signature_image_dirigeant_url, style: { height: 40, width: 120, objectFit: 'contain' } } as any)
+              : null,
+            React.createElement(Text, { style: styles.signatureLabel }, contrat.signature_nom_complet || soc?.nom || ''),
+            contrat.date_signature_dirigeant
+              ? React.createElement(Text, { style: styles.signatureDate }, `Signé le ${formatDate(contrat.date_signature_dirigeant)}`)
+              : contrat.date_signature
+                ? React.createElement(Text, { style: styles.signatureDate }, `Signé le ${formatDate(contrat.date_signature)}`)
+                : null,
           ),
           React.createElement(View, { style: styles.signatureBox },
             React.createElement(Text, { style: styles.signatureLabel }, "L'Employé(e)"),
             React.createElement(Text, { style: styles.signatureLabel }, `${emp?.prenom || ''} ${emp?.nom || ''}`.trim()),
-            contrat.date_signature && React.createElement(Text, { style: styles.signatureDate }, `Signé le ${formatDate(contrat.date_signature)}`)
+            contrat.date_signature_employe
+              ? React.createElement(Text, { style: styles.signatureDate }, `Signé le ${formatDate(contrat.date_signature_employe)}`)
+              : null,
           )
         ),
 
