@@ -2428,7 +2428,7 @@ Voulez-vous vraiment continuer ?`
                                 size="sm"
                                 className="h-7 text-xs"
                                 onClick={() => {
-                                  const fakeTx = { id: 'pick', libelle: g.tiers, tiers_detecte: g.tiers, debit: g.total, credit: 0, devise: g.devise }
+                                  const fakeTx = { id: 'pick', libelle: g.tiers, tiers_detecte: g.tiers, debit: g.totalOriginal, credit: 0, devise: g.devise }
                                   setPickTxForFacture(g.factures[0])
                                 }}
                               >
