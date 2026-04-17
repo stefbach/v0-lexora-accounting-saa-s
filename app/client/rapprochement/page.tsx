@@ -1889,7 +1889,7 @@ Voulez-vous vraiment continuer ?`
           ════════════════════════════════════════════════════════════════ */}
       <div className="flex gap-1 border-b border-gray-200">
         {([
-          { id: 'fournisseurs' as const, icon: '📊', label: 'Par fournisseur', count: 0, color: 'border-[#D4AF37] text-[#A88925]' },
+          { id: 'fournisseurs' as const, icon: '🏦', label: 'Relevé → Factures', count: 0, color: 'border-[#D4AF37] text-[#A88925]' },
           { id: 'aclasser' as const, icon: '📋', label: 'À classer', count: unmatched.length, color: 'border-orange-500 text-orange-700' },
           { id: 'classees' as const, icon: '✅', label: 'Classées', count: matchedWithInvoice.length + classifiedAuto.length + interne.length, color: 'border-green-500 text-green-700' },
           { id: 'verifier' as const, icon: '⚠️', label: 'À vérifier', count: paidNoInvoice.length, color: 'border-amber-500 text-amber-700' },
@@ -2216,7 +2216,8 @@ Voulez-vous vraiment continuer ?`
         const RATES: Record<string, number> = { MUR: 1, EUR: 54.4, USD: 44.8, GBP: 54.2 }
         const toMUR = (amount: number, devise: string) => amount * (RATES[(devise || 'MUR').toUpperCase()] || 1)
 
-        // Toutes les tx non identifiées (débits = paiements sortants)
+        // Utiliser les transactions DÉJÀ FILTRÉES par le compte et le mois sélectionnés
+        // (pas toutes les tx — seulement celles de la période/compte choisis)
         const outgoingTx = transactions
           .filter((t: any) => t.statut === 'non_identifie' && Number(t.debit) > 0)
           .sort((a: any, b: any) => (a.date || '').localeCompare(b.date || ''))
@@ -2297,10 +2298,16 @@ Voulez-vous vraiment continuer ?`
             <CardHeader className="pb-2">
               <CardTitle className="text-[#0B0F2E] flex items-center gap-2 text-base">
                 <span>📊</span> Relevé bancaire → Factures
+                {selectedCompte && selectedCompte !== 'all' && (
+                  <Badge variant="outline" className="text-xs font-normal">{selectedCompte}</Badge>
+                )}
                 <span className="text-xs font-normal text-gray-400 ml-auto">
                   {outgoingTx.length} paiement{outgoingTx.length > 1 ? 's' : ''} · {withMatch.length} avec correspondance · {withoutMatch.length} sans
                 </span>
               </CardTitle>
+              <p className="text-xs text-gray-500 mt-1">
+                Sélectionnez un compte bancaire et un mois ci-dessus pour voir les paiements et leurs factures correspondantes.
+              </p>
             </CardHeader>
             <CardContent className="p-0 overflow-x-auto">
               {outgoingTx.length === 0 ? (
