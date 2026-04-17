@@ -3774,22 +3774,18 @@ export async function POST(request: Request) {
 
     // ── annuler_paiement_factures : remettre N factures en "en_attente" ──
     // Remet le statut, clear rapproche_*, et délettrer les tx bancaires associées.
-    // C'est l'équivalent UI du SQL « UPDATE factures SET statut='en_attente' WHERE id IN (...) »
+    // Si facture_ids = ['ALL'], remet TOUTES les factures + TOUTES les tx bancaires
+    // à zéro pour la société (reset complet du rapprochement).
     if (action === 'annuler_paiement_factures') {
       const { societe_id: socId, facture_ids } = body
-      if (!socId || !Array.isArray(facture_ids) || facture_ids.length === 0) {
-        return NextResponse.json({ error: 'societe_id et facture_ids[] requis' }, { status: 400 })
+      if (!socId) {
+        return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
       }
 
-      // 1. Récupérer les factures avec leurs infos de rapprochement
-      const { data: facsToReset } = await supabase
-        .from('factures')
-        .select('id, rapproche_releve_id, rapproche_transaction_idx, statut')
-        .in('id', facture_ids)
-        .eq('societe_id', socId)
+      const isResetAll = Array.isArray(facture_ids) && facture_ids.length === 1 && facture_ids[0] === 'ALL'
 
-      // 2. Remettre les factures en attente
-      const { error: resetErr } = await supabase
+      // 1. Remettre les factures en attente
+      let resetQuery = supabase
         .from('factures')
         .update({
           statut: 'en_attente',
@@ -3798,46 +3794,61 @@ export async function POST(request: Request) {
           rapproche_date: null,
           rapproche_source: null,
         })
-        .in('id', facture_ids)
         .eq('societe_id', socId)
+        .neq('statut', 'annule')
+        .neq('statut', 'brouillon')
 
+      if (!isResetAll && Array.isArray(facture_ids) && facture_ids.length > 0) {
+        resetQuery = resetQuery.in('id', facture_ids)
+      }
+
+      const { data: resetData, error: resetErr } = await resetQuery.select('id')
       if (resetErr) {
         return NextResponse.json({ error: resetErr.message }, { status: 500 })
       }
 
-      // 3. Délettrer les transactions bancaires associées
+      // 2. Remettre TOUTES les tx bancaires à non_identifie
+      // (pas seulement celles liées aux factures, car les tx auto-classifiées
+      // Phase 1/3 ne sont liées à aucune facture mais bloquent le re-rapprochement)
       let txReset = 0
-      const releveUpdates = new Map<string, { releve_id: string; indices: number[] }>()
-      for (const f of facsToReset || []) {
-        if (f.rapproche_releve_id && f.rapproche_transaction_idx != null) {
-          const key = f.rapproche_releve_id
-          if (!releveUpdates.has(key)) releveUpdates.set(key, { releve_id: key, indices: [] })
-          releveUpdates.get(key)!.indices.push(Number(f.rapproche_transaction_idx))
-        }
-      }
-      for (const { releve_id: rId, indices } of releveUpdates.values()) {
-        const { data: rel } = await supabase
-          .from('releves_bancaires').select('id, transactions_json').eq('id', rId).single()
-        if (!rel?.transactions_json) continue
-        const txs = [...rel.transactions_json]
+      const { data: releves } = await supabase
+        .from('releves_bancaires')
+        .select('id, transactions_json')
+        .eq('societe_id', socId)
+
+      for (const rel of releves || []) {
+        const txs = [...(rel.transactions_json || [])]
         let changed = false
-        for (const idx of indices) {
-          if (idx < txs.length && txs[idx]) {
-            const { lettre, facture_id, facture_ids: fids, matched_type, match_confidence, note, rapproche_at, rapprochement_multi, nb_factures, ecart_montant, ...rest } = txs[idx]
-            txs[idx] = { ...rest, statut: 'non_identifie' }
+        for (let i = 0; i < txs.length; i++) {
+          const tx = txs[i]
+          if (!tx) continue
+          // Garder les virements internes (ils sont corrects)
+          if (tx.statut === 'interne' || tx.matched_type === 'transfert_interne') continue
+          // Tout le reste → non_identifie
+          if (tx.statut === 'rapproche' || tx.statut === 'propose' || tx.lettre || tx.facture_id || tx.facture_ids || tx.matched_type) {
+            const { lettre, facture_id, facture_ids: fids, ecriture_id, matched_type, match_confidence, note, rapproche_at, rapprochement_multi, nb_factures, ecart_montant, ...rest } = tx
+            txs[i] = { ...rest, statut: 'non_identifie' }
             changed = true
             txReset++
           }
         }
         if (changed) {
-          await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', rId)
+          await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', rel.id)
         }
       }
 
+      // 3. Supprimer les écritures BNQ liées au rapprochement
+      const { count: ecrituresDeleted } = await supabase
+        .from('ecritures_comptables_v2')
+        .delete({ count: 'exact' })
+        .eq('societe_id', socId)
+        .eq('journal', 'BNQ')
+
       return NextResponse.json({
         ok: true,
-        nb_factures_reset: (facsToReset || []).length,
+        nb_factures_reset: (resetData || []).length,
         nb_tx_delettrees: txReset,
+        nb_ecritures_supprimees: ecrituresDeleted || 0,
       })
     }
 
