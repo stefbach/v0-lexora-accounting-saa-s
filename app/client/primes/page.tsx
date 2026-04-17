@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -42,8 +43,7 @@ const SCOPE_LABELS: Record<string, string> = {
 
 export default function PrimesPage() {
   const { profile, loading: profileLoading } = useProfile()
-  const [societes, setSocietes] = useState<Societe[]>([])
-  const [selectedSociete, setSelectedSociete] = useState("")
+  const { societeId } = useSocieteActive()
   const [regles, setRegles] = useState<ReglePrime[]>([])
   const [calculs, setCalculs] = useState<PrimeCalculee[]>([])
   const [historique, setHistorique] = useState<PrimeCalculee[]>([])
@@ -58,46 +58,34 @@ export default function PrimesPage() {
     scope_value: "", conditions: "", periode: "", plafond: "",
   })
 
-  const fetchSocietes = useCallback(async () => {
-    if (!profile?.id) return
-    try {
-      const r = await fetch(`/api/societes?user_id=${profile.id}`)
-      if (r.ok) { const d = await r.json(); setSocietes(d.societes || []) }
-    } catch { /* silent */ }
-  }, [profile?.id])
-
   const fetchRegles = useCallback(async () => {
-    if (!selectedSociete) return
+    if (!societeId) return
     setFetching(true)
     try {
-      const r = await fetch(`/api/rh/primes/regles?societe_id=${selectedSociete}`)
+      const r = await fetch(`/api/rh/primes/regles?societe_id=${societeId}`)
       if (r.ok) { const d = await r.json(); setRegles(d.regles || []) }
     } catch { /* silent */ }
     setFetching(false)
-  }, [selectedSociete])
+  }, [societeId])
 
   const fetchHistorique = useCallback(async () => {
-    if (!selectedSociete) return
+    if (!societeId) return
     try {
-      const r = await fetch(`/api/rh/primes/regles?societe_id=${selectedSociete}&historique=true`)
+      const r = await fetch(`/api/rh/primes/regles?societe_id=${societeId}&historique=true`)
       if (r.ok) { const d = await r.json(); setHistorique(d.primes || []) }
     } catch { /* silent */ }
-  }, [selectedSociete])
+  }, [societeId])
 
-  useEffect(() => { fetchSocietes() }, [fetchSocietes])
-  useEffect(() => {
-    if (societes.length && !selectedSociete) setSelectedSociete(societes[0].id)
-  }, [societes, selectedSociete])
   useEffect(() => { fetchRegles(); fetchHistorique() }, [fetchRegles, fetchHistorique])
 
   const handleCreerRegle = async () => {
-    if (!form.nom || !selectedSociete) return
+    if (!form.nom || !societeId) return
     try {
       const r = await fetch("/api/rh/primes/regles", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "creer_regle", societe_id: selectedSociete,
+          action: "creer_regle", societe_id: societeId,
           nom: form.nom, type: form.type,
           montant: form.montant ? parseFloat(form.montant) : 0,
           scope: form.scope, scope_value: form.scope_value || null,
@@ -128,13 +116,13 @@ export default function PrimesPage() {
   }
 
   const handleCalculer = async () => {
-    if (!selectedSociete || !periode) return
+    if (!societeId || !periode) return
     setCalculating(true)
     try {
       const r = await fetch("/api/rh/primes/regles", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "calculer", societe_id: selectedSociete, periode }),
+        body: JSON.stringify({ action: "calculer", societe_id: societeId, periode }),
       })
       if (r.ok) { const d = await r.json(); setCalculs(d.primes || []) }
     } catch { /* silent */ }
@@ -146,7 +134,7 @@ export default function PrimesPage() {
       await fetch("/api/rh/primes/regles", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "valider", societe_id: selectedSociete, periode }),
+        body: JSON.stringify({ action: "valider", societe_id: societeId, periode }),
       })
       fetchHistorique()
     } catch { /* silent */ }
@@ -157,7 +145,7 @@ export default function PrimesPage() {
       await fetch("/api/rh/primes/regles", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "integrer_paie", societe_id: selectedSociete, periode }),
+        body: JSON.stringify({ action: "integrer_paie", societe_id: societeId, periode }),
       })
     } catch { /* silent */ }
   }
@@ -177,17 +165,6 @@ export default function PrimesPage() {
           <h1 className="text-2xl font-bold text-[#0B0F2E]">Gestion des Primes</h1>
           <p className="text-sm text-gray-500">Catalogue, calcul et suivi des primes</p>
         </div>
-        <Select value={selectedSociete} onValueChange={setSelectedSociete}>
-          <SelectTrigger className="w-64">
-            <Building2 className="w-4 h-4 mr-2 text-[#0B0F2E]" />
-            <SelectValue placeholder="Societe" />
-          </SelectTrigger>
-          <SelectContent>
-            {societes.map(s => (
-              <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
       </div>
 
       <Tabs defaultValue="catalogue">
