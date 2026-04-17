@@ -130,6 +130,30 @@ export default function EspaceEmployePage() {
 
   useEffect(() => { load() }, [load])
 
+  // V2.5 — refresh ciblé côté Congés. Avant, CongesTab appelait onRefresh=load
+  // qui relançait 6 fetch du dashboard pour une simple création/annulation.
+  // On relit uniquement balances + liste (la liste est aussi utilisée comme
+  // fallback par le calcul des soldes).
+  const refreshConges = useCallback(async () => {
+    if (!employe) return
+    const [cgRes, histRes] = await Promise.all([
+      fetch(`/api/rh/conges?action=balances&employe_id=${employe.id}`).then(r => r.json()).catch(() => ({ balances: [] })),
+      fetch(`/api/rh/conges?employe_id=${employe.id}`).then(r => r.json()).catch(() => ({ conges: [] })),
+    ])
+    const bal = cgRes.balances?.find((b: any) => b.employe_id === employe.id) || cgRes.balances?.[0]
+    if (bal && bal.al_droit !== undefined) {
+      setConges(bal)
+    } else {
+      const histConges = (histRes.conges || histRes.demandes || []).filter((c: any) => c.statut === "approuve" || c.statut === "approved")
+      const alPris = histConges.filter((c: any) => c.type_conge === "AL").reduce((s: number, c: any) => s + (Number(c.nb_jours) || 0), 0)
+      const slPris = histConges.filter((c: any) => c.type_conge === "SL").reduce((s: number, c: any) => s + (Number(c.nb_jours) || 0), 0)
+      setConges({
+        al_droit: 22, al_pris: alPris, al_solde: 22 - alPris,
+        sl_droit: 15, sl_pris: slPris, sl_solde: 15 - slPris,
+      })
+    }
+  }, [employe])
+
   const doPunch = async (type: string) => {
     if (!employe) return
     setPunching(true)
@@ -257,7 +281,7 @@ export default function EspaceEmployePage() {
           )}
 
           {tab === "conges" && employe && (
-            <CongesTab employe={employe} onRefresh={load} />
+            <CongesTab employe={employe} onRefresh={refreshConges} />
           )}
 
           {tab === "trajets" && employe && (
