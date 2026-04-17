@@ -1076,7 +1076,20 @@ export default function EspaceEmployePage() {
     }
     applyHash()
     window.addEventListener("hashchange", applyHash)
-    return () => window.removeEventListener("hashchange", applyHash)
+    // Fallback: Next 14 App Router doesn't always fire hashchange nor
+    // update pathname/searchParams on <Link> hash-only clicks. Catch
+    // those clicks at the document level and replay applyHash() once
+    // the browser has written the new hash into the URL.
+    const onSidebarClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null
+      if (!target?.closest?.('a[href^="/salarie#"]')) return
+      requestAnimationFrame(applyHash)
+    }
+    document.addEventListener("click", onSidebarClick)
+    return () => {
+      window.removeEventListener("hashchange", applyHash)
+      document.removeEventListener("click", onSidebarClick)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname, searchParams])
   // When the user clicks the in-page tab bar, keep the URL in sync so the
