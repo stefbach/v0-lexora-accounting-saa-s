@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { getAdminClient } from '@/lib/supabase/admin'
 import { CLAUDE_CONFIG } from '@/lib/ai/prompts'
 import {
   assertFactureAccess,
@@ -10,14 +10,6 @@ import {
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
-
-function getAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-}
 
 // POST /api/client/echeances/extract-batch
 // Extracts date_echeance from PDFs for factures that don't have one

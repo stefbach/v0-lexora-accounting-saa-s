@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
-import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
+import { getAdminClient } from '@/lib/supabase/admin'
 import { createEcrituresForFacture as createEcrituresShared } from '@/lib/accounting/ecritures-factures'
 import {
   assertSocieteAccess,
@@ -8,13 +8,6 @@ import {
   mapSocieteAccessError,
   ResourceNotFoundError,
 } from '@/lib/supabase/assert-societe-access'
-
-function getAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !serviceKey) throw new Error('Missing Supabase admin credentials')
-  return createSupabaseClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
-}
 
 export const dynamic = 'force-dynamic'
 

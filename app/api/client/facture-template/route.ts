@@ -1,15 +1,11 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { getAdminClient } from '@/lib/supabase/admin'
 import { assertSocieteAccess, mapSocieteAccessError } from '@/lib/supabase/assert-societe-access'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 export const runtime = 'nodejs'
-
-function getAdminClient() {
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { autoRefreshToken: false, persistSession: false } })
-}
 
 // Limits
 const MAX_FILE_SIZE = 20 * 1024 * 1024 // 20 MB
@@ -32,12 +28,7 @@ export async function POST(request: Request) {
       if (!societe_id) {
         return NextResponse.json({ error: 'societe_id requis — plus de templates globaux' }, { status: 400 })
       }
-      const adminAccessCheck = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!,
-        { auth: { autoRefreshToken: false, persistSession: false } },
-      )
-      await assertSocieteAccess(adminAccessCheck, user.id, societe_id)
+      await assertSocieteAccess(getAdminClient(), user.id, societe_id)
 
       if (file.size > MAX_FILE_SIZE) {
         return NextResponse.json({

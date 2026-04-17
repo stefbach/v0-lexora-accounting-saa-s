@@ -1,19 +1,11 @@
-import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { getAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 import { getTauxChange } from '@/lib/taux-change'
 import { SYSTEM_PROMPT_RECOMMANDATIONS_CFO } from '@/lib/ai/prompts'
 import { assertSocieteAccess, mapSocieteAccessError } from '@/lib/supabase/assert-societe-access'
 
 export const maxDuration = 60
-
-function getAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    (process.env.SUPABASE_SERVICE_ROLE_KEY)!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-}
 
 function convertToMUR(amount: number, devise: string, rates: Record<string, number>): number {
   if (!devise || devise === 'MUR') return amount

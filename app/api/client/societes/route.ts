@@ -1,13 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
-import { createClient as adminClient } from '@supabase/supabase-js'
+import { getAdminClient as getAdmin } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 import { assertSocieteAccess, mapSocieteAccessError } from '@/lib/supabase/assert-societe-access'
-
-function getAdmin() {
-  return adminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-    auth: { autoRefreshToken: false, persistSession: false }
-  })
-}
 
 export async function GET() {
   try {

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
-import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
+import { getAdminClient } from '@/lib/supabase/admin'
 import {
   assertDocumentAccess,
   assertFactureAccess,
@@ -8,14 +8,6 @@ import {
 } from '@/lib/supabase/assert-societe-access'
 
 export const dynamic = 'force-dynamic'
-
-function getAdminClient() {
-  return createSupabaseClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } },
-  )
-}
 
 // Actions disponibles pour les clients (client_admin et client_user)
 export async function POST(request: Request) {
