@@ -179,20 +179,30 @@ export function TrajetsTab({ employe }: { employe: any }) {
           {loadingT ? <div className="flex justify-center py-6"><Loader2 className="w-6 h-6 animate-spin" /></div> :
           trajets.filter((t: any) => t.statut !== "en_cours").length === 0 ? <p className="text-gray-400 text-center py-6 text-sm">Aucun trajet enregistré</p> : (
             <div className="space-y-2">
-              {trajets.filter((t: any) => t.statut !== "en_cours").map((t: any) => (
-                <div key={t.id} className="flex items-center justify-between p-3 rounded-xl border" style={{ borderLeft: `3px solid ${t.statut === "valide" ? "#2ECC8A" : t.statut === "rejete" ? "#dc2626" : "#D4AF37"}` }}>
-                  <div>
-                    <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>{new Date(t.date_trajet).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })} — {t.vehicule}</p>
-                    <p className="text-xs text-gray-400">{t.motif || "—"}</p>
+              {trajets.filter((t: any) => t.statut !== "en_cours").map((t: any) => {
+                const motifRejet = t.motif_rejet || t.raison_rejet || t.commentaire_rh || null
+                return (
+                  <div key={t.id} className="flex flex-col gap-2 p-3 rounded-xl border" style={{ borderLeft: `3px solid ${t.statut === "valide" ? "#2ECC8A" : t.statut === "rejete" ? "#dc2626" : "#D4AF37"}` }}>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>{new Date(t.date_trajet).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })} — {t.vehicule}</p>
+                        <p className="text-xs text-gray-400">{t.motif || "—"}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-mono font-bold text-sm">{Number(t.distance_totale_km || 0).toFixed(1)} km</p>
+                        <Badge className={`text-[10px] ${t.statut === "valide" ? "bg-green-100 text-green-700" : t.statut === "rejete" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"}`}>
+                          {t.statut === "valide" ? "Validé" : t.statut === "rejete" ? "Rejeté" : "En attente"}
+                        </Badge>
+                      </div>
+                    </div>
+                    {t.statut === "rejete" && motifRejet && (
+                      <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">
+                        <span className="font-semibold">Motif de rejet :</span> {motifRejet}
+                      </div>
+                    )}
                   </div>
-                  <div className="text-right">
-                    <p className="font-mono font-bold text-sm">{Number(t.distance_totale_km || 0).toFixed(1)} km</p>
-                    <Badge className={`text-[10px] ${t.statut === "valide" ? "bg-green-100 text-green-700" : t.statut === "rejete" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"}`}>
-                      {t.statut === "valide" ? "Validé" : t.statut === "rejete" ? "Rejeté" : "En attente"}
-                    </Badge>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </CardContent>
