@@ -401,17 +401,32 @@ export async function GET(request: Request) {
     }
 
     // 2) Get employees for those societes
-    // Filtre: uniquement employés actifs non-partis (WRA 2019 — un employé
-    // avec date_depart ne peut plus prendre de congé ; un employé actif=false
-    // est désactivé même sans date_depart). Les employés partis restent
-    // visibles dans /rh/depart et /rh/historique-paie uniquement.
-    const { data: emps } = await supabase
-      .from('employes')
-      .select('id, nom, prenom, poste, societe_id, date_arrivee, gender, actif, date_depart')
-      .in('societe_id', societeIds)
-      .eq('actif', true)
-      .is('date_depart', null)
-    const employees = emps || []
+    // Sprint 16 fix — SELECT résilient : try/catch + retry sans colonnes
+    // optionnelles si 42703. Colonnes gender/genre/actif peuvent manquer
+    // sur certains envs selon les migrations appliquées.
+    let employees: any[] = []
+    try {
+      const { data: emps, error: empErr } = await supabase
+        .from('employes')
+        .select('id, nom, prenom, poste, societe_id, date_arrivee, genre, gender, actif, date_depart')
+        .in('societe_id', societeIds)
+        .eq('actif', true)
+        .is('date_depart', null)
+      if (empErr) {
+        // Retry without genre/actif if columns missing (42703)
+        console.warn('[conges GET] employees query error, retrying:', empErr.message, empErr.code)
+        const { data: emps2 } = await supabase
+          .from('employes')
+          .select('id, nom, prenom, poste, societe_id, date_arrivee')
+          .in('societe_id', societeIds)
+          .is('date_depart', null)
+        employees = emps2 || []
+      } else {
+        employees = emps || []
+      }
+    } catch (e: any) {
+      console.error('[conges GET] employees fetch exception:', e?.message || e)
+    }
     const employeeIds = employees.map((e: any) => e.id)
 
     if (employeeIds.length === 0) {
@@ -746,7 +761,21 @@ export async function POST(request: Request) {
       if (!body.employe_id || !body.type_conge || !body.date_debut || !body.date_fin)
         return NextResponse.json({ error: 'Champs requis manquants' }, { status: 400 })
 
-      const { data: emp } = await supabase.from('employes').select('id, societe_id, gender, genre, auth_user_id, email, date_arrivee').eq('id', body.employe_id).maybeSingle()
+      // Sprint 16 fix — SELECT résilient pour genre (colonne optionnelle mig 047)
+      let emp: any = null
+      {
+        const { data, error } = await supabase.from('employes')
+          .select('id, societe_id, gender, genre, auth_user_id, email, date_arrivee')
+          .eq('id', body.employe_id).maybeSingle()
+        if (error && error.code === '42703') {
+          const { data: d2 } = await supabase.from('employes')
+            .select('id, societe_id, gender, auth_user_id, email, date_arrivee')
+            .eq('id', body.employe_id).maybeSingle()
+          emp = d2
+        } else {
+          emp = data
+        }
+      }
       if (!emp) {
         return NextResponse.json({ error: 'Employe non trouve' }, { status: 404 })
       }
