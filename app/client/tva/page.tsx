@@ -31,6 +31,7 @@ import {
   Download,
 } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import Link from "next/link"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -80,11 +81,10 @@ function isForeignSupplier(emetteur: string): boolean {
 
 export default function TVAPage() {
   const { profile, loading } = useProfile()
+  const { societeId, societe } = useSocieteActive()
   const [data, setData] = useState<any>(null)
   const [fetching, setFetching] = useState(true)
   const [computing, setComputing] = useState(false)
-  const [selectedSociete, setSelectedSociete] = useState<string>("")
-  const [societes, setSocietes] = useState<{ id: string; nom: string }[]>([])
   const [exportOpen, setExportOpen] = useState(false)
   const [showAllClient, setShowAllClient] = useState(false)
   const [showAllLocal, setShowAllLocal] = useState(false)
@@ -141,26 +141,11 @@ export default function TVAPage() {
     return `${QUARTER_LABELS[selectedTrimestre] || selectedTrimestre} ${selectedYear}-${selectedYear + 1}`
   }
 
-  // Fetch ALL sociétés the user has access to
   useEffect(() => {
-    Promise.all([
-      fetch("/api/client/societes").then(r => r.json()).catch(() => ({ societes: [] })),
-      fetch("/api/comptable/societes").then(r => r.json()).catch(() => ({ societes: [] })),
-    ]).then(([d1, d2]) => {
-      const all = [...(d1.societes || []), ...(d2.societes || [])]
-      const unique = Array.from(new Map(all.map((s: any) => [s.id, s])).values()) as { id: string; nom: string }[]
-      setSocietes(unique)
-      if (unique.length > 0 && !selectedSociete) setSelectedSociete(unique[0].id)
-    })
-  }, [])
-
-  useEffect(() => {
+    if (!societeId) { setFetching(false); return }
     setFetching(true)
     const { debut, fin } = getPeriodDates()
-    const base = selectedSociete && selectedSociete !== "all"
-      ? `societe_id=${selectedSociete}&`
-      : ""
-    const url = `/api/client/financial?${base}date_debut=${debut}&date_fin=${fin}`
+    const url = `/api/client/financial?societe_id=${societeId}&date_debut=${debut}&date_fin=${fin}`
     fetch(url)
       .then((res) => res.json())
       .then((json) => {
@@ -168,7 +153,7 @@ export default function TVAPage() {
       })
       .catch(() => setData(null))
       .finally(() => setFetching(false))
-  }, [selectedSociete, periodMode, selectedMonth, selectedTrimestre, selectedYear])
+  }, [societeId, periodMode, selectedMonth, selectedTrimestre, selectedYear])
 
   if (loading || fetching) {
     return (
@@ -405,18 +390,6 @@ export default function TVAPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {societes.length > 0 && (
-            <div className="flex items-center gap-2">
-              <Building2 className="h-4 w-4 text-muted-foreground" />
-              <Select value={selectedSociete} onValueChange={setSelectedSociete}>
-                <SelectTrigger className="w-[220px] h-9"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
-                  {societes.length > 1 && <SelectItem value="all">Toutes les soci&eacute;t&eacute;s</SelectItem>}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
           {/* Deadline indicator */}
           <Card className={`border-2 ${deadline.isOverdue ? "border-red-500" : deadline.isUrgent ? "border-orange-400" : "border-gray-200"}`}>
             <CardContent className="py-3 px-4 flex items-center gap-3">
@@ -481,7 +454,7 @@ export default function TVAPage() {
                     try {
                       const { pdf } = await import('@react-pdf/renderer')
                       const { TVADeclarationPDF } = await import('@/components/pdf/TVADeclarationPDF')
-                      const socData = societes.find((x: any) => x.id === selectedSociete)
+                      const socData = societe
                       const pLabel = getPeriodLabel()
                       const taxableAchatsHT = facturesFournisseurLocal.filter((fac: any) => (Number(fac.montant_tva) || 0) > 0).reduce((sum: number, fac: any) => sum + (Number(fac.montant_ht) || 0), 0)
                       const caHT = facturesClientLocal.reduce((sum: number, fac: any) => sum + (Number(fac.montant_ht) || 0), 0)
