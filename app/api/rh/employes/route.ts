@@ -66,22 +66,84 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  // Logs étape par étape pour tracer les 500 en prod (Vercel Functions logs).
+  const step = (label: string, extra?: any) =>
+    console.log(`[employes POST] ${label}`, extra !== undefined ? extra : '')
   try {
+    step('START')
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    step('auth OK', { userId: user.id })
     const supabase = getAdminClient()
 
     const body = await request.json()
+    step('body parsed', { keys: Object.keys(body), societe_id: body.societe_id, nom: body.nom })
     if (!body.societe_id || !body.nom || !body.prenom || !body.salaire_base)
       return NextResponse.json({ error: 'Champs requis manquants' }, { status: 400 })
 
     // Générer code employé
-    const { count } = await supabase.from('employes').select('*', { count: 'exact', head: true }).eq('societe_id', body.societe_id)
+    const { count, error: countErr } = await supabase.from('employes')
+      .select('*', { count: 'exact', head: true }).eq('societe_id', body.societe_id)
+    if (countErr) {
+      console.error('[employes POST] count error:', countErr.message, countErr.code, countErr.details)
+      return NextResponse.json({ error: `Erreur comptage employés: ${countErr.message}`, code: countErr.code }, { status: 500 })
+    }
     body.code = String((count || 0) + 1).padStart(6, '0')
+    step('code generated', { code: body.code })
 
-    const { data, error } = await supabase.from('employes').insert(body).select().single()
-    if (error) throw error
+    // Sprint — INSERT résilient au schéma : si une colonne n'existe pas en
+    // prod (mig 040 / 117 non appliquée), on strip la colonne mentionnée
+    // dans le message d'erreur et on retry. Permet au formulaire d'envoyer
+    // toutes les colonnes nouvelles (phone_allowance, daily_bus_fare,
+    // prime_fixe_*, etc.) sans casser la création sur des envs en retard.
+    //
+    // Pattern identique à l'approche retry 42703 déjà utilisée dans
+    // jours-feries et frais-km. On garde un compteur max pour éviter les
+    // boucles infinies si l'erreur n'est pas stripp-able.
+    let insertBody = { ...body }
+    let data: any = null
+    let insertError: any = null
+    const strippedCols: string[] = []
+    for (let attempt = 0; attempt < 10; attempt++) {
+      step(`insert attempt ${attempt + 1}`, { cols: Object.keys(insertBody).length })
+      const res = await supabase.from('employes').insert(insertBody).select().single()
+      if (!res.error) { data = res.data; insertError = null; break }
+      insertError = res.error
+      console.error('[employes POST] insert error:', {
+        attempt: attempt + 1,
+        message: res.error.message,
+        code: res.error.code,
+        hint: res.error.hint,
+        details: res.error.details,
+      })
+      // 42703 = undefined_column — strip la colonne mentionnée et retry
+      if (res.error.code === '42703') {
+        // Postgres message typique : "column \"phone_allowance\" of relation \"employes\" does not exist"
+        const match = res.error.message.match(/column "([^"]+)" of relation/)
+          || res.error.message.match(/column ([a-z_]+) does not exist/i)
+        const col = match?.[1]
+        if (col && col in insertBody) {
+          delete insertBody[col]
+          strippedCols.push(col)
+          continue
+        }
+      }
+      break // autre erreur non récupérable
+    }
+    if (insertError) {
+      return NextResponse.json({
+        error: `Erreur création employé: ${insertError.message}${insertError.hint ? ` (${insertError.hint})` : ''}`,
+        code: insertError.code,
+        hint: insertError.hint,
+        details: insertError.details,
+        stripped_columns: strippedCols,
+      }, { status: 500 })
+    }
+    if (!data) {
+      return NextResponse.json({ error: 'INSERT a réussi mais aucune ligne retournée (anomalie)' }, { status: 500 })
+    }
+    step('insert OK', { id: data.id, code: data.code, stripped: strippedCols })
 
     // Sprint 3 BUG 2 — Initialiser soldes congés année en cours AVEC les
     // valeurs WRA 2019. Auparavant on insérait juste {employe_id, annee}
@@ -101,14 +163,26 @@ export async function POST(request: Request) {
     const alDroit = moisAnciennete >= 12 ? 22 : Math.max(0, Math.round(moisAnciennete * 22 / 12))
     const slDroit = moisAnciennete >= 12 ? 15 : Math.max(0, Math.round(moisAnciennete * 15 / 12))
 
-    await supabase.from('soldes_conges').insert({
-      employe_id: data.id,
-      annee: now.getFullYear(),
-      al_droit: alDroit,
-      al_pris: 0,
-      sl_droit: slDroit,
-      sl_pris: 0,
-    })
+    // Sprint — soldes_conges insert en best-effort. Un échec ne doit pas
+    // faire 500 la création d'employé (les rapports recalculent à la
+    // volée côté /rh/conges). On log et on continue.
+    try {
+      const { error: soldesErr } = await supabase.from('soldes_conges').insert({
+        employe_id: data.id,
+        annee: now.getFullYear(),
+        al_droit: alDroit,
+        al_pris: 0,
+        sl_droit: slDroit,
+        sl_pris: 0,
+      })
+      if (soldesErr) {
+        console.warn('[employes POST] soldes_conges insert échec (non bloquant):', soldesErr.message, soldesErr.code)
+      } else {
+        step('soldes_conges OK')
+      }
+    } catch (e: any) {
+      console.warn('[employes POST] soldes_conges exception (non bloquant):', e?.message || e)
+    }
 
     // Sprint 4 TÂCHE 6 — Contrat brouillon auto à l'embauche.
     // Cherche un template dans contrat_templates qui matche le type_contrat
@@ -166,13 +240,19 @@ export async function POST(request: Request) {
       console.warn('[employes POST] contrat brouillon exception:', e?.message || e)
       contratStatus = 'failed'
     }
+    step('DONE', { id: data.id, contrat_status: contratStatus, stripped: strippedCols })
 
     return NextResponse.json({
       employe: data,
       contrat_status: contratStatus, // 'created' | 'no_template' | 'failed'
       contrat_id: contratId,
+      stripped_columns: strippedCols, // info debug : colonnes absentes en prod stripp-ées
     }, { status: 201 })
   } catch (e: unknown) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
+    console.error('[employes POST] UNCAUGHT:', e)
+    return NextResponse.json({
+      error: e instanceof Error ? e.message : 'Erreur',
+      stack: e instanceof Error ? e.stack?.split('\n').slice(0, 5).join('\n') : undefined,
+    }, { status: 500 })
   }
 }
