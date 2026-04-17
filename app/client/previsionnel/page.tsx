@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import Link from "next/link"
 import { useProfile } from "@/hooks/use-profile"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -66,10 +67,9 @@ interface Credit {
 
 export default function PrevisionnelPage() {
   const { profile, loading } = useProfile()
+  const { societeId } = useSocieteActive()
   const [data, setData] = useState<any>(null)
   const [fetching, setFetching] = useState(true)
-  const [selectedSociete, setSelectedSociete] = useState<string>("")
-  const [societes, setSocietes] = useState<{ id: string; nom: string }[]>([])
   const [budgets, setBudgets] = useState<Record<string, number>>({})
   const [investments, setInvestments] = useState<Investment[]>([])
   const [credits, setCredits] = useState<Credit[]>([])
@@ -115,18 +115,6 @@ export default function PrevisionnelPage() {
     } catch { /* ignore */ }
   }, [])
 
-  // Fetch ALL sociétés the user has access to (same pattern as banque page)
-  useEffect(() => {
-    Promise.all([
-      fetch("/api/client/societes").then(r => r.json()).catch(() => ({ societes: [] })),
-      fetch("/api/comptable/societes").then(r => r.json()).catch(() => ({ societes: [] })),
-    ]).then(([d1, d2]) => {
-      const all = [...(d1.societes || []), ...(d2.societes || [])]
-      const unique = Array.from(new Map(all.map((s: any) => [s.id, s])).values()) as { id: string; nom: string }[]
-      setSocietes(unique)
-      if (unique.length > 0 && !selectedSociete) setSelectedSociete(unique[0].id)
-    })
-  }, [])
 
   const saveBudgets = useCallback((b: Record<string, number>) => {
     setBudgets(b)
@@ -135,9 +123,9 @@ export default function PrevisionnelPage() {
 
   // Load investissements/credits from DB
   const fetchInvestissements = useCallback(async () => {
-    if (!selectedSociete || selectedSociete === "all") return
+    if (!societeId) return
     try {
-      const res = await fetch(`/api/client/investissements?societe_id=${selectedSociete}`)
+      const res = await fetch(`/api/client/investissements?societe_id=${societeId}`)
       const json = await res.json()
       setInvestments((json.investissements || []).map((i: any) => ({
         id: i.id, description: i.libelle, amount: Number(i.montant) || 0, date: i.date_debut || "",
@@ -147,18 +135,18 @@ export default function PrevisionnelPage() {
         rate: Number(c.taux_interet) || 0, monthly: Number(c.mensualite) || 0, remaining: Number(c.capital_restant) || 0,
       })))
     } catch { /* keep existing */ }
-  }, [selectedSociete])
+  }, [societeId])
 
   useEffect(() => { fetchInvestissements() }, [fetchInvestissements])
 
   const saveInvestment = async (inv: Investment) => {
-    if (!selectedSociete || selectedSociete === "all" || !inv.description) return
+    if (!societeId || !inv.description) return
 setSaveStatus(prev => ({ ...prev, [inv.id]: 'saving' }))
     try {
       const isNew = inv.id?.startsWith?.("new-")
       const res = await fetch("/api/client/investissements", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: isNew ? undefined : inv.id, societe_id: selectedSociete, type: "investissement", libelle: inv.description, montant: inv.amount, date_debut: inv.date || null }),
+        body: JSON.stringify({ id: isNew ? undefined : inv.id, societe_id: societeId, type: "investissement", libelle: inv.description, montant: inv.amount, date_debut: inv.date || null }),
       })
       if (isNew) {
         const json = await res.json()
@@ -185,14 +173,14 @@ setSaveStatus(prev => ({ ...prev, [inv.id]: 'saving' }))
   }
 
   const saveCredit = async (cr: Credit) => {
-    if (!selectedSociete || selectedSociete === "all") return
+    if (!societeId) return
     if (!cr.bank && cr.amount === 0 && cr.monthly === 0 && cr.remaining === 0) return
 setSaveStatus(prev => ({ ...prev, [cr.id]: 'saving' }))
     try {
       const isNew = cr.id?.startsWith?.("new-")
       const res = await fetch("/api/client/investissements", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: isNew ? undefined : cr.id, societe_id: selectedSociete, type: "credit", libelle: cr.bank || "Crédit", montant: cr.amount, taux_interet: cr.rate, mensualite: cr.monthly, capital_restant: cr.remaining, banque: cr.bank }),
+        body: JSON.stringify({ id: isNew ? undefined : cr.id, societe_id: societeId, type: "credit", libelle: cr.bank || "Crédit", montant: cr.amount, taux_interet: cr.rate, mensualite: cr.monthly, capital_restant: cr.remaining, banque: cr.bank }),
       })
       if (isNew) {
         const json = await res.json()
@@ -219,19 +207,18 @@ setSaveStatus(prev => ({ ...prev, [cr.id]: 'saving' }))
   }
 
   const fetchData = useCallback(async () => {
+    if (!societeId) { setFetching(false); return }
     setFetching(true)
     try {
       const { debut, fin } = getPeriodDates()
-      const base = selectedSociete && selectedSociete !== "all"
-        ? `societe_id=${selectedSociete}&`
-        : ""
+      const base = `societe_id=${societeId}&`
       const url = `/api/client/financial?${base}date_debut=${debut}&date_fin=${fin}`
       const res = await fetch(url)
       const json = await res.json()
       setData(json.financial)
     } catch { setData(null) }
     finally { setFetching(false) }
-  }, [selectedSociete, periodMode, selectedMonth, selectedTrimestre, selectedYear])
+  }, [societeId, periodMode, selectedMonth, selectedTrimestre, selectedYear])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -399,18 +386,6 @@ setSaveStatus(prev => ({ ...prev, [cr.id]: 'saving' }))
             <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Mon Prévisionnel</h1>
             <p className="text-sm text-muted-foreground mt-1">Budget, trésorerie, BFR et investissements</p>
           </div>
-          {societes.length > 0 && (
-            <div className="flex items-center gap-2">
-              <Building2 className="h-4 w-4 text-muted-foreground" />
-              <Select value={selectedSociete} onValueChange={setSelectedSociete}>
-                <SelectTrigger className="w-[220px] h-9"><SelectValue placeholder="Société" /></SelectTrigger>
-                <SelectContent>
-                  {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
-                  {societes.length > 1 && <SelectItem value="all">Toutes les sociétés</SelectItem>}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
         </div>
         <Button variant="outline" size="sm" onClick={fetchData} disabled={fetching}>
           <RefreshCw className={`h-4 w-4 mr-2 ${fetching ? "animate-spin" : ""}`} />
