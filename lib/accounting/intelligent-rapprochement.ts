@@ -924,16 +924,24 @@ function matchByAmountFallback(
     // Ne PAS matcher si ambiguïté ET pas de signal tiers fort
     if (isAmbiguous && best.tiersSim < 0.30) continue
 
+    // RÈGLE FONDAMENTALE : si le tiers ne correspond PAS DU TOUT, on ne matche
+    // PAS automatiquement, même si le montant est exact. Un montant de 213 EUR
+    // peut correspondre à Google Cloud OU à un virement salaire — sans signal
+    // tiers, c'est du hasard.
+    // On SKIP complètement (même pas "proposé") si tiersSim = 0 et qu'il n'y a
+    // aucun mot en commun entre la tx et la facture.
+    if (best.tiersSim < 0.10) continue
+
     const isExact = best.diff < 0.005
     const isTDS = best.diff >= 0.02 && best.diff <= 0.06
     let confidence = 0.50
-    if (isExact) confidence = 0.88
-    else if (isTDS) confidence = 0.72
-    else confidence = 0.55
+    if (isExact) confidence = 0.80
+    else if (isTDS) confidence = 0.65
+    else confidence = 0.50
 
-    // Bonus tiers (texte proche)
-    if (best.tiersSim > 0.50) confidence += 0.10
-    else if (best.tiersSim > 0.25) confidence += 0.05
+    // Bonus tiers (texte proche) — le tiers est LE facteur déterminant
+    if (best.tiersSim > 0.50) confidence += 0.15
+    else if (best.tiersSim > 0.25) confidence += 0.08
 
     // Bonus date (même mois)
     if (best.delay <= 15) confidence += 0.05
