@@ -23,6 +23,7 @@ import {
   ShieldAlert,
 } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { ClientPanel, ClientEmpty } from "@/components/client/ClientKit"
 
@@ -82,14 +83,16 @@ function formatMUR(n: number) {
 
 export default function AlertesPage() {
   const { profile } = useProfile()
+  const { societeId } = useSocieteActive()
   const [filter, setFilter] = useState("toutes")
   const [alerts, setAlerts] = useState<AlertItem[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function fetchAlerts() {
+      if (!societeId) { setLoading(false); return }
       try {
-        const res = await fetch("/api/client/alertes")
+        const res = await fetch(`/api/client/alertes?societe_id=${societeId}`)
         if (res.ok) {
           const data = await res.json()
           if (Array.isArray(data.alertes)) {
@@ -110,7 +113,7 @@ export default function AlertesPage() {
     }
 
     fetchAlerts()
-  }, [])
+  }, [societeId])
 
   if (profile?.role === "client_user") {
     return (
