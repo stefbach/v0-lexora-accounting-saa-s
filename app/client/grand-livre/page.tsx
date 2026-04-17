@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Loader2, BookOpen, ChevronLeft, ChevronRight, Download, RefreshCw, FileDown } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 
 function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 function fmtDate(d: string) { return d ? new Date(d).toLocaleDateString("fr-FR") : "—" }
@@ -57,8 +58,7 @@ function getLetterColor(lettre: string): string {
 interface Societe { id: string; nom: string }
 
 export default function ClientGrandLivrePage() {
-  const [societes, setSocietes] = useState<Societe[]>([])
-  const [selectedSociete, setSelectedSociete] = useState("")
+  const { societeId, societe } = useSocieteActive()
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [page, setPage] = useState(1)
@@ -81,19 +81,11 @@ export default function ClientGrandLivrePage() {
     return `${s}-${s + 1}`
   })
 
-  useEffect(() => {
-    fetch("/api/comptable/societes").then(r => r.json()).then(d => {
-      const s = d.societes || []
-      setSocietes(s)
-      if (s.length > 0 && !selectedSociete) setSelectedSociete(s[0].id)
-    })
-  }, [])
-
   const load = useCallback(async () => {
-    if (!selectedSociete) { setData(null); return }
+    if (!societeId) { setData(null); return }
     setLoading(true)
     try {
-      const params = new URLSearchParams({ societe_id: selectedSociete, page: String(page), limit: "50" })
+      const params = new URLSearchParams({ societe_id: societeId, page: String(page), limit: "50" })
       if (compteDebut) params.set("compte_debut", compteDebut)
       if (compteFin) params.set("compte_fin", compteFin)
       if (dateDebut) params.set("date_debut", dateDebut)
@@ -104,7 +96,7 @@ export default function ClientGrandLivrePage() {
       setData(await res.json())
     } catch { setData(null) }
     finally { setLoading(false) }
-  }, [selectedSociete, page, compteDebut, compteFin, dateDebut, dateFin, journal, exercice])
+  }, [societeId, page, compteDebut, compteFin, dateDebut, dateFin, journal, exercice])
 
   useEffect(() => { load() }, [load])
 
@@ -130,11 +122,11 @@ export default function ClientGrandLivrePage() {
   }
 
   const exportPDF = async () => {
-    if (!selectedSociete || pdfLoading) return
+    if (!societeId || pdfLoading) return
     setPdfLoading(true)
     try {
       // Fetch ALL entries (no pagination) for the PDF
-      const params = new URLSearchParams({ societe_id: selectedSociete, limit: "0" })
+      const params = new URLSearchParams({ societe_id: societeId, limit: "0" })
       if (compteDebut) params.set("compte_debut", compteDebut)
       if (compteFin) params.set("compte_fin", compteFin)
       if (dateDebut) params.set("date_debut", dateDebut)
@@ -152,7 +144,7 @@ export default function ClientGrandLivrePage() {
 
       const { pdf } = await import('@react-pdf/renderer')
       const { GrandLivrePDF } = await import('@/components/pdf/GrandLivrePDF')
-      const socData = societes.find(s => s.id === selectedSociete)
+      const socData = societe
       const blob = await pdf(
         <GrandLivrePDF
           societe={socData}
@@ -189,7 +181,7 @@ export default function ClientGrandLivrePage() {
           <Button variant="outline" size="sm" onClick={exportCSV} disabled={!ecritures.length}>
             <Download className="w-4 h-4 mr-2" />CSV
           </Button>
-          <Button variant="outline" size="sm" onClick={exportPDF} disabled={!selectedSociete || pdfLoading}>
+          <Button variant="outline" size="sm" onClick={exportPDF} disabled={!societeId || pdfLoading}>
             {pdfLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileDown className="w-4 h-4 mr-2" />}PDF
           </Button>
         </>
@@ -199,17 +191,7 @@ export default function ClientGrandLivrePage() {
 
       {/* Filtres */}
       <Card>
-        <CardContent className="p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-          <div>
-            <Label className="text-xs">Societe</Label>
-            <Select value={selectedSociete} onValueChange={v => { setSelectedSociete(v); setPage(1) }}>
-              <SelectTrigger className="h-9"><SelectValue placeholder="Choisir..." /></SelectTrigger>
-              <SelectContent>
-                {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
-                <SelectItem value="all">Toutes</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        <CardContent className="p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
           <div>
             <Label className="text-xs">Exercice</Label>
             <Select value={exercice || "all"} onValueChange={v => { setExercice(v === "all" ? "" : v); setPage(1) }}>
@@ -257,7 +239,7 @@ export default function ClientGrandLivrePage() {
         )}
       </div>
 
-      {!selectedSociete ? (
+      {!societeId ? (
         <Card><CardContent className="py-16 text-center text-gray-400">Selectionnez une societe</CardContent></Card>
       ) : loading ? (
         <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-[#0B0F2E]" /></div>
