@@ -15,6 +15,7 @@ import { Search, Landmark, AlertCircle, Clock, RefreshCw, Loader2, Building2, X,
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { useProfile } from "@/hooks/use-profile"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { RequireRole, NON_CLIENT_USER_ROLES } from "@/components/client/RequireRole"
 import { MonthPicker } from "@/components/ui/MonthPicker"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
@@ -117,18 +118,7 @@ export default function ClientBanquePage() {
   }
 
   if (profile?.role === "client_user") {
-    return (
-      <div className="p-6">
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground">Vous n&apos;avez pas accès à cette section.</p>
-            <Link href="/client" className="text-sm underline mt-4 inline-block" style={{ color: "#D4AF37" }}>
-              Retour au tableau de bord
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
-    )
+    return <RequireRole roles={NON_CLIENT_USER_ROLES}>{null}</RequireRole>
   }
 
   if (loading) {

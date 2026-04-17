@@ -10,24 +10,13 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { FileText, CalendarClock, AlertTriangle, CheckCircle } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
+import { RequireRole, NON_CLIENT_USER_ROLES } from "@/components/client/RequireRole"
 
 export default function FiscalFreelancePage() {
   const { profile } = useProfile()
 
   if (profile?.role === "client_user") {
-    return (
-      <div className="p-6 flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-        <h1 className="text-xl font-bold" style={{ color: "#0B0F2E" }}>
-          Accès non autorisé
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Vous n&apos;avez pas la permission d&apos;accéder à cette page.
-        </p>
-        <Link href="/client/upload" className="text-sm underline" style={{ color: "#D4AF37" }}>
-          Retour à l&apos;envoi de documents
-        </Link>
-      </div>
-    )
+    return <RequireRole roles={NON_CLIENT_USER_ROLES}>{null}</RequireRole>
   }
 
   return (

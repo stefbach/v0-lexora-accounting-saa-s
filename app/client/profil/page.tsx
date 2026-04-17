@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { RequireRole, NON_CLIENT_USER_ROLES } from "@/components/client/RequireRole"
 import {
   Card,
   CardContent,
@@ -67,19 +68,7 @@ export default function ProfilPage() {
   }
 
   if (profile?.role === "client_user") {
-    return (
-      <div className="p-6 flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-        <h1 className="text-xl font-bold" style={{ color: "#0B0F2E" }}>
-          Acc&egrave;s non autoris&eacute;
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Vous n&apos;avez pas la permission d&apos;acc&eacute;der &agrave; cette page.
-        </p>
-        <Link href="/client/upload" className="text-sm underline" style={{ color: "#D4AF37" }}>
-          Retour &agrave; l&apos;envoi de documents
-        </Link>
-      </div>
-    )
+    return <RequireRole roles={NON_CLIENT_USER_ROLES}>{null}</RequireRole>
   }
 
   return (

@@ -14,6 +14,7 @@ import {
 } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { RequireRole, NON_CLIENT_USER_ROLES } from "@/components/client/RequireRole"
 import Link from "next/link"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
@@ -437,16 +438,7 @@ export default function AnnualReturnPage() {
 
   // Access control
   if (profile?.role === "client_user") {
-    return (
-      <div className="p-6 flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-        <h1 className="text-xl font-bold" style={{ color: NAVY }}>
-          Vous n&apos;avez pas acc&egrave;s &agrave; cette section
-        </h1>
-        <Link href="/client" className="text-sm underline" style={{ color: GOLD }}>
-          Retour au tableau de bord
-        </Link>
-      </div>
-    )
+    return <RequireRole roles={NON_CLIENT_USER_ROLES}>{null}</RequireRole>
   }
 
   const currentYear = new Date().getFullYear()
