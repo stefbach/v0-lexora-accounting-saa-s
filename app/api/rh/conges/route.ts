@@ -880,6 +880,35 @@ export async function POST(request: Request) {
         }
       }
 
+      // Sprint 15 FIX 3 — Max légaux congés spéciaux (WRA 2019).
+      // CAR (mariage) = 6j/an, COM (décès) = 3j/an, GAR (garde enfant) = 5j/an.
+      // On vérifie le cumul annuel déjà posé (hors refusés) + la nouvelle demande.
+      const MAX_JOURS_SPECIAUX: Record<string, { max: number; label: string; ref: string }> = {
+        'CAR': { max: 6, label: 'Congé mariage', ref: 'WRA Art. 51' },
+        'COM': { max: 3, label: 'Congé décès famille', ref: 'WRA Art. 50' },
+        'GAR': { max: 5, label: 'Garde enfant malade', ref: 'WRA Art. 49(2)' },
+      }
+      const specialRule = MAX_JOURS_SPECIAUX[body.type_conge]
+      if (specialRule) {
+        const annee = body.date_debut.slice(0, 4)
+        const { data: existingSpecial } = await supabase
+          .from('demandes_conges')
+          .select('nb_jours')
+          .eq('employe_id', body.employe_id)
+          .eq('type_conge', body.type_conge)
+          .neq('statut', 'refuse')
+          .gte('date_debut', `${annee}-01-01`)
+          .lte('date_debut', `${annee}-12-31`)
+        const dejaPoises = (existingSpecial || []).reduce(
+          (s: number, c: any) => s + (Number(c.nb_jours) || 0), 0
+        )
+        if (dejaPoises + nb_jours > specialRule.max) {
+          return NextResponse.json({
+            error: `${specialRule.label} limité à ${specialRule.max} jour(s) par an (${specialRule.ref}). Déjà posé cette année : ${dejaPoises}j. Demande : ${nb_jours}j → dépasse le maximum.`,
+          }, { status: 400 })
+        }
+      }
+
       // Check balance for AL and SL.
       // FIX 2 — politique RH : si le solde est insuffisant, NE PAS bloquer.
       // Le congé est créé en bascule UL (unpaid leave) automatiquement et
