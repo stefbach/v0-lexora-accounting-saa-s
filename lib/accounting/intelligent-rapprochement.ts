@@ -845,6 +845,193 @@ export function autoClassify(
 // PHASE 4 — Consolidation : exécuter les 3 phases et agréger
 // ═══════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════
+// PHASE 2.5 — Fallback : match par montant seul (sans alias)
+// ═══════════════════════════════════════════════════════════════
+// Un comptable humain regarde un relevé et une liste de factures.
+// Même s'il ne connaît pas le tiers, il voit :
+//   - 1 tx de 50 000 MUR + 1 facture de 50 000 MUR → match évident
+//   - 1 tx de 97 000 MUR + 2 factures de 50 000 + 47 000 → match groupé
+//   - 1 tx de 48 500 MUR vs facture de 50 000 → probable TDS 3%
+//
+// Ce fallback reproduit cette logique. Il est PLUS PRUDENT que le match
+// par alias (confidence plus basse, conditions plus strictes pour le
+// multi-factures) parce qu'il n'a pas la garantie du tiers.
+
+function matchByAmountFallback(
+  unmatchedTxs: MatchingTransaction[],
+  unpaidFactures: MatchingFacture[],
+  rates?: Record<string, number>,
+): IntermediateMatch[] {
+  const matches: IntermediateMatch[] = []
+  const usedTxKeys = new Set<string>()
+  const usedFactureIds = new Set<string>()
+
+  // ── Passe 1 : 1 tx → 1 facture (match exact ou TDS) ──────────
+  for (const tx of unmatchedTxs) {
+    if (usedTxKeys.has(txKey(tx))) continue
+    const txRaw = Math.max(tx.debit, tx.credit)
+    if (txRaw === 0) continue
+    const txDevise = (tx.devise || 'MUR').toUpperCase()
+    const txAmtMUR = toMUR(txRaw, tx.devise, rates)
+
+    // Collecter TOUS les candidats (pas juste le meilleur) pour évaluer l'ambiguïté
+    const candidates: Array<{ f: MatchingFacture; diff: number; delay: number; tiersSim: number }> = []
+
+    for (const f of unpaidFactures) {
+      if (usedFactureIds.has(f.id)) continue
+      const fTTC = Number(f.montant_ttc) || 0
+      const fMUR = Number(f.montant_mur) || 0
+      if (fTTC === 0 && fMUR === 0) continue
+      const fDevise = (f.devise || 'MUR').toUpperCase()
+
+      let diff: number
+      if (txDevise === fDevise && fTTC > 0) {
+        diff = Math.abs(txRaw - fTTC) / fTTC
+      } else if (fMUR > 0) {
+        diff = Math.abs(txAmtMUR - fMUR) / fMUR
+      } else {
+        const fAmtMUR = toMUR(fTTC, f.devise, rates)
+        if (fAmtMUR === 0) continue
+        diff = Math.abs(txAmtMUR - fAmtMUR) / fAmtMUR
+      }
+
+      // Tolérance 12% (plus souple que le match par alias à 8%)
+      if (diff > 0.12) continue
+
+      const delay = daysBetween(f.date_facture || '', tx.date)
+      // Similarité textuelle entre tiers tx et tiers facture (bonus si noms proches)
+      const tiersSim = tiersSimilarity(tx.tiers_detecte || tx.libelle || '', f.tiers || '')
+
+      candidates.push({ f, diff, delay, tiersSim })
+    }
+
+    if (candidates.length === 0) continue
+
+    // Trier : montant exact > TDS > reste ; puis tiers similaire > inconnu ; puis date
+    candidates.sort((a, b) => {
+      const diffBin = (d: number) => d < 0.005 ? 0 : d < 0.06 ? 1 : 2
+      const da = diffBin(a.diff), db = diffBin(b.diff)
+      if (da !== db) return da - db
+      if (Math.abs(a.tiersSim - b.tiersSim) > 0.15) return b.tiersSim - a.tiersSim
+      return a.delay - b.delay
+    })
+
+    const best = candidates[0]
+    // Score d'ambiguïté : si 2+ factures ont un montant très proche, on baisse la confiance
+    const closeCompetitors = candidates.filter(c => c !== best && Math.abs(c.diff - best.diff) < 0.02)
+    const isAmbiguous = closeCompetitors.length > 0
+
+    // Ne PAS matcher si ambiguïté ET pas de signal tiers fort
+    if (isAmbiguous && best.tiersSim < 0.30) continue
+
+    const isExact = best.diff < 0.005
+    const isTDS = best.diff >= 0.02 && best.diff <= 0.06
+    let confidence = 0.50
+    if (isExact) confidence = 0.88
+    else if (isTDS) confidence = 0.72
+    else confidence = 0.55
+
+    // Bonus tiers (texte proche)
+    if (best.tiersSim > 0.50) confidence += 0.10
+    else if (best.tiersSim > 0.25) confidence += 0.05
+
+    // Bonus date (même mois)
+    if (best.delay <= 15) confidence += 0.05
+    else if (best.delay <= 45) confidence += 0.02
+    if (best.delay > 180) confidence -= 0.10
+
+    // Pénalité ambiguïté
+    if (isAmbiguous) confidence -= 0.15
+
+    confidence = Math.min(0.95, Math.max(0.20, confidence))
+
+    const tiersTx = (tx.tiers_detecte || tx.libelle || '').substring(0, 40)
+    matches.push({
+      supplierKey: `__fallback_${tiersTx}`,
+      supplierName: tiersTx,
+      transactionKey: txKey(tx),
+      transaction: tx,
+      factureIds: [best.f.id],
+      factures: [best.f],
+      strategy: isExact ? 'amount_exact' : isTDS ? 'amount_tds' : 'amount_close',
+      confidence,
+      reasoning: `Match par montant${isExact ? ' exact' : ` (écart ${(best.diff * 100).toFixed(1)}%)`}${isTDS ? ' (probable TDS)' : ''} — ${best.f.tiers || best.f.numero_facture || ''}, délai ${best.delay}j${best.tiersSim > 0.25 ? `, tiers similaire (${(best.tiersSim * 100).toFixed(0)}%)` : ''}${isAmbiguous ? ' ⚠ ambiguïté détectée' : ''}`,
+      amountDiff: best.diff * txRaw,
+      phase: 'supplier_match',
+    })
+    usedTxKeys.add(txKey(tx))
+    usedFactureIds.add(best.f.id)
+  }
+
+  // ── Passe 2 : 1 tx → N factures (groupement par somme) ────────
+  for (const tx of unmatchedTxs) {
+    if (usedTxKeys.has(txKey(tx))) continue
+    const txRaw = Math.max(tx.debit, tx.credit)
+    if (txRaw === 0) continue
+    const txDevise = (tx.devise || 'MUR').toUpperCase()
+    const txAmtMUR = toMUR(txRaw, tx.devise, rates)
+
+    const available = unpaidFactures.filter(f => !usedFactureIds.has(f.id))
+    if (available.length < 2) continue
+
+    // Stratégie greedy : on accumule les factures les plus proches en montant
+    // jusqu'à atteindre le montant de la tx (±8%), trié par montant décroissant.
+    // Plus rapide que le bruteforce combinatoire, et plus réaliste : un comptable
+    // regroupe naturellement les grosses factures d'abord.
+    const sortedByAmount = [...available]
+      .map(f => {
+        const fDevise = (f.devise || 'MUR').toUpperCase()
+        const fAmt = (txDevise === fDevise && Number(f.montant_ttc) > 0)
+          ? Number(f.montant_ttc)
+          : (Number(f.montant_mur) || toMUR(Number(f.montant_ttc) || 0, f.devise, rates))
+        return { f, amt: fAmt }
+      })
+      .filter(({ amt }) => amt > 0 && amt <= txRaw * 1.02) // exclure les factures > tx
+      .sort((a, b) => b.amt - a.amt)
+
+    const compareAmt = sortedByAmount[0]?.f.devise?.toUpperCase() === txDevise ? txRaw : txAmtMUR
+    let runningSum = 0
+    const combo: MatchingFacture[] = []
+
+    for (const { f, amt } of sortedByAmount) {
+      if (combo.length >= 10) break // max 10 factures
+      if (runningSum + amt > compareAmt * 1.08) continue // dépasse le tx
+      combo.push(f)
+      runningSum += amt
+      const diff = Math.abs(compareAmt - runningSum) / compareAmt
+      if (diff < 0.08) {
+        // Match trouvé
+        const isExact = diff < 0.005
+        let confidence = combo.length <= 3 ? 0.80 : 0.70
+        if (isExact) confidence += 0.10
+        if (combo.length > 5) confidence -= 0.10
+
+        const tiersTx = (tx.tiers_detecte || tx.libelle || '').substring(0, 40)
+        matches.push({
+          supplierKey: `__fallback_multi_${tiersTx}`,
+          supplierName: tiersTx,
+          transactionKey: txKey(tx),
+          transaction: tx,
+          factureIds: combo.map(f2 => f2.id),
+          factures: [...combo],
+          strategy: 'amount_multi_facture',
+          confidence: Math.min(0.92, Math.max(0.40, confidence)),
+          reasoning: `${combo.length} factures → total ${isExact ? 'exact' : `écart ${(diff * 100).toFixed(1)}%`}`,
+          amountDiff: diff * compareAmt,
+          phase: 'supplier_match',
+        })
+        for (const f2 of combo) usedFactureIds.add(f2.id)
+        usedTxKeys.add(txKey(tx))
+        break
+      }
+    }
+  }
+
+  console.log(`[intelligent/fallback] ${matches.length} matches trouvés sans alias (${matches.filter(m => m.strategy === 'amount_exact').length} exact, ${matches.filter(m => m.strategy === 'amount_tds').length} TDS, ${matches.filter(m => m.strategy === 'amount_close').length} close, ${matches.filter(m => m.strategy === 'amount_multi_facture').length} multi-factures)`)
+  return matches
+}
+
 export function runIntelligentRapprochement(
   transactions: MatchingTransaction[],
   factures: MatchingFacture[],
@@ -872,9 +1059,25 @@ export function runIntelligentRapprochement(
     }
   }
 
-  // Phase 2: Match by supplier
+  // Phase 2: Match by supplier (alias-aware)
   const supplierMatches = matchBySupplier(registry, context.rates, aliasMap)
   const matchedTxKeys = new Set(supplierMatches.map(m => m.transactionKey))
+  const matchedFactureIds = new Set(supplierMatches.flatMap(m => m.factureIds))
+
+  // Phase 2.5: Fallback — match par montant seul (sans alias) pour les tx orphelines.
+  // Se comporte "comme un humain" : si une tx de 10 000 MUR correspond à une seule
+  // facture de 10 000 MUR et qu'il n'y a aucune ambiguïté, on matche même sans alias.
+  // Supporte aussi le multi-factures (1 tx = somme de N factures).
+  const fallbackMatches = matchByAmountFallback(
+    transactions.filter(t => !matchedTxKeys.has(txKey(t))),
+    factures.filter(f => !matchedFactureIds.has(f.id)),
+    context.rates,
+  )
+  for (const m of fallbackMatches) {
+    matchedTxKeys.add(m.transactionKey)
+    for (const fid of m.factureIds) matchedFactureIds.add(fid)
+  }
+  const allMatches = [...supplierMatches, ...fallbackMatches]
 
   // Phase 3: Auto-classify remaining (with alias-aware internal detection)
   const classifications = autoClassify(transactions, matchedTxKeys, {
@@ -884,7 +1087,7 @@ export function runIntelligentRapprochement(
 
   // Stats
   const byStrategy: Record<string, number> = {}
-  for (const m of supplierMatches) {
+  for (const m of allMatches) {
     byStrategy[m.strategy] = (byStrategy[m.strategy] || 0) + 1
   }
   for (const c of classifications) {
@@ -897,7 +1100,7 @@ export function runIntelligentRapprochement(
   const identified = matched + classified
 
   return {
-    matches: supplierMatches.sort((a, b) => b.confidence - a.confidence),
+    matches: allMatches.sort((a, b) => b.confidence - a.confidence),
     classifications,
     supplierProfiles: [...registry.values()].filter(p => p.transactions.length > 0),
     stats: {
