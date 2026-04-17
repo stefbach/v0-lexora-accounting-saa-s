@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react"
 import Link from "next/link"
 import { useProfile } from "@/hooks/use-profile"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -51,10 +52,9 @@ const MONTHS_FR = [
 
 export default function EcheancesPage() {
   const { profile, loading } = useProfile()
+  const { societeId } = useSocieteActive()
   const [data, setData] = useState<any>(null)
   const [fetching, setFetching] = useState(true)
-  const [selectedSociete, setSelectedSociete] = useState<string>("")
-  const [societes, setSocietes] = useState<{ id: string; nom: string }[]>([])
   const [currentDate, setCurrentDate] = useState(() => new Date())
   const [periodFilter, setPeriodFilter] = useState("30j")
   const [typeFilter, setTypeFilter] = useState("all")
@@ -78,31 +78,16 @@ export default function EcheancesPage() {
   const [editingEcheance, setEditingEcheance] = useState<string | null>(null)
   const [editingDate, setEditingDate] = useState("")
 
-  // Fetch ALL sociétés the user has access to
-  useEffect(() => {
-    Promise.all([
-      fetch("/api/client/societes").then(r => r.json()).catch(() => ({ societes: [] })),
-      fetch("/api/comptable/societes").then(r => r.json()).catch(() => ({ societes: [] })),
-    ]).then(([d1, d2]) => {
-      const all = [...(d1.societes || []), ...(d2.societes || [])]
-      const unique = Array.from(new Map(all.map((s: any) => [s.id, s])).values()) as { id: string; nom: string }[]
-      setSocietes(unique)
-      if (unique.length > 0 && !selectedSociete) setSelectedSociete(unique[0].id)
-    })
-  }, [])
-
   const fetchData = useCallback(async () => {
+    if (!societeId) { setFetching(false); return }
     setFetching(true)
     try {
-      const url = selectedSociete && selectedSociete !== "all"
-        ? `/api/client/financial?societe_id=${selectedSociete}`
-        : "/api/client/financial"
-      const res = await fetch(url)
+      const res = await fetch(`/api/client/financial?societe_id=${societeId}`)
       const json = await res.json()
       setData(json.financial)
     } catch { setData(null) }
     finally { setFetching(false) }
-  }, [selectedSociete])
+  }, [societeId])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -110,7 +95,7 @@ export default function EcheancesPage() {
     if (!manualDesc || !manualDate || !manualMontant) return
     setManualSaving(true)
     try {
-      const socId = selectedSociete && selectedSociete !== "all" ? selectedSociete : societes[0]?.id
+      const socId = societeId
       if (!socId) return
       await fetch("/api/comptable/factures", {
         method: "POST",
@@ -176,7 +161,7 @@ export default function EcheancesPage() {
   }
 
   const handleExtractBatch = async () => {
-    const socId = selectedSociete && selectedSociete !== "all" ? selectedSociete : societes[0]?.id
+    const socId = societeId
     if (!socId) return
     const toProcess = selectedFactures.length > 0
       ? facturesSansDate.filter((f: any) => selectedFactures.includes(f.id) && f.document_id)
@@ -208,7 +193,7 @@ export default function EcheancesPage() {
   }
 
   const handleApply30Days = async () => {
-    const socId = selectedSociete && selectedSociete !== "all" ? selectedSociete : societes[0]?.id
+    const socId = societeId
     if (!socId) return
     const count = selectedFactures.length > 0 ? selectedFactures.length : facturesSansDate.length
     if (!confirm(`Appliquer date_facture + 30 jours à ${count} factures sans échéance ?\n(Délai légal mauricien — Companies Act 2001)`)) return
@@ -417,18 +402,6 @@ export default function EcheancesPage() {
       subtitle="Calendrier des échéances fiscales (MRA) et des factures fournisseurs / clients. Délai standard Maurice : 30 jours (Companies Act 2001)."
       actions={
         <>
-          {societes.length > 0 && (
-            <div className="flex items-center gap-2">
-              <Building2 className="h-4 w-4 text-muted-foreground" />
-              <Select value={selectedSociete} onValueChange={setSelectedSociete}>
-                <SelectTrigger className="w-[220px] h-9"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
-                  {societes.length > 1 && <SelectItem value="all">Toutes les sociétés</SelectItem>}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
           <Button variant="outline" size="sm" onClick={fetchData} disabled={fetching}>
             <RefreshCw className={`h-4 w-4 mr-2 ${fetching ? "animate-spin" : ""}`} />
             Actualiser
