@@ -1465,7 +1465,9 @@ export async function POST(request: Request) {
           special_allowance_3: isHorsMRA ? 0 : Math.round((busAllowanceMensuel + primeFixe3) * 100) / 100,
           transport_allowance: isHorsMRA ? 0 : (Number(emp.transport_allowance) || 0),
           petrol_allowance: isHorsMRA ? 0 : (Number(emp.petrol_allowance) || 0),
-          increment_salaire: isHorsMRA ? 0 : (Number(emp.increment_salaire) || 0),
+          // Salary compensation (635 MUR si base ≤ 50K) ajoutée à
+          // increment_salaire pour que le GENERATED salaire_brut l'inclue.
+          increment_salaire: isHorsMRA ? 0 : ((Number(emp.increment_salaire) || 0) + (salaire_base_mur <= 50000 ? 635 : 0)),
           // Sprint 11 BUG 7 — other_refund = refund fiche employé + frais km approuvés du mois
           other_refund: isHorsMRA ? 0 : ((Number(emp.other_refund) || 0) + total_frais_km),
           eoy_bonus: isHorsMRA ? 0 : eoy_bonus_montant,

@@ -358,10 +358,28 @@ function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris
             React.createElement(Text, { style: [s.rowLabel, { color: '#27ae60' }] }, 'PAYE'),
             React.createElement(Text, { style: [s.rowValue, { color: '#27ae60' }] }, 'Exonere')
           ),
-      Number(bulletin.montant_absence) > 0 ? React.createElement(View, { style: [s.row, { backgroundColor: '#fdf0f0' }] },
-        React.createElement(Text, { style: [s.rowLabel, { color: '#e74c3c' }] }, `Absence injustifiee (${bulletin.jours_absence} jour(s))`),
-        React.createElement(Text, { style: [s.rowValue, { color: '#e74c3c' }] }, `-${fmt(bulletin.montant_absence)} MUR`)
-      ) : null,
+      // BUG 2+3 — distinguer UL (congés non payés) des absences injustifiées.
+      // Si montant_absence > 0 et jours_absence = 0 → c'est du UL déduit.
+      // Si jours_absence > 0 → c'est de l'absence injustifiée.
+      (() => {
+        const montant = Number(bulletin.montant_absence) || 0
+        const jours = Number(bulletin.jours_absence) || 0
+        if (montant <= 0) return null
+        if (jours > 0 && montant > 0) {
+          // Absences injustifiées réelles
+          return React.createElement(View, { style: [s.row, { backgroundColor: '#fdf0f0' }] },
+            React.createElement(Text, { style: [s.rowLabel, { color: '#e74c3c' }] }, `Absences injustifiees (${jours}j)`),
+            React.createElement(Text, { style: [s.rowValue, { color: '#e74c3c' }] }, `-${fmt(montant)} MUR`)
+          )
+        }
+        // UL (congés non payés) — extraire nb jours depuis notes
+        const ulMatch = (bulletin.notes || '').match(/UL:\s*(\d+)j/)
+        const ulJours = ulMatch ? ulMatch[1] : '?'
+        return React.createElement(View, { style: [s.row, { backgroundColor: '#fdf0f0' }] },
+          React.createElement(Text, { style: [s.rowLabel, { color: '#e74c3c' }] }, `Conges non payes UL (${ulJours}j)`),
+          React.createElement(Text, { style: [s.rowValue, { color: '#e74c3c' }] }, `-${fmt(montant)} MUR`)
+        )
+      })(),
       React.createElement(View, { style: s.totalRow },
         React.createElement(Text, { style: s.totalLabel }, 'TOTAL DEDUCTIONS'),
         React.createElement(Text, { style: s.totalValue }, `-${fmt(bulletin.total_deductions)} MUR`)
