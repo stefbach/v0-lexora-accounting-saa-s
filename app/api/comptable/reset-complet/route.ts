@@ -193,7 +193,19 @@ export async function POST(request: Request) {
     // 6. Comptes courants associés (liés à la société mais utilisés seulement si rapprochement)
     stats.comptes_courants_associes = await deleteWithCount(supabase, 'comptes_courants_associes', { societe_id })
 
-    // 7. Immobilisations — garde par défaut (ne touche que si demandé)
+    // 7. Remettre les soldes bancaires à zéro (sinon la page Banque affiche
+    //    un solde fantôme même si toutes les transactions ont été supprimées).
+    //    On GARDE les comptes bancaires (config: banque, numéro, devise) mais
+    //    on remet solde_actuel = 0 pour un redémarrage propre.
+    const { count: nbComptesReset } = await supabase
+      .from('comptes_bancaires')
+      .update({ solde_actuel: 0 })
+      .eq('societe_id', societe_id)
+      .neq('solde_actuel', 0)
+      .select('id', { count: 'exact', head: true })
+    stats.comptes_bancaires_solde_reset = nbComptesReset || 0
+
+    // 8. Immobilisations — garde par défaut (ne touche que si demandé)
     if (options.immobilisations) {
       stats.immobilisations = await deleteWithCount(supabase, 'immobilisations', { societe_id })
     }
