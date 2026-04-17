@@ -209,24 +209,25 @@ export default function EspaceEmployePage() {
         </div>
 
         <div className="max-w-4xl mx-auto p-4 md:p-6 pb-24 md:pb-6 space-y-6">
-          {/* Desktop Tabs */}
-          <div className="hidden md:flex gap-1 bg-white rounded-xl p-1.5 border shadow-sm">
+          {/* Desktop Tabs — wrap on narrow viewports, truncate long labels
+              to keep the bar readable between 1024px and 1920px. */}
+          <div className="hidden md:flex flex-wrap gap-1 bg-white rounded-xl p-1.5 border shadow-sm">
             {([
               { id: "dashboard" as Tab, label: "Pointage", icon: LayoutDashboard },
               { id: "profil" as Tab, label: "Ma fiche", icon: User },
               { id: "bulletins" as Tab, label: "Bulletins", icon: FileText },
               { id: "planning" as Tab, label: "Planning", icon: Clock },
               { id: "primes" as Tab, label: "Primes", icon: TrendingUp },
-              { id: "conges" as Tab, label: "Mes congés", icon: Calendar },
-              { id: "sante" as Tab, label: "Mon Espace Sante TIBOK", icon: HeartPulse },
-              { id: "trajets" as Tab, label: "Trajets km", icon: Car },
-              { id: "contrats" as Tab, label: "Mes contrats", icon: FileText },
+              { id: "conges" as Tab, label: "Congés", icon: Calendar },
+              { id: "sante" as Tab, label: "Santé TIBOK", icon: HeartPulse },
+              { id: "trajets" as Tab, label: "Trajets", icon: Car },
+              { id: "contrats" as Tab, label: "Contrats", icon: FileText },
               { id: "documents" as Tab, label: "Documents", icon: FolderOpen },
             ]).map(t => (
               <button key={t.id} onClick={() => router.push(`/salarie#${t.id}`)}
-                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm rounded-lg transition-all duration-200 ${tab === t.id ? "text-white font-medium shadow-md" : "text-gray-500 hover:bg-gray-50"}`}
+                className={`flex-1 min-w-[96px] flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm rounded-lg transition-all duration-200 whitespace-nowrap ${tab === t.id ? "text-white font-medium shadow-md" : "text-gray-500 hover:bg-gray-50"}`}
                 style={tab === t.id ? { backgroundColor: NAVY } : {}}>
-                <t.icon className="h-4 w-4" />{t.label}
+                <t.icon className="h-4 w-4 flex-shrink-0" />{t.label}
               </button>
             ))}
           </div>
