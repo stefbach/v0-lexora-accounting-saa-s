@@ -82,16 +82,24 @@ export function PrimesTab({
         </Card>
       )}
 
-      {bulletins.length > 0 && (
-        <Card style={{ borderLeft: `3px solid ${GOLD}` }}>
-          <CardContent className="p-4">
-            <p className="text-xs text-gray-500 mb-1">Total primes & OT perçus (année en cours)</p>
-            <p className="text-xl font-bold" style={{ color: GOLD }}>
-              {fmt(bulletins.reduce((s: number, b: any) => s + (Number(b.special_allowance_1) || 0) + (Number(b.heures_sup_montant) || 0), 0))} MUR
-            </p>
-          </CardContent>
-        </Card>
-      )}
+      {(() => {
+        // V3.1 — filtrer sur l'année courante (la version précédente
+        // sommait TOUS les bulletins, ce qui falsifiait le total dès
+        // qu'un historique pluriannuel était chargé).
+        const year = new Date().getFullYear().toString()
+        const thisYear = bulletins.filter((b: any) => String(b.periode || "").startsWith(year))
+        if (thisYear.length === 0) return null
+        const total = thisYear.reduce((s: number, b: any) =>
+          s + (Number(b.special_allowance_1) || 0) + (Number(b.heures_sup_montant) || 0), 0)
+        return (
+          <Card style={{ borderLeft: `3px solid ${GOLD}` }}>
+            <CardContent className="p-4">
+              <p className="text-xs text-gray-500 mb-1">Total primes &amp; OT perçus en {year}</p>
+              <p className="text-xl font-bold" style={{ color: GOLD }}>{fmt(total)} MUR</p>
+            </CardContent>
+          </Card>
+        )
+      })()}
     </div>
   )
 }
