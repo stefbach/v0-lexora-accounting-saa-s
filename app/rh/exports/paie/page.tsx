@@ -11,6 +11,7 @@ import {
   AlertTriangle, Clock, Building2, Users, Wallet, FileCheck
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { MraDeadlineAlert } from "@/components/rh/MraDeadlineAlert"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -368,6 +369,8 @@ export default function ExportPaiePage() {
   return (
     <ClientPageShell hideHero disableParticles>
     <div className="space-y-6 max-w-7xl mx-auto">
+      {/* Sprint 15 FIX 8 — Alerte deadline MRA */}
+      <MraDeadlineAlert />
       {/* Alert banner */}
       {alertMsg && (
         <div

@@ -12,6 +12,7 @@ import {
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import MonEspacePersonnel from "@/components/rh/MonEspacePersonnel"
+import { MraDeadlineAlert } from "@/components/rh/MraDeadlineAlert"
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from "recharts"
 import Link from "next/link"
 
@@ -235,6 +236,8 @@ export default function RHDashboard() {
       }
     >
       <div className="space-y-6 max-w-[1400px] mx-auto">
+        {/* Sprint 15 FIX 8 — Alerte deadline MRA 20 du mois */}
+        <MraDeadlineAlert />
         {/* TÂCHE 7 — Mon espace personnel (rendu uniquement si l'user RH
             a une fiche employé liée ; sinon le composant retourne null). */}
         <MonEspacePersonnel />
