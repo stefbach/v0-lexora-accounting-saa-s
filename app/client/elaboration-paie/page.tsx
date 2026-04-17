@@ -13,6 +13,7 @@ import {
   ArrowRight, Building2, Banknote, FileSpreadsheet, Lock, Eye, ChevronRight
 } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 
 const fmt = (n: number) => n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " MUR"
 
@@ -43,9 +44,8 @@ const MONTHS = ["Janvier","Fevrier","Mars","Avril","Mai","Juin","Juillet","Aout"
 
 export default function ElaborationPaiePage() {
   const { profile, loading: profileLoading } = useProfile()
+  const { societeId, societe } = useSocieteActive()
   const [step, setStep] = useState(1)
-  const [societes, setSocietes] = useState<Societe[]>([])
-  const [selectedSociete, setSelectedSociete] = useState("")
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
   const now = new Date()
@@ -61,24 +61,20 @@ export default function ElaborationPaiePage() {
 
   useEffect(() => {
     if (profileLoading || !profile) return
-    fetch("/api/client/societes").then(r => r.json()).then(data => {
-      const list = data.societes || data || []
-      setSocietes(list)
-      if (list.length > 0) setSelectedSociete(list[0].id)
-    }).catch(() => {}).finally(() => setLoading(false))
+    setLoading(false)
   }, [profile, profileLoading])
 
   const loadEmployes = useCallback(async () => {
-    if (!selectedSociete) return
+    if (!societeId) return
     setProcessing(true)
     try {
-      const data = await fetch(`/api/rh/employes?societe_id=${selectedSociete}`).then(r => r.json())
+      const data = await fetch(`/api/rh/employes?societe_id=${societeId}`).then(r => r.json())
       const list: Employe[] = data.employes || data || []
       setEmployes(list)
       setSelected(new Set(list.map(e => e.id)))
     } catch { /* ignore */ }
     setProcessing(false)
-  }, [selectedSociete])
+  }, [societeId])
 
   const handleStart = () => { loadEmployes(); setStep(2) }
 
@@ -100,7 +96,7 @@ export default function ElaborationPaiePage() {
       const data = await fetch("/api/rh/paie", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "calculer_batch", societe_id: selectedSociete, periode,
+          action: "calculer_batch", societe_id: societeId, periode,
           variables: variables.map(v => ({
             employe_id: v.employe_id, jours_travailles: v.jours, absences: v.absences,
             heures_sup_150: v.hs15, heures_sup_200: v.hs20, primes: v.primes, avance_salaire: v.avance,
@@ -134,7 +130,7 @@ export default function ElaborationPaiePage() {
     try {
       const r = await fetch("/api/rh/paie", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: `export_${type}`, societe_id: selectedSociete, periode })
+        body: JSON.stringify({ action: `export_${type}`, societe_id: societeId, periode })
       })
       if (r.ok) {
         const url = URL.createObjectURL(await r.blob())
@@ -151,7 +147,7 @@ export default function ElaborationPaiePage() {
     try {
       await fetch("/api/rh/paie", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "cloturer_periode", societe_id: selectedSociete, periode })
+        body: JSON.stringify({ action: "cloturer_periode", societe_id: societeId, periode })
       })
       setExports(prev => ({ ...prev, cloture: true }))
     } catch { /* ignore */ }
@@ -162,7 +158,7 @@ export default function ElaborationPaiePage() {
     return <div className="flex items-center justify-center min-h-[60vh]"><Loader2 className="w-8 h-8 animate-spin text-[#D4AF37]" /></div>
   }
 
-  const societeNom = societes.find(s => s.id === selectedSociete)?.nom || ""
+  const societeNom = societe?.nom || ""
   const VarInput = ({ v, i, field }: { v: Variable; i: number; field: keyof Variable }) => (
     <Input type="number" value={v[field] as number} className="text-center h-8"
       onChange={e => updateVar(i, field, Number(e.target.value))} />
@@ -186,12 +182,6 @@ export default function ElaborationPaiePage() {
             {periode && <span className="ml-2">-- Periode : {MONTHS[parseInt(month) - 1]} {year}</span>}
           </p>
         </div>
-        {societes.length > 1 && (
-          <Select value={selectedSociete} onValueChange={setSelectedSociete}>
-            <SelectTrigger className="w-56"><Building2 className="w-4 h-4 mr-2" /><SelectValue placeholder="Societe" /></SelectTrigger>
-            <SelectContent>{societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent>
-          </Select>
-        )}
       </div>
 
       {/* Stepper */}
@@ -402,7 +392,7 @@ export default function ElaborationPaiePage() {
               <Button variant="outline" onClick={() => setStep(4)}>Retour</Button>
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => window.open(
-                  `/api/rh/paie/bulletins-zip?societe_id=${selectedSociete}&periode=${periode}`, "_blank"
+                  `/api/rh/paie/bulletins-zip?societe_id=${societeId}&periode=${periode}`, "_blank"
                 )}><Download className="w-4 h-4 mr-2" />Telecharger tout</Button>
                 <Button onClick={() => setStep(6)} className="bg-[#0B0F2E] hover:bg-[#0B0F2E]/90 text-white">
                   <ChevronRight className="w-4 h-4 mr-2" />Exports
