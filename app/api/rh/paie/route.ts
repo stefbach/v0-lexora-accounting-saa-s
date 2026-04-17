@@ -1376,9 +1376,40 @@ export async function POST(request: Request) {
         // Avant : net = salaire_base si hors MRA → ignorait l'UL. Maintenant :
         // net = salaire_base - totalDeductionAbsence si hors MRA.
         const totalDeductionAbsence = montant_absence_final + montant_ul
+
+        // Sprint 15 FIX 1 — Avance sur salaire (WRA Art. 29).
+        // Déduire la mensualité de l'avance active du salaire net.
+        // Max = 50% du net. Après déduction, mettre à jour solde_restant.
+        // Si solde atteint 0 → statut = 'rembourse'.
+        let avanceDeduction = 0
+        try {
+          const { data: avanceActive } = await supabase.from('avances_salaire')
+            .select('id, mensualite, solde_restant')
+            .eq('employe_id', emp.id).eq('statut', 'actif')
+            .order('date_octroi', { ascending: true }).limit(1).maybeSingle()
+          if (avanceActive && Number(avanceActive.mensualite) > 0) {
+            const netAvantAvance = isHorsMRA
+              ? (salaire_base_mur - totalDeductionAbsence)
+              : (resultat.salaire_net - totalDeductionAbsence)
+            const maxDeduction = Math.round(netAvantAvance * 0.5 * 100) / 100
+            const mensualite = Math.min(Number(avanceActive.mensualite), maxDeduction, Number(avanceActive.solde_restant))
+            if (mensualite > 0) {
+              avanceDeduction = Math.round(mensualite * 100) / 100
+              const newSolde = Math.round((Number(avanceActive.solde_restant) - avanceDeduction) * 100) / 100
+              await supabase.from('avances_salaire').update({
+                solde_restant: Math.max(0, newSolde),
+                statut: newSolde <= 0 ? 'rembourse' : 'actif',
+              }).eq('id', avanceActive.id)
+              console.log(`[paie batch] AVANCE ${emp.prenom} ${emp.nom}: -${avanceDeduction} MUR (solde restant: ${Math.max(0, newSolde)})`)
+            }
+          }
+        } catch (e: any) {
+          console.warn('[paie batch] avance check failed (table absente ?):', e?.message || e)
+        }
+
         const salaire_net_final = isHorsMRA
-          ? Math.round((salaire_base_mur - totalDeductionAbsence) * 100) / 100
-          : Math.round((resultat.salaire_net - totalDeductionAbsence) * 100) / 100
+          ? Math.round((salaire_base_mur - totalDeductionAbsence - avanceDeduction) * 100) / 100
+          : Math.round((resultat.salaire_net - totalDeductionAbsence - avanceDeduction) * 100) / 100
 
         // Résumé notes pour le bulletin
         const transportAlloc = isHorsMRA ? 0 : (Number(emp.transport_allowance) || 0)

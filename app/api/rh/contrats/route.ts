@@ -133,10 +133,24 @@ export async function POST(request: Request) {
 
     const supabase = getAdminClient()
     const body = await request.json()
-    const { employe_id, type_contrat, secteur, date_debut, date_fin, salaire_brut, poste, html_content, notes } = body
+    const { employe_id, type_contrat, secteur, date_debut, date_fin, salaire_brut, poste, html_content, notes, motif_cdd, periode_essai_jours } = body
 
     if (!employe_id || !type_contrat || !date_debut) {
       return NextResponse.json({ error: 'Champs obligatoires manquants : employe_id, type_contrat, date_debut' }, { status: 400 })
+    }
+
+    // Sprint 15 FIX 6 — Motif CDD obligatoire (WRA Art. 7)
+    if (type_contrat === 'CDD' && !motif_cdd) {
+      return NextResponse.json({
+        error: 'Le motif du CDD est obligatoire (WRA Art. 7). Motifs légaux : Remplacement, Accroissement temporaire, Saisonnier, Mission spécifique, Formation.',
+      }, { status: 400 })
+    }
+
+    // Sprint 15 FIX 7 — Période d'essai max 180j (WRA Art. 35)
+    if (periode_essai_jours !== undefined && Number(periode_essai_jours) > 180) {
+      return NextResponse.json({
+        error: 'La période d\'essai ne peut pas dépasser 180 jours (6 mois) selon WRA Art. 35.',
+      }, { status: 400 })
     }
 
     // Récupérer societe_id depuis l'employé
@@ -148,22 +162,27 @@ export async function POST(request: Request) {
 
     if (empErr || !employe) return NextResponse.json({ error: 'Employé introuvable' }, { status: 404 })
 
+    // Sprint 15 FIX 6+7 — motif_cdd et periode_essai_jours stockés dans
+    // le contrat. Colonnes optionnelles (mig 028 les a ou pas) → best-effort.
+    const insertRow: Record<string, unknown> = {
+      employe_id,
+      societe_id: employe.societe_id,
+      type_contrat,
+      secteur: secteur || 'general',
+      date_debut,
+      date_fin: date_fin || null,
+      salaire_brut: salaire_brut || null,
+      poste: poste || null,
+      html_content: html_content || null,
+      notes: notes || null,
+      statut: 'brouillon',
+      created_at: new Date().toISOString(),
+    }
+    if (motif_cdd) insertRow.motif_cdd = motif_cdd
+    if (periode_essai_jours !== undefined) insertRow.periode_essai_jours = Number(periode_essai_jours)
     const { data: contrat, error } = await supabase
       .from('contrats_employes')
-      .insert({
-        employe_id,
-        societe_id: employe.societe_id,
-        type_contrat,
-        secteur: secteur || 'general',
-        date_debut,
-        date_fin: date_fin || null,
-        salaire_brut: salaire_brut || null,
-        poste: poste || null,
-        html_content: html_content || null,
-        notes: notes || null,
-        statut: 'brouillon',
-        created_at: new Date().toISOString(),
-      })
+      .insert(insertRow)
       .select()
       .single()
 

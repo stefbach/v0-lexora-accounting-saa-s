@@ -746,7 +746,7 @@ export async function POST(request: Request) {
       if (!body.employe_id || !body.type_conge || !body.date_debut || !body.date_fin)
         return NextResponse.json({ error: 'Champs requis manquants' }, { status: 400 })
 
-      const { data: emp } = await supabase.from('employes').select('id, societe_id, gender, genre, auth_user_id, email').eq('id', body.employe_id).maybeSingle()
+      const { data: emp } = await supabase.from('employes').select('id, societe_id, gender, genre, auth_user_id, email, date_arrivee').eq('id', body.employe_id).maybeSingle()
       if (!emp) {
         return NextResponse.json({ error: 'Employe non trouve' }, { status: 404 })
       }
@@ -869,6 +869,22 @@ export async function POST(request: Request) {
         if (calendarDays > 112) {
           return NextResponse.json({ error: 'Maternity Leave: maximum 16 weeks (112 calendar days) per WRA 2019 Section 52' }, { status: 400 })
         }
+        // Sprint 15 FIX 2 — WRA Art. 45 : congé maternité 100% salaire dû
+        // uniquement après 12 mois de service continu. Avant 12 mois,
+        // l'employeur n'est pas obligé de maintenir 100% — on avertit mais
+        // on ne bloque pas (le RH confirme en connaissance de cause via le
+        // flag force_mat_avant_12m envoyé par l'UI au 2ème essai).
+        const hireDateMat = emp.date_arrivee ? new Date(String(emp.date_arrivee) + 'T00:00:00') : null
+        const moisServiceMat = hireDateMat
+          ? Math.max(0, (new Date().getFullYear() - hireDateMat.getFullYear()) * 12 + (new Date().getMonth() - hireDateMat.getMonth()))
+          : 99
+        if (moisServiceMat < 12 && !body.force_mat_avant_12m) {
+          return NextResponse.json({
+            error: `Ancienneté insuffisante pour congé maternité 100% (${moisServiceMat} mois, minimum 12 mois requis — WRA Art. 45). Confirmez pour accorder quand même.`,
+            code: 'MAT_ANCIENNETE_INSUFFISANTE',
+            mois_service: moisServiceMat,
+          }, { status: 422 })
+        }
       }
       if (body.type_conge === 'PAT') {
         // Paternity = 4 weeks = 28 calendar days (WRA 2019 Section 53)
@@ -877,6 +893,35 @@ export async function POST(request: Request) {
         const calendarDays = Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
         if (calendarDays > 28) {
           return NextResponse.json({ error: 'Paternity Leave: maximum 4 weeks (28 calendar days) per WRA 2019 Section 53' }, { status: 400 })
+        }
+      }
+
+      // Sprint 15 FIX 3 — Max légaux congés spéciaux (WRA 2019).
+      // CAR (mariage) = 6j/an, COM (décès) = 3j/an, GAR (garde enfant) = 5j/an.
+      // On vérifie le cumul annuel déjà posé (hors refusés) + la nouvelle demande.
+      const MAX_JOURS_SPECIAUX: Record<string, { max: number; label: string; ref: string }> = {
+        'CAR': { max: 6, label: 'Congé mariage', ref: 'WRA Art. 51' },
+        'COM': { max: 3, label: 'Congé décès famille', ref: 'WRA Art. 50' },
+        'GAR': { max: 5, label: 'Garde enfant malade', ref: 'WRA Art. 49(2)' },
+      }
+      const specialRule = MAX_JOURS_SPECIAUX[body.type_conge]
+      if (specialRule) {
+        const annee = body.date_debut.slice(0, 4)
+        const { data: existingSpecial } = await supabase
+          .from('demandes_conges')
+          .select('nb_jours')
+          .eq('employe_id', body.employe_id)
+          .eq('type_conge', body.type_conge)
+          .neq('statut', 'refuse')
+          .gte('date_debut', `${annee}-01-01`)
+          .lte('date_debut', `${annee}-12-31`)
+        const dejaPoises = (existingSpecial || []).reduce(
+          (s: number, c: any) => s + (Number(c.nb_jours) || 0), 0
+        )
+        if (dejaPoises + nb_jours > specialRule.max) {
+          return NextResponse.json({
+            error: `${specialRule.label} limité à ${specialRule.max} jour(s) par an (${specialRule.ref}). Déjà posé cette année : ${dejaPoises}j. Demande : ${nb_jours}j → dépasse le maximum.`,
+          }, { status: 400 })
         }
       }
 

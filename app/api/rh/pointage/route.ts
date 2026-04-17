@@ -231,6 +231,39 @@ export async function GET(request: Request) {
     const mensuel = searchParams.get('mensuel') === '1'
     const periode = searchParams.get('periode')
 
+    // Sprint 15 FIX 5 — détecter les pointages sans sortie (orphelins).
+    // Retourne la liste des pointages avec heure_sortie IS NULL antérieurs
+    // à aujourd'hui, enrichis du nom de l'employé.
+    const actionParam = searchParams.get('action')
+    if (actionParam === 'check_orphelins') {
+      let orphQuery = supabase.from('pointages')
+        .select('id, employe_id, date_pointage, heure_entree')
+        .is('heure_sortie', null)
+        .lt('date_pointage', new Date().toISOString().split('T')[0])
+        .order('date_pointage', { ascending: false })
+        .limit(50)
+      if (societe_id) {
+        const { data: emps } = await supabase.from('employes')
+          .select('id').eq('societe_id', societe_id).is('date_depart', null)
+        const ids = (emps || []).map((e: any) => e.id)
+        if (ids.length > 0) orphQuery = orphQuery.in('employe_id', ids)
+        else return NextResponse.json({ orphelins: [], count: 0 })
+      }
+      const { data: orphelins } = await orphQuery
+      const orphEmpIds = [...new Set((orphelins || []).map((o: any) => o.employe_id))]
+      let empMap: Record<string, any> = {}
+      if (orphEmpIds.length > 0) {
+        const { data: emps } = await supabase.from('employes')
+          .select('id, nom, prenom, poste').in('id', orphEmpIds)
+        for (const e of emps || []) empMap[e.id] = e
+      }
+      const enriched = (orphelins || []).map((o: any) => ({
+        ...o,
+        employe: empMap[o.employe_id] || null,
+      }))
+      return NextResponse.json({ orphelins: enriched, count: enriched.length })
+    }
+
     const empIds = employe_id ? null : await resolveEmployeeFilter(supabase, user.id, societe_id)
 
     if (mensuel || periode) {
@@ -420,6 +453,30 @@ export async function POST(request: Request) {
 
     if (!employe_id || !type_pointage) {
       return NextResponse.json({ error: 'employe_id et type_pointage requis' }, { status: 400 })
+    }
+
+    // Sprint 15 FIX 4 — enforcement pointage_actif=false.
+    // Si la société a désactivé le pointage, refuser les POST sauf pour
+    // les rôles admin/rh/rh_manager (qui peuvent forcer pour tests/corrections).
+    try {
+      const { data: empSoc } = await supabase.from('employes')
+        .select('societe_id').eq('id', employe_id).maybeSingle()
+      if (empSoc?.societe_id) {
+        const { data: socConfig } = await supabase.from('societes')
+          .select('pointage_actif').eq('id', empSoc.societe_id).maybeSingle()
+        if (socConfig && socConfig.pointage_actif === false) {
+          const { data: prof } = await supabase.from('profiles')
+            .select('role').eq('id', user.id).maybeSingle()
+          const bypassRoles = ['admin', 'super_admin', 'rh', 'rh_manager']
+          if (!prof || !bypassRoles.includes(prof.role)) {
+            return NextResponse.json({
+              error: 'Le pointage n\'est pas activé pour cette société. Activez-le dans /rh/societe → Paramètres.',
+            }, { status: 403 })
+          }
+        }
+      }
+    } catch (e: any) {
+      console.warn('[pointage POST] pointage_actif check failed (non-blocking):', e?.message || e)
     }
 
     const today = bodyDate || new Date().toISOString().split('T')[0]
