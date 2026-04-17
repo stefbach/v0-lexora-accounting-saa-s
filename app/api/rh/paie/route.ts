@@ -613,10 +613,22 @@ export async function POST(request: Request) {
       // réduit 1.5% au lieu de 3%). Les primes fixes sont des allocations
       // mensuelles stables (prime fonction, ancienneté, électricité, etc.)
       // qui s'ajoutent au brut TOUS LES MOIS.
-      const primes_fixes_employe =
-        (Number(emp.prime_fixe_1) || 0) +
-        (Number(emp.prime_fixe_2) || 0) +
-        (Number(emp.prime_fixe_3) || 0)
+      //
+      // Sprint — distribution explicite des allowances dans les colonnes
+      // bulletin (toutes imposables, cf. note MRA plus bas) :
+      //   special_allowance_1 = primes variables du mois + prime_fixe_1
+      //   special_allowance_2 = phone_allowance        + prime_fixe_2
+      //   special_allowance_3 = daily_bus_fare × 26    + prime_fixe_3
+      // Le brut bulletin (GENERATED column, mig 016) somme tous ces éléments
+      // → CSG/NSF/PAYE et exports MRA intègrent naturellement le tout.
+      const phoneAllowance = Number(emp.phone_allowance) || 0
+      // daily_bus_fare est un tarif par jour ouvré → × 26 pour l'estimation
+      // mensuelle fixe (nb jours ouvrés standard Maurice, cohérent avec le
+      // taux horaire WRA salaire_base / (45h × 52 / 12) ≈ base/195 par heure).
+      const busAllowanceMensuel = Math.round((Number(emp.daily_bus_fare) || 0) * 26 * 100) / 100
+      const pf1 = Number(emp.prime_fixe_1) || 0
+      const pf2 = Number(emp.prime_fixe_2) || 0
+      const pf3 = Number(emp.prime_fixe_3) || 0
 
       const elements = {
         salaire_base: salaire_base_mur,
@@ -624,11 +636,12 @@ export async function POST(request: Request) {
         petrol_allowance: Number(emp.petrol_allowance) || 0,
         increment_salaire: body.increment_salaire || 0,
         heures_sup_montant: Math.round(total_ot_montant) + (body.heures_sup_montant || 0),
-        // special_allowance_1 regroupe : primes variables du mois (total_primes) +
-        // primes fixes récurrentes de la fiche employé + surcharge body éventuelle
-        special_allowance_1: total_primes + primes_fixes_employe + (body.special_allowance_1 || 0),
-        special_allowance_2: body.special_allowance_2 || 0,
-        special_allowance_3: body.special_allowance_3 || 0,
+        // special_allowance_1 = primes variables du mois + prime_fixe_1 + surcharge body
+        special_allowance_1: total_primes + pf1 + (body.special_allowance_1 || 0),
+        // special_allowance_2 = phone_allowance + prime_fixe_2 + surcharge body
+        special_allowance_2: phoneAllowance + pf2 + (body.special_allowance_2 || 0),
+        // special_allowance_3 = bus mensuel (daily × 26) + prime_fixe_3 + surcharge body
+        special_allowance_3: busAllowanceMensuel + pf3 + (body.special_allowance_3 || 0),
         // Sprint 11 BUG 7 — frais km approuvés inclus dans other_refund
         other_refund: (body.other_refund || 0) + total_frais_km_single,
         eoy_bonus: body.eoy_bonus || 0,
@@ -651,7 +664,9 @@ export async function POST(request: Request) {
             + (Number(elements.transport_allowance) || 0)
             + (Number(elements.petrol_allowance) || 0)
             + (Number(elements.heures_sup_montant) || 0)
-            + (Number(elements.special_allowance_1) || 0))
+            + (Number(elements.special_allowance_1) || 0)
+            + (Number(elements.special_allowance_2) || 0)
+            + (Number(elements.special_allowance_3) || 0))
         if (nbJoursOuvresMoisSingle > 0 && salaireBrutSingle > 0) {
           montant_ul_single = Math.round(joursUnpaidLeaveSingle * (salaireBrutSingle / nbJoursOuvresMoisSingle) * 100) / 100
           console.log(`[paie] UL OK (single) ${emp.prenom} ${emp.nom} — ${joursUnpaidLeaveSingle}j × (${salaireBrutSingle} / ${nbJoursOuvresMoisSingle}) = ${montant_ul_single} MUR`)
@@ -681,8 +696,11 @@ export async function POST(request: Request) {
         total_charges_patronales: resultat.total_charges_patronales,
         heures_sup_montant: elements.heures_sup_montant || 0,
         special_allowance_1: elements.special_allowance_1 || 0,
+        special_allowance_2: elements.special_allowance_2 || 0,
+        special_allowance_3: elements.special_allowance_3 || 0,
         transport_allowance: elements.transport_allowance || 0,
         petrol_allowance: elements.petrol_allowance || 0,
+        other_refund: elements.other_refund || 0,
         // montant_absence = unjustified absence + UL deduction (merged).
         montant_absence: Math.round(totalDeductionAbsence * 100) / 100,
         statut: 'brouillon',
@@ -918,12 +936,34 @@ export async function POST(request: Request) {
           console.warn('[paie batch] frais_km fetch failed (table absente ?):', e?.message || e)
         }
 
-        // 2b. Primes fixes de la fiche employé (récurrentes chaque mois)
+        // 2b. Primes fixes + autres allowances de la fiche employé (récurrentes).
+        //
+        // Sprint — distribution explicite dans les colonnes bulletin :
+        //   special_allowance_1 = primes variables + auto-rules + prime_fixe_1
+        //   special_allowance_2 = phone_allowance  + prime_fixe_2
+        //   special_allowance_3 = bus_mensuel      + prime_fixe_3
+        //
+        // Avant, toutes les primes fixes étaient lumped dans total_primes
+        // (→ special_allowance_1). Problèmes :
+        //   - phone_allowance et daily_bus_fare n'étaient pas lus du tout
+        //     (pas de ligne de code qui les référence avant ce commit).
+        //   - Le PDF "Primes du mois" mélangeait variables + fixes sans
+        //     détail individuel (cf. Sprint 11 BUG 3 qui a partiellement
+        //     corrigé via un decomposition PDF, mais la distribution en DB
+        //     restait lumpy).
         const primeFixe1 = Number(emp.prime_fixe_1) || 0
         const primeFixe2 = Number(emp.prime_fixe_2) || 0
         const primeFixe3 = Number(emp.prime_fixe_3) || 0
+        const phoneAllowance = Number(emp.phone_allowance) || 0
+        const busAllowanceMensuel = Math.round((Number(emp.daily_bus_fare) || 0) * 26 * 100) / 100
+        // total_primes reste utilisé pour les logs/notes — représente la
+        // somme des primes variables du mois + auto-rules (hors primes fixes
+        // qui sont désormais distribuées dans les colonnes sa2/sa3).
+        // total_primes conserve prime_fixe_1 (qui va dans sa1 avec les variables).
         const totalPrimesFixes = primeFixe1 + primeFixe2 + primeFixe3
-        total_primes += totalPrimesFixes
+        // Note : on garde totalPrimesFixes pour la note résumé mais on ne
+        // l'ajoute PAS à total_primes (les primes fixes vont dans sa1/sa2/sa3
+        // directement, pas via total_primes).
 
         // 2c. Auto-rules (meal allowance, call allowance, etc.)
         // Declare here (computed later after leave/pointage analysis) so they're available in auto-rules
@@ -1139,7 +1179,13 @@ export async function POST(request: Request) {
           transport_allowance: Number(emp.transport_allowance) || 0,
           petrol_allowance: Number(emp.petrol_allowance) || 0,
           heures_sup_montant: Math.round(total_ot_montant),
-          special_allowance_1: Math.round(total_primes),
+          // Sprint — distribution des allowances dans les 3 colonnes sa1/2/3.
+          // sa1 = primes variables + auto-rules + prime_fixe_1
+          // sa2 = phone_allowance + prime_fixe_2
+          // sa3 = bus_fare × 26 + prime_fixe_3
+          special_allowance_1: Math.round(total_primes + primeFixe1),
+          special_allowance_2: Math.round((phoneAllowance + primeFixe2) * 100) / 100,
+          special_allowance_3: Math.round((busAllowanceMensuel + primeFixe3) * 100) / 100,
           // Sprint 11 BUG 7 — frais km approuvés inclus dans le brut via other_refund
           other_refund: (Number(emp.other_refund) || 0) + total_frais_km,
           eoy_bonus: eoy_bonus_montant,
@@ -1191,7 +1237,9 @@ export async function POST(request: Request) {
               + (Number(elements.transport_allowance) || 0)
               + (Number(elements.petrol_allowance) || 0)
               + (Number(elements.heures_sup_montant) || 0)
-              + (Number(elements.special_allowance_1) || 0))
+              + (Number(elements.special_allowance_1) || 0)
+              + (Number(elements.special_allowance_2) || 0)
+              + (Number(elements.special_allowance_3) || 0))
           if (nbJoursOuvresMois > 0 && salaireBrutPaie > 0) {
             montant_ul = Math.round(joursUnpaidLeave * (salaireBrutPaie / nbJoursOuvresMois) * 100) / 100
             const tag = isHorsMRA ? ' [hors MRA — déduction net seule]' : ''
@@ -1213,15 +1261,26 @@ export async function POST(request: Request) {
         // Résumé notes pour le bulletin
         const transportAlloc = isHorsMRA ? 0 : (Number(emp.transport_allowance) || 0)
         const petrolAlloc = isHorsMRA ? 0 : (Number(emp.petrol_allowance) || 0)
+        const phoneAlloc = isHorsMRA ? 0 : phoneAllowance
+        const busAlloc = isHorsMRA ? 0 : busAllowanceMensuel
         const mraTag = isHorsMRA ? ' [HORS MRA - Brut=Base]' : ''
-        const primesFixesDetail = totalPrimesFixes > 0 ? `, Primes fixes: ${totalPrimesFixes}` : ''
+        // Sprint — total_primes ne contient plus les primes_fixes (désormais
+        // distribuées dans sa1/sa2/sa3 directement). Il vaut : primes
+        // variables approuvées du mois + auto-rules. Les primes fixes sont
+        // résumées séparément via primesFixesDetail.
+        const primesVariables = Math.round(total_primes - totalAutoRules)
+        const primesFixesDetail = totalPrimesFixes > 0
+          ? `, Primes fixes: ${totalPrimesFixes} (pf1=${primeFixe1}+pf2=${primeFixe2}+pf3=${primeFixe3})`
+          : ''
+        const phoneDetail = phoneAlloc > 0 ? `, Phone: ${phoneAlloc}` : ''
+        const busDetail = busAlloc > 0 ? `, Bus: ${busAlloc} (${emp.daily_bus_fare}×26)` : ''
         const autoRulesDetail = autoRulesApplied.length > 0 ? `, Auto: ${autoRulesApplied.join('; ')}` : ''
         const nightDetail = nightShiftAllowance > 0 ? `, Night shift +${(nightShiftPct * 100).toFixed(0)}%: ${nightShiftAllowance} (${Math.round(total_heures_nuit)}h nuit)` : ''
         const ulDetail = joursUnpaidLeave > 0 ? `, UL: ${joursUnpaidLeave}j = -${montant_ul}` : ''
         const notesResume = isHorsMRA
           ? `Base: ${salaire_base_mur} [HORS MRA - Brut=Net=Base]`
-          : `Base: ${salaire_base_mur}, Transport: ${transportAlloc}, Petrol: ${petrolAlloc}, OT: ${Math.round(total_ot_montant)}${nightDetail}, Primes var: ${Math.round(total_primes - totalPrimesFixes - totalAutoRules)}${primesFixesDetail}${autoRulesDetail}, Absences: ${jours_absence_injust}j${ulDetail}`
-        console.log(`[paie] ${emp.prenom} ${emp.nom}: base=${salaire_base_mur} transport=${transportAlloc} petrol=${petrolAlloc} OT=${Math.round(total_ot_montant)} primes=${Math.round(total_primes)} abs=${jours_absence_injust}j ul=${joursUnpaidLeave}j${mraTag}`)
+          : `Base: ${salaire_base_mur}, Transport: ${transportAlloc}, Petrol: ${petrolAlloc}${phoneDetail}${busDetail}, OT: ${Math.round(total_ot_montant)}${nightDetail}, Primes var: ${primesVariables}${primesFixesDetail}${autoRulesDetail}, Absences: ${jours_absence_injust}j${ulDetail}`
+        console.log(`[paie] ${emp.prenom} ${emp.nom}: base=${salaire_base_mur} transport=${transportAlloc} petrol=${petrolAlloc} phone=${phoneAlloc} bus=${busAlloc} OT=${Math.round(total_ot_montant)} primesVar=${primesVariables} primesFixes=${totalPrimesFixes} abs=${jours_absence_injust}j ul=${joursUnpaidLeave}j${mraTag}`)
 
         const bulletin: Record<string, any> = {
           employe_id: emp.id,
@@ -1240,7 +1299,11 @@ export async function POST(request: Request) {
           total_deductions: Math.round((resultat.total_deductions + totalDeductionAbsence) * 100) / 100,
           total_charges_patronales: resultat.total_charges_patronales,
           heures_sup_montant: isHorsMRA ? 0 : Math.round(total_ot_montant),
-          special_allowance_1: isHorsMRA ? 0 : Math.round(total_primes),
+          // Sprint — distribution des allowances (sa1/sa2/sa3) pour que le
+          // brut GENERATED inclue naturellement phone + bus + primes fixes.
+          special_allowance_1: isHorsMRA ? 0 : Math.round(total_primes + primeFixe1),
+          special_allowance_2: isHorsMRA ? 0 : Math.round((phoneAllowance + primeFixe2) * 100) / 100,
+          special_allowance_3: isHorsMRA ? 0 : Math.round((busAllowanceMensuel + primeFixe3) * 100) / 100,
           transport_allowance: isHorsMRA ? 0 : (Number(emp.transport_allowance) || 0),
           petrol_allowance: isHorsMRA ? 0 : (Number(emp.petrol_allowance) || 0),
           increment_salaire: isHorsMRA ? 0 : (Number(emp.increment_salaire) || 0),

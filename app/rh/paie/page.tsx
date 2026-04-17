@@ -757,15 +757,23 @@ export default function PaiePage() {
                           <TooltipTrigger asChild>
                             <span className="cursor-help underline decoration-dotted">{fmt(b.salaire_brut)}</span>
                           </TooltipTrigger>
-                          <TooltipContent className="max-w-xs text-xs">
-                            <p className="font-bold mb-1">Detail brut :</p>
-                            <p>Base: {fmt(b.salaire_base)}</p>
-                            {Number(b.transport_allowance) > 0 && <p>Transport: {fmt(b.transport_allowance)}</p>}
-                            {Number(b.petrol_allowance) > 0 && <p>Petrol: {fmt(b.petrol_allowance)}</p>}
-                            {Number(b.heures_sup_montant) > 0 && <p>OT: {fmt(b.heures_sup_montant)}</p>}
-                            {Number(b.special_allowance_1) > 0 && <p>Primes: {fmt(b.special_allowance_1)}</p>}
-                            {Number(b.eoy_bonus) > 0 && <p>13eme mois: {fmt(b.eoy_bonus)}</p>}
-                            {b.notes && <p className="mt-1 text-gray-400">{b.notes}</p>}
+                          <TooltipContent className="max-w-sm text-xs">
+                            <p className="font-bold mb-1">Détail brut :</p>
+                            <div className="space-y-0.5">
+                              <p className="flex justify-between gap-3"><span>Base</span><span className="font-mono">{fmt(b.salaire_base)}</span></p>
+                              {Number(b.transport_allowance) > 0 && <p className="flex justify-between gap-3"><span>+ Transport</span><span className="font-mono">{fmt(b.transport_allowance)}</span></p>}
+                              {Number(b.petrol_allowance) > 0 && <p className="flex justify-between gap-3"><span>+ Essence</span><span className="font-mono">{fmt(b.petrol_allowance)}</span></p>}
+                              {Number(b.heures_sup_montant) > 0 && <p className="flex justify-between gap-3"><span>+ OT</span><span className="font-mono">{fmt(b.heures_sup_montant)}</span></p>}
+                              {Number(b.special_allowance_1) > 0 && <p className="flex justify-between gap-3"><span>+ Primes / allowance 1</span><span className="font-mono">{fmt(b.special_allowance_1)}</span></p>}
+                              {Number(b.special_allowance_2) > 0 && <p className="flex justify-between gap-3"><span>+ Téléphone / allowance 2</span><span className="font-mono">{fmt(b.special_allowance_2)}</span></p>}
+                              {Number(b.special_allowance_3) > 0 && <p className="flex justify-between gap-3"><span>+ Bus / allowance 3</span><span className="font-mono">{fmt(b.special_allowance_3)}</span></p>}
+                              {Number(b.other_refund) > 0 && <p className="flex justify-between gap-3"><span>+ Remboursements</span><span className="font-mono">{fmt(b.other_refund)}</span></p>}
+                              {Number(b.increment_salaire) > 0 && <p className="flex justify-between gap-3"><span>+ Increment</span><span className="font-mono">{fmt(b.increment_salaire)}</span></p>}
+                              {Number(b.eoy_bonus) > 0 && <p className="flex justify-between gap-3"><span>+ 13ème mois</span><span className="font-mono">{fmt(b.eoy_bonus)}</span></p>}
+                              {Number(b.departure_notice) > 0 && <p className="flex justify-between gap-3"><span>+ Préavis</span><span className="font-mono">{fmt(b.departure_notice)}</span></p>}
+                              <p className="flex justify-between gap-3 pt-1 mt-1 border-t border-gray-400 font-bold"><span>= Brut</span><span className="font-mono">{fmt(b.salaire_brut)}</span></p>
+                            </div>
+                            {b.notes && <p className="mt-2 pt-1 border-t border-gray-400 text-gray-400 break-words">{b.notes}</p>}
                           </TooltipContent>
                         </Tooltip>
                       </TableCell>

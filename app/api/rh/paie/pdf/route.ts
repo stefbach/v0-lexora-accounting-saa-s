@@ -156,18 +156,20 @@ function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris
   const csgPct = Number(bulletin.salaire_brut) > 50000 ? '3%' : '1.5%'
   const hasOT = Number(bulletin.heures_sup_montant) > 0
 
-  // Sprint 11 BUG 3 — décomposition de special_allowance_1 en lignes labellisées.
-  // special_allowance_1 agrège : primes variables approuvées du mois +
-  // primes fixes récurrentes (employes.prime_fixe_1/2/3) + auto-rules +
-  // surcharge body. Si le bulletin expose uniquement le total, chaque
-  // prime apparaissait sous "Primes du mois" → le patron veut voir les
-  // vrais libellés (ex: ELECTRICITE, LOYER).
+  // Sprint — décomposition des 3 colonnes sa1/sa2/sa3 en lignes labellisées.
+  // Distribution effective (cf. app/api/rh/paie/route.ts) :
+  //   sa1 = primes variables approuvées + auto-rules + prime_fixe_1
+  //   sa2 = phone_allowance + prime_fixe_2
+  //   sa3 = (daily_bus_fare × 26) + prime_fixe_3
   //
-  // Approche : on rend individuellement :
-  //   1. Primes variables de primes_variables_mois (libellé via catalogue_primes.libelle)
-  //   2. Primes fixes de l'employé (employes.prime_fixe_N / prime_fixe_N_libelle) dont le montant > 0
-  //   3. Un résidu "Primes du mois" = special_allowance_1 - (1) - (2)
-  //      si > 0 (couvre auto-rules + surcharge body non traçables).
+  // Au rendu PDF on affiche individuellement :
+  //   - Primes variables du mois (libellé via catalogue_primes.libelle)
+  //   - Phone Allowance (si > 0)
+  //   - Bus quotidien (si > 0, avec indication tarif/jour × 26)
+  //   - Primes fixes employé (prime_fixe_N_libelle + montant)
+  //   - Résidu éventuel par colonne si la somme reconstruite diverge du
+  //     montant bulletin (couvre surcharges body / auto-rules non exposées
+  //     ligne à ligne ou différences de rounding).
   const sumPrimesVar = (primesMois || []).reduce((s: number, p: any) => s + Number(p.montant || 0), 0)
   const primesFixes = [1, 2, 3]
     .map(n => ({
@@ -176,11 +178,24 @@ function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris
       montant: Number(emp?.[`prime_fixe_${n}`]) || 0,
     }))
     .filter(p => p.montant > 0)
-  const sumPrimesFixes = primesFixes.reduce((s, p) => s + p.montant, 0)
+  const phoneAllowance = Number(emp?.phone_allowance) || 0
+  const dailyBusFare = Number(emp?.daily_bus_fare) || 0
+  const busMensuel = Math.round(dailyBusFare * 26 * 100) / 100
   const sa1 = Number(bulletin.special_allowance_1 || 0)
-  const residuSa1 = Math.max(0, Math.round((sa1 - sumPrimesVar - sumPrimesFixes) * 100) / 100)
-  const hasPrimes = sa1 > 0 || primesMois.length > 0 || primesFixes.length > 0
-  const totalPrimes = sa1 + Number(bulletin.special_allowance_2 || 0) + Number(bulletin.special_allowance_3 || 0)
+  const sa2 = Number(bulletin.special_allowance_2 || 0)
+  const sa3 = Number(bulletin.special_allowance_3 || 0)
+
+  // Calcul des résidus par colonne (reste après soustraction des éléments
+  // labellisés connus). sa1Résidu couvre auto-rules + body.special_allowance_1.
+  const pf1 = primesFixes.find(p => p.n === 1)?.montant || 0
+  const pf2 = primesFixes.find(p => p.n === 2)?.montant || 0
+  const pf3 = primesFixes.find(p => p.n === 3)?.montant || 0
+  const residuSa1 = Math.max(0, Math.round((sa1 - sumPrimesVar - pf1) * 100) / 100)
+  const residuSa2 = Math.max(0, Math.round((sa2 - phoneAllowance - pf2) * 100) / 100)
+  const residuSa3 = Math.max(0, Math.round((sa3 - busMensuel - pf3) * 100) / 100)
+
+  const hasPrimes = sa1 > 0 || sa2 > 0 || sa3 > 0 || primesMois.length > 0 || primesFixes.length > 0 || phoneAllowance > 0 || busMensuel > 0
+  const totalPrimes = sa1 + sa2 + sa3
 
   const Row = ({ label, value, style: rowStyle }: { label: string; value: string; style?: any }) =>
     React.createElement(View, { style: s.row },
@@ -251,7 +266,8 @@ function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris
         React.createElement(Text, { style: s.otSubLabel }, 'Sous-total heures supplementaires'),
         React.createElement(Text, { style: s.otSubValue }, `${fmt(bulletin.heures_sup_montant)} MUR`)
       ) : null,
-      // Sprint 11 BUG 3 — primes détaillées :
+      // Sprint — allowances & primes détaillées (cf. distribution sa1/sa2/sa3
+      // dans app/api/rh/paie/route.ts) :
       // 1) Primes variables approuvées (libellé via catalogue_primes)
       ...primesMois.map((p: any, i: number) =>
         React.createElement(View, { style: s.primeRow, key: `pv${i}` },
@@ -259,19 +275,32 @@ function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris
           React.createElement(Text, { style: s.primeValue }, `${fmt(Number(p.montant))} MUR`)
         )
       ),
-      // 2) Primes fixes récurrentes de la fiche employé (libellé libre, ex: ELECTRICITE)
+      // 2) Phone Allowance (fiche employé, mensuel fixe)
+      phoneAllowance > 0
+        ? React.createElement(Row, { label: 'Téléphone', value: `${fmt(phoneAllowance)} MUR`, key: 'phone' })
+        : null,
+      // 3) Bus quotidien × 26 jours ouvrés — estimation mensuelle fixe
+      busMensuel > 0
+        ? React.createElement(Row, { label: `Bus quotidien (${dailyBusFare} × 26)`, value: `${fmt(busMensuel)} MUR`, key: 'bus' })
+        : null,
+      // 4) Primes fixes récurrentes (libellé libre : ELECTRICITE, LOYER, …)
       ...primesFixes.map((p: any, i: number) =>
         React.createElement(View, { style: s.primeRow, key: `pf${i}` },
           React.createElement(Text, { style: s.primeLabel }, `Prime — ${p.libelle || `Prime fixe ${p.n}`}`),
           React.createElement(Text, { style: s.primeValue }, `${fmt(p.montant)} MUR`)
         )
       ),
-      // 3) Résidu non traçable (auto-rules, surcharge body) — affiché seulement si > 0
+      // 5) Résidus par colonne — couvrent auto-rules + surcharges body
+      // non exposées ligne à ligne. Affichés seulement si > 0.
       residuSa1 > 0
-        ? React.createElement(Row, { label: 'Primes du mois', value: `${fmt(residuSa1)} MUR`, key: 'sa1res' })
+        ? React.createElement(Row, { label: 'Autres primes du mois', value: `${fmt(residuSa1)} MUR`, key: 'sa1res' })
         : null,
-      Number(bulletin.special_allowance_2) > 0 ? React.createElement(Row, { label: 'Allocation speciale 2', value: `${fmt(bulletin.special_allowance_2)} MUR` }) : null,
-      Number(bulletin.special_allowance_3) > 0 ? React.createElement(Row, { label: 'Allocation speciale 3', value: `${fmt(bulletin.special_allowance_3)} MUR` }) : null,
+      residuSa2 > 0
+        ? React.createElement(Row, { label: 'Allocation spéciale 2 (autres)', value: `${fmt(residuSa2)} MUR`, key: 'sa2res' })
+        : null,
+      residuSa3 > 0
+        ? React.createElement(Row, { label: 'Allocation spéciale 3 (autres)', value: `${fmt(residuSa3)} MUR`, key: 'sa3res' })
+        : null,
       hasPrimes ? React.createElement(View, { style: s.subTotalRow },
         React.createElement(Text, { style: s.subTotalLabel }, 'Sous-total primes'),
         React.createElement(Text, { style: s.subTotalValue }, `${fmt(totalPrimes)} MUR`)
