@@ -12,6 +12,7 @@ import {
   Loader2, Download, Building2, FileText, Calculator,
   AlertTriangle, CheckCircle2, Users, CreditCard
 } from "lucide-react"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -123,22 +124,11 @@ interface PayeRow {
 // ---------------------------------------------------------------------------
 
 export default function ExportsRHPage() {
-  const [societes, setSocietes] = useState<Societe[]>([])
-  const [societe, setSociete] = useState("")
+  const { societeId, societe: activeSociete } = useSocieteActive()
+  const societe = societeId || ""
   const [periode, setPeriode] = useState(new Date().toISOString().slice(0, 7))
 
-  // Load societes
-  useEffect(() => {
-    fetch("/api/comptable/societes")
-      .then((r) => r.json())
-      .then((d) => {
-        const list = d.societes || []
-        setSocietes(list)
-        if (list.length === 1) setSociete(list[0].id)
-      })
-  }, [])
-
-  const societeNom = societes.find((s) => s.id === societe)?.nom || ""
+  const societeNom = activeSociete?.nom || ""
 
   return (
     <div className="p-6 space-y-6 max-w-6xl">
@@ -152,30 +142,13 @@ export default function ExportsRHPage() {
       {/* Shared selectors */}
       <Card>
         <CardContent className="p-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <Label>Societe</Label>
-              <Select value={societe} onValueChange={setSociete}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choisir une societe" />
-                </SelectTrigger>
-                <SelectContent>
-                  {societes.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.nom}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Periode (mois)</Label>
-              <Input
-                type="month"
-                value={periode}
-                onChange={(e) => setPeriode(e.target.value)}
-              />
-            </div>
+          <div>
+            <Label>Periode (mois)</Label>
+            <Input
+              type="month"
+              value={periode}
+              onChange={(e) => setPeriode(e.target.value)}
+            />
           </div>
         </CardContent>
       </Card>
