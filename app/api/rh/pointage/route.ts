@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { resolveOwnership } from '@/lib/rh/ownership'
 
 export const dynamic = 'force-dynamic'
 
@@ -453,6 +454,12 @@ export async function POST(request: Request) {
 
     if (!employe_id || !type_pointage) {
       return NextResponse.json({ error: 'employe_id et type_pointage requis' }, { status: 400 })
+    }
+
+    // P0 Sécurité — ownership check : un employé ne peut pointer que pour lui-même.
+    const ownership = await resolveOwnership(supabase, user.id)
+    if (!ownership.isRH && ownership.employe_id && employe_id !== ownership.employe_id) {
+      return NextResponse.json({ error: 'Accès refusé — vous ne pouvez pointer que pour vous-même.' }, { status: 403 })
     }
 
     // Sprint 15 FIX 4 — enforcement pointage_actif=false.
