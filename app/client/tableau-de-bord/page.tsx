@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useProfile } from "@/hooks/use-profile"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -59,8 +60,7 @@ function getMonthRange(mois: string): { debut: string; fin: string } {
 export default function TableauDeBord() {
   const { profile, loading: profileLoading } = useProfile()
   const router = useRouter()
-  const [societes, setSocietes] = useState<Societe[]>([])
-  const [selected, setSelected] = useState<string>("")
+  const { societeId, societe, societes } = useSocieteActive()
   const [loading, setLoading] = useState(true)
 
   const now = new Date()
@@ -76,18 +76,11 @@ export default function TableauDeBord() {
   const [chartData, setChartData] = useState<any[]>([])
   const [alertes, setAlertes] = useState<Alerte[]>([])
 
-  useEffect(() => {
-    fetch("/api/client/societes").then(r => r.json()).then(d => {
-      setSocietes(d.societes || [])
-      if (d.societes?.length > 0) setSelected(d.societes[0].id)
-    })
-  }, [])
-
   // Fetch KPIs + chart data
   useEffect(() => {
-    if (!selected) return
+    if (!societeId) { setLoading(false); return }
     setLoading(true)
-    const base = selected !== "all" ? `societe_id=${selected}&` : ""
+    const base = `societe_id=${societeId}&`
 
     const exMatch = exercice.match(/^(\d{4})-(\d{4})$/)
     const exDebut = exMatch ? `${exMatch[1]}-07-01` : ""
@@ -212,7 +205,7 @@ export default function TableauDeBord() {
       setChartData(cd)
       setLoading(false)
     })
-  }, [selected, mois, exercice])
+  }, [societeId, mois, exercice])
 
   // Redirect assistant
   useEffect(() => {
@@ -262,38 +255,15 @@ export default function TableauDeBord() {
           <h1 className="text-2xl font-bold text-[#0B0F2E]">Bonjour {profile?.full_name?.split(" ")[0] || ""}</h1>
           <p className="text-gray-500 text-sm mt-0.5 capitalize">{formatMoisLabel(mois)}</p>
         </div>
-        {societes.length > 0 && (
-          <Select value={selected} onValueChange={setSelected}>
-            <SelectTrigger className="w-full sm:w-56"><SelectValue placeholder="Société" /></SelectTrigger>
-            <SelectContent>
-              {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
-              {societes.length > 1 && <SelectItem value="all">Toutes mes sociétés</SelectItem>}
-            </SelectContent>
-          </Select>
-        )}
-        {societes.length === 1 && (
+        {societe && (
           <div className="text-right">
-            <p className="font-semibold text-[#0B0F2E]">{societes[0].nom}</p>
-            {societes[0].brn && <p className="text-xs text-gray-400">BRN : {societes[0].brn}</p>}
+            <p className="font-semibold text-[#0B0F2E]">{societe.nom}</p>
+            {societe.brn && <p className="text-xs text-gray-400">BRN : {societe.brn}</p>}
           </div>
         )}
       </div>
 
-      {/* Onboarding */}
-      {societes.length === 0 && (
-        <Card className="border-2 border-dashed border-[#D4AF37]/40 bg-[#D4AF37]/5">
-          <CardContent className="p-8 text-center space-y-4">
-            <Building2 className="w-12 h-12 mx-auto text-[#D4AF37]" />
-            <div>
-              <p className="text-lg font-bold text-[#0B0F2E]">Bienvenue sur LEXORA</p>
-              <p className="text-sm text-gray-500 mt-1">Commencez par créer votre société pour accéder à tous les modules.</p>
-            </div>
-            <Link href="/client/societes"><Button className="bg-[#0B0F2E]"><Plus className="w-4 h-4 mr-2" /> Créer ma société</Button></Link>
-          </CardContent>
-        </Card>
-      )}
-
-      {societes.length > 0 && (
+      {societeId && (
         <>
           {/* ROW 1: Ce mois — 7 KPIs */}
           <div className="space-y-2">
@@ -486,7 +456,7 @@ export default function TableauDeBord() {
                 </Link>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {societes.map(s => (
+                {societes.map((s: any) => (
                   <Card key={s.id} className="border-l-4 border-l-[#0B0F2E]">
                     <CardContent className="p-4 flex items-center justify-between">
                       <div>
