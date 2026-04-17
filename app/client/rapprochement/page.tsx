@@ -1986,7 +1986,7 @@ Voulez-vous vraiment continuer ?`
                                     </>
                                   )}
                                   <DropdownMenuSeparator />
-                                  <DropdownMenuItem onClick={() => { setDialogTab('factures'); setLinkDialog(tx) }}>
+                                  <DropdownMenuItem onClick={() => { setDialogTab('factures'); setLettrageTiersFilter(tx.tiers_detecte || ''); setSelectedFactureIds(new Set()); setLinkDialog(tx) }}>
                                     <Link2 className="w-4 h-4 mr-2 text-blue-600" />Lettrer avec une facture
                                   </DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => openNdfDialog(tx)}>
@@ -2263,7 +2263,7 @@ Voulez-vous vraiment continuer ?`
                                     </>
                                   )}
                                   <DropdownMenuSeparator />
-                                  <DropdownMenuItem onClick={() => { setDialogTab('factures'); setLinkDialog(tx) }}>
+                                  <DropdownMenuItem onClick={() => { setDialogTab('factures'); setLettrageTiersFilter(tx.tiers_detecte || ''); setSelectedFactureIds(new Set()); setLinkDialog(tx) }}>
                                     <Link2 className="w-4 h-4 mr-2 text-blue-600" />
                                     Lettrer avec facture(s) fournisseur
                                   </DropdownMenuItem>
@@ -2955,6 +2955,18 @@ Voulez-vous vraiment continuer ?`
                           placeholder="🔍 Client, n° facture, montant (1500), plage (1000-2000), date (2026-03)..."
                           className="h-8 text-sm flex-1"
                         />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 text-xs whitespace-nowrap"
+                          onClick={() => {
+                            const ids = new Set(selectedFactureIds)
+                            filtered.forEach((f: any) => ids.add(f.id))
+                            setSelectedFactureIds(ids)
+                          }}
+                        >
+                          Tout cocher ({filtered.length})
+                        </Button>
                         <span className="text-xs text-gray-500 whitespace-nowrap">
                           {filtered.length}/{factures.length}
                         </span>
