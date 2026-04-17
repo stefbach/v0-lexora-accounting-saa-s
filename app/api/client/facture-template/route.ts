@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { assertSocieteAccess, mapSocieteAccessError } from '@/lib/supabase/assert-societe-access'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -28,6 +29,15 @@ export async function POST(request: Request) {
       const file = formData.get('file') as File
       const societe_id = formData.get('societe_id') as string
       if (!file) return NextResponse.json({ error: 'Fichier requis' }, { status: 400 })
+      if (!societe_id) {
+        return NextResponse.json({ error: 'societe_id requis — plus de templates globaux' }, { status: 400 })
+      }
+      const adminAccessCheck = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        { auth: { autoRefreshToken: false, persistSession: false } },
+      )
+      await assertSocieteAccess(adminAccessCheck, user.id, societe_id)
 
       if (file.size > MAX_FILE_SIZE) {
         return NextResponse.json({
@@ -194,9 +204,7 @@ export async function POST(request: Request) {
         .select('id, nom')
         .eq('nom', baseName)
         .limit(1)
-      const { data: existing } = societe_id
-        ? await existsQuery.eq('societe_id', societe_id).maybeSingle()
-        : await existsQuery.is('societe_id', null).maybeSingle()
+      const { data: existing } = await existsQuery.eq('societe_id', societe_id).maybeSingle()
 
       if (existing) {
         const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ')
@@ -204,7 +212,7 @@ export async function POST(request: Request) {
       }
 
       const payload = {
-        societe_id: societe_id || null,
+        societe_id,
         nom,
         couleur_primaire: template.couleur_primaire || '#0B0F2E',
         couleur_secondaire: template.couleur_secondaire || '#D4AF37',
@@ -261,9 +269,11 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ error: 'Action inconnue' }, { status: 400 })
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const mapped = mapSocieteAccessError(e)
+    if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
     console.error('[facture-template]', e)
-    return NextResponse.json({ error: e.message || 'Erreur' }, { status: 500 })
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
 

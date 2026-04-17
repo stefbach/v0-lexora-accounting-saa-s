@@ -3,6 +3,7 @@ import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { getTauxChange } from '@/lib/taux-change'
 import { SYSTEM_PROMPT_TRESORERIE_J90, injectTauxChange } from '@/lib/ai/prompts'
+import { assertSocieteAccess, mapSocieteAccessError } from '@/lib/supabase/assert-societe-access'
 
 export const maxDuration = 60
 
@@ -48,6 +49,9 @@ export async function GET(request: Request) {
 
     // Get client's dossiers, optionally filtered by société
     const requestedSocieteId = searchParams.get('societe_id')
+    if (requestedSocieteId) {
+      await assertSocieteAccess(supabase, user.id, requestedSocieteId)
+    }
     let dossierQuery = supabase.from('dossiers').select('id, societe_id').eq('client_id', targetClientId)
     if (requestedSocieteId) dossierQuery = dossierQuery.eq('societe_id', requestedSocieteId)
     const { data: dossiers } = await dossierQuery
@@ -197,6 +201,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ previsionnel })
   } catch (e: unknown) {
+    const mapped = mapSocieteAccessError(e)
+    if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
     console.error('Previsionnel API error:', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
