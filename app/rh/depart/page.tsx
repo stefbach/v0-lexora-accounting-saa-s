@@ -342,6 +342,34 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
             >
               📜 Certificat de travail
             </Button>
+            {/* Sprint 16 FIX 5 — Documents de fin de contrat */}
+            <Button
+              variant="outline"
+              onClick={() => window.open(`/api/rh/depart/solde-tout-compte?employe_id=${breakdown?.employe?.id}`, '_blank')}
+              className="border-emerald-300 text-emerald-700"
+              type="button"
+            >
+              💰 Solde de tout compte
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => window.open(`/api/rh/depart/attestation?employe_id=${breakdown?.employe?.id}`, '_blank')}
+              className="border-blue-300 text-blue-700"
+              type="button"
+            >
+              📋 Attestation fin contrat
+            </Button>
+            {/* Sprint 16 FIX 4 — Déclaration Workfare TUB (licenciement économique) */}
+            {breakdown?.type_depart === 'licenciement' && (
+              <Button
+                variant="outline"
+                onClick={() => window.open(`/api/rh/depart/workfare?employe_id=${breakdown?.employe?.id}`, '_blank')}
+                className="border-red-300 text-red-700"
+                type="button"
+              >
+                🏛️ Déclaration Workfare TUB
+              </Button>
+            )}
             <Button
               onClick={onConfirm}
               disabled={confirming}
