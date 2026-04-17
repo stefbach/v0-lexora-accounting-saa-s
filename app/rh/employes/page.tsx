@@ -59,10 +59,22 @@ function genPwd() {
 
 // ── Composant formulaire creation (state isole = pas de re-render parent) ──
 function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; onCreated: () => void; onClose: () => void }) {
-  const [form, setForm] = useState({ societe_id:"",nom:"",prenom:"",poste:"",email:"",telephone:"",salaire_base:"",transport_allowance:"0",petrol_allowance:"0",date_arrivee:"",role:"salarie",csg_categorie:"A",bank_account:"",bank_name:"",nic:"",tan:"",iban:"",genre:"",date_naissance:"",departement:"",type_contrat:"CDI",devise_salaire:"MUR" })
+  const [form, setForm] = useState({ societe_id:"",nom:"",prenom:"",poste:"",email:"",telephone:"",salaire_base:"",transport_allowance:"0",petrol_allowance:"0",phone_allowance:"0",daily_bus_fare:"0",date_arrivee:"",role:"salarie",csg_categorie:"A",bank_account:"",bank_name:"",nic:"",tan:"",iban:"",genre:"",date_naissance:"",departement:"",type_contrat:"CDI",devise_salaire:"MUR" })
+  // Primes fixes personnalisées (libellé + montant), capées à 3 (mig 117).
+  // Mappées au submit vers prime_fixe_1/2/3 + prime_fixe_*_libelle.
+  const [primesFixes, setPrimesFixes] = useState<{ libelle: string; montant: string }[]>([])
+  const MAX_PRIMES_FIXES = 3
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const u = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
+  const addPrimeFixe = () => {
+    if (primesFixes.length >= MAX_PRIMES_FIXES) return
+    setPrimesFixes(p => [...p, { libelle: "", montant: "" }])
+  }
+  const removePrimeFixe = (i: number) =>
+    setPrimesFixes(p => p.filter((_, idx) => idx !== i))
+  const updatePrimeFixe = (i: number, k: "libelle" | "montant", v: string) =>
+    setPrimesFixes(p => p.map((row, idx) => idx === i ? { ...row, [k]: v } : row))
 
   // Section "Accès Lexora" — création optionnelle du compte auth en même
   // temps que la fiche employé. Si toggle ON, un second POST vers
@@ -104,7 +116,29 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
     if (!validate()) return
     setSaving(true); setErrors({})
     try {
-      const res = await fetch("/api/rh/employes", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ ...form, salaire_base: parseFloat(form.salaire_base), transport_allowance: parseFloat(form.transport_allowance)||0, petrol_allowance: parseFloat(form.petrol_allowance)||0 }) })
+      // Map primesFixes[0..2] vers prime_fixe_1/2/3 + libellé. Les slots non
+      // remplis sont envoyés à 0 / "" pour rester explicites côté DB.
+      const primesPayload: Record<string, unknown> = {}
+      for (let i = 0; i < MAX_PRIMES_FIXES; i++) {
+        const row = primesFixes[i]
+        const n = i + 1
+        const m = row ? parseFloat(row.montant) || 0 : 0
+        primesPayload[`prime_fixe_${n}`] = m
+        primesPayload[`prime_fixe_${n}_libelle`] = row ? (row.libelle || "").trim() : ""
+      }
+      const res = await fetch("/api/rh/employes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...form,
+          salaire_base: parseFloat(form.salaire_base),
+          transport_allowance: parseFloat(form.transport_allowance) || 0,
+          petrol_allowance: parseFloat(form.petrol_allowance) || 0,
+          phone_allowance: parseFloat(form.phone_allowance) || 0,
+          daily_bus_fare: parseFloat(form.daily_bus_fare) || 0,
+          ...primesPayload,
+        }),
+      })
       if (!res.ok) { const d = await res.json(); throw new Error(d.error) }
       // Sprint 4 TÂCHE 6 — feedback selon contrat_status renvoyé par l'API
       const body = await res.json().catch(() => ({}))
@@ -218,8 +252,8 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
         </FormField>
       </FormSection>
 
-      {/* Salaire */}
-      <FormSection icon={<Banknote className="w-4 h-4 text-green-600" />} title="Salaire" color="#22c55e">
+      {/* Rémunération — salaire de base */}
+      <FormSection icon={<Banknote className="w-4 h-4 text-green-600" />} title="Rémunération" color="#22c55e">
         <FormField label="Salaire de base" required>
           <Input className={inputClass} type="number" value={form.salaire_base} onChange={e=>u("salaire_base",e.target.value)} placeholder="35 000"/>
           {fieldErr("salaire_base")}
@@ -227,12 +261,129 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
         <FormField label="Devise">
           <Select value={form.devise_salaire} onValueChange={v=>u("devise_salaire",v)}><SelectTrigger className={selectTriggerClass}><SelectValue/></SelectTrigger><SelectContent>{["MUR","EUR","USD","GBP"].map(d=><SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select>
         </FormField>
-        <FormField label="Transport">
-          <Input className={inputClass} type="number" value={form.transport_allowance} onChange={e=>u("transport_allowance",e.target.value)} placeholder="0"/>
+      </FormSection>
+
+      {/* Compensations & Allowances — fixes + primes personnalisées */}
+      <FormSection icon={<Banknote className="w-4 h-4 text-emerald-600" />} title="Compensations & Allowances" color="#10b981">
+        <FormField label="Transport (MUR)">
+          <Input className={inputClass} type="number" min="0" step="0.01" value={form.transport_allowance} onChange={e=>u("transport_allowance",e.target.value)} placeholder="0"/>
         </FormField>
-        <FormField label="Petrol">
-          <Input className={inputClass} type="number" value={form.petrol_allowance} onChange={e=>u("petrol_allowance",e.target.value)} placeholder="0"/>
+        <FormField label="Essence / Carburant (MUR)">
+          <Input className={inputClass} type="number" min="0" step="0.01" value={form.petrol_allowance} onChange={e=>u("petrol_allowance",e.target.value)} placeholder="0"/>
         </FormField>
+        <FormField label="Téléphone (MUR)">
+          <Input className={inputClass} type="number" min="0" step="0.01" value={form.phone_allowance} onChange={e=>u("phone_allowance",e.target.value)} placeholder="0"/>
+        </FormField>
+        <FormField label="Bus quotidien (MUR / jour)">
+          <Input className={inputClass} type="number" min="0" step="0.01" value={form.daily_bus_fare} onChange={e=>u("daily_bus_fare",e.target.value)} placeholder="0"/>
+        </FormField>
+
+        {/* Primes fixes personnalisées (dynamiques, max 3) */}
+        <div className="sm:col-span-2 space-y-2 pt-1 border-t border-gray-100">
+          <div className="flex items-center justify-between">
+            <Label className="text-xs font-medium text-gray-600">
+              Compensations personnalisées
+              <span className="ml-1 text-gray-400 font-normal">(ex: Electricité, Loyer…)</span>
+            </Label>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs"
+              disabled={primesFixes.length >= MAX_PRIMES_FIXES}
+              onClick={addPrimeFixe}
+              title={primesFixes.length >= MAX_PRIMES_FIXES ? "Maximum 3 compensations personnalisées" : "Ajouter"}
+            >
+              <Plus className="w-3 h-3 mr-1" />
+              Ajouter une compensation
+            </Button>
+          </div>
+          {primesFixes.length === 0 && (
+            <p className="text-[11px] text-gray-400 italic">
+              Aucune compensation personnalisée. Cliquez sur « Ajouter » pour en créer une.
+            </p>
+          )}
+          {primesFixes.length >= MAX_PRIMES_FIXES && (
+            <p className="text-[11px] text-amber-600">
+              Maximum 3 compensations personnalisées atteint.
+            </p>
+          )}
+          {primesFixes.map((row, i) => (
+            <div key={i} className="grid grid-cols-[1fr_140px_auto] gap-2 items-center">
+              <Input
+                className={inputClass}
+                value={row.libelle}
+                onChange={e => updatePrimeFixe(i, "libelle", e.target.value)}
+                placeholder={`Libellé prime ${i + 1} (ex: Electricité)`}
+              />
+              <Input
+                className={`${inputClass} font-mono`}
+                type="number" min="0" step="0.01"
+                value={row.montant}
+                onChange={e => updatePrimeFixe(i, "montant", e.target.value)}
+                placeholder="Montant MUR"
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-9 w-9 p-0"
+                onClick={() => removePrimeFixe(i)}
+                title="Supprimer"
+              >
+                <Trash2 className="w-4 h-4 text-red-500" />
+              </Button>
+            </div>
+          ))}
+        </div>
+
+        {/* Résumé brut estimé en temps réel */}
+        {(() => {
+          const base = parseFloat(form.salaire_base) || 0
+          const transport = parseFloat(form.transport_allowance) || 0
+          const petrol = parseFloat(form.petrol_allowance) || 0
+          const phone = parseFloat(form.phone_allowance) || 0
+          // daily_bus_fare est par jour → exclu du brut mensuel estimé pour
+          // éviter une projection trompeuse (dépend du nb de jours travaillés)
+          const primes = primesFixes.reduce((s, r) => s + (parseFloat(r.montant) || 0), 0)
+          const total = base + transport + petrol + phone + primes
+          const lines: { label: string; value: number; sign?: "plus" }[] = []
+          if (base > 0) lines.push({ label: "Salaire de base", value: base })
+          if (transport > 0) lines.push({ label: "Transport", value: transport, sign: "plus" })
+          if (petrol > 0) lines.push({ label: "Essence", value: petrol, sign: "plus" })
+          if (phone > 0) lines.push({ label: "Téléphone", value: phone, sign: "plus" })
+          for (const r of primesFixes) {
+            const m = parseFloat(r.montant) || 0
+            if (m > 0) lines.push({ label: r.libelle.trim() || "Prime perso.", value: m, sign: "plus" })
+          }
+          if (base <= 0) return null
+          return (
+            <div className="sm:col-span-2 rounded-lg border border-emerald-200 bg-emerald-50/50 p-3 mt-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800 mb-2">
+                Brut mensuel estimé
+              </p>
+              <div className="space-y-1">
+                {lines.map((l, i) => (
+                  <div key={i} className="flex justify-between text-sm font-mono">
+                    <span className="text-gray-700">
+                      {l.sign === "plus" ? "+ " : ""}{l.label}
+                    </span>
+                    <span className="text-gray-900">{l.value.toLocaleString("fr-FR")} {form.devise_salaire}</span>
+                  </div>
+                ))}
+                <div className="flex justify-between text-sm font-mono font-bold pt-1 border-t border-emerald-200">
+                  <span className="text-emerald-900">Total brut estimé</span>
+                  <span className="text-emerald-900">{total.toLocaleString("fr-FR")} {form.devise_salaire}</span>
+                </div>
+              </div>
+              {parseFloat(form.daily_bus_fare) > 0 && (
+                <p className="text-[10px] text-gray-500 italic mt-2">
+                  Le bus quotidien ({form.daily_bus_fare} MUR/jour) varie selon le nombre de jours travaillés — non inclus dans cette estimation mensuelle fixe.
+                </p>
+              )}
+            </div>
+          )
+        })()}
       </FormSection>
 
       {/* Banque */}
