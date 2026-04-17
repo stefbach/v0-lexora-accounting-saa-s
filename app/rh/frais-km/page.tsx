@@ -122,22 +122,26 @@ export default function FraisKmPage() {
     if (!formEmploye || !formKm) return
     setSaving(true)
     try {
-      await fetch("/api/rh/frais-km", {
+      const res = await fetch("/api/rh/frais-km", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: editingFrais ? "update" : "create",
-          id: editingFrais?.id,
+          action: "saisir",
           employe_id: formEmploye,
           periode,
-          km: parseFloat(formKm),
+          km_parcourus: parseFloat(formKm),
           societe_id: societe !== "all" ? societe : undefined,
         }),
       })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        alert("Erreur ajout frais km : " + (data.error || `HTTP ${res.status}`))
+        return
+      }
       setDialogOpen(false)
       load()
-    } catch (e) {
-      console.error(e)
+    } catch (e: any) {
+      alert("Erreur réseau : " + (e?.message || ""))
     } finally {
       setSaving(false)
     }
@@ -145,11 +149,12 @@ export default function FraisKmPage() {
 
   const approveFrais = async (id: string) => {
     try {
-      await fetch("/api/rh/frais-km", {
+      const res = await fetch("/api/rh/frais-km", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "approve", id }),
+        body: JSON.stringify({ action: "approuver", id }),
       })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); alert("Erreur: " + (d.error || "")); return }
       load()
     } catch (e) {
       console.error(e)

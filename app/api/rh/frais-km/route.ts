@@ -116,7 +116,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       rule,
       frais,
-      tarif_km: Number(rule?.tarif_par_km) || 16,
+      tarif_km: Number(rule?.tarif_par_km) || 4,
       entries: entries || [],
       total: (entries || []).length,
     })
@@ -208,7 +208,7 @@ export async function POST(request: Request) {
         saisieRule = sr2
       }
 
-      const tarif = Number(saisieRule?.tarif_par_km) || 16
+      const tarif = Number(saisieRule?.tarif_par_km) || 4
       let kmEffectifs = Number(km_parcourus)
       // Apply monthly cap on km (puisque montant est GENERATED)
       const plafond = Number(saisieRule?.plafond_mensuel) || 0
