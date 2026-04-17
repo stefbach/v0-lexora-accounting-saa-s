@@ -242,13 +242,20 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
               <TableCell className="text-right font-medium">{fmt(breakdown.conges_al.montant)}</TableCell>
             </TableRow>
 
-            {/* SL payout */}
-            <TableRow>
-              <TableCell className="font-medium">Congés maladie (SL) non utilisés</TableCell>
-              <TableCell className="text-center text-sm text-gray-500">
-                {breakdown.conges_sl.restant} jours ({breakdown.conges_sl.droit_prorata} acquis - {breakdown.conges_sl.pris} pris) x {fmt(breakdown.conges_sl.taux_journalier)}/j
+            {/* SL — WRA Art. 48(2) : NON payable à la sortie */}
+            <TableRow className="bg-gray-50/50">
+              <TableCell className="font-medium text-gray-500">
+                Congés maladie (SL) non utilisés
+                <span className="block text-[10px] text-amber-700 mt-0.5">
+                  Non payables à la sortie (WRA Art. 48(2))
+                </span>
               </TableCell>
-              <TableCell className="text-right font-medium">{fmt(breakdown.conges_sl.montant)}</TableCell>
+              <TableCell className="text-center text-sm text-gray-400">
+                {breakdown.conges_sl.restant} jours restants (info)
+              </TableCell>
+              <TableCell className="text-right text-gray-400 line-through">
+                {fmt(breakdown.conges_sl.restant * breakdown.conges_sl.taux_journalier)}
+              </TableCell>
             </TableRow>
 
             {/* 13th month */}

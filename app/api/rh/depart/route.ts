@@ -195,7 +195,9 @@ export async function POST(request: Request) {
       const alRemaining = Math.max(0, Math.round((alEntitled - alTaken) * 100) / 100)
       const alPayout = Math.round(alRemaining * dailySalary)
 
-      // 5. Unused SL (15 days/year prorata, Mauritius pays unused SL at departure)
+      // 5. SL restant — WRA Art. 48(2) : le Sick Leave non pris N'EST PAS
+      // payable à la sortie. Seul l'Annual Leave est dû. On garde le calcul
+      // (jours restants) pour information RH mais le montant est 0.
       const slEntitled = Math.round((15 * mWorked) / 12 * 100) / 100
       const { data: slTakenData } = await supabase
         .from('demandes_conges')
@@ -208,7 +210,7 @@ export async function POST(request: Request) {
 
       const slTaken = (slTakenData || []).reduce((s: number, c: any) => s + (c.nb_jours || 0), 0)
       const slRemaining = Math.max(0, Math.round((slEntitled - slTaken) * 100) / 100)
-      const slPayout = Math.round(slRemaining * dailySalary)
+      const slPayout = 0 // WRA Art. 48(2) — SL non payable à la sortie
 
       // 6. Prorata 13th month (EOY bonus)
       const treizMois = Math.round((salaireBase / 12) * mWorked)
@@ -272,7 +274,8 @@ export async function POST(request: Request) {
           pris: slTaken,
           restant: slRemaining,
           taux_journalier: Math.round(dailySalary),
-          montant: slPayout,
+          montant: 0,
+          non_payable_wra: true, // WRA Art. 48(2) — info UI
         },
         treizieme_mois: {
           mois_travailles: mWorked,
