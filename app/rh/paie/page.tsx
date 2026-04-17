@@ -561,8 +561,24 @@ export default function PaiePage() {
                           {step.label}
                         </p>
                         <p className="text-xs text-gray-500 mt-1">{step.desc}</p>
-                        {step.done ? (
+                        {/* Sprint 16 BUG 2 — ne PAS masquer le bouton quand step.done=true
+                            pour l'étape "calcul". Le RH doit pouvoir recalculer à tout
+                            moment tant que la période n'est pas verrouillée. */}
+                        {step.done && step.id !== "calcul" ? (
                           <span className="inline-block mt-2 text-xs text-green-600 font-semibold bg-green-100 px-2 py-0.5 rounded-full">Fait</span>
+                        ) : step.done && step.id === "calcul" && !isLocked ? (
+                          <div className="flex flex-col items-center gap-1 mt-2">
+                            <span className="text-xs text-green-600 font-semibold bg-green-100 px-2 py-0.5 rounded-full">Fait</span>
+                            <Button
+                              className="h-7 text-[11px] px-3"
+                              variant="outline"
+                              disabled={step.actionDisabled || !!actionLoading || calculating}
+                              onClick={step.action}
+                            >
+                              {calculating && <Loader2 className="w-3 h-3 animate-spin mr-1" />}
+                              🔄 Recalculer
+                            </Button>
+                          </div>
                         ) : step.action ? (
                           <Button
                             className="mt-3 h-8 text-xs px-4"
