@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { resolveOwnership } from '@/lib/rh/ownership'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,6 +38,14 @@ export async function GET(request: Request) {
     const date_debut = searchParams.get('date_debut')
     const date_fin = searchParams.get('date_fin')
     const statut = searchParams.get('statut')
+
+    // P0 Sécurité — ownership check
+    const ownership = await resolveOwnership(supabase, user.id)
+    if (!ownership.isRH) {
+      if (employe_id && ownership.employe_id && employe_id !== ownership.employe_id) {
+        return NextResponse.json({ error: 'Accès refusé — vous ne pouvez voir que vos propres trajets.' }, { status: 403 })
+      }
+    }
 
     if (!societe_id && !employe_id) {
       return NextResponse.json({ error: 'societe_id ou employe_id requis' }, { status: 400 })
