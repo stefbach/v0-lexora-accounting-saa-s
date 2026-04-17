@@ -49,8 +49,12 @@ export default function EspaceEmployePage() {
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t) }, [])
   useEffect(() => { if (feedback) { const t = setTimeout(() => setFeedback(""), 4000); return () => clearTimeout(t) } }, [feedback])
 
-  // Sync tab with URL hash (sidebar links push /salarie#<tab>).
-  // Hotfix ae2fa1a : hashchange + click fallback + pathname/searchParams deps.
+  // Sync tab with URL hash.
+  // The sidebar and all in-page navigations call router.push("/salarie#X")
+  // synchronously (see hotfix 438f38a), which updates the URL before the
+  // next paint and re-triggers usePathname/useSearchParams, so our effect
+  // re-runs and re-reads window.location.hash. The hashchange listener
+  // stays as a safety net for browser back/forward and manual URL edits.
   useEffect(() => {
     const applyHash = () => {
       if (typeof window === "undefined") return
@@ -59,16 +63,7 @@ export default function EspaceEmployePage() {
     }
     applyHash()
     window.addEventListener("hashchange", applyHash)
-    const onSidebarClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement | null
-      if (!target?.closest?.('a[href^="/salarie#"]')) return
-      requestAnimationFrame(applyHash)
-    }
-    document.addEventListener("click", onSidebarClick)
-    return () => {
-      window.removeEventListener("hashchange", applyHash)
-      document.removeEventListener("click", onSidebarClick)
-    }
+    return () => window.removeEventListener("hashchange", applyHash)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname, searchParams])
 
