@@ -1672,6 +1672,23 @@ Voulez-vous vraiment continuer ?`
                 <span className="text-xs font-normal text-gray-400 ml-auto">
                   {rows.length} facture{rows.length > 1 ? 's' : ''}
                 </span>
+                {/* Bouton "Tout remettre en attente" — visible s'il y a des factures payées */}
+                {rows.some(r => r.status === 'paye') && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs gap-1 border-[#9F1239]/40 text-[#9F1239] hover:bg-[#9F1239]/5"
+                    disabled={annulationEnCours}
+                    onClick={() => {
+                      const payees = rows.filter(r => r.status === 'paye').map(r => r.f.id)
+                      if (payees.length === 0) return
+                      handleAnnulerPaiement(payees)
+                    }}
+                  >
+                    {annulationEnCours ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                    Tout remettre en attente ({rows.filter(r => r.status === 'paye').length})
+                  </Button>
+                )}
               </CardTitle>
               {/* Barre d'annulation en masse — visible quand ≥1 facture payée est cochée */}
               {selectedFacturesForAnnulation.size > 0 && (
