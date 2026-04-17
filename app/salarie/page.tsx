@@ -1,5 +1,6 @@
 "use client"
 import React, { useState, useEffect, useCallback } from "react"
+import { usePathname, useSearchParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -1044,6 +1045,8 @@ function DocumentsTab({ employe: _employe }: { employe: any }) {
 }
 
 export default function EspaceEmployePage() {
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<Tab>("dashboard")
   const [employe, setEmploye] = useState<any>(null)
@@ -1075,7 +1078,7 @@ export default function EspaceEmployePage() {
     window.addEventListener("hashchange", applyHash)
     return () => window.removeEventListener("hashchange", applyHash)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [pathname, searchParams])
   // When the user clicks the in-page tab bar, keep the URL in sync so the
   // sidebar highlight follows.
   useEffect(() => {
