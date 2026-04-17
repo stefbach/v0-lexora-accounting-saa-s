@@ -2209,228 +2209,197 @@ Voulez-vous vraiment continuer ?`
         </details>
       )}
 
-      {/* SECTION — Vue par fournisseur */}
+      {/* SECTION — Vue par relevé bancaire : lire la banque, chercher les factures */}
       {transactionTab === 'fournisseurs' && (() => {
         const allFacs = (data?.factures || []) as any[]
-        const unpaidFacs = allFacs.filter((f: any) => f.statut !== 'paye' && f.statut !== 'annule' && f.type_facture !== 'client')
-
-        // Taux de change approximatifs pour comparer factures MUR avec tx EUR
+        const unpaidFacs = allFacs.filter((f: any) => f.statut !== 'paye' && f.statut !== 'annule')
         const RATES: Record<string, number> = { MUR: 1, EUR: 54.4, USD: 44.8, GBP: 54.2 }
-        const toMUR = (amount: number, devise: string) => {
-          const rate = RATES[(devise || 'MUR').toUpperCase()] || 1
-          return amount * rate
-        }
+        const toMUR = (amount: number, devise: string) => amount * (RATES[(devise || 'MUR').toUpperCase()] || 1)
 
-        // Grouper par tiers normalisé + mois
-        const groupMap = new Map<string, { tiers: string; tiersNorm: string; mois: string; factures: any[]; totalMUR: number; totalOriginal: number; devise: string }>()
-        for (const f of unpaidFacs) {
-          const tiersRaw = f.tiers || 'Inconnu'
-          const tiersNorm = tiersRaw.toLowerCase().replace(/\b(ltd|limited|sarl|sas|sa|co|inc)\b/gi, '').replace(/[.,;:()/\\'\-"]/g, ' ').replace(/\s+/g, ' ').trim()
-          const mois = (f.date_facture || '').substring(0, 7) || 'sans-date'
-          const key = `${tiersNorm}__${mois}`
-          if (!groupMap.has(key)) {
-            groupMap.set(key, { tiers: tiersRaw, tiersNorm, mois, factures: [], totalMUR: 0, totalOriginal: 0, devise: f.devise || 'MUR' })
+        // Toutes les tx non identifiées (débits = paiements sortants)
+        const outgoingTx = transactions
+          .filter((t: any) => t.statut === 'non_identifie' && Number(t.debit) > 0)
+          .sort((a: any, b: any) => (a.date || '').localeCompare(b.date || ''))
+
+        // Pour chaque tx bancaire, chercher les factures correspondantes
+        const txWithProposals = outgoingTx.map((tx: any) => {
+          const txAmt = Number(tx.debit) || 0
+          const txDevise = (tx.devise || 'MUR').toUpperCase()
+          const txAmtMUR = toMUR(txAmt, txDevise)
+          const txTiers = (tx.tiers_detecte || '').toLowerCase()
+          const txLibelle = (tx.libelle || '').toLowerCase()
+          const txDate = tx.date || ''
+
+          // Étape 1 : trouver les factures dont le TIERS correspond au libellé bancaire
+          const tiersMatches: Array<{ f: any; tiersSim: number; amtDiffPct: number }> = []
+          for (const f of unpaidFacs) {
+            const fTiers = (f.tiers || '').toLowerCase()
+            if (!fTiers || fTiers.length < 2) continue
+            // Mots du fournisseur qui apparaissent dans le libellé/tiers bancaire
+            const fWords = fTiers.split(/\s+/).filter((w: string) => w.length >= 3)
+            const matched = fWords.filter((w: string) => txTiers.includes(w) || txLibelle.includes(w))
+            const tiersSim = fWords.length > 0 ? matched.length / fWords.length : 0
+            if (tiersSim < 0.20) continue // au moins 1 mot sur 5 doit matcher
+
+            const fMUR = Number(f.montant_mur) || toMUR(Number(f.montant_ttc) || 0, f.devise || 'MUR')
+            const amtDiffPct = fMUR > 0 ? Math.abs(txAmtMUR - fMUR) / fMUR : 999
+            tiersMatches.push({ f, tiersSim, amtDiffPct })
           }
-          const g = groupMap.get(key)!
-          g.factures.push(f)
-          g.totalMUR += Number(f.montant_mur) || toMUR(Number(f.montant_ttc) || 0, f.devise || 'MUR')
-          g.totalOriginal += Number(f.montant_ttc) || 0
-        }
 
-        const groupes = Array.from(groupMap.values()).sort((a, b) => b.mois.localeCompare(a.mois) || b.totalMUR - a.totalMUR)
+          // Étape 2 : parmi les factures du même tiers, trouver le meilleur match
+          // — soit 1 facture exacte
+          // — soit un groupe dont la somme = montant tx
+          let bestSingle: typeof tiersMatches[0] | null = null
+          let bestGroup: typeof tiersMatches | null = null
 
-        // Pour chaque groupe, chercher la meilleure tx bancaire
-        // IMPORTANT : comparer en MUR (convertir les tx EUR via le taux)
-        const allTx = transactions.filter((t: any) => t.statut === 'non_identifie' && Number(t.debit) > 0)
-        const usedTxIds = new Set<string>()
+          // 2a. Match unitaire : la facture la plus proche en montant
+          const singleCandidates = tiersMatches
+            .filter(m => m.amtDiffPct < 0.12)
+            .sort((a, b) => a.amtDiffPct - b.amtDiffPct)
+          if (singleCandidates.length > 0) {
+            bestSingle = singleCandidates[0]
+          }
 
-        const groupesWithMatch = groupes.map(g => {
-          let bestTx: any = null
-          let bestScore = -1
-          const gTotalMUR = g.totalMUR
-
-          for (const tx of allTx) {
-            if (usedTxIds.has(tx.id)) continue
-            const txAmt = Number(tx.debit) || 0
-            if (txAmt === 0) continue
-            const txDevise = (tx.devise || 'MUR').toUpperCase()
-            const txAmtMUR = toMUR(txAmt, txDevise)
-
-            // Comparer en MUR
-            const amtDiff = Math.abs(txAmtMUR - gTotalMUR) / Math.max(gTotalMUR, 1)
-            if (amtDiff > 0.15) continue
-
-            // Aussi comparer en devise native si même devise
-            let nativeDiff = 999
-            if (txDevise === g.devise.toUpperCase() && g.totalOriginal > 0) {
-              nativeDiff = Math.abs(txAmt - g.totalOriginal) / g.totalOriginal
-            }
-            const bestDiff = Math.min(amtDiff, nativeDiff)
-
-            const txTiers = (tx.tiers_detecte || tx.libelle || '').toLowerCase()
-            const tiersWords = g.tiersNorm.split(/\s+/).filter((w: string) => w.length >= 3)
-            const matchedWords = tiersWords.filter((w: string) => txTiers.includes(w))
-            const tiersSim = tiersWords.length > 0 ? matchedWords.length / tiersWords.length : 0
-
-            let score = 0
-            if (bestDiff < 0.005) score += 50
-            else if (bestDiff < 0.03) score += 40
-            else if (bestDiff < 0.08) score += 25
-            else score += 10
-
-            score += tiersSim * 40
-
-            if (g.mois !== 'sans-date' && tx.date) {
-              const txMois = (tx.date || '').substring(0, 7)
-              if (txMois === g.mois) score += 10
-              else {
-                const gDate = new Date(g.mois + '-15')
-                const tDate = new Date(tx.date)
-                const daysDiff = Math.abs((tDate.getTime() - gDate.getTime()) / 86400000)
-                if (daysDiff <= 45) score += 5
+          // 2b. Match groupé : somme des factures du même fournisseur
+          // Regrouper par tiers normalisé
+          const byTiers = new Map<string, typeof tiersMatches>()
+          for (const m of tiersMatches) {
+            const key = (m.f.tiers || '').toLowerCase().substring(0, 20)
+            if (!byTiers.has(key)) byTiers.set(key, [])
+            byTiers.get(key)!.push(m)
+          }
+          for (const [, group] of byTiers) {
+            if (group.length < 2) continue
+            const sumMUR = group.reduce((s, m) => s + (Number(m.f.montant_mur) || toMUR(Number(m.f.montant_ttc) || 0, m.f.devise || 'MUR')), 0)
+            const groupDiff = Math.abs(txAmtMUR - sumMUR) / Math.max(sumMUR, 1)
+            if (groupDiff < 0.12) {
+              // Le groupe est un meilleur match que le single ?
+              if (!bestSingle || groupDiff < bestSingle.amtDiffPct) {
+                bestGroup = group
               }
             }
-
-            if (score > bestScore) {
-              bestScore = score
-              bestTx = { ...tx, score, amtDiff: bestDiff, tiersSim, txAmtMUR }
-            }
           }
 
-          if (bestTx && bestScore >= 20) {
-            usedTxIds.add(bestTx.id)
-          }
+          const proposal = bestGroup
+            ? { type: 'groupe' as const, factures: bestGroup.map(m => m.f), diff: Math.abs(txAmtMUR - bestGroup.reduce((s, m) => s + (Number(m.f.montant_mur) || toMUR(Number(m.f.montant_ttc) || 0, m.f.devise || 'MUR')), 0)) / txAmtMUR, tiersSim: bestGroup[0].tiersSim }
+            : bestSingle
+              ? { type: 'single' as const, factures: [bestSingle.f], diff: bestSingle.amtDiffPct, tiersSim: bestSingle.tiersSim }
+              : null
 
-          const matchLevel = !bestTx || bestScore < 20 ? 'none'
-            : bestTx.amtDiff < 0.03 && bestTx.tiersSim > 0.3 ? 'exact'
-            : bestTx.amtDiff < 0.10 ? 'approximatif'
-            : 'none'
-
-          return { ...g, bestTx: bestScore >= 20 ? bestTx : null, matchLevel }
+          return { tx, proposal }
         })
 
-        const MOIS_FR: Record<string, string> = {
-          '01': 'Janvier', '02': 'Février', '03': 'Mars', '04': 'Avril',
-          '05': 'Mai', '06': 'Juin', '07': 'Juillet', '08': 'Août',
-          '09': 'Septembre', '10': 'Octobre', '11': 'Novembre', '12': 'Décembre'
-        }
-        const fmtMois = (m: string) => {
-          const [y, mm] = m.split('-')
-          return `${MOIS_FR[mm] || mm} ${y}`
-        }
+        const withMatch = txWithProposals.filter(t => t.proposal)
+        const withoutMatch = txWithProposals.filter(t => !t.proposal)
 
         return (
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-[#0B0F2E] flex items-center gap-2 text-base">
-                <span>📊</span> Rapprochement par fournisseur
+                <span>📊</span> Relevé bancaire → Factures
                 <span className="text-xs font-normal text-gray-400 ml-auto">
-                  {groupes.length} groupe{groupes.length > 1 ? 's' : ''} · {unpaidFacs.length} facture{unpaidFacs.length > 1 ? 's' : ''} en attente
+                  {outgoingTx.length} paiement{outgoingTx.length > 1 ? 's' : ''} · {withMatch.length} avec correspondance · {withoutMatch.length} sans
                 </span>
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0 overflow-x-auto">
-              {groupes.length === 0 ? (
-                <div className="text-center py-12 text-gray-500 text-sm">Aucune facture fournisseur en attente</div>
+              {outgoingTx.length === 0 ? (
+                <div className="text-center py-12 text-gray-500 text-sm">Aucun paiement non identifié dans le relevé</div>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Fournisseur</TableHead>
-                      <TableHead>Mois</TableHead>
-                      <TableHead className="text-center">Factures</TableHead>
-                      <TableHead className="text-right">Total dû</TableHead>
-                      <TableHead>Paiement trouvé</TableHead>
-                      <TableHead className="text-right">Montant tx</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Libellé bancaire</TableHead>
+                      <TableHead className="text-right">Montant payé</TableHead>
+                      <TableHead>→</TableHead>
+                      <TableHead>Facture(s) proposée(s)</TableHead>
+                      <TableHead className="text-right">Montant facture</TableHead>
                       <TableHead className="text-center">Écart</TableHead>
                       <TableHead>Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {groupesWithMatch.map((g, gi) => {
-                      const tx = g.bestTx
-                      const borderCls = g.matchLevel === 'exact' ? 'border-l-4 border-l-[#0F766E] bg-[#0F766E]/5'
-                        : g.matchLevel === 'approximatif' ? 'border-l-4 border-l-[#D4AF37] bg-[#D4AF37]/5'
+                    {txWithProposals.map(({ tx, proposal }, i) => {
+                      const borderCls = proposal
+                        ? proposal.diff < 0.03 ? 'border-l-4 border-l-[#0F766E] bg-[#0F766E]/5'
+                          : 'border-l-4 border-l-[#D4AF37] bg-[#D4AF37]/5'
                         : ''
+                      const facTotal = proposal
+                        ? proposal.factures.reduce((s: number, f: any) => s + (Number(f.montant_ttc) || 0), 0)
+                        : 0
+                      const facDevise = proposal?.factures[0]?.devise || ''
                       return (
-                        <TableRow key={gi} className={borderCls}>
-                          <TableCell className="font-medium text-sm text-[#0B0F2E]">{g.tiers}</TableCell>
-                          <TableCell className="text-sm text-gray-600">{g.mois !== 'sans-date' ? fmtMois(g.mois) : '—'}</TableCell>
-                          <TableCell className="text-center">
-                            <Badge variant="outline" className="text-xs">{g.factures.length}</Badge>
+                        <TableRow key={tx.id} className={borderCls}>
+                          <TableCell className="text-sm whitespace-nowrap">{formatDate(tx.date)}</TableCell>
+                          <TableCell className="text-sm max-w-[250px]">
+                            <div className="font-medium text-[#0B0F2E] truncate" title={tx.libelle}>{tx.tiers_detecte || tx.libelle?.substring(0, 40) || '—'}</div>
+                            <div className="text-[10px] text-gray-400 truncate" title={tx.libelle}>{tx.libelle?.substring(0, 60)}</div>
                           </TableCell>
-                          <TableCell className="text-right font-mono font-semibold text-sm">
-                            {g.devise !== 'MUR' ? (
-                              <div>
-                                <div>{fmt(g.totalOriginal)} <span className="text-xs text-gray-400">{g.devise}</span></div>
-                                <div className="text-[10px] text-gray-400">≈ {fmt(g.totalMUR)} MUR</div>
-                              </div>
-                            ) : (
-                              <span>{fmt(g.totalMUR)} <span className="text-xs text-gray-400">MUR</span></span>
-                            )}
+                          <TableCell className="text-right font-mono font-semibold text-[#9F1239] text-sm whitespace-nowrap">
+                            -{fmt(Number(tx.debit))} {tx.devise || ''}
                           </TableCell>
+                          <TableCell className="text-center text-gray-300">→</TableCell>
                           <TableCell className="text-sm">
-                            {tx ? (
+                            {proposal ? (
                               <div>
-                                <div className="font-medium text-[#0B0F2E] truncate max-w-[200px]" title={tx.libelle}>{tx.tiers_detecte || tx.libelle?.substring(0, 30) || '—'}</div>
-                                <div className="text-[10px] text-gray-400">{formatDate(tx.date)}</div>
+                                <div className="font-medium text-[#0B0F2E]">
+                                  {proposal.factures.length === 1
+                                    ? `${proposal.factures[0].tiers} — ${proposal.factures[0].numero_facture}`
+                                    : `${proposal.factures[0].tiers} — ${proposal.factures.length} factures`
+                                  }
+                                </div>
+                                {proposal.factures.length > 1 && (
+                                  <div className="text-[10px] text-gray-400">
+                                    {proposal.factures.map((f: any) => f.numero_facture).join(', ')}
+                                  </div>
+                                )}
                               </div>
                             ) : (
-                              <span className="text-gray-400 text-xs">❌ Pas trouvé</span>
+                              <span className="text-gray-400 text-xs">Aucune correspondance</span>
                             )}
                           </TableCell>
-                          <TableCell className="text-right font-mono text-sm">
-                            {tx ? (
-                              <span className={g.matchLevel === 'exact' ? 'text-[#0F766E] font-semibold' : g.matchLevel === 'approximatif' ? 'text-[#A88925]' : ''}>
-                                {fmt(Number(tx.debit))} {tx.devise || ''}
-                              </span>
-                            ) : '—'}
+                          <TableCell className="text-right font-mono text-sm whitespace-nowrap">
+                            {proposal ? `${fmt(facTotal)} ${facDevise}` : '—'}
                           </TableCell>
-                          <TableCell className="text-center text-xs">
-                            {tx ? (
+                          <TableCell className="text-center">
+                            {proposal ? (
                               <Badge className={
-                                g.matchLevel === 'exact' ? 'bg-[#0F766E]/10 text-[#0F766E] border-[#0F766E]/30' :
-                                g.matchLevel === 'approximatif' ? 'bg-[#D4AF37]/10 text-[#A88925] border-[#D4AF37]/30' :
+                                proposal.diff < 0.005 ? 'bg-[#0F766E]/10 text-[#0F766E]' :
+                                proposal.diff < 0.08 ? 'bg-[#D4AF37]/10 text-[#A88925]' :
                                 'bg-gray-100 text-gray-500'
                               }>
-                                {tx.amtDiff < 0.005 ? '✓ exact' : `${(tx.amtDiff * 100).toFixed(1)}%`}
+                                {proposal.diff < 0.005 ? '✓ exact' : `${(proposal.diff * 100).toFixed(1)}%`}
                               </Badge>
                             ) : '—'}
                           </TableCell>
                           <TableCell>
-                            {tx && g.matchLevel !== 'none' ? (
+                            {proposal ? (
                               <div className="flex gap-1">
                                 <Button
                                   size="sm"
                                   className="h-7 text-xs bg-[#0F766E] hover:bg-[#0F766E]/90 text-white"
                                   onClick={() => {
-                                    if (g.factures.length === 1) {
-                                      handleManualLink(tx, g.factures[0], 'facture')
+                                    if (proposal.factures.length === 1) {
+                                      handleManualLink(tx, proposal.factures[0], 'facture')
                                     } else {
-                                      handleManualLinkMulti(tx, g.factures)
+                                      handleManualLinkMulti(tx, proposal.factures)
                                     }
                                   }}
                                 >
                                   Valider
                                 </Button>
                                 <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 text-xs"
-                                  onClick={() => { setDialogTab('factures'); setLettrageTiersFilter(g.tiers); setSelectedFactureIds(new Set()); setLinkDialog(tx) }}
+                                  variant="ghost" size="sm" className="h-7 text-xs"
+                                  onClick={() => { setDialogTab('factures'); setLettrageTiersFilter(tx.tiers_detecte || ''); setSelectedFactureIds(new Set()); setLinkDialog(tx) }}
                                 >
                                   Détail
                                 </Button>
                               </div>
                             ) : (
                               <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-7 text-xs"
-                                onClick={() => {
-                                  const fakeTx = { id: 'pick', libelle: g.tiers, tiers_detecte: g.tiers, debit: g.totalOriginal, credit: 0, devise: g.devise }
-                                  setPickTxForFacture(g.factures[0])
-                                }}
+                                variant="outline" size="sm" className="h-7 text-xs"
+                                onClick={() => { setDialogTab('factures'); setLettrageTiersFilter(''); setSelectedFactureIds(new Set()); setLinkDialog(tx) }}
                               >
                                 Chercher
                               </Button>
