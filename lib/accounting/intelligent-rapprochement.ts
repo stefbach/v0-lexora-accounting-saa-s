@@ -200,7 +200,6 @@ function normalizeAdvanced(name: string): string {
     .toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/\b(ltd|limited|sarl|sas|sa|eurl|co\.?|inc|llc|plc|pvt|pty|bv|gmbh|cie|company)\b/gi, '')
-    .replace(/\b(mauritius|mu|mru|republic of)\b/gi, '')
     .replace(/[.,;:!?()/\\'\-"]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
