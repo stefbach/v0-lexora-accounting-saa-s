@@ -70,6 +70,70 @@ function getAdminClient() {
   )
 }
 
+/**
+ * Sprint 13 BUG 1 — Prorata premier / dernier mois.
+ *
+ * Retourne { ratio, joursTravailles, joursOuvrables, motif } pour un employé
+ * sur une période donnée :
+ *   - Premier mois (date_arrivee dans la période)
+ *       joursTravailles = workingDays(date_arrivee → periodeEnd)
+ *   - Dernier mois (date_depart dans la période)
+ *       joursTravailles = workingDays(periodeStart → date_depart)
+ *   - Les DEUX (entrée/sortie même mois, rare)
+ *       joursTravailles = workingDays(date_arrivee → date_depart)
+ *   - Aucun des deux → ratio = 1 (pas de prorata)
+ *
+ * joursOuvrables = workingDays(periodeStart → periodeEnd) — dénominateur
+ * basé sur les jours ouvrés réels de la société (working_days employé +
+ * jours fériés), pas sur une approximation 26 jours.
+ *
+ * Le ratio est appliqué AU SEUL salaire de base (salaire_base_mur).
+ * Les allowances (transport, petrol, phone, primes fixes) restent non
+ * prorata-ées par défaut — policy à affiner par société si demandé.
+ */
+function computeProrataFirstLastMonth(
+  emp: { date_arrivee?: string | null; date_depart?: string | null; working_days?: any } | null | undefined,
+  periodeStart: string,
+  periodeEnd: string,
+  joursFeries: Set<string>,
+): { ratio: number; joursTravailles: number; joursOuvrables: number; motif: string | null } {
+  const dateArrivee = emp?.date_arrivee ? String(emp.date_arrivee).slice(0, 10) : null
+  const dateDepart = emp?.date_depart ? String(emp.date_depart).slice(0, 10) : null
+  const isFirstMonth = !!(dateArrivee && dateArrivee >= periodeStart && dateArrivee <= periodeEnd)
+  const isLastMonth = !!(dateDepart && dateDepart >= periodeStart && dateDepart <= periodeEnd)
+
+  const joursOuvrables = calculateWorkingDays(periodeStart, periodeEnd, {
+    workingDays: getWorkingDaysForEmploye(emp),
+    joursFeries,
+  })
+
+  if (!isFirstMonth && !isLastMonth) {
+    return { ratio: 1, joursTravailles: joursOuvrables, joursOuvrables, motif: null }
+  }
+
+  const startEffectif = isFirstMonth && dateArrivee ? dateArrivee : periodeStart
+  const endEffectif = isLastMonth && dateDepart ? dateDepart : periodeEnd
+  const joursTravailles = calculateWorkingDays(startEffectif, endEffectif, {
+    workingDays: getWorkingDaysForEmploye(emp),
+    joursFeries,
+  })
+
+  // Éviter division par zéro si la société n'a aucun jour ouvré pour cet
+  // employé (cas limite : working_days tous à false). Retourne ratio=0 +
+  // motif explicite plutôt que NaN.
+  if (joursOuvrables <= 0) {
+    return { ratio: 0, joursTravailles: 0, joursOuvrables: 0, motif: 'aucun_jour_ouvre' }
+  }
+
+  const ratio = Math.min(1, Math.max(0, joursTravailles / joursOuvrables))
+  const motif = isFirstMonth && isLastMonth
+    ? `prorata_entree_sortie_meme_mois (${joursTravailles}/${joursOuvrables}j)`
+    : isFirstMonth
+      ? `prorata_premier_mois (${joursTravailles}/${joursOuvrables}j depuis ${dateArrivee})`
+      : `prorata_dernier_mois (${joursTravailles}/${joursOuvrables}j jusqu'à ${dateDepart})`
+  return { ratio, joursTravailles, joursOuvrables, motif }
+}
+
 const JOURS_FERIES_MU = ["01-01", "02-01", "12-03", "01-05", "09-05", "15-08", "02-11", "25-12"]
 
 function isFerie(dateStr: string): boolean { return JOURS_FERIES_MU.includes(dateStr.slice(5)) }
@@ -605,6 +669,21 @@ export async function POST(request: Request) {
         salaire_base_mur = Math.round(salaire_base_mur * taux)
       }
 
+      // Sprint 13 BUG 1 — Prorata premier/dernier mois (WRA 2019).
+      // Un employé arrivé le 17 avril doit toucher salaire × jours_travaillés
+      // / jours_ouvrables du mois. Même logique symétrique pour le départ.
+      // Le prorata s'applique uniquement au salaire_base — les allowances
+      // (transport, petrol, phone, primes fixes) restent en montant plein
+      // par défaut (policy company à affiner si demandé).
+      const prorataSingle = computeProrataFirstLastMonth(
+        emp, periodeStartSingle, periodeEndSingle, joursFeriesSetSingle,
+      )
+      if (prorataSingle.ratio < 1) {
+        const originalBase = salaire_base_mur
+        salaire_base_mur = Math.round(salaire_base_mur * prorataSingle.ratio * 100) / 100
+        console.log(`[paie calculer] PRORATA ${emp.prenom} ${emp.nom} — ${prorataSingle.motif}, base ${originalBase} → ${salaire_base_mur}`)
+      }
+
       // Sprint 10 BUG 4 — inclure les primes fixes récurrentes (mig 117)
       // stockées sur employes.prime_fixe_1/2/3. Avant : action `calculer`
       // (unitaire) ne les lisait PAS alors que `calculer_batch` oui →
@@ -703,6 +782,8 @@ export async function POST(request: Request) {
         other_refund: elements.other_refund || 0,
         // montant_absence = unjustified absence + UL deduction (merged).
         montant_absence: Math.round(totalDeductionAbsence * 100) / 100,
+        // Sprint 13 BUG 1 — trace prorata dans les notes pour l'UI
+        notes: prorataSingle.ratio < 1 ? `[${prorataSingle.motif}]` : null,
         statut: 'brouillon',
       }
 
@@ -1150,6 +1231,20 @@ export async function POST(request: Request) {
           salaire_base_mur = Math.round(salaire_base_mur * taux)
         }
 
+        // Sprint 13 BUG 1 — Prorata premier/dernier mois (WRA 2019).
+        // Réduit le salaire de base au prorata des jours ouvrables
+        // effectivement travaillés sur la période quand date_arrivee tombe
+        // dans le mois (arrivée en cours de mois) ou date_depart (départ
+        // en cours de mois). Les allowances restent non prorata-ées.
+        const prorataBatch = computeProrataFirstLastMonth(
+          emp, periodeStart, periodeEnd, joursFeriesSet,
+        )
+        if (prorataBatch.ratio < 1) {
+          const originalBase = salaire_base_mur
+          salaire_base_mur = Math.round(salaire_base_mur * prorataBatch.ratio * 100) / 100
+          console.log(`[paie batch] PRORATA ${emp.prenom} ${emp.nom} — ${prorataBatch.motif}, base ${originalBase} → ${salaire_base_mur}`)
+        }
+
         // EOY bonus: if include_eoy_bonus is set, compute 1/12 of annual basic
         let eoy_bonus_montant = 0
         if (body.include_eoy_bonus && periodeStr.endsWith("-12")) {
@@ -1277,9 +1372,15 @@ export async function POST(request: Request) {
         const autoRulesDetail = autoRulesApplied.length > 0 ? `, Auto: ${autoRulesApplied.join('; ')}` : ''
         const nightDetail = nightShiftAllowance > 0 ? `, Night shift +${(nightShiftPct * 100).toFixed(0)}%: ${nightShiftAllowance} (${Math.round(total_heures_nuit)}h nuit)` : ''
         const ulDetail = joursUnpaidLeave > 0 ? `, UL: ${joursUnpaidLeave}j = -${montant_ul}` : ''
+        // Sprint 13 BUG 1 — trace prorata dans les notes pour que le RH
+        // voie immédiatement pourquoi la base diffère du salaire brut
+        // contractuel (premier/dernier mois).
+        const prorataDetail = prorataBatch.ratio < 1
+          ? ` [${prorataBatch.motif}]`
+          : ''
         const notesResume = isHorsMRA
-          ? `Base: ${salaire_base_mur} [HORS MRA - Brut=Net=Base]`
-          : `Base: ${salaire_base_mur}, Transport: ${transportAlloc}, Petrol: ${petrolAlloc}${phoneDetail}${busDetail}, OT: ${Math.round(total_ot_montant)}${nightDetail}, Primes var: ${primesVariables}${primesFixesDetail}${autoRulesDetail}, Absences: ${jours_absence_injust}j${ulDetail}`
+          ? `Base: ${salaire_base_mur} [HORS MRA - Brut=Net=Base]${prorataDetail}`
+          : `Base: ${salaire_base_mur}${prorataDetail}, Transport: ${transportAlloc}, Petrol: ${petrolAlloc}${phoneDetail}${busDetail}, OT: ${Math.round(total_ot_montant)}${nightDetail}, Primes var: ${primesVariables}${primesFixesDetail}${autoRulesDetail}, Absences: ${jours_absence_injust}j${ulDetail}`
         console.log(`[paie] ${emp.prenom} ${emp.nom}: base=${salaire_base_mur} transport=${transportAlloc} petrol=${petrolAlloc} phone=${phoneAlloc} bus=${busAlloc} OT=${Math.round(total_ot_montant)} primesVar=${primesVariables} primesFixes=${totalPrimesFixes} abs=${jours_absence_injust}j ul=${joursUnpaidLeave}j${mraTag}`)
 
         const bulletin: Record<string, any> = {

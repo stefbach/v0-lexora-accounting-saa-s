@@ -257,7 +257,16 @@ function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris
       React.createElement(View, { style: s.sectionHeader },
         React.createElement(Text, { style: s.sectionTitle }, 'ELEMENTS DE REMUNERATION')
       ),
-      React.createElement(Row, { label: 'Salaire de base', value: `${fmt(bulletin.salaire_base)} MUR` }),
+      // Sprint 13 BUG 1 — si le bulletin est prorata-é (premier/dernier mois),
+      // bulletin.notes contient `[prorata_premier_mois (14/26j depuis YYYY-MM-DD)]`
+      // ou variante. On extrait le libellé parenthèse pour l'afficher à
+      // côté du label salaire de base.
+      (() => {
+        const n = (bulletin.notes || '').toString()
+        const m = n.match(/prorata[_a-z]+ \(([^)]+)\)/)
+        const label = m ? `Salaire de base (prorata ${m[1]})` : 'Salaire de base'
+        return React.createElement(Row, { label, value: `${fmt(bulletin.salaire_base)} MUR` })
+      })(),
       Number(bulletin.transport_allowance) > 0 ? React.createElement(Row, { label: 'Transport Allowance', value: `${fmt(bulletin.transport_allowance)} MUR` }) : null,
       Number(bulletin.petrol_allowance) > 0 ? React.createElement(Row, { label: 'Petrol Allowance', value: `${fmt(bulletin.petrol_allowance)} MUR` }) : null,
       Number(bulletin.increment_salaire) > 0 ? React.createElement(Row, { label: 'Increment de salaire', value: `${fmt(bulletin.increment_salaire)} MUR` }) : null,
