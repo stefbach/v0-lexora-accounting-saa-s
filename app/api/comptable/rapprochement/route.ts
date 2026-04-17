@@ -714,11 +714,10 @@ export async function POST(request: Request) {
 
           // Seuil d'auto-application différent selon la source du match :
           // - Match par alias fournisseur (strategy "supplier_*") → confiance ≥ 0.60 suffit
-          //   (le tiers est confirmé par l'alias, le montant est proche)
-          // - Match par montant seul (strategy "amount_*") → confiance ≥ 0.85 requise
-          //   (pas de confirmation du tiers, risque de faux positif élevé)
+          // - Match par montant seul (strategy "amount_*") → confiance ≥ 0.70 requise
+          //   (montant exact/très proche + tiers similaire = OK, montant approximatif seul = proposé)
           const isFallbackMatch = (match.strategy || '').startsWith('amount_')
-          const autoApplyThreshold = isFallbackMatch ? 0.85 : 0.60
+          const autoApplyThreshold = isFallbackMatch ? 0.70 : 0.60
 
           if (conf >= autoApplyThreshold) {
             // High confidence → auto-apply
