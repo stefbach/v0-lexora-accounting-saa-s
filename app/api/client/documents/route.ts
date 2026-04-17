@@ -1,14 +1,6 @@
-import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { getAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
-
-function getAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    (process.env.SUPABASE_SERVICE_ROLE_KEY)!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-}
 
 // GET — List all documents for the current user (via their dossiers)
 export async function GET() {

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { getAdminClient } from '@/lib/supabase/admin'
+import { assertSocieteAccess, mapSocieteAccessError } from '@/lib/supabase/assert-societe-access'
 import React from 'react'
 import { renderToBuffer, Document, Page, View, Text, StyleSheet } from '@react-pdf/renderer'
 
@@ -8,14 +9,6 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 const BUCKET = 'factures-pdf'
-
-function getAdminClient() {
-  return createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-}
 
 const styles = StyleSheet.create({
   page:        { padding: 48, fontFamily: 'Helvetica', fontSize: 9, color: '#1a1a1a', lineHeight: 1.5 },
@@ -87,14 +80,9 @@ export async function GET(_request: Request, { params }: Params) {
 
     if (error || !facture) return NextResponse.json({ error: 'Facture introuvable' }, { status: 404 })
 
-    // Tenant isolation — verify user has access to this facture's société
-    const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single()
-    if (!['admin', 'super_admin'].includes(profile?.role || '')) {
-      const { data: userSocietes } = await admin.from('user_societes').select('societe_id').eq('user_id', user.id)
-      const allowedIds = userSocietes?.map((s: any) => s.societe_id) || []
-      if (!facture.societe_id || !allowedIds.includes(facture.societe_id)) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-      }
+    // Tenant isolation unifiée via getAccessibleSocieteIds (user_societes + dossiers + created_by)
+    if (facture.societe_id) {
+      await assertSocieteAccess(admin, user.id, facture.societe_id)
     }
 
     // Si PDF déjà stocké → signed URL
@@ -241,6 +229,8 @@ export async function GET(_request: Request, { params }: Params) {
       },
     })
   } catch (e: unknown) {
+    const mapped = mapSocieteAccessError(e)
+    if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur PDF' }, { status: 500 })
   }
 }
