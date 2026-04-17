@@ -267,6 +267,16 @@ function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris
         const label = m ? `Salaire de base (prorata ${m[1]})` : 'Salaire de base'
         return React.createElement(Row, { label, value: `${fmt(bulletin.salaire_base)} MUR` })
       })(),
+      // Compensation salariale Finance Act 2024 (635 MUR si base ≤ 50K)
+      // Incluse dans le brut GENERATED mais invisible sur le PDF → l'employé
+      // ne comprend pas pourquoi brut > base. On l'affiche explicitement.
+      (() => {
+        const base = Number(bulletin.salaire_base) || 0
+        if (base > 0 && base <= 50000) {
+          return React.createElement(Row, { label: 'Compensation salariale 2024', value: '635 MUR' })
+        }
+        return null
+      })(),
       Number(bulletin.transport_allowance) > 0 ? React.createElement(Row, { label: 'Transport Allowance', value: `${fmt(bulletin.transport_allowance)} MUR` }) : null,
       Number(bulletin.petrol_allowance) > 0 ? React.createElement(Row, { label: 'Petrol Allowance', value: `${fmt(bulletin.petrol_allowance)} MUR` }) : null,
       Number(bulletin.increment_salaire) > 0 ? React.createElement(Row, { label: 'Increment de salaire', value: `${fmt(bulletin.increment_salaire)} MUR` }) : null,
