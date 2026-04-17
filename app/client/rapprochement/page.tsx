@@ -2214,40 +2214,58 @@ Voulez-vous vraiment continuer ?`
         const allFacs = (data?.factures || []) as any[]
         const unpaidFacs = allFacs.filter((f: any) => f.statut !== 'paye' && f.statut !== 'annule' && f.type_facture !== 'client')
 
+        // Taux de change approximatifs pour comparer factures MUR avec tx EUR
+        const RATES: Record<string, number> = { MUR: 1, EUR: 54.4, USD: 44.8, GBP: 54.2 }
+        const toMUR = (amount: number, devise: string) => {
+          const rate = RATES[(devise || 'MUR').toUpperCase()] || 1
+          return amount * rate
+        }
+
         // Grouper par tiers normalisé + mois
-        const groupMap = new Map<string, { tiers: string; tiersNorm: string; mois: string; factures: any[]; total: number; devise: string }>()
+        const groupMap = new Map<string, { tiers: string; tiersNorm: string; mois: string; factures: any[]; totalMUR: number; totalOriginal: number; devise: string }>()
         for (const f of unpaidFacs) {
           const tiersRaw = f.tiers || 'Inconnu'
           const tiersNorm = tiersRaw.toLowerCase().replace(/\b(ltd|limited|sarl|sas|sa|co|inc)\b/gi, '').replace(/[.,;:()/\\'\-"]/g, ' ').replace(/\s+/g, ' ').trim()
           const mois = (f.date_facture || '').substring(0, 7) || 'sans-date'
           const key = `${tiersNorm}__${mois}`
           if (!groupMap.has(key)) {
-            groupMap.set(key, { tiers: tiersRaw, tiersNorm, mois, factures: [], total: 0, devise: f.devise || 'MUR' })
+            groupMap.set(key, { tiers: tiersRaw, tiersNorm, mois, factures: [], totalMUR: 0, totalOriginal: 0, devise: f.devise || 'MUR' })
           }
           const g = groupMap.get(key)!
           g.factures.push(f)
-          g.total += Number(f.montant_ttc) || 0
+          g.totalMUR += Number(f.montant_mur) || toMUR(Number(f.montant_ttc) || 0, f.devise || 'MUR')
+          g.totalOriginal += Number(f.montant_ttc) || 0
         }
 
-        const groupes = Array.from(groupMap.values()).sort((a, b) => b.mois.localeCompare(a.mois) || b.total - a.total)
+        const groupes = Array.from(groupMap.values()).sort((a, b) => b.mois.localeCompare(a.mois) || b.totalMUR - a.totalMUR)
 
-        // Pour chaque groupe, chercher la meilleure tx bancaire correspondante
+        // Pour chaque groupe, chercher la meilleure tx bancaire
+        // IMPORTANT : comparer en MUR (convertir les tx EUR via le taux)
         const allTx = transactions.filter((t: any) => t.statut === 'non_identifie' && Number(t.debit) > 0)
         const usedTxIds = new Set<string>()
 
         const groupesWithMatch = groupes.map(g => {
           let bestTx: any = null
           let bestScore = -1
-          const gTotal = g.total
+          const gTotalMUR = g.totalMUR
 
           for (const tx of allTx) {
             if (usedTxIds.has(tx.id)) continue
             const txAmt = Number(tx.debit) || 0
             if (txAmt === 0) continue
+            const txDevise = (tx.devise || 'MUR').toUpperCase()
+            const txAmtMUR = toMUR(txAmt, txDevise)
 
-            // Score basé sur : écart montant + similarité tiers + proximité date
-            const amtDiff = Math.abs(txAmt - gTotal) / Math.max(gTotal, 1)
-            if (amtDiff > 0.15) continue // écart > 15% = pas pertinent
+            // Comparer en MUR
+            const amtDiff = Math.abs(txAmtMUR - gTotalMUR) / Math.max(gTotalMUR, 1)
+            if (amtDiff > 0.15) continue
+
+            // Aussi comparer en devise native si même devise
+            let nativeDiff = 999
+            if (txDevise === g.devise.toUpperCase() && g.totalOriginal > 0) {
+              nativeDiff = Math.abs(txAmt - g.totalOriginal) / g.totalOriginal
+            }
+            const bestDiff = Math.min(amtDiff, nativeDiff)
 
             const txTiers = (tx.tiers_detecte || tx.libelle || '').toLowerCase()
             const tiersWords = g.tiersNorm.split(/\s+/).filter((w: string) => w.length >= 3)
@@ -2255,14 +2273,13 @@ Voulez-vous vraiment continuer ?`
             const tiersSim = tiersWords.length > 0 ? matchedWords.length / tiersWords.length : 0
 
             let score = 0
-            if (amtDiff < 0.005) score += 50  // exact
-            else if (amtDiff < 0.03) score += 40 // très proche
-            else if (amtDiff < 0.08) score += 25 // TDS probable
+            if (bestDiff < 0.005) score += 50
+            else if (bestDiff < 0.03) score += 40
+            else if (bestDiff < 0.08) score += 25
             else score += 10
 
-            score += tiersSim * 40 // bonus tiers
+            score += tiersSim * 40
 
-            // Bonus date (tx dans le même mois ou mois suivant)
             if (g.mois !== 'sans-date' && tx.date) {
               const txMois = (tx.date || '').substring(0, 7)
               if (txMois === g.mois) score += 10
@@ -2276,7 +2293,7 @@ Voulez-vous vraiment continuer ?`
 
             if (score > bestScore) {
               bestScore = score
-              bestTx = { ...tx, score, amtDiff, tiersSim }
+              bestTx = { ...tx, score, amtDiff: bestDiff, tiersSim, txAmtMUR }
             }
           }
 
@@ -2343,7 +2360,14 @@ Voulez-vous vraiment continuer ?`
                             <Badge variant="outline" className="text-xs">{g.factures.length}</Badge>
                           </TableCell>
                           <TableCell className="text-right font-mono font-semibold text-sm">
-                            {fmt(g.total)} <span className="text-xs text-gray-400">{g.devise}</span>
+                            {g.devise !== 'MUR' ? (
+                              <div>
+                                <div>{fmt(g.totalOriginal)} <span className="text-xs text-gray-400">{g.devise}</span></div>
+                                <div className="text-[10px] text-gray-400">≈ {fmt(g.totalMUR)} MUR</div>
+                              </div>
+                            ) : (
+                              <span>{fmt(g.totalMUR)} <span className="text-xs text-gray-400">MUR</span></span>
+                            )}
                           </TableCell>
                           <TableCell className="text-sm">
                             {tx ? (
