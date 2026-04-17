@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label"
 import { Search, Loader2, FileText, AlertTriangle, Download, User, Trash2, Building2, AlertCircle, RefreshCw, Wrench, CheckCircle2, Globe, MapPin } from "lucide-react"
 import { toast } from "sonner"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import * as XLSX from "xlsx"
 import { MonthPicker } from "@/components/ui/MonthPicker"
 
@@ -41,32 +42,19 @@ function getStatutBadge(statut: string) {
 }
 
 export default function ClientFournisseursPage() {
+  const { societeId } = useSocieteActive()
   const [search, setSearch] = useState("")
-  const [societes, setSocietes] = useState<any[]>([])
-  const [societe, setSociete] = useState("")
   const [loading, setLoading] = useState(true)
   const [factures, setFactures] = useState<any[]>([])
   const [totaux, setTotaux] = useState<any>({})
   const [selectedFournisseur, setSelectedFournisseur] = useState<string>("all")
   const [selectedMois, setSelectedMois] = useState<string | null>(null)
 
-  useEffect(() => {
-    Promise.all([
-      fetch("/api/client/societes").then(r => r.json()).catch(() => ({ societes: [] })),
-      fetch("/api/comptable/societes").then(r => r.json()).catch(() => ({ societes: [] })),
-    ]).then(([d1, d2]) => {
-      const all = [...(d1.societes || []), ...(d2.societes || [])]
-      const unique = Array.from(new Map(all.map((s: any) => [s.id, s])).values())
-      setSocietes(unique)
-      if (unique.length >= 1) setSociete(unique[0].id)
-    })
-  }, [])
-
   const load = useCallback(async () => {
-    if (!societe) return
+    if (!societeId) return
     setLoading(true)
     try {
-      const res = await fetch(`/api/comptable/factures?societe_id=${societe}&type=fournisseur&limit=1000`)
+      const res = await fetch(`/api/comptable/factures?societe_id=${societeId}&type=fournisseur&limit=1000`)
       const data = await res.json()
       setFactures(data.factures || [])
       setTotaux(data.totaux || {})
@@ -75,7 +63,7 @@ export default function ClientFournisseursPage() {
       setTotaux({})
     }
     setLoading(false)
-  }, [societe])
+  }, [societeId])
 
   useEffect(() => { load() }, [load])
 
@@ -122,35 +110,7 @@ export default function ClientFournisseursPage() {
     }
   }
 
-  // Reassign
-  const [reassignOpen, setReassignOpen] = useState(false)
-  const [reassignFacture, setReassignFacture] = useState<any>(null)
-  const [reassignSocieteId, setReassignSocieteId] = useState("")
-  const [reassignSaving, setReassignSaving] = useState(false)
-
-  const openReassign = (f: any) => {
-    setReassignFacture(f)
-    setReassignSocieteId(f.societe_id || "")
-    setReassignOpen(true)
-  }
-
-  const saveReassign = async () => {
-    if (!reassignFacture || !reassignSocieteId) return
-    if (reassignSocieteId === reassignFacture.societe_id) { setReassignOpen(false); return }
-    setReassignSaving(true)
-    try {
-      const res = await fetch("/api/comptable/factures", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: reassignFacture.id, societe_id: reassignSocieteId }),
-      })
-      const data = await res.json()
-      if (!res.ok) { alert(data.error || "Erreur"); return }
-      setReassignOpen(false)
-      load()
-    } catch (e: any) { alert("Erreur: " + (e.message || "")) }
-    finally { setReassignSaving(false) }
-  }
+  // NOTE: Réassignation de facture entre sociétés retirée en Phase 0.5.
 
   // Consistency check
   const [consistency, setConsistency] = useState<any>(null)
@@ -159,10 +119,10 @@ export default function ClientFournisseursPage() {
   const [showIncoherences, setShowIncoherences] = useState(false)
 
   const loadConsistency = useCallback(async (openList = false) => {
-    if (!societe) return
+    if (!societeId) return
     setConsistencyLoading(true)
     try {
-      const res = await fetch(`/api/comptable/rapprochement/consistency?societe_id=${societe}`)
+      const res = await fetch(`/api/comptable/rapprochement/consistency?societe_id=${societeId}`)
       if (res.ok) {
         const data = await res.json()
         setConsistency(data)
@@ -171,18 +131,18 @@ export default function ClientFournisseursPage() {
         }
       }
     } catch {} finally { setConsistencyLoading(false) }
-  }, [societe])
+  }, [societeId])
 
   useEffect(() => { loadConsistency() }, [loadConsistency])
 
   const runFix = async (action: 'link_existing_matches' | 'unmark_orphans') => {
-    if (!societe) return
+    if (!societeId) return
     setConsistencyFixing(action)
     try {
       const res = await fetch("/api/comptable/rapprochement/consistency", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ societe_id: societe, action }),
+        body: JSON.stringify({ societe_id: societeId, action }),
       })
       const data = await res.json()
       if (!res.ok) { alert(data.error || "Erreur"); return }
@@ -196,14 +156,14 @@ export default function ClientFournisseursPage() {
 
   // Backfill journal entries for existing invoices (phase 1 + phase 3 fix)
   const runBackfillEcritures = async () => {
-    if (!societe) return
+    if (!societeId) return
     if (!confirm("Generer les ecritures comptables (401, 411, 607, 706, 4456, 4457) pour toutes les factures existantes ?\n\nCette operation est idempotente (peut etre relancee sans doublons).")) return
     setConsistencyFixing('backfill_ecritures')
     try {
       const res = await fetch("/api/comptable/factures/backfill-ecritures", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ societe_id: societe }),
+        body: JSON.stringify({ societe_id: societeId }),
       })
       const data = await res.json()
       if (!res.ok) { alert(data.error || "Erreur"); return }
@@ -271,10 +231,6 @@ export default function ClientFournisseursPage() {
       subtitle="Suivi des factures fournisseurs, paiements, lettrage automatique et rapprochement 401."
       actions={
         <>
-          <Select value={societe} onValueChange={setSociete}>
-            <SelectTrigger className="w-[220px]"><SelectValue placeholder="Société" /></SelectTrigger>
-            <SelectContent>{societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent>
-          </Select>
           <Button variant="outline" onClick={handleExport} disabled={filtered.length === 0}>
             <Download className="w-4 h-4 mr-2" />Exporter
           </Button>
@@ -520,9 +476,6 @@ export default function ClientFournisseursPage() {
                             ? <Loader2 className="w-4 h-4 animate-spin" />
                             : (row.client_offshore ? <Globe className="w-4 h-4" /> : <MapPin className="w-4 h-4" />)}
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={() => openReassign(row)} title="Changer de societe" className="h-7 w-7 p-0 text-amber-600">
-                          <Building2 className="w-4 h-4" />
-                        </Button>
                         <Button variant="ghost" size="sm" onClick={() => handleDelete(row)} title="Supprimer" className="h-7 w-7 p-0 text-red-500">
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -545,54 +498,6 @@ export default function ClientFournisseursPage() {
         </Card>
       )}
 
-      {/* Reassign dialog */}
-      <Dialog open={reassignOpen} onOpenChange={setReassignOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Building2 className="w-5 h-5 text-amber-600" />
-              Changer de societe
-            </DialogTitle>
-          </DialogHeader>
-          {reassignFacture && (
-            <div className="space-y-4 py-2">
-              <div className="p-3 bg-gray-50 rounded-lg text-sm">
-                <p><strong>Fournisseur :</strong> {reassignFacture.tiers || "—"}</p>
-                <p><strong>N° Facture :</strong> {reassignFacture.numero_facture || "—"}</p>
-                <p><strong>Montant :</strong> {fmt2(reassignFacture.montant_ttc || 0)} {reassignFacture.devise || "MUR"}</p>
-              </div>
-              <div>
-                <Label>Societe actuelle</Label>
-                <p className="text-sm text-gray-500 mt-1">
-                  {societes.find(s => s.id === reassignFacture.societe_id)?.nom || "Inconnue"}
-                </p>
-              </div>
-              <div>
-                <Label>Reassigner vers</Label>
-                <Select value={reassignSocieteId} onValueChange={setReassignSocieteId}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {societes.map((s: any) => (
-                      <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <p className="text-xs text-amber-600 flex items-start gap-1">
-                <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
-                La facture et le document numerise associe seront deplaces vers la nouvelle societe.
-              </p>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setReassignOpen(false)}>Annuler</Button>
-            <Button onClick={saveReassign} disabled={reassignSaving || !reassignSocieteId} className="bg-[#0B0F2E] text-white">
-              {reassignSaving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-              Reassigner
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
       </div>
     </ClientPageShell>
   )
