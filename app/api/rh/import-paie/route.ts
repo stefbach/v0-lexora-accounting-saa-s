@@ -514,6 +514,23 @@ export async function POST(request: Request) {
           t.basic > 0 ? mkEntry('4212', `Provision 13ème mois à payer ${moisLabel}`, 0, Math.round(t.basic / 12)) : null,
         ].filter(Boolean) as any[]
 
+        // ── Vérification d'équilibre : débit total DOIT = crédit total ──────
+        // Certains bulletins Excel ont des composants dans le NET (housing, meal,
+        // commissions…) qui ne sont pas captés par basic+ot+allowances. Sans cette
+        // vérification, la balance est perpétuellement déséquilibrée.
+        // On ajoute une écriture d'ajustement en 6419 "Autres rémunérations" pour
+        // la différence, ce qui force l'équilibre et rend l'écart visible.
+        const totalDebit = entries.reduce((s, e) => s + (e.debit_mur || 0), 0)
+        const totalCredit = entries.reduce((s, e) => s + (e.credit_mur || 0), 0)
+        const ecart = Math.round(totalCredit - totalDebit)
+        if (ecart > 0) {
+          entries.push(mkEntry('6419', `Ajustement paie (éléments non détaillés) ${moisLabel}`, ecart, 0))
+          console.log(`[import-paie] Ajustement +${ecart} MUR en 6419 pour équilibrer le bulletin SAL`)
+        } else if (ecart < 0) {
+          entries.push(mkEntry('4210', `Ajustement paie (retenue non détaillée) ${moisLabel}`, 0, Math.abs(ecart)))
+          console.log(`[import-paie] Ajustement ${ecart} MUR en 4210 pour équilibrer le bulletin SAL`)
+        }
+
         // Insert directement dans ecritures_comptables_v2 (pas la vue v1 qui
         // a un trigger INSTEAD OF cassé sur ref_folio).
         const { error: comptaErr } = await supabase.from('ecritures_comptables_v2').insert(entries)
