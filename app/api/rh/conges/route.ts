@@ -542,7 +542,7 @@ export async function GET(request: Request) {
           prenom: emp.prenom,
           poste: emp.poste,
           societe_id: emp.societe_id,
-          gender: emp.gender,
+          gender: emp.genre || emp.gender,
           date_arrivee: emp.date_arrivee,
           al_droit: alEntitled,
           // Sprint 13 BUG 2 — al_pris = compteur de suivi indépendant du solde.
@@ -746,7 +746,7 @@ export async function POST(request: Request) {
       if (!body.employe_id || !body.type_conge || !body.date_debut || !body.date_fin)
         return NextResponse.json({ error: 'Champs requis manquants' }, { status: 400 })
 
-      const { data: emp } = await supabase.from('employes').select('id, societe_id, gender, auth_user_id, email').eq('id', body.employe_id).maybeSingle()
+      const { data: emp } = await supabase.from('employes').select('id, societe_id, gender, genre, auth_user_id, email').eq('id', body.employe_id).maybeSingle()
       if (!emp) {
         return NextResponse.json({ error: 'Employe non trouve' }, { status: 404 })
       }
@@ -855,10 +855,10 @@ export async function POST(request: Request) {
         }, { status: 409 })
       }
 
-      if (body.type_conge === 'MAT' && emp.gender === 'M') {
+      if (body.type_conge === 'MAT' && (emp.genre || emp.gender) === 'M') {
         return NextResponse.json({ error: 'Conge maternite reserve aux femmes (WRA 2019)' }, { status: 400 })
       }
-      if (body.type_conge === 'PAT' && emp.gender === 'F') {
+      if (body.type_conge === 'PAT' && (emp.genre || emp.gender) === 'F') {
         return NextResponse.json({ error: 'Conge paternite reserve aux hommes (WRA 2019)' }, { status: 400 })
       }
       if (body.type_conge === 'MAT') {

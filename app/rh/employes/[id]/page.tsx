@@ -337,7 +337,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label className="text-xs text-gray-500">Genre</Label>
-                    <Select value={form.gender || "M"} onValueChange={v => u("gender", v)}>
+                    <Select value={form.genre || form.gender || "M"} onValueChange={v => u("genre", v)}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>{GENDERS.map(g => <SelectItem key={g.v} value={g.v}>{g.l}</SelectItem>)}</SelectContent>
                     </Select>
