@@ -2320,7 +2320,7 @@ Voulez-vous vraiment continuer ?`
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {txWithProposals.map(({ tx, proposal }, i) => {
+                    {txWithProposals.map(({ tx, proposal }: any, i: number) => {
                       const borderCls = proposal
                         ? proposal.diff < 0.03 ? 'border-l-4 border-l-[#0F766E] bg-[#0F766E]/5'
                           : 'border-l-4 border-l-[#D4AF37] bg-[#D4AF37]/5'
