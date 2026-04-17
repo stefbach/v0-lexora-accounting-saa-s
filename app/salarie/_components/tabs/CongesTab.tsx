@@ -1,5 +1,6 @@
 "use client"
 import { useState, useEffect } from "react"
+import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -9,6 +10,9 @@ import { Progress } from "@/components/ui/progress"
 import { Textarea } from "@/components/ui/textarea"
 import { Loader2, Calendar, CalendarPlus, CheckCircle, FileText, Upload, X } from "lucide-react"
 import { NAVY, GOLD, BLUE, GREEN } from "../shared/constants"
+
+const MAX_CERT_BYTES = 5 * 1024 * 1024 // 5 MB
+const ACCEPTED_CERT_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"]
 
 // Extrait du monolithe page.tsx pendant le sprint-salarie V0.1.
 // Iso-fonctionnel.
@@ -64,8 +68,21 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
       setError("Les demi-journées ne sont pas autorisées pour ce type de congé")
       return
     }
+    if (needsCertificat && !file) {
+      setError("Certificat médical obligatoire pour une demande SL > 3 jours")
+      return
+    }
+    if (file && !ACCEPTED_CERT_TYPES.includes(file.type)) {
+      setError("Format de certificat non supporté : PDF, JPG, PNG ou WebP uniquement")
+      return
+    }
+    if (file && file.size > MAX_CERT_BYTES) {
+      setError("Certificat trop volumineux (5 Mo maximum)")
+      return
+    }
     setSubmitting(true); setError(""); setSuccess("")
     try {
+      // 1) Créer la demande (JSON comme avant).
       const res = await fetch("/api/rh/conges", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -80,15 +97,46 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
         }),
       })
       const data = await res.json()
-      if (data.error) setError(data.error)
-      else {
-        setSuccess(demiJournee ? "Demi-journée soumise avec succès" : "Demande soumise avec succès")
-        setDateDebut(""); setDateFin(""); setMotif(""); setFile(null)
-        setDemiJournee(false); setMatinOuApresMidi('matin')
-        await refreshData()
-        onRefresh()
-        setTimeout(() => setSuccess(""), 4000)
+      if (data.error) { setError(data.error); setSubmitting(false); return }
+
+      // 2) V2.1 — si un certificat est attaché, l'uploader via un POST
+      // multipart vers l'endpoint dédié. TODO(RH agent) — l'endpoint
+      // POST /api/rh/conges/:id/certificat est livré par la branche
+      // fix/sprint-rh-securite ce week-end. En attendant, on tolère
+      // un 404 avec un message d'avertissement pour ne pas bloquer la
+      // création de la demande.
+      const createdId = data.conge?.id || data.id || data.demande?.id
+      if (file && createdId) {
+        const form = new FormData()
+        form.append("certificat", file)
+        try {
+          const certRes = await fetch(`/api/rh/conges/${createdId}/certificat`, {
+            method: "POST",
+            body: form,
+          })
+          if (!certRes.ok) {
+            if (certRes.status === 404) {
+              toast.warning("Certificat non transmis", {
+                description: "L'endpoint d'upload est en cours de déploiement. Transmettez votre certificat au RH en parallèle.",
+              })
+            } else {
+              const err = await certRes.json().catch(() => ({}))
+              toast.error("Erreur upload certificat", { description: err.error || `HTTP ${certRes.status}` })
+            }
+          } else {
+            toast.success("Certificat médical transmis")
+          }
+        } catch {
+          toast.warning("Certificat non transmis (réseau)")
+        }
       }
+
+      setSuccess(demiJournee ? "Demi-journée soumise avec succès" : "Demande soumise avec succès")
+      setDateDebut(""); setDateFin(""); setMotif(""); setFile(null)
+      setDemiJournee(false); setMatinOuApresMidi('matin')
+      await refreshData()
+      onRefresh()
+      setTimeout(() => setSuccess(""), 4000)
     } catch { setError("Erreur réseau") }
     setSubmitting(false)
   }
