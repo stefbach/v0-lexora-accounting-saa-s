@@ -39,7 +39,6 @@ export default function EspaceEmployePage() {
   const [bulletins, setBulletins] = useState<any[]>([])
   const [primes, setPrimes] = useState<any[]>([])
   const [conges, setConges] = useState<any>({ al_droit: 22, al_pris: 0, al_solde: 22, sl_droit: 15, sl_pris: 0, sl_solde: 15 })
-  const [planning, setPlanning] = useState<any[]>([])
   const [annonces, setAnnonces] = useState<any[]>([])
   const [now, setNow] = useState(new Date())
   const [punching, setPunching] = useState(false)
@@ -75,13 +74,13 @@ export default function EspaceEmployePage() {
       setEmploye(emp)
       if (emp) {
         const today = todayISO()
-        const periode = today.slice(0, 7)
-        const [ptRes, bulRes, prRes, cgRes, plRes, histRes] = await Promise.all([
+        // Le planning est désormais géré à l'intérieur de PlanningTab
+        // (sprint V2.3 — sélecteur de mois). On ne le récupère plus ici.
+        const [ptRes, bulRes, prRes, cgRes, histRes] = await Promise.all([
           fetch(`/api/rh/pointage?date=${today}&employe_id=${emp.id}`).then(r => r.json()).catch(() => ({ pointages: [] })),
           fetch(`/api/rh/paie?action=list&employe_id=${emp.id}`).then(r => r.json()).catch(() => ({ bulletins: [] })),
           fetch(`/api/rh/primes?type=saisie&employe_id=${emp.id}`).then(r => r.json()).catch(() => ({ primes: [] })),
           fetch(`/api/rh/conges?action=balances&employe_id=${emp.id}`).then(r => r.json()).catch(() => ({ balances: [] })),
-          fetch(`/api/rh/planning?periode=${periode}&societe_id=${emp.societe_id}&employe_id=${emp.id}`).then(r => r.json()).catch(() => ({ planning: [] })),
           fetch(`/api/rh/conges?employe_id=${emp.id}`).then(r => r.json()).catch(() => ({ conges: [] })),
         ])
         setPointageToday(ptRes.pointages?.[0] || null)
@@ -99,29 +98,6 @@ export default function EspaceEmployePage() {
             sl_droit: 15, sl_pris: slPris, sl_solde: 15 - slPris,
           })
         }
-        const myPlanning = (plRes.planning || []).filter((p: any) => p.employe_id === emp.id)
-        const approvedLeaves = (histRes.conges || []).filter((c: any) => c.statut === "approuve" || c.statut === "approved")
-        const leaveMonthStr = today.slice(0, 7)
-        const leaveDays = new Map<number, string>()
-        for (const c of approvedLeaves) {
-          const startStr = String(c.date_debut || "").slice(0, 10)
-          const endStr = String(c.date_fin || c.date_debut || "").slice(0, 10)
-          const leaveType = c.type_conge || "AL"
-          if (!startStr) continue
-          for (let d = 1; d <= 31; d++) {
-            const dayStr = `${leaveMonthStr}-${String(d).padStart(2, "0")}`
-            if (dayStr >= startStr && dayStr <= endStr) leaveDays.set(d, leaveType)
-          }
-        }
-        const mergedPlanning = myPlanning.map((p: any) => {
-          const lt = leaveDays.get(p.jour || p.day)
-          if (lt) {
-            const leaveLabels: Record<string, string> = { AL: "Local Leave", SL: "Sick Leave", MAT: "Maternité", PAT: "Paternité", SANS_SOLDE: "Sans solde" }
-            return { ...p, shift: leaveLabels[lt] || "Congé", leave_type: lt, est_repos: false, heure_debut: null, heure_fin: null, heures_prevues: 0 }
-          }
-          return p
-        })
-        setPlanning(mergedPlanning)
         fetch("/api/rh/annonces").then(r => r.json()).then(d => setAnnonces(d.annonces || [])).catch(() => {})
       }
     } catch {}
@@ -272,8 +248,8 @@ export default function EspaceEmployePage() {
             <BulletinsTab bulletins={bulletins} employe={employe} onMarkRead={load} />
           )}
 
-          {tab === "planning" && (
-            <PlanningTab planning={planning} />
+          {tab === "planning" && employe && (
+            <PlanningTab employe={employe} />
           )}
 
           {tab === "primes" && (
