@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Loader2, Plus, Save, Trash2, Pencil, X, Download, BookOpen, AlertCircle, CheckCircle2, Search, Filter } from "lucide-react"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 
 interface Ecriture {
   id: string
@@ -38,8 +39,7 @@ function formatDate(d: string | null) {
 
 export default function EcrituresPage() {
   const searchParams = useSearchParams()
-  const [societes, setSocietes] = useState<any[]>([])
-  const [societeId, setSocieteId] = useState<string | null>(null)
+  const { societeId } = useSocieteActive()
   const [ecritures, setEcritures] = useState<Ecriture[]>([])
   const [totals, setTotals] = useState<{ debit_total: number; credit_total: number; solde: number } | null>(null)
   const [total, setTotal] = useState(0)
@@ -75,17 +75,6 @@ export default function EcrituresPage() {
     return () => clearTimeout(t)
   }, [toast])
 
-  // Chargement societes
-  useEffect(() => {
-    fetch("/api/comptable/societes")
-      .then(r => r.json())
-      .then(d => {
-        const list = d.societes || []
-        setSocietes(list)
-        if (list.length > 0) setSocieteId(list[0].id)
-      })
-      .catch(() => {})
-  }, [])
 
   const load = async () => {
     if (!societeId) return
@@ -245,14 +234,6 @@ export default function EcrituresPage() {
           <p className="text-sm text-gray-500">Journal chronologique global · saisie OD · édition · export FEC</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          {societes.length > 0 && (
-            <Select value={societeId || ""} onValueChange={v => { setSocieteId(v); setPage(1) }}>
-              <SelectTrigger className="w-[220px]"><SelectValue placeholder="Société" /></SelectTrigger>
-              <SelectContent>
-                {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          )}
           <Button onClick={() => setOdOpen(true)} className="bg-[#D4AF37] text-[#0B0F2E] hover:bg-[#C9A82E]">
             <Plus className="w-4 h-4 mr-1" /> Nouvelle OD
           </Button>
