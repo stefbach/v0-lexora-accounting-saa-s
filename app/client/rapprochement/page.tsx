@@ -1696,7 +1696,6 @@ Voulez-vous vraiment continuer ?`
                   </div>
                 </div>
               )}
-              </CardTitle>
               <div className="flex flex-wrap gap-3 text-xs text-gray-500 pt-1">
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" />{counts.paye} payées</span>
                 {counts.missingReleve > 0 && <span className="flex items-center gap-1 text-orange-700"><span className="w-2 h-2 rounded-full bg-orange-500" />{counts.missingReleve} relevé manquant</span>}
