@@ -3111,9 +3111,16 @@ export async function POST(request: Request) {
         charge_diverse: '658',
         paiement_mra: '447',
         frais_bancaires: '627',
-        salaire: '421',
+        salaire: '4210',
         virement_interne: '580',
         remboursement_personnel: '108',
+        fournisseur: '401',
+        charge_sociale: '431',
+        loyer: '613',
+        assurance: '616',
+        honoraires: '622',
+        telecom: '626',
+        impot_taxe: '635',
         autre: '471',
       }
       const compte = CLASSE_COMPTES[classification] || '471'

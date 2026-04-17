@@ -22,6 +22,24 @@ import { PeriodeBar } from "@/components/rapprochement/PeriodeBar"
 import { BalanceComptes } from "@/components/rapprochement/BalanceComptes"
 
 function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
+
+const CLASSIFICATION_CHOICES = [
+  { code: 'fournisseur',            label: 'Fournisseur',              compte: '401' },
+  { code: 'frais_bancaires',        label: 'Frais bancaires',          compte: '627' },
+  { code: 'paiement_mra',           label: 'Paiement MRA (impôts)',    compte: '447' },
+  { code: 'charge_sociale',         label: 'Charges sociales (CSG/NSF)', compte: '431' },
+  { code: 'salaire',                label: 'Salaire net',              compte: '4210' },
+  { code: 'compte_courant_associe', label: 'Compte courant associé',   compte: '455' },
+  { code: 'avance_personnel',       label: 'Avance au personnel',      compte: '425' },
+  { code: 'virement_interne',       label: 'Virement interne',         compte: '580' },
+  { code: 'loyer',                  label: 'Loyer / charges locatives', compte: '613' },
+  { code: 'assurance',              label: 'Assurance',                compte: '616' },
+  { code: 'honoraires',             label: 'Honoraires / comptable',   compte: '622' },
+  { code: 'telecom',                label: 'Télécom / internet',       compte: '626' },
+  { code: 'impot_taxe',             label: 'Impôts et taxes',          compte: '635' },
+  { code: 'charge_diverse',         label: 'Charge diverse',           compte: '658' },
+  { code: 'autre',                  label: 'À classer plus tard',      compte: '471' },
+] as const
 function formatDate(d: string) { return d ? new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" }) : "—" }
 
 function TruncatedCell({ text, className }: { text: string; className?: string }) {
@@ -1845,7 +1863,7 @@ Voulez-vous vraiment continuer ?`
           </CardHeader>
           <CardContent className="p-0 overflow-x-auto">
             <Table>
-              <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Libellé</TableHead><TableHead className="text-right">Montant</TableHead><TableHead>Tiers</TableHead><TableHead>Type</TableHead><TableHead>Lettre</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Libellé</TableHead><TableHead className="text-right">Montant</TableHead><TableHead>Tiers</TableHead><TableHead>Type</TableHead><TableHead>Lettre</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
               <TableBody>
                 {classifiedAuto.map((tx: any) => (
                   <TableRow key={tx.id} className="bg-blue-50/30">
@@ -1855,6 +1873,33 @@ Voulez-vous vraiment continuer ?`
                     <TableCell className="text-sm">{tx.tiers_detecte || "—"}</TableCell>
                     <TableCell><Badge className="bg-blue-100 text-blue-700 text-[10px]">{tx.matched_type?.replace(/_/g, ' ') || '—'}</Badge></TableCell>
                     <TableCell><Badge className="bg-blue-100 text-blue-700"><CheckCircle2 className="w-3 h-3" /></Badge></TableCell>
+                    <TableCell>
+                      {tx.releve_id && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-blue-700 hover:text-blue-900">
+                              Modifier <ChevronDown className="w-3 h-3" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-80">
+                            <DropdownMenuLabel className="text-xs">Corriger la classification (le système apprend)</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            {CLASSIFICATION_CHOICES.map(c => (
+                              <DropdownMenuItem key={c.code} onClick={() => handleClasserTx(tx, c.code, false)}>
+                                <span className="text-xs font-mono text-gray-500 mr-2">{c.compte}</span>{c.label}
+                              </DropdownMenuItem>
+                            ))}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuLabel className="text-xs text-amber-700">⚡ Corriger + propager à toutes les tx du même tiers</DropdownMenuLabel>
+                            {CLASSIFICATION_CHOICES.map(c => (
+                              <DropdownMenuItem key={`prop-${c.code}`} onClick={() => handleClasserTx(tx, c.code, true)}>
+                                <span className="text-xs font-mono text-gray-500 mr-2">{c.compte}</span>{c.label} <span className="ml-auto text-[10px] text-amber-600">(propager)</span>
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -1905,16 +1950,7 @@ Voulez-vous vraiment continuer ?`
                                   && norm(o.tiers_detecte || o.tiers || '') === myTiers
                                 ).length
                               : 0
-                            const classifications = [
-                              { code: 'frais_bancaires',        label: 'Frais bancaires',         compte: '627' },
-                              { code: 'paiement_mra',           label: 'Paiement MRA (impôts)',   compte: '447' },
-                              { code: 'salaire',                label: 'Salaire net',             compte: '421' },
-                              { code: 'compte_courant_associe', label: 'Compte courant associé',  compte: '455' },
-                              { code: 'avance_personnel',       label: 'Avance au personnel',     compte: '425' },
-                              { code: 'virement_interne',       label: 'Virement interne',        compte: '580' },
-                              { code: 'charge_diverse',         label: 'Charge diverse',          compte: '658' },
-                              { code: 'autre',                  label: 'À classer plus tard',     compte: '471' },
-                            ]
+                            const classifications = CLASSIFICATION_CHOICES
                             return (
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
