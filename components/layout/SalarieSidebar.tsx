@@ -1,7 +1,6 @@
 "use client"
 import { useState, useEffect } from "react"
 import { usePathname, useRouter } from "next/navigation"
-import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { LanguageSwitcher } from "@/components/LanguageSwitcher"
@@ -136,10 +135,15 @@ export function SalarieSidebar() {
           {NAV.map(({ hash, label, icon: Icon }) => {
             const active = activeHash === hash
             return (
-              <Link
+              <a
                 key={hash}
                 href={`/salarie${hash}`}
-                onClick={() => setActiveHash(hash)}
+                onClick={(e) => {
+                  if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
+                  e.preventDefault()
+                  router.push(`/salarie${hash}`)
+                  setActiveHash(hash)
+                }}
                 className={cn(
                   "group relative flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-all duration-200",
                   active ? "text-[#0B0F2E] font-semibold" : "text-white/70 hover:text-white"
@@ -176,7 +180,7 @@ export function SalarieSidebar() {
                 )}
                 <Icon className="w-4 h-4 flex-shrink-0 relative" style={{ color: active ? "#0B0F2E" : undefined }} />
                 <span className="relative">{label}</span>
-              </Link>
+              </a>
             )
           })}
         </nav>
