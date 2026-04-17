@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Users, Merge, Loader2, AlertCircle, CheckCircle2, X, Edit2 } from "lucide-react"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 
 interface TiersInfo {
   raw: string
@@ -26,8 +27,7 @@ function fmt(n: number) {
 }
 
 export default function TiersConsolidationPage() {
-  const [societes, setSocietes] = useState<any[]>([])
-  const [societeId, setSocieteId] = useState<string | null>(null)
+  const { societeId } = useSocieteActive()
   const [groups, setGroups] = useState<ConsolidationGroup[]>([])
   const [loading, setLoading] = useState(false)
   const [merging, setMerging] = useState<Set<string>>(new Set())
@@ -40,16 +40,6 @@ export default function TiersConsolidationPage() {
     const t = setTimeout(() => setToast(null), 5000)
     return () => clearTimeout(t)
   }, [toast])
-
-  useEffect(() => {
-    fetch("/api/comptable/societes")
-      .then(r => r.json())
-      .then(d => {
-        setSocietes(d.societes || [])
-        if ((d.societes || []).length > 0) setSocieteId(d.societes[0].id)
-      })
-      .catch(() => {})
-  }, [])
 
   const scan = async () => {
     if (!societeId) return
@@ -133,17 +123,6 @@ export default function TiersConsolidationPage() {
 
       <Card>
         <CardContent className="p-3 flex items-end gap-2 flex-wrap">
-          {societes.length > 0 && (
-            <div>
-              <label className="text-xs">Société</label>
-              <Select value={societeId || ""} onValueChange={setSocieteId}>
-                <SelectTrigger className="w-[240px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
           <div>
             <label className="text-xs">Sensibilité (0 = tous, 1 = identiques)</label>
             <Input
