@@ -331,7 +331,16 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
               className="border-[#0B0F2E] text-[#0B0F2E]"
               type="button"
             >
-              📄 Télécharger PDF
+              📄 Imprimer solde
+            </Button>
+            {/* Sprint 14 BONUS — Certificat de travail WRA Art. 22(3) */}
+            <Button
+              variant="outline"
+              onClick={() => window.open(`/api/rh/depart/certificat?employe_id=${breakdown?.employe?.id}`, '_blank')}
+              className="border-purple-300 text-purple-700"
+              type="button"
+            >
+              📜 Certificat de travail
             </Button>
             <Button
               onClick={onConfirm}
