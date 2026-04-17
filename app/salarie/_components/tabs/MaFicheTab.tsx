@@ -31,6 +31,9 @@ export function MaFicheTab({ employe, onUpdated }: { employe: any; onUpdated: ()
           adresse: f.adresse, adresse2: f.adresse2, ville: f.ville, code_postal: f.code_postal,
           date_naissance: f.date_naissance, genre: f.genre, statut_marital: f.statut_marital, nationalite: f.nationalite,
           bank_name: f.bank_name, bank_account: f.bank_account, iban: f.iban,
+          contact_urgence_nom: f.contact_urgence_nom,
+          contact_urgence_tel: f.contact_urgence_tel,
+          contact_urgence_relation: f.contact_urgence_relation,
         }),
       })
       const data = await res.json()
@@ -136,6 +139,20 @@ export function MaFicheTab({ employe, onUpdated }: { employe: any; onUpdated: ()
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="rounded-2xl shadow-sm">
+        <div className="flex rounded-2xl overflow-hidden">
+          <div className="w-1.5 shrink-0" style={{ backgroundColor: "#F97316" }} />
+          <div className="flex-1 p-5 space-y-4">
+            <p className="text-sm font-semibold uppercase tracking-wide text-gray-400">Contact d&apos;urgence</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5"><Label className="text-xs font-medium text-gray-500">Nom</Label><Input className={inputCls} value={f.contact_urgence_nom || ""} onChange={e => u("contact_urgence_nom", e.target.value)} placeholder="Nom prénom" /></div>
+              <div className="space-y-1.5"><Label className="text-xs font-medium text-gray-500">Téléphone</Label><Input className={inputCls} value={f.contact_urgence_tel || ""} onChange={e => u("contact_urgence_tel", e.target.value)} placeholder="+230 5XXX XXXX" /></div>
+              <div className="space-y-1.5 md:col-span-2"><Label className="text-xs font-medium text-gray-500">Relation</Label><Input className={inputCls} value={f.contact_urgence_relation || ""} onChange={e => u("contact_urgence_relation", e.target.value)} placeholder="Conjoint, parent, ami…" /></div>
             </div>
           </div>
         </div>
