@@ -217,7 +217,7 @@ function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () => void
 
   const needsCertificat = typeConge === "SL" && dateDebut && dateFin && (() => {
     const d1 = new Date(dateDebut), d2 = new Date(dateFin)
-    return (d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24) > 3
+    return Math.round((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24)) + 1 > 3
   })()
 
   // Leave types where half-day makes sense — mirrors the RH page's allowlist.

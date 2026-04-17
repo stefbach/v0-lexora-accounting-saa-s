@@ -1772,6 +1772,35 @@ export default function CongesPage() {
               }
               return null
             })()}
+            {/* Aperçu nb_jours — montre au RH le calcul AVANT soumission */}
+            {form.date_debut && form.date_fin && !form.demi_journee && (() => {
+              const s = new Date(form.date_debut + 'T12:00:00')
+              const e = new Date(form.date_fin + 'T12:00:00')
+              if (e < s) return null
+              const calDays = Math.round((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1
+              let workDays = 0
+              const cursor = new Date(s)
+              while (cursor <= e) {
+                const day = cursor.getDay()
+                if (day !== 0 && day !== 6) workDays++
+                cursor.setDate(cursor.getDate() + 1)
+              }
+              return (
+                <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                  <p className="text-sm font-medium text-blue-900">
+                    Estimation : <strong>{workDays} jour{workDays > 1 ? "s" : ""} ouvrable{workDays > 1 ? "s" : ""}</strong>
+                    {calDays !== workDays && (
+                      <span className="text-xs text-blue-600 ml-2">
+                        ({calDays} jour{calDays > 1 ? "s" : ""} calendaire{calDays > 1 ? "s" : ""} dont {calDays - workDays} weekend{calDays - workDays > 1 ? "s" : ""})
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-[10px] text-blue-600 mt-0.5">
+                    Le calcul final tiendra compte du planning de l'employé et des jours fériés.
+                  </p>
+                </div>
+              )
+            })()}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Annuler</Button>
