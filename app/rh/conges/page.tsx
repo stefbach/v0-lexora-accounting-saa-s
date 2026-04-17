@@ -540,7 +540,7 @@ export default function CongesPage() {
     try {
       const res = await fetch("/api/comptable/societes")
       const data = await res.json()
-      setSocietes(data.societes || [])
+      setSocietes(Array.isArray(data.societes) ? data.societes : [])
     } catch (e) { console.error(e) }
   }, [])
 
@@ -552,7 +552,7 @@ export default function CongesPage() {
       // partis (actif=false OU date_depart!=null), on re-filtre côté
       // client pour garantir qu'aucun ancien salarié n'apparaisse dans
       // les listes de congés.
-      const actifs = (data.employes || []).filter(
+      const actifs = (Array.isArray(data.employes) ? data.employes : []).filter(
         (e: any) => e.actif !== false && !e.date_depart
       )
       setEmployes(actifs)
@@ -566,8 +566,10 @@ export default function CongesPage() {
       if (societe !== "all") params.set("societe_id", societe)
       const res = await fetch(`/api/rh/conges?${params}`)
       const data = await res.json()
-      setBalances(data.balances || [])
-      setKpis(data.kpis || { total_al_taken: 0, total_sl_taken: 0, pending_requests: 0, alerts: 0 })
+      // Sprint 16 fix — guard défensif: si l'API renvoie un objet au lieu
+      // d'un array (ex: erreur Postgres encapsulée), forcer [].
+      setBalances(Array.isArray(data.balances) ? data.balances : [])
+      setKpis(data.kpis && typeof data.kpis === 'object' ? data.kpis : { total_al_taken: 0, total_sl_taken: 0, pending_requests: 0, alerts: 0 })
     } catch (e) { console.error(e) }
     finally { setLoadingBalances(false) }
   }, [societe])
@@ -615,7 +617,7 @@ export default function CongesPage() {
       if (societe !== "all") params.set("societe_id", societe)
       const res = await fetch(`/api/rh/conges?${params}`)
       const data = await res.json()
-      setConges(data.conges || [])
+      setConges(Array.isArray(data.conges) ? data.conges : [])
     } catch (e) { console.error(e) }
     finally { setLoadingConges(false) }
   }, [societe])
@@ -627,8 +629,8 @@ export default function CongesPage() {
       if (societe !== "all") params.set("societe_id", societe)
       const res = await fetch(`/api/rh/conges?${params}`)
       const data = await res.json()
-      setAbsentsAvecConge(data.absents_avec_conge || [])
-      setEmployesSansConge(data.employes_sans_conge || [])
+      setAbsentsAvecConge(Array.isArray(data.absents_avec_conge) ? data.absents_avec_conge : [])
+      setEmployesSansConge(Array.isArray(data.employes_sans_conge) ? data.employes_sans_conge : [])
     } catch (e) { console.error(e) }
     finally { setLoadingAbsents(false) }
   }, [societe])
@@ -640,7 +642,7 @@ export default function CongesPage() {
       if (societe !== "all") params.set("societe_id", societe)
       const res = await fetch(`/api/rh/conges?${params}`)
       const data = await res.json()
-      setAllConges(data.conges || [])
+      setAllConges(Array.isArray(data.conges) ? data.conges : [])
     } catch (e) { console.error(e) }
     finally { setLoadingHisto(false) }
   }, [societe])
@@ -652,7 +654,7 @@ export default function CongesPage() {
       if (societe !== "all") params.set("societe_id", societe)
       const res = await fetch(`/api/rh/conges?${params}`)
       const data = await res.json()
-      setCalendarConges(data.conges || [])
+      setCalendarConges(Array.isArray(data.conges) ? data.conges : [])
     } catch (e) { console.error(e) }
     finally { setLoadingCalendar(false) }
   }, [societe])
