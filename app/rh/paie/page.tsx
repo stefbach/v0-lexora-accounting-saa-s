@@ -282,7 +282,8 @@ export default function PaiePage() {
       id: "calcul", label: "Calcul",
       desc: hasBulletins ? `${bulletins.length || workflow?.bulletins_total || 0} bulletin(s)` : "Lancer le calcul",
       done: hasBulletins, icon: Calculator,
-      action: calculerBatch, actionLabel: "Calculer la paie",
+      action: calculerBatch,
+      actionLabel: hasBulletins ? "Recalculer la paie" : "Calculer la paie",
       actionDisabled: calculating || isLocked, phase: "process",
     },
     {
@@ -412,6 +413,14 @@ export default function PaiePage() {
   const [recalcId, setRecalcId] = useState<string | null>(null)
   const recalculerEmploye = async (employe_id: string) => {
     if (societe === "all") return
+    const emp = bulletins.find(b => b.employe_id === employe_id)
+    const nomComplet = emp?.employe ? `${emp.employe.prenom} ${emp.employe.nom}` : employe_id
+    if (!confirm(
+      `Recalculer le bulletin de ${nomComplet} ?\n\n` +
+      `Les valeurs actuelles seront remplacées par les données à jour ` +
+      `de la fiche employé (salaire, allowances, primes, prorata…).\n\n` +
+      `Le bulletin repassera en statut "brouillon".`
+    )) return
     setRecalcId(employe_id)
     try {
       const res = await fetch("/api/rh/paie", {
