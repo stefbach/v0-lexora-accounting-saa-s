@@ -1,7 +1,21 @@
 import { NextResponse } from 'next/server'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
+import {
+  assertDocumentAccess,
+  assertFactureAccess,
+  mapSocieteAccessError,
+} from '@/lib/supabase/assert-societe-access'
 
 export const dynamic = 'force-dynamic'
+
+function getAdminClient() {
+  return createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } },
+  )
+}
 
 // Actions disponibles pour les clients (client_admin et client_user)
 export async function POST(request: Request) {
@@ -10,7 +24,8 @@ export async function POST(request: Request) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
-    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+    const admin = getAdminClient()
+    const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single()
     const allowedRoles = ['client_admin', 'client_user', 'admin']
     if (!allowedRoles.includes(profile?.role || '')) {
       return NextResponse.json({ error: 'Accès client requis' }, { status: 403 })
@@ -23,11 +38,9 @@ export async function POST(request: Request) {
     if (action === 'commenter_document') {
       if (!document_id || !note) return NextResponse.json({ error: 'document_id et note requis' }, { status: 400 })
 
-      // Vérifier que le document appartient à une société du client
-      const { data: doc } = await supabase.from('documents').select('id,dossier_id').eq('id', document_id).single()
-      if (!doc) return NextResponse.json({ error: 'Document non trouvé' }, { status: 404 })
+      await assertDocumentAccess(admin, user.id, document_id)
 
-      const { data, error } = await supabase.from('documents')
+      const { data, error } = await admin.from('documents')
         .update({ client_note: note })
         .eq('id', document_id)
         .select().single()
@@ -38,7 +51,10 @@ export async function POST(request: Request) {
     // ── Action 2 : Demander reanalyse d'un document ──
     if (action === 'reanalyser_document') {
       if (!document_id) return NextResponse.json({ error: 'document_id requis' }, { status: 400 })
-      const { error } = await supabase.from('documents')
+
+      await assertDocumentAccess(admin, user.id, document_id)
+
+      const { error } = await admin.from('documents')
         .update({ statut: 'en_attente', client_note: note || 'Reanalyse demandée par le client' })
         .eq('id', document_id)
       if (error) throw error
@@ -48,8 +64,11 @@ export async function POST(request: Request) {
     // ── Action 3 : Approuver/rejeter une facture ──
     if (action === 'approuver_facture' || action === 'rejeter_facture') {
       if (!facture_id) return NextResponse.json({ error: 'facture_id requis' }, { status: 400 })
+
+      await assertFactureAccess(admin, user.id, facture_id)
+
       const newStatut = action === 'approuver_facture' ? 'approuve_client' : 'rejete_client'
-      const { data, error } = await supabase.from('factures')
+      const { data, error } = await admin.from('factures')
         .update({ statut: newStatut, client_note: note || null })
         .eq('id', facture_id)
         .select().single()
@@ -60,11 +79,11 @@ export async function POST(request: Request) {
     // ── Action 4 : Envoyer un message à son comptable ──
     if (action === 'contacter_comptable') {
       if (!note) return NextResponse.json({ error: 'message requis' }, { status: 400 })
-      const { data: profile2 } = await supabase.from('profiles').select('comptable_id').eq('id', user.id).single()
+      const { data: profile2 } = await admin.from('profiles').select('comptable_id').eq('id', user.id).single()
 
-      const { data, error } = await supabase.from('messages_internes').insert({
+      const { data, error } = await admin.from('messages_internes').insert({
         sender_id: user.id,
-        receiver_id: (profile2 as any)?.comptable_id || null,
+        receiver_id: (profile2 as { comptable_id?: string | null } | null)?.comptable_id || null,
         message: note,
         type_demande: type_demande || 'general',
         lu: false,
@@ -75,6 +94,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ error: 'Action inconnue' }, { status: 400 })
   } catch (e: unknown) {
+    const mapped = mapSocieteAccessError(e)
+    if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
