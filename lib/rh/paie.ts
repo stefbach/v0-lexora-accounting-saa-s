@@ -125,7 +125,9 @@ export function calculerBulletin(
     : params.csg_salarie_taux_plein
 
   const csg_salarie = Math.round(salaire_brut_base * csgTaux)
-  const csg_bonus = eoy_bonus > 0 ? Math.round(eoy_bonus * params.csg_salarie_taux_plein) : 0
+  // Sprint 14 FIX 5 — CSG bonus suit la même tranche que le salaire de base
+  // (1.5% si brut ≤ 50K, 3% si > 50K) au lieu du 3% forfaitaire.
+  const csg_bonus = eoy_bonus > 0 ? Math.round(eoy_bonus * csgTaux) : 0
   const nsf_salarie = Math.round(salaire_brut * params.nsf_salarie)
 
   // PAYE -- bareme progressif annuel MRA 2025/26
@@ -150,7 +152,8 @@ export function calculerBulletin(
     ? (params.csg_patronal_taux_reduit || 0.030)
     : params.csg_patronal
   const csg_patronal = Math.round(salaire_brut_base * csgPatronalTaux)
-  const csg_patronal_bonus = eoy_bonus > 0 ? Math.round(eoy_bonus * params.csg_patronal) : 0
+  // Sprint 14 FIX 5 — CSG patronal bonus suit la même tranche que le salaire
+  const csg_patronal_bonus = eoy_bonus > 0 ? Math.round(eoy_bonus * csgPatronalTaux) : 0
   const nsf_patronal = Math.round(salaire_brut * params.nsf_patronal)
 
   // Training Levy (HRDC): 1% of basic salary only (not total emoluments)

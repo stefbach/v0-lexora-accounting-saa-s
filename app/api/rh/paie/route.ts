@@ -1245,10 +1245,37 @@ export async function POST(request: Request) {
           console.log(`[paie batch] PRORATA ${emp.prenom} ${emp.nom} — ${prorataBatch.motif}, base ${originalBase} → ${salaire_base_mur}`)
         }
 
-        // EOY bonus: if include_eoy_bonus is set, compute 1/12 of annual basic
+        // Sprint 14 FIX 5 — Bonus 13ème mois complet (WRA Art. 52 + Finance Act).
+        //
+        // Ancienne logique : eoy_bonus = salaire_base seul.
+        //   → Problèmes : (1) pas d'inclusion transport/phone/primes fixes
+        //                  (2) pas de prorata ancienneté
+        //                  (3) pas d'exclusion < 3 mois
+        //
+        // WRA Art. 52 : "émoluments" = base + allowances + primes récurrentes.
+        // Éligibilité : ≥ 8 mois → bonus plein ; 3-7 mois → prorata ; < 3 mois → 0.
         let eoy_bonus_montant = 0
         if (body.include_eoy_bonus && periodeStr.endsWith("-12")) {
-          eoy_bonus_montant = Math.round(salaire_base_mur) // 1 month's basic salary as 13th month
+          const totalEmoluments = salaire_base_mur
+            + (Number(emp.transport_allowance) || 0)
+            + (Number(emp.petrol_allowance) || 0)
+            + phoneAllowance
+            + busAllowanceMensuel
+            + primeFixe1 + primeFixe2 + primeFixe3
+          const hireDate = emp.date_arrivee ? new Date(String(emp.date_arrivee) + 'T00:00:00') : null
+          const periodeDate = new Date(periodeStr + '-15')
+          const moisService = hireDate
+            ? Math.max(0,
+                (periodeDate.getFullYear() - hireDate.getFullYear()) * 12
+                + (periodeDate.getMonth() - hireDate.getMonth())
+              )
+            : 99
+          const moisDansAnnee = Math.min(moisService, 12)
+          let bonusFactor = 0
+          if (moisDansAnnee >= 8) bonusFactor = 1
+          else if (moisDansAnnee >= 3) bonusFactor = moisDansAnnee / 12
+          eoy_bonus_montant = Math.round(totalEmoluments * bonusFactor)
+          console.log(`[paie batch] EOY BONUS ${emp.prenom} ${emp.nom}: emoluments=${totalEmoluments} moisService=${moisService} moisDansAnnee=${moisDansAnnee} factor=${bonusFactor} bonus=${eoy_bonus_montant}`)
         }
 
         const isHorsMRA = emp.exclure_mra === true
