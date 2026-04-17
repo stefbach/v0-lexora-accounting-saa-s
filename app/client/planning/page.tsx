@@ -12,6 +12,7 @@ import {
   Save, Upload, Wand2, Users, Search, Clock
 } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 
 interface Societe { id: string; nom: string }
 interface Employe { id: string; nom: string; prenom: string }
@@ -47,8 +48,7 @@ const DEFAULT_TEMPLATES: Template[] = [
 
 export default function PlanningPage() {
   const { profile, loading: profileLoading } = useProfile()
-  const [societes, setSocietes] = useState<Societe[]>([])
-  const [selectedSociete, setSelectedSociete] = useState("")
+  const { societeId } = useSocieteActive()
   const [employes, setEmployes] = useState<Employe[]>([])
   const [planning, setPlanning] = useState<PlanningRow[]>([])
   const [weekOffset, setWeekOffset] = useState(0)
@@ -63,19 +63,11 @@ export default function PlanningPage() {
 
   const week = getWeekDates(weekOffset)
 
-  const fetchSocietes = useCallback(async () => {
-    if (!profile?.id) return
-    try {
-      const r = await fetch(`/api/societes?user_id=${profile.id}`)
-      if (r.ok) { const d = await r.json(); setSocietes(d.societes || []) }
-    } catch { /* silent */ }
-  }, [profile?.id])
-
   const fetchEmployes = useCallback(async () => {
-    if (!selectedSociete) return
+    if (!societeId) return
     setFetching(true)
     try {
-      const r = await fetch(`/api/rh/employes?societe_id=${selectedSociete}`)
+      const r = await fetch(`/api/rh/employes?societe_id=${societeId}`)
       if (r.ok) {
         const d = await r.json()
         const emps: Employe[] = d.employes || []
@@ -87,12 +79,8 @@ export default function PlanningPage() {
       }
     } catch { /* silent */ }
     setFetching(false)
-  }, [selectedSociete])
+  }, [societeId])
 
-  useEffect(() => { fetchSocietes() }, [fetchSocietes])
-  useEffect(() => {
-    if (societes.length && !selectedSociete) setSelectedSociete(societes[0].id)
-  }, [societes, selectedSociete])
   useEffect(() => { fetchEmployes() }, [fetchEmployes])
 
   const updateShift = (rowIdx: number, colIdx: number, value: Shift) => {
@@ -129,7 +117,7 @@ export default function PlanningPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          societe_id: selectedSociete, prompt: aiPrompt,
+          societe_id: societeId, prompt: aiPrompt,
           employes: employes.map(e => ({ id: e.id, nom: `${e.prenom} ${e.nom}` })),
         }),
       })
@@ -172,17 +160,6 @@ export default function PlanningPage() {
           <h1 className="text-2xl font-bold text-[#0B0F2E]">Planning</h1>
           <p className="text-sm text-gray-500">Planification des horaires hebdomadaires</p>
         </div>
-        <Select value={selectedSociete} onValueChange={setSelectedSociete}>
-          <SelectTrigger className="w-64">
-            <Building2 className="w-4 h-4 mr-2 text-[#0B0F2E]" />
-            <SelectValue placeholder="Societe" />
-          </SelectTrigger>
-          <SelectContent>
-            {societes.map(s => (
-              <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
       </div>
 
       {/* Week navigator + filter */}
