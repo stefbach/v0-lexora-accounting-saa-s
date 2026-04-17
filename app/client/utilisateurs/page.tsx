@@ -213,7 +213,7 @@ function StatusBadge({ actif }: { actif?: boolean }) {
 // Main page
 // ---------------------------------------------------------------------------
 export default function UtilisateursPage() {
-  const { societes: providerSocietes } = useSocieteActive()
+  const { societeId, societes: providerSocietes } = useSocieteActive()
   const societes = providerSocietes as any as Societe[]
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
@@ -261,15 +261,16 @@ export default function UtilisateursPage() {
   // Data loading
   // ---------------------------------------------------------------------------
   const load = useCallback(async () => {
+    if (!societeId) { setLoading(false); setUsers([]); return }
     setLoading(true)
     try {
-      const u = await fetch("/api/client/users").then((r) => r.json())
+      const u = await fetch(`/api/client/users?societe_id=${societeId}`).then((r) => r.json())
       setUsers(u.users || [])
     } catch {
       // silent
     }
     setLoading(false)
-  }, [])
+  }, [societeId])
 
   useEffect(() => { load() }, [load])
 
