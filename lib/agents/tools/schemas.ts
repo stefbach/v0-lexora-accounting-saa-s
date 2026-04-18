@@ -90,7 +90,7 @@ export const CLASSIFY: AgentToolDefinition = {
       transaction_id: { type: 'string', description: 'UUID de la transaction' },
       class: {
         type: 'string',
-        enum: ['customer_payment', 'supplier_payment', 'payroll', 'tax_payment', 'shareholder_loan', 'internal_transfer', 'expense_reimbursement', 'bank_fee', 'unknown'],
+        enum: ['customer_payment', 'supplier_payment', 'payroll', 'tax_payment', 'shareholder_loan', 'internal_transfer', 'expense_reimbursement', 'bank_fee', 'rent', 'unknown'],
         description: 'Classe de la transaction',
       },
       confidence: { type: 'number', description: 'Score de confiance 0-100' },

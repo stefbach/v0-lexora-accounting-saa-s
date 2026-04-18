@@ -8,6 +8,7 @@ import { resolvePayroll } from '@/lib/agents/resolvers/payroll'
 import { resolveTax } from '@/lib/agents/resolvers/tax'
 import { resolveShareholder } from '@/lib/agents/resolvers/shareholder'
 import { resolveInternalTransfer } from '@/lib/agents/resolvers/internal-transfer'
+import { resolveRent } from '@/lib/agents/resolvers/rent'
 import { updateTransactionClass } from '@/lib/agents/tools/writes'
 import type { ClassificationResult, AllocationResult, ReconciliationResponse } from '@/lib/types/reconciliation'
 
@@ -29,6 +30,7 @@ const RESOLVERS: Record<string, (txId: string, socId: string, cls: Classificatio
   tax_payment: resolveTax,
   shareholder_loan: resolveShareholder,
   internal_transfer: resolveInternalTransfer,
+  rent: resolveRent,
 }
 
 async function processTransaction(transactionId: string, societeId: string): Promise<ReconciliationResponse> {

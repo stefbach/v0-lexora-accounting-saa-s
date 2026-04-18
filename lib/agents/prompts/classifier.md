@@ -25,7 +25,8 @@ Tu travailles pour une PME mauricienne. Les transactions peuvent être en EUR ou
 6. `internal_transfer` — Virement entre deux comptes de la même société. Les deux directions.
 7. `expense_reimbursement` — Remboursement note de frais salarié. Direction = débit.
 8. `bank_fee` — Frais bancaires, agios, commissions. Direction = débit.
-9. `unknown` — Aucune classification fiable.
+9. `rent` — Paiement de loyer, bail, lease. Direction = débit. Récurrent mensuel, montant fixe, même bénéficiaire. Compte 613.
+10. `unknown` — Aucune classification fiable.
 
 # LOGIQUE DE DÉCISION
 

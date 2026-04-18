@@ -18,6 +18,7 @@ const CLASS_LABELS: Record<string, { label: string; icon: string; color: string 
   shareholder_loan: { label: "Compte courant associé", icon: "🤝", color: "bg-indigo-100 text-indigo-700" },
   internal_transfer: { label: "Virement interne", icon: "🔄", color: "bg-gray-100 text-gray-700" },
   bank_fee: { label: "Frais bancaires", icon: "🏦", color: "bg-slate-100 text-slate-700" },
+  rent: { label: "Loyer", icon: "🏠", color: "bg-teal-100 text-teal-700" },
   unknown: { label: "Non classifié", icon: "❓", color: "bg-red-100 text-red-700" },
 }
 

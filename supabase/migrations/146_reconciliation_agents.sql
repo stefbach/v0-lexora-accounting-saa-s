@@ -24,6 +24,7 @@ DO $$ BEGIN
     'internal_transfer',
     'expense_reimbursement',
     'bank_fee',
+    'rent',
     'unknown'
   );
 EXCEPTION WHEN duplicate_object THEN NULL;
@@ -412,5 +413,10 @@ VALUES
   -- Virements internes
   ('00000000-0000-0000-0000-000000000000', 'label_class', 'OWN ACCOUNT TRANSFER', 'internal_transfer', '580', TRUE),
   ('00000000-0000-0000-0000-000000000000', 'label_class', 'VIREMENT INTERNE', 'internal_transfer', '580', TRUE),
-  ('00000000-0000-0000-0000-000000000000', 'label_class', 'TRESORERIE', 'internal_transfer', '580', TRUE)
+  ('00000000-0000-0000-0000-000000000000', 'label_class', 'TRESORERIE', 'internal_transfer', '580', TRUE),
+  -- Loyers
+  ('00000000-0000-0000-0000-000000000000', 'label_class', 'LOYER', 'rent', '613', TRUE),
+  ('00000000-0000-0000-0000-000000000000', 'label_class', 'RENT', 'rent', '613', TRUE),
+  ('00000000-0000-0000-0000-000000000000', 'label_class', 'BAIL', 'rent', '613', TRUE),
+  ('00000000-0000-0000-0000-000000000000', 'label_class', 'LEASE', 'rent', '613', TRUE)
 ON CONFLICT DO NOTHING;

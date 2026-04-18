@@ -14,6 +14,7 @@ export type TransactionClass =
   | 'internal_transfer'
   | 'expense_reimbursement'
   | 'bank_fee'
+  | 'rent'
   | 'unknown'
 
 export type AllocationType =
