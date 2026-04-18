@@ -1416,36 +1416,31 @@ Voulez-vous vraiment continuer ?`
           <Button
             onClick={async () => {
               if (!societeId) return
-              setAutoMatching(true)
-              setAutoStep("🤖 Agent IA en cours d'analyse...")
+              const btn = document.getElementById('agent-btn')
+              if (btn) btn.textContent = '🤖 Agent IA en cours...'
               try {
                 const res = await fetch("/api/v1/agent/reconcile", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ societe_id: societeId, batch: true, limit: 50 }),
+                  body: JSON.stringify({ societe_id: societeId, batch: true, limit: 20 }),
                 })
-                const data = await res.json()
-                setAutoStep("")
-                setAutoResult({
-                  matched: data.allocated || 0,
-                  total: data.processed || 0,
-                  interne: 0, frais_bancaires: 0, salaire_bulk: 0, mra: 0,
-                  not_matched: data.flagged || 0,
-                  total_classified: data.proposed || 0,
-                  matches: [],
-                })
+                const text = await res.text()
+                let data: any
+                try { data = JSON.parse(text) } catch { alert('Erreur: ' + text.substring(0, 200)); return }
+                alert(`Agent terminé !\n\n${data.processed || 0} traitées\n${data.allocated || 0} rapprochées\n${data.proposed || 0} proposées\n${data.flagged || 0} à vérifier\n${data.failed || 0} erreurs\n\nDurée: ${((data.duration_ms || 0) / 1000).toFixed(1)}s\nCoût: $${(data.total_cost_usd || 0).toFixed(3)}`)
                 await load()
-              } catch { setAutoStep("") }
-              finally { setAutoMatching(false) }
+              } catch (e: any) {
+                alert('Erreur réseau: ' + (e.message || ''))
+              } finally {
+                const btn = document.getElementById('agent-btn')
+                if (btn) btn.textContent = '⚡ Lancer l\'agent IA'
+              }
             }}
-            disabled={autoMatching || !societeId}
+            id="agent-btn"
             className="bg-[#0B0F2E] hover:bg-[#1a1f4a] text-white font-semibold"
             size="lg"
           >
-            {autoMatching
-              ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{autoStep || "Agent IA..."}</>
-              : <><Zap className="w-4 h-4 mr-2" />Lancer l&apos;agent IA</>
-            }
+            ⚡ Lancer l&apos;agent IA
           </Button>
         </div>
       </div>
