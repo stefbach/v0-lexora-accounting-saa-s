@@ -110,7 +110,7 @@ Classifie et rapproche chaque transaction. Retourne le JSON.`
 
     const response = await client.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 4096,
+      max_tokens: 8192,
       system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
       messages: [{ role: 'user', content: userMessage }],
     })
@@ -118,13 +118,14 @@ Classifie et rapproche chaque transaction. Retourne le JSON.`
     const duration = Date.now() - startTime
     const text = response.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
 
-    // 6. Parser le JSON retourné
+    // 6. Parser le JSON retourné (gérer code blocks markdown)
     let results: any[] = []
     try {
-      const jsonMatch = text.match(/\[[\s\S]*\]/)
+      const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
+      const jsonMatch = cleaned.match(/\[[\s\S]*\]/)
       if (jsonMatch) results = JSON.parse(jsonMatch[0])
     } catch {
-      return NextResponse.json({ error: 'Réponse Claude non parsable', raw: text.substring(0, 500) }, { status: 500 })
+      return NextResponse.json({ error: 'Réponse Claude non parsable', raw: text.substring(0, 1000) }, { status: 500 })
     }
 
     // 7. Appliquer les résultats

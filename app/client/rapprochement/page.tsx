@@ -1428,7 +1428,7 @@ Voulez-vous vraiment continuer ?`
                 const text = await res.text()
                 let data: any
                 try { data = JSON.parse(text) } catch { alert('Erreur: ' + text.substring(0, 300)); return }
-                if (data.error) { alert('Erreur: ' + data.error); return }
+                if (data.error) { alert('Erreur: ' + data.error + (data.raw ? '\n\nRéponse brute:\n' + data.raw.substring(0, 300) : '')); return }
                 alert(`🤖 Agent terminé en ${((data.duration_ms || 0) / 1000).toFixed(1)}s !\n\n${data.processed} transactions analysées\n${data.classified} classifiées\n${data.allocated} rapprochées automatiquement\n${data.proposed} proposées (à confirmer)\n${data.flagged} à vérifier\n\nCoût IA : $${(data.cost_usd || 0).toFixed(4)}`)
                 await load()
               } catch (e: any) {
