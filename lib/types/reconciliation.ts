@@ -234,6 +234,7 @@ export interface AgentRunConfig {
   system_prompt: string
   tools: AgentToolDefinition[]
   user_message: string
+  model?: string
   max_iterations?: number
   timeout_ms?: number
   terminal_tool_names: string[]

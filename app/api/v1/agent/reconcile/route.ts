@@ -13,7 +13,7 @@ import { updateTransactionClass } from '@/lib/agents/tools/writes'
 import type { ClassificationResult, AllocationResult, ReconciliationResponse } from '@/lib/types/reconciliation'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60
+export const maxDuration = 120
 
 function getAdminClient() {
   return createClient(

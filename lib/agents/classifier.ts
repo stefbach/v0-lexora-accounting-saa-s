@@ -91,14 +91,23 @@ Détails :
 
 Commence par get_historical_patterns pour vérifier si cette transaction a déjà été vue. Puis analyse les signaux et appelle classify() avec ta décision.`
 
+  // Pré-charger les patterns pour les injecter dans le message (évite 1 tool call)
+  const patterns = await getHistoricalPatterns(societeId, fingerprint)
+  const patternHint = patterns.client_matches.length > 0
+    ? `\n\nPatterns connus (client) : ${patterns.client_matches.map((p: any) => `${p.label_pattern} → ${p.predicted_class} (${p.occurrence_count}x)`).join(', ')}`
+    : patterns.tenant_matches.length > 0
+      ? `\n\nPatterns connus (tenant) : ${patterns.tenant_matches.map((p: any) => `${p.label_pattern} → ${p.predicted_class}`).join(', ')}`
+      : ''
+
   const result = await runAgent(
     {
       agent_name: 'classifier',
+      model: 'claude-haiku-4-5-20251001',
       system_prompt: getSystemPrompt(),
       tools: CLASSIFIER_TOOLS,
-      user_message: userMessage,
-      max_iterations: 8,
-      timeout_ms: 25_000,
+      user_message: userMessage + patternHint,
+      max_iterations: 5,
+      timeout_ms: 20_000,
       terminal_tool_names: ['classify'],
     },
     executeTool,
