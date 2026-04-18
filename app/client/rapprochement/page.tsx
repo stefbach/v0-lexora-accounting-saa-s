@@ -1413,6 +1413,40 @@ Voulez-vous vraiment continuer ?`
               : <><span className="mr-2">✨</span>Rapprocher automatiquement</>
             }
           </Button>
+          <Button
+            onClick={async () => {
+              if (!societeId) return
+              setAutoMatching(true)
+              setAutoStep("🤖 Agent IA en cours d'analyse...")
+              try {
+                const res = await fetch("/api/v1/agent/reconcile", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ societe_id: societeId, batch: true, limit: 50 }),
+                })
+                const data = await res.json()
+                setAutoStep("")
+                setAutoResult({
+                  matched: data.allocated || 0,
+                  total: data.processed || 0,
+                  interne: 0, frais_bancaires: 0, salaire_bulk: 0, mra: 0,
+                  not_matched: data.flagged || 0,
+                  total_classified: data.proposed || 0,
+                  matches: [],
+                })
+                await load()
+              } catch { setAutoStep("") }
+              finally { setAutoMatching(false) }
+            }}
+            disabled={autoMatching || !societeId}
+            className="bg-[#0B0F2E] hover:bg-[#1a1f4a] text-white font-semibold"
+            size="lg"
+          >
+            {autoMatching
+              ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{autoStep || "Agent IA..."}</>
+              : <><Zap className="w-4 h-4 mr-2" />Lancer l&apos;agent IA</>
+            }
+          </Button>
         </div>
       </div>
 
