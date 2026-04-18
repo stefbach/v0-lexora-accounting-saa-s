@@ -19,10 +19,14 @@ export default function AgentTestPage() {
       const res = await fetch('/api/v1/agent/reconcile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ societe_id: societeId, batch: true, limit: 2 }),
+        body: JSON.stringify({ societe_id: societeId, batch: true, limit: 1 }),
       })
-      const data = await res.json()
-      setResult(data)
+      const text = await res.text()
+      try {
+        setResult(JSON.parse(text))
+      } catch {
+        setError(`HTTP ${res.status} — Réponse brute :\n\n${text.substring(0, 1000)}`)
+      }
     } catch (e: any) {
       setError(e.message || 'Erreur réseau')
     } finally {
