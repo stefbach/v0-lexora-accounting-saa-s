@@ -69,7 +69,7 @@ export async function POST(request: Request) {
     // 2. Charger les tx pending — filtrées par mois si spécifié
     let txQuery = supabase
       .from('transactions_bancaires')
-      .select('id, date_transaction, libelle_banque, debit, credit, devise, tiers_identifie, counterparty_iban')
+      .select('id, date_transaction, libelle_banque, debit, credit, devise, tiers_identifie, counterparty_iban, releve_id, transaction_idx')
       .eq('societe_id', societe_id)
       .eq('statut_lettrage', 'a_lettrer')
       .order('date_transaction')
@@ -161,11 +161,21 @@ Classifie et rapproche chaque transaction. Retourne le JSON.`
     // 7. Appliquer les résultats
     let allocated = 0, proposed = 0, flagged = 0
 
+    // Charger les relevés pour synchroniser le JSONB
+    const { data: releves } = await supabase
+      .from('releves_bancaires')
+      .select('id, transactions_json')
+      .eq('societe_id', societe_id)
+    const releveMap = new Map<string, { id: string; txs: any[]; changed: boolean }>()
+    for (const r of releves || []) {
+      releveMap.set(r.id, { id: r.id, txs: [...(r.transactions_json || [])], changed: false })
+    }
+
     for (const r of results) {
       const tx = txs[r.tx_index]
       if (!tx) continue
 
-      // Mettre à jour la classification
+      // Mettre à jour la classification dans transactions_bancaires
       await supabase.from('transactions_bancaires').update({
         classified_type: r.class,
         classification_confidence: r.confidence,
@@ -173,9 +183,25 @@ Classifie et rapproche chaque transaction. Retourne le JSON.`
         classified_at: new Date().toISOString(),
       }).eq('id', tx.id)
 
+      // Synchroniser vers le JSONB (releves_bancaires.transactions_json)
+      // pour que la page rapprochement existante voie les changements
+      const releveId = (tx as any).releve_id
+      const txIdx = (tx as any).transaction_idx
+      if (releveId != null && txIdx != null) {
+        const rel = releveMap.get(releveId)
+        if (rel && rel.txs[txIdx]) {
+          rel.txs[txIdx] = {
+            ...rel.txs[txIdx],
+            matched_type: r.class,
+            match_confidence: `agent_${r.confidence}`,
+            note: `🤖 ${r.rationale}`,
+          }
+          rel.changed = true
+        }
+      }
+
       // Si des factures sont matchées et confiance >= 80%
       if (r.facture_ids && r.facture_ids.length > 0 && r.confidence >= 80) {
-        // Créer les allocations
         for (const fId of r.facture_ids) {
           const fac = (factures || []).find(f => f.id === fId)
           if (!fac) continue
@@ -195,15 +221,46 @@ Classifie et rapproche chaque transaction. Retourne le JSON.`
           })
         }
 
-        // Mettre à jour le statut
         if (r.confidence >= 90) {
           await supabase.from('transactions_bancaires').update({ statut_lettrage: 'lettre' }).eq('id', tx.id)
           for (const fId of r.facture_ids) {
-            await supabase.from('factures').update({ statut: 'paye', rapproche_date: new Date().toISOString(), rapproche_source: 'agent_ia' }).eq('id', fId)
+            await supabase.from('factures').update({
+              statut: 'paye',
+              rapproche_date: tx.date_transaction,
+              rapproche_source: 'agent_ia',
+            }).eq('id', fId)
+          }
+          // Sync JSONB : marquer comme rapproché
+          if (releveId != null && txIdx != null) {
+            const rel = releveMap.get(releveId)
+            if (rel && rel.txs[txIdx]) {
+              const code = `AI${String(allocated + 1).padStart(3, '0')}`
+              rel.txs[txIdx] = {
+                ...rel.txs[txIdx],
+                statut: 'rapproche',
+                lettre: code,
+                facture_id: r.facture_ids[0],
+                facture_ids: r.facture_ids,
+              }
+              rel.changed = true
+            }
           }
           allocated++
         } else {
           await supabase.from('transactions_bancaires').update({ statut_lettrage: 'a_verifier' }).eq('id', tx.id)
+          // Sync JSONB : marquer comme proposé
+          if (releveId != null && txIdx != null) {
+            const rel = releveMap.get(releveId)
+            if (rel && rel.txs[txIdx]) {
+              rel.txs[txIdx] = {
+                ...rel.txs[txIdx],
+                statut: 'propose',
+                facture_id: r.facture_ids[0],
+                facture_ids: r.facture_ids,
+              }
+              rel.changed = true
+            }
+          }
           proposed++
         }
       } else if (r.class !== 'unknown') {
@@ -211,6 +268,13 @@ Classifie et rapproche chaque transaction. Retourne le JSON.`
         flagged++
       } else {
         flagged++
+      }
+    }
+
+    // 8. Sauvegarder les JSONB modifiés
+    for (const [relId, rel] of releveMap) {
+      if (rel.changed) {
+        await supabase.from('releves_bancaires').update({ transactions_json: rel.txs }).eq('id', relId)
       }
     }
 
