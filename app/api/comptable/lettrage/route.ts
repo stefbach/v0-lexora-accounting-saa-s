@@ -24,20 +24,22 @@ async function requireAllowedRole() {
   return { user, email: user.email }
 }
 
+type EntryFull = Entry & { lettre?: string | null; date_lettrage?: string | null; lettrage_auto?: boolean }
+
 async function fetchEntries(
   supabase: ReturnType<typeof getAdminClient>,
   societe_id: string,
   opts: { compte?: string | null; date_debut?: string | null; date_fin?: string | null; only_unlettered?: boolean },
-): Promise<Entry[]> {
+): Promise<EntryFull[]> {
   const { data: dossiers } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id)
   const dossierIds = (dossiers || []).map((d: { id: string }) => d.id)
 
-  const entries: Entry[] = []
+  const entries: EntryFull[] = []
 
   if (dossierIds.length > 0) {
     let q = supabase
       .from('ecritures_comptables')
-      .select('id, compte, libelle, date_ecriture, debit, credit, lettre, piece_justificative')
+      .select('id, compte, libelle, date_ecriture, debit, credit, lettre, date_lettrage, lettrage_auto, piece_justificative')
       .in('dossier_id', dossierIds)
     if (opts.only_unlettered) q = q.is('lettre', null)
     if (opts.compte) q = q.like('compte', `${opts.compte}%`)
@@ -53,6 +55,9 @@ async function fetchEntries(
         debit: Number(e.debit) || 0,
         credit: Number(e.credit) || 0,
         piece_justificative: e.piece_justificative,
+        lettre: e.lettre,
+        date_lettrage: e.date_lettrage,
+        lettrage_auto: e.lettrage_auto,
       })
     }
   }

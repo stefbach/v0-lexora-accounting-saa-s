@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import {
-  BookOpen, Plus, Pencil, Trash2, Upload, Download, Search, RefreshCw, Loader2, FileText,
+  BookOpen, Plus, Pencil, Trash2, Upload, Download, Search, RefreshCw, Loader2, FileText, Sparkles,
 } from "lucide-react"
 import { toast } from "sonner"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
@@ -256,6 +256,24 @@ export default function PlanComptablePage() {
     }
   }
 
+  async function seedPCM() {
+    if (!confirm("Insérer le Plan Comptable Mauricien standard (≈120 comptes) ?\nLes comptes existants seront conservés.")) return
+    setSaving(true)
+    try {
+      const res = await fetch("/api/comptable/plan-comptable/seed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ societe_id: null }),
+      })
+      const body = await res.json()
+      if (!res.ok) throw new Error(body.error || "Erreur seed")
+      toast.success(body.message || "PCM inséré")
+      fetchComptes()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erreur seed")
+    } finally { setSaving(false) }
+  }
+
   return (
     <ClientPageShell
       kicker="Comptabilité"
@@ -263,7 +281,10 @@ export default function PlanComptablePage() {
       subtitle="Gestion du plan de comptes (PCM) — classes 1 à 8"
       breadcrumbs={[{ label: "Espace client", href: "/client" }, { label: "Plan comptable" }]}
       actions={
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" size="sm" onClick={seedPCM} disabled={saving}>
+            <Sparkles className="h-4 w-4 mr-1" /> Charger PCM Maurice
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
             <Upload className="h-4 w-4 mr-1" /> Importer CSV
           </Button>
@@ -347,7 +368,19 @@ export default function PlanComptablePage() {
                 </TableHeader>
                 <TableBody>
                   {filtered.length === 0 ? (
-                    <TableRow><TableCell colSpan={8} className="text-center py-8 text-gray-500">Aucun compte</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={8} className="text-center py-10">
+                      <div className="text-gray-500 mb-3">
+                        {comptes.length === 0
+                          ? "Le plan comptable est vide. Charger le PCM Maurice standard ?"
+                          : "Aucun compte ne correspond aux filtres."}
+                      </div>
+                      {comptes.length === 0 && (
+                        <Button size="sm" onClick={seedPCM} disabled={saving} style={{ backgroundColor: "#D4AF37", color: "#0B0F2E" }}>
+                          {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Sparkles className="h-4 w-4 mr-1" />}
+                          Charger le PCM Maurice (≈120 comptes)
+                        </Button>
+                      )}
+                    </TableCell></TableRow>
                   ) : filtered.map(c => (
                     <TableRow key={c.id} className={!c.actif ? "opacity-50" : ""}>
                       <TableCell className="font-mono">{c.compte}</TableCell>

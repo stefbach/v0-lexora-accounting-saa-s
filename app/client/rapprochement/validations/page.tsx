@@ -31,10 +31,17 @@ function fmtDate(d: string) {
   return d ? new Date(d).toLocaleDateString("fr-FR") : "—"
 }
 
+interface SetupCheck {
+  ok: boolean
+  checks: Record<string, { ok: boolean; detail?: string }>
+  missing: string[]
+}
+
 export default function RapprochementValidationsPage() {
   const { societeId } = useSocieteActive()
   const [loading, setLoading] = useState(false)
   const [items, setItems] = useState<Rapprochement[]>([])
+  const [setupCheck, setSetupCheck] = useState<SetupCheck | null>(null)
 
   const fetchAll = useCallback(async () => {
     if (!societeId) return
@@ -49,7 +56,14 @@ export default function RapprochementValidationsPage() {
     } finally { setLoading(false) }
   }, [societeId])
 
-  useEffect(() => { fetchAll() }, [fetchAll])
+  const fetchSetup = useCallback(async () => {
+    try {
+      const res = await fetch("/api/comptable/setup")
+      if (res.ok) setSetupCheck(await res.json())
+    } catch {}
+  }, [])
+
+  useEffect(() => { fetchAll(); fetchSetup() }, [fetchAll, fetchSetup])
 
   const counts = {
     total: items.length,
@@ -74,6 +88,28 @@ export default function RapprochementValidationsPage() {
         </Button>
       }
     >
+      {setupCheck && !setupCheck.ok && (
+        <Card className="mb-4 border-amber-300 bg-amber-50">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <ShieldCheck className="h-5 w-5 text-amber-600 mt-0.5" />
+              <div className="flex-1 text-sm">
+                <div className="font-semibold mb-1">Configuration incomplète</div>
+                <ul className="space-y-1 text-xs">
+                  {Object.entries(setupCheck.checks).map(([k, v]) => (
+                    <li key={k} className={v.ok ? "text-emerald-700" : "text-amber-800"}>
+                      {v.ok ? "✓" : "✗"} <strong>{k}</strong>: {v.detail}
+                    </li>
+                  ))}
+                </ul>
+                <div className="text-xs text-gray-600 mt-2">
+                  Appliquer les migrations SQL manquantes dans <code>supabase/migrations/</code>.
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
       <div className="grid grid-cols-4 gap-3 mb-4">
         <Card><CardContent className="p-4">
           <div className="text-xs text-gray-500">Total rapprochements</div>
