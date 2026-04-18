@@ -143,7 +143,15 @@ export async function POST(request: Request) {
           else flagged++
         } catch (e: any) {
           failed++
-          console.error(`[agent/reconcile] Erreur sur tx ${tx.id}:`, e.message)
+          const errMsg = e?.message || String(e)
+          console.error(`[agent/reconcile] Erreur sur tx ${tx.id}:`, errMsg)
+          results.push({
+            transaction_id: tx.id,
+            classification: { transaction_id: tx.id, class: 'unknown' as any, confidence: 0, rationale: `Erreur: ${errMsg}`, needs_review: true },
+            resolution: { transaction_id: tx.id, status: 'flagged', allocations: [], typology: null, confidence: 0, rationale: `Erreur: ${errMsg}`, agent_name: 'error' },
+            duration_ms: 0,
+            cost_usd: 0,
+          })
         }
       }
 
