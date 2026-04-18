@@ -532,10 +532,11 @@ export async function GET(request: Request) {
       })
 
     // Revenue: use factures clients (MUR) as primary, fallback to écritures classe 7
-    // Expenses: ALWAYS use écritures classe 6 (includes salaires, charges, all operational costs)
-    // Factures fournisseurs are a subset — they miss salaires (641), charges sociales (645), etc.
+    // Expenses: combiner écritures classe 6 (salaires, charges patronales, frais)
+    //           + factures fournisseurs (qui créent des BNQ 401/512, pas des class 6)
+    // Les deux sources sont complémentaires, pas alternatives.
     const finalCA = caFromFactures > 0 ? caFromFactures : totalRevenue
-    const finalDepenses = totalExpenses > 0 ? totalExpenses : depensesFromFactures
+    const finalDepenses = depensesFromFactures > 0 ? depensesFromFactures : totalExpenses
     const finalResultat = finalCA - finalDepenses
 
     return NextResponse.json({
