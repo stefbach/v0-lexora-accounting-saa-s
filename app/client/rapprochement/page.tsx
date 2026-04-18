@@ -1417,24 +1417,54 @@ Voulez-vous vraiment continuer ?`
             onClick={async () => {
               if (!societeId) return
               const btn = document.getElementById('agent-btn')
-              if (btn) btn.textContent = '🤖 Agent IA en cours...'
+              if (!btn) return
+              btn.textContent = '🤖 Extraction des transactions...'
+
+              // 1. Extraire les tx du JSONB
               try {
-                const res = await fetch("/api/v1/agent/reconcile", {
+                await fetch("/api/v1/agent/reconcile", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ societe_id: societeId, batch: true, limit: 20 }),
+                  body: JSON.stringify({ societe_id: societeId, batch: true, limit: 0 }),
                 })
-                const text = await res.text()
-                let data: any
-                try { data = JSON.parse(text) } catch { alert('Erreur: ' + text.substring(0, 200)); return }
-                alert(`Agent terminé !\n\n${data.processed || 0} traitées\n${data.allocated || 0} rapprochées\n${data.proposed || 0} proposées\n${data.flagged || 0} à vérifier\n${data.failed || 0} erreurs\n\nDurée: ${((data.duration_ms || 0) / 1000).toFixed(1)}s\nCoût: $${(data.total_cost_usd || 0).toFixed(3)}`)
-                await load()
-              } catch (e: any) {
-                alert('Erreur réseau: ' + (e.message || ''))
-              } finally {
-                const btn = document.getElementById('agent-btn')
-                if (btn) btn.textContent = '⚡ Lancer l\'agent IA'
+              } catch {}
+
+              // 2. Traiter 1 par 1 (évite le timeout Vercel 60s)
+              let processed = 0, allocated = 0, proposed = 0, flagged = 0, failed = 0
+              let keepGoing = true
+
+              while (keepGoing) {
+                btn.textContent = `🤖 Transaction ${processed + 1} en cours...`
+                try {
+                  const res = await fetch("/api/v1/agent/reconcile", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ societe_id: societeId, batch: true, limit: 1 }),
+                  })
+                  const text = await res.text()
+                  let data: any
+                  try { data = JSON.parse(text) } catch { failed++; keepGoing = false; break }
+
+                  if (data.processed === 0) { keepGoing = false; break }
+
+                  processed += data.processed || 0
+                  allocated += data.allocated || 0
+                  proposed += data.proposed || 0
+                  flagged += data.flagged || 0
+                  failed += data.failed || 0
+
+                  btn.textContent = `🤖 ${processed} traitées (${allocated}✅ ${proposed}⏳ ${flagged}⚠️)`
+
+                  if (processed >= 50) keepGoing = false // sécurité
+                } catch {
+                  failed++
+                  keepGoing = false
+                }
               }
+
+              alert(`Agent terminé !\n\n${processed} traitées\n${allocated} rapprochées\n${proposed} proposées\n${flagged} à vérifier\n${failed} erreurs`)
+              btn.textContent = '⚡ Lancer l\'agent IA'
+              await load()
             }}
             id="agent-btn"
             className="bg-[#0B0F2E] hover:bg-[#1a1f4a] text-white font-semibold"
