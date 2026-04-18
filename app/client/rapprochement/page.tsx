@@ -1418,53 +1418,24 @@ Voulez-vous vraiment continuer ?`
               if (!societeId) return
               const btn = document.getElementById('agent-btn')
               if (!btn) return
-              btn.textContent = '🤖 Extraction des transactions...'
-
-              // 1. Extraire les tx du JSONB
+              btn.textContent = '🤖 Agent IA analyse toutes les transactions...'
               try {
-                await fetch("/api/v1/agent/reconcile", {
+                const res = await fetch("/api/v1/agent/batch", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ societe_id: societeId, batch: true, limit: 0 }),
+                  body: JSON.stringify({ societe_id: societeId }),
                 })
-              } catch {}
-
-              // 2. Traiter 1 par 1 (évite le timeout Vercel 60s)
-              let processed = 0, allocated = 0, proposed = 0, flagged = 0, failed = 0
-              let keepGoing = true
-
-              while (keepGoing) {
-                btn.textContent = `🤖 Transaction ${processed + 1} en cours...`
-                try {
-                  const res = await fetch("/api/v1/agent/reconcile", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ societe_id: societeId, batch: true, limit: 1 }),
-                  })
-                  const text = await res.text()
-                  let data: any
-                  try { data = JSON.parse(text) } catch { failed++; keepGoing = false; break }
-
-                  if (data.processed === 0) { keepGoing = false; break }
-
-                  processed += data.processed || 0
-                  allocated += data.allocated || 0
-                  proposed += data.proposed || 0
-                  flagged += data.flagged || 0
-                  failed += data.failed || 0
-
-                  btn.textContent = `🤖 ${processed} traitées (${allocated}✅ ${proposed}⏳ ${flagged}⚠️)`
-
-                  if (processed >= 50) keepGoing = false // sécurité
-                } catch {
-                  failed++
-                  keepGoing = false
-                }
+                const text = await res.text()
+                let data: any
+                try { data = JSON.parse(text) } catch { alert('Erreur: ' + text.substring(0, 300)); return }
+                if (data.error) { alert('Erreur: ' + data.error); return }
+                alert(`🤖 Agent terminé en ${((data.duration_ms || 0) / 1000).toFixed(1)}s !\n\n${data.processed} transactions analysées\n${data.classified} classifiées\n${data.allocated} rapprochées automatiquement\n${data.proposed} proposées (à confirmer)\n${data.flagged} à vérifier\n\nCoût IA : $${(data.cost_usd || 0).toFixed(4)}`)
+                await load()
+              } catch (e: any) {
+                alert('Erreur: ' + (e.message || ''))
+              } finally {
+                btn.textContent = '⚡ Lancer l\'agent IA'
               }
-
-              alert(`Agent terminé !\n\n${processed} traitées\n${allocated} rapprochées\n${proposed} proposées\n${flagged} à vérifier\n${failed} erreurs`)
-              btn.textContent = '⚡ Lancer l\'agent IA'
-              await load()
             }}
             id="agent-btn"
             className="bg-[#0B0F2E] hover:bg-[#1a1f4a] text-white font-semibold"
