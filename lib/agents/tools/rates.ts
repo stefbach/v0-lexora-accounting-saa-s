@@ -41,7 +41,7 @@ export async function getExchangeRate(date: string, currencyFrom = 'EUR', curren
         rate,
         source: 'taux_change_table',
         fetched_at: new Date().toISOString(),
-      }, { onConflict: 'date,currency_from,currency_to' }).catch(() => {})
+      }, { onConflict: 'date,currency_from,currency_to' })
 
       return { rate, source: 'taux_change_table', date }
     }
