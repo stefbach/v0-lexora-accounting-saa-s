@@ -58,7 +58,7 @@ export async function POST(request: Request) {
     if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
 
     const body = await request.json()
-    const { societe_id } = body
+    const { societe_id, mois } = body
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
 
     const supabase = getAdminClient()
@@ -66,8 +66,8 @@ export async function POST(request: Request) {
     // 1. Extraire les tx du JSONB si pas encore fait
     await supabase.rpc('extract_bank_transactions', { p_societe_id: societe_id })
 
-    // 2. Charger les tx pending
-    const { data: txs } = await supabase
+    // 2. Charger les tx pending — filtrées par mois si spécifié
+    let txQuery = supabase
       .from('transactions_bancaires')
       .select('id, date_transaction, libelle_banque, debit, credit, devise, tiers_identifie, counterparty_iban')
       .eq('societe_id', societe_id)
@@ -75,17 +75,39 @@ export async function POST(request: Request) {
       .order('date_transaction')
       .limit(50)
 
-    if (!txs || txs.length === 0) {
-      return NextResponse.json({ processed: 0, results: [], message: 'Aucune transaction en attente' })
+    if (mois) {
+      // Filtrer les tx du mois sélectionné (ex: 2025-07)
+      const [y, m] = mois.split('-').map(Number)
+      const debut = `${y}-${String(m).padStart(2, '0')}-01`
+      const lastDay = new Date(y, m, 0).getDate()
+      const fin = `${y}-${String(m).padStart(2, '0')}-${lastDay}`
+      txQuery = txQuery.gte('date_transaction', debut).lte('date_transaction', fin)
     }
 
-    // 3. Charger les factures impayées
-    const { data: factures } = await supabase
+    const { data: txs } = await txQuery
+
+    if (!txs || txs.length === 0) {
+      return NextResponse.json({ processed: 0, results: [], message: mois ? `Aucune transaction en attente pour ${mois}` : 'Aucune transaction en attente' })
+    }
+
+    // 3. Charger les factures impayées — fenêtre large (3 mois avant le mois sélectionné)
+    // Une facture de mai peut être payée en juillet (échéance 60j)
+    let facQuery = supabase
       .from('factures')
       .select('id, numero_facture, tiers, montant_ttc, montant_mur, devise, type_facture, date_facture')
       .eq('societe_id', societe_id)
       .in('statut', ['en_attente', 'retard', 'partiel'])
       .order('date_facture')
+
+    if (mois) {
+      // Charger les factures des 3 mois précédents jusqu'au mois sélectionné
+      const [y, m] = mois.split('-').map(Number)
+      const d = new Date(y, m - 1 - 3, 1) // 3 mois avant
+      const debut = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
+      facQuery = facQuery.gte('date_facture', debut)
+    }
+
+    const { data: factures } = await facQuery
 
     // 4. Construire le message pour Claude
     const txList = txs.map((tx, i) =>

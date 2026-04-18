@@ -1416,20 +1416,21 @@ Voulez-vous vraiment continuer ?`
           <Button
             onClick={async () => {
               if (!societeId) return
+              if (!selectedMois) { alert('Sélectionnez un mois d\'abord'); return }
               const btn = document.getElementById('agent-btn')
               if (!btn) return
-              btn.textContent = '🤖 Agent IA analyse toutes les transactions...'
+              btn.textContent = `🤖 Agent IA analyse ${selectedMois}...`
               try {
                 const res = await fetch("/api/v1/agent/batch", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ societe_id: societeId }),
+                  body: JSON.stringify({ societe_id: societeId, mois: selectedMois }),
                 })
                 const text = await res.text()
                 let data: any
                 try { data = JSON.parse(text) } catch { alert('Erreur: ' + text.substring(0, 300)); return }
                 if (data.error) { alert('Erreur: ' + data.error + (data.raw ? '\n\nRéponse brute:\n' + data.raw.substring(0, 300) : '')); return }
-                alert(`🤖 Agent terminé en ${((data.duration_ms || 0) / 1000).toFixed(1)}s !\n\n${data.processed} transactions analysées\n${data.classified} classifiées\n${data.allocated} rapprochées automatiquement\n${data.proposed} proposées (à confirmer)\n${data.flagged} à vérifier\n\nCoût IA : $${(data.cost_usd || 0).toFixed(4)}`)
+                alert(`🤖 Agent terminé pour ${selectedMois} en ${((data.duration_ms || 0) / 1000).toFixed(1)}s !\n\n${data.processed} transactions analysées\n${data.classified} classifiées\n${data.allocated} rapprochées automatiquement\n${data.proposed} proposées (à confirmer)\n${data.flagged} à vérifier\n\nCoût IA : $${(data.cost_usd || 0).toFixed(4)}`)
                 await load()
               } catch (e: any) {
                 alert('Erreur: ' + (e.message || ''))
