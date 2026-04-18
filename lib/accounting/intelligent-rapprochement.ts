@@ -760,6 +760,9 @@ export function autoClassify(
       continue
     }
 
+    // Détection personne physique (MR/MRS/MISS) — utilisé par salaires ET CSG
+    const looksLikePerson = /\b(mr|mrs|miss|mme|monsieur|madame)\b/i.test(tiers + ' ' + lib)
+
     // ── Salaires ──
     // Aussi classer comme salaire si le tiers est une personne (MR/MRS/MISS)
     // et que le montant est un débit (paiement sortant vers une personne)
@@ -815,7 +818,6 @@ export function autoClassify(
     // GARDE-FOU : si le tiers contient un nom de personne (MR/MRS/MISS + prénom + nom),
     // c'est probablement un salaire ou un CCA, PAS une charge sociale.
     // Les vrais paiements CSG/NSF vont vers des ORGANISMES, pas des personnes.
-    const looksLikePerson = /\b(mr|mrs|miss|mme|monsieur|madame)\b/i.test(tiers + ' ' + lib)
     const isMRA = MRA_PATTERNS.some(p => tiers.includes(p))
     const isCSG = !looksLikePerson && CSG_TIERS_PATTERNS.some(p => tiers.includes(p))
     if (isMRA || isCSG) {
