@@ -462,12 +462,17 @@ export async function POST(request: Request) {
             const selfWords = selfName.split(/\s+/).filter((w: string) => w.length > 2)
             const tiersWords = tiersName.split(/\s+/).filter((w: string) => w.length > 2)
             if (selfWords.length === 0 || tiersWords.length === 0) return false
-            // Chaque mot de self doit être trouvé (ou début de mot) dans tiers
-            const matchedSelf = selfWords.filter((sw: string) => tiersWords.some((tw: string) => tw.startsWith(sw.substring(0, 3)) || sw.startsWith(tw.substring(0, 3))))
+            // Minimum 4 caractères pour le matching (évite "myt" matchant n'importe quoi)
+            const matchedSelf = selfWords.filter((sw: string) => tiersWords.some((tw: string) => {
+              if (sw.length < 4 || tw.length < 4) return false
+              return tw.startsWith(sw.substring(0, 4)) || sw.startsWith(tw.substring(0, 4))
+            }))
             if (matchedSelf.length < selfWords.length * 0.7) return false
-            // Le tiers ne doit pas avoir beaucoup de mots non-matchés
-            const unmatchedTiers = tiersWords.filter((tw: string) => !selfWords.some((sw: string) => tw.startsWith(sw.substring(0, 3)) || sw.startsWith(tw.substring(0, 3))))
-            return unmatchedTiers.length === 0 // Aucun mot extra dans le tiers
+            const unmatchedTiers = tiersWords.filter((tw: string) => !selfWords.some((sw: string) => {
+              if (sw.length < 4 || tw.length < 4) return false
+              return tw.startsWith(sw.substring(0, 4)) || sw.startsWith(tw.substring(0, 4))
+            }))
+            return unmatchedTiers.length === 0
           }
 
           const isTiersSelf = selfNamesNorm.some(n => isSelfMatch(n, txTiersNorm))
