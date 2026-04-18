@@ -764,10 +764,8 @@ export function autoClassify(
     const looksLikePerson = /\b(mr|mrs|miss|mme|monsieur|madame)\b/i.test(tiers + ' ' + lib)
 
     // ── Salaires ──
-    // Aussi classer comme salaire si le tiers est une personne (MR/MRS/MISS)
-    // et que le montant est un débit (paiement sortant vers une personne)
     const isSalaryByPattern = SALARY_PATTERNS.some(p => lib.includes(p) || tiers.includes(p))
-    const isSalaryByPerson = looksLikePerson && tx.debit > 0 && !isMRA
+    const isSalaryByPerson = looksLikePerson && tx.debit > 0
     if (isSalaryByPattern || isSalaryByPerson) {
       let note = 'Salaire / paie'
       let confidence = 0.85
