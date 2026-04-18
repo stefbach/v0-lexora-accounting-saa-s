@@ -140,7 +140,7 @@ export default function ClientRapprochementPage() {
   //   'aclasser' → unmatched (à traiter)
   //   'classees' → confirmées + auto-classées + virements internes
   //   'verifier' → rapprochées sans pièce comptable (paidNoInvoice)
-  const [transactionTab, setTransactionTab] = useState<'aclasser' | 'classees' | 'verifier' | 'fournisseurs'>('fournisseurs')
+  const [transactionTab, setTransactionTab] = useState<'aclasser' | 'classees' | 'verifier' | 'fournisseurs'>('aclasser')
 
   // Pagination for the "À classer" tab list.
   const [unmatchedPage, setUnmatchedPage] = useState(1)
@@ -2190,7 +2190,8 @@ Voulez-vous vraiment continuer ?`
       )}
 
       {/* SECTION — Vue par relevé bancaire : lire la banque, chercher les factures */}
-      {transactionTab === 'fournisseurs' && (() => {
+      {/* Vue Relevé → Factures — DÉSACTIVÉE, sera remplacée par les agents IA */}
+      {transactionTab === 'fournisseurs' && false && (() => {
         const allFacs = (data?.factures || []) as any[]
         const unpaidFacs = allFacs.filter((f: any) => f.statut !== 'paye' && f.statut !== 'annule')
         const RATES: Record<string, number> = { MUR: 1, EUR: 54.4, USD: 44.8, GBP: 54.2 }
@@ -2402,6 +2403,23 @@ Voulez-vous vraiment continuer ?`
           </Card>
         )
       })()}
+
+      {/* Placeholder pour le tab fournisseurs en attendant les agents IA */}
+      {transactionTab === 'fournisseurs' && (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <div className="text-4xl mb-4">🤖</div>
+            <h3 className="text-lg font-semibold text-[#0B0F2E] mb-2">Rapprochement intelligent — En construction</h3>
+            <p className="text-sm text-gray-500 max-w-md mx-auto">
+              Cette vue sera alimentée par le système d&apos;agents IA qui lit chaque ligne du relevé
+              et propose les factures correspondantes.
+            </p>
+            <p className="text-xs text-gray-400 mt-3">
+              En attendant, utilisez les onglets &quot;À classer&quot; et &quot;Classées&quot;.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* SECTION 4 — Transactions à classer — onglet "À classer" */}
       {transactionTab === 'aclasser' && (

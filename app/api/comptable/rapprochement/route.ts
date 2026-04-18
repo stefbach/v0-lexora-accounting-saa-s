@@ -716,8 +716,9 @@ export async function POST(request: Request) {
           // - Match par alias fournisseur (strategy "supplier_*") → confiance ≥ 0.60
           // - Match par montant (strategy "amount_*") → confiance ≥ 0.70
           //   Requiert montant proche + tiers similaire. Sous 0.70 → proposé (jaune).
+          // Fallback par montant DÉSACTIVÉ pour auto-apply — sera remplacé par agents IA
           const isFallbackMatch = (match.strategy || '').startsWith('amount_')
-          const autoApplyThreshold = isFallbackMatch ? 0.70 : 0.60
+          const autoApplyThreshold = isFallbackMatch ? 9.99 : 0.60
 
           if (conf >= autoApplyThreshold) {
             // High confidence → auto-apply
