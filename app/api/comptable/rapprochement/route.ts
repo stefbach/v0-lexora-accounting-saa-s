@@ -7,7 +7,7 @@ import type { SupplierAlias } from '@/lib/accounting/intelligent-rapprochement'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { lastDayOfMonth } from '@/lib/rh/period'
-import { getTauxChange } from '@/lib/taux-change'
+import { getTauxChange, getTauxChangeSafe } from '@/lib/taux-change'
 import { accountClass } from '@/lib/accounting/classification-rules'
 import { validateLettrageGroup } from '@/lib/accounting/accounting-rules'
 import { classifyTransaction, detectDirector, getComplianceSeverity, type ClassificationRule } from '@/lib/accounting/classification-engine'
@@ -295,7 +295,7 @@ export async function POST(request: Request) {
       let dossiers: any[] = []
       let facturesData: any[] | null = null
       let factErr: any = null
-      let rates: Record<string, number> = { MUR: 1, EUR: 46.50, USD: 44.80, GBP: 54.20 }
+      let rates: Record<string, number> = await getTauxChangeSafe('rapprochement.init')
       let comptesBancaires: any[] = []
       let allBulletins: any[] = []
 
@@ -305,7 +305,7 @@ export async function POST(request: Request) {
           supabase.from('societes').select('nom, aliases').eq('id', societe_id),
           supabase.from('dossiers').select('id, client_id').eq('societe_id', societe_id),
           supabase.from('factures').select('id, numero_facture, tiers, montant_ttc, montant_mur, type_facture, devise, date_facture, date_echeance, conditions_paiement, statut').eq('societe_id', societe_id).in('statut', ['en_attente', 'retard', 'partiel']),
-          getTauxChange().catch(() => ({ MUR: 1, EUR: 46.50, USD: 44.80, GBP: 54.20 })),
+          getTauxChangeSafe('rapprochement.main'),
           // FIX 1 — compte_comptable est nécessaire pour router la 2e ligne
           // BNQ sur le bon 512xxx (ex: 512100 DDS MUR, 512200 DDS EUR).
           supabase.from('comptes_bancaires').select('id, devise, compte_comptable, banque, numero_compte').eq('societe_id', societe_id),
@@ -3069,7 +3069,7 @@ export async function POST(request: Request) {
       const { data: compteBancaire } = await supabase
         .from('comptes_bancaires').select('devise').eq('id', releve.compte_bancaire_id).maybeSingle()
       const txDevise = (compteBancaire?.devise || 'MUR').toUpperCase()
-      const rates: Record<string, number> = await getTauxChange().catch(() => ({ MUR: 1, EUR: 46.50, USD: 44.80, GBP: 54.20 }))
+      const rates: Record<string, number> = await getTauxChangeSafe('rapprochement.classer_transaction')
       const tauxDevise = rates[txDevise] || 1
       console.log(`[classer_transaction] devise=${txDevise} taux=${tauxDevise}`)
 
@@ -3685,7 +3685,7 @@ export async function POST(request: Request) {
       const { data: cb } = await supabase
         .from('comptes_bancaires').select('devise').eq('id', releve.compte_bancaire_id).maybeSingle()
       const devise = (cb?.devise || 'MUR').toUpperCase()
-      const rates: Record<string, number> = await getTauxChange().catch(() => ({ MUR: 1, EUR: 46.50, USD: 44.80, GBP: 54.20 }))
+      const rates: Record<string, number> = await getTauxChangeSafe('rapprochement.reclassify')
       const taux = rates[devise] || 1
 
       const txIdx = parseInt(transaction_id.split('-').pop() || '0')

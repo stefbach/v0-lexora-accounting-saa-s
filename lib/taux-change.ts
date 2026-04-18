@@ -268,6 +268,58 @@ export async function getTauxChange(): Promise<Record<string, number>> {
 }
 
 /**
+ * Same as getTauxChange but never throws — replaces ad-hoc catches with
+ * hardcoded fallbacks scattered across API routes. Logs a warning if the
+ * DB is unreachable so drift is visible in Vercel logs / Sentry.
+ */
+export async function getTauxChangeSafe(context = 'unknown'): Promise<Record<string, number>> {
+  try {
+    return await getTauxChangeFromDB()
+  } catch (e) {
+    console.warn(`[taux-change][${context}] DB unreachable, using FALLBACK_RATES`, e)
+    return { ...FALLBACK_RATES }
+  }
+}
+
+/**
+ * Health check: returns the freshness of FX rates in DB.
+ * Useful for admin dashboards / alerting when the daily cron fails.
+ */
+export async function getTauxHealth(): Promise<{
+  has_rates: boolean
+  latest_date: string | null
+  currencies: string[]
+  stale: boolean
+  hours_since_last: number | null
+}> {
+  try {
+    const supabase = getSupabase()
+    const { data } = await supabase
+      .from('taux_change')
+      .select('devise, date_taux')
+      .order('date_taux', { ascending: false })
+      .limit(50)
+
+    if (!data || data.length === 0) {
+      return { has_rates: false, latest_date: null, currencies: [], stale: true, hours_since_last: null }
+    }
+
+    const latest = data[0].date_taux as string
+    const currencies = [...new Set(data.map(r => r.devise as string))]
+    const hours = (Date.now() - new Date(latest).getTime()) / 3600000
+    return {
+      has_rates: true,
+      latest_date: latest,
+      currencies,
+      stale: hours > 36, // more than 36h old = stale (daily cron + weekend margin)
+      hours_since_last: Math.round(hours),
+    }
+  } catch {
+    return { has_rates: false, latest_date: null, currencies: [], stale: true, hours_since_last: null }
+  }
+}
+
+/**
  * Convert an amount to MUR using the provided rates.
  */
 export function convertToMUR(amount: number, devise: string, rates: Record<string, number>): number {

@@ -110,7 +110,9 @@ const MENU: MenuSection[] = [
     requiredModule: "comptabilite",
     items: [
       { href: "/client/banque", label: "Banque", labelKey: "acc.bank", icon: Banknote },
-      { href: "/client/rapprochement", label: "Rapprochement & Lettrage", labelKey: "acc.reconciliation", icon: CreditCard },
+      { href: "/client/rapprochement", label: "Rapprochement", labelKey: "acc.reconciliation", icon: CreditCard },
+      { href: "/client/lettrage", label: "Lettrage", icon: CreditCard },
+      { href: "/client/plan-comptable", label: "Plan comptable", icon: BookOpen },
       { href: "/client/fournisseurs", label: "Fournisseurs", labelKey: "acc.suppliers", icon: FileSpreadsheet },
       { href: "/client/salaires-compta", label: "Salaires", icon: CreditCard },
       { href: "/client/compte-courant", label: "Comptes Courants Associés", labelKey: "acc.current_accounts", icon: Users },
