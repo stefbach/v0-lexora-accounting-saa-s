@@ -50,7 +50,7 @@ async function executeTool(toolName: string, input: Record<string, unknown>): Pr
 
       return {
         transaction_id: txId,
-        class: classType,
+        class: classType as ClassificationResult['class'],
         confidence,
         rationale,
         needs_review: confidence < 85,

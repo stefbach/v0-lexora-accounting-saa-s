@@ -88,14 +88,15 @@ export async function recordLearningPattern(
     })
 
     if (error) {
-      // Upsert fallback : incrémenter si existe
       if (error.code === '23505') {
-        await supabase.rpc('increment_pattern_count', {
-          p_societe_id: pattern.societeId,
-          p_pattern_type: pattern.patternType,
-          p_label: pattern.labelPattern,
-          p_iban: pattern.counterpartyIban,
-        }).catch(() => {})
+        try {
+          await supabase
+            .from('client_learning_patterns')
+            .update({ occurrence_count: 2, last_seen: new Date().toISOString() })
+            .eq('societe_id', pattern.societeId)
+            .eq('pattern_type', pattern.patternType)
+            .eq('label_pattern', pattern.labelPattern || '')
+        } catch { /* best effort */ }
       }
     }
   } else {
