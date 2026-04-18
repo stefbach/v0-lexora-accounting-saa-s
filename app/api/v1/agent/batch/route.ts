@@ -73,7 +73,7 @@ export async function POST(request: Request) {
       .eq('societe_id', societe_id)
       .eq('statut_lettrage', 'a_lettrer')
       .order('date_transaction')
-      .limit(100)
+      .limit(50)
 
     if (!txs || txs.length === 0) {
       return NextResponse.json({ processed: 0, results: [], message: 'Aucune transaction en attente' })
@@ -118,14 +118,22 @@ Classifie et rapproche chaque transaction. Retourne le JSON.`
     const duration = Date.now() - startTime
     const text = response.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
 
-    // 6. Parser le JSON retourné (gérer code blocks markdown)
+    // 6. Parser le JSON retourné (gérer code blocks markdown + troncature)
     let results: any[] = []
     try {
-      const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
+      let cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
+      // Si la réponse est tronquée (JSON incomplet), fermer le tableau
+      if (cleaned.includes('[') && !cleaned.includes(']')) {
+        // Trouver le dernier objet complet (terminé par })
+        const lastBrace = cleaned.lastIndexOf('}')
+        if (lastBrace > 0) {
+          cleaned = cleaned.substring(0, lastBrace + 1) + ']'
+        }
+      }
       const jsonMatch = cleaned.match(/\[[\s\S]*\]/)
       if (jsonMatch) results = JSON.parse(jsonMatch[0])
-    } catch {
-      return NextResponse.json({ error: 'Réponse Claude non parsable', raw: text.substring(0, 1000) }, { status: 500 })
+    } catch (parseErr: any) {
+      return NextResponse.json({ error: 'Réponse Claude non parsable', parse_error: parseErr.message, raw: text.substring(0, 1000) }, { status: 500 })
     }
 
     // 7. Appliquer les résultats
