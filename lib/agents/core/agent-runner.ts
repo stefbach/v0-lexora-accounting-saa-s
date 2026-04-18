@@ -68,9 +68,8 @@ export async function runAgent(
 
       if (response.stop_reason === 'tool_use') {
         const toolUseBlocks = response.content.filter(
-          (b): b is Anthropic.ContentBlockParam & { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> } =>
-            b.type === 'tool_use'
-        )
+          (b: any) => b.type === 'tool_use'
+        ) as Array<{ type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }>
 
         const toolResults: Anthropic.ToolResultBlockParam[] = []
 
