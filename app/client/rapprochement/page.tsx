@@ -2524,17 +2524,7 @@ Voulez-vous vraiment continuer ?`
                                   && norm(o.tiers_detecte || o.tiers || '') === myTiers
                                 ).length
                               : 0
-                            const classifications = [
-                              { code: 'frais_bancaires',         label: 'Frais bancaires',         compte: '627' },
-                              { code: 'paiement_mra',            label: 'Paiement MRA (impots)',   compte: '447' },
-                              { code: 'salaire',                 label: 'Salaire net',             compte: '421' },
-                              { code: 'compte_courant_associe',  label: 'Compte courant associe',  compte: '455' },
-                              { code: 'avance_personnel',        label: 'Avance au personnel',     compte: '425' },
-                              { code: 'virement_interne',        label: 'Virement interne',        compte: '580' },
-                              { code: 'remboursement_personnel', label: 'Remboursement personnel', compte: '108' },
-                              { code: 'charge_diverse',          label: 'Charge diverse',          compte: '658' },
-                              { code: 'autre',                   label: 'A classer plus tard',     compte: '471' },
-                            ]
+                            const classifications = CLASSIFICATION_CHOICES
                             return (
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
