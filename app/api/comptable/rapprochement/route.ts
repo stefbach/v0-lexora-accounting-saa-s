@@ -420,6 +420,22 @@ export async function POST(request: Request) {
         const updatedTxs = [...txs]
         let changed = false
         let skippedCount = 0
+
+        // Charger les associés/actionnaires pour détecter les CCA
+        const { data: associesData } = await supabase
+          .from('comptes_courants_associes')
+          .select('nom, type')
+          .eq('societe_id', societe_id)
+        const { data: directorsData } = await supabase
+          .from('directors_shareholders')
+          .select('nom_complet, role')
+          .eq('societe_id', societe_id)
+          .eq('active', true)
+        const associeNames = [
+          ...(associesData || []).map((a: any) => (a.nom || '').toLowerCase()),
+          ...(directorsData || []).map((d: any) => (d.nom_complet || '').toLowerCase()),
+        ].filter(n => n.length > 2)
+
         // Collect indices of unclassified transactions for batch engine matching
         const unclassifiedTxIndices: number[] = []
 
@@ -493,6 +509,20 @@ export async function POST(request: Request) {
             updatedTxs[i] = { ...tx, statut: 'rapproche', matched_type: 'frais_bancaires', note: 'Frais bancaires', ecriture_id: feeEcriture?.id || null }
             if (feeEcriture) { ecritures = ecritures.filter(e => e.id !== feeEcriture.id); await supabase.from('ecritures_comptables').update({ lettre: `FEE${i}`, date_lettrage: new Date().toISOString().split('T')[0] }).eq('id', feeEcriture.id) }
             counts.frais_bancaires++; counts.matched++; changed = true; classified = true
+          }
+
+          // RULE B2 — Compte courant associé (CCA)
+          // Si le tiers est un associé/actionnaire connu → CCA (455), PAS salaire
+          if (!classified && associeNames.length > 0) {
+            const txFullText = (txTiers + ' ' + txLib).toLowerCase()
+            const matchedAssocie = associeNames.find(name => {
+              const words = name.split(/\s+/).filter((w: string) => w.length >= 3)
+              return words.length > 0 && words.every((w: string) => txFullText.includes(w))
+            })
+            if (matchedAssocie) {
+              updatedTxs[i] = { ...tx, statut: 'rapproche', matched_type: 'compte_courant_associe', note: `CCA — ${matchedAssocie}` }
+              counts.matched++; changed = true; classified = true
+            }
           }
 
           // RULE C — Bulk salary
@@ -1422,6 +1452,10 @@ export async function POST(request: Request) {
                   compteCharge = '421'; libellePrefix = 'Salaire'
                 } else if (tx.matched_type === 'reversal_salaire') {
                   compteCharge = '421'; libellePrefix = 'Reversal salaire'
+                } else if (tx.matched_type === 'compte_courant_associe') {
+                  compteCharge = '455'; libellePrefix = 'Compte courant associé'
+                } else if (tx.matched_type === 'loyer') {
+                  compteCharge = '613'; libellePrefix = 'Loyer'
                 } else if (tx.matched_type?.startsWith('rule_') && tx.classification_compte) {
                   // Classification par règle configurable (R01-R07+)
                   compteCharge = tx.classification_compte
@@ -1538,16 +1572,22 @@ export async function POST(request: Request) {
         // Mapping étendu pour les classifications proposées par le menu
         // "Classer..." de la page rapprochement (Part 2 redesign).
         const CLASSE_COMPTES: Record<string, string> = {
-          compte_courant_associe: '455',  // Comptes courants associés
-          avance_personnel: '425',        // Avances au personnel
-          charge_diverse: '658',          // Autres charges de gestion
-          paiement_mra: '444',            // État, impôts (MRA)
-          frais_bancaires: '627',         // Services bancaires et assimilés
-          // Nouveaux types ajoutés par la refonte UI :
-          salaire: '641',                 // Personnel — rémunérations
-          virement_interne: '581',        // Virements internes (bridge account)
-          remboursement_personnel: '108', // Compte de l'exploitant
-          autre: '471',                   // Charges à classer (fallback explicite)
+          compte_courant_associe: '455',
+          avance_personnel: '425',
+          charge_diverse: '658',
+          paiement_mra: '444',
+          frais_bancaires: '627',
+          salaire: '4210',
+          virement_interne: '580',
+          remboursement_personnel: '108',
+          loyer: '613',
+          assurance: '616',
+          honoraires: '622',
+          telecom: '626',
+          impot_taxe: '635',
+          charge_sociale: '431',
+          fournisseur: '401',
+          autre: '471',
         }
         const compteCharge = CLASSE_COMPTES[classification] || '471'
         console.log(`[lettrer_manuel] societe=${societe_id} tx=${transaction_id} classification=${classification} → compte=${compteCharge}`)
