@@ -712,7 +712,14 @@ export async function POST(request: Request) {
             (match.transaction as any)?.date ||
             new Date().toISOString().split('T')[0]
 
-          if (conf >= 0.60) {
+          // Seuil d'auto-application :
+          // - Match par alias fournisseur (strategy "supplier_*") → confiance ≥ 0.60
+          // - Match par montant (strategy "amount_*") → confiance ≥ 0.70
+          //   Requiert montant proche + tiers similaire. Sous 0.70 → proposé (jaune).
+          const isFallbackMatch = (match.strategy || '').startsWith('amount_')
+          const autoApplyThreshold = isFallbackMatch ? 0.70 : 0.60
+
+          if (conf >= autoApplyThreshold) {
             // High confidence → auto-apply
             const code = `R${String(counts.matched + 1).padStart(3, '0')}`
             entry.updatedTxs[txIdx] = {
@@ -3762,6 +3769,86 @@ export async function POST(request: Request) {
         devise,
         employe: nomEmploye,
         compte: compteDebit,
+      })
+    }
+
+    // ── annuler_paiement_factures : remettre N factures en "en_attente" ──
+    // Remet le statut, clear rapproche_*, et délettrer les tx bancaires associées.
+    // Si facture_ids = ['ALL'], remet TOUTES les factures + TOUTES les tx bancaires
+    // à zéro pour la société (reset complet du rapprochement).
+    if (action === 'annuler_paiement_factures') {
+      const { societe_id: socId, facture_ids } = body
+      if (!socId) {
+        return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
+      }
+
+      const isResetAll = Array.isArray(facture_ids) && facture_ids.length === 1 && facture_ids[0] === 'ALL'
+
+      // 1. Remettre les factures en attente
+      let resetQuery = supabase
+        .from('factures')
+        .update({
+          statut: 'en_attente',
+          rapproche_releve_id: null,
+          rapproche_transaction_idx: null,
+          rapproche_date: null,
+          rapproche_source: null,
+        })
+        .eq('societe_id', socId)
+        .neq('statut', 'annule')
+        .neq('statut', 'brouillon')
+
+      if (!isResetAll && Array.isArray(facture_ids) && facture_ids.length > 0) {
+        resetQuery = resetQuery.in('id', facture_ids)
+      }
+
+      const { data: resetData, error: resetErr } = await resetQuery.select('id')
+      if (resetErr) {
+        return NextResponse.json({ error: resetErr.message }, { status: 500 })
+      }
+
+      // 2. Remettre TOUTES les tx bancaires à non_identifie
+      // (pas seulement celles liées aux factures, car les tx auto-classifiées
+      // Phase 1/3 ne sont liées à aucune facture mais bloquent le re-rapprochement)
+      let txReset = 0
+      const { data: releves } = await supabase
+        .from('releves_bancaires')
+        .select('id, transactions_json')
+        .eq('societe_id', socId)
+
+      for (const rel of releves || []) {
+        const txs = [...(rel.transactions_json || [])]
+        let changed = false
+        for (let i = 0; i < txs.length; i++) {
+          const tx = txs[i]
+          if (!tx) continue
+          // Garder les virements internes (ils sont corrects)
+          if (tx.statut === 'interne' || tx.matched_type === 'transfert_interne') continue
+          // Tout le reste → non_identifie
+          if (tx.statut === 'rapproche' || tx.statut === 'propose' || tx.lettre || tx.facture_id || tx.facture_ids || tx.matched_type) {
+            const { lettre, facture_id, facture_ids: fids, ecriture_id, matched_type, match_confidence, note, rapproche_at, rapprochement_multi, nb_factures, ecart_montant, ...rest } = tx
+            txs[i] = { ...rest, statut: 'non_identifie' }
+            changed = true
+            txReset++
+          }
+        }
+        if (changed) {
+          await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', rel.id)
+        }
+      }
+
+      // 3. Supprimer les écritures BNQ liées au rapprochement
+      const { count: ecrituresDeleted } = await supabase
+        .from('ecritures_comptables_v2')
+        .delete({ count: 'exact' })
+        .eq('societe_id', socId)
+        .eq('journal', 'BNQ')
+
+      return NextResponse.json({
+        ok: true,
+        nb_factures_reset: (resetData || []).length,
+        nb_tx_delettrees: txReset,
+        nb_ecritures_supprimees: ecrituresDeleted || 0,
       })
     }
 

@@ -200,7 +200,6 @@ function normalizeAdvanced(name: string): string {
     .toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/\b(ltd|limited|sarl|sas|sa|eurl|co\.?|inc|llc|plc|pvt|pty|bv|gmbh|cie|company)\b/gi, '')
-    .replace(/\b(mauritius|mu|mru|republic of)\b/gi, '')
     .replace(/[.,;:!?()/\\'\-"]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
@@ -925,16 +924,24 @@ function matchByAmountFallback(
     // Ne PAS matcher si ambiguïté ET pas de signal tiers fort
     if (isAmbiguous && best.tiersSim < 0.30) continue
 
+    // RÈGLE FONDAMENTALE : si le tiers ne correspond PAS DU TOUT, on ne matche
+    // PAS automatiquement, même si le montant est exact. Un montant de 213 EUR
+    // peut correspondre à Google Cloud OU à un virement salaire — sans signal
+    // tiers, c'est du hasard.
+    // On SKIP complètement (même pas "proposé") si tiersSim = 0 et qu'il n'y a
+    // aucun mot en commun entre la tx et la facture.
+    if (best.tiersSim < 0.10) continue
+
     const isExact = best.diff < 0.005
     const isTDS = best.diff >= 0.02 && best.diff <= 0.06
     let confidence = 0.50
-    if (isExact) confidence = 0.88
-    else if (isTDS) confidence = 0.72
-    else confidence = 0.55
+    if (isExact) confidence = 0.80
+    else if (isTDS) confidence = 0.65
+    else confidence = 0.50
 
-    // Bonus tiers (texte proche)
-    if (best.tiersSim > 0.50) confidence += 0.10
-    else if (best.tiersSim > 0.25) confidence += 0.05
+    // Bonus tiers (texte proche) — le tiers est LE facteur déterminant
+    if (best.tiersSim > 0.50) confidence += 0.15
+    else if (best.tiersSim > 0.25) confidence += 0.08
 
     // Bonus date (même mois)
     if (best.delay <= 15) confidence += 0.05
@@ -964,7 +971,73 @@ function matchByAmountFallback(
     usedFactureIds.add(best.f.id)
   }
 
-  // ── Passe 2 : 1 tx → N factures (groupement par somme) ────────
+  // ── Passe 2 : 1 tx → N factures MÊME FOURNISSEUR ─────────────
+  // Cas Emtel / MyT / Mauritius Telecom : 5 factures mensuelles payées
+  // en un seul virement. On regroupe d'abord par tiers similaire, puis
+  // on vérifie si la somme colle au montant de la tx.
+  for (const tx of unmatchedTxs) {
+    if (usedTxKeys.has(txKey(tx))) continue
+    const txRaw = Math.max(tx.debit, tx.credit)
+    if (txRaw === 0) continue
+    const txDevise = (tx.devise || 'MUR').toUpperCase()
+    const txAmtMUR = toMUR(txRaw, tx.devise, rates)
+    const txTiers = (tx.tiers_detecte || tx.libelle || '').toLowerCase()
+    if (txTiers.length < 2) continue
+
+    const available = unpaidFactures.filter(f => !usedFactureIds.has(f.id))
+    if (available.length < 2) continue
+
+    // Grouper les factures par tiers similaire à la tx
+    const sameTiers = available.filter(f => {
+      const sim = advancedTiersScore(txTiers, f.tiers || '')
+      return sim > 0.25
+    })
+    if (sameTiers.length < 2) continue
+
+    // Calculer la somme de toutes les factures du même tiers
+    let totalFacs = 0
+    const combo: MatchingFacture[] = []
+    for (const f of sameTiers) {
+      const fDevise = (f.devise || 'MUR').toUpperCase()
+      const fAmt = (txDevise === fDevise && Number(f.montant_ttc) > 0)
+        ? Number(f.montant_ttc)
+        : (Number(f.montant_mur) || toMUR(Number(f.montant_ttc) || 0, f.devise, rates))
+      if (fAmt <= 0) continue
+      totalFacs += fAmt
+      combo.push(f)
+    }
+
+    const compareAmt = combo[0]?.devise?.toUpperCase() === txDevise ? txRaw : txAmtMUR
+    const diff = totalFacs > 0 ? Math.abs(compareAmt - totalFacs) / totalFacs : 999
+
+    // Tolérance 10% pour le regroupement fournisseur (TDS, frais, arrondis)
+    if (diff > 0.10 || combo.length < 2) continue
+
+    const isExact = diff < 0.005
+    const tiersSim = advancedTiersScore(txTiers, combo[0]?.tiers || '')
+    let confidence = 0.82
+    if (isExact) confidence = 0.93
+    if (tiersSim > 0.50) confidence += 0.05
+    if (combo.length > 6) confidence -= 0.05
+
+    matches.push({
+      supplierKey: `__fallback_group_${txTiers.substring(0, 30)}`,
+      supplierName: combo[0]?.tiers || txTiers,
+      transactionKey: txKey(tx),
+      transaction: tx,
+      factureIds: combo.map(f => f.id),
+      factures: [...combo],
+      strategy: 'amount_same_supplier_group',
+      confidence: Math.min(0.95, Math.max(0.50, confidence)),
+      reasoning: `${combo.length} factures "${combo[0]?.tiers || '?'}" → total ${isExact ? 'exact' : `écart ${(diff * 100).toFixed(1)}%`}`,
+      amountDiff: diff * compareAmt,
+      phase: 'supplier_match',
+    })
+    for (const f of combo) usedFactureIds.add(f.id)
+    usedTxKeys.add(txKey(tx))
+  }
+
+  // ── Passe 3 : 1 tx → N factures (greedy cross-supplier) ──────
   for (const tx of unmatchedTxs) {
     if (usedTxKeys.has(txKey(tx))) continue
     const txRaw = Math.max(tx.debit, tx.credit)
