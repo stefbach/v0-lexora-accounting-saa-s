@@ -531,11 +531,11 @@ export async function GET(request: Request) {
         }
       })
 
-    // Revenue: use factures clients (MUR) as primary, fallback to écritures classe 7
-    // Expenses: use écritures classe 6 as primary (includes salaires, charges, frais)
-    // Fallback to factures fournisseurs si pas d'écritures
+    // Dépenses = factures fournisseurs (montant MUR) + écritures classe 6 hors fournisseurs
+    // (salaires 641, charges patronales 645, frais 627, impôts 63, etc.)
+    // depensesFromFactures combine TOUJOURS les deux sources (ligne 244)
     const finalCA = caFromFactures > 0 ? caFromFactures : totalRevenue
-    const finalDepenses = totalExpenses > 0 ? totalExpenses : depensesFromFactures
+    const finalDepenses = depensesFromFactures
     const finalResultat = finalCA - finalDepenses
 
     return NextResponse.json({
