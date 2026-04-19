@@ -12,6 +12,81 @@ function getAdminClient() {
   )
 }
 
+/**
+ * Calcule le report à nouveau (solde d'ouverture) pour un compte donné,
+ * en utilisant la fonction SQL fn_solde_compte_at_date (migration 152).
+ * Fallback sur calcul manuel si le RPC échoue.
+ */
+async function getReportANouveau(
+  supabase: ReturnType<typeof getAdminClient>,
+  societe_id: string,
+  numero_compte: string,
+  date_debut: string,
+): Promise<number> {
+  const veille = new Date(new Date(date_debut).getTime() - 86400000)
+    .toISOString()
+    .slice(0, 10)
+  const { data, error } = await supabase.rpc('fn_solde_compte_at_date', {
+    p_societe_id: societe_id,
+    p_numero_compte: numero_compte,
+    p_date: veille,
+  })
+  if (error) {
+    console.warn(
+      '[grand-livre] fn_solde_compte_at_date RPC failed, fallback to manual calc:',
+      error.message,
+    )
+    return await getReportANouveauManual(supabase, societe_id, numero_compte, date_debut)
+  }
+  return Number(data ?? 0)
+}
+
+/**
+ * Fallback : calcul manuel du report à nouveau (si fn_solde_compte_at_date
+ * n'est pas disponible, ex. migration 152 non appliquée).
+ */
+async function getReportANouveauManual(
+  supabase: ReturnType<typeof getAdminClient>,
+  societe_id: string,
+  numero_compte: string,
+  date_debut: string,
+): Promise<number> {
+  // V2
+  const { data: priorV2 } = await supabase
+    .from('ecritures_comptables_v2')
+    .select('debit_mur, credit_mur')
+    .eq('societe_id', societe_id)
+    .eq('numero_compte', numero_compte)
+    .lt('date_ecriture', date_debut)
+
+  let solde = 0
+  for (const e of priorV2 || []) {
+    solde += (Number(e.debit_mur) || 0) - (Number(e.credit_mur) || 0)
+  }
+
+  // V1 fallback (même compte, via dossiers)
+  if (!priorV2 || priorV2.length === 0) {
+    const { data: dossiers } = await supabase
+      .from('dossiers')
+      .select('id')
+      .eq('societe_id', societe_id)
+    const dossierIds = (dossiers || []).map((d: any) => d.id)
+    if (dossierIds.length > 0) {
+      const { data: priorV1 } = await supabase
+        .from('ecritures_comptables')
+        .select('debit, credit')
+        .in('dossier_id', dossierIds)
+        .eq('compte', numero_compte)
+        .lt('date_ecriture', date_debut)
+      for (const e of priorV1 || []) {
+        solde += (Number(e.debit) || 0) - (Number(e.credit) || 0)
+      }
+    }
+  }
+
+  return solde
+}
+
 export async function GET(request: Request) {
   try {
     const supabaseAuth = await createServerClient()
@@ -27,11 +102,46 @@ export async function GET(request: Request) {
     const date_fin     = searchParams.get('date_fin')
     const journal      = searchParams.get('journal')
     const exercice     = searchParams.get('exercice')
+    const useFastBalance = searchParams.get('fast_balance') === 'true'
     const page         = parseInt(searchParams.get('page') || '1', 10)
     const limit        = parseInt(searchParams.get('limit') || '50', 10)
     const offset       = (page - 1) * limit
 
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
+
+    // --- Mode Balance Instantanée via vue matérialisée (migration 152) ---
+    // Si `fast_balance=true` et `exercice` est fourni, on tente d'utiliser
+    // mv_soldes_comptes_exercice pour un retour ultra rapide des soldes agrégés.
+    if (useFastBalance && exercice) {
+      // Parse exercice "YYYY-YYYY" -> année de début (ex "2025-2026" -> 2025)
+      const exMatch = exercice.match(/^(\d{4})-(\d{4})$/)
+      const exerciceInt = exMatch ? parseInt(exMatch[1], 10) : parseInt(exercice, 10)
+      if (!Number.isNaN(exerciceInt)) {
+        let mvQuery = supabase
+          .from('mv_soldes_comptes_exercice')
+          .select('*')
+          .eq('societe_id', societe_id)
+          .eq('exercice', exerciceInt)
+          .order('numero_compte')
+        if (compte_debut) mvQuery = mvQuery.gte('numero_compte', compte_debut)
+        if (compte_fin)   mvQuery = mvQuery.lte('numero_compte', compte_fin)
+
+        const { data: mvData, error: mvErr } = await mvQuery
+        if (!mvErr && mvData) {
+          return NextResponse.json({
+            ok: true,
+            source: 'materialized_view',
+            exercice,
+            soldes: mvData,
+          })
+        }
+        console.warn(
+          '[grand-livre] mv_soldes_comptes_exercice unavailable, falling back to full listing:',
+          mvErr?.message,
+        )
+        // fallback silencieux sur le mode standard ci-dessous
+      }
+    }
 
     // Parse exercice to date range if provided (e.g., "2025-2026" = July 2025 to June 2026)
     let exerciceDateDebut: string | null = null
@@ -155,49 +265,30 @@ export async function GET(request: Request) {
       return (a.date_ecriture || '').localeCompare(b.date_ecriture || '')
     })
 
-    // Compute opening balances (report a nouveau) from prior year entries
-    // Only for balance sheet accounts (classes 1-5) - P&L accounts (6, 7) reset each year
+    // --- Reports à nouveau : via fn_solde_compte_at_date avec fallback ---
+    // Seuls les comptes de bilan (classes 1-5) reportent leur solde d'un exercice à l'autre.
     const soldeOuvertureParCompte: Record<string, number> = {}
 
     if (effectiveDateDebut) {
-      // Fetch all entries BEFORE the start date to compute opening balances
-      let priorV2Query = supabase.from('ecritures_comptables_v2')
-        .select('numero_compte, debit_mur, credit_mur')
-        .eq('societe_id', societe_id)
-        .lt('date_ecriture', effectiveDateDebut)
-      if (compte_debut) priorV2Query = priorV2Query.gte('numero_compte', compte_debut)
-      if (compte_fin) priorV2Query = priorV2Query.lte('numero_compte', compte_fin)
-
-      const { data: priorV2Data } = await priorV2Query
-      let priorEntries: any[] = priorV2Data || []
-
-      // V1 fallback for prior entries
-      if (priorEntries.length === 0) {
-        const { data: dossiers } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id)
-        const dossierIds = (dossiers || []).map((d: any) => d.id)
-        if (dossierIds.length > 0) {
-          let priorV1Query = supabase.from('ecritures_comptables')
-            .select('compte, debit, credit')
-            .in('dossier_id', dossierIds)
-            .lt('date_ecriture', effectiveDateDebut)
-          if (compte_debut) priorV1Query = priorV1Query.gte('compte', compte_debut)
-          if (compte_fin) priorV1Query = priorV1Query.lte('compte', compte_fin)
-          const { data: priorV1Data } = await priorV1Query
-          priorEntries = (priorV1Data || []).map((e: any) => ({
-            numero_compte: e.compte, debit_mur: Number(e.debit) || 0, credit_mur: Number(e.credit) || 0
-          }))
-        }
-      }
-
-      // Aggregate opening balances per account (only balance sheet accounts: classes 1-5)
-      for (const e of priorEntries) {
+      // Comptes présents dans la période (filtrage classes 1-5)
+      const comptesBilanSet = new Set<string>()
+      for (const e of allEntries) {
         const compte = e.numero_compte
         if (!compte) continue
         const firstChar = compte.charAt(0)
-        // Only carry forward balance sheet accounts (1-5), not P&L (6, 7)
         if (firstChar >= '1' && firstChar <= '5') {
-          soldeOuvertureParCompte[compte] = (soldeOuvertureParCompte[compte] || 0) + (Number(e.debit_mur) || 0) - (Number(e.credit_mur) || 0)
+          comptesBilanSet.add(compte)
         }
+      }
+
+      // Calcul en parallèle des soldes d'ouverture (via RPC, fallback manuel par compte)
+      const comptesBilan = Array.from(comptesBilanSet)
+      const soldes = await Promise.all(
+        comptesBilan.map(c => getReportANouveau(supabase, societe_id, c, effectiveDateDebut)),
+      )
+      for (let i = 0; i < comptesBilan.length; i++) {
+        const s = soldes[i]
+        if (s !== 0) soldeOuvertureParCompte[comptesBilan[i]] = s
       }
     }
 

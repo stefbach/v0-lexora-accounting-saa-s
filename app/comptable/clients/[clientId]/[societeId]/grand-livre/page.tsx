@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Loader2, ArrowLeft, Download, ChevronLeft, ChevronRight, BookOpen, Check, X } from "lucide-react"
+import { Loader2, ArrowLeft, Download, ChevronLeft, ChevronRight, BookOpen, Check, X, FileDown } from "lucide-react"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -239,9 +239,24 @@ export default function GrandLivrePage() {
             <p className="text-sm text-gray-500 mt-0.5">Toutes les écritures comptables avec solde progressif</p>
           </div>
         </div>
-        <Button onClick={exportCSV} variant="outline" className="gap-2" disabled={!data?.ecritures?.length}>
-          <Download className="w-4 h-4" /> Exporter CSV
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={exportCSV} variant="outline" className="gap-2" disabled={!data?.ecritures?.length}>
+            <Download className="w-4 h-4" /> Exporter CSV
+          </Button>
+          <Button
+            onClick={() => {
+              const qp = new URLSearchParams({ societe_id: societeId, format: "fec" })
+              if (dateDeb) qp.set("date_debut", dateDeb)
+              if (dateFin) qp.set("date_fin", dateFin)
+              window.open(`/api/comptable/export-fec?${qp.toString()}`, "_blank")
+            }}
+            variant="outline"
+            className="gap-2"
+            disabled={!societeId}
+          >
+            <FileDown className="w-4 h-4" /> Exporter FEC
+          </Button>
+        </div>
       </div>
 
       {/* Filtres */}

@@ -14,6 +14,7 @@ export async function GET(request: Request) {
     const date_debut = searchParams.get('date_debut')
     const date_fin   = searchParams.get('date_fin')
     const exercice   = searchParams.get('exercice')
+    const useFast    = searchParams.get('fast') === 'true'
 
     if (!societe_id) {
       return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
@@ -31,6 +32,35 @@ export async function GET(request: Request) {
         .eq('annee', exercice)
         .single()
       if (ex) { dDebut = ex.date_debut; dFin = ex.date_fin }
+    }
+
+    // --- Mode rapide via vue matérialisée (migration 152) ---
+    // Si fast=true et exercice fourni, on lit mv_soldes_comptes_exercice.
+    // Fallback silencieux vers le calcul manuel si la MV n'existe pas.
+    if (useFast && exercice) {
+      const exMatch = exercice.match(/^(\d{4})-(\d{4})$/)
+      const exerciceInt = exMatch ? parseInt(exMatch[1], 10) : parseInt(exercice, 10)
+      if (!Number.isNaN(exerciceInt)) {
+        const { data: mvData, error: mvErr } = await supabase
+          .from('mv_soldes_comptes_exercice')
+          .select('*')
+          .eq('societe_id', societe_id)
+          .eq('exercice', exerciceInt)
+          .order('numero_compte')
+
+        if (!mvErr && mvData && mvData.length > 0) {
+          return NextResponse.json({
+            ok: true,
+            source: 'materialized_view',
+            exercice,
+            soldes: mvData,
+          })
+        }
+        if (mvErr) {
+          console.warn('[balance] mv_soldes_comptes_exercice unavailable:', mvErr.message)
+        }
+        // fallback vers calcul manuel ci-dessous
+      }
     }
 
     // Récupérer toutes les écritures
