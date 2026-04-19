@@ -1,6 +1,6 @@
 -- ============================================================================
 -- CONSOLIDATED MIGRATIONS 146 → 166 (19 migrations)
--- Generated: 2026-04-19T14:30:41Z
+-- Generated: 2026-04-19T14:34:06Z
 -- Project: v0-lexora-accounting-saa-s
 -- ============================================================================
 -- À coller dans: Supabase Dashboard → SQL Editor → New query → Run
@@ -1605,19 +1605,42 @@ COMMENT ON FUNCTION fn_current_role IS
 -- - Cumul YTD par employé pour PAYE cumulatif depuis juillet
 -- ============================================================================
 
--- Ajoute les colonnes manquantes à parametres_paie_mra
+-- Ajoute les colonnes à parametres_paie_mra (défensif : ajoute aussi celles
+-- qui devraient déjà exister depuis mig 143 mais peuvent manquer si 143 pas appliquée)
 ALTER TABLE public.parametres_paie_mra
+  ADD COLUMN IF NOT EXISTS csg_seuil_taux_reduit NUMERIC(18,2) DEFAULT 50000,
+  ADD COLUMN IF NOT EXISTS csg_salarie_taux_reduit NUMERIC(5,4) DEFAULT 0.015,
+  ADD COLUMN IF NOT EXISTS csg_salarie_taux_plein NUMERIC(5,4) DEFAULT 0.030,
+  ADD COLUMN IF NOT EXISTS csg_patronal NUMERIC(5,4) DEFAULT 0.060,
+  ADD COLUMN IF NOT EXISTS csg_patronal_taux_reduit NUMERIC(5,4) DEFAULT 0.030,
+  ADD COLUMN IF NOT EXISTS nsf_salarie NUMERIC(5,4) DEFAULT 0.015,
+  ADD COLUMN IF NOT EXISTS nsf_patronal NUMERIC(5,4) DEFAULT 0.025,
+  ADD COLUMN IF NOT EXISTS nsf_plafond_mensuel NUMERIC(18,2) DEFAULT 19500,
+  ADD COLUMN IF NOT EXISTS training_levy NUMERIC(5,4) DEFAULT 0.010,
+  ADD COLUMN IF NOT EXISTS prgf_patronal_par_jour NUMERIC(18,2) DEFAULT 4.50,
+  ADD COLUMN IF NOT EXISTS prgf_taux_emoluments NUMERIC(5,4) DEFAULT 0.045,
+  ADD COLUMN IF NOT EXISTS paye_seuil_exoneration NUMERIC(18,2) DEFAULT 390000,
+  ADD COLUMN IF NOT EXISTS paye_taux_1 NUMERIC(5,4) DEFAULT 0.10,
+  ADD COLUMN IF NOT EXISTS paye_seuil_taux_2 NUMERIC(18,2) DEFAULT 490000,
+  ADD COLUMN IF NOT EXISTS paye_taux_2 NUMERIC(5,4) DEFAULT 0.15,
   ADD COLUMN IF NOT EXISTS paye_seuil_taux_3 NUMERIC(18,2) DEFAULT 590000,
   ADD COLUMN IF NOT EXISTS paye_taux_3 NUMERIC(5,4) DEFAULT 0.20,
-  ADD COLUMN IF NOT EXISTS nsf_plafond_mensuel NUMERIC(18,2) DEFAULT 19500,
-  ADD COLUMN IF NOT EXISTS csg_patronal_taux_reduit NUMERIC(5,4) DEFAULT 0.03,
+  ADD COLUMN IF NOT EXISTS salary_compensation NUMERIC(18,2) DEFAULT 635,
+  ADD COLUMN IF NOT EXISTS salary_compensation_seuil NUMERIC(18,2) DEFAULT 50000,
   ADD COLUMN IF NOT EXISTS nit_seuil_categorie_a NUMERIC(18,2) DEFAULT 25000,
   ADD COLUMN IF NOT EXISTS nit_seuil_categorie_b NUMERIC(18,2) DEFAULT 30000;
 
 -- Met à jour le seuil tranche 2 (bug historique : 650000 au lieu de 490000)
-UPDATE public.parametres_paie_mra
-SET paye_seuil_taux_2 = 490000
-WHERE paye_seuil_taux_2 = 650000;
+-- Wrap dans DO block pour que ça marche même si aucune ligne n'existe encore.
+DO $$
+BEGIN
+  UPDATE public.parametres_paie_mra
+  SET paye_seuil_taux_2 = 490000
+  WHERE paye_seuil_taux_2 = 650000;
+END $$;
+
+-- Note : pas d'INSERT automatique — les paramètres_paie_mra doivent
+-- être créés par société via UI/migration dédiée (contrainte UNIQUE(societe_id)).
 
 -- ============================================================================
 -- Table cumul YTD (pour PAYE cumulatif depuis juillet, année fiscale Maurice)
