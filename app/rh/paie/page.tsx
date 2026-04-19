@@ -516,6 +516,23 @@ export default function PaiePage() {
             {isLocked && (
               <Badge className="bg-red-100 text-red-700 gap-1"><Lock className="w-3 h-3" />PERIODE VERROUILLEE</Badge>
             )}
+            <div className="ml-auto flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!societe || societe === "all" || !periode}
+                onClick={() => {
+                  if (!societe || societe === "all" || !periode) return
+                  window.open(
+                    `/api/rh/paie/export-dsn?societe_id=${societe}&periode=${periode}`,
+                    "_blank",
+                  )
+                }}
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 mr-1" />
+                Exporter DSN (XML)
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
@@ -1202,6 +1219,21 @@ export default function PaiePage() {
                             <Button size="sm" variant="outline" onClick={() => window.open(`/api/rh/exports/virement?societe_id=${societe}&periode=${p}&format=json`, "_blank")}>
                               <Download className="w-3.5 h-3.5 mr-1" />
                               Export virements
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={!societe || societe === "all"}
+                              onClick={() => {
+                                if (!societe || societe === "all") return
+                                window.open(
+                                  `/api/rh/paie/export-dsn?societe_id=${societe}&periode=${p}`,
+                                  "_blank",
+                                )
+                              }}
+                            >
+                              <FileSpreadsheet className="w-3.5 h-3.5 mr-1" />
+                              Exporter DSN (XML)
                             </Button>
                           </div>
                         </CardContent>

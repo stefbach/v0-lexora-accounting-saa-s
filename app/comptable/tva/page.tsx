@@ -170,9 +170,36 @@ export default function TVAPage() {
           <h1 className="text-2xl font-bold" style={{ color: NAVY }}>TVA MRA — Déclarations</h1>
           <p className="text-sm text-gray-500 mt-1">9 boxes MRA — Calcul automatique depuis les écritures comptables</p>
         </div>
-        <Button variant="outline" className="gap-2">
-          <Download className="w-4 h-4" /> Exporter
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            className="gap-2"
+            disabled={!selectedSociete || selectedSociete === "all" || !selectedPeriode}
+            onClick={() => {
+              if (!selectedSociete || selectedSociete === "all" || !selectedPeriode) return
+              window.open(
+                `/api/comptable/tva/export-mra?societe_id=${selectedSociete}&periode=${selectedPeriode}&format=csv`,
+                "_blank",
+              )
+            }}
+          >
+            <Download className="w-4 h-4" /> Exporter VAT3 MRA (CSV)
+          </Button>
+          <Button
+            variant="outline"
+            className="gap-2"
+            disabled={!selectedSociete || selectedSociete === "all" || !selectedPeriode}
+            onClick={() => {
+              if (!selectedSociete || selectedSociete === "all" || !selectedPeriode) return
+              window.open(
+                `/api/comptable/tva/export-mra?societe_id=${selectedSociete}&periode=${selectedPeriode}&format=xml`,
+                "_blank",
+              )
+            }}
+          >
+            <Download className="w-4 h-4" /> Exporter VAT3 MRA (XML)
+          </Button>
+        </div>
       </div>
 
       {/* KPIs */}
