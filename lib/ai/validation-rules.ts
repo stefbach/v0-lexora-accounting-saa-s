@@ -193,13 +193,34 @@ export function validateFactureExtraction(
   if (ht != null && tva != null && ttc != null && ttc > 0) {
     const check = validateTVAConsistency(ht, tva, ttc, taux ?? undefined)
     if (!check.ok) {
-      issues.push({
-        field: 'montant_ttc',
-        severity: 'error',
-        message: `HT+TVA != TTC (écart ${check.ecart.toFixed(2)})`,
-        suggested_value: ht + tva,
-      })
-      penalty += 15
+      // Cas légitime : factures relevés (Emtel, CEB, CWA, etc.) où le TTC
+      // inclut un solde antérieur impayé en plus des charges du mois courant.
+      // Signature : HT et TVA sont cohérents entre eux (taux correct),
+      // mais TTC >> HT+TVA. On downgrade en 'info' — l'extraction Claude
+      // n'est pas fautive, c'est la structure métier de la facture.
+      const tauxApplique = taux ?? 15
+      const tvaCalculee = Math.round(ht * (tauxApplique / 100) * 100) / 100
+      const tvaCoherente = tva === 0 ? ht === 0 : Math.abs(tvaCalculee - tva) / Math.max(tva, 1) < 0.05
+      const ttcSuperieurAuxCharges = ttc > (ht + tva) * 1.2 // TTC au moins 20% > HT+TVA
+      const previousBalance = toNumber((flattenExtraction(extraction) as Record<string, unknown>)?.previous_balance)
+        ?? toNumber((extraction as Record<string, unknown>)?.solde_anterieur)
+
+      if (tvaCoherente && (ttcSuperieurAuxCharges || (previousBalance ?? 0) > 0)) {
+        issues.push({
+          field: 'montant_ttc',
+          severity: 'info',
+          message: `TTC (${ttc}) > HT+TVA (${ht + tva}) — probable solde antérieur ou charges cumulées (télécom/utilities)`,
+        })
+        // pas de penalty — c'est un cas métier légitime
+      } else {
+        issues.push({
+          field: 'montant_ttc',
+          severity: 'error',
+          message: `HT+TVA != TTC (écart ${check.ecart.toFixed(2)})`,
+          suggested_value: ht + tva,
+        })
+        penalty += 15
+      }
     }
   }
 
