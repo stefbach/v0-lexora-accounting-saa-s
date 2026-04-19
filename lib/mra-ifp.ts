@@ -19,6 +19,7 @@
 
 import { Agent as HttpsAgent } from 'node:https'
 import { readFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 
 // ── Mode configuration ──
 
@@ -146,6 +147,14 @@ export interface MRAInvoice {
   ebsId: string
   invoiceTypeCode: string // '01' = invoice, '02' = credit note, '03' = debit note
   invoiceNumber: string
+  /**
+   * UUID stable pour l'idempotence MRA (généré au 1er call et persisté en DB).
+   * Si présent, il est envoyé tel quel comme `request_id` dans le payload, ce
+   * qui garantit qu'un retry externe (même facture rejouée) ne produit pas un
+   * nouvel IRN côté MRA. À pré-générer dans la route caller avant
+   * `fiscaliseInvoice()` et stocker sur la facture.
+   */
+  mra_request_id?: string
   issueDate: string // YYYY-MM-DD
   currencyCode: string // MUR, EUR, USD
   exchangeRate?: number
@@ -184,6 +193,17 @@ export interface MRAFiscalisationResponse {
   irn?: string
   qrCodeData?: string
   fiscalisationDate?: string
+  /** Statut retourné par MRA ('accepted' | 'rejected' | 'pending' | 'fiscalised'). */
+  status?: string
+  /** Signature numérique MRA (pour vérification ultérieure), si présente. */
+  signature?: string
+  /**
+   * Réponse brute complète de l'API MRA. Conservée pour stockage en DB
+   * (`mra_response_raw`) afin de constituer une piste d'audit et permettre
+   * la vérification future de la signature et des métadonnées.
+   * En mode mock cette valeur est absente.
+   */
+  raw?: Record<string, unknown>
   errorCode?: string
   errorMessage?: string
   /**
@@ -331,10 +351,18 @@ async function postToMraApi(
   if (config.certPath) {
     try {
       const cert = readFileSync(config.certPath)
+      // En sandbox on accepte les self-signed (cas courant chez MRA); en
+      // production on exige une chaîne TLS valide (compliance).
+      const rejectUnauthorized = config.mode === 'production'
+      if (config.mode === 'sandbox' && !rejectUnauthorized) {
+        console.warn(
+          '[mra] Sandbox mode: accepting self-signed certificates (rejectUnauthorized=false)',
+        )
+      }
       httpsAgent = new HttpsAgent({
         cert,
         passphrase: config.certPassword ?? undefined,
-        rejectUnauthorized: true,
+        rejectUnauthorized,
       })
     } catch (err) {
       console.error('[mra] Failed to load certificate:', err)
@@ -348,9 +376,12 @@ async function postToMraApi(
         ebs_id: config.ebsId,
         tan: config.taxpayerTan,
         invoice,
-        // Idempotence basique : invoiceNumber + timestamp. La spec MRA peut
-        // exiger un UUID ou un hash signé.
-        request_id: `${invoice.invoiceNumber}-${Date.now()}`,
+        // Idempotence : UUID stable. Si l'invoice a un `mra_request_id`
+        // pré-généré (persisté en DB au 1er appel), on le réutilise afin que
+        // tout rejeu externe reste idempotent côté MRA. Sinon on génère un
+        // nouvel UUID — mais dans ce cas le caller DOIT persister la valeur
+        // avant de faire un retry, sous peine d'obtenir 2 IRN distincts.
+        request_id: invoice.mra_request_id ?? randomUUID(),
       })
 
       const response = await fetch(url, {
@@ -440,6 +471,9 @@ async function fiscaliseSandbox(
     irn: data.irn ?? 'MRA-SANDBOX-NO-IRN',
     qrCodeData: data.qr_code ?? data.qrCodeData ?? data.qrCode ?? '',
     fiscalisationDate: data.fiscalisationDate ?? new Date().toISOString(),
+    status: data.status,
+    signature: data.signature,
+    raw: data as Record<string, unknown>,
   }
 }
 
@@ -477,6 +511,9 @@ async function fiscaliseProduction(
     irn: data.irn ?? '',
     qrCodeData: data.qr_code ?? data.qrCodeData ?? data.qrCode ?? '',
     fiscalisationDate: data.fiscalisationDate ?? new Date().toISOString(),
+    status: data.status,
+    signature: data.signature,
+    raw: data as Record<string, unknown>,
   }
 }
 
@@ -532,14 +569,12 @@ async function realFiscaliseLegacy(
  *   - `sandbox`    : stub, currently falls back to mock + sets `_fallback_reason`
  *   - `production` : stub, currently falls back to mock + sets `_fallback_reason`
  *
- * The `config` parameter is kept for backwards compatibility with existing
- * call-sites that build an `MRAConfig` from `societes` table settings. It is
- * ignored when `MRA_MODE` is set, except as a last-resort signal that the
- * caller explicitly wants the legacy real-HTTP path (used only if env-based
- * mode is `mock` AND the caller provided non-mock legacy credentials — in that
- * case we still stay on mock to avoid surprising behaviour).
- *
  * Returns IRN + QR code data on success.
+ *
+ * @deprecated Le paramètre `_config` est ignoré (la configuration est lue
+ *   depuis l'environnement via `getMraConfig()`). Il est conservé pour
+ *   compatibilité avec les call-sites legacy qui dérivent les credentials de
+ *   la table `societes`. Préférer à terme une signature `fiscaliseInvoiceV2(invoice)`.
  */
 export async function fiscaliseInvoice(
   _config: MRAConfig,

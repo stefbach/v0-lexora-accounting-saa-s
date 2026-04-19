@@ -139,6 +139,20 @@ export async function GET(request: Request): Promise<NextResponse> {
       .eq('id', societe_id)
       .maybeSingle()
 
+    // Robustesse : refuser de générer un export vide si la société n'a
+    // aucun identifiant MRA. Un VAT3 sans VATNumber/TAN/ERN serait rejeté
+    // côté MRA, autant rendre l'erreur visible au caller.
+    if (!societe?.numero_tva_mra && !societe?.ern && !societe?.brn) {
+      return NextResponse.json(
+        {
+          error:
+            'La société doit avoir au moins un identifiant MRA (VAT number, ERN ou BRN) pour générer un export VAT3.',
+          code: 'missing_mra_identifier',
+        },
+        { status: 400 },
+      )
+    }
+
     const societeNom = sanitizeFilename(String(societe?.nom || 'Societe'))
     const vatNumber = String(societe?.numero_tva_mra || '')
     // Pas de colonne TAN dédiée sur `societes` — on retombe sur ERN puis BRN
