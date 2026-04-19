@@ -13,9 +13,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
   Building2, Users, Package, Layout, Save, Plus, Pencil, Trash2, Check, X, Eye, Palette,
-  Shield, Wifi, WifiOff, Info, Loader2
+  Shield, Wifi, WifiOff, Info, Loader2, Upload
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { toast } from "sonner"
 
 const ACCENT_COLORS = [
   { name: "Navy", hex: "#0B0F2E" }, { name: "Gold", hex: "#D4AF37" },
@@ -66,13 +68,97 @@ const TEMPLATES: InvoiceTemplate[] = [
 
 function genId() { return crypto.randomUUID() }
 
+// ── Mapper DB ↔ état UI ────────────────────────────────────────────────────
+// La table `invoice_settings` utilise des noms un peu différents (pied_de_page,
+// mention_legale_mra…) ; on convertit aux frontières pour ne pas toucher au
+// reste du code UI.
+interface InvoiceSettingsRow {
+  societe_id?: string
+  logo_url?: string | null
+  brn?: string | null
+  vat_number?: string | null
+  adresse?: string | null
+  telephone?: string | null
+  email?: string | null
+  website?: string | null
+  banque_nom?: string | null
+  banque_compte?: string | null
+  banque_iban?: string | null
+  banque_swift?: string | null
+  devise_defaut?: string | null
+  conditions_paiement?: string | null
+  prefixe_facture?: string | null
+  prochain_numero?: number | null
+  pied_de_page?: string | null
+  mention_legale_mra?: string | null
+  template_id?: string | null
+  couleur_primaire?: string | null
+  couleur_secondaire?: string | null
+  mra_active?: boolean | null
+  mra_ebs_id?: string | null
+  mra_api_key_encrypted?: string | null
+  mra_env?: "sandbox" | "production" | null
+}
+
+function rowToCompanySettings(row: InvoiceSettingsRow): CompanySettings {
+  const condStr = row.conditions_paiement ?? ""
+  const condNum = parseInt(condStr, 10)
+  return {
+    nom: DEFAULT_SETTINGS.nom, // nom n'est pas encore stocké — conservé pour futur
+    brn: row.brn ?? "",
+    vat_number: row.vat_number ?? "",
+    logo_url: row.logo_url ?? "",
+    adresse: row.adresse ?? "",
+    telephone: row.telephone ?? "",
+    email: row.email ?? "",
+    website: row.website ?? "",
+    banque_nom: row.banque_nom ?? "",
+    banque_compte: row.banque_compte ?? "",
+    banque_iban: row.banque_iban ?? "",
+    banque_swift: row.banque_swift ?? "",
+    devise_defaut: row.devise_defaut ?? "MUR",
+    prefixe_facture: row.prefixe_facture ?? "INV-",
+    prochain_numero: row.prochain_numero ?? 1,
+    conditions_paiement: Number.isFinite(condNum) && condNum > 0 ? condNum : 30,
+    footer_text: row.pied_de_page ?? "",
+    mention_legale: row.mention_legale_mra ?? "",
+  }
+}
+
+function companySettingsToRow(s: CompanySettings): Omit<InvoiceSettingsRow, "societe_id"> {
+  return {
+    logo_url: s.logo_url || null,
+    brn: s.brn || null,
+    vat_number: s.vat_number || null,
+    adresse: s.adresse || null,
+    telephone: s.telephone || null,
+    email: s.email || null,
+    website: s.website || null,
+    banque_nom: s.banque_nom || null,
+    banque_compte: s.banque_compte || null,
+    banque_iban: s.banque_iban || null,
+    banque_swift: s.banque_swift || null,
+    devise_defaut: s.devise_defaut || "MUR",
+    conditions_paiement: String(s.conditions_paiement ?? 30),
+    prefixe_facture: s.prefixe_facture || "INV-",
+    prochain_numero: s.prochain_numero || 1,
+    pied_de_page: s.footer_text || null,
+    mention_legale_mra: s.mention_legale || null,
+  }
+}
+
 export default function FacturationSettingsPage() {
+  const { societeId } = useSocieteActive()
   const [settings, setSettings] = useState<CompanySettings>(DEFAULT_SETTINGS)
   const [clients, setClients] = useState<InvoiceClient[]>([])
   const [catalogue, setCatalogue] = useState<CatalogueItem[]>([])
   const [selectedTemplate, setSelectedTemplate] = useState("standard")
   const [templateColors, setTemplateColors] = useState({ primaire: "#0B0F2E", secondaire: "#D4AF37" })
   const [saved, setSaved] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [syncing, setSyncing] = useState(false)
+  // Affiché si localStorage contient d'anciens settings ET la DB est vide
+  const [hasLegacyLocal, setHasLegacyLocal] = useState(false)
   const [clientDialog, setClientDialog] = useState(false)
   const [editingClient, setEditingClient] = useState<InvoiceClient | null>(null)
   const [catalogueDialog, setCatalogueDialog] = useState(false)
@@ -106,44 +192,198 @@ export default function FacturationSettingsPage() {
   const [catTva, setCatTva] = useState(true)
   const [catCategorie, setCatCategorie] = useState("")
 
-  // Load from localStorage
+  // ── Chargement : 1) DB (Mon Entreprise / Modèles / MRA) 2) localStorage (Clients / Catalogue) ──
   useEffect(() => {
-    try {
-      const s = localStorage.getItem("lexora_invoice_settings")
-      if (s) setSettings(JSON.parse(s))
-      const c = localStorage.getItem("lexora_invoice_clients")
-      if (c) setClients(JSON.parse(c))
-      const cat = localStorage.getItem("lexora_invoice_catalogue")
-      if (cat) setCatalogue(JSON.parse(cat))
-      const t = localStorage.getItem("lexora_invoice_template")
-      if (t) setSelectedTemplate(t)
-      const tc = localStorage.getItem("lexora_invoice_template_colors")
-      if (tc) setTemplateColors(JSON.parse(tc))
-      const mra = localStorage.getItem("lexora_mra_settings")
-      if (mra) {
-        const m = JSON.parse(mra)
-        setMraActive(m.active || false)
-        setMraEbsId(m.ebs_id || "")
-        setMraApiKey(m.api_key || "")
-        setMraEnvironment(m.environment || "sandbox")
-        setMraApiUrl(m.api_url || "https://sandboxifp.mra.mu/api/v1")
-      }
-    } catch { /* ignore */ }
-  }, [])
+    if (!societeId) {
+      setLoading(false)
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      setLoading(true)
+      try {
+        const res = await fetch(`/api/client/invoice-settings?societe_id=${societeId}`, { cache: "no-store" })
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({ error: "Erreur réseau" }))
+          toast.error(body.error || "Impossible de charger les paramètres")
+          return
+        }
+        const data = await res.json()
+        const row = (data.settings ?? {}) as InvoiceSettingsRow
+        const isEmptyRow = !row || Object.keys(row).length === 0
 
-  const saveAll = useCallback(() => {
-    localStorage.setItem("lexora_invoice_settings", JSON.stringify(settings))
-    localStorage.setItem("lexora_invoice_clients", JSON.stringify(clients))
-    localStorage.setItem("lexora_invoice_catalogue", JSON.stringify(catalogue))
-    localStorage.setItem("lexora_invoice_template", selectedTemplate)
-    localStorage.setItem("lexora_invoice_template_colors", JSON.stringify(templateColors))
-    localStorage.setItem("lexora_mra_settings", JSON.stringify({
-      active: mraActive, ebs_id: mraEbsId, api_key: mraApiKey,
-      environment: mraEnvironment, api_url: mraApiUrl,
-    }))
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
-  }, [settings, clients, catalogue, selectedTemplate, templateColors, mraActive, mraEbsId, mraApiKey, mraEnvironment, mraApiUrl])
+        if (cancelled) return
+        if (!isEmptyRow) {
+          setSettings(rowToCompanySettings(row))
+          if (row.template_id) setSelectedTemplate(row.template_id)
+          if (row.couleur_primaire || row.couleur_secondaire) {
+            setTemplateColors({
+              primaire: row.couleur_primaire ?? "#0B0F2E",
+              secondaire: row.couleur_secondaire ?? "#D4AF37",
+            })
+          }
+          setMraActive(Boolean(row.mra_active))
+          setMraEbsId(row.mra_ebs_id ?? "")
+          setMraApiKey(row.mra_api_key_encrypted ?? "")
+          const env = (row.mra_env ?? "sandbox") as "sandbox" | "production"
+          setMraEnvironment(env)
+          setMraApiUrl(env === "production" ? "https://ifp.mra.mu/api/v1" : "https://sandboxifp.mra.mu/api/v1")
+        }
+
+        // Clients & catalogue restent en localStorage (scope limit ce sprint)
+        try {
+          const c = localStorage.getItem("lexora_invoice_clients")
+          if (c) setClients(JSON.parse(c))
+          const cat = localStorage.getItem("lexora_invoice_catalogue")
+          if (cat) setCatalogue(JSON.parse(cat))
+        } catch { /* ignore */ }
+
+        // Détection d'anciennes données locales non-encore migrées
+        const hasLegacy = typeof window !== "undefined" && (
+          !!localStorage.getItem("lexora_invoice_settings")
+          || !!localStorage.getItem("lexora_invoice_template")
+          || !!localStorage.getItem("lexora_invoice_template_colors")
+          || !!localStorage.getItem("lexora_mra_settings")
+        )
+        setHasLegacyLocal(hasLegacy && isEmptyRow)
+      } catch (e) {
+        console.error("[facturation-settings] load failed", e)
+        toast.error("Erreur lors du chargement des paramètres")
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [societeId])
+
+  const saveAll = useCallback(async () => {
+    if (!societeId) {
+      toast.error("Aucune société active — sélectionnez une société pour sauvegarder")
+      return
+    }
+    setSyncing(true)
+    try {
+      const payload = {
+        societe_id: societeId,
+        ...companySettingsToRow(settings),
+        template_id: selectedTemplate,
+        couleur_primaire: templateColors.primaire,
+        couleur_secondaire: templateColors.secondaire,
+        mra_active: mraActive,
+        mra_ebs_id: mraEbsId || null,
+        mra_api_key_encrypted: mraApiKey || null,
+        mra_env: mraEnvironment,
+      }
+      const res = await fetch("/api/client/invoice-settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: "Erreur" }))
+        toast.error(body.error || "Sauvegarde échouée")
+        return
+      }
+      // Clients / catalogue → toujours en localStorage
+      try {
+        localStorage.setItem("lexora_invoice_clients", JSON.stringify(clients))
+        localStorage.setItem("lexora_invoice_catalogue", JSON.stringify(catalogue))
+      } catch { /* ignore quota */ }
+      setSaved(true)
+      toast.success("Paramètres sauvegardés")
+      setTimeout(() => setSaved(false), 2000)
+    } catch (e) {
+      console.error("[facturation-settings] save failed", e)
+      toast.error("Erreur lors de la sauvegarde")
+    } finally {
+      setSyncing(false)
+    }
+  }, [societeId, settings, clients, catalogue, selectedTemplate, templateColors, mraActive, mraEbsId, mraApiKey, mraEnvironment])
+
+  // ── Migration one-shot : importe les anciennes données localStorage vers la DB ──
+  const importLegacyLocal = useCallback(async () => {
+    if (!societeId) {
+      toast.error("Aucune société active")
+      return
+    }
+    setSyncing(true)
+    try {
+      // Reconstitue l'état depuis les clés localStorage historiques
+      let localSettings: CompanySettings = settings
+      let localTemplate = selectedTemplate
+      let localColors = templateColors
+      let localMraActive = mraActive
+      let localMraEbs = mraEbsId
+      let localMraKey = mraApiKey
+      let localMraEnv: "sandbox" | "production" = mraEnvironment
+
+      try {
+        const s = localStorage.getItem("lexora_invoice_settings")
+        if (s) localSettings = { ...DEFAULT_SETTINGS, ...JSON.parse(s) }
+        const t = localStorage.getItem("lexora_invoice_template")
+        if (t) localTemplate = t
+        const tc = localStorage.getItem("lexora_invoice_template_colors")
+        if (tc) localColors = JSON.parse(tc)
+        const mra = localStorage.getItem("lexora_mra_settings")
+        if (mra) {
+          const m = JSON.parse(mra)
+          localMraActive = Boolean(m.active)
+          localMraEbs = m.ebs_id || ""
+          localMraKey = m.api_key || ""
+          localMraEnv = (m.environment === "production" ? "production" : "sandbox")
+        }
+      } catch {
+        toast.error("Données locales illisibles")
+        return
+      }
+
+      const payload = {
+        societe_id: societeId,
+        ...companySettingsToRow(localSettings),
+        template_id: localTemplate,
+        couleur_primaire: localColors.primaire,
+        couleur_secondaire: localColors.secondaire,
+        mra_active: localMraActive,
+        mra_ebs_id: localMraEbs || null,
+        mra_api_key_encrypted: localMraKey || null,
+        mra_env: localMraEnv,
+      }
+
+      const res = await fetch("/api/client/invoice-settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: "Erreur" }))
+        toast.error(body.error || "Import échoué")
+        return
+      }
+
+      // Succès : on applique aux states + on nettoie les clés migrées
+      setSettings(localSettings)
+      setSelectedTemplate(localTemplate)
+      setTemplateColors(localColors)
+      setMraActive(localMraActive)
+      setMraEbsId(localMraEbs)
+      setMraApiKey(localMraKey)
+      setMraEnvironment(localMraEnv)
+      setMraApiUrl(localMraEnv === "production" ? "https://ifp.mra.mu/api/v1" : "https://sandboxifp.mra.mu/api/v1")
+      try {
+        localStorage.removeItem("lexora_invoice_settings")
+        localStorage.removeItem("lexora_invoice_template")
+        localStorage.removeItem("lexora_invoice_template_colors")
+        localStorage.removeItem("lexora_mra_settings")
+      } catch { /* ignore */ }
+      setHasLegacyLocal(false)
+      toast.success("Paramètres locaux importés avec succès")
+    } catch (e) {
+      console.error("[facturation-settings] import failed", e)
+      toast.error("Erreur lors de l'import")
+    } finally {
+      setSyncing(false)
+    }
+  }, [societeId, settings, selectedTemplate, templateColors, mraActive, mraEbsId, mraApiKey, mraEnvironment])
 
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -225,14 +465,38 @@ export default function FacturationSettingsPage() {
       title="Paramètres de Facturation"
       subtitle="Configuration MRA (ERN, IRN, TVA, devise par défaut) pour toutes vos factures émises."
       actions={
-        <Button onClick={saveAll} className="bg-[#0B0F2E] hover:bg-[#2a3d6b]">
-          {saved ? <><Check className="w-4 h-4 mr-2" />Sauvegardé !</> : <><Save className="w-4 h-4 mr-2" />Sauvegarder tout</>}
+        <Button onClick={saveAll} disabled={syncing || loading || !societeId} className="bg-[#0B0F2E] hover:bg-[#2a3d6b]">
+          {syncing ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Sauvegarde...</>
+            : saved ? <><Check className="w-4 h-4 mr-2" />Sauvegardé !</>
+            : <><Save className="w-4 h-4 mr-2" />Sauvegarder tout</>}
         </Button>
       }
     >
       <div className="space-y-6">
         <div className="hidden">{/* header moved to shell */}
       </div>
+
+      {!societeId && !loading && (
+        <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800 flex items-center gap-2">
+          <Info className="w-4 h-4 flex-shrink-0" />
+          Sélectionnez une société active dans la barre supérieure pour charger et sauvegarder les paramètres.
+        </div>
+      )}
+
+      {hasLegacyLocal && societeId && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 flex items-start gap-3">
+          <Upload className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-blue-900">Paramètres locaux détectés</p>
+            <p className="text-xs text-blue-700 mt-0.5">
+              Vos anciens paramètres sont stockés dans ce navigateur. Importez-les dans votre compte pour les retrouver sur tous vos appareils.
+            </p>
+          </div>
+          <Button size="sm" variant="outline" onClick={importLegacyLocal} disabled={syncing} className="border-blue-300 text-blue-700 hover:bg-blue-100">
+            {syncing ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Import...</> : <>Importer mes paramètres locaux</>}
+          </Button>
+        </div>
+      )}
 
       <Tabs defaultValue="entreprise" className="space-y-4">
         <TabsList className="grid grid-cols-5 w-full max-w-3xl">
