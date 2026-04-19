@@ -5,8 +5,8 @@
  *
  * The module supports three runtime modes selected via env vars:
  *   - `mock`       : default, produces deterministic fake IRNs + QR data (dev/test)
- *   - `sandbox`    : scaffold for MRA sandbox (not yet implemented, falls back to mock)
- *   - `production` : scaffold for MRA production (not yet implemented, falls back to mock)
+ *   - `sandbox`    : real HTTP POST to MRA sandbox (fallback to mock on HTTP error)
+ *   - `production` : real HTTP POST to MRA production (throws on HTTP error — no silent fallback)
  *
  * Safety: if `MRA_MODE=production` but any critical env var is missing (EBS_ID,
  * API_ENDPOINT, CERT_PATH, TAXPAYER_TAN), the module logs an error and downgrades
@@ -16,6 +16,9 @@
  *   MRA_MODE, MRA_EBS_ID, MRA_API_ENDPOINT, MRA_CERT_PATH,
  *   MRA_CERT_PASSWORD, MRA_TAXPAYER_TAN
  */
+
+import { Agent as HttpsAgent } from 'node:https'
+import { readFileSync } from 'node:fs'
 
 // ── Mode configuration ──
 
@@ -185,10 +188,16 @@ export interface MRAFiscalisationResponse {
   errorMessage?: string
   /**
    * Set when a non-mock mode was requested but the implementation fell back to
-   * the mock path (e.g. sandbox/production stubs). Allows callers and tests to
+   * the mock path (e.g. sandbox HTTP error). Allows callers and tests to
    * detect a fallback without parsing logs.
+   *
+   * Note: production NEVER falls back to mock — it throws instead (compliance).
    */
-  _fallback_reason?: 'real_not_implemented' | 'config_incomplete'
+  _fallback_reason?: 'real_not_implemented' | 'config_incomplete' | 'sandbox_http_error'
+  /** Raw HTTP status returned by the MRA API when a fallback occurred. */
+  _http_status?: number
+  /** Error message captured at the fallback site. */
+  _error?: string
 }
 
 // ── Constants ──
@@ -266,45 +275,209 @@ async function fiscaliseMock(
   }
 }
 
-// ── Sandbox Implementation (stub) ──
+// ── Real HTTP helper (shared by sandbox + production) ──
+
+interface MraApiResponse {
+  irn?: string
+  qr_code?: string
+  qrCodeData?: string
+  qrCode?: string
+  signature?: string
+  fiscalisationDate?: string
+  status?: 'accepted' | 'rejected' | 'pending'
+  error?: string
+  errorCode?: string
+  errorMessage?: string
+  [key: string]: unknown
+}
+
+interface PostToMraResult {
+  ok: boolean
+  data?: MraApiResponse
+  error?: string
+  httpStatus?: number
+}
 
 /**
- * TODO: Implement MRA sandbox fiscalisation.
- *   - Load X.509 certificate at `config.certPath` (decrypt with `certPassword` if PKCS#12)
- *   - Build mTLS agent (https.Agent with cert+key) or use an undici Dispatcher
- *   - POST to `${config.apiEndpoint}/invoices/fiscalise` with the MRA-mandated payload
- *     (include EBS ID, taxpayer TAN, signed invoice JSON)
- *   - Handle retries with exponential backoff for 5xx / network errors
- *   - Parse response → extract IRN, QR payload, fiscalisation timestamp
- *   - Persist full raw response in DB for audit (done at call-site)
+ * HTTP POST vers l'API MRA EBS (sandbox ou production).
+ *
+ * SCAFFOLD: les payloads exacts (champs, formats) doivent être confirmés avec
+ * la documentation MRA EBS officielle. Les champs de retour (irn, qr_code, signature)
+ * sont des hypothèses basées sur le format général EBS.
+ *
+ * mTLS : si config.certPath est fourni, charge un certificat X.509 en format PEM.
+ * Pour un format PKCS#12 (.p12), une adaptation est nécessaire (pfx + passphrase).
+ *
+ * Idempotence : request_id généré à partir de invoiceNumber + timestamp (basique).
+ * La vraie spec MRA peut exiger un identifiant plus robuste (UUID v4 + hash invoice).
+ *
+ * Retry : 3 tentatives avec backoff exponentiel (2s, 4s, 8s). Les 4xx ne sont PAS
+ * rejoués (erreur de requête). Les 5xx et erreurs réseau sont rejoués.
+ */
+async function postToMraApi(
+  config: MraConfig,
+  invoice: MRAInvoice
+): Promise<PostToMraResult> {
+  if (!config.apiEndpoint) {
+    return { ok: false, error: 'No apiEndpoint configured' }
+  }
+
+  const url = `${config.apiEndpoint.replace(/\/$/, '')}/invoices/fiscalise`
+  const maxAttempts = 3
+  let lastError: string | undefined
+
+  // Charger le certificat client pour mTLS si spécifié (une seule fois hors boucle)
+  let httpsAgent: HttpsAgent | undefined
+  if (config.certPath) {
+    try {
+      const cert = readFileSync(config.certPath)
+      httpsAgent = new HttpsAgent({
+        cert,
+        passphrase: config.certPassword ?? undefined,
+        rejectUnauthorized: true,
+      })
+    } catch (err) {
+      console.error('[mra] Failed to load certificate:', err)
+      return { ok: false, error: 'Certificate load failed' }
+    }
+  }
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const body = JSON.stringify({
+        ebs_id: config.ebsId,
+        tan: config.taxpayerTan,
+        invoice,
+        // Idempotence basique : invoiceNumber + timestamp. La spec MRA peut
+        // exiger un UUID ou un hash signé.
+        request_id: `${invoice.invoiceNumber}-${Date.now()}`,
+      })
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-EBS-ID': config.ebsId ?? '',
+          'X-TAN': config.taxpayerTan ?? '',
+        },
+        body,
+        // undici dispatcher for mTLS (Node 18+). Types don't cover this field
+        // on the global fetch, so we cast via unknown.
+        ...(httpsAgent ? ({ dispatcher: httpsAgent } as unknown as object) : {}),
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => '<no body>')
+        lastError = `HTTP ${response.status}: ${errorText.slice(0, 200)}`
+        console.error(`[mra] Attempt ${attempt}/${maxAttempts} failed:`, lastError)
+
+        // 4xx = erreur de requête (invoice invalide, auth KO, ...), ne pas retry
+        if (response.status >= 400 && response.status < 500) {
+          return { ok: false, error: lastError, httpStatus: response.status }
+        }
+
+        // 5xx = server error, retry avec backoff exponentiel
+        if (attempt < maxAttempts) {
+          await new Promise(r => setTimeout(r, Math.pow(2, attempt) * 1000))
+        }
+        continue
+      }
+
+      const data = (await response.json()) as MraApiResponse
+
+      // Idempotence : si la réponse inclut déjà un IRN, ne pas retraiter —
+      // on renvoie tel quel. (Le caller ne rejoue pas de toute façon, mais
+      // ce check est utile si la même requête est émise deux fois et que le
+      // serveur MRA renvoie le même IRN.)
+      return { ok: true, data, httpStatus: response.status }
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : String(err)
+      console.error(`[mra] Attempt ${attempt}/${maxAttempts} exception:`, lastError)
+      if (attempt < maxAttempts) {
+        await new Promise(r => setTimeout(r, Math.pow(2, attempt) * 1000))
+      }
+    }
+  }
+
+  return {
+    ok: false,
+    error: `All ${maxAttempts} attempts failed. Last: ${lastError ?? 'unknown'}`,
+  }
+}
+
+// ── Sandbox Implementation ──
+
+/**
+ * Sandbox fiscalisation: real HTTP POST to MRA sandbox endpoint.
+ * On HTTP/network error, falls back to `fiscaliseMock()` and annotates the
+ * response with `_fallback_reason: 'sandbox_http_error'` + `_error` + `_http_status`
+ * so callers/tests can detect the fallback without parsing logs.
  */
 async function fiscaliseSandbox(
   invoice: MRAInvoice,
   config: MraConfig
 ): Promise<MRAFiscalisationResponse> {
-  console.warn('[mra] sandbox not yet implemented, using mock')
-  const res = await fiscaliseMock(invoice, config)
-  return { ...res, _fallback_reason: 'real_not_implemented' }
+  const result = await postToMraApi(config, invoice)
+
+  if (!result.ok || !result.data) {
+    console.error(
+      '[mra] Sandbox call failed, falling back to mock:',
+      result.error,
+      result.httpStatus !== undefined ? `(status ${result.httpStatus})` : ''
+    )
+    const mockResult = await fiscaliseMock(invoice, config)
+    return {
+      ...mockResult,
+      _fallback_reason: 'sandbox_http_error',
+      _error: result.error,
+      _http_status: result.httpStatus,
+    }
+  }
+
+  const data = result.data
+  return {
+    success: true,
+    irn: data.irn ?? 'MRA-SANDBOX-NO-IRN',
+    qrCodeData: data.qr_code ?? data.qrCodeData ?? data.qrCode ?? '',
+    fiscalisationDate: data.fiscalisationDate ?? new Date().toISOString(),
+  }
 }
 
-// ── Production Implementation (stub) ──
+// ── Production Implementation ──
 
 /**
- * TODO: Implement MRA production fiscalisation.
- *   - Same plumbing as sandbox (mTLS + signed POST) but pointed at the production
- *     endpoint (e.g. https://vfisc.mra.mu/realapi)
- *   - Stricter validation of taxpayer TAN / EBS ID before sending
- *   - Enforce idempotency (retry-safe) using an invoice-level correlation ID
- *   - Parse response → extract IRN, QR payload, fiscalisation timestamp
- *   - Persist full raw response in DB for audit (done at call-site)
+ * Production fiscalisation: real HTTP POST to MRA production endpoint.
+ *
+ * IMPORTANT: unlike sandbox, production does NOT fall back to mock on HTTP
+ * error — it throws. Silently returning a mock IRN in production would mean
+ * emitting a non-compliant invoice with a fake fiscalisation token, which is
+ * a regulatory risk. Callers must handle the thrown error explicitly.
  */
 async function fiscaliseProduction(
   invoice: MRAInvoice,
   config: MraConfig
 ): Promise<MRAFiscalisationResponse> {
-  console.warn('[mra] production not yet implemented, using mock')
-  const res = await fiscaliseMock(invoice, config)
-  return { ...res, _fallback_reason: 'real_not_implemented' }
+  const result = await postToMraApi(config, invoice)
+
+  if (!result.ok || !result.data) {
+    console.error(
+      '[mra] PRODUCTION call failed. NOT falling back to mock by default (compliance risk).',
+      result.error,
+      result.httpStatus !== undefined ? `(status ${result.httpStatus})` : ''
+    )
+    throw new Error(
+      `[mra] Production fiscalisation failed: ${result.error ?? 'unknown'}. ` +
+      `Invoice ${invoice.invoiceNumber} NOT fiscalized.`
+    )
+  }
+
+  const data = result.data
+  return {
+    success: true,
+    irn: data.irn ?? '',
+    qrCodeData: data.qr_code ?? data.qrCodeData ?? data.qrCode ?? '',
+    fiscalisationDate: data.fiscalisationDate ?? new Date().toISOString(),
+  }
 }
 
 // ── Legacy real API implementation (kept for the `fiscaliseInvoice(config, invoice)` path) ──
