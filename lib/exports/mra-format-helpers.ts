@@ -62,3 +62,33 @@ export function escapeCsv(s: string | number | null | undefined): string {
 export function addUtf8Bom(content: string): string {
   return '\uFEFF' + content
 }
+
+/**
+ * Retourne l'année fiscale mauricienne pour une date donnée.
+ *
+ * À Maurice, l'année fiscale court du 1er juillet au 30 juin de l'année
+ * suivante (ex : FY 2025-2026 = 1er juillet 2025 → 30 juin 2026).
+ * Cette fonction renvoie l'année de *début* de l'exercice.
+ *
+ * Exemples :
+ *   getAnneeFiscaleMaurice(new Date('2025-08-15')) → 2025
+ *   getAnneeFiscaleMaurice(new Date('2026-03-10')) → 2025
+ *   getAnneeFiscaleMaurice(new Date('2026-07-01')) → 2026
+ */
+export function getAnneeFiscaleMaurice(date: Date = new Date()): number {
+  const year = date.getUTCFullYear()
+  const month = date.getUTCMonth() + 1 // 1-12
+  return month >= 7 ? year : year - 1
+}
+
+/**
+ * Retourne les bornes (date de début / date de fin, format YYYY-MM-DD)
+ * de l'année fiscale mauricienne dont le paramètre `annee` est l'année
+ * de début (ex : anneeFiscaleBounds(2025) → juillet 2025 → juin 2026).
+ */
+export function anneeFiscaleBounds(annee: number): { debut: string; fin: string } {
+  return {
+    debut: `${annee}-07-01`,
+    fin: `${annee + 1}-06-30`,
+  }
+}

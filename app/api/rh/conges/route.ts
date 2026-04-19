@@ -25,17 +25,33 @@ function getAdminClient() {
  * Load jours_feries from DB for a given year (Mauritius). Returns a Set
  * of 'YYYY-MM-DD' strings. Falls back to the hardcoded MU calendar for
  * that year if the DB call fails or returns an empty set.
+ *
+ * Multi-tenant scoping: when a `societe_id` is provided, we include BOTH
+ * global jours fériés (societe_id IS NULL) and those specific to that
+ * société. Without a `societe_id`, only global rows are returned so a
+ * société cannot accidentally inherit another tenant's custom holidays.
  */
 async function loadJoursFeriesForYear(
   supabase: ReturnType<typeof getAdminClient>,
-  year: number
+  year: number,
+  societe_id?: string
 ): Promise<Set<string>> {
   try {
-    const { data } = await supabase
+    let query = supabase
       .from('jours_feries')
       .select('date, travail_autorise')
       .gte('date', `${year}-01-01`)
       .lte('date', `${year}-12-31`)
+
+    if (societe_id) {
+      // Inclut fériés globaux (societe_id NULL) + fériés spécifiques à la société
+      query = query.or(`societe_id.is.null,societe_id.eq.${societe_id}`)
+    } else {
+      // Sans societe_id, retourne seulement les globaux
+      query = query.is('societe_id', null)
+    }
+
+    const { data } = await query
     // Sprint 4 TÂCHE 3 — on exclut les jours fériés avec travail_autorise=TRUE
     // (WRA 2019 art. 21 — ces jours deviennent ouvrables avec majoration).
     // Filtrage JS plutôt que SQL pour rétrocompat si mig 139 non appliquée :
@@ -43,8 +59,8 @@ async function loadJoursFeriesForYear(
     // → la ligne est conservée (comportement legacy).
     const set = new Set<string>(
       (data || [])
-        .filter((r: any) => !r.travail_autorise)
-        .map((r: any) => String(r.date).slice(0, 10)),
+        .filter((r: { travail_autorise?: boolean }) => !r.travail_autorise)
+        .map((r: { date: string }) => String(r.date).slice(0, 10)),
     )
     if (set.size > 0) return set
   } catch {
@@ -64,18 +80,22 @@ async function computeNbJoursForEmploye(
   dateDebut: string,
   dateFin: string
 ): Promise<number> {
+  // Pull the employee's working_days pattern AND societe_id so we can
+  // scope the jours_feries lookup to the employee's tenant (global rows +
+  // the société's own custom rows only — never another tenant's).
   const { data: emp } = await supabase
     .from('employes')
-    .select('working_days')
+    .select('working_days, societe_id')
     .eq('id', employeId)
     .maybeSingle()
   const workingDays = getWorkingDaysForEmploye(emp)
+  const societeId: string | undefined = emp?.societe_id ?? undefined
 
   const startYear = parseInt(dateDebut.slice(0, 4), 10)
   const endYear = parseInt(dateFin.slice(0, 4), 10)
   const holidays = new Set<string>()
   for (let y = startYear; y <= endYear; y++) {
-    for (const h of await loadJoursFeriesForYear(supabase, y)) holidays.add(h)
+    for (const h of await loadJoursFeriesForYear(supabase, y, societeId)) holidays.add(h)
   }
 
   return calculateWorkingDays(dateDebut, dateFin, { workingDays, joursFeries: holidays })
@@ -316,16 +336,21 @@ function calculateSLEntitlement(dateArrivee: string | null, year: number, today?
   return 15
 }
 
-/** Detect consecutive sick leave days > 3 for an employee */
-function detectSickCertAlert(slRecords: any[]): boolean {
+/**
+ * Detect whether a medical certificate should be required for a sick leave.
+ * WRA 2019 art. 11 : certificat médical requis pour absence > 2 jours consécutifs
+ * (and not > 3 days as was previously coded — that was a WRA violation).
+ */
+function detectSickCertAlert(slRecords: { date_debut: string; date_fin: string }[]): boolean {
   if (slRecords.length === 0) return false
   const sorted = [...slRecords].sort((a, b) => a.date_debut.localeCompare(b.date_debut))
   // Check individual records
   for (const rec of sorted) {
     const days = countWorkingDays(rec.date_debut, rec.date_fin)
-    if (days > 3) return true
+    // WRA 2019 art. 11 : certificat médical requis pour absence > 2 jours consécutifs
+    if (days > 2) return true
   }
-  // Check consecutive separate SL records that together span > 3 days
+  // Check consecutive separate SL records that together span > 2 days
   let consecutiveDays = 0
   let lastEnd: Date | null = null
   for (const rec of sorted) {
@@ -345,7 +370,8 @@ function detectSickCertAlert(slRecords: any[]): boolean {
       consecutiveDays = days
     }
     lastEnd = end
-    if (consecutiveDays > 3) return true
+    // WRA 2019 art. 11 : certificat médical requis pour absence > 2 jours consécutifs
+    if (consecutiveDays > 2) return true
   }
   return false
 }

@@ -96,12 +96,26 @@ export async function getUserSocieteIds(userId: string): Promise<string[]> {
     }
   }
 
-  // 8. Ultimate fallback: if still empty, get sociétés from employes the user might manage
+  // 8. Ultimate fallback — SECURITY: by default, NO access if no mapping was found.
+  // Previously this block granted access to ALL societes for any RH/manager/comptable
+  // role without an explicit mapping in user_societes / profiles.societe_id, which was
+  // a multi-tenant breach (a newly-created rh user with no mapping could see every
+  // societe in the DB). Now we only keep the admin/super_admin path (already handled
+  // earlier in the function, but kept here defensively in case role is set late).
   if (ids.size === 0) {
-    const { data: allSocietes } = await supabase.from('societes').select('id')
-    // If user has any role that implies RH access, give them all sociétés
-    if (['client_admin', 'client_user', 'rh', 'rh_manager', 'comptable', 'comptable_dedie'].includes(profile.role)) {
-      for (const s of allSocietes || []) ids.add(s.id)
+    if (['admin', 'super_admin'].includes(profile.role ?? '')) {
+      const { data: allSocietes } = await supabase
+        .from('societes')
+        .select('id')
+
+      if (allSocietes) {
+        for (const s of allSocietes) {
+          if (s.id) ids.add(s.id)
+        }
+      }
+    } else {
+      // Log pour auditer les utilisateurs sans mapping explicite
+      console.warn('[rh/access] User', userId, 'role', profile.role, 'has no user_societes mapping — access denied')
     }
   }
 

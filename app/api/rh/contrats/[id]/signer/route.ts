@@ -76,10 +76,15 @@ export async function POST(request: Request, { params }: Params) {
 
       if (contratErr || !contrat) return NextResponse.json({ error: 'Contrat introuvable' }, { status: 404 })
 
-      // Sauvegarder le token
+      // Sauvegarder le token avec TTL 48h + reset compteur tentatives (mig 165)
+      const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString()
       const { error: updateErr } = await adminSupabase
         .from('contrats_employes')
-        .update({ token_signature: token })
+        .update({
+          token_signature: token,
+          token_signature_expires_at: expiresAt,
+          token_signature_attempts: 0,
+        })
         .eq('id', id)
 
       if (updateErr) throw updateErr
@@ -166,13 +171,43 @@ export async function POST(request: Request, { params }: Params) {
 
       const { data: contrat, error: fetchErr } = await adminSupabase
         .from('contrats_employes')
-        .select('id, statut, token_signature, date_signature')
+        .select('id, statut, token_signature, date_signature, token_signature_expires_at, token_signature_attempts')
         .eq('id', id)
         .single()
 
       if (fetchErr || !contrat) return NextResponse.json({ error: 'Contrat introuvable' }, { status: 404 })
       if (contrat.token_signature !== token) return NextResponse.json({ error: 'Token invalide ou expiré' }, { status: 403 })
       if (contrat.statut === 'signe') return NextResponse.json({ error: 'Contrat déjà signé' }, { status: 409 })
+
+      // Mig 165 — Vérifier expiration du token (48h). Si NULL = ancien contrat, pas de régression.
+      const contratTyped = contrat as typeof contrat & {
+        token_signature_expires_at?: string | null
+        token_signature_attempts?: number | null
+      }
+      if (contratTyped.token_signature_expires_at) {
+        const expiresAt = new Date(contratTyped.token_signature_expires_at)
+        if (expiresAt < new Date()) {
+          return NextResponse.json({
+            error: 'Le lien de signature a expiré (48h). Contactez votre RH pour un nouveau lien.',
+            code: 'token_expired',
+          }, { status: 410 })
+        }
+      }
+
+      // Mig 165 — Vérifier compteur tentatives (max 3)
+      const attempts = contratTyped.token_signature_attempts ?? 0
+      if (attempts >= 3) {
+        return NextResponse.json({
+          error: 'Trop de tentatives de signature. Contactez votre RH.',
+          code: 'too_many_attempts',
+        }, { status: 429 })
+      }
+
+      // Incrément compteur tentatives
+      await adminSupabase
+        .from('contrats_employes')
+        .update({ token_signature_attempts: attempts + 1 })
+        .eq('id', id)
 
       const forwarded = request.headers.get('x-forwarded-for')
       const ip = forwarded ? forwarded.split(',')[0].trim() : 'inconnue'
@@ -212,7 +247,7 @@ export async function GET(request: Request, { params }: Params) {
     const { data: contrat, error } = await adminSupabase
       .from('contrats_employes')
       .select(`
-        id, type_contrat, date_debut, statut, token_signature,
+        id, type_contrat, date_debut, statut, token_signature, token_signature_expires_at,
         employe:employes ( prenom, nom, poste ),
         societe:societes ( nom )
       `)
@@ -223,7 +258,19 @@ export async function GET(request: Request, { params }: Params) {
     if (contrat.token_signature !== token) return NextResponse.json({ error: 'Token invalide ou expiré' }, { status: 403 })
     if (contrat.statut === 'signe') return NextResponse.json({ error: 'Contrat déjà signé' }, { status: 409 })
 
-    const { token_signature: _, ...safe } = contrat as any
+    // Mig 165 — Vérifier expiration du token (48h). Si NULL = ancien contrat, pas de régression.
+    const contratTyped = contrat as typeof contrat & { token_signature_expires_at?: string | null }
+    if (contratTyped.token_signature_expires_at) {
+      const expiresAt = new Date(contratTyped.token_signature_expires_at)
+      if (expiresAt < new Date()) {
+        return NextResponse.json({
+          error: 'Le lien de signature a expiré (48h). Contactez votre RH pour un nouveau lien.',
+          code: 'token_expired',
+        }, { status: 410 })
+      }
+    }
+
+    const { token_signature: _, ...safe } = contrat as Record<string, unknown>
     return NextResponse.json({ contrat: safe, valide: true })
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
