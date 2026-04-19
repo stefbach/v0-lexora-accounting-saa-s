@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { createEcrituresForFacture as createEcrituresShared } from '@/lib/accounting/ecritures-factures'
+import { getTauxForDate } from '@/lib/taux-change'
 import {
   assertSocieteAccess,
   getAccessibleSocieteIds,
@@ -246,12 +247,26 @@ export async function POST(request: Request) {
     }
 
     const ttc = montant_ttc ?? (montant_ht + montant_tva)
-    const mur = devise === 'MUR' ? ttc : ttc * (taux_change || 1)
+
+    // Conversion devise → MUR. Si taux_change non fourni, on récupère le taux
+    // historique depuis la table taux_change (à la date de facture si dispo,
+    // sinon date du jour). Évite le bug critique mur = ttc × 1 sur EUR/USD/GBP.
+    let tauxFinal = Number(taux_change) || 0
+    if (devise !== 'MUR' && (!tauxFinal || tauxFinal <= 0)) {
+      try {
+        tauxFinal = await getTauxForDate(devise, date_facture || new Date().toISOString().slice(0, 10))
+      } catch (err) {
+        console.error('[factures POST] getTauxForDate failed', err)
+        tauxFinal = 1 // dernier recours pour éviter NaN
+      }
+    }
+    if (devise === 'MUR') tauxFinal = 1
+    const mur = ttc * tauxFinal
 
     const insertData: Record<string, unknown> = {
       societe_id, type_facture: 'client',
       numero_facture: finalNumero, tiers, description,
-      date_facture, date_echeance, devise, taux_change,
+      date_facture, date_echeance, devise, taux_change: tauxFinal,
       montant_ht, montant_tva, montant_ttc: ttc,
       taux_tva, montant_mur: mur, statut, notes,
       notes_internes, lignes, conditions_paiement, termes,
@@ -451,11 +466,23 @@ export async function PATCH(request: Request) {
       }
     }
 
-    // Recalculate MUR if needed
+    // Recalculate MUR if needed (uses real FX rate if taux_change not provided)
     if (updates.montant_ttc !== undefined && updates.devise) {
-      updates.montant_mur = updates.devise === 'MUR'
-        ? updates.montant_ttc
-        : updates.montant_ttc * (updates.taux_change || 1)
+      let tauxFinal = Number(updates.taux_change) || 0
+      if (updates.devise !== 'MUR' && (!tauxFinal || tauxFinal <= 0)) {
+        try {
+          tauxFinal = await getTauxForDate(
+            updates.devise as string,
+            (updates.date_facture as string) || new Date().toISOString().slice(0, 10),
+          )
+        } catch (err) {
+          console.error('[factures PATCH] getTauxForDate failed', err)
+          tauxFinal = 1
+        }
+      }
+      if (updates.devise === 'MUR') tauxFinal = 1
+      updates.taux_change = tauxFinal
+      updates.montant_mur = (updates.montant_ttc as number) * tauxFinal
     }
 
     updates.updated_at = new Date().toISOString()
