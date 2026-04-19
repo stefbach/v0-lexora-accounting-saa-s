@@ -12,9 +12,104 @@
  * 8. REFUND (80%)           — negative-flow / reversal matching (refund on a previously paid facture)
  */
 
-// Fallback FX rates MUR (used when taux not provided)
+import type { SupabaseClient } from '@supabase/supabase-js'
+
+/**
+ * Fallback FX rates MUR — dernier recours (mis à jour manuellement).
+ * Le chemin principal est désormais la table `taux_change` (migration 124,
+ * colonne `date_taux` + index `idx_taux_change_devise_date`).
+ * Note: le spec d'origine mentionne `taux_change_historiques` mais la migration
+ * 124 étend en réalité la table `taux_change` avec des colonnes historiques.
+ */
 const FALLBACK_FX: Record<string, number> = {
   EUR: 46.50, GBP: 54.20, USD: 44.80, MUR: 1,
+}
+
+/** Cache en mémoire (clé: devise|YYYY-MM-DD) pour éviter reqs répétées */
+const fxCache = new Map<string, number>()
+
+/**
+ * Récupère le taux historique devise→MUR à une date donnée.
+ * Stratégie :
+ * 1. Cache mémoire
+ * 2. Table taux_change (date exacte, puis date la plus proche ≤)
+ * 3. Fallback statique FALLBACK_FX (avec warning)
+ */
+export async function getTauxChangeAtDate(
+  supabase: SupabaseClient,
+  devise: string,
+  date: Date | string,
+): Promise<{ taux: number; source: 'cache' | 'db_exact' | 'db_near' | 'fallback' }> {
+  const devU = (devise ?? 'MUR').toUpperCase()
+  if (devU === 'MUR') return { taux: 1, source: 'cache' }
+
+  const dateStr = typeof date === 'string' ? date.slice(0, 10) : date.toISOString().slice(0, 10)
+  const cacheKey = `${devU}|${dateStr}`
+
+  // 1. Cache
+  const cached = fxCache.get(cacheKey)
+  if (cached !== undefined) return { taux: cached, source: 'cache' }
+
+  // 2. DB exact match
+  try {
+    const { data: exact, error: errExact } = await supabase
+      .from('taux_change')
+      .select('taux, date_taux')
+      .eq('devise', devU)
+      .eq('date_taux', dateStr)
+      .maybeSingle()
+
+    if (!errExact && exact?.taux) {
+      const taux = Number(exact.taux)
+      fxCache.set(cacheKey, taux)
+      return { taux, source: 'db_exact' }
+    }
+
+    // 3. DB nearest date ≤ dateStr
+    const { data: near, error: errNear } = await supabase
+      .from('taux_change')
+      .select('taux, date_taux')
+      .eq('devise', devU)
+      .lte('date_taux', dateStr)
+      .order('date_taux', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (!errNear && near?.taux) {
+      const taux = Number(near.taux)
+      fxCache.set(cacheKey, taux)
+      return { taux, source: 'db_near' }
+    }
+  } catch (err) {
+    console.warn('[matching-engine] getTauxChangeAtDate db lookup failed, using fallback', err)
+  }
+
+  // 4. Fallback statique
+  const fallback = FALLBACK_FX[devU]
+  if (fallback !== undefined) {
+    console.warn(`[matching-engine] FX fallback used for ${devU} at ${dateStr} (devise historique non trouvée)`)
+    fxCache.set(cacheKey, fallback)
+    return { taux: fallback, source: 'fallback' }
+  }
+
+  // Ultime recours : 1:1 (évite crash, mais log erreur)
+  console.error(`[matching-engine] No FX available for ${devU}, using 1.0`)
+  return { taux: 1, source: 'fallback' }
+}
+
+/**
+ * Version synchrone qui utilise UNIQUEMENT FALLBACK_FX.
+ * Conservée pour compat avec les call-sites qui ne peuvent pas await.
+ * À remplacer progressivement par getTauxChangeAtDate.
+ */
+export function getFxFallbackSync(devise: string): number {
+  const devU = (devise ?? 'MUR').toUpperCase()
+  return FALLBACK_FX[devU] ?? 1
+}
+
+/** Vide le cache FX (utile pour tests ou après maj taux_change) */
+export function clearFxCache(): void {
+  fxCache.clear()
 }
 
 export function toMUR(amount: number, devise: string | null, rates?: Record<string, number>): number {
