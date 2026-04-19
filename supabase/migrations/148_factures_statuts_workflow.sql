@@ -33,8 +33,27 @@
 -- ---------------------------------------------------------------------------
 -- 1. Colonnes workflow sur factures
 -- ---------------------------------------------------------------------------
+-- Étape 1 : ajoute la colonne sans NOT NULL pour permettre le mapping
 ALTER TABLE public.factures
-  ADD COLUMN IF NOT EXISTS statut_workflow TEXT NOT NULL DEFAULT 'brouillon';
+  ADD COLUMN IF NOT EXISTS statut_workflow TEXT DEFAULT 'brouillon';
+
+-- Étape 2 : mappe les statuts legacy vers les statuts workflow granulaires
+-- Seulement pour les lignes où statut_workflow est resté à 'brouillon' par défaut (fraîchement ajouté)
+UPDATE public.factures
+SET statut_workflow = CASE
+  WHEN statut IN ('paye') THEN 'paye'
+  WHEN statut IN ('partiel') THEN 'paye_partiel'
+  WHEN statut IN ('annule', 'annulee') THEN 'annulee'
+  WHEN statut IN ('comptabilisee') THEN 'comptabilisee'
+  WHEN statut = 'retard' THEN 'retard_7j'
+  WHEN statut IN ('en_attente', 'emise', 'envoyee', 'valide') THEN 'envoyee'
+  ELSE 'brouillon'
+END
+WHERE statut_workflow = 'brouillon' AND statut IS NOT NULL;
+
+-- Étape 3 : enforce NOT NULL maintenant que toutes les lignes ont une valeur
+ALTER TABLE public.factures
+  ALTER COLUMN statut_workflow SET NOT NULL;
 
 ALTER TABLE public.factures
   ADD COLUMN IF NOT EXISTS validee_par UUID REFERENCES auth.users(id);

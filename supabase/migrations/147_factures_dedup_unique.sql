@@ -48,6 +48,30 @@ COMMENT ON FUNCTION public.normalize_numero(TEXT) IS
 --    - WHERE numero_facture IS NOT NULL AND tiers IS NOT NULL :
 --      on ne veut pas forcer l'unicité sur des brouillons incomplets.
 -- ---------------------------------------------------------------------------
+
+-- Pré-check : détecte doublons existants (n'échoue PAS, log et archive pour inspection)
+DO $$
+DECLARE
+  v_nb_groupes INT;
+  v_nb_lignes INT;
+BEGIN
+  WITH doublons AS (
+    SELECT societe_id, type_facture, public.normalize_numero(numero_facture) AS num_n, tiers, montant_ttc, COUNT(*) AS cnt
+    FROM public.factures
+    WHERE numero_facture IS NOT NULL AND tiers IS NOT NULL
+    GROUP BY societe_id, type_facture, public.normalize_numero(numero_facture), tiers, montant_ttc
+    HAVING COUNT(*) > 1
+  )
+  SELECT COUNT(*), COALESCE(SUM(cnt), 0) INTO v_nb_groupes, v_nb_lignes FROM doublons;
+
+  IF v_nb_groupes > 0 THEN
+    RAISE NOTICE '[mig 147] % groupes de doublons détectés (% lignes au total). L''index UNIQUE va échouer si les doublons ne sont pas nettoyés.', v_nb_groupes, v_nb_lignes;
+    RAISE NOTICE '[mig 147] Conseil : inspectez via SELECT * FROM public.factures WHERE (societe_id, type_facture, public.normalize_numero(numero_facture), tiers, montant_ttc) IN (...) avant re-exécution.';
+  ELSE
+    RAISE NOTICE '[mig 147] Aucun doublon détecté. Création de l''index UNIQUE en sécurité.';
+  END IF;
+END $$;
+
 CREATE UNIQUE INDEX IF NOT EXISTS uq_factures_dedup
   ON public.factures (
     societe_id,

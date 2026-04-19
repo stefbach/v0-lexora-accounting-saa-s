@@ -101,17 +101,29 @@ COMMENT ON COLUMN public.factures.numero_sequence IS
 -- 4. Contrainte UNIQUE partielle sur (societe_id, exercice, numero_sequence)
 --    pour les factures clients qui ont bien une séquence (non NULL).
 -- ---------------------------------------------------------------------------
--- On ajoute une colonne dérivée "exercice" n'est pas nécessaire, on utilise
--- un index UNIQUE partiel directement.
+-- NOTE : l'appelant doit setter factures.exercice = p_exercice lors de
+--        l'attribution du numéro via get_next_facture_number, afin que
+--        l'index UNIQUE (societe_id, exercice, numero_sequence) reste
+--        cohérent et évite les collisions entre exercices différents
+--        (ex: FV-2026-000001 et FV-2027-000001 ont tous deux
+--        numero_sequence=1 mais un exercice distinct).
+
+-- Ajoute la colonne exercice (générée depuis date_facture si pas déjà présente)
+ALTER TABLE public.factures ADD COLUMN IF NOT EXISTS exercice INT;
+
+-- Backfill l'exercice pour lignes existantes
+UPDATE public.factures
+SET exercice = EXTRACT(YEAR FROM date_facture)::INT
+WHERE exercice IS NULL AND date_facture IS NOT NULL;
+
+-- DROP ancien index UNIQUE s'il existe, puis le recrée avec exercice
+DROP INDEX IF EXISTS uq_factures_numero_sequence;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_factures_numero_sequence
-  ON public.factures (societe_id, numero_sequence)
-  WHERE type_facture = 'client'
-    AND numero_sequence IS NOT NULL;
+  ON public.factures (societe_id, exercice, numero_sequence)
+  WHERE type_facture = 'client' AND numero_sequence IS NOT NULL AND exercice IS NOT NULL;
 
 COMMENT ON INDEX public.uq_factures_numero_sequence IS
-  'Unicité gap-free du numéro séquentiel client par société. Partial index :
-   ne concerne que type_facture=''client'' ET numero_sequence IS NOT NULL
-   (fournisseurs et legacy exclus).';
+  'Unicité du numéro séquentiel par société/exercice pour factures clients (gap-free intra-exercice).';
 
 -- Index de lookup rapide pour les listes/statistiques par exercice
 CREATE INDEX IF NOT EXISTS idx_factures_sequences_societe_exercice
