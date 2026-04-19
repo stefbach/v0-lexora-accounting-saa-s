@@ -16,18 +16,44 @@ export interface GranularConfidence {
   auto_decision: 'auto_approve' | 'quick_review' | 'full_review' | 'reject'
 }
 
+/**
+ * Poids des champs utilisés par `computeGranularConfidence` pour pondérer le
+ * score de confiance global d'une extraction. La somme des poids par type
+ * ≈ 100, de sorte que le score reste sur une échelle 0-100.
+ *
+ * Raisonnement pour les factures :
+ * - `montant_ttc` (25) : champ le plus critique — il pilote l'écriture
+ *   comptable, la TVA à récupérer / collecter et la validation réconciliation
+ *   bancaire. Une erreur sur ce champ est quasi-systématiquement bloquante.
+ * - `emetteur` (20) : indispensable pour identifier le tiers (fournisseur ou
+ *   client) et rattacher l'écriture au bon compte 401/411.
+ * - `date` (15), `montant_ht` (15), `montant_tva` (15) : forment le triplet
+ *   comptable minimum, moins critiques individuellement que `montant_ttc`
+ *   mais nécessaires pour les contrôles de cohérence HT+TVA=TTC.
+ * - `numero_facture` (10) : peut être régénéré / dérivé du nom de fichier si
+ *   manquant, donc moins pondéré que les autres.
+ *
+ * Raisonnement pour les relevés bancaires :
+ * - `transactions` (25) : sans la liste de lignes, le relevé est inexploitable
+ *   pour le rapprochement — c'est le cœur de la valeur extraite.
+ * - `solde_ouverture` (20) et `solde_cloture` (20) : indispensables au contrôle
+ *   de cohérence (ouverture + ΔE/S = clôture) et à la reprise de solde.
+ * - `periode_debut` (15) et `periode_fin` (15) : contextualisent les
+ *   transactions et servent à détecter les chevauchements entre relevés.
+ * - `numero_compte` (5) : généralement inférable via le dossier/société ou
+ *   déjà connu via la configuration bancaire côté société.
+ */
 const FACTURE_FIELDS: ReadonlyArray<{
   key: string
   aliases: string[]
   weight: number
 }> = [
-  { key: 'emetteur', aliases: ['fournisseur', 'client', 'emetteur', 'tiers'], weight: 15 },
-  { key: 'numero', aliases: ['numero_facture', 'numero_reference'], weight: 15 },
+  { key: 'montant_ttc', aliases: ['montant_ttc'], weight: 25 },
+  { key: 'emetteur', aliases: ['fournisseur', 'client', 'emetteur', 'tiers'], weight: 20 },
   { key: 'date', aliases: ['date_facture', 'date_document'], weight: 15 },
   { key: 'montant_ht', aliases: ['montant_ht'], weight: 15 },
   { key: 'montant_tva', aliases: ['montant_tva', 'tva'], weight: 15 },
-  { key: 'montant_ttc', aliases: ['montant_ttc'], weight: 15 },
-  { key: 'devise', aliases: ['devise'], weight: 10 },
+  { key: 'numero', aliases: ['numero_facture', 'numero_reference'], weight: 10 },
 ]
 
 const RELEVE_FIELDS: ReadonlyArray<{
@@ -35,11 +61,12 @@ const RELEVE_FIELDS: ReadonlyArray<{
   aliases: string[]
   weight: number
 }> = [
-  { key: 'numero_compte', aliases: ['numero_compte', 'iban'], weight: 20 },
-  { key: 'periode', aliases: ['periode_debut'], weight: 20 },
+  { key: 'transactions', aliases: ['lignes', 'transactions'], weight: 25 },
   { key: 'solde_ouverture', aliases: ['solde_ouverture', 'solde_debut'], weight: 20 },
   { key: 'solde_cloture', aliases: ['solde_cloture', 'solde_fin'], weight: 20 },
-  { key: 'transactions', aliases: ['lignes', 'transactions'], weight: 20 },
+  { key: 'periode_debut', aliases: ['periode_debut'], weight: 15 },
+  { key: 'periode_fin', aliases: ['periode_fin'], weight: 15 },
+  { key: 'numero_compte', aliases: ['numero_compte', 'iban'], weight: 5 },
 ]
 
 function hasMeaningfulValue(val: unknown): boolean {

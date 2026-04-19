@@ -1,3 +1,11 @@
+/**
+ * Seuils par défaut pour validation des factures.
+ *
+ * Ces valeurs peuvent être surchargées en passant options à validateMontantRaisonnable.
+ * Pour une configuration par société, utiliser plutôt `societes.params_validation` (JSONB)
+ * à implémenter dans une migration future (~Wave 3 ou 4).
+ */
+
 export interface ValidationIssue {
   field: string
   severity: 'error' | 'warning' | 'info'
@@ -111,10 +119,16 @@ export function validateDatePlausible(dateStr: string): boolean {
   return true
 }
 
-export function validateMontantRaisonnable(montant: number, devise?: string): boolean {
+export function validateMontantRaisonnable(
+  montant: number,
+  devise?: string,
+  options?: { maxMur?: number; maxOther?: number }
+): boolean {
   if (!Number.isFinite(montant)) return false
   if (montant <= 0) return false
-  const max = devise && devise.toUpperCase() !== 'MUR' ? 500_000 : 10_000_000
+  const maxMur = options?.maxMur ?? 10_000_000
+  const maxOther = options?.maxOther ?? 500_000
+  const max = devise && devise.toUpperCase() !== 'MUR' ? maxOther : maxMur
   return montant < max
 }
 
