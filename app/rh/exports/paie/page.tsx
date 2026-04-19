@@ -78,6 +78,18 @@ export default function ExportPaiePage() {
   const [csgStatus, setCsgStatus] = useState<ExportStatus>(initialStatus)
   const [payeStatus, setPayeStatus] = useState<ExportStatus>(initialStatus)
 
+  // -- Déclarations annuelles MRA --
+  // Année fiscale mauricienne : juillet N → juin N+1. On déduit l'année
+  // fiscale courante depuis la date du jour (pas depuis `periode`, qui
+  // cible le mois de la paie).
+  const _nowFy = new Date()
+  const _currentFy = _nowFy.getUTCMonth() + 1 >= 7 ? _nowFy.getUTCFullYear() : _nowFy.getUTCFullYear() - 1
+  const [anneeFiscale, setAnneeFiscale] = useState<number>(_currentFy)
+  const [form1Status, setForm1Status] = useState<ExportStatus>(initialStatus)
+  const [form2Status, setForm2Status] = useState<ExportStatus>(initialStatus)
+  const [prgfAnnualStatus, setPrgfAnnualStatus] = useState<ExportStatus>(initialStatus)
+  const [csgAnnualStatus, setCsgAnnualStatus] = useState<ExportStatus>(initialStatus)
+
   // -- Alert/toast messages --
   const [alertMsg, setAlertMsg] = useState<{ type: "success" | "error"; text: string } | null>(null)
 
@@ -357,6 +369,59 @@ export default function ExportPaiePage() {
       setAlertMsg({ type: "error", text: msg })
     }
   }
+
+  // ========== Déclarations annuelles MRA ==========
+  // Helper commun : déclenche un GET sur l'endpoint avec les query params
+  // et télécharge la réponse. En cas d'erreur JSON (400/500), on affiche
+  // le message serveur — exactement comme les exports mensuels.
+  const triggerAnnualExport = async (
+    endpoint: string,
+    format: 'csv' | 'xml' | 'pdf',
+    baseFilename: string,
+    setStatus: (s: ExportStatus) => void,
+  ) => {
+    if (!societe) return setAlertMsg({ type: 'error', text: 'Veuillez selectionner une societe.' })
+    if (!anneeFiscale) return setAlertMsg({ type: 'error', text: 'Annee fiscale requise.' })
+    setStatus({ loading: true, done: false, error: null, summary: null })
+    try {
+      const url = `${endpoint}?societe_id=${encodeURIComponent(societe)}&annee_fiscale=${anneeFiscale}&format=${format}`
+      const res = await fetch(url)
+      const ct = res.headers.get('content-type') || ''
+      if (!res.ok) {
+        // Erreur JSON attendue (400 / 500)
+        if (ct.includes('application/json')) {
+          const data = await res.json().catch(() => ({}))
+          throw new Error(data?.error || `Erreur ${res.status}`)
+        }
+        const txt = await res.text().catch(() => '')
+        throw new Error(`Erreur ${res.status}: ${txt.slice(0, 200)}`)
+      }
+      const blob = await res.blob()
+      const extMap: Record<string, string> = { csv: 'csv', xml: 'xml', pdf: 'txt' }
+      const filename = `${baseFilename}_${anneeFiscale}-${anneeFiscale + 1}.${extMap[format] || format}`
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      setStatus({ loading: false, done: true, error: null, summary: null })
+      setAlertMsg({ type: 'success', text: `${baseFilename} (${format.toUpperCase()}) telecharge.` })
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Erreur export'
+      setStatus({ loading: false, done: false, error: msg, summary: null })
+      setAlertMsg({ type: 'error', text: msg })
+    }
+  }
+
+  const exportForm1 = (fmt: 'csv' | 'xml') =>
+    triggerAnnualExport('/api/rh/paie/exports/form-1-tds', fmt, 'Form1_TDS', setForm1Status)
+  const exportForm2 = (fmt: 'csv' | 'xml') =>
+    triggerAnnualExport('/api/rh/paie/exports/form-2-emoluments', fmt, 'Form2_Emoluments', setForm2Status)
+  const exportPrgfAnnual = (fmt: 'csv' | 'xml') =>
+    triggerAnnualExport('/api/rh/paie/exports/prgf-annual', fmt, 'PRGF_Annual', setPrgfAnnualStatus)
+  const exportCsgAnnual = (fmt: 'csv' | 'xml') =>
+    triggerAnnualExport('/api/rh/paie/exports/csg-annual', fmt, 'CSG_Annual', setCsgAnnualStatus)
 
   // -- StatusBadge component --
   const StatusBadge = ({ status }: { status: ExportStatus }) => {
@@ -769,6 +834,139 @@ export default function ExportPaiePage() {
                   </div>
                 </div>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Déclarations annuelles MRA Card */}
+          <Card className="rounded-2xl shadow-sm border-l-4" style={{ borderLeftColor: NAVY }}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2" style={{ color: NAVY }}>
+                <FileCheck className="w-4 h-4" />
+                Declarations annuelles MRA
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-gray-500">
+                Annee fiscale mauricienne : 1er juillet -&gt; 30 juin. Selectionnez l'annee de debut de l'exercice puis telechargez les fichiers officiels.
+              </p>
+
+              {/* Selecteur annee fiscale */}
+              <div className="flex items-center gap-3">
+                <label className="text-sm text-gray-600">Annee fiscale (debut) :</label>
+                <input
+                  type="number"
+                  min={2020}
+                  max={2099}
+                  value={anneeFiscale}
+                  onChange={(e) => setAnneeFiscale(Number(e.target.value) || _currentFy)}
+                  className="h-10 w-24 px-3 border rounded-md text-sm bg-white"
+                />
+                <span className="text-xs text-gray-400">(FY {anneeFiscale}-{anneeFiscale + 1})</span>
+              </div>
+
+              {/* Form 1 TDS */}
+              <div className="p-4 border rounded-xl space-y-2">
+                <p className="text-sm font-medium" style={{ color: NAVY }}>Form 1 - Income Tax TDS (PAYE annuel)</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button
+                    onClick={() => exportForm1('csv')}
+                    disabled={form1Status.loading || !societe}
+                    variant="outline"
+                    className="rounded-xl"
+                  >
+                    {form1Status.loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Download className="h-4 w-4 mr-2" />}
+                    Form 1 CSV
+                  </Button>
+                  <Button
+                    onClick={() => exportForm1('xml')}
+                    disabled={form1Status.loading || !societe}
+                    variant="outline"
+                    className="rounded-xl"
+                  >
+                    {form1Status.loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Download className="h-4 w-4 mr-2" />}
+                    Form 1 XML
+                  </Button>
+                  <StatusBadge status={form1Status} />
+                </div>
+              </div>
+
+              {/* Form 2 Emoluments */}
+              <div className="p-4 border rounded-xl space-y-2">
+                <p className="text-sm font-medium" style={{ color: NAVY }}>Form 2 - Statement of Emoluments</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button
+                    onClick={() => exportForm2('csv')}
+                    disabled={form2Status.loading || !societe}
+                    variant="outline"
+                    className="rounded-xl"
+                  >
+                    {form2Status.loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Download className="h-4 w-4 mr-2" />}
+                    Form 2 CSV
+                  </Button>
+                  <Button
+                    onClick={() => exportForm2('xml')}
+                    disabled={form2Status.loading || !societe}
+                    variant="outline"
+                    className="rounded-xl"
+                  >
+                    {form2Status.loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Download className="h-4 w-4 mr-2" />}
+                    Form 2 XML
+                  </Button>
+                  <StatusBadge status={form2Status} />
+                </div>
+              </div>
+
+              {/* PRGF Annual */}
+              <div className="p-4 border rounded-xl space-y-2">
+                <p className="text-sm font-medium" style={{ color: NAVY }}>PRGF Annual Reconciliation</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button
+                    onClick={() => exportPrgfAnnual('csv')}
+                    disabled={prgfAnnualStatus.loading || !societe}
+                    variant="outline"
+                    className="rounded-xl"
+                  >
+                    {prgfAnnualStatus.loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Download className="h-4 w-4 mr-2" />}
+                    PRGF Annual CSV
+                  </Button>
+                  <Button
+                    onClick={() => exportPrgfAnnual('xml')}
+                    disabled={prgfAnnualStatus.loading || !societe}
+                    variant="outline"
+                    className="rounded-xl"
+                  >
+                    {prgfAnnualStatus.loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Download className="h-4 w-4 mr-2" />}
+                    PRGF Annual XML
+                  </Button>
+                  <StatusBadge status={prgfAnnualStatus} />
+                </div>
+              </div>
+
+              {/* CSG Annual */}
+              <div className="p-4 border rounded-xl space-y-2">
+                <p className="text-sm font-medium" style={{ color: NAVY }}>CSG Annual Reconciliation</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button
+                    onClick={() => exportCsgAnnual('csv')}
+                    disabled={csgAnnualStatus.loading || !societe}
+                    variant="outline"
+                    className="rounded-xl"
+                  >
+                    {csgAnnualStatus.loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Download className="h-4 w-4 mr-2" />}
+                    CSG Annual CSV
+                  </Button>
+                  <Button
+                    onClick={() => exportCsgAnnual('xml')}
+                    disabled={csgAnnualStatus.loading || !societe}
+                    variant="outline"
+                    className="rounded-xl"
+                  >
+                    {csgAnnualStatus.loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Download className="h-4 w-4 mr-2" />}
+                    CSG Annual XML
+                  </Button>
+                  <StatusBadge status={csgAnnualStatus} />
+                </div>
+              </div>
             </CardContent>
           </Card>
 

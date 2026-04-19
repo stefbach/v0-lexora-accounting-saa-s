@@ -13,7 +13,22 @@
  * - PAYE: 0% up to 390,000/yr, 10% on next 260,000, 15% on remainder
  * - Salary Compensation 2026: Rs 635 for employees earning <= 50,000 MUR
  */
-import type { ParametresPaieMRA } from '@/lib/types'
+import type { ParametresPaieMRA as ParametresPaieMRABase } from '@/lib/types'
+
+/**
+ * Sprint 15 — Extension locale de ParametresPaieMRA pour conformité MRA.
+ * Les nouveaux champs sont optionnels (rétro-compatibilité) et couvrent :
+ *  - Tranche PAYE 3 (Finance Act 2026 : 490K / 590K avec 20%)
+ *  - Plafond mensuel NSF (Rs 19 500)
+ *  - Seuils NIT Catégorie A / B (Negative Income Tax)
+ */
+export interface ParametresPaieMRA extends ParametresPaieMRABase {
+  paye_seuil_taux_3?: number        // Seuil tranche 3 (ex: 590 000 MUR/an)
+  paye_taux_3?: number              // Taux tranche 3 (ex: 0.20 = 20%)
+  nsf_plafond_mensuel?: number      // Plafond mensuel NSF (Rs 19 500)
+  nit_seuil_categorie_a?: number    // Seuil NIT Cat A (sans dépendants)
+  nit_seuil_categorie_b?: number    // Seuil NIT Cat B (avec dépendants)
+}
 
 export const PARAMS_MRA_DEFAUT: ParametresPaieMRA = {
   csg_seuil_taux_reduit: 50000,
@@ -23,13 +38,18 @@ export const PARAMS_MRA_DEFAUT: ParametresPaieMRA = {
   csg_patronal_taux_reduit: 0.030,  // 3% employeur (si brut <= 50K)
   nsf_salarie: 0.015,               // 1.5% NSF salarie
   nsf_patronal: 0.025,              // 2.5% NSF employeur
+  nsf_plafond_mensuel: 19500,       // Plafond mensuel NSF (Rs 19 500)
   training_levy: 0.010,             // 1% HRDC sur salaire de base
   prgf_patronal_par_jour: 4.50,     // PRGF par jour travaille
   prgf_taux_emoluments: 0.045,      // 4.5% des emoluments totaux
   paye_seuil_exoneration: 390000,   // 0% jusqu'a 390K MUR/an
   paye_taux_1: 0.10,                // 10% tranche 1
-  paye_seuil_taux_2: 650000,        // Seuil tranche 2 (390K + 260K)
-  paye_taux_2: 0.15,                // 15% tranche 2+
+  paye_seuil_taux_2: 490000,        // Seuil tranche 2 (Finance Act 2026)
+  paye_taux_2: 0.15,                // 15% tranche 2
+  paye_seuil_taux_3: 590000,        // Seuil tranche 3 (Finance Act 2026)
+  paye_taux_3: 0.20,                // 20% tranche 3
+  nit_seuil_categorie_a: 25000,     // NIT Cat A : sans dépendants (<= 25K/mois)
+  nit_seuil_categorie_b: 30000,     // NIT Cat B : avec dépendants (<= 30K/mois)
   salary_compensation: 635,          // Rs 635 Salary Compensation 2026
   salary_compensation_seuil: 50000,  // Applicable si salaire <= 50,000
 }
@@ -40,6 +60,7 @@ export interface ElementsBrut {
   heures_sup_montant?: number
   transport_allowance?: number
   petrol_allowance?: number
+  phone_allowance?: number
   special_allowance_1?: number
   special_allowance_2?: number
   special_allowance_3?: number
@@ -48,6 +69,17 @@ export interface ElementsBrut {
   departure_notice?: number    // Preavis
   salary_compensation?: number // Salary Compensation (auto-calculated if not provided)
   commission?: number          // Commission
+  // Sprint 15 — NIT Catégorie B (avec dépendants)
+  nb_dependants?: number
+  // Sprint 15 — Prorata premier/dernier mois (WRA §84)
+  prorata?: { ratio: number }
+  // Sprint 15 — PAYE cumulatif YTD (optionnel, pour calcul différentiel)
+  // TODO Sprint 16 — implémenter le calcul différentiel exact (voir calculerPayeCumulatif)
+  cumul_ytd?: {
+    salaire_brut_cumul: number
+    paye_retenu_cumul: number
+    nb_mois_cumul: number
+  }
 }
 
 export interface ResultatPaie {
@@ -89,12 +121,13 @@ export function calculerBulletin(
   airboxMur: number = 924.48,
   ordinateurMur: number = 818.22
 ): ResultatPaie {
-  const {
+  let {
     salaire_base,
     increment_salaire = 0,
     heures_sup_montant = 0,
     transport_allowance = 0,
     petrol_allowance = 0,
+    phone_allowance = 0,
     special_allowance_1 = 0,
     special_allowance_2 = 0,
     special_allowance_3 = 0,
@@ -104,6 +137,22 @@ export function calculerBulletin(
     commission = 0,
   } = elements
 
+  // Sprint 15 FIX 3 — Prorata premier/dernier mois (WRA §84) : appliquer
+  // le ratio au salaire de base ET à toutes les allowances, pas uniquement
+  // au salaire de base.
+  const prorataRatio = elements.prorata?.ratio ?? 1
+  if (prorataRatio < 1) {
+    const r = prorataRatio
+    salaire_base = Math.round(salaire_base * r * 100) / 100
+    increment_salaire = Math.round(increment_salaire * r * 100) / 100
+    transport_allowance = Math.round(transport_allowance * r * 100) / 100
+    petrol_allowance = Math.round(petrol_allowance * r * 100) / 100
+    phone_allowance = Math.round(phone_allowance * r * 100) / 100
+    special_allowance_1 = Math.round(special_allowance_1 * r * 100) / 100
+    special_allowance_2 = Math.round(special_allowance_2 * r * 100) / 100
+    special_allowance_3 = Math.round(special_allowance_3 * r * 100) / 100
+  }
+
   // Salary Compensation 2026: Rs 635 for employees earning <= 50,000
   const salary_compensation_montant = elements.salary_compensation !== undefined
     ? elements.salary_compensation
@@ -111,7 +160,7 @@ export function calculerBulletin(
 
   const salaire_brut_base = salaire_base + salary_compensation_montant + increment_salaire +
     heures_sup_montant +
-    transport_allowance + petrol_allowance +
+    transport_allowance + petrol_allowance + phone_allowance +
     special_allowance_1 + special_allowance_2 + special_allowance_3 +
     other_refund + departure_notice + commission
 
@@ -119,7 +168,7 @@ export function calculerBulletin(
 
   // Total emoluments for PRGF calculation (basic + allowances + compensation, excl OT & EOY)
   const total_emoluments = salaire_base + salary_compensation_montant + increment_salaire +
-    transport_allowance + petrol_allowance +
+    transport_allowance + petrol_allowance + phone_allowance +
     special_allowance_1 + special_allowance_2 + special_allowance_3 +
     commission
 
@@ -132,25 +181,36 @@ export function calculerBulletin(
   // Sprint 14 FIX 5 — CSG bonus suit la même tranche que le salaire de base
   // (1.5% si brut ≤ 50K, 3% si > 50K) au lieu du 3% forfaitaire.
   const csg_bonus = eoy_bonus > 0 ? Math.round(eoy_bonus * csgTaux) : 0
-  const nsf_salarie = Math.round(salaire_brut * params.nsf_salarie)
+  // Sprint 15 FIX 2 — NSF plafonné à Rs 19 500/mois (salarié et employeur)
+  const nsfPlafond = params.nsf_plafond_mensuel ?? 19500
+  const nsfSalarieBrut = salaire_brut * params.nsf_salarie
+  const nsf_salarie = Math.round(Math.min(nsfSalarieBrut, nsfPlafond))
 
   // PAYE -- bareme progressif annuel MRA 2025/26
   // EOY Bonus (13th month) is EXEMPT from PAYE in Mauritius (but subject to CSG)
+  // Sprint 15 FIX 1 — Barème Finance Act 2026 avec tranche 3 (20%).
   const salaireAnnuel = salaire_brut_base * 12 // eoy_bonus excluded from PAYE base
   let payeAnnuel = 0
   if (salaireAnnuel > params.paye_seuil_exoneration) {
     const tranche1 = Math.min(salaireAnnuel, params.paye_seuil_taux_2) - params.paye_seuil_exoneration
     payeAnnuel += tranche1 * params.paye_taux_1
     if (salaireAnnuel > params.paye_seuil_taux_2) {
-      payeAnnuel += (salaireAnnuel - params.paye_seuil_taux_2) * params.paye_taux_2
+      // Tranche 2 : seuil_taux_2 à seuil_taux_3
+      const borne3 = params.paye_seuil_taux_3 ?? params.paye_seuil_taux_2
+      const tranche2 = Math.min(salaireAnnuel, borne3) - params.paye_seuil_taux_2
+      payeAnnuel += tranche2 * params.paye_taux_2
+
+      // Tranche 3 : au-dessus de seuil_taux_3
+      if (salaireAnnuel > borne3 && params.paye_taux_3) {
+        payeAnnuel += (salaireAnnuel - borne3) * params.paye_taux_3
+      }
     }
   }
   const payeBrut = Math.round(payeAnnuel / 12)
 
   // Sprint 14 FIX 6 — NIT (Negative Income Tax, Finance Act 2024).
-  // Crédit d'impôt pour les bas salaires — réduit le PAYE dû. Si NIT ≥
-  // PAYE, PAYE = 0 (pas de crédit négatif versé, juste exonération).
-  const nit = calculerNIT(salaire_brut_base)
+  // Sprint 15 FIX 4 — Seuils distincts Cat A (sans dépendants) et Cat B (avec).
+  const nit = calculerNIT(salaire_brut_base, elements.nb_dependants ?? 0, params)
   const paye = Math.max(0, payeBrut - nit.montant)
   const nit_applique = nit.eligible ? Math.min(nit.montant, payeBrut) : 0
 
@@ -165,7 +225,9 @@ export function calculerBulletin(
   const csg_patronal = Math.round(salaire_brut_base * csgPatronalTaux)
   // Sprint 14 FIX 5 — CSG patronal bonus suit la même tranche que le salaire
   const csg_patronal_bonus = eoy_bonus > 0 ? Math.round(eoy_bonus * csgPatronalTaux) : 0
-  const nsf_patronal = Math.round(salaire_brut * params.nsf_patronal)
+  // Sprint 15 FIX 2 — NSF patronal plafonné à Rs 19 500/mois
+  const nsfPatronalBrut = salaire_brut * params.nsf_patronal
+  const nsf_patronal = Math.round(Math.min(nsfPatronalBrut, nsfPlafond))
 
   // Training Levy (HRDC): 1% of basic salary only (not total emoluments)
   const training_levy = Math.round(salaire_base * params.training_levy)
@@ -267,16 +329,56 @@ export function calculerPAYE(
   salaireMensuelImposable: number,
   params: ParametresPaieMRA = PARAMS_MRA_DEFAUT
 ): number {
-  const salaireAnnuel = salaireMensuelImposable * 12
+  return Math.round(calculerPayeAnnuel(salaireMensuelImposable * 12, params) / 12)
+}
+
+/**
+ * Sprint 15 — Calcul PAYE annuel (barème progressif Finance Act 2026).
+ * 0% jusqu'à paye_seuil_exoneration, 10% puis 15% puis 20%.
+ */
+export function calculerPayeAnnuel(
+  salaireAnnuel: number,
+  params: ParametresPaieMRA = PARAMS_MRA_DEFAUT
+): number {
   let payeAnnuel = 0
   if (salaireAnnuel > params.paye_seuil_exoneration) {
     const tranche1 = Math.min(salaireAnnuel, params.paye_seuil_taux_2) - params.paye_seuil_exoneration
     payeAnnuel += tranche1 * params.paye_taux_1
     if (salaireAnnuel > params.paye_seuil_taux_2) {
-      payeAnnuel += (salaireAnnuel - params.paye_seuil_taux_2) * params.paye_taux_2
+      const borne3 = params.paye_seuil_taux_3 ?? params.paye_seuil_taux_2
+      const tranche2 = Math.min(salaireAnnuel, borne3) - params.paye_seuil_taux_2
+      payeAnnuel += tranche2 * params.paye_taux_2
+      if (salaireAnnuel > borne3 && params.paye_taux_3) {
+        payeAnnuel += (salaireAnnuel - borne3) * params.paye_taux_3
+      }
     }
   }
-  return Math.round(payeAnnuel / 12)
+  return payeAnnuel
+}
+
+/**
+ * Sprint 15 FIX 6 — PAYE cumulatif YTD (Year-To-Date).
+ * Calcule le PAYE du mois courant = PAYE annualisé sur cumul YTD − PAYE
+ * déjà retenu les mois précédents. Simplification : on applique le barème
+ * au salaire moyen annualisé du cumul YTD.
+ *
+ * TODO Sprint 16 — implémenter le lissage exact (méthode cumulative MRA).
+ */
+export function calculerPayeCumulatif(
+  cumulSalaire: number,
+  cumulPaye: number,
+  salaireMoisBrut: number,
+  nbMoisCumul: number,
+  params: ParametresPaieMRA = PARAMS_MRA_DEFAUT
+): number {
+  const moisEcoules = nbMoisCumul + 1
+  const nouveauCumul = cumulSalaire + salaireMoisBrut
+  // Salaire annualisé sur la base des mois écoulés
+  const salaireAnnualise = (nouveauCumul * 12) / Math.max(1, moisEcoules)
+  const payeAnnuelBareme = calculerPayeAnnuel(salaireAnnualise, params)
+  // Part cumulée du PAYE due à ce stade de l'année (prorata sur mois écoulés)
+  const payeCumuleDu = (payeAnnuelBareme * moisEcoules) / 12
+  return Math.max(0, Math.round(payeCumuleDu - cumulPaye))
 }
 
 /**
@@ -286,16 +388,19 @@ export function calculerPAYE(
  * @returns { eligible, montant }
  */
 export function calculerNIT(
-  salaireMensuelBrut: number
+  salaireMensuelBrut: number,
+  nbDependants: number = 0,
+  params: ParametresPaieMRA = PARAMS_MRA_DEFAUT
 ): { eligible: boolean; montant: number } {
-  // NIT thresholds for Mauritius 2025-2026
-  // Category A: No dependents - income <= 25,000/month
-  // Category B: 1+ dependents - income <= 30,000/month
-  // Simplified: using single threshold
-  const NIT_SEUIL_MENSUEL = 25000
-  const NIT_MONTANT = 1000 // Rs 1,000 per month for eligible employees
+  // Sprint 15 FIX 4 — NIT thresholds for Mauritius 2025-2026 :
+  //   Category A : sans dépendants → seuil 25 000 MUR/mois
+  //   Category B : 1+ dépendants   → seuil 30 000 MUR/mois
+  const nitSeuilCatA = params.nit_seuil_categorie_a ?? 25000
+  const nitSeuilCatB = params.nit_seuil_categorie_b ?? 30000
+  const nitSeuil = nbDependants > 0 ? nitSeuilCatB : nitSeuilCatA
+  const NIT_MONTANT = 1000 // Rs 1,000 par mois pour les bénéficiaires
 
-  if (salaireMensuelBrut <= NIT_SEUIL_MENSUEL && salaireMensuelBrut > 0) {
+  if (salaireMensuelBrut <= nitSeuil && salaireMensuelBrut > 0) {
     return { eligible: true, montant: NIT_MONTANT }
   }
   return { eligible: false, montant: 0 }
@@ -338,12 +443,30 @@ export async function calculerBulletinDevise(
 }
 
 // Calcul 13eme mois (EOY Bonus) -- WRA Section 52
+// Sprint 15 FIX 5 — Finance Act 2024 : la base du 13e mois doit inclure tous
+// les émoluments (salaire de base + allowances), pas uniquement le salaire
+// de base. On accepte un nombre (ancien appel, rétro-compat) OU un objet
+// `ElementsBrut` (nouveau cas, émoluments complets).
 export function calculerTreizMois(
-  salaire_base: number,
+  salaireOuElements: number | ElementsBrut,
   mois_travailles: number = 12,
   tranche: '75pct' | '25pct' | 'total' = 'total'
 ): number {
-  const base = (salaire_base / 12) * mois_travailles
+  let emoluments: number
+  if (typeof salaireOuElements === 'number') {
+    emoluments = salaireOuElements
+  } else {
+    const e = salaireOuElements
+    emoluments =
+      (e.salaire_base || 0) +
+      (e.transport_allowance || 0) +
+      (e.petrol_allowance || 0) +
+      (e.phone_allowance || 0) +
+      (e.special_allowance_1 || 0) +
+      (e.special_allowance_2 || 0) +
+      (e.special_allowance_3 || 0)
+  }
+  const base = (emoluments / 12) * mois_travailles
   if (tranche === '75pct') return Math.round(base * 0.75 * 100) / 100
   if (tranche === '25pct') return Math.round(base * 0.25 * 100) / 100
   return Math.round(base * 100) / 100
