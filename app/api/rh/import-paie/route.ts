@@ -525,7 +525,7 @@ export async function POST(request: Request) {
         const totalCredit = entries.reduce((s, e) => s + (e.credit_mur || 0), 0)
         const ecart = Math.round(totalCredit - totalDebit)
         if (ecart > 0) {
-          entries.push(mkEntry('6419', `Ajustement paie (éléments non détaillés) ${moisLabel}`, ecart, 0))
+          entries.push(mkEntry('6418', `Ajustement paie (éléments non détaillés) ${moisLabel}`, ecart, 0))
           console.log(`[import-paie] Ajustement +${ecart} MUR en 6419 pour équilibrer le bulletin SAL`)
         } else if (ecart < 0) {
           entries.push(mkEntry('4210', `Ajustement paie (retenue non détaillée) ${moisLabel}`, 0, Math.abs(ecart)))
