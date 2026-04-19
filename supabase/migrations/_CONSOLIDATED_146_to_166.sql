@@ -1,6 +1,6 @@
 -- ============================================================================
 -- CONSOLIDATED MIGRATIONS 146 → 166 (19 migrations)
--- Generated: 2026-04-19T14:42:09Z
+-- Generated: 2026-04-19T14:43:56Z
 -- Project: v0-lexora-accounting-saa-s
 -- ============================================================================
 -- À coller dans: Supabase Dashboard → SQL Editor → New query → Run
@@ -792,27 +792,16 @@ EXECUTE FUNCTION fn_enforce_r7_no_lettre_resultat();
 -- On ne supprime pas, on retire juste la lettre pour respecter la règle.
 -- Ces cas sont loggés pour audit manuel.
 
-DO $$
-DECLARE
-  v_count INT;
-BEGIN
-  SELECT COUNT(*) INTO v_count
-  FROM ecritures_comptables_v2
-  WHERE lettre IS NOT NULL
-    AND numero_compte IS NOT NULL
-    AND (numero_compte LIKE '6%' OR numero_compte LIKE '7%');
-
-  IF v_count > 0 THEN
-    RAISE NOTICE '[mig 151] % écritures avaient un lettrage invalide sur classe 6/7 — nettoyées', v_count;
-    UPDATE ecritures_comptables_v2
-    SET lettre = NULL,
-        date_lettrage = NULL,
-        lettrage_auto = FALSE
-    WHERE lettre IS NOT NULL
-      AND numero_compte IS NOT NULL
-      AND (numero_compte LIKE '6%' OR numero_compte LIKE '7%');
-  END IF;
-END $$;
+-- Nettoyage direct des lettrages invalides existants (sans DO block pour éviter
+-- le conflit parsing "SELECT INTO" dans l'éditeur SQL Supabase).
+-- Si aucune ligne ne matche, UPDATE ne fait rien silencieusement.
+UPDATE ecritures_comptables_v2
+SET lettre = NULL,
+    date_lettrage = NULL,
+    lettrage_auto = FALSE
+WHERE lettre IS NOT NULL
+  AND numero_compte IS NOT NULL
+  AND (numero_compte LIKE '6%' OR numero_compte LIKE '7%');
 
 COMMENT ON FUNCTION fn_enforce_r7_no_lettre_resultat IS 'Trigger BEFORE INSERT/UPDATE : empêche toute pose de lettre sur comptes classe 6 (charges) ou 7 (produits). Règle comptable R7.';
 
