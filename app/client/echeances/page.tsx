@@ -51,24 +51,80 @@ const MONTHS_FR = [
   "Juillet", "Aout", "Septembre", "Octobre", "Novembre", "Decembre"
 ]
 
-interface AgedReceivables {
-  totaux: Record<string, number>
-  par_tiers?: Record<string, unknown>[]
+interface AgedTotaux {
+  current: number
+  '1-30': number
+  '31-60': number
+  '61-90': number
+  over_90: number
+  total: number
 }
-interface AgedPayables {
-  totaux: Record<string, number>
-  alertes?: { message: string }[]
+
+interface AgedTiers {
+  tiers: string
+  montant: number
+  nb_factures: number
+  tranche_la_plus_ancienne?: string
 }
+
+interface AgedAlerte {
+  type: string
+  montant: number
+  nb_factures: number
+  message: string
+}
+
+interface AgedReport {
+  ok: boolean
+  as_of_date: string
+  societe_id: string
+  devise: string
+  totaux: AgedTotaux
+  par_tiers?: AgedTiers[]
+  alertes?: AgedAlerte[]
+}
+
 interface AgedDataState {
-  receivables: AgedReceivables | null
-  payables: AgedPayables | null
+  receivables: AgedReport | null
+  payables: AgedReport | null
   loading: boolean
+}
+
+interface FactureRow {
+  id: string
+  societe_id?: string
+  tiers?: string | null
+  description?: string | null
+  emetteur?: string | null
+  destinataire?: string | null
+  numero?: string | null
+  numero_facture?: string | null
+  date_facture?: string | null
+  date_echeance?: string | null
+  statut?: string | null
+  type_facture?: 'client' | 'fournisseur' | string | null
+  montant_mur?: number | string | null
+  montant_ttc?: number | string | null
+  mode_paiement?: string | null
+  notes?: string | null
+  document_id?: string | null
+}
+
+interface FinancialData {
+  factures?: FactureRow[]
+  [key: string]: unknown
+}
+
+interface Deadline extends FactureRow {
+  isOverdue: boolean
+  daysUntil: number
+  date_echeance: string
 }
 
 export default function EcheancesPage() {
   const { profile, loading } = useProfile()
   const { societeId } = useSocieteActive()
-  const [data, setData] = useState<any>(null)
+  const [data, setData] = useState<FinancialData | null>(null)
   const [fetching, setFetching] = useState(true)
   const [currentDate, setCurrentDate] = useState(() => new Date())
   const [periodFilter, setPeriodFilter] = useState("30j")
@@ -82,7 +138,7 @@ export default function EcheancesPage() {
   const [progress, setProgress] = useState<{ current: number; total: number; currentFile: string; found: number; notFound: number } | null>(null)
   const [applying30j, setApplying30j] = useState(false)
   const [selectedFactures, setSelectedFactures] = useState<string[]>([])
-  const [dayPopover, setDayPopover] = useState<{ date: string; events: any[] } | null>(null)
+  const [dayPopover, setDayPopover] = useState<{ date: string; events: CalendarEvent[] } | null>(null)
   const [visibleCount, setVisibleCount] = useState(20)
   const [manualDesc, setManualDesc] = useState("")
   const [manualDate, setManualDate] = useState("")
@@ -160,28 +216,28 @@ export default function EcheancesPage() {
   }
 
   // Upcoming deadlines from factures
-  const deadlines = useMemo(() => {
+  const deadlines = useMemo<Deadline[]>(() => {
     if (!data) return []
     const factures = data.factures || []
     const todayStr = new Date().toISOString().slice(0, 10)
     return factures
-      .filter((f: any) => {
+      .filter((f: FactureRow): f is FactureRow & { date_echeance: string } => {
         if (!f.date_echeance) return false
         if (f.statut === "paye" || f.statut === "annule") return false
         return true
       })
-      .map((f: any) => ({
+      .map((f): Deadline => ({
         ...f,
         isOverdue: f.date_echeance < todayStr,
         daysUntil: Math.ceil((new Date(f.date_echeance).getTime() - Date.now()) / 86400000),
       }))
-      .sort((a: any, b: any) => a.date_echeance.localeCompare(b.date_echeance))
+      .sort((a, b) => a.date_echeance.localeCompare(b.date_echeance))
   }, [data])
 
   // Factures sans échéance
-  const facturesSansDate = useMemo(() => {
+  const facturesSansDate = useMemo<FactureRow[]>(() => {
     if (!data) return []
-    return (data.factures || []).filter((f: any) => !f.date_echeance && f.statut !== 'paye' && f.statut !== 'annule')
+    return (data.factures || []).filter((f: FactureRow) => !f.date_echeance && f.statut !== 'paye' && f.statut !== 'annule')
   }, [data])
 
   const handleSetEcheance = async (factureId: string, newDate: string) => {
@@ -201,8 +257,8 @@ export default function EcheancesPage() {
     const socId = societeId
     if (!socId) return
     const toProcess = selectedFactures.length > 0
-      ? facturesSansDate.filter((f: any) => selectedFactures.includes(f.id) && f.document_id)
-      : facturesSansDate.filter((f: any) => f.document_id)
+      ? facturesSansDate.filter((f: FactureRow) => selectedFactures.includes(f.id) && f.document_id)
+      : facturesSansDate.filter((f: FactureRow) => f.document_id)
     if (toProcess.length === 0) { alert("Aucune facture avec document PDF à analyser"); return }
 
     setExtracting(true)
@@ -249,10 +305,10 @@ export default function EcheancesPage() {
 
 
   // Filtered deadlines
-  const filteredDeadlines = useMemo(() => {
+  const filteredDeadlines = useMemo<Deadline[]>(() => {
     const todayStr = new Date().toISOString().slice(0, 10)
     const now = new Date()
-    return deadlines.filter((d: any) => {
+    return deadlines.filter((d: Deadline) => {
       // Type filter
       if (typeFilter === "client" && d.type_facture !== "client") return false
       if (typeFilter === "fournisseur" && d.type_facture !== "fournisseur") return false
@@ -278,10 +334,10 @@ export default function EcheancesPage() {
   const kpis = useMemo(() => {
     const todayStr = new Date().toISOString().slice(0, 10)
     const in30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)
-    const aPayer = deadlines.filter((d: any) => d.type_facture === "fournisseur").reduce((s: number, d: any) => s + (Number(d.montant_mur) || Number(d.montant_ttc) || 0), 0)
-    const aRecevoir = deadlines.filter((d: any) => d.type_facture === "client").reduce((s: number, d: any) => s + (Number(d.montant_mur) || Number(d.montant_ttc) || 0), 0)
-    const enRetard = deadlines.filter((d: any) => d.date_echeance < todayStr).length
-    const dans30j = deadlines.filter((d: any) => d.date_echeance >= todayStr && d.date_echeance <= in30).length
+    const aPayer = deadlines.filter((d: Deadline) => d.type_facture === "fournisseur").reduce((s: number, d: Deadline) => s + (Number(d.montant_mur) || Number(d.montant_ttc) || 0), 0)
+    const aRecevoir = deadlines.filter((d: Deadline) => d.type_facture === "client").reduce((s: number, d: Deadline) => s + (Number(d.montant_mur) || Number(d.montant_ttc) || 0), 0)
+    const enRetard = deadlines.filter((d: Deadline) => d.date_echeance < todayStr).length
+    const dans30j = deadlines.filter((d: Deadline) => d.date_echeance >= todayStr && d.date_echeance <= in30).length
     return { aPayer, aRecevoir, enRetard, dans30j }
   }, [deadlines])
 
@@ -317,7 +373,7 @@ export default function EcheancesPage() {
 
     // Factures from API
     const factures = data?.factures || []
-    factures.forEach((f: any) => {
+    factures.forEach((f: FactureRow) => {
       const echeance = f.date_echeance || f.date_facture
       if (!echeance) return
       // Only include if same month
@@ -362,7 +418,7 @@ export default function EcheancesPage() {
     }
     // Add unpaid invoices
     const factures = data?.factures || []
-    factures.forEach((f: any) => {
+    factures.forEach((f: FactureRow) => {
       const echeance = f.date_echeance || f.date_facture
       if (!echeance) return
       const amount = Number(f.montant_mur) || Number(f.montant_ttc) || 0
@@ -483,7 +539,7 @@ export default function EcheancesPage() {
               {agedData.payables?.alertes && agedData.payables.alertes.length > 0 && (
                 <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded">
                   <div className="font-semibold text-red-700 text-sm">⚠️ Alertes</div>
-                  {agedData.payables.alertes.map((a, i: number) => (
+                  {agedData.payables.alertes.map((a: AgedAlerte, i: number) => (
                     <div key={i} className="text-xs text-red-600 mt-1">{a.message}</div>
                   ))}
                 </div>

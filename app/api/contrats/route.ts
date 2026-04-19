@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { getAdminClient } from '@/lib/supabase/admin'
+import {
+  assertSocieteAccess,
+  mapSocieteAccessError,
+} from '@/lib/supabase/assert-societe-access'
 import { messageAccueil } from '@/lib/contrats/assistant'
 
 // GET /api/contrats — Lister les contrats
@@ -17,6 +22,17 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || searchParams.get('q')
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '20')
+
+    // Multi-tenant access check: si societe_id fourni, vérifier l'accès de l'user.
+    if (societe_id) {
+      try {
+        await assertSocieteAccess(getAdminClient(), user.id, societe_id)
+      } catch (err) {
+        const mapped = mapSocieteAccessError(err)
+        if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
+        throw err
+      }
+    }
 
     let query = supabase
       .from('contrats_clients')
@@ -64,6 +80,17 @@ export async function POST(request: NextRequest) {
       client_id,
       contexte_initial,
     } = body
+
+    // Multi-tenant access check: si societe_id fourni, vérifier l'accès de l'user.
+    if (societe_id) {
+      try {
+        await assertSocieteAccess(getAdminClient(), user.id, societe_id)
+      } catch (err) {
+        const mapped = mapSocieteAccessError(err)
+        if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
+        throw err
+      }
+    }
 
     // Récupérer infos client si fourni
     let contexte_client: { nom_client?: string; nom_societe?: string; nom_cabinet?: string } = {}
@@ -196,6 +223,17 @@ export async function PATCH(request: NextRequest) {
 
     if (Object.keys(update).length === 0) {
       return NextResponse.json({ error: 'Aucun champ à mettre à jour' }, { status: 400 })
+    }
+
+    // Si societe_id est modifié, re-vérifier l'accès multi-tenant vers la nouvelle société.
+    if (typeof update.societe_id === 'string' && update.societe_id) {
+      try {
+        await assertSocieteAccess(getAdminClient(), user.id, update.societe_id)
+      } catch (err) {
+        const mapped = mapSocieteAccessError(err)
+        if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
+        throw err
+      }
     }
 
     const { data, error } = await supabase
