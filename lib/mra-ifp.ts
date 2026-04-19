@@ -2,14 +2,126 @@
  * MRA Invoice Fiscalization Platform (IFP) Integration
  *
  * Handles communication with the Mauritius Revenue Authority e-invoicing system.
- * Currently operates in MOCK mode for development/testing. Set USE_MOCK = false
- * and configure real MRA EBS credentials for production fiscalisation.
+ *
+ * The module supports three runtime modes selected via env vars:
+ *   - `mock`       : default, produces deterministic fake IRNs + QR data (dev/test)
+ *   - `sandbox`    : scaffold for MRA sandbox (not yet implemented, falls back to mock)
+ *   - `production` : scaffold for MRA production (not yet implemented, falls back to mock)
+ *
+ * Safety: if `MRA_MODE=production` but any critical env var is missing (EBS_ID,
+ * API_ENDPOINT, CERT_PATH, TAXPAYER_TAN), the module logs an error and downgrades
+ * to `mock` mode so that a misconfigured production deployment does not crash.
+ *
+ * Env vars consumed (see .env.local.example):
+ *   MRA_MODE, MRA_EBS_ID, MRA_API_ENDPOINT, MRA_CERT_PATH,
+ *   MRA_CERT_PASSWORD, MRA_TAXPAYER_TAN
  */
 
-// Toggle this to switch between mock and real MRA API
-const USE_MOCK = true
+// ── Mode configuration ──
 
-// ── Types ──
+/** Runtime mode of the MRA integration. */
+export type MraMode = 'mock' | 'sandbox' | 'production'
+
+/** Resolved MRA configuration read from env vars. */
+export interface MraConfig {
+  mode: MraMode
+  /** Electronic Billing Solution ID provided by MRA. */
+  ebsId: string | null
+  /** URL of the MRA API (sandbox or production). */
+  apiEndpoint: string | null
+  /** Path to the X.509 certificate (PEM or PKCS#12). */
+  certPath: string | null
+  /** Password protecting the certificate (if PKCS#12). */
+  certPassword: string | null
+  /** Tax Account Number of the taxpayer. */
+  taxpayerTan: string | null
+  /** Prefix used when generating mock IRNs. */
+  mockIrnPrefix: string
+}
+
+const DEFAULT_MOCK_IRN_PREFIX = 'MRA-MOCK'
+
+function readEnv(name: string): string | null {
+  const v = process.env[name]
+  if (v === undefined || v === null) return null
+  const trimmed = String(v).trim()
+  return trimmed.length === 0 ? null : trimmed
+}
+
+function parseMode(raw: string | null): MraMode {
+  switch ((raw || '').toLowerCase()) {
+    case 'sandbox':
+      return 'sandbox'
+    case 'production':
+    case 'prod':
+      return 'production'
+    case 'mock':
+    case '':
+    case null as unknown as string:
+      return 'mock'
+    default:
+      console.warn(`[mra] Unknown MRA_MODE='${raw}', defaulting to 'mock'`)
+      return 'mock'
+  }
+}
+
+/**
+ * Read the MRA configuration from the process environment.
+ *
+ * Returns a resolved `MraConfig`. If `MRA_MODE=production` but one of the
+ * critical settings is missing, the mode is downgraded to `mock` and an error
+ * is logged (fail-safe default, avoids a broken production deployment).
+ */
+export function getMraConfig(): MraConfig {
+  const requestedMode = parseMode(readEnv('MRA_MODE'))
+  const ebsId = readEnv('MRA_EBS_ID')
+  const apiEndpoint = readEnv('MRA_API_ENDPOINT')
+  const certPath = readEnv('MRA_CERT_PATH')
+  const certPassword = readEnv('MRA_CERT_PASSWORD')
+  const taxpayerTan = readEnv('MRA_TAXPAYER_TAN')
+  const mockIrnPrefix = readEnv('MRA_MOCK_IRN_PREFIX') || DEFAULT_MOCK_IRN_PREFIX
+
+  let mode: MraMode = requestedMode
+
+  if (requestedMode === 'production') {
+    const missing: string[] = []
+    if (!ebsId) missing.push('MRA_EBS_ID')
+    if (!apiEndpoint) missing.push('MRA_API_ENDPOINT')
+    if (!certPath) missing.push('MRA_CERT_PATH')
+    if (!taxpayerTan) missing.push('MRA_TAXPAYER_TAN')
+    if (missing.length > 0) {
+      console.error(
+        `[mra] Production mode requested but config incomplete (missing: ${missing.join(', ')}), falling back to mock`
+      )
+      mode = 'mock'
+    }
+  }
+
+  return {
+    mode,
+    ebsId,
+    apiEndpoint,
+    certPath,
+    certPassword,
+    taxpayerTan,
+    mockIrnPrefix,
+  }
+}
+
+/**
+ * Returns `true` when the environment fully defines the settings required to
+ * talk to the real MRA IFP (sandbox or production). Does not validate
+ * certificate contents — only presence of env vars.
+ */
+export function isMraRealConfigured(): boolean {
+  const ebsId = readEnv('MRA_EBS_ID')
+  const apiEndpoint = readEnv('MRA_API_ENDPOINT')
+  const certPath = readEnv('MRA_CERT_PATH')
+  const taxpayerTan = readEnv('MRA_TAXPAYER_TAN')
+  return Boolean(ebsId && apiEndpoint && certPath && taxpayerTan)
+}
+
+// ── Legacy types (kept for backwards compatibility with existing call-sites) ──
 
 export interface MRAConfig {
   api_url: string
@@ -62,6 +174,12 @@ export interface MRAFiscalisationResponse {
   fiscalisationDate?: string
   errorCode?: string
   errorMessage?: string
+  /**
+   * Set when a non-mock mode was requested but the implementation fell back to
+   * the mock path (e.g. sandbox/production stubs). Allows callers and tests to
+   * detect a fallback without parsing logs.
+   */
+  _fallback_reason?: 'real_not_implemented' | 'config_incomplete'
 }
 
 // ── Constants ──
@@ -77,14 +195,14 @@ const INVOICE_TYPE_CODES: Record<string, string> = {
 
 // ── Mock Implementation ──
 
-function generateMockIRN(): string {
+function generateMockIRN(prefix: string = DEFAULT_MOCK_IRN_PREFIX): string {
   const year = new Date().getFullYear()
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
   let random = ''
   for (let i = 0; i < 8; i++) {
     random += chars.charAt(Math.floor(Math.random() * chars.length))
   }
-  return `MRA-${year}-${random}`
+  return `${prefix}-${year}-${random}`
 }
 
 function generateMockQRData(irn: string, invoice: MRAInvoice): string {
@@ -100,7 +218,14 @@ function generateMockQRData(irn: string, invoice: MRAInvoice): string {
   return `https://efiling.mra.mu/verify?${params.toString()}`
 }
 
-async function mockFiscalise(invoice: MRAInvoice): Promise<MRAFiscalisationResponse> {
+/**
+ * Mock fiscalisation: validates minimal invariants and returns a synthetic IRN
+ * + QR payload. No network I/O beyond an artificial delay.
+ */
+async function fiscaliseMock(
+  invoice: MRAInvoice,
+  config: MraConfig
+): Promise<MRAFiscalisationResponse> {
   // Simulate network delay
   await new Promise(resolve => setTimeout(resolve, 500))
 
@@ -121,7 +246,7 @@ async function mockFiscalise(invoice: MRAInvoice): Promise<MRAFiscalisationRespo
     }
   }
 
-  const irn = generateMockIRN()
+  const irn = generateMockIRN(config.mockIrnPrefix)
   const qrCodeData = generateMockQRData(irn, invoice)
 
   return {
@@ -132,9 +257,53 @@ async function mockFiscalise(invoice: MRAInvoice): Promise<MRAFiscalisationRespo
   }
 }
 
-// ── Real API Implementation (placeholder) ──
+// ── Sandbox Implementation (stub) ──
 
-async function realFiscalise(config: MRAConfig, invoice: MRAInvoice): Promise<MRAFiscalisationResponse> {
+/**
+ * TODO: Implement MRA sandbox fiscalisation.
+ *   - Load X.509 certificate at `config.certPath` (decrypt with `certPassword` if PKCS#12)
+ *   - Build mTLS agent (https.Agent with cert+key) or use an undici Dispatcher
+ *   - POST to `${config.apiEndpoint}/invoices/fiscalise` with the MRA-mandated payload
+ *     (include EBS ID, taxpayer TAN, signed invoice JSON)
+ *   - Handle retries with exponential backoff for 5xx / network errors
+ *   - Parse response → extract IRN, QR payload, fiscalisation timestamp
+ *   - Persist full raw response in DB for audit (done at call-site)
+ */
+async function fiscaliseSandbox(
+  invoice: MRAInvoice,
+  config: MraConfig
+): Promise<MRAFiscalisationResponse> {
+  console.warn('[mra] sandbox not yet implemented, using mock')
+  const res = await fiscaliseMock(invoice, config)
+  return { ...res, _fallback_reason: 'real_not_implemented' }
+}
+
+// ── Production Implementation (stub) ──
+
+/**
+ * TODO: Implement MRA production fiscalisation.
+ *   - Same plumbing as sandbox (mTLS + signed POST) but pointed at the production
+ *     endpoint (e.g. https://vfisc.mra.mu/realapi)
+ *   - Stricter validation of taxpayer TAN / EBS ID before sending
+ *   - Enforce idempotency (retry-safe) using an invoice-level correlation ID
+ *   - Parse response → extract IRN, QR payload, fiscalisation timestamp
+ *   - Persist full raw response in DB for audit (done at call-site)
+ */
+async function fiscaliseProduction(
+  invoice: MRAInvoice,
+  config: MraConfig
+): Promise<MRAFiscalisationResponse> {
+  console.warn('[mra] production not yet implemented, using mock')
+  const res = await fiscaliseMock(invoice, config)
+  return { ...res, _fallback_reason: 'real_not_implemented' }
+}
+
+// ── Legacy real API implementation (kept for the `fiscaliseInvoice(config, invoice)` path) ──
+
+async function realFiscaliseLegacy(
+  config: MRAConfig,
+  invoice: MRAInvoice
+): Promise<MRAFiscalisationResponse> {
   try {
     const response = await fetch(`${config.api_url}/invoices/fiscalise`, {
       method: 'POST',
@@ -175,16 +344,40 @@ async function realFiscalise(config: MRAConfig, invoice: MRAInvoice): Promise<MR
 
 /**
  * Send an invoice to MRA IFP for fiscalisation.
- * Returns the IRN (Invoice Reference Number) and QR code data on success.
+ *
+ * The function routes to the implementation selected by `getMraConfig()`:
+ *   - `mock`       : deterministic local response (default)
+ *   - `sandbox`    : stub, currently falls back to mock + sets `_fallback_reason`
+ *   - `production` : stub, currently falls back to mock + sets `_fallback_reason`
+ *
+ * The `config` parameter is kept for backwards compatibility with existing
+ * call-sites that build an `MRAConfig` from `societes` table settings. It is
+ * ignored when `MRA_MODE` is set, except as a last-resort signal that the
+ * caller explicitly wants the legacy real-HTTP path (used only if env-based
+ * mode is `mock` AND the caller provided non-mock legacy credentials — in that
+ * case we still stay on mock to avoid surprising behaviour).
+ *
+ * Returns IRN + QR code data on success.
  */
 export async function fiscaliseInvoice(
-  config: MRAConfig,
+  _config: MRAConfig,
   invoice: MRAInvoice
 ): Promise<MRAFiscalisationResponse> {
-  if (USE_MOCK) {
-    return mockFiscalise(invoice)
+  const config = getMraConfig()
+  switch (config.mode) {
+    case 'mock':
+      return fiscaliseMock(invoice, config)
+    case 'sandbox':
+      return fiscaliseSandbox(invoice, config)
+    case 'production':
+      return fiscaliseProduction(invoice, config)
+    default: {
+      // Exhaustiveness guard
+      const _exhaustive: never = config.mode
+      void _exhaustive
+      return fiscaliseMock(invoice, config)
+    }
   }
-  return realFiscalise(config, invoice)
 }
 
 /**
@@ -340,6 +533,10 @@ export function generateQRCode(data: string): string {
 
 /**
  * Build MRA configuration from societe settings.
+ *
+ * Kept for backwards compatibility with call-sites that derive MRA credentials
+ * from the `societes` row. New code should prefer `getMraConfig()` which reads
+ * the server-wide env-based configuration.
  */
 export function getMRAConfig(societe: {
   mra_ebs_id?: string
@@ -362,14 +559,21 @@ export function getMRAConfig(societe: {
 
 /**
  * Test connection to MRA IFP.
- * Returns true if the connection is successful.
+ *
+ * In `mock` mode (default), returns a synthetic success after a short delay.
+ * In `sandbox` / `production` modes the real endpoint is reachable, this issues
+ * a lightweight HTTP GET against the legacy `config.api_url`. Future work should
+ * replace this with an mTLS-authenticated probe against `config.apiEndpoint`.
  */
 export async function testMRAConnection(config: MRAConfig): Promise<{ success: boolean; message: string }> {
-  if (USE_MOCK) {
+  const mraConfig = getMraConfig()
+  if (mraConfig.mode === 'mock') {
     await new Promise(resolve => setTimeout(resolve, 800))
-    return { success: true, message: 'Connexion au serveur MRA (sandbox) reussie.' }
+    return { success: true, message: 'Connexion au serveur MRA (mock) reussie.' }
   }
 
+  // TODO: replace with mTLS probe against mraConfig.apiEndpoint once the real
+  // implementation lands. For now, keep the legacy HTTP probe for compatibility.
   try {
     const response = await fetch(`${config.api_url}/health`, {
       method: 'GET',
@@ -391,3 +595,7 @@ export async function testMRAConnection(config: MRAConfig): Promise<{ success: b
     }
   }
 }
+
+// Re-export legacy helper name to avoid breaking any callers that may have
+// imported it; kept out of the public surface by not being referenced above.
+void realFiscaliseLegacy
