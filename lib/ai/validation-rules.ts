@@ -93,18 +93,14 @@ export function validateTVAConsistency(
   if (!Number.isFinite(ht) || !Number.isFinite(tva) || !Number.isFinite(ttc)) {
     return { ok: false, ecart: Number.POSITIVE_INFINITY }
   }
+  // Seul test vraiment critique : HT + TVA = TTC (cohérence arithmétique).
+  // On NE vérifie PAS que TVA = HT × taux car les factures mixtes (certaines
+  // lignes taxables, d'autres non) ont un taux effectif < taux_tva.
+  // Si HT+TVA=TTC, la cohérence mathématique interne est bonne.
   const expected = ht + tva
   const ecart = Math.abs(expected - ttc)
   const tolerance = Math.max(1, Math.abs(ttc) * 0.005)
-  let ok = ecart <= tolerance
-
-  if (ok && typeof taux === 'number' && Number.isFinite(taux) && ht > 0) {
-    const expectedTva = ht * (taux / 100)
-    const tvaEcart = Math.abs(expectedTva - tva)
-    const tvaTol = Math.max(1, Math.abs(expectedTva) * 0.02)
-    if (tvaEcart > tvaTol) ok = false
-  }
-
+  const ok = ecart <= tolerance
   return { ok, ecart }
 }
 
