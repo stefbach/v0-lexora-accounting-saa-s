@@ -235,18 +235,11 @@ export async function GET(request: Request) {
     const allEcritures = ecritures || []
     const allDocs = documents || []
 
-    // Augment depensesFromFactures with payroll + charges from écritures
-    // Classe 6 : charges (641x salaires, 645x charges patronales, 627 frais, 63x impôts)
-    // Classe 4 paie : dettes paie (4210 net, 4311/4312 CSG/NSF, 4321-4324, 4330 PAYE)
-    // Les deux sont des DÉPENSES : la classe 6 = charge P&L, la classe 4 = dette à payer
-    const PAIE_COMPTES_4 = ['4210', '4211', '4212', '421', '4311', '4312', '4321', '4322', '4323', '4324', '4330', '431', '432', '433', '444']
-    const isPayeCompte4 = (compte: string) => PAIE_COMPTES_4.some(p => compte === p || compte.startsWith(p + '0'))
-
+    // Augment depensesFromFactures with payroll expenses from écritures
+    // Classe 6 uniquement : charges réelles (641x salaires, 645x patronales, 627 frais, 63x impôts)
+    // PAS les classe 4 (4210, 4311...) qui sont les DETTES, pas les charges → double-comptage
     const depensesNonFournisseursEcritures = allEcritures
-      .filter((e: any) => {
-        const c = e.compte || ''
-        return (c.startsWith('6') && !c.startsWith('628')) || isPayeCompte4(c)
-      })
+      .filter((e: any) => e.compte?.startsWith('6') && !e.compte?.startsWith('628'))
       .reduce((sum: number, e: any) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
     depensesFromFactures = depensesFournisseursFactures + depensesNonFournisseursEcritures
 
