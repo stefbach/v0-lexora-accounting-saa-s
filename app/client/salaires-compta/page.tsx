@@ -31,7 +31,7 @@ export default function SalairesComptaPage() {
         groups[p].nb++
         groups[p].basic += Number(b.salaire_base) || 0
         groups[p].ot += Number(b.heures_sup_montant) || 0
-        groups[p].primes += (Number(b.transport_allowance) || 0) + (Number(b.petrol_allowance) || 0) + (Number(b.special_allowance_1) || 0) + (Number(b.special_allowance_2) || 0) + (Number(b.special_allowance_3) || 0) + (Number(b.other_refund) || 0)
+        groups[p].primes += (Number(b.special_allowance_1) || 0) + (Number(b.special_allowance_2) || 0) + (Number(b.special_allowance_3) || 0) + (Number(b.other_refund) || 0)
         groups[p].brut += (Number(b.salaire_base) || 0) + (Number(b.heures_sup_montant) || 0) + (Number(b.transport_allowance) || 0) + (Number(b.petrol_allowance) || 0) + (Number(b.special_allowance_1) || 0) + (Number(b.special_allowance_2) || 0) + (Number(b.special_allowance_3) || 0) + (Number(b.other_refund) || 0)
         groups[p].net += Number(b.salaire_net) || 0
         groups[p].csg_sal += Number(b.csg_salarie) || 0
