@@ -4,6 +4,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSystemPrompt, injectTauxChange, injectSocietes, CLAUDE_CONFIG, SYSTEM_PROMPT_GENERIC_EXTRACTION } from '@/lib/ai/prompts'
 import type { PromptId } from '@/lib/ai/prompts'
 import { isBankName, validateAndCleanExtraction, computeConfidence, repairBankJSON } from '@/lib/utils/bank-utils'
+import { validateFactureExtraction, validateReleveBancaireExtraction } from '@/lib/ai/validation-rules'
+import { computeGranularConfidence, decideWorkflowAction } from '@/lib/utils/confidence-scorer'
+import { suggestAccounts } from '@/lib/accounting/suggest-account'
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -256,6 +259,68 @@ export async function POST(
     const extractionConfidence = computeConfidence(finalExtraction, finalTypeDocument)
     console.log(`[reanalyze] Confidence score: ${extractionConfidence}/100`)
 
+    // === Wave 1 libs: validation + confidence granulaire + workflow_action + suggest-account ===
+    const hasExtraction = finalExtraction && Object.keys(finalExtraction).length > 0
+    let validationResult: { valid: boolean; issues: unknown[]; confidence_penalty: number } = {
+      valid: true,
+      issues: [],
+      confidence_penalty: 0,
+    }
+    if (hasExtraction) {
+      try {
+        if (finalTypeDocument === 'facture_fournisseur' || finalTypeDocument === 'facture_client') {
+          validationResult = validateFactureExtraction(finalExtraction as Record<string, unknown>)
+        } else if (finalTypeDocument === 'releve_bancaire') {
+          validationResult = validateReleveBancaireExtraction(finalExtraction as Record<string, unknown>)
+        }
+      } catch (err) {
+        console.warn('[reanalyze] validation failed gracefully', err)
+      }
+    }
+
+    const granularConfidence = hasExtraction
+      ? computeGranularConfidence(
+          finalExtraction as Record<string, unknown>,
+          finalTypeDocument,
+          validationResult.issues.length,
+        )
+      : { global: 0, fields: [], validation_issues_count: 0, auto_decision: 'reject' as const }
+
+    const workflowAction = decideWorkflowAction(granularConfidence.global)
+
+    // Suggest account for supplier invoices
+    let accountSuggestions: Awaited<ReturnType<typeof suggestAccounts>> = []
+    const emetteurForSuggest = (finalExtraction as Record<string, unknown>)?.emetteur
+      ?? (finalExtraction as Record<string, unknown>)?.fournisseur
+    if (finalTypeDocument === 'facture_fournisseur' && emetteurForSuggest) {
+      try {
+        const targetSocieteId = dossier?.societe_id || null
+        if (targetSocieteId) {
+          accountSuggestions = await suggestAccounts({
+            societe_id: targetSocieteId,
+            tiers: String(emetteurForSuggest),
+            libelle: (finalExtraction as Record<string, unknown>)?.description ? String((finalExtraction as Record<string, unknown>).description) : undefined,
+            type_facture: 'fournisseur',
+            montant_ttc: typeof (finalExtraction as Record<string, unknown>)?.montant_ttc === 'number'
+              ? (finalExtraction as Record<string, number>).montant_ttc
+              : undefined,
+            supabase,
+          })
+        }
+      } catch (err) {
+        console.warn('[reanalyze] suggestAccounts failed, continuing without', err)
+      }
+    }
+
+    console.log('[reanalyze] wave1', {
+      type: finalTypeDocument,
+      valid: validationResult.valid,
+      issues: validationResult.issues.length,
+      confidence_global: granularConfidence.global,
+      workflow_action: workflowAction,
+      has_suggestions: accountSuggestions.length > 0,
+    })
+
     // Delete old accounting entries for this document
     if (doc.dossier_id) {
       await supabase.from('ecritures_comptables')
@@ -268,7 +333,7 @@ export async function POST(
     // Update document
     const updateFields: any = {
       type_document: finalTypeDocument,
-      statut: 'traite',
+      statut: workflowAction === 'reject' ? 'en_attente' : 'traite',
       societe_detectee: finalSociete !== 'INCONNU' ? finalSociete : null,
       confiance_type: extractionConfidence || finalConfiance,
       n8n_result: {
@@ -281,6 +346,18 @@ export async function POST(
           hint: hint || null,
           type_force: typeForce,
         },
+        // Wave 1 additions
+        validation: {
+          valid: validationResult.valid,
+          issues: validationResult.issues,
+          issues_count: validationResult.issues.length,
+        },
+        confidence_granular: granularConfidence,
+        workflow_action: workflowAction,
+        account_suggestions: accountSuggestions,
+        review_required: workflowAction === 'quick_review' || workflowAction === 'full_review' || workflowAction === 'reject',
+        review_level: workflowAction,
+        review_reason: workflowAction === 'reject' ? 'extraction_low_confidence' : null,
       },
     }
 
