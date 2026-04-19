@@ -38,10 +38,41 @@ interface AlertItem {
   montant: number | null
   echeance: string | null
   action_requise: string
-  // local-only state
+  // Clé stable fournie par l'API — utilisée pour persister l'état côté DB.
+  alerte_key: string
+  alerte_type?: string
+  // État hydraté depuis /api/client/alertes/state (et mis à jour optimistiquement).
   lue: boolean
   archivee: boolean
+  acknowledged: boolean
 }
+
+interface AlerteApiItem {
+  id: string
+  type: "urgent" | "attention" | "info"
+  titre: string
+  description: string
+  montant: number | null
+  echeance: string | null
+  action_requise: string
+  alerte_key: string
+  alerte_type?: string
+}
+
+interface AlerteStateApiItem {
+  alerte_key: string
+  alerte_type?: string | null
+  lue_at: string | null
+  archivee_at: string | null
+  acknowledged_at: string | null
+}
+
+type AlerteAction =
+  | "mark_read"
+  | "mark_unread"
+  | "archive"
+  | "unarchive"
+  | "acknowledge"
 
 function getAlertIcon(type: string) {
   switch (type) {
@@ -93,21 +124,37 @@ export default function AlertesPage() {
     async function fetchAlerts() {
       if (!societeId) { setLoading(false); return }
       try {
-        const res = await fetch(`/api/client/alertes?societe_id=${societeId}`)
-        if (res.ok) {
-          const data = await res.json()
-          if (Array.isArray(data.alertes)) {
-            setAlerts(
-              data.alertes.map((a: any) => ({
-                ...a,
-                lue: false,
-                archivee: false,
-              }))
-            )
-          }
+        // Fetch en parallèle : alertes actives (rule-based) + états persistés.
+        // Si la récupération des états échoue (DB down), l'UI continue en mode
+        // "tout non lu / non archivé" comme avant.
+        const [alertesRes, statesRes] = await Promise.all([
+          fetch(`/api/client/alertes?societe_id=${societeId}`),
+          fetch(`/api/client/alertes/state?societe_id=${societeId}`).catch(() => null),
+        ])
+
+        if (!alertesRes.ok) { setLoading(false); return }
+        const data = await alertesRes.json() as { alertes?: AlerteApiItem[] }
+        const items: AlerteApiItem[] = Array.isArray(data.alertes) ? data.alertes : []
+
+        // Hydrate les états depuis la DB (map alerte_key → state).
+        const stateByKey = new Map<string, AlerteStateApiItem>()
+        if (statesRes && statesRes.ok) {
+          const sj = await statesRes.json() as { states?: AlerteStateApiItem[] }
+          for (const s of sj.states ?? []) stateByKey.set(s.alerte_key, s)
         }
+
+        const merged: AlertItem[] = items.map(a => {
+          const st = stateByKey.get(a.alerte_key)
+          return {
+            ...a,
+            lue: !!st?.lue_at,
+            archivee: !!st?.archivee_at,
+            acknowledged: !!st?.acknowledged_at,
+          }
+        })
+        setAlerts(merged)
       } catch {
-        // API not available -- leave empty
+        // Graceful : en cas d'échec total, l'UI reste vide mais ne crash pas.
       } finally {
         setLoading(false)
       }
@@ -115,6 +162,26 @@ export default function AlertesPage() {
 
     fetchAlerts()
   }, [societeId])
+
+  // Persiste une action côté DB, en optimistic update.
+  // Si le POST échoue (DB down), on garde le changement local : l'utilisateur
+  // n'est pas bloqué, et au prochain reload l'état reviendra à celui de la DB.
+  async function persistAction(alerteKey: string, action: AlerteAction, alerteType?: string) {
+    try {
+      await fetch(`/api/client/alertes/state`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          alerte_key: alerteKey,
+          alerte_type: alerteType,
+          societe_id: societeId,
+          action,
+        }),
+      })
+    } catch {
+      // Silencieux : l'UI reste fonctionnelle en mode local.
+    }
+  }
 
   if (profile?.role === "client_user") {
     return <RequireRole roles={NON_CLIENT_USER_ROLES}>{null}</RequireRole>
@@ -153,11 +220,17 @@ export default function AlertesPage() {
   const infoCount = alerts.filter((a) => a.type === "info" && !a.archivee).length
 
   function markAsRead(id: string) {
+    const target = alerts.find(a => a.id === id)
+    if (!target) return
     setAlerts((prev) => prev.map((a) => (a.id === id ? { ...a, lue: true } : a)))
+    void persistAction(target.alerte_key, "mark_read", target.alerte_type)
   }
 
   function archiveAlert(id: string) {
+    const target = alerts.find(a => a.id === id)
+    if (!target) return
     setAlerts((prev) => prev.map((a) => (a.id === id ? { ...a, archivee: true, lue: true } : a)))
+    void persistAction(target.alerte_key, "archive", target.alerte_type)
   }
 
   // Group alerts by type for grouped display

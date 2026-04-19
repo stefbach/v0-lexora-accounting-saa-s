@@ -51,6 +51,20 @@ const MONTHS_FR = [
   "Juillet", "Aout", "Septembre", "Octobre", "Novembre", "Decembre"
 ]
 
+interface AgedReceivables {
+  totaux: Record<string, number>
+  par_tiers?: Record<string, unknown>[]
+}
+interface AgedPayables {
+  totaux: Record<string, number>
+  alertes?: { message: string }[]
+}
+interface AgedDataState {
+  receivables: AgedReceivables | null
+  payables: AgedPayables | null
+  loading: boolean
+}
+
 export default function EcheancesPage() {
   const { profile, loading } = useProfile()
   const { societeId } = useSocieteActive()
@@ -78,6 +92,28 @@ export default function EcheancesPage() {
   const [manualSaving, setManualSaving] = useState(false)
   const [editingEcheance, setEditingEcheance] = useState<string | null>(null)
   const [editingDate, setEditingDate] = useState("")
+
+  // Aged receivables + payables (synthèse consolidée)
+  const [agedData, setAgedData] = useState<AgedDataState>({ receivables: null, payables: null, loading: true })
+
+  useEffect(() => {
+    async function loadAged() {
+      if (!societeId) return
+      try {
+        const [recRes, payRes] = await Promise.all([
+          fetch(`/api/comptable/rapports/aged-receivables?societe_id=${societeId}`),
+          fetch(`/api/comptable/rapports/aged-payables?societe_id=${societeId}`)
+        ])
+        const rec = recRes.ok ? await recRes.json() : null
+        const pay = payRes.ok ? await payRes.json() : null
+        setAgedData({ receivables: rec, payables: pay, loading: false })
+      } catch (err) {
+        console.error('[echeances] aged fetch failed', err)
+        setAgedData({ receivables: null, payables: null, loading: false })
+      }
+    }
+    loadAged()
+  }, [societeId])
 
   const fetchData = useCallback(async () => {
     if (!societeId) { setFetching(false); return }
@@ -405,6 +441,93 @@ export default function EcheancesPage() {
       }
     >
       <div className="space-y-6">
+
+      {/* Synthèse consolidée — aged receivables & payables */}
+      {agedData.loading ? (
+        <div>Chargement de la synthèse...</div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Créances clients (à encaisser)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">
+                {agedData.receivables?.totaux?.total?.toLocaleString() ?? 0} MUR
+              </div>
+              <div className="grid grid-cols-5 gap-2 mt-4 text-sm">
+                <div><div className="text-muted-foreground">À échéance</div><div>{agedData.receivables?.totaux?.current?.toLocaleString() ?? 0}</div></div>
+                <div><div className="text-muted-foreground">1-30j</div><div>{agedData.receivables?.totaux?.['1-30']?.toLocaleString() ?? 0}</div></div>
+                <div><div className="text-muted-foreground">31-60j</div><div>{agedData.receivables?.totaux?.['31-60']?.toLocaleString() ?? 0}</div></div>
+                <div><div className="text-muted-foreground">61-90j</div><div>{agedData.receivables?.totaux?.['61-90']?.toLocaleString() ?? 0}</div></div>
+                <div className="text-red-600"><div className="text-muted-foreground">&gt;90j</div><div>{agedData.receivables?.totaux?.over_90?.toLocaleString() ?? 0}</div></div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Dettes fournisseurs (à payer)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">
+                {agedData.payables?.totaux?.total?.toLocaleString() ?? 0} MUR
+              </div>
+              <div className="grid grid-cols-5 gap-2 mt-4 text-sm">
+                <div><div className="text-muted-foreground">À échéance</div><div>{agedData.payables?.totaux?.current?.toLocaleString() ?? 0}</div></div>
+                <div><div className="text-muted-foreground">1-30j</div><div>{agedData.payables?.totaux?.['1-30']?.toLocaleString() ?? 0}</div></div>
+                <div><div className="text-muted-foreground">31-60j</div><div>{agedData.payables?.totaux?.['31-60']?.toLocaleString() ?? 0}</div></div>
+                <div><div className="text-muted-foreground">61-90j</div><div>{agedData.payables?.totaux?.['61-90']?.toLocaleString() ?? 0}</div></div>
+                <div className="text-red-600"><div className="text-muted-foreground">&gt;90j</div><div>{agedData.payables?.totaux?.over_90?.toLocaleString() ?? 0}</div></div>
+              </div>
+              {agedData.payables?.alertes && agedData.payables.alertes.length > 0 && (
+                <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded">
+                  <div className="font-semibold text-red-700 text-sm">⚠️ Alertes</div>
+                  {agedData.payables.alertes.map((a, i: number) => (
+                    <div key={i} className="text-xs text-red-600 mt-1">{a.message}</div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Position nette et prévisionnel */}
+      {!agedData.loading && agedData.receivables && agedData.payables && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Position nette &amp; prévisionnel trésorerie</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-lg">
+              Position nette : <strong className={
+                ((agedData.receivables.totaux.total ?? 0) - (agedData.payables.totaux.total ?? 0)) >= 0
+                  ? 'text-green-600' : 'text-red-600'
+              }>
+                {((agedData.receivables.totaux.total ?? 0) - (agedData.payables.totaux.total ?? 0)).toLocaleString()} MUR
+              </strong>
+            </div>
+            <div className="text-sm text-muted-foreground mt-2">
+              Projection si toutes les échéances sont respectées :
+            </div>
+            <div className="grid grid-cols-4 gap-2 mt-2 text-sm">
+              {['current', '1-30', '31-60', '61-90'].map((tranche, i) => {
+                const label = ['Immédiat', 'J+30', 'J+60', 'J+90'][i]
+                const net = (agedData.receivables?.totaux?.[tranche] ?? 0) - (agedData.payables?.totaux?.[tranche] ?? 0)
+                return (
+                  <div key={tranche}>
+                    <div className="text-muted-foreground">{label}</div>
+                    <div className={net >= 0 ? 'text-green-600' : 'text-red-600'}>
+                      {net.toLocaleString()}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Mauritius context */}
       <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-800">
