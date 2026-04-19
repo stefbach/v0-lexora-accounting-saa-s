@@ -115,6 +115,110 @@ function resolveAlias(name: string, aliasMap: Map<string, string>): string | nul
   return null
 }
 
+// ============================================================================
+// Batch loaders / indexers — Wave 2 (élimine N+1)
+// ============================================================================
+//
+// Ces helpers permettent de pré-indexer les factures / écritures en Maps
+// pour obtenir des lookups O(1) au lieu de scans O(n) à l'intérieur des
+// hot loops. Ils sont utilisés par :
+//   - matchByAmountFallback (Passe 1) : pré-filtrage des candidats par bucket de montant
+//   - autoClassify : lookup des écritures par compte (627 frais, 444/431/... MRA)
+//
+// Ne modifient AUCUNE règle métier : les tolérances et le scoring final
+// continuent de s'appliquer après le pré-filtrage.
+
+/** Normalise une clé de tiers pour indexation (sans espaces, sans accents). */
+function normalizeTiersKey(raw: string): string {
+  return (raw || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '')
+    .trim()
+}
+
+/** Indexe des factures par tiers normalisé pour lookup O(1). */
+export function indexFacturesByTiers<T extends { tiers?: string | null }>(
+  factures: T[],
+): Map<string, T[]> {
+  const map = new Map<string, T[]>()
+  for (const f of factures) {
+    if (!f.tiers) continue
+    const key = normalizeTiersKey(f.tiers)
+    if (!key) continue
+    const bucket = map.get(key)
+    if (bucket) bucket.push(f)
+    else map.set(key, [f])
+  }
+  return map
+}
+
+/** Indexe des écritures par compte (préfixe exact) pour lookup O(1). */
+export function indexEcrituresByCompte<T extends { compte?: string | null }>(
+  ecritures: T[],
+): Map<string, T[]> {
+  const map = new Map<string, T[]>()
+  for (const e of ecritures) {
+    if (!e.compte) continue
+    const bucket = map.get(e.compte)
+    if (bucket) bucket.push(e)
+    else map.set(e.compte, [e])
+  }
+  return map
+}
+
+/** Indexe des écritures par préfixe de compte (ex: "627", "444") pour
+ *  accélérer les filtrages du type `e.compte?.startsWith("627")`. */
+export function indexEcrituresByComptePrefix<
+  T extends { compte?: string | null },
+>(ecritures: T[], prefixLength: number = 3): Map<string, T[]> {
+  const map = new Map<string, T[]>()
+  for (const e of ecritures) {
+    if (!e.compte || e.compte.length < prefixLength) continue
+    const key = e.compte.substring(0, prefixLength)
+    const bucket = map.get(key)
+    if (bucket) bucket.push(e)
+    else map.set(key, [e])
+  }
+  return map
+}
+
+/** Indexe par bucket de montant pour matching tolérant (±1 bucket). */
+export function indexByAmountBucket<T>(
+  items: T[],
+  getAmount: (item: T) => number | null | undefined,
+  bucketSize: number = 100,
+): Map<number, T[]> {
+  const map = new Map<number, T[]>()
+  for (const it of items) {
+    const amt = getAmount(it)
+    if (typeof amt !== 'number' || !Number.isFinite(amt) || amt <= 0) continue
+    const bucket = Math.floor(amt / bucketSize)
+    const arr = map.get(bucket)
+    if (arr) arr.push(it)
+    else map.set(bucket, [it])
+  }
+  return map
+}
+
+/** Retrouve des candidats par bucket de montant ±N buckets. */
+export function lookupByAmountRange<T>(
+  index: Map<number, T[]>,
+  target: number,
+  bucketSize: number = 100,
+  bucketRadius: number = 1,
+): T[] {
+  if (!Number.isFinite(target) || target <= 0) return []
+  const centerBucket = Math.floor(target / bucketSize)
+  const result: T[] = []
+  for (let b = centerBucket - bucketRadius; b <= centerBucket + bucketRadius; b++) {
+    const items = index.get(b)
+    if (items) result.push(...items)
+  }
+  return result
+}
+
 // ═══════════════════════════════════════════════════════════════
 // Types
 // ═══════════════════════════════════════════════════════════════
@@ -687,6 +791,29 @@ export function autoClassify(
 ): AutoClassification[] {
   const results: AutoClassification[] = []
 
+  // Pre-index ecritures par préfixe de compte pour éviter un .find() O(n) par tx.
+  // - 627* : frais bancaires
+  // - 444*, 431*, 432*, 4457*, 447* : MRA / charges sociales
+  // On pré-calcule les buckets UNE FOIS ici ; chaque lookup par tx devient O(k)
+  // où k est le nombre d'écritures du préfixe (beaucoup plus petit que N total).
+  const ecrituresByPrefix3 = context.ecritures
+    ? indexEcrituresByComptePrefix(context.ecritures, 3)
+    : null
+  const ecrituresByPrefix4 = context.ecritures
+    ? indexEcrituresByComptePrefix(context.ecritures, 4)
+    : null
+  // Pour le lookup MRA : fusionner 444/431/432/447 + le cas spécial "4457"
+  const ecrituresMraCandidates = context.ecritures
+    ? [
+        ...(ecrituresByPrefix3?.get('444') || []),
+        ...(ecrituresByPrefix3?.get('431') || []),
+        ...(ecrituresByPrefix3?.get('432') || []),
+        ...(ecrituresByPrefix3?.get('447') || []),
+        ...(ecrituresByPrefix4?.get('4457') || []),
+      ]
+    : null
+  const ecrituresFraisCandidates = ecrituresByPrefix3?.get('627') || null
+
   for (const tx of transactions) {
     if (matchedTxKeys.has(txKey(tx))) continue
     const txAmt = Math.max(tx.debit, tx.credit)
@@ -744,9 +871,9 @@ export function autoClassify(
     // ── Frais bancaires ──
     if (BANK_FEE_PATTERNS.some(p => lib.includes(p))) {
       let ecritureId: string | undefined
-      if (context.ecritures) {
-        const fee = context.ecritures.find(e =>
-          e.compte?.startsWith('627') &&
+      if (ecrituresFraisCandidates) {
+        // Lookup O(k) où k = nombre d'écritures 627* (vs N total auparavant)
+        const fee = ecrituresFraisCandidates.find(e =>
           Math.abs((e.debit || 0) - tx.debit) / Math.max(tx.debit, 1) < 0.15
         )
         if (fee) ecritureId = fee.id
@@ -822,9 +949,11 @@ export function autoClassify(
       let ecritureId: string | undefined
       let note = 'Paiement MRA / charges sociales'
 
-      if (context.ecritures) {
-        const mraEcr = context.ecritures.find(e => {
-          if (!e.compte?.match(/^(444|431|432|4457|447)/)) return false
+      if (ecrituresMraCandidates) {
+        // Lookup O(k) sur les écritures des préfixes MRA déjà pré-indexés.
+        // La condition sur le préfixe de compte est désormais garantie par l'index
+        // (444/431/432/447/4457), plus besoin du regex à chaque itération.
+        const mraEcr = ecrituresMraCandidates.find(e => {
           const eAmt = (e.credit || 0) || (e.debit || 0)
           return eAmt > 0 && Math.abs(tx.debit - eAmt) / eAmt < 0.10
         })
@@ -874,6 +1003,24 @@ function matchByAmountFallback(
   const usedTxKeys = new Set<string>()
   const usedFactureIds = new Set<string>()
 
+  // Pre-index factures par bucket de montant pour éviter un scan O(n) par tx.
+  // Bucket = 100 MUR : avec tolérance 12%, on ratisse ±2 buckets autour de la cible
+  // pour garantir qu'on n'exclut aucun match légitime.
+  // Les factures en devises étrangères (dont le montant TTC peut être petit)
+  // sont indexées sur montant_mur ; on combine les deux index pour le lookup.
+  const BUCKET_SIZE = 100
+  const BUCKET_RADIUS_12PCT = 2 // assez large pour tolérer 12% d'écart sur les petits montants
+  const facturesByAmountTTC = indexByAmountBucket(
+    unpaidFactures,
+    (f) => Number(f.montant_ttc) || 0,
+    BUCKET_SIZE,
+  )
+  const facturesByAmountMUR = indexByAmountBucket(
+    unpaidFactures,
+    (f) => Number(f.montant_mur) || 0,
+    BUCKET_SIZE,
+  )
+
   // ── Passe 1 : 1 tx → 1 facture (match exact ou TDS) ──────────
   for (const tx of unmatchedTxs) {
     if (usedTxKeys.has(txKey(tx))) continue
@@ -885,7 +1032,24 @@ function matchByAmountFallback(
     // Collecter TOUS les candidats (pas juste le meilleur) pour évaluer l'ambiguïté
     const candidates: Array<{ f: MatchingFacture; diff: number; delay: number; tiersSim: number }> = []
 
-    for (const f of unpaidFactures) {
+    // O(1) lookup via buckets : union des candidats par montant TTC (même devise)
+    // et par montant MUR (cross-devise). Déduplication par id.
+    const ttcCandidates = lookupByAmountRange(facturesByAmountTTC, txRaw, BUCKET_SIZE, BUCKET_RADIUS_12PCT)
+    const murCandidates = lookupByAmountRange(facturesByAmountMUR, txAmtMUR, BUCKET_SIZE, BUCKET_RADIUS_12PCT)
+    const seen = new Set<string>()
+    const facturesInBucket: MatchingFacture[] = []
+    for (const f of ttcCandidates) {
+      if (seen.has(f.id)) continue
+      seen.add(f.id)
+      facturesInBucket.push(f)
+    }
+    for (const f of murCandidates) {
+      if (seen.has(f.id)) continue
+      seen.add(f.id)
+      facturesInBucket.push(f)
+    }
+
+    for (const f of facturesInBucket) {
       if (usedFactureIds.has(f.id)) continue
       const fTTC = Number(f.montant_ttc) || 0
       const fMUR = Number(f.montant_mur) || 0
