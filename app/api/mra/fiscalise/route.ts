@@ -184,13 +184,17 @@ export async function POST(request: Request) {
     const qrCodeImage = result.qrCodeData ? generateQRCode(result.qrCodeData) : null
 
     // Update facture with IRN and QR code
+    // Persiste aussi la réponse brute MRA (audit + vérification future
+    // de la signature) et la signature extraite si présente.
     const { data: updated, error: updateError } = await supabase
       .from('factures')
       .update({
         irn: result.irn,
         qr_code_data: qrCodeImage || result.qrCodeData,
         fiscalisation_date: result.fiscalisationDate,
-        mra_status: 'fiscalise',
+        mra_status: result.status ?? 'fiscalise',
+        mra_response_raw: result.raw ?? null,
+        mra_signature: result.signature ?? null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', facture_id)
@@ -323,7 +327,9 @@ async function handleAnnulation(
         irn: result.irn,
         qr_code_data: qrCodeImage || result.qrCodeData,
         fiscalisation_date: result.fiscalisationDate,
-        mra_status: 'fiscalise',
+        mra_status: result.status ?? 'fiscalise',
+        mra_response_raw: result.raw ?? null,
+        mra_signature: result.signature ?? null,
       })
       .eq('id', avoir.id)
 

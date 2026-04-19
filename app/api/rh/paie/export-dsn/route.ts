@@ -136,6 +136,19 @@ export async function GET(request: Request): Promise<NextResponse> {
 
     const bulletins: BulletinRow[] = (bulletinsRaw || []) as BulletinRow[]
 
+    // Robustesse : refuser de générer une DSN vide. Un XML avec
+    // `<Employees></Employees>` serait accepté par le parseur mais rejeté
+    // par le contrôle métier MRA ; autant surfacer l'erreur au caller.
+    if (bulletins.length === 0) {
+      return NextResponse.json(
+        {
+          error: `Aucun bulletin de paie trouvé pour la période ${periode}.`,
+          code: 'no_bulletins_found',
+        },
+        { status: 400 },
+      )
+    }
+
     // 3) Fetch employés référencés
     const empIds = [...new Set(bulletins.map((b) => b.employe_id).filter(Boolean))]
     let empMap = new Map<string, EmployeRow>()

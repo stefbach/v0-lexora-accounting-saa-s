@@ -568,7 +568,7 @@ export default function EcheancesPage() {
               Projection si toutes les échéances sont respectées :
             </div>
             <div className="grid grid-cols-4 gap-2 mt-2 text-sm">
-              {['current', '1-30', '31-60', '61-90'].map((tranche, i) => {
+              {(['current', '1-30', '31-60', '61-90'] as const).map((tranche, i) => {
                 const label = ['Immédiat', 'J+30', 'J+60', 'J+90'][i]
                 const net = (agedData.receivables?.totaux?.[tranche] ?? 0) - (agedData.payables?.totaux?.[tranche] ?? 0)
                 return (
@@ -666,7 +666,7 @@ export default function EcheancesPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredDeadlines.map((d: any) => {
+                    {filteredDeadlines.map((d: Deadline) => {
                       const dateColor = d.isOverdue ? "text-red-600 font-bold" : d.daysUntil <= 7 ? "text-orange-600 font-semibold" : "text-green-600"
                       return (
                         <TableRow key={d.id}>
@@ -852,11 +852,11 @@ export default function EcheancesPage() {
           <CardContent className="p-0 overflow-x-auto">
             <Table>
               <TableHeader><TableRow>
-                <TableHead className="w-8"><input type="checkbox" checked={selectedFactures.length === facturesSansDate.length && facturesSansDate.length > 0} onChange={() => setSelectedFactures(selectedFactures.length === facturesSansDate.length ? [] : facturesSansDate.map((f: any) => f.id))} className="cursor-pointer" /></TableHead>
+                <TableHead className="w-8"><input type="checkbox" checked={selectedFactures.length === facturesSansDate.length && facturesSansDate.length > 0} onChange={() => setSelectedFactures(selectedFactures.length === facturesSansDate.length ? [] : facturesSansDate.map((f: FactureRow) => f.id))} className="cursor-pointer" /></TableHead>
                 <TableHead>Tiers</TableHead><TableHead>Date facture</TableHead><TableHead className="text-right">Montant</TableHead><TableHead>Type</TableHead><TableHead>Action</TableHead>
               </TableRow></TableHeader>
               <TableBody>
-                {facturesSansDate.slice(0, visibleCount).map((f: any) => {
+                {facturesSansDate.slice(0, visibleCount).map((f: FactureRow) => {
                   const suggestedDate = f.date_facture ? new Date(new Date(f.date_facture).getTime() + 30 * 86400000).toISOString().slice(0, 10) : ""
                   return (
                     <TableRow key={f.id}>
