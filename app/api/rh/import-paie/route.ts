@@ -451,9 +451,10 @@ export async function POST(request: Request) {
       // D'abord supprimer les anciennes écritures SAL pour cette période (évite les doublons)
       let comptaOk = false
       if (dossier) {
-        await supabase.from('ecritures_comptables')
+        // Supprimer depuis v2 directement (pas la vue v1 qui a un trigger cassé)
+        await supabase.from('ecritures_comptables_v2')
           .delete()
-          .eq('dossier_id', dossier.id)
+          .eq('societe_id', societe_id)
           .eq('journal', 'SAL')
           .eq('date_ecriture', periodeDate)
         console.log(`[import-paie] Deleted old SAL entries for ${periodeDate}`)
