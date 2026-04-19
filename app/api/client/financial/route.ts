@@ -219,15 +219,16 @@ export async function GET(request: Request) {
     let facturesFromTable: any[] = []
     if (!facturesErr) facturesFromTable = facturesData || []
 
-    // Compute CA and dépenses from factures table (more reliable than écritures)
+    // Compute CA and dépenses from factures table — EN HT (hors taxe)
+    // En comptabilité, le résultat = CA HT - Charges HT. La TVA est séparée.
     const caFromFactures = facturesFromTable
       .filter(f => f.type_facture === 'client' && f.statut !== 'annule')
-      .reduce((s, f) => s + (Number(f.montant_mur) || convertToMUR(Number(f.montant_ttc) || 0, f.devise || 'MUR', rates)), 0)
+      .reduce((s, f) => s + convertToMUR(Number(f.montant_ht) || 0, f.devise || 'MUR', rates), 0)
 
-    // Fournisseur invoices total (from factures table — MUR)
+    // Fournisseur invoices total HT (from factures table — MUR)
     const depensesFournisseursFactures = facturesFromTable
       .filter(f => f.type_facture === 'fournisseur' && f.statut !== 'annule')
-      .reduce((s, f) => s + (Number(f.montant_mur) || convertToMUR(Number(f.montant_ttc) || 0, f.devise || 'MUR', rates)), 0)
+      .reduce((s, f) => s + convertToMUR(Number(f.montant_ht) || 0, f.devise || 'MUR', rates), 0)
     // depensesFromFactures will be augmented with payroll (641, 645) from écritures below
     // (computed after allEcritures is built)
     let depensesFromFactures = depensesFournisseursFactures
