@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Plus, Trash2, Eye, Save, Lock, Download, ArrowLeft, FileText, User, ListOrdered, Calculator, CreditCard, StickyNote, Palette, Check, FileWarning, FileMinus, Wand2 } from "lucide-react"
+import { Plus, Trash2, Eye, Save, Lock, Download, ArrowLeft, FileText, User, ListOrdered, Calculator, CreditCard, StickyNote, Palette, Check, FileWarning, FileMinus, Wand2, Sparkles, Loader2 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 
@@ -81,6 +81,10 @@ export default function NouvelleFacturePage() {
   const [templates, setTemplates] = useState<any[]>([])
   const [templateId, setTemplateId] = useState("")
   const [tvaDef, setTvaDef] = useState(15)
+  // Migration 146 : numérotation auto via RPC get_next_facture_number
+  const [autoNumero, setAutoNumero] = useState<{ sequence: number; exercice: number } | null>(null)
+  const [generatingNumero, setGeneratingNumero] = useState(false)
+  const [numeroError, setNumeroError] = useState<string | null>(null)
 
   useEffect(() => {
     try {
@@ -123,6 +127,34 @@ export default function NouvelleFacturePage() {
     setTauxLoading(false)
   }, [])
   useEffect(() => { fetchTaux(devise) }, [devise, fetchTaux])
+
+  const handleGenerateNumero = async () => {
+    if (!societeId) { setNumeroError("Sélectionnez une société avant de générer un numéro."); return }
+    setGeneratingNumero(true)
+    setNumeroError(null)
+    try {
+      const exercice = new Date(dateFacture || today()).getFullYear()
+      const res = await fetch(`/api/client/factures/next-number?societe_id=${encodeURIComponent(societeId)}&exercice=${exercice}`)
+      const data = await res.json() as { numero?: string; sequence?: number; exercice?: number; error?: string }
+      if (!res.ok || !data.numero || typeof data.sequence !== "number" || typeof data.exercice !== "number") {
+        throw new Error(data.error || "Numérotation automatique indisponible (vérifiez la migration 146).")
+      }
+      setNumeroFacture(data.numero)
+      setAutoNumero({ sequence: data.sequence, exercice: data.exercice })
+    } catch (e: unknown) {
+      setNumeroError(e instanceof Error ? e.message : "Erreur de génération du numéro.")
+    } finally {
+      setGeneratingNumero(false)
+    }
+  }
+
+  const handleNumeroChange = (val: string) => {
+    setNumeroFacture(val)
+    // Si l'utilisateur édite après génération auto, on invalide la séquence
+    // (elle sera ignorée dans le POST → retour au comportement manuel).
+    if (autoNumero) setAutoNumero(null)
+    if (numeroError) setNumeroError(null)
+  }
 
   const handleClientSelect = (id: string) => {
     setSelectedClientId(id)
@@ -177,6 +209,7 @@ export default function NouvelleFacturePage() {
       const nnn = String(settings?.prochain_numero || 1).padStart(3, "0")
       const generated = t.format_numero.replace("{YYYY}", yyyy).replace("{MM}", mm).replace("{NNN}", nnn)
       setNumeroFacture(generated)
+      setAutoNumero(null)
     }
   }
 
@@ -200,6 +233,10 @@ export default function NouvelleFacturePage() {
       accent_color: accentColor,
       type_document: typeDocument,
       facture_reference_id: factureReferenceId || undefined,
+      // Migration 146 : transmet numero_sequence + exercice UNIQUEMENT
+      // si le numéro a été généré par la RPC. Sinon (saisie manuelle), on
+      // laisse ces champs absents → comportement legacy préservé.
+      ...(autoNumero ? { numero_sequence: autoNumero.sequence, exercice: autoNumero.exercice } : {}),
     }
   }
 
@@ -356,7 +393,28 @@ export default function NouvelleFacturePage() {
         <CardHeader className="pb-2"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><FileText className="w-4 h-4" />Informations facture</CardTitle></CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Field label="N. Facture"><Input value={numeroFacture} onChange={e => setNumeroFacture(e.target.value)} className="font-mono" /></Field>
+            <Field label="N. Facture">
+              <div className="flex gap-2">
+                <Input value={numeroFacture} onChange={e => handleNumeroChange(e.target.value)} className="font-mono" />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleGenerateNumero}
+                  disabled={generatingNumero || !societeId}
+                  title="Générer un numéro séquentiel gap-free (MRA)"
+                  className="shrink-0 border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37]/10"
+                >
+                  {generatingNumero ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                </Button>
+              </div>
+              {autoNumero && (
+                <p className="text-xs text-green-600 mt-1">Séquence #{autoNumero.sequence} · exercice {autoNumero.exercice}</p>
+              )}
+              {numeroError && (
+                <p className="text-xs text-red-600 mt-1">{numeroError}</p>
+              )}
+            </Field>
             <Field label="Date facture"><Input type="date" value={dateFacture} onChange={e => { setDateFacture(e.target.value); if (echeancePreset > 0) setDateEcheance(addDays(e.target.value, echeancePreset)) }} /></Field>
             <Field label="Date echeance"><Input type="date" value={dateEcheance} onChange={e => { setDateEcheance(e.target.value); setEcheancePreset(-1) }} /></Field>
             <Field label="Reference"><Input value={reference} onChange={e => setReference(e.target.value)} placeholder="Ref. / PO" /></Field>

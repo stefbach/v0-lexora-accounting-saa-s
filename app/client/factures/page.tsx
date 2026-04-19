@@ -16,6 +16,7 @@ import {
   Search, Plus, Loader2, FileText, TrendingUp, Clock, AlertCircle,
   Eye, Trash2, RefreshCw, CalendarDays, Settings, Pencil, CheckCircle2,
   Shield, ShieldCheck, X, Building2, Download, Receipt,
+  Send, ThumbsUp, ThumbsDown, History,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { ClientKpi, ClientPanel } from "@/components/client/ClientKit"
@@ -30,6 +31,21 @@ interface Facture {
   recurrent: boolean; recurrent_frequence: string | null
   irn?: string | null; mra_status?: string | null; type_document?: string | null
   document_id?: string | null; pdf_url?: string | null; pdf_path?: string | null
+  // Migration 148 (workflow approbation)
+  statut_workflow?: string | null
+  validee_par?: string | null
+  validee_at?: string | null
+  refus_raison?: string | null
+  approbation_niveau?: number | null
+}
+interface HistoriqueRow {
+  id: string
+  ancien_statut: string | null
+  nouveau_statut: string
+  action: string | null
+  user_id: string | null
+  commentaire: string | null
+  created_at: string
 }
 interface Societe { id: string; nom: string }
 interface RecurringTemplate {
@@ -47,6 +63,38 @@ const STATUT_COLORS: Record<string, string> = {
   retard: "bg-red-100 text-red-800",
   partiel: "bg-blue-100 text-blue-800",
   annule: "bg-gray-100 text-gray-600",
+}
+
+// Migration 148 : statut_workflow — palette + libellé
+const WORKFLOW_COLORS: Record<string, string> = {
+  brouillon: "bg-gray-100 text-gray-600",
+  a_valider: "bg-amber-100 text-amber-800",
+  validee: "bg-emerald-100 text-emerald-800",
+  refusee: "bg-rose-100 text-rose-800",
+  envoyee: "bg-blue-100 text-blue-800",
+  acompte_recu: "bg-indigo-100 text-indigo-800",
+  paye_partiel: "bg-sky-100 text-sky-800",
+  paye: "bg-green-100 text-green-800",
+  retard_7j: "bg-orange-100 text-orange-800",
+  retard_30j: "bg-red-100 text-red-800",
+  en_contentieux: "bg-red-200 text-red-900",
+  annulee: "bg-gray-100 text-gray-600",
+  comptabilisee: "bg-violet-100 text-violet-800",
+}
+const WORKFLOW_LABELS: Record<string, string> = {
+  brouillon: "Brouillon",
+  a_valider: "À valider",
+  validee: "Validée",
+  refusee: "Refusée",
+  envoyee: "Envoyée",
+  acompte_recu: "Acompte reçu",
+  paye_partiel: "Payée partiel",
+  paye: "Payée",
+  retard_7j: "Retard 7j",
+  retard_30j: "Retard 30j",
+  en_contentieux: "Contentieux",
+  annulee: "Annulée",
+  comptabilisee: "Comptabilisée",
 }
 
 function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
@@ -86,6 +134,82 @@ export default function ClientFacturesPage() {
 
   // MRA fiscalisation
   const [fiscalisingId, setFiscalisingId] = useState<string | null>(null)
+
+  // Workflow approbation (migration 148)
+  const [workflowLoadingId, setWorkflowLoadingId] = useState<string | null>(null)
+  const [refusDialog, setRefusDialog] = useState<Facture | null>(null)
+  const [refusRaison, setRefusRaison] = useState("")
+  const [historique, setHistorique] = useState<HistoriqueRow[]>([])
+  const [historiqueLoading, setHistoriqueLoading] = useState(false)
+
+  const loadHistorique = useCallback(async (factureId: string) => {
+    setHistoriqueLoading(true)
+    try {
+      const res = await fetch(`/api/client/factures/${factureId}/historique`)
+      const data = (await res.json()) as { historique?: HistoriqueRow[] }
+      setHistorique(data.historique || [])
+    } catch {
+      setHistorique([])
+    } finally {
+      setHistoriqueLoading(false)
+    }
+  }, [])
+
+  const callWorkflow = async (
+    facture: Facture,
+    action: "soumettre" | "valider" | "refuser",
+    refus_raison?: string,
+  ) => {
+    if (workflowLoadingId) return
+    setWorkflowLoadingId(facture.id)
+    try {
+      const res = await fetch(`/api/client/factures/${facture.id}/workflow`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, refus_raison }),
+      })
+      const data = (await res.json()) as {
+        facture?: {
+          statut_workflow: string
+          validee_par: string | null
+          validee_at: string | null
+          refus_raison: string | null
+          approbation_niveau: number | null
+        }
+        error?: string
+      }
+      if (!res.ok || !data.facture) {
+        alert(data.error || "Erreur workflow")
+        return
+      }
+      setFactures(prev =>
+        prev.map(f =>
+          f.id === facture.id
+            ? {
+                ...f,
+                statut_workflow: data.facture!.statut_workflow,
+                validee_par: data.facture!.validee_par,
+                validee_at: data.facture!.validee_at,
+                refus_raison: data.facture!.refus_raison,
+                approbation_niveau: data.facture!.approbation_niveau,
+              }
+            : f,
+        ),
+      )
+    } catch (e: unknown) {
+      alert("Erreur réseau : " + (e instanceof Error ? e.message : ""))
+    } finally {
+      setWorkflowLoadingId(null)
+    }
+  }
+
+  const submitRefus = async () => {
+    if (!refusDialog) return
+    if (!refusRaison.trim()) { alert("Motif de refus obligatoire"); return }
+    await callWorkflow(refusDialog, "refuser", refusRaison.trim())
+    setRefusDialog(null)
+    setRefusRaison("")
+  }
 
   const handleFiscalise = async (f: Facture) => {
     if (fiscalisingId) return
@@ -155,8 +279,10 @@ export default function ClientFacturesPage() {
       // Open the original PDF document
       window.open(`/api/documents/${f.document_id}/download`, "_blank")
     } else {
-      // Show detail dialog
+      // Show detail dialog + load approbation history (migration 148)
       setDetailFacture(f)
+      setHistorique([])
+      loadHistorique(f.id)
     }
   }
 
@@ -357,11 +483,22 @@ export default function ClientFacturesPage() {
                       <TableHead>N.</TableHead><TableHead>Client</TableHead><TableHead>Date</TableHead>
                       <TableHead className="text-right">HT</TableHead><TableHead className="text-right">TVA</TableHead>
                       <TableHead className="text-right">TTC</TableHead><TableHead>Devise</TableHead>
-                      <TableHead className="text-right">MUR</TableHead><TableHead>Statut</TableHead><TableHead>MRA</TableHead><TableHead className="text-right">Actions</TableHead>
+                      <TableHead className="text-right">MUR</TableHead>
+                      <TableHead>Statut</TableHead>
+                      <TableHead>Workflow</TableHead>
+                      {factures.some(ff => (ff.approbation_niveau ?? 0) > 0) && (
+                        <TableHead className="text-center">Niveau appro.</TableHead>
+                      )}
+                      <TableHead>MRA</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filtered.map(f => (
+                    {filtered.map(f => {
+                      const workflow = f.statut_workflow || "brouillon"
+                      const showNiveauCol = factures.some(ff => (ff.approbation_niveau ?? 0) > 0)
+                      const isLoadingWF = workflowLoadingId === f.id
+                      return (
                       <TableRow key={f.id}>
                         <TableCell className="font-mono text-xs">{f.numero_facture || "-"}</TableCell>
                         <TableCell className="font-medium">{f.tiers || "-"}</TableCell>
@@ -376,6 +513,23 @@ export default function ClientFacturesPage() {
                             {f.statut === "en_attente" ? "en attente" : f.statut}
                           </span>
                         </TableCell>
+                        <TableCell>
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs font-medium ${WORKFLOW_COLORS[workflow] || "bg-gray-100 text-gray-600"}`}
+                            title={f.refus_raison ? `Refus : ${f.refus_raison}` : undefined}
+                          >
+                            {WORKFLOW_LABELS[workflow] || workflow}
+                          </span>
+                        </TableCell>
+                        {showNiveauCol && (
+                          <TableCell className="text-center text-xs">
+                            {(f.approbation_niveau ?? 0) > 0 ? (
+                              <Badge variant="outline" className="border-[#D4AF37] text-[#D4AF37]">N{f.approbation_niveau}</Badge>
+                            ) : (
+                              <span className="text-gray-300">-</span>
+                            )}
+                          </TableCell>
+                        )}
                         <TableCell>
                           {f.irn ? (
                             <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800" title={f.irn}>
@@ -401,7 +555,44 @@ export default function ClientFacturesPage() {
                           )}
                         </TableCell>
                         <TableCell className="text-right">
-                          <div className="flex justify-end gap-1">
+                          <div className="flex justify-end gap-1 flex-wrap">
+                            {/* Workflow actions (migration 148) */}
+                            {(workflow === "brouillon" || workflow === "refusee") && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => callWorkflow(f, "soumettre")}
+                                disabled={isLoadingWF}
+                                title="Mettre à approuver"
+                                className="text-amber-600 hover:text-amber-700"
+                              >
+                                {isLoadingWF ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                              </Button>
+                            )}
+                            {workflow === "a_valider" && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => callWorkflow(f, "valider")}
+                                  disabled={isLoadingWF}
+                                  title="Valider"
+                                  className="text-emerald-600 hover:text-emerald-700"
+                                >
+                                  {isLoadingWF ? <Loader2 className="w-4 h-4 animate-spin" /> : <ThumbsUp className="w-4 h-4" />}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => { setRefusDialog(f); setRefusRaison("") }}
+                                  disabled={isLoadingWF}
+                                  title="Refuser"
+                                  className="text-rose-600 hover:text-rose-700"
+                                >
+                                  <ThumbsDown className="w-4 h-4" />
+                                </Button>
+                              </>
+                            )}
                             <Button variant="ghost" size="sm" onClick={() => handlePreview(f)} title="Apercu"><Eye className="w-4 h-4" /></Button>
                             <a href={`/api/client/factures/${f.id}/pdf`} target="_blank" rel="noopener noreferrer" title={f.pdf_url ? "PDF stocké" : "Générer PDF"}>
                               <Button variant="ghost" size="sm" className={f.pdf_url ? "text-green-600 hover:text-green-700" : "text-gray-500"}>
@@ -412,7 +603,8 @@ export default function ClientFacturesPage() {
                           </div>
                         </TableCell>
                       </TableRow>
-                    ))}
+                      )
+                    })}
                   </TableBody>
                 </Table>
               )}
@@ -550,7 +742,7 @@ export default function ClientFacturesPage() {
       </Tabs>
 
       {/* Facture detail dialog (when no document_id) */}
-      <Dialog open={!!detailFacture} onOpenChange={open => { if (!open) setDetailFacture(null) }}>
+      <Dialog open={!!detailFacture} onOpenChange={open => { if (!open) { setDetailFacture(null); setHistorique([]) } }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-[#0B0F2E]">
@@ -564,9 +756,23 @@ export default function ClientFacturesPage() {
                 <div><span className="text-gray-500">Date :</span> <span className="font-medium">{detailFacture.date_facture ? new Date(detailFacture.date_facture).toLocaleDateString("fr-FR") : "—"}</span></div>
                 <div><span className="text-gray-500">Échéance :</span> <span className="font-medium">{detailFacture.date_echeance ? new Date(detailFacture.date_echeance).toLocaleDateString("fr-FR") : "—"}</span></div>
                 <div><span className="text-gray-500">Statut :</span> <Badge className={`ml-1 ${STATUT_COLORS[detailFacture.statut] || ""}`}>{detailFacture.statut}</Badge></div>
+                <div>
+                  <span className="text-gray-500">Workflow :</span>
+                  <Badge className={`ml-1 ${WORKFLOW_COLORS[detailFacture.statut_workflow || "brouillon"] || ""}`}>
+                    {WORKFLOW_LABELS[detailFacture.statut_workflow || "brouillon"] || detailFacture.statut_workflow}
+                  </Badge>
+                </div>
+                {(detailFacture.approbation_niveau ?? 0) > 0 && (
+                  <div><span className="text-gray-500">Niveau appro. :</span> <Badge variant="outline">N{detailFacture.approbation_niveau}</Badge></div>
+                )}
                 <div><span className="text-gray-500">Devise :</span> <span className="font-medium">{detailFacture.devise}</span></div>
                 <div><span className="text-gray-500">Mode paiement :</span> <span className="font-medium">{detailFacture.mode_paiement || "—"}</span></div>
               </div>
+              {detailFacture.refus_raison && (
+                <div className="bg-rose-50 border border-rose-200 rounded-lg p-2 text-sm text-rose-700">
+                  <strong>Motif de refus :</strong> {detailFacture.refus_raison}
+                </div>
+              )}
               <div className="border rounded-lg p-3 bg-gray-50 space-y-1">
                 <div className="flex justify-between text-sm"><span className="text-gray-500">Montant HT</span><span className="font-mono">{fmt(detailFacture.montant_ht)} {detailFacture.devise}</span></div>
                 <div className="flex justify-between text-sm"><span className="text-gray-500">TVA</span><span className="font-mono">{fmt(detailFacture.montant_tva)} {detailFacture.devise}</span></div>

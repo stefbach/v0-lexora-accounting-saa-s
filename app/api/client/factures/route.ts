@@ -199,6 +199,9 @@ export async function POST(request: Request) {
       recurrent = false, recurrent_frequence, logo_url,
       mode_paiement = 'banque', paye_par, contact_id,
       type_document = 'facture', facture_reference_id,
+      // Migration 146 : si le numéro a été généré via get_next_facture_number,
+      // l'UI renvoie `numero_sequence` et `exercice` pour respecter l'UNIQUE partiel.
+      numero_sequence, exercice,
     } = body
 
     if (!societe_id || !date_facture) {
@@ -259,6 +262,20 @@ export async function POST(request: Request) {
     }
     if (facture_reference_id) {
       insertData.facture_reference_id = facture_reference_id
+    }
+
+    // Migration 146 — persiste le couple (numero_sequence, exercice) si fourni
+    // par l'UI (cas "Générer numéro auto" via RPC get_next_facture_number).
+    // Ces colonnes sont nullable → saisie manuelle reste supportée inchangée.
+    if (typeof numero_sequence === 'number' && Number.isFinite(numero_sequence)) {
+      insertData.numero_sequence = numero_sequence
+    }
+    if (typeof exercice === 'number' && Number.isFinite(exercice)) {
+      insertData.exercice = exercice
+    } else if (date_facture) {
+      // Backfill : dérive l'exercice depuis date_facture pour cohérence
+      const y = new Date(date_facture).getFullYear()
+      if (Number.isFinite(y)) insertData.exercice = y
     }
 
     const { data, error } = await supabase
