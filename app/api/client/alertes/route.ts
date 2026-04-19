@@ -3,6 +3,7 @@ import { getAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 import { getTauxChange } from '@/lib/taux-change'
 import { assertSocieteAccess, mapSocieteAccessError } from '@/lib/supabase/assert-societe-access'
+import { computeAlerteKey, type AlerteType } from '@/lib/alertes/key'
 
 function convertToMUR(amount: number, devise: string, rates: Record<string, number>): number {
   if (!devise || devise === 'MUR') return amount
@@ -12,7 +13,7 @@ function convertToMUR(amount: number, devise: string, rates: Record<string, numb
   return amount
 }
 
-interface Alerte {
+export interface Alerte {
   id: string
   type: 'urgent' | 'attention' | 'info'
   titre: string
@@ -20,6 +21,11 @@ interface Alerte {
   montant: number | null
   echeance: string | null
   action_requise: string
+  // Clé stable pour persister l'état user (lue/archivée/acknowledged).
+  // Calculée côté API via lib/alertes/key.ts — le frontend ne la recalcule pas.
+  alerte_key: string
+  // Type métier de l'alerte (pour filtrage côté DB).
+  alerte_type: AlerteType
 }
 
 // GET — Generate financial alerts for a client (rule-based, no AI call)
@@ -102,6 +108,8 @@ export async function GET(request: Request) {
       if (montantRestant > 0) {
         const montantMUR = convertToMUR(montantRestant, devise, rates)
         const isOverdue = dateEcheance && new Date(dateEcheance) < now
+        const alerte_type: AlerteType = isOverdue ? 'facture_retard' : 'facture_en_attente'
+        const detail = `${doc.id}-${ext.numero_reference || doc.nom_fichier || ''}`
 
         alertes.push({
           id: `alerte-${++alerteIdx}`,
@@ -113,6 +121,13 @@ export async function GET(request: Request) {
           montant: Math.round(montantMUR * 100) / 100,
           echeance: dateEcheance,
           action_requise: isOverdue ? 'Relancer le paiement immediatement' : 'Suivre le paiement avant echeance',
+          alerte_type,
+          alerte_key: computeAlerteKey({
+            type: alerte_type,
+            societeId: doc.societe_detectee ?? requestedSocieteId ?? null,
+            periode: currentMonth,
+            detail,
+          }),
         })
       }
     }
@@ -136,16 +151,24 @@ export async function GET(request: Request) {
 
       const tvaNette = tvaCollectee - tvaDeductible
 
+      const tvaPeriode = tvaDeadline.toISOString().split('T')[0]
       alertes.push({
         id: `alerte-${++alerteIdx}`,
         type: daysUntilTVA <= 7 ? 'urgent' : 'attention',
         titre: `Declaration TVA - Echeance dans ${daysUntilTVA} jours`,
-        description: `TVA nette estimee: ${Math.round(tvaNette).toLocaleString('fr-FR')} MUR (collectee: ${Math.round(tvaCollectee).toLocaleString('fr-FR')}, deductible: ${Math.round(tvaDeductible).toLocaleString('fr-FR')}). Date limite: ${tvaDeadline.toISOString().split('T')[0]}`,
+        description: `TVA nette estimee: ${Math.round(tvaNette).toLocaleString('fr-FR')} MUR (collectee: ${Math.round(tvaCollectee).toLocaleString('fr-FR')}, deductible: ${Math.round(tvaDeductible).toLocaleString('fr-FR')}). Date limite: ${tvaPeriode}`,
         montant: Math.round(tvaNette * 100) / 100,
-        echeance: tvaDeadline.toISOString().split('T')[0],
+        echeance: tvaPeriode,
         action_requise: tvaNette > 0
           ? 'Preparer et soumettre la declaration TVA au MRA'
           : 'Preparer la declaration TVA (credit a reporter)',
+        alerte_type: 'tva_deadline',
+        alerte_key: computeAlerteKey({
+          type: 'tva_deadline',
+          societeId: requestedSocieteId ?? societeIds[0] ?? null,
+          periode: tvaPeriode,
+          detail: 'mra-tva',
+        }),
       })
     }
 
@@ -154,6 +177,9 @@ export async function GET(request: Request) {
     // ---------------------------------------------------------------
     const errorDocs = documents.filter(d => d.statut === 'erreur' || d.statut === 'error')
     if (errorDocs.length > 0) {
+      // Clé indépendante du nombre exact de docs en erreur : on veut que
+      // l'utilisateur puisse "acquitter" cette alerte pour la journée.
+      const errorIds = errorDocs.map(d => d.id).sort().join(',')
       alertes.push({
         id: `alerte-${++alerteIdx}`,
         type: 'attention',
@@ -162,6 +188,13 @@ export async function GET(request: Request) {
         montant: null,
         echeance: null,
         action_requise: 'Verifier et re-soumettre les documents en erreur',
+        alerte_type: 'document_erreur',
+        alerte_key: computeAlerteKey({
+          type: 'document_erreur',
+          societeId: requestedSocieteId ?? societeIds[0] ?? null,
+          periode: currentMonth,
+          detail: errorIds,
+        }),
       })
     }
 
@@ -181,6 +214,13 @@ export async function GET(request: Request) {
         montant: Math.round(totalBankMUR * 100) / 100,
         echeance: null,
         action_requise: 'Action immediate requise: securiser la tresorerie, accelerer les encaissements',
+        alerte_type: 'tresorerie_critique',
+        alerte_key: computeAlerteKey({
+          type: 'tresorerie_critique',
+          societeId: requestedSocieteId ?? societeIds[0] ?? null,
+          periode: currentMonth,
+          detail: 'solde-consolide',
+        }),
       })
     } else if (totalBankMUR < 500_000) {
       alertes.push({
@@ -191,6 +231,13 @@ export async function GET(request: Request) {
         montant: Math.round(totalBankMUR * 100) / 100,
         echeance: null,
         action_requise: 'Surveiller les decaissements a venir et planifier la tresorerie',
+        alerte_type: 'tresorerie_surveillance',
+        alerte_key: computeAlerteKey({
+          type: 'tresorerie_surveillance',
+          societeId: requestedSocieteId ?? societeIds[0] ?? null,
+          periode: currentMonth,
+          detail: 'solde-consolide',
+        }),
       })
     }
 
@@ -216,6 +263,13 @@ export async function GET(request: Request) {
         montant: null,
         echeance: null,
         action_requise: 'Telecharger les documents manquants pour completer la comptabilite du mois',
+        alerte_type: 'doc_manquant',
+        alerte_key: computeAlerteKey({
+          type: 'doc_manquant',
+          societeId: requestedSocieteId ?? societeIds[0] ?? null,
+          periode: currentMonth,
+          detail: missingTypes.slice().sort().join('-'),
+        }),
       })
     }
 
