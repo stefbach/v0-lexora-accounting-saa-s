@@ -96,7 +96,10 @@ interface InvoiceSettingsRow {
   couleur_secondaire?: string | null
   mra_active?: boolean | null
   mra_ebs_id?: string | null
-  mra_api_key_encrypted?: string | null
+  // Le GET renvoie la clé masquée ("***" + 4 derniers chars) — jamais la valeur brute.
+  // Pour écriture (PUT/PATCH), le champ persisté est `mra_api_key_secret`.
+  mra_api_key_masked?: string | null
+  mra_api_key_secret?: string | null
   mra_env?: "sandbox" | "production" | null
 }
 
@@ -224,7 +227,9 @@ export default function FacturationSettingsPage() {
           }
           setMraActive(Boolean(row.mra_active))
           setMraEbsId(row.mra_ebs_id ?? "")
-          setMraApiKey(row.mra_api_key_encrypted ?? "")
+          // L'API retourne la clé masquée ("***XXXX"), jamais la valeur brute.
+          // L'utilisateur doit re-saisir la clé complète pour la mettre à jour.
+          setMraApiKey(row.mra_api_key_masked ?? "")
           const env = (row.mra_env ?? "sandbox") as "sandbox" | "production"
           setMraEnvironment(env)
           setMraApiUrl(env === "production" ? "https://ifp.mra.mu/api/v1" : "https://sandboxifp.mra.mu/api/v1")
@@ -271,7 +276,11 @@ export default function FacturationSettingsPage() {
         couleur_secondaire: templateColors.secondaire,
         mra_active: mraActive,
         mra_ebs_id: mraEbsId || null,
-        mra_api_key_encrypted: mraApiKey || null,
+        // N'envoie la clé que si elle a été modifiée (non masquée).
+        // Une valeur commençant par "***" est la version masquée retournée par GET.
+        ...(mraApiKey && !mraApiKey.startsWith("***")
+          ? { mra_api_key_secret: mraApiKey }
+          : {}),
         mra_env: mraEnvironment,
       }
       const res = await fetch("/api/client/invoice-settings", {
@@ -345,7 +354,10 @@ export default function FacturationSettingsPage() {
         couleur_secondaire: localColors.secondaire,
         mra_active: localMraActive,
         mra_ebs_id: localMraEbs || null,
-        mra_api_key_encrypted: localMraKey || null,
+        // Import localStorage : même logique — ne pas ré-envoyer une clé masquée.
+        ...(localMraKey && !localMraKey.startsWith("***")
+          ? { mra_api_key_secret: localMraKey }
+          : {}),
         mra_env: localMraEnv,
       }
 

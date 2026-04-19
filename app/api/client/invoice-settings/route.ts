@@ -39,7 +39,9 @@ export interface InvoiceSettings {
   // MRA
   mra_active: boolean
   mra_ebs_id: string | null
-  mra_api_key_encrypted: string | null
+  // NOTE: stored in plaintext (app-level secret) — to be encrypted via lib/crypto TODO.
+  // Never returned raw by GET — masked as mra_api_key_masked.
+  mra_api_key_secret: string | null
   mra_env: 'sandbox' | 'production'
 }
 
@@ -70,7 +72,7 @@ const WRITABLE_FIELDS: readonly (keyof InvoiceSettingsPatch)[] = [
   'couleur_secondaire',
   'mra_active',
   'mra_ebs_id',
-  'mra_api_key_encrypted',
+  'mra_api_key_secret',
   'mra_env',
 ] as const
 
@@ -80,6 +82,29 @@ function sanitize(body: Record<string, unknown>): InvoiceSettingsPatch {
     if (key in body) out[key] = body[key]
   }
   return out as InvoiceSettingsPatch
+}
+
+/**
+ * Masque la clé API MRA pour réponse HTTP : ne jamais renvoyer la valeur brute.
+ * Retourne `"***" + 4 derniers caractères` (ex : "***f8a1").
+ */
+function maskSecret(secret: string | null | undefined): string | null {
+  if (!secret || typeof secret !== 'string' || secret.length === 0) return null
+  const lastFour = secret.slice(-4)
+  return `***${lastFour}`
+}
+
+/**
+ * Retire la clé brute des settings lus en base et la remplace par une version
+ * masquée dans `mra_api_key_masked`. `mra_api_key_secret` n'est jamais retourné.
+ */
+function redactSettings(row: Record<string, unknown> | null): Record<string, unknown> {
+  if (!row) return {}
+  const { mra_api_key_secret, ...safe } = row as { mra_api_key_secret?: string | null } & Record<string, unknown>
+  return {
+    ...safe,
+    mra_api_key_masked: maskSecret(mra_api_key_secret ?? null),
+  }
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -122,7 +147,7 @@ export async function GET(request: Request) {
       )
     }
 
-    return NextResponse.json({ settings: data || {} })
+    return NextResponse.json({ settings: redactSettings(data) })
   } catch (e: unknown) {
     const mapped = mapSocieteAccessError(e)
     if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
@@ -180,7 +205,7 @@ export async function PUT(request: Request) {
       )
     }
 
-    return NextResponse.json({ settings: data })
+    return NextResponse.json({ settings: redactSettings(data) })
   } catch (e: unknown) {
     const mapped = mapSocieteAccessError(e)
     if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
@@ -243,7 +268,7 @@ export async function PATCH(request: Request) {
           { status: 500 },
         )
       }
-      return NextResponse.json({ settings: data })
+      return NextResponse.json({ settings: redactSettings(data) })
     }
 
     const { data, error } = await admin
@@ -261,7 +286,7 @@ export async function PATCH(request: Request) {
       )
     }
 
-    return NextResponse.json({ settings: data })
+    return NextResponse.json({ settings: redactSettings(data) })
   } catch (e: unknown) {
     const mapped = mapSocieteAccessError(e)
     if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
