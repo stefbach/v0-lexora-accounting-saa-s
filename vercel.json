@@ -63,6 +63,14 @@
     {
       "path": "/api/cron/db-health-check",
       "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/cron/relances-factures-clients",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/factures-recurrentes-attendues",
+      "schedule": "30 9 * * *"
     }
   ]
 }
