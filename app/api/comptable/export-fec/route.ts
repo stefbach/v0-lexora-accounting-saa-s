@@ -14,6 +14,38 @@ function getAdminClient() {
 }
 
 /**
+ * Tronque une chaine a un nombre max de caracteres (pas de bytes),
+ * en respectant les caracteres multi-byte UTF-8 (surrogate pairs inclus).
+ */
+function truncateUtf8Safe(str: string, maxChars: number): string {
+  if (!str) return ''
+  const chars = Array.from(str)
+  if (chars.length <= maxChars) return str
+  return chars.slice(0, maxChars).join('')
+}
+
+/**
+ * Formate un nombre au format francais (virgule decimale, 2 decimales).
+ */
+function formatFrench(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(Number(n))) return '0,00'
+  return Number(n).toFixed(2).replace('.', ',')
+}
+
+/**
+ * Formate une date au format FEC YYYYMMDD (UTC).
+ */
+function formatFecDate(d: string | Date | null | undefined): string {
+  if (!d) return ''
+  const dt = typeof d === 'string' ? new Date(d) : d
+  if (!(dt instanceof Date) || isNaN(dt.getTime())) return ''
+  const yyyy = dt.getUTCFullYear()
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(dt.getUTCDate()).padStart(2, '0')
+  return `${yyyy}${mm}${dd}`
+}
+
+/**
  * GET /api/comptable/export-fec?societe_id=xxx&date_debut=YYYY-MM-DD&date_fin=YYYY-MM-DD&format=fec|csv|balance
  *
  * Formats :
@@ -45,7 +77,7 @@ export async function GET(request: Request) {
 
     let query = supabase
       .from('ecritures_comptables_v2')
-      .select('id, numero_compte, libelle, debit_mur, credit_mur, lettre, date_ecriture, journal, ref_folio, created_at')
+      .select('id, numero_compte, libelle, debit_mur, credit_mur, lettre, date_lettrage, date_ecriture, journal, ref_folio, numero_piece, devise, montant_devise, created_at')
       .eq('dossier_id', dossier.id)
       .order('date_ecriture', { ascending: true })
       .order('created_at', { ascending: true })
@@ -86,38 +118,67 @@ export async function GET(request: Request) {
 
     // === Format FEC (français) ===
     if (format === 'fec') {
-      // FEC exige 18 colonnes standard, separees par TAB
+      // FEC exige 18 colonnes standard, separees par TAB, encodage UTF-8 avec BOM
       const header = [
         'JournalCode', 'JournalLib', 'EcritureNum', 'EcritureDate', 'CompteNum', 'CompteLib',
         'CompAuxNum', 'CompAuxLib', 'PieceRef', 'PieceDate', 'EcritureLib',
         'Debit', 'Credit', 'EcritureLet', 'DateLet', 'ValidDate', 'Montantdevise', 'Idevise',
       ].join('\t')
-      const lines = [header]
+      const lines: string[] = [header]
       for (const e of ecritures || []) {
+        const journalCode = (e.journal || 'OD').toString().replace(/\t/g, ' ')
+        const journalLib = (e.journal || 'OD').toString().replace(/\t/g, ' ')
+        const ecritureNum = (e.ref_folio || String(e.id).substring(0, 12)).toString().replace(/\t/g, ' ')
+        const ecritureDate = formatFecDate(e.date_ecriture)
+        const compteNum = (e.numero_compte || '').toString().replace(/\t/g, ' ')
+        const compteLib = truncateUtf8Safe((e.libelle || '').toString().replace(/\t/g, ' '), 60)
+        const compAuxNum = ''
+        const compAuxLib = ''
+        const pieceRef = ((e as any).numero_piece || e.ref_folio || '').toString().replace(/\t/g, ' ')
+        const pieceDate = formatFecDate(e.date_ecriture)
+        const ecritureLib = truncateUtf8Safe((e.libelle || '').toString().replace(/\t/g, ' '), 60)
+        const debit = formatFrench(Number(e.debit_mur))
+        const credit = formatFrench(Number(e.credit_mur))
+        const ecritureLet = (e.lettre || '').toString().replace(/\t/g, ' ')
+        const dateLet = formatFecDate((e as any).date_lettrage)
+        const validDate = formatFecDate(e.date_ecriture)
+        const devise = ((e as any).devise || 'MUR').toString().toUpperCase().replace(/\t/g, ' ')
+        const montantDeviseNum = Number((e as any).montant_devise)
+        const montantDevise =
+          devise !== 'MUR' && Number.isFinite(montantDeviseNum) && montantDeviseNum !== 0
+            ? formatFrench(montantDeviseNum)
+            : ''
+
         const line = [
-          e.journal || 'OD', e.journal || 'OD',
-          e.ref_folio || String(e.id).substring(0, 12),
-          String(e.date_ecriture || '').replace(/-/g, ''),
-          e.numero_compte || '',
-          (e.libelle || '').substring(0, 60),
-          '', '', // pas de comptes auxiliaires distincts
-          e.ref_folio || '',
-          String(e.date_ecriture || '').replace(/-/g, ''),
-          (e.libelle || '').replace(/\t/g, ' '),
-          (Number(e.debit_mur) || 0).toFixed(2).replace('.', ','),
-          (Number(e.credit_mur) || 0).toFixed(2).replace('.', ','),
-          e.lettre || '', '',
-          String(e.date_ecriture || '').replace(/-/g, ''),
-          '', '',
+          journalCode,
+          journalLib,
+          ecritureNum,
+          ecritureDate,
+          compteNum,
+          compteLib,
+          compAuxNum,
+          compAuxLib,
+          pieceRef,
+          pieceDate,
+          ecritureLib,
+          debit,
+          credit,
+          ecritureLet,
+          dateLet,
+          validDate,
+          montantDevise,
+          devise,
         ].join('\t')
         lines.push(line)
       }
-      const fec = lines.join('\n')
+      const BOM = '\uFEFF'
+      const fec = BOM + lines.join('\n')
+      const exerciceSuffix = `${date_debut || 'all'}_${date_fin || 'now'}`
       return new NextResponse(fec, {
         status: 200,
         headers: {
-          'Content-Type': 'text/tab-separated-values; charset=utf-8',
-          'Content-Disposition': `attachment; filename="FEC_${societeNom}_${date_debut || 'all'}_${date_fin || 'now'}.txt"`,
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Content-Disposition': `attachment; filename="FEC_${societeNom}_${exerciceSuffix}.txt"`,
         },
       })
     }
