@@ -1224,7 +1224,10 @@ export async function POST(request: Request) {
               // ── Virements internes → 581 ──
               if (tx.statut === 'interne' || tx.matched_type === 'transfert_interne') {
                 const intRef = `VI-${releveId}-${i}`
-                const alreadyExists = (allEcr401v2 || []).some((e: any) => e.ref_folio === intRef)
+                const anyRefInt = `${releveId}-${i}`
+                const alreadyExists = (allEcr401v2 || []).some((e: any) =>
+                  e.ref_folio && (e.ref_folio === intRef || e.ref_folio.endsWith(anyRefInt))
+                )
                 if (alreadyExists) continue
 
                 // Use shared VI code from counterpart matching if available
@@ -1435,7 +1438,12 @@ export async function POST(request: Request) {
             // Salaires → D 421 / C 512, Particuliers → D 467 / C 512
             if (tx.statut === 'rapproche' && !tx.facture_id && tx.matched_type) {
               const classRef = `CLS-${releveId2}-${i2}`
-              const classExists = (allEcr401v2 || []).some((e: any) => e.ref_folio === classRef)
+              // Vérifier si une écriture BNQ existe DÉJÀ pour cette tx, quel que soit le ref_folio
+              // (évite les doublons entre CLS-xxx, CL-xxx, BANK-xxx)
+              const anyRef = `${releveId2}-${i2}`
+              const classExists = (allEcr401v2 || []).some((e: any) =>
+                e.ref_folio && (e.ref_folio === classRef || e.ref_folio.endsWith(anyRef))
+              )
               if (!classExists) {
                 let compteCharge = '471'
                 let libellePrefix = 'Opération bancaire'
