@@ -12,39 +12,53 @@ CREATE EXTENSION IF NOT EXISTS citext;
 -- ============================================================================
 -- 1. Email case-insensitive sur employes
 -- ============================================================================
--- Change employes.email en CITEXT (case-insensitive comparison)
--- Note: cette ALTER peut échouer si UNIQUE constraint existe déjà avec case-sensitive.
--- On fait un DROP puis re-CREATE pour être sûr.
+-- Stratégie adoptée : INDEX UNIQUE sur LOWER(email) au lieu de conversion CITEXT.
+--
+-- Raison : Postgres bloque ALTER TYPE sur une colonne référencée par des RLS
+-- policies (erreur 0A000 "cannot alter type of a column used in a policy
+-- definition"). Plutôt que de dropper/recréer toutes les policies dépendantes
+-- (risqué — on ne connaît pas toutes leurs définitions), on utilise un index
+-- fonctionnel sur LOWER(email) qui donne le même effet pratique :
+--   - Unicité case-insensitive garantie côté DB
+--   - Les requêtes WHERE LOWER(email) = LOWER($1) utilisent l'index
+--
+-- Côté application (routes auth/signer), toujours normaliser avec .toLowerCase()
+-- avant lookup pour garantir match consistant.
+-- ============================================================================
 
+-- Dédoublonnage case-insensitive préalable (garde la ligne la plus récente,
+-- NULL les autres pour éviter violation du nouvel index UNIQUE)
 DO $$
 BEGIN
-  -- Vérifie si la colonne existe et n'est pas déjà CITEXT
   IF EXISTS (
     SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'employes' AND column_name = 'email' AND data_type <> 'USER-DEFINED'
+    WHERE table_schema = 'public' AND table_name = 'employes' AND column_name = 'email'
   ) THEN
-    -- Dédoublonnage case-insensitive AVANT conversion (garde la ligne la plus récente)
     WITH doublons AS (
       SELECT id, email,
-             ROW_NUMBER() OVER (PARTITION BY LOWER(email) ORDER BY created_at DESC NULLS LAST, id DESC) AS rn
+             ROW_NUMBER() OVER (
+               PARTITION BY LOWER(email)
+               ORDER BY created_at DESC NULLS LAST, id DESC
+             ) AS rn
       FROM public.employes
-      WHERE email IS NOT NULL
+      WHERE email IS NOT NULL AND email <> ''
     )
     UPDATE public.employes
     SET email = NULL
     WHERE id IN (SELECT id FROM doublons WHERE rn > 1);
 
-    -- Converti en CITEXT
-    ALTER TABLE public.employes ALTER COLUMN email TYPE CITEXT;
-
-    RAISE NOTICE '[mig 165] employes.email converti en CITEXT (doublons case-insensitive déduplicatés)';
+    RAISE NOTICE '[mig 165] Dédoublonnage email case-insensitive effectué (doublons mis à NULL).';
   END IF;
 END $$;
 
--- Index UNIQUE case-insensitive (en plus du type CITEXT qui implique auto)
+-- Index UNIQUE fonctionnel sur LOWER(email) — case-insensitive sans changer le type
+DROP INDEX IF EXISTS public.uq_employes_email_ci;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_employes_email_ci
-  ON public.employes (email)
-  WHERE email IS NOT NULL;
+  ON public.employes (LOWER(email))
+  WHERE email IS NOT NULL AND email <> '';
+
+COMMENT ON INDEX public.uq_employes_email_ci IS
+  'Unicité case-insensitive de employes.email via LOWER(). Plus portable que CITEXT (évite conflit policies RLS).';
 
 -- ============================================================================
 -- 2. TTL sur token_signature des contrats employés
