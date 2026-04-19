@@ -19,6 +19,7 @@ import {
   Menu,
   X,
   ShieldAlert,
+  RefreshCcw,
 } from "lucide-react"
 
 const MENU = [
@@ -30,7 +31,8 @@ const MENU = [
       { href: "/admin/clients", label: "Clients", labelKey: "admin.clients", icon: Briefcase },
       { href: "/admin/comptables", label: "Comptables", labelKey: "admin.accountants", icon: UserCog },
       { href: "/admin/societes", label: "Societes", labelKey: "admin.companies", icon: Building2 },
-      { href: "/admin/documents", label: "Documents", labelKey: "admin.documents", icon: FileText },
+      { href: "/admin/documents", label: "Documents", labelKey: "admin.documents", icon: FileText, exact: true },
+      { href: "/admin/documents/batch-reanalyze", label: "Re-analyse OCR", icon: RefreshCcw },
       { href: "/admin/services", label: "Services & Plans", labelKey: "admin.services", icon: Settings },
     ],
   },
