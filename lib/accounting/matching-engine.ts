@@ -29,6 +29,20 @@ const FALLBACK_FX: Record<string, number> = {
 const fxCache = new Map<string, number>()
 
 /**
+ * Résultat d'une résolution de taux de change.
+ *
+ * Le flag `_warning` est positionné uniquement lorsque la devise demandée n'est
+ * ni trouvée en base ni dans FALLBACK_FX, et que le moteur retombe sur un taux
+ * 1:1 pour éviter un crash. Les call-sites doivent détecter ce flag et afficher
+ * un warning utilisateur / bloquer la comptabilisation selon leur politique.
+ */
+export interface FxResult {
+  taux: number
+  source: 'cache' | 'db_exact' | 'db_near' | 'fallback'
+  _warning?: 'fx_unknown_currency_used_1_to_1'
+}
+
+/**
  * Récupère le taux historique devise→MUR à une date donnée.
  * Stratégie :
  * 1. Cache mémoire
@@ -39,7 +53,7 @@ export async function getTauxChangeAtDate(
   supabase: SupabaseClient,
   devise: string,
   date: Date | string,
-): Promise<{ taux: number; source: 'cache' | 'db_exact' | 'db_near' | 'fallback' }> {
+): Promise<FxResult> {
   const devU = (devise ?? 'MUR').toUpperCase()
   if (devU === 'MUR') return { taux: 1, source: 'cache' }
 
@@ -93,8 +107,8 @@ export async function getTauxChangeAtDate(
   }
 
   // Ultime recours : 1:1 (évite crash, mais log erreur)
-  console.error(`[matching-engine] No FX available for ${devU}, using 1.0`)
-  return { taux: 1, source: 'fallback' }
+  console.error(`[matching-engine] CRITICAL: No FX available for ${devU} at ${dateStr}, using 1:1 which is almost certainly WRONG`)
+  return { taux: 1, source: 'fallback', _warning: 'fx_unknown_currency_used_1_to_1' as const }
 }
 
 /**
@@ -104,7 +118,12 @@ export async function getTauxChangeAtDate(
  */
 export function getFxFallbackSync(devise: string): number {
   const devU = (devise ?? 'MUR').toUpperCase()
-  return FALLBACK_FX[devU] ?? 1
+  const rate = FALLBACK_FX[devU]
+  if (rate === undefined) {
+    console.error(`[matching-engine] Unknown currency ${devU} — using 1:1 as last resort (likely wrong)`)
+    return 1
+  }
+  return rate
 }
 
 /** Vide le cache FX (utile pour tests ou après maj taux_change) */

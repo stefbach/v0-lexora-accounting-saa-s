@@ -89,11 +89,20 @@ export function getMraConfig(): MraConfig {
     if (!apiEndpoint) missing.push('MRA_API_ENDPOINT')
     if (!certPath) missing.push('MRA_CERT_PATH')
     if (!taxpayerTan) missing.push('MRA_TAXPAYER_TAN')
+
     if (missing.length > 0) {
-      console.error(
-        `[mra] Production mode requested but config incomplete (missing: ${missing.join(', ')}), falling back to mock`
-      )
-      mode = 'mock'
+      const allowFallback = (process.env.MRA_ALLOW_FALLBACK_TO_MOCK ?? '').toLowerCase() === 'true'
+      if (allowFallback) {
+        console.error(
+          `[mra] Production mode requested but config incomplete (missing: ${missing.join(', ')}), falling back to mock (MRA_ALLOW_FALLBACK_TO_MOCK=true)`
+        )
+        mode = 'mock'
+      } else {
+        throw new Error(
+          `[mra] MRA_MODE=production but required config is missing: ${missing.join(', ')}. ` +
+          `Set these env vars, OR set MRA_ALLOW_FALLBACK_TO_MOCK=true to bypass (mock IRN will be generated — compliance risk).`
+        )
+      }
     }
   }
 

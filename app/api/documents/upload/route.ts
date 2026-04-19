@@ -1025,6 +1025,12 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
             : null
 
     // Update document as processed
+    // Note: la colonne `statut` de `documents` est contrainte par un CHECK strict
+    // ('en_attente','en_cours','traite','erreur'). On ne peut donc pas distinguer
+    // "reject (revue humaine requise)" via le statut lui-même — on utilise les
+    // champs `review_required` / `review_reason` dans `n8n_result` pour exprimer
+    // l'intention explicitement. Les vues comptables doivent filtrer les docs
+    // avec `n8n_result->review_required = true` en conséquence.
     const updateData: any = {
       type_document: typeDocument,
       statut: isRejected ? 'en_attente' : 'traite',
@@ -1045,7 +1051,12 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
         ...(needsReview ? { needs_review: true, review_level: reviewLevel } : {}),
         ...(isRejected
           ? {
+              // review_required distingue les doc nécessitant revue humaine
+              // (confiance trop basse) des doc pas encore traités (statut='en_attente'
+              // brut sans passage par le pipeline d'extraction).
               needs_review: false,
+              review_required: true,
+              review_reason: 'extraction_low_confidence',
               review_level: 'reject',
               erreur: 'extraction_low_confidence',
             }
