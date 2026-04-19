@@ -82,9 +82,27 @@ function pickAlias(
   extraction: Record<string, unknown>,
   aliases: string[]
 ): { present: boolean; value: unknown } {
+  // Cherche au root
   for (const a of aliases) {
     if (hasMeaningfulValue(extraction[a])) {
       return { present: true, value: extraction[a] }
+    }
+  }
+  // Cherche dans les sous-objets courants (structure imbriquée Claude)
+  const nestedKeys = ['facture', 'montants', 'montant', 'emetteur', 'fournisseur_info', 'client_info', 'details']
+  for (const nk of nestedKeys) {
+    const sub = extraction[nk]
+    if (!sub || typeof sub !== 'object') continue
+    const subObj = sub as Record<string, unknown>
+    for (const a of aliases) {
+      if (hasMeaningfulValue(subObj[a])) {
+        return { present: true, value: subObj[a] }
+      }
+    }
+    // Cas emetteur: { nom: "..." } → prend nom comme value pour alias "emetteur"
+    if ((nk === 'emetteur' || nk === 'fournisseur_info') && aliases.includes('emetteur')) {
+      const nom = subObj.nom || subObj.name || subObj.raison_sociale
+      if (hasMeaningfulValue(nom)) return { present: true, value: nom }
     }
   }
   return { present: false, value: undefined }
@@ -149,6 +167,7 @@ export function computeGranularConfidence(
   const invalidFields = new Set<string>()
   if (validation) {
     for (const issue of validation.issues) {
+      // 'info' = observation (pas de pénalité) — ex: montant_ttc=0 légitime (avoirs/transferts)
       if (issue.severity === 'error' || issue.severity === 'warning') {
         invalidFields.add(issue.field)
       }

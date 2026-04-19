@@ -138,19 +138,40 @@ export function validateFactureExtraction(
   const issues: ValidationIssue[] = []
   let penalty = 0
 
-  const ht = toNumber(extraction.montant_ht)
-  const tva = toNumber(extraction.montant_tva)
-  const ttc = toNumber(extraction.montant_ttc)
-  const taux = toNumber(extraction.taux_tva)
-  const devise = toStringSafe(extraction.devise) || 'MUR'
+  // Accès résilient aux structures imbriquées générées par Claude.
+  // Claude peut produire { montant_ttc, emetteur, ... } (plate)
+  // OU { montants: { montant_ttc, ... }, facture: { numero, date_facture, ... }, emetteur: { nom, brn, ... } } (imbriquée).
+  const flat = flattenExtraction(extraction)
 
-  if (ttc == null || ttc <= 0) {
+  const ht = toNumber(flat.montant_ht)
+  const tva = toNumber(flat.montant_tva)
+  const ttc = toNumber(flat.montant_ttc)
+  const taux = toNumber(flat.taux_tva)
+  const devise = toStringSafe(flat.devise) || 'MUR'
+
+  // Un montant explicite à 0 est légitime pour avoirs/transferts/résiliations.
+  // On distingue : "absent" (null/undefined) = error, "présent et 0" = info (pas de penalty).
+  if (ttc == null) {
     issues.push({
       field: 'montant_ttc',
       severity: 'error',
-      message: 'montant_ttc absent ou invalide',
+      message: 'montant_ttc absent',
     })
     penalty += 25
+  } else if (ttc < 0) {
+    issues.push({
+      field: 'montant_ttc',
+      severity: 'error',
+      message: `montant_ttc négatif (${ttc}) — seuls les avoirs peuvent avoir un montant négatif`,
+    })
+    penalty += 20
+  } else if (ttc === 0) {
+    issues.push({
+      field: 'montant_ttc',
+      severity: 'info',
+      message: 'montant_ttc à 0 — facture de transfert/avoir/résiliation (à vérifier)',
+    })
+    // pas de penalty — montant 0 peut être légitime
   } else {
     if (!validateMontantRaisonnable(ttc, devise)) {
       issues.push({
@@ -169,7 +190,7 @@ export function validateFactureExtraction(
     }
   }
 
-  if (ht != null && tva != null && ttc != null) {
+  if (ht != null && tva != null && ttc != null && ttc > 0) {
     const check = validateTVAConsistency(ht, tva, ttc, taux ?? undefined)
     if (!check.ok) {
       issues.push({
@@ -191,7 +212,7 @@ export function validateFactureExtraction(
     penalty += 5
   }
 
-  const dateFacture = toStringSafe(extraction.date_facture || extraction.date_document)
+  const dateFacture = toStringSafe(flat.date_facture || flat.date_document)
   if (!dateFacture) {
     issues.push({
       field: 'date_facture',
@@ -209,7 +230,7 @@ export function validateFactureExtraction(
   }
 
   const tiers = toStringSafe(
-    extraction.fournisseur || extraction.client || extraction.emetteur || extraction.tiers
+    flat.fournisseur || flat.client || flat.emetteur || flat.tiers
   )
   if (!tiers) {
     issues.push({
@@ -227,7 +248,7 @@ export function validateFactureExtraction(
     penalty += 20
   }
 
-  const iban = toStringSafe(extraction.iban)
+  const iban = toStringSafe(flat.iban)
   if (iban && !validateIBAN(iban)) {
     issues.push({
       field: 'iban',
@@ -237,7 +258,7 @@ export function validateFactureExtraction(
     penalty += 5
   }
 
-  const brn = toStringSafe(extraction.brn)
+  const brn = toStringSafe(flat.brn)
   if (brn && !validateBRN(brn)) {
     issues.push({
       field: 'brn',
@@ -247,7 +268,7 @@ export function validateFactureExtraction(
     penalty += 5
   }
 
-  const numero = toStringSafe(extraction.numero_facture || extraction.numero_reference)
+  const numero = toStringSafe(flat.numero_facture || flat.numero_reference || flat.numero)
   if (!numero) {
     issues.push({
       field: 'numero_facture',
@@ -263,6 +284,54 @@ export function validateFactureExtraction(
     issues,
     confidence_penalty: Math.min(100, penalty),
   }
+}
+
+/**
+ * Aplatit une extraction imbriquée (Claude produit parfois des objets nested
+ * comme { facture: {...}, montants: {...}, emetteur: {...} }).
+ *
+ * Renvoie un objet plat où les clés attendues (montant_ttc, date_facture, etc.)
+ * sont accessibles directement, qu'elles soient au root ou dans un sous-objet.
+ * Les clés au root prennent toujours priorité si présentes.
+ */
+export function flattenExtraction(
+  extraction: Record<string, unknown>
+): Record<string, unknown> {
+  const flat: Record<string, unknown> = { ...extraction }
+
+  // Champs à chercher dans les sous-objets courants
+  const knownSubObjects = ['facture', 'montants', 'montant', 'emetteur', 'fournisseur_info', 'client_info', 'details']
+  const targetFields = [
+    'montant_ht', 'montant_tva', 'montant_ttc', 'taux_tva', 'devise',
+    'date_facture', 'date_document', 'date_echeance',
+    'numero_facture', 'numero_reference', 'numero',
+    'fournisseur', 'client', 'tiers',
+    'iban', 'brn', 'vat_number',
+  ]
+
+  for (const subKey of knownSubObjects) {
+    const sub = extraction[subKey]
+    if (!sub || typeof sub !== 'object') continue
+    const subObj = sub as Record<string, unknown>
+    for (const field of targetFields) {
+      // Ne remplace pas si déjà présent au root (priorité root)
+      if (flat[field] == null && subObj[field] != null) {
+        flat[field] = subObj[field]
+      }
+    }
+    // Cas spécial : emetteur/fournisseur sous forme d'objet { nom, brn, ... }
+    if ((subKey === 'emetteur' || subKey === 'fournisseur_info') && flat.emetteur == null) {
+      const nom = subObj.nom || subObj.name || subObj.raison_sociale
+      if (nom) flat.emetteur = nom
+      if (!flat.brn && subObj.brn) flat.brn = subObj.brn
+    }
+    if (subKey === 'client_info' && flat.client == null) {
+      const nom = subObj.nom || subObj.name || subObj.raison_sociale
+      if (nom) flat.client = nom
+    }
+  }
+
+  return flat
 }
 
 export function validateReleveBancaireExtraction(
