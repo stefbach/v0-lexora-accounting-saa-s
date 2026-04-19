@@ -809,10 +809,69 @@ export default function ClientFacturesPage() {
               {detailFacture.notes && (
                 <div className="text-sm"><span className="text-gray-500">Notes :</span> <span>{detailFacture.notes}</span></div>
               )}
+
+              {/* Historique d'approbation (migration 148) */}
+              <div>
+                <p className="text-sm font-semibold text-[#0B0F2E] mb-2 flex items-center gap-1.5">
+                  <History className="w-4 h-4" />Historique d&apos;approbation
+                </p>
+                {historiqueLoading ? (
+                  <div className="text-xs text-gray-400 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" />Chargement…</div>
+                ) : historique.length === 0 ? (
+                  <p className="text-xs text-gray-400">Aucun changement de statut enregistré.</p>
+                ) : (
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                    {historique.map(h => (
+                      <div key={h.id} className="text-xs border-l-2 border-[#D4AF37]/50 pl-2 py-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-gray-500">{new Date(h.created_at).toLocaleString("fr-FR")}</span>
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0">{h.action || "changement"}</Badge>
+                          <span className="text-gray-700">
+                            {h.ancien_statut ? `${WORKFLOW_LABELS[h.ancien_statut] || h.ancien_statut} → ` : ""}
+                            <strong>{WORKFLOW_LABELS[h.nouveau_statut] || h.nouveau_statut}</strong>
+                          </span>
+                        </div>
+                        {h.commentaire && <div className="text-gray-600 italic mt-0.5">« {h.commentaire} »</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setDetailFacture(null)}>Fermer</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de refus (migration 148) */}
+      <Dialog open={!!refusDialog} onOpenChange={open => { if (!open) { setRefusDialog(null); setRefusRaison("") } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-[#0B0F2E]">
+              Refuser la facture {refusDialog?.numero_facture || ""}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label>Motif du refus (obligatoire)</Label>
+            <textarea
+              className="w-full border rounded-md p-2 text-sm min-h-[90px]"
+              value={refusRaison}
+              onChange={e => setRefusRaison(e.target.value)}
+              placeholder="Ex : prix unitaire incorrect, client inactif…"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setRefusDialog(null); setRefusRaison("") }}>Annuler</Button>
+            <Button
+              onClick={submitRefus}
+              disabled={!refusRaison.trim() || workflowLoadingId === refusDialog?.id}
+              className="bg-rose-600 hover:bg-rose-700 text-white"
+            >
+              {workflowLoadingId === refusDialog?.id ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ThumbsDown className="w-4 h-4 mr-2" />}
+              Confirmer le refus
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
