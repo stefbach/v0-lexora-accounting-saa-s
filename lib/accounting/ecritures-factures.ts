@@ -57,6 +57,23 @@ export async function createEcrituresForFacture(
       .eq('societe_id', facture.societe_id)
       .eq('ref_folio', refFolio)
 
+    // Clean legacy duplicates: old code wrote via v1 view with ref_folio = facture.id
+    // (no FAC- prefix) or with facture_id FK. Both paths end up in v2.
+    await supabase
+      .from('ecritures_comptables_v2')
+      .delete()
+      .eq('societe_id', facture.societe_id)
+      .eq('ref_folio', facture.id)
+
+    if (dossier_id) {
+      await supabase
+        .from('ecritures_comptables_v2')
+        .delete()
+        .eq('dossier_id', dossier_id)
+        .eq('facture_id', facture.id)
+        .in('journal', ['ACH', 'VTE'])
+    }
+
     const libelle = `Facture ${facture.numero_facture || ''} — ${facture.tiers || ''}`.trim()
     const isClient = facture.type_facture === 'client'
     const journal = isClient ? 'VTE' : 'ACH'

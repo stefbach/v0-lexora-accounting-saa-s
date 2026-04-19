@@ -155,6 +155,23 @@ export async function POST(request: Request) {
     if (!dossier) return NextResponse.json({ error: 'Dossier comptable introuvable' }, { status: 400 })
 
     const refFolio = reference || `OD-${Date.now().toString(36)}`
+
+    // Anti-doublon : si une reference explicite est fournie, verifier qu'elle
+    // n'existe pas deja (evite les double-soumissions du formulaire)
+    if (reference) {
+      const { data: existing } = await supabase
+        .from('ecritures_comptables_v2')
+        .select('id')
+        .eq('societe_id', societe_id)
+        .like('ref_folio', `${reference}-%`)
+        .limit(1)
+      if (existing && existing.length > 0) {
+        return NextResponse.json({
+          error: `Ecriture avec reference "${reference}" deja existante — doublon evite`,
+        }, { status: 409 })
+      }
+    }
+
     const payload = lignes.map((l: any, idx: number) => ({
       dossier_id: dossier.id,
       societe_id,
