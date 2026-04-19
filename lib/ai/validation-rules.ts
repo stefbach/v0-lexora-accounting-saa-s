@@ -193,33 +193,38 @@ export function validateFactureExtraction(
   if (ht != null && tva != null && ttc != null && ttc > 0) {
     const check = validateTVAConsistency(ht, tva, ttc, taux ?? undefined)
     if (!check.ok) {
-      // Cas légitime : factures relevés (Emtel, CEB, CWA, etc.) où le TTC
-      // inclut un solde antérieur impayé en plus des charges du mois courant.
-      // Signature : HT et TVA sont cohérents entre eux (taux correct),
-      // mais TTC >> HT+TVA. On downgrade en 'info' — l'extraction Claude
-      // n'est pas fautive, c'est la structure métier de la facture.
-      const tauxApplique = taux ?? 15
-      const tvaCalculee = Math.round(ht * (tauxApplique / 100) * 100) / 100
-      const tvaCoherente = tva === 0 ? ht === 0 : Math.abs(tvaCalculee - tva) / Math.max(tva, 1) < 0.05
-      const ttcSuperieurAuxCharges = ttc > (ht + tva) * 1.2 // TTC au moins 20% > HT+TVA
-      const previousBalance = toNumber((flattenExtraction(extraction) as Record<string, unknown>)?.previous_balance)
-        ?? toNumber((extraction as Record<string, unknown>)?.solde_anterieur)
+      const diff = ttc - (ht + tva)
 
-      if (tvaCoherente && (ttcSuperieurAuxCharges || (previousBalance ?? 0) > 0)) {
+      // Cas 1 : TTC > HT+TVA de manière significative (> 100 MUR ou > 15%)
+      // → facture relevé avec solde antérieur / charges cumulées (Emtel, CEB, CWA...)
+      // L'extraction Claude n'est pas fautive — c'est la structure métier.
+      const seuilSignificatif = Math.max(100, (ht + tva) * 0.15)
+
+      if (diff > seuilSignificatif) {
         issues.push({
           field: 'montant_ttc',
           severity: 'info',
-          message: `TTC (${ttc}) > HT+TVA (${ht + tva}) — probable solde antérieur ou charges cumulées (télécom/utilities)`,
+          message: `TTC (${ttc}) > HT+TVA (${(ht + tva).toFixed(2)}, diff ${diff.toFixed(2)}) — probable solde antérieur ou charges cumulées`,
         })
-        // pas de penalty — c'est un cas métier légitime
-      } else {
+        // pas de penalty
+      } else if (diff < -seuilSignificatif) {
+        // TTC bien plus petit que HT+TVA → probable avoir ou vraie erreur
         issues.push({
           field: 'montant_ttc',
-          severity: 'error',
+          severity: 'warning',
+          message: `TTC (${ttc}) < HT+TVA (${(ht + tva).toFixed(2)}) — probable avoir/remise ou extraction imprécise`,
+          suggested_value: ht + tva,
+        })
+        penalty += 8
+      } else {
+        // Petit écart inexpliqué — vraie erreur d'extraction
+        issues.push({
+          field: 'montant_ttc',
+          severity: 'warning',
           message: `HT+TVA != TTC (écart ${check.ecart.toFixed(2)})`,
           suggested_value: ht + tva,
         })
-        penalty += 15
+        penalty += 10
       }
     }
   }
