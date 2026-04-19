@@ -1485,6 +1485,38 @@ export async function POST(request: Request) {
                     lettre: classLettre, ref_folio: classRef },
                 ])
                 ecrituresCreees++
+
+                // Lettrage salaires : lier le paiement BNQ (débit 421) avec la dette SAL (crédit 4210)
+                if (tx.matched_type === 'salaire_individuel' || tx.matched_type === 'salaire_bulk' || tx.matched_type === 'salaire_bulk_non_verifie') {
+                  const salComptes = ['4210', '421', '421000']
+                  const txMonth = txDate2?.substring(0, 7) || ''
+                  const { data: salEntries } = await supabase
+                    .from('ecritures_comptables_v2')
+                    .select('id, numero_compte, credit_mur, lettre, date_ecriture')
+                    .eq('societe_id', societe_id)
+                    .eq('journal', 'SAL')
+                    .in('numero_compte', salComptes)
+                    .is('lettre', null)
+                    .gt('credit_mur', 0)
+
+                  if (salEntries && salEntries.length > 0) {
+                    const isBulk = tx.matched_type !== 'salaire_individuel'
+                    const matched = salEntries.find((se: any) => {
+                      if (isBulk) {
+                        return (se.date_ecriture || '').startsWith(txMonth)
+                      } else {
+                        const diff = Math.abs(Number(se.credit_mur) - txAmountMUR2) / Math.max(txAmountMUR2, 1)
+                        return diff < 0.05
+                      }
+                    })
+                    if (matched) {
+                      await supabase.from('ecritures_comptables_v2')
+                        .update({ lettre: classLettre, date_lettrage: new Date().toISOString().split('T')[0] })
+                        .eq('id', matched.id)
+                      console.log(`[rapprochement] Lettrage salaire: BNQ ${classLettre} ↔ SAL ${matched.id}`)
+                    }
+                  }
+                }
               }
             }
           }
