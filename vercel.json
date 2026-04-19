@@ -66,11 +66,11 @@
     },
     {
       "path": "/api/cron/relances-factures-clients",
-      "schedule": "0 9 * * *"
+      "schedule": "0 5 * * *"
     },
     {
       "path": "/api/cron/factures-recurrentes-attendues",
-      "schedule": "30 9 * * *"
+      "schedule": "30 5 * * *"
     }
   ]
 }

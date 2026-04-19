@@ -117,6 +117,7 @@ export async function getMostUsedAccountForTiers(
       .select('id, tiers')
       .eq('societe_id', societe_id)
       .eq('type_facture', type_facture)
+      .order('date_facture', { ascending: false })
       .limit(500)
 
     if (error || !factures) return null
@@ -134,6 +135,7 @@ export async function getMostUsedAccountForTiers(
       .select('numero_compte')
       .in('facture_id', factureIdsMatching)
       .like('numero_compte', `${comptePrefix}%`)
+      .order('date_ecriture', { ascending: false })
       .limit(500)
 
     if (!ecritures || ecritures.length === 0) return null
@@ -156,7 +158,8 @@ export async function getMostUsedAccountForTiers(
     }
 
     return topCount > 0 ? { compte: topCompte, count: topCount } : null
-  } catch {
+  } catch (err) {
+    console.error('[suggest-account] getMostUsedAccountForTiers failed', err)
     return null
   }
 }
@@ -199,7 +202,8 @@ async function findExplicitAffectation(
     }
 
     return null
-  } catch {
+  } catch (err) {
+    console.error('[suggest-account] findExplicitAffectation failed', err)
     return null
   }
 }

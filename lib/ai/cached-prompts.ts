@@ -33,10 +33,16 @@ interface ExtendedUsage {
   cache_read_input_tokens?: number
 }
 
+function assertAnthropicKey(): string {
+  const k = process.env.ANTHROPIC_API_KEY
+  if (!k) throw new Error('[cached-prompts] ANTHROPIC_API_KEY missing')
+  return k
+}
+
 let _anthropic: Anthropic | null = null
 function getAnthropic(): Anthropic {
   if (!_anthropic) {
-    _anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+    _anthropic = new Anthropic({ apiKey: assertAnthropicKey() })
   }
   return _anthropic
 }

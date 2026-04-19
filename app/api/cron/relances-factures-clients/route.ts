@@ -96,10 +96,11 @@ function determinerNiveau(dateEcheanceIso: string, nowIso: string): NiveauRelanc
   const now = new Date(nowIso).getTime()
   const diffDays = Math.floor((now - ech) / (1000 * 60 * 60 * 24))
 
-  if (diffDays === -7) return 0
-  if (diffDays === 7) return 1
-  if (diffDays === 15) return 2
-  if (diffDays === 30) return 3
+  // Plages pour absorber les décalages horaires / exécutions tardives
+  if (diffDays >= -8 && diffDays <= -6) return 0   // J-7 ±1j (rappel amical)
+  if (diffDays >= 6 && diffDays <= 8) return 1     // J+7 ±1j
+  if (diffDays >= 14 && diffDays <= 16) return 2   // J+15 ±1j
+  if (diffDays >= 29 && diffDays <= 31) return 3   // J+30 ±1j
   return null
 }
 
