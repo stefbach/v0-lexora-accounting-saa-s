@@ -5,6 +5,9 @@ import { getSystemPrompt, injectTauxChange, injectSocietes, CLAUDE_CONFIG, SYSTE
 import { findTiersInAnnuaire, incrementTiersUsage, createTiersFromOcr } from '@/lib/tiers-annuaire'
 import { createHash } from 'crypto'
 import { isBankName, validateAndCleanExtraction, computeConfidence } from '@/lib/utils/bank-utils'
+import { validateFactureExtraction, validateReleveBancaireExtraction } from '@/lib/ai/validation-rules'
+import { computeGranularConfidence, decideWorkflowAction } from '@/lib/utils/confidence-scorer'
+import { suggestAccounts } from '@/lib/accounting/suggest-account'
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -910,15 +913,143 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
       }
     }
 
+    // ======================================================================
+    // Validation + confidence scoring (Wave 2)
+    // ======================================================================
+    const routingType: string = typeof parsed.routing?.type_document === 'string'
+      ? parsed.routing.type_document
+      : typeDocument || 'autre'
+    const extractionForValidation: Record<string, unknown> =
+      extraction && typeof extraction === 'object' ? (extraction as Record<string, unknown>) : {}
+    const hasExtraction = Object.keys(extractionForValidation).length > 0
+
+    let validationResult: {
+      valid: boolean
+      issues: Array<{ field: string; severity: 'error' | 'warning' | 'info'; message: string; suggested_value?: unknown }>
+      confidence_penalty: number
+    } = { valid: true, issues: [], confidence_penalty: 0 }
+
+    if (hasExtraction) {
+      if (routingType === 'facture_fournisseur' || routingType === 'facture_client') {
+        validationResult = validateFactureExtraction(extractionForValidation)
+      } else if (routingType === 'releve_bancaire') {
+        validationResult = validateReleveBancaireExtraction(extractionForValidation)
+      }
+    }
+
+    const granularConfidence = hasExtraction
+      ? computeGranularConfidence(extractionForValidation, routingType, validationResult.issues.length)
+      : {
+          global: 0,
+          fields: [],
+          validation_issues_count: 0,
+          auto_decision: 'reject' as const,
+        }
+
+    const workflowAction = decideWorkflowAction(granularConfidence.global)
+
+    // Suggest account for supplier invoices only
+    let accountSuggestions: Awaited<ReturnType<typeof suggestAccounts>> = []
+    if (routingType === 'facture_fournisseur' && hasExtraction) {
+      // Resolve societe_id — prefer explicit form data, fall back to dossier lookup
+      let suggestSocieteId: string | null = societeId || null
+      if (!suggestSocieteId && finalDossierId) {
+        try {
+          const { data: dossierSuggest } = await supabase
+            .from('dossiers')
+            .select('societe_id')
+            .eq('id', finalDossierId)
+            .maybeSingle()
+          suggestSocieteId = dossierSuggest?.societe_id || null
+        } catch {
+          /* ignore */
+        }
+      }
+
+      const rawEmetteur = extractionForValidation.emetteur ?? extractionForValidation.fournisseur
+      const emetteurName: string = rawEmetteur && typeof rawEmetteur === 'object'
+        ? String(
+            (rawEmetteur as Record<string, unknown>).nom ??
+              (rawEmetteur as Record<string, unknown>).name ??
+              '',
+          )
+        : String(rawEmetteur ?? '')
+
+      const descriptionVal = extractionForValidation.description
+      const descriptionStr: string | undefined =
+        typeof descriptionVal === 'string' && descriptionVal.trim().length > 0
+          ? descriptionVal
+          : undefined
+
+      const montantTtcVal = extractionForValidation.montant_ttc
+      const montantTtcNum: number | undefined =
+        typeof montantTtcVal === 'number' && Number.isFinite(montantTtcVal)
+          ? montantTtcVal
+          : undefined
+
+      if (suggestSocieteId && emetteurName) {
+        try {
+          accountSuggestions = await suggestAccounts({
+            societe_id: suggestSocieteId,
+            tiers: emetteurName,
+            libelle: descriptionStr,
+            type_facture: 'fournisseur',
+            montant_ttc: montantTtcNum,
+            supabase,
+          })
+        } catch (err) {
+          console.warn('[upload] suggestAccounts failed, continuing without', err)
+        }
+      }
+    }
+
+    console.log('[upload] validation_and_scoring', {
+      document_type: routingType,
+      valid: validationResult.valid,
+      issues_count: validationResult.issues.length,
+      confidence_global: granularConfidence.global,
+      workflow_action: workflowAction,
+      has_account_suggestions: accountSuggestions.length > 0,
+    })
+
+    // Determine document statut / needs_review based on workflowAction
+    const isRejected = workflowAction === 'reject'
+    const needsReview = workflowAction === 'quick_review' || workflowAction === 'full_review'
+    const reviewLevel: 'quick' | 'full' | 'reject' | null =
+      workflowAction === 'quick_review'
+        ? 'quick'
+        : workflowAction === 'full_review'
+          ? 'full'
+          : workflowAction === 'reject'
+            ? 'reject'
+            : null
+
     // Update document as processed
     const updateData: any = {
-      type_document: typeDocument, statut: 'traite',
+      type_document: typeDocument,
+      statut: isRejected ? 'en_attente' : 'traite',
       societe_detectee: detectedSociete !== 'INCONNU' ? detectedSociete : null,
       confiance_type: extractionConfidence || confianceType,
       n8n_result: {
         routing: parsed.routing,
         extraction,
         metadata: { model: CLAUDE_CONFIG.model, processed_at: new Date().toISOString() },
+        validation: {
+          valid: validationResult.valid,
+          issues: validationResult.issues,
+          issues_count: validationResult.issues.length,
+        },
+        confidence_granular: granularConfidence,
+        workflow_action: workflowAction,
+        account_suggestions: accountSuggestions,
+        ...(needsReview ? { needs_review: true, review_level: reviewLevel } : {}),
+        ...(isRejected
+          ? {
+              needs_review: false,
+              review_level: 'reject',
+              erreur: 'extraction_low_confidence',
+            }
+          : {}),
         ...(parsed._raw_response ? { _raw_response: parsed._raw_response } : {}),
       },
     }
