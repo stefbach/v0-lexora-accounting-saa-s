@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
-import { Loader2, Calendar, ChevronLeft, ChevronRight, Send, Wand2, Users, Check, Plus, Trash2, Clock, Coffee, AlertTriangle, FileDown, Copy, Eye, Shield, CheckCircle2, XCircle } from "lucide-react"
+import { Loader2, Calendar, ChevronLeft, ChevronRight, Send, Wand2, Users, Check, Plus, Trash2, Clock, Coffee, AlertTriangle, FileDown, Copy, Eye, Shield, CheckCircle2, XCircle, Info } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { toast } from "sonner"
 import Link from "next/link"
@@ -767,7 +767,16 @@ export default function PlanningPage() {
   }
 
   const generateStandard = () => {
-    const c = creneaux[0] // Premier créneau = journée standard
+    // Cherche le premier créneau de TRAVAIL (heures > 0 et nom != "repos").
+    // Évite de remplir le mois avec un créneau "Repos" si c'est le 1er listé.
+    const workCreneau = creneaux.find(
+      c => c.heures_effectives > 0 && !c.nom.toLowerCase().includes("repos"),
+    ) || creneaux[0]
+    if (!workCreneau) {
+      toast.error("Aucun créneau de travail configuré")
+      return
+    }
+    const c = workCreneau
     setPlanning(prev => {
       const next = { ...prev }
       for (const empId of Object.keys(next)) {
@@ -789,6 +798,7 @@ export default function PlanningPage() {
       }
       return next
     })
+    toast.success(`Planning rempli avec "${workCreneau.nom}"`)
   }
 
   const generate3x8 = () => {
@@ -1045,28 +1055,68 @@ export default function PlanningPage() {
         </div>
       </div>
 
-      {/* Créneaux summary */}
-      <Card className="border-dashed">
-        <CardContent className="pt-4 pb-3">
-          <div className="flex flex-wrap gap-2">
-            {creneaux.map(c => (
-              <div key={c.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium ${c.couleur}`}>
-                <span className="font-bold">{c.code}</span>
-                <span>{c.nom}</span>
-                <span className="opacity-75">{c.heure_debut}—{c.heure_fin}</span>
-                {c.pause_minutes > 0 && <span className="opacity-75 flex items-center gap-0.5"><Coffee className="w-3 h-3" />{c.pause_minutes}min</span>}
-                <span className="opacity-75">({c.heures_effectives}h eff.)</span>
+      {/* Créneaux summary — bandeau enrichi avec lien vers /rh/planning/regles */}
+      {(() => {
+        const societeNom = societes.find(s => s.id === societe)?.nom || "société"
+        const joursShort: Record<string, string> = { lun: "Lu", mar: "Ma", mer: "Me", jeu: "Je", ven: "Ve", sam: "Sa", dim: "Di" }
+        return (
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-sm font-semibold" style={{ color: "#0B0F2E" }}>
+                    Créneaux de {societeNom}
+                  </CardTitle>
+                  <Badge variant="outline" className="text-[10px]">
+                    {creneaux.length} actif{creneaux.length > 1 ? "s" : ""}
+                  </Badge>
+                </div>
+                <Link href="/rh/planning/regles" className="text-xs font-medium text-blue-600 hover:underline">
+                  Modifier →
+                </Link>
               </div>
-            ))}
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-200 text-gray-600">
-              <span className="font-bold">R</span> Repos
-            </div>
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-100 text-emerald-700">
-              <span className="font-bold">C</span> Congé
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {creneaux.length === 0 ? (
+                <div className="flex items-center justify-between gap-3 p-3 rounded-lg border border-dashed border-gray-300 bg-gray-50">
+                  <span className="text-sm text-gray-500">Aucun créneau configuré.</span>
+                  <Link href="/rh/planning/regles">
+                    <Button size="sm" variant="outline">Configurer</Button>
+                  </Link>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-stretch gap-2">
+                  {creneaux.map(c => {
+                    const jours = (c.jours || []).map(j => joursShort[j] || j).join("·")
+                    return (
+                      <div key={c.id} className={`flex items-center gap-2 px-3 py-2 rounded-lg ${c.couleur}`}>
+                        <span className="inline-flex items-center justify-center w-7 h-7 rounded bg-white/20 text-xs font-bold">
+                          {c.code}
+                        </span>
+                        <div className="flex flex-col leading-tight">
+                          <span className="text-sm font-semibold">{c.nom}</span>
+                          <span className="text-[10px] opacity-90">
+                            {c.heure_debut && c.heure_fin ? `${c.heure_debut}—${c.heure_fin}` : "—"}
+                            {c.pause_minutes > 0 ? ` · ${c.pause_minutes}min` : ""}
+                            {c.heures_effectives > 0 ? ` · ${c.heures_effectives}h eff.` : ""}
+                          </span>
+                          {jours && <span className="text-[9px] opacity-75">{jours}</span>}
+                        </div>
+                      </div>
+                    )
+                  })}
+                  <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-gray-200 text-gray-600 self-start">
+                    <span className="font-bold">R</span> Repos
+                  </div>
+                  <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-emerald-100 text-emerald-700 self-start">
+                    <span className="font-bold">C</span> Congé
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )
+      })()}
 
       {/* Conflict alert bar */}
       {/* Sprint 11 BUG 8 — différencier erreurs bloquantes (rouge) des
@@ -1615,6 +1665,13 @@ export default function PlanningPage() {
           <DialogHeader>
             <DialogTitle style={{ color: "#0B0F2E" }}>Créneaux horaires</DialogTitle>
           </DialogHeader>
+          <div className="flex items-start gap-2 px-3 py-2 rounded-lg border border-blue-200 bg-blue-50 text-xs text-blue-900 mb-3">
+            <Info className="w-4 h-4 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium">Les créneaux sont partagés avec les règles de planning</p>
+              <p className="mt-0.5">Pour une édition complète, utilisez <Link href="/rh/planning/regles" className="underline font-medium">Règles de planning</Link>.</p>
+            </div>
+          </div>
           {!editingCreneau ? (
             <div className="space-y-3">
               {creneaux.map(c => (
