@@ -1253,7 +1253,20 @@ export async function POST(request: Request) {
               if (tx.statut !== 'rapproche' || !tx.facture_id) continue
 
               const refFolio = `BANK-${releveId}-${i}`
-              const existingEntry = (allEcr401v2 || []).find((e: any) => e.ref_folio === refFolio)
+              // Anti-doublon : auto_rapprocher crée déjà via createEcrituresForPayment
+              // avec ref_folio = `BANK-${releveId}-${i}-${facture_id}` ET facture_id FK.
+              // On cherche par ref_folio exact OU par préfixe OU par facture_id pour
+              // couvrir tous les chemins d'écriture. Sans ça, cette phase recréait des
+              // doublons avec un libellé légèrement différent qui échappait à safeInsertBnq.
+              const refFolioPrefix = `${refFolio}-`
+              const existingEntry = (allEcr401v2 || []).find((e: any) => {
+                if (!e || e.journal !== 'BNQ') return false
+                if (e.ref_folio === refFolio) return true
+                if (typeof e.ref_folio === 'string' && e.ref_folio.startsWith(refFolioPrefix)) return true
+                if (e.facture_id && e.facture_id === tx.facture_id
+                    && String(e.numero_compte || '').match(/^(401|411)/)) return true
+                return false
+              })
 
               const { data: facture } = await supabase.from('factures')
                 .select('numero_facture, tiers, type_facture, montant_mur, montant_ttc')
@@ -2519,9 +2532,14 @@ export async function POST(request: Request) {
               .order('date_ecriture', { ascending: false })
               .limit(5)
             // Prefer entries already linked to this facture_id.
+            // Anti-doublon : si aucune entrée liée/non-lettrée, on réutilise quand
+            // même la première entrée qui matche (montant, compte, direction, date).
+            // Sans ce fallback, sync_lettrage créait un doublon quand createEcrituresForPayment
+            // avait déjà créé l'entrée avec un lettre_code mais sans facture_id (cas backfill).
             const linked = (data || []).find((e: any) => e.facture_id === f.id)
             const unletteredAny = (data || []).find((e: any) => !e.lettre)
-            bnqRow = linked || unletteredAny || null
+            const anyMatch = (data || [])[0] || null
+            bnqRow = linked || unletteredAny || anyMatch
           }
 
           // 3. If no BNQ counterpart exists, create TWO balanced BNQ

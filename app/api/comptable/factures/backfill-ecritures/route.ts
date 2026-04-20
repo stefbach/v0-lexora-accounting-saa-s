@@ -113,6 +113,7 @@ export async function POST(request: Request) {
             tiers: f.tiers || '',
             ref_folio,
             description: `Paiement ${f.numero_facture || ''} — ${f.tiers || ''}`,
+            facture_id: f.id,
           })
           if (pr.ok) {
             stats.paiements_generes++
