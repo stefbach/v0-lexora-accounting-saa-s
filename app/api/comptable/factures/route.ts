@@ -104,6 +104,30 @@ export async function POST(request: Request) {
     const ttc = montant_ttc ?? (montant_ht + montant_tva)
     const mur = devise === 'MUR' ? ttc : ttc * (taux_change || 1)
 
+    // Anti-doublon : même tiers + même montant TTC ±1 + même date ±1 jour
+    if (societe_id && tiers && ttc > 0 && date_facture) {
+      const admin = getAdminClient()
+      const dObj = new Date(date_facture)
+      const dMinus1 = new Date(dObj.getTime() - 86400000).toISOString().slice(0, 10)
+      const dPlus1 = new Date(dObj.getTime() + 86400000).toISOString().slice(0, 10)
+      const { data: dup } = await admin
+        .from('factures')
+        .select('id, numero_facture, date_facture')
+        .eq('societe_id', societe_id)
+        .ilike('tiers', tiers)
+        .gte('date_facture', dMinus1)
+        .lte('date_facture', dPlus1)
+        .gte('montant_ttc', ttc - 1)
+        .lte('montant_ttc', ttc + 1)
+        .limit(1)
+      if (dup && dup.length > 0) {
+        return NextResponse.json({
+          error: `Doublon : facture ${dup[0].numero_facture || ''} du ${dup[0].date_facture} existe déjà pour ${tiers} au même montant`,
+          duplicate: dup[0],
+        }, { status: 409 })
+      }
+    }
+
     const { data, error } = await supabase
       .from('factures')
       .insert({

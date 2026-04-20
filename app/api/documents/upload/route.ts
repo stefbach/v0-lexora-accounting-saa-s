@@ -1369,6 +1369,32 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
           notes: extraction.analyse_tva || (tvaApplicable ? `TVA ${tauxTva}% applicable` : 'Pas de TVA'),
         }
 
+        // Anti-doublon : vérifier si une facture similaire existe déjà
+        // (même fournisseur + même montant TTC ±1 + même date ±1 jour)
+        const fDate = String(factureData.date_facture || '')
+        const fDateObj = fDate ? new Date(fDate) : null
+        const fDateMinus1 = fDateObj ? new Date(fDateObj.getTime() - 86400000).toISOString().slice(0, 10) : fDate
+        const fDatePlus1 = fDateObj ? new Date(fDateObj.getTime() + 86400000).toISOString().slice(0, 10) : fDate
+        const fTTC = Number(factureData.montant_ttc) || 0
+        if (factureData.societe_id && factureData.tiers && fTTC > 0 && fDate) {
+          const { data: existingDup } = await supabase
+            .from('factures')
+            .select('id, numero_facture, date_facture, montant_ttc')
+            .eq('societe_id', factureData.societe_id as string)
+            .ilike('tiers', String(factureData.tiers))
+            .gte('date_facture', fDateMinus1)
+            .lte('date_facture', fDatePlus1)
+            .gte('montant_ttc', fTTC - 1)
+            .lte('montant_ttc', fTTC + 1)
+            .limit(1)
+          if (existingDup && existingDup.length > 0) {
+            const dup = existingDup[0] as any
+            console.warn(`[upload] DOUBLON FACTURE détecté: ${dup.numero_facture} du ${dup.date_facture} = ${dup.montant_ttc} TTC (même tiers "${factureData.tiers}")`)
+            factureCreateError = `Doublon détecté : facture ${dup.numero_facture} du ${dup.date_facture} avec le même montant (${dup.montant_ttc}) existe déjà pour ${factureData.tiers}`
+          }
+        }
+
+        if (!factureCreateError) {
         const { data: insertedFacture, error: factureError } = await supabase.from('factures').insert(factureData).select('id').maybeSingle()
         if (factureError) {
           factureCreateError = factureError.message
@@ -1387,6 +1413,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
           }
           console.log(`[upload] Facture ${typeDocument} created: ${extraction.numero_reference || 'sans numéro'} — ${montantTTC} ${devise}`)
         }
+        } // close if (!factureCreateError)
       }
     } else if (typeDocument === 'facture_client' || typeDocument === 'facture_fournisseur') {
       factureSkipReason = `no_finalDossierId (typeDocument=${typeDocument})`
