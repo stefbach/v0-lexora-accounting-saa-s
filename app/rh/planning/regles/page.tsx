@@ -1,19 +1,31 @@
 "use client"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
 import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Switch } from "@/components/ui/switch"
+import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
+import {
+  Accordion, AccordionItem, AccordionTrigger, AccordionContent,
+} from "@/components/ui/accordion"
+import {
+  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
-import { ArrowLeft, Save, Shield, Loader2 } from "lucide-react"
+import { ArrowLeft, Save, Shield, Loader2, Plus } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type {
   PlanningShift, PlanningConfig, PlanningRegleLegale, JourCode,
 } from "@/types/planning"
 import { DEFAULT_CONFIG, DEFAULT_REGLES_WRA } from "@/types/planning"
 import { UI_PRESETS, type UIPreset } from "@/lib/planning/ui-presets"
+import { getWRAExplanation } from "@/lib/planning/wra-explanations"
+import { ShiftRow } from "./_components/ShiftRow"
+import { ShiftEditDialog } from "./_components/ShiftEditDialog"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -43,6 +55,10 @@ export default function ReglesPlanningPage() {
   const [regles, setRegles] = useState<PlanningRegleLegale[]>(DEFAULT_REGLES_WRA)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+
+  // Edition de créneaux
+  const [editorOpen, setEditorOpen] = useState(false)
+  const [editorShift, setEditorShift] = useState<PlanningShift | null>(null)
 
   // Chargement des sociétés accessibles
   useEffect(() => {
@@ -95,6 +111,71 @@ export default function ReglesPlanningPage() {
         : [...prev.jours_travailles, code],
     }))
   }
+
+  // ─── Shifts CRUD ────────────────────────────────────────────────────
+  const openAddShift = () => {
+    setEditorShift(null)
+    setEditorOpen(true)
+  }
+  const openEditShift = (s: PlanningShift) => {
+    setEditorShift(s)
+    setEditorOpen(true)
+  }
+  const saveShift = (next: PlanningShift) => {
+    setShifts(prev => {
+      const idx = prev.findIndex(s => s.id === next.id)
+      return idx >= 0
+        ? prev.map(s => (s.id === next.id ? next : s))
+        : [...prev, next]
+    })
+    setEditorOpen(false)
+    setEditorShift(null)
+  }
+  const duplicateShift = (s: PlanningShift) => {
+    // Cherche un code unique en incrémentant 2/3 si nécessaire
+    const existingCodes = new Set(shifts.map(x => x.code.toUpperCase()))
+    let newCode = `${s.code}2`
+    let n = 2
+    while (existingCodes.has(newCode.toUpperCase())) {
+      n += 1
+      newCode = `${s.code}${n}`.slice(0, 3)
+    }
+    const dup: PlanningShift = {
+      ...s,
+      id: genShiftId(),
+      code: newCode,
+      label: `${s.label} (copie)`,
+    }
+    setShifts(prev => [...prev, dup])
+    toast.info(`Créneau "${s.label}" dupliqué`)
+  }
+  const deleteShift = (id: string) => {
+    const target = shifts.find(s => s.id === id)
+    if (!target) return
+    if (!window.confirm(`Supprimer le créneau "${target.label}" ?`)) return
+    setShifts(prev => prev.filter(s => s.id !== id))
+  }
+
+  // ─── Règles WRA ─────────────────────────────────────────────────────
+  const updateRegle = (
+    key: string,
+    field: "enabled" | "value",
+    val: boolean | number | string,
+  ) => {
+    setRegles(prev => prev.map(r => (r.key === key ? { ...r, [field]: val } : r)))
+  }
+
+  // ─── Dérivés pour l'UI ──────────────────────────────────────────────
+  const existingCodes = useMemo(
+    () => shifts
+      .filter(s => !editorShift || s.id !== editorShift.id)
+      .map(s => s.code.toUpperCase()),
+    [shifts, editorShift],
+  )
+  const maxHeuresJourRegle = useMemo(() => {
+    const r = regles.find(x => x.key === "max_heures_jour" && x.enabled)
+    return r ? Number(r.value) : undefined
+  }, [regles])
 
   const handleSave = async () => {
     if (!societe) return
@@ -232,27 +313,97 @@ export default function ReglesPlanningPage() {
               </CardContent>
             </Card>
 
-            {/* Section 2 — Mes créneaux (placeholder) */}
-            <Card className="border-2 border-dashed border-gray-300 bg-gray-50/50">
+            {/* Section 2 — Mes créneaux */}
+            <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-gray-600">
-                  <span aria-hidden>🕐</span> Mes créneaux
-                </CardTitle>
-                <p className="text-sm text-gray-500">À venir dans la prochaine itération.</p>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <CardTitle className="flex items-center gap-2" style={{ color: NAVY }}>
+                      <span aria-hidden>🕐</span> Mes créneaux
+                    </CardTitle>
+                    <p className="text-sm text-gray-600">
+                      Les types de journée disponibles pour planifier les employés.
+                    </p>
+                  </div>
+                  <Button size="sm" onClick={openAddShift}>
+                    <Plus className="w-4 h-4 mr-1" /> Ajouter
+                  </Button>
+                </div>
               </CardHeader>
+              <CardContent>
+                {shifts.length === 0 ? (
+                  <div className="text-center py-10 text-sm text-gray-400">
+                    Aucun créneau. Utilisez un modèle dans « Démarrage rapide » ci-dessus ou cliquez sur « Ajouter ».
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {shifts.map(shift => (
+                      <ShiftRow
+                        key={shift.id}
+                        shift={shift}
+                        onEdit={() => openEditShift(shift)}
+                        onDuplicate={() => duplicateShift(shift)}
+                        onDelete={() => deleteShift(shift.id)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </CardContent>
             </Card>
 
-            {/* Section 3 — Règles WRA (placeholder) */}
-            <Card className="border-2 border-dashed border-gray-300 bg-gray-50/50">
+            {/* Section 3 — Règles légales WRA 2019 */}
+            <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-gray-600">
-                  <span aria-hidden>⚖️</span> Règles légales — WRA 2019
+                <CardTitle className="flex items-center gap-2" style={{ color: NAVY }}>
+                  <span aria-hidden>⚖️</span> Règles légales — Workers' Rights Act 2019
                 </CardTitle>
-                <p className="text-sm text-gray-500">À venir dans la prochaine itération.</p>
+                <p className="text-sm text-gray-600">
+                  Limites légales à Maurice. Les règles désactivées ne sont pas vérifiées lors de la validation du planning.
+                </p>
               </CardHeader>
+              <CardContent>
+                <TooltipProvider delayDuration={200}>
+                  <Accordion type="multiple" defaultValue={["heures"]} className="w-full">
+                    <WraCategoryItem
+                      value="heures"
+                      label="🕐 Heures de travail"
+                      regles={regles.filter(r => r.category === "heures")}
+                      onChange={updateRegle}
+                    />
+                    <WraCategoryItem
+                      value="repos"
+                      label="😴 Repos et rotation"
+                      regles={regles.filter(r => r.category === "repos")}
+                      onChange={updateRegle}
+                    />
+                    <WraCategoryItem
+                      value="ot"
+                      label="💰 Heures supplémentaires"
+                      regles={regles.filter(r => r.category === "ot")}
+                      onChange={updateRegle}
+                    />
+                    <WraCategoryItem
+                      value="equipe"
+                      label="👥 Équipe"
+                      regles={regles.filter(r => r.category === "equipe")}
+                      onChange={updateRegle}
+                    />
+                  </Accordion>
+                </TooltipProvider>
+              </CardContent>
             </Card>
           </>
         )}
+
+        {/* Dialog d'édition de créneau */}
+        <ShiftEditDialog
+          shift={editorShift}
+          open={editorOpen}
+          onOpenChange={setEditorOpen}
+          onSave={saveShift}
+          existingCodes={existingCodes}
+          maxHeuresJour={maxHeuresJourRegle}
+        />
 
         {/* Bouton Enregistrer — fixed bottom-right */}
         <div className="fixed bottom-6 right-6 z-40">
@@ -268,5 +419,102 @@ export default function ReglesPlanningPage() {
         </div>
       </div>
     </ClientPageShell>
+  )
+}
+
+// ─── Sous-composants WRA ─────────────────────────────────────────────
+
+function WraCategoryItem({
+  value, label, regles, onChange,
+}: {
+  value: string
+  label: string
+  regles: PlanningRegleLegale[]
+  onChange: (key: string, field: "enabled" | "value", val: boolean | number | string) => void
+}) {
+  const nbActives = regles.filter(r => r.enabled).length
+  return (
+    <AccordionItem value={value}>
+      <AccordionTrigger>
+        <div className="flex items-center gap-2 flex-1">
+          <span>{label}</span>
+          <Badge variant="outline" className="ml-auto mr-3 text-[10px] font-normal">
+            {nbActives}/{regles.length} actives
+          </Badge>
+        </div>
+      </AccordionTrigger>
+      <AccordionContent>
+        <div className="divide-y">
+          {regles.map(r => (
+            <RegleRow key={r.key} regle={r} onChange={onChange} />
+          ))}
+        </div>
+      </AccordionContent>
+    </AccordionItem>
+  )
+}
+
+function RegleRow({
+  regle, onChange,
+}: {
+  regle: PlanningRegleLegale
+  onChange: (key: string, field: "enabled" | "value", val: boolean | number | string) => void
+}) {
+  return (
+    <div className={cn(
+      "flex items-center gap-3 py-3",
+      !regle.enabled && "opacity-50",
+    )}>
+      <Switch
+        checked={regle.enabled}
+        onCheckedChange={(v) => onChange(regle.key, "enabled", v)}
+        aria-label={`Activer ${regle.label}`}
+      />
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-medium" style={{ color: NAVY }}>{regle.label}</div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge
+              variant="outline"
+              className="text-[10px] font-mono mt-1 cursor-help"
+            >
+              {regle.wraRef}
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-xs">
+            <p className="text-xs">{getWRAExplanation(regle.wraRef)}</p>
+          </TooltipContent>
+        </Tooltip>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        {regle.type === "boolean" ? (
+          <Switch
+            checked={regle.value as boolean}
+            onCheckedChange={(v) => onChange(regle.key, "value", v)}
+            disabled={!regle.enabled}
+          />
+        ) : regle.type === "time" ? (
+          <Input
+            type="time"
+            value={regle.value as string}
+            onChange={e => onChange(regle.key, "value", e.target.value)}
+            disabled={!regle.enabled}
+            className="w-[110px] text-sm"
+          />
+        ) : (
+          <Input
+            type="number"
+            value={regle.value as number}
+            onChange={e => onChange(regle.key, "value", parseFloat(e.target.value) || 0)}
+            disabled={!regle.enabled}
+            className="w-[80px] text-right text-sm"
+            min={0}
+          />
+        )}
+        {regle.unit && (
+          <span className="text-xs text-gray-500 min-w-[50px] whitespace-nowrap">{regle.unit}</span>
+        )}
+      </div>
+    </div>
   )
 }
