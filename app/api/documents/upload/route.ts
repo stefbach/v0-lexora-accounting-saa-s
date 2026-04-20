@@ -681,17 +681,34 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
       const rawLignes: any[] = extraction.lignes || []
       const rawTransactions: any[] = extraction.transactions || []
       if (rawTransactions.length === 0 && rawLignes.length > 0) {
-        extraction.transactions = rawLignes.map((l: any) => ({
-          date: l.date || '',
-          libelle: l.libelle || '',
-          debit: l.sens === 'debit' ? (Number(l.montant) || 0) : 0,
-          credit: l.sens === 'credit' ? (Number(l.montant) || 0) : 0,
-          solde_apres: l.solde_apres ?? null,
-          tiers_detecte: l.tiers_detecte || null,
-          compte_comptable: l.sens === 'debit' ? (l.compte_debit || null) : (l.compte_credit || null),
-          statut: (l.confiance || 0) >= 70 ? 'identifie' : ((l.confiance || 0) >= 40 ? 'a_verifier' : 'non_identifie'),
-        }))
+        extraction.transactions = rawLignes.map((l: any) => {
+          // Support ancien format (montant + sens) ET nouveau format (debit + credit)
+          let debit = Number(l.debit) || 0
+          let credit = Number(l.credit) || 0
+          if (debit === 0 && credit === 0 && l.montant) {
+            if (l.sens === 'debit') debit = Number(l.montant) || 0
+            else credit = Number(l.montant) || 0
+          }
+          return {
+            date: l.date || '',
+            libelle: l.libelle || '',
+            debit,
+            credit,
+            solde_apres: l.solde_apres ?? null,
+            tiers_detecte: l.tiers_detecte || null,
+            compte_comptable: l.compte_debit || l.compte_credit || (debit > 0 ? l.compte_debit : l.compte_credit) || null,
+            statut: (l.confiance || 0) >= 70 ? 'identifie' : ((l.confiance || 0) >= 40 ? 'a_verifier' : 'non_identifie'),
+          }
+        })
       }
+      // Log extraction stats
+      const nbExtracted = (extraction.transactions || []).length
+      const nbExpected = extraction.nb_transactions_releve || 0
+      if (nbExpected > 0 && nbExtracted < nbExpected) {
+        console.warn(`[upload] LIGNES MANQUANTES: extrait ${nbExtracted}/${nbExpected} transactions du relevé`)
+        extraction.lignes_manquantes = true
+      }
+      console.log(`[upload] releve: ${nbExtracted} transactions extraites${nbExpected > 0 ? ` (${nbExpected} attendues)` : ''}`)
     }
 
     // Post-processing: validate nom_societe is NOT a bank name
@@ -1630,16 +1647,24 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
           const rawLignes: any[] = extraction.lignes || []
 
           // Convert lignes[] format → transactions[] format
-          const lignesAsTransactions = rawLignes.map((l: any) => ({
-            date: l.date || '',
-            libelle: l.libelle || '',
-            debit: l.sens === 'debit' ? (Number(l.montant) || 0) : 0,
-            credit: l.sens === 'credit' ? (Number(l.montant) || 0) : 0,
-            solde_apres: null,
-            tiers_detecte: l.tiers_detecte || null,
-            compte_comptable: l.sens === 'debit' ? (l.compte_debit || null) : (l.compte_credit || null),
-            statut: l.confiance >= 70 ? 'identifie' : (l.confiance >= 40 ? 'a_verifier' : 'non_identifie'),
-          }))
+          const lignesAsTransactions = rawLignes.map((l: any) => {
+            let debit = Number(l.debit) || 0
+            let credit = Number(l.credit) || 0
+            if (debit === 0 && credit === 0 && l.montant) {
+              if (l.sens === 'debit') debit = Number(l.montant) || 0
+              else credit = Number(l.montant) || 0
+            }
+            return {
+              date: l.date || '',
+              libelle: l.libelle || '',
+              debit,
+              credit,
+              solde_apres: l.solde_apres ?? null,
+              tiers_detecte: l.tiers_detecte || null,
+              compte_comptable: l.compte_debit || l.compte_credit || null,
+              statut: (l.confiance || 0) >= 70 ? 'identifie' : ((l.confiance || 0) >= 40 ? 'a_verifier' : 'non_identifie'),
+            }
+          })
 
           // Merge: prefer explicit transactions[], fall back to converted lignes[]
           const normalizedTransactions = rawTransactions.length > 0

@@ -5,7 +5,7 @@
 export const CLAUDE_CONFIG = {
   model: (process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6") as string,
   max_tokens: 4096,
-  max_tokens_releve_bancaire: 65536,
+  max_tokens_releve_bancaire: 128000,
   temperature: 0,
 }
 
@@ -409,7 +409,7 @@ EXTRACTION OBLIGATOIRE EN-TETE:
 - Extraire le nom de la banque (champ "banque") — MCB, SBM, Barclays, etc.
 - Extraire la devise du compte (champ "devise") — LIRE EXACTEMENT le champ "Currency:" ou "Devise:" dans l'en-tete du releve. Ne PAS deviner. Ne PAS utiliser EUR par defaut. A Maurice, la devise par defaut est MUR.
 
-FORMAT REPONSE JSON strict:
+FORMAT REPONSE JSON strict (COMPACT — maximiser le nombre de transactions):
 {
   "banque": "",
   "nom_societe": "",
@@ -428,39 +428,30 @@ FORMAT REPONSE JSON strict:
   "solde_cloture": 0,
   "total_debits": 0,
   "total_credits": 0,
+  "nb_transactions_releve": 0,
   "lignes_manquantes": false,
   "ecart_solde": 0,
   "lignes": [
     {
       "date": "YYYY-MM-DD",
       "libelle": "",
-      "montant": 0,
-      "sens": "debit|credit",
+      "debit": 0,
+      "credit": 0,
       "solde_apres": 0,
-      "compte_debit": "",
-      "compte_credit": "",
-      "libelle_ecriture": "",
-      "reference": "",
       "tiers_detecte": "",
-      "confiance": 0,
-      "alerte": null,
-      "devise_origine": null,
-      "montant_origine": null,
-      "taux_change_applique": null
+      "confiance": 0
     }
-  ],
-  "ecritures_comptables": [
-    {"compte": "51x", "libelle": "", "debit": 0, "credit": 0}
-  ],
-  "ecritures_non_rapprochees": 0
+  ]
 }
 
-REGLES CHAMPS OBLIGATOIRES:
-- periode_debut et periode_fin: TOUJOURS en format YYYY-MM-DD (date exacte du premier et dernier jour du releve)
-- solde_ouverture = solde_debut, solde_cloture = solde_fin (inclure les deux paires)
-- numero_compte = compte_bancaire (inclure les deux)
-- solde_apres: pour CHAQUE transaction, extraire la colonne BALANCE / SOLDE du releve. C'est le solde progressif apres cette transaction. Si le releve a une colonne "BALANCE", "SOLDE" ou "BAL" → la lire pour chaque ligne.
-- ecritures_comptables: generer les ecritures comptables (debit charge/credit banque pour les debits, debit banque/credit produit pour les credits)`
+IMPORTANT FORMAT COMPACT:
+- NE PAS inclure ecritures_comptables[] — elles seront generees automatiquement
+- Utiliser "debit" et "credit" au lieu de "montant" + "sens" (plus compact)
+- Pour les debits: "debit": montant, "credit": 0
+- Pour les credits: "debit": 0, "credit": montant
+- Omettre les champs null (pas de "alerte": null, "devise_origine": null etc.)
+- nb_transactions_releve = nombre TOTAL de lignes sur le releve papier (pour verification)
+- tiers_detecte: extraire le nom du tiers depuis le libelle (max 50 chars)`
 
 export const SYSTEM_PROMPT_CHARGES_SOCIALES = `Tu es un expert en droit social mauricien specialise dans les charges sociales et cotisations.
 
