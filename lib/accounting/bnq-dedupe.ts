@@ -113,6 +113,31 @@ export async function dedupeBnqEntries(
       continue
     }
     try {
+      // Anti-doublon renforcé : quand on a un facture_id, on considère comme
+      // doublon toute entrée BNQ existante sur le même facture_id + compte +
+      // direction (debit/credit) — sans dépendre du libellé qui varie entre
+      // les différents code paths (« Paiement X — Y » vs « Règlement Y — X »).
+      const factureId = (e as any).facture_id
+      if (factureId) {
+        let qf = supabase
+          .from('ecritures_comptables_v2')
+          .select('id')
+          .eq('journal', 'BNQ')
+          .eq('facture_id', factureId)
+          .eq('numero_compte', k.numero_compte)
+          .eq('debit_mur', k.debit_mur)
+          .eq('credit_mur', k.credit_mur)
+          .limit(1)
+        const { data: byFacture } = await qf.maybeSingle()
+        if (byFacture) {
+          skipped++
+          skipReasons.push(
+            `BNQ ${k.numero_compte} ${k.debit_mur}/${k.credit_mur} facture_id=${factureId} — déjà présent (id=${(byFacture as any).id})`,
+          )
+          continue
+        }
+      }
+
       let q = supabase
         .from('ecritures_comptables_v2')
         .select('id')
