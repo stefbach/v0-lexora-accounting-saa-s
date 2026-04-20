@@ -31,15 +31,34 @@ async function recomputeSoldeConges(
   annee: number
 ): Promise<void> {
   try {
-    if (typeConge === 'AL') {
-      const { data: approved } = await supabase
+    if (typeConge === 'AL' || typeConge === 'UL') {
+      // FIX — al_pris = AL approuvés + UL auto-basculés depuis un AL
+      // (motif contient `[Auto-bascule UL]` sans mention "Sick Leave").
+      // Ces UL-from-AL comptent comme jours de congé annuel réellement
+      // pris (carence ou solde insuffisant). Mirror du fix dans ../route.ts
+      // pour garder la cohérence entre POST creer/approuver et DELETE.
+      const { data: approvedAl } = await supabase
         .from('demandes_conges')
         .select('nb_jours, impose_par_societe')
         .eq('employe_id', employeId).eq('type_conge', 'AL').eq('statut', 'approuve')
         .gte('date_debut', `${annee}-01-01`).lte('date_debut', `${annee}-12-31`)
 
+      const { data: approvedUl } = await supabase
+        .from('demandes_conges')
+        .select('nb_jours, impose_par_societe, motif')
+        .eq('employe_id', employeId).eq('type_conge', 'UL').eq('statut', 'approuve')
+        .gte('date_debut', `${annee}-01-01`).lte('date_debut', `${annee}-12-31`)
+
+      const ulFromAl = (approvedUl || []).filter(c =>
+        typeof c.motif === 'string'
+        && c.motif.includes('[Auto-bascule UL]')
+        && !/Sick\s+Leave/i.test(c.motif)
+      )
+
+      const approved = [...(approvedAl || []), ...ulFromAl]
+
       let imposeSociete = 0, imposeEmploye = 0
-      for (const c of approved || []) {
+      for (const c of approved) {
         const n = Number(c.nb_jours) || 0
         if (c.impose_par_societe === true) imposeSociete += n; else imposeEmploye += n
       }

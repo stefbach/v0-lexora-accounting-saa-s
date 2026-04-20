@@ -127,9 +127,18 @@ async function recomputeSoldeConges(
   annee: number = new Date().getFullYear()
 ): Promise<void> {
   try {
-    if (typeConge === 'AL') {
-      // Pull approved AL rows with the impose flag to compute the split.
-      const { data: approved } = await supabase
+    if (typeConge === 'AL' || typeConge === 'UL') {
+      // FIX — al_pris doit compter les AL approuvés ET les UL basculés
+      // depuis un AL (motif contient `[Auto-bascule UL]` sans mention
+      // "Sick Leave"). Ces UL-from-AL représentent des jours que
+      // l'employé a bien pris en tant que congé annuel (carence ou
+      // solde insuffisant), donc ils comptent dans le compteur de suivi
+      // persisté sur soldes_conges.al_pris.
+      //
+      // Quand l'appelant passe typeConge='UL', c'est probablement après
+      // création/approbation d'une demande UL auto-basculée : on recompute
+      // alors l'al_pris (qui inclut les UL-from-AL).
+      const { data: approvedAl } = await supabase
         .from('demandes_conges')
         .select('nb_jours, impose_par_societe')
         .eq('employe_id', employeId)
@@ -138,9 +147,26 @@ async function recomputeSoldeConges(
         .gte('date_debut', `${annee}-01-01`)
         .lte('date_debut', `${annee}-12-31`)
 
+      const { data: approvedUlFromAl } = await supabase
+        .from('demandes_conges')
+        .select('nb_jours, impose_par_societe, motif')
+        .eq('employe_id', employeId)
+        .eq('type_conge', 'UL')
+        .eq('statut', 'approuve')
+        .gte('date_debut', `${annee}-01-01`)
+        .lte('date_debut', `${annee}-12-31`)
+
+      const ulFromAl = (approvedUlFromAl || []).filter(c =>
+        typeof c.motif === 'string'
+        && c.motif.includes('[Auto-bascule UL]')
+        && !/Sick\s+Leave/i.test(c.motif)
+      )
+
+      const approved = [...(approvedAl || []), ...ulFromAl]
+
       let imposeSociete = 0
       let imposeEmploye = 0
-      for (const c of approved || []) {
+      for (const c of approved) {
         const n = Number(c.nb_jours) || 0
         if (c.impose_par_societe === true) imposeSociete += n
         else imposeEmploye += n

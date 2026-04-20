@@ -267,13 +267,25 @@ function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris
         const label = m ? `Salaire de base (prorata ${m[1]})` : 'Salaire de base'
         return React.createElement(Row, { label, value: `${fmt(bulletin.salaire_base)} MUR` })
       })(),
-      // Compensation salariale 2024 + incrément (sans double-compter)
+      // Compensation salariale 2024 + incrément (sans double-compter).
+      //
+      // FIX — Doublon 635 MUR : quand increment_salaire = 635 exactement ET
+      // salaire_base <= 50 000, la valeur stockée correspond à la seule
+      // compensation (pas à un vrai incrément). On n'affiche alors QUE la
+      // ligne "Compensation salariale 2024" — "Incrément de salaire" est
+      // masquée (elle ferait apparaître deux fois 635 MUR sur le bulletin).
+      //
+      // Pour les autres cas (incr ≠ 635), on continue de soustraire 635 de
+      // l'incr stocké pour sortir le vrai incrément net, afin de préserver
+      // la cohérence avec les bulletins qui stockent incr = compensation +
+      // vrai incrément.
       (() => {
         const base = Number(bulletin.salaire_base) || 0
         const incr = Number(bulletin.increment_salaire) || 0
         const hasComp = base > 0 && base <= 50000
         const compMontant = hasComp ? 635 : 0
-        const realIncr = Math.max(0, incr - compMontant)
+        const incrEstJusteCompensation = hasComp && incr === 635
+        const realIncr = incrEstJusteCompensation ? 0 : Math.max(0, incr - compMontant)
         const els: any[] = []
         if (hasComp) els.push(React.createElement(Row, { label: 'Compensation salariale 2024', value: '635 MUR', key: 'comp' }))
         if (realIncr > 0) els.push(React.createElement(Row, { label: 'Increment de salaire', value: `${fmt(realIncr)} MUR`, key: 'incr' }))
