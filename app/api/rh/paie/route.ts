@@ -215,7 +215,14 @@ export async function GET(request: Request) {
     const employe_id = searchParams.get('employe_id')
     const periode = searchParams.get('periode')
     const societe_id = searchParams.get('societe_id')
-    step('step2: params', { periode, societe_id, employe_id })
+    // Pagination — opt-in : seulement actif si ?page=N fourni. Sans ?page,
+    // comportement legacy (toutes les lignes, pas de champs pagination).
+    const pageParam = searchParams.get('page')
+    const limitParam = searchParams.get('limit')
+    const paginated = pageParam !== null
+    const page = Math.max(1, Number(pageParam) || 1)
+    const limit = Math.min(100, Math.max(1, Number(limitParam) || 10))
+    step('step2: params', { periode, societe_id, employe_id, paginated, page, limit })
 
     // Multi-tenant: verify access — wrap in try/catch pour éviter 500 si
     // une table de mapping (profiles/dossiers/user_societes/...) manque.
@@ -258,9 +265,11 @@ export async function GET(request: Request) {
     }
 
     // Query bulletins (NO FK join — avoids schema cache issues)
+    // Pagination opt-in : on demande `count: 'exact'` uniquement si paginé,
+    // sinon on évite le surcoût du COUNT() côté Postgres.
     let query = supabase
       .from('bulletins_paie')
-      .select('*')
+      .select('*', paginated ? { count: 'exact' } : undefined)
       .order('periode', { ascending: false })
 
     if (employe_id) query = query.eq('employe_id', employe_id)
@@ -271,8 +280,14 @@ export async function GET(request: Request) {
       query = query.in('societe_id', accessibleIds)
     }
 
+    if (paginated) {
+      const from = (page - 1) * limit
+      const to = from + limit - 1
+      query = query.range(from, to)
+    }
+
     step('step5: bulletins query starting')
-    const { data, error } = await query
+    const { data, error, count } = await query
     if (error) {
       // Sprint 5 BUG A — renvoyer tous les détails Postgres pour debug
       // (code SQL, hint, details) au lieu juste du message tronqué.
@@ -393,6 +408,24 @@ export async function GET(request: Request) {
     }
 
     step('step10: DONE', { bulletins: enriched.length, pointage_actif })
+    // Pagination : si ?page fourni, on enrichit la réponse avec les champs
+    // {data, total, page, limit, totalPages}. Sans ?page, on garde la forme
+    // legacy pour ne pas casser les callers existants (UI /rh/paie, PDF).
+    if (paginated) {
+      const total = count ?? enriched.length
+      const totalPages = limit > 0 ? Math.max(1, Math.ceil(total / limit)) : 1
+      return NextResponse.json({
+        data: enriched,
+        total,
+        page,
+        limit,
+        totalPages,
+        bulletins: enriched,
+        totaux,
+        nb: enriched.length,
+        pointage_actif,
+      })
+    }
     return NextResponse.json({ bulletins: enriched, totaux, nb: enriched.length, pointage_actif })
   } catch (e: any) {
     // Sprint 5 BUG A — logger la stack complète + le nom de l'erreur pour

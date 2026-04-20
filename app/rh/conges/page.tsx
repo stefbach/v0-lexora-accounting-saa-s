@@ -1317,7 +1317,28 @@ export default function CongesPage() {
                                 {c.certificat_url ? (
                                   <div className="flex items-center gap-1 text-green-600">
                                     <CheckCircle className="w-3 h-3" />
-                                    <a href={c.certificat_url} target="_blank" rel="noopener noreferrer" className="text-[10px] underline">Certificat joint</a>
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        try {
+                                          const res = await fetch(`/api/rh/conges/${c.id}/certificat`)
+                                          const data = await res.json()
+                                          if (!res.ok || !data.signed_url) {
+                                            // Fallback legacy : l'URL stockée est une URL publique directe.
+                                            if (/^https?:\/\//i.test(c.certificat_url || '')) {
+                                              window.open(c.certificat_url!, '_blank', 'noopener,noreferrer')
+                                              return
+                                            }
+                                            alert(data.error || `Impossible d'ouvrir le certificat (${res.status})`)
+                                            return
+                                          }
+                                          window.open(data.signed_url, '_blank', 'noopener,noreferrer')
+                                        } catch (e: any) {
+                                          alert(`Erreur : ${e?.message || 'réseau indisponible'}`)
+                                        }
+                                      }}
+                                      className="text-[10px] underline"
+                                    >📎 Voir certificat</button>
                                   </div>
                                 ) : (
                                   <Button
