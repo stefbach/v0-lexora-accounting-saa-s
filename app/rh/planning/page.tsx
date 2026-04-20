@@ -1122,6 +1122,43 @@ export default function PlanningPage() {
         )
       })()}
 
+      {/* Banner guidance — affiché si la société a des employés mais qu'aucune
+          cellule du planning n'est encore remplie pour le mois affiché. */}
+      {!loading && employes.length > 0 && (() => {
+        const filledCells = Object.values(planning).reduce(
+          (sum, empPlanning) => sum + Object.values(empPlanning).filter(c => c !== null).length,
+          0,
+        )
+        if (filledCells > 0) return null
+        return (
+          <Card className="border-blue-200 bg-blue-50">
+            <CardContent className="py-4">
+              <div className="flex items-start gap-3">
+                <div className="shrink-0 w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center">
+                  <Wand2 className="w-5 h-5 text-white" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-semibold text-blue-900">
+                    Prêt à créer le planning de {MONTH_NAMES[month]} {year} ?
+                  </h4>
+                  <p className="text-sm text-blue-800 mt-1">
+                    Utilisez un générateur rapide, ou cliquez directement sur une case.
+                  </p>
+                  <div className="flex gap-2 mt-3 flex-wrap">
+                    <Button size="sm" onClick={generateStandard}>
+                      Appliquer le créneau standard
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setBulkOpen(true)}>
+                      Affectation multiple
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )
+      })()}
+
       {/* Conflict alert bar */}
       {/* Sprint 11 BUG 8 — différencier erreurs bloquantes (rouge) des
           avertissements OT légaux (jaune). Compteur séparé + badges +
