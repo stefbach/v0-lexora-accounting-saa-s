@@ -137,6 +137,7 @@ export default function ClientRapprochementPage() {
   const FACTURES_PAGE_SIZE = 20
   const [facturesStatusFilter, setFacturesStatusFilter] = useState<'all' | 'en_retard' | 'en_attente' | 'releve_manquant' | 'paye'>('all')
   const [facturesFournisseurFilter, setFacturesFournisseurFilter] = useState<string | null>(null)
+  const [facturesChecked, setFacturesChecked] = useState<Set<string>>(new Set())
 
   // Part 2: Transactions section is split in 3 tabs.
   //   'aclasser' → unmatched (à traiter)
@@ -1775,9 +1776,99 @@ Voulez-vous vraiment continuer ?`
                 const pageRows = filteredRows.slice(start, start + FACTURES_PAGE_SIZE)
                 return (
               <>
+              {/* ── Barre d'action groupée (multi-factures → 1 virement) ── */}
+              {facturesChecked.size > 0 && (() => {
+                const checkedRows = filteredRows.filter(r => facturesChecked.has(r.f.id))
+                const totalChecked = checkedRows.reduce((s, r) => s + (Number(r.f.montant_ttc) || 0), 0)
+                const totalMUR = checkedRows.reduce((s, r) => s + (Number(r.f.montant_mur) || Number(r.f.montant_ttc) || 0), 0)
+                const candidates = [...(unmatched || [])].filter((t: any) => {
+                  const tDebit = Number(t.debit) || 0
+                  if (tDebit <= 0) return false
+                  return Math.abs(tDebit - totalMUR) / Math.max(totalMUR, 1) < 0.15
+                }).slice(0, 5)
+                return (
+                  <div className="flex items-center justify-between gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 mx-4 mt-2">
+                    <div className="flex items-center gap-3 text-sm">
+                      <span className="font-bold text-[#0B0F2E]">{facturesChecked.size} facture{facturesChecked.size > 1 ? 's' : ''}</span>
+                      <span className="text-gray-500">Total :</span>
+                      <span className="font-mono font-bold text-[#0B0F2E]">{fmt(totalChecked)} {checkedRows[0]?.f.devise || 'MUR'}</span>
+                      {checkedRows[0]?.f.devise !== 'MUR' && totalMUR !== totalChecked && (
+                        <span className="text-xs text-gray-400">(≈ {fmt(totalMUR)} MUR)</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {candidates.length > 0 ? (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button size="sm" className="h-7 text-xs gap-1 bg-[#0B0F2E] text-white">
+                              <Link2 className="w-3 h-3" />
+                              Rapprocher ({candidates.length} tx candidate{candidates.length > 1 ? 's' : ''})
+                              <ChevronDown className="w-3 h-3" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-80">
+                            <DropdownMenuLabel className="text-[10px] text-blue-600">
+                              Transactions bancaires ≈ {fmt(totalMUR)} MUR (±15%)
+                            </DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            {candidates.map((tx: any, ci: number) => (
+                              <DropdownMenuItem key={ci} onClick={() => {
+                                setLinkDialog(tx)
+                                const ids = new Set<string>()
+                                checkedRows.forEach(r => ids.add(r.f.id))
+                                setSelectedFactureIds(ids)
+                                setDialogTab('factures')
+                              }} className="gap-2 py-2">
+                                <div className="flex flex-col flex-1 min-w-0">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-sm font-medium truncate">{tx.tiers_detecte || tx.libelle?.substring(0, 30) || '—'}</span>
+                                    <span className="text-sm font-mono text-red-600 shrink-0">-{fmt(Number(tx.debit))} {tx.devise}</span>
+                                  </div>
+                                  <span className="text-[10px] text-gray-500">{formatDate(tx.date)} · {tx.banque || ''}</span>
+                                </div>
+                              </DropdownMenuItem>
+                            ))}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => {
+                              const fakeMulti = { montant_ttc: totalChecked, montant_mur: totalMUR, devise: checkedRows[0]?.f.devise || 'MUR', tiers: checkedRows.map(r => r.f.tiers).filter(Boolean)[0] || '', numero_facture: `${facturesChecked.size} factures` }
+                              setPickTxForFacture(fakeMulti)
+                            }} className="gap-2">
+                              <Search className="w-4 h-4 text-gray-500" />
+                              <span className="text-sm">Chercher dans toutes les transactions</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      ) : (
+                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => {
+                          const fakeMulti = { montant_ttc: totalChecked, montant_mur: totalMUR, devise: checkedRows[0]?.f.devise || 'MUR', tiers: checkedRows.map(r => r.f.tiers).filter(Boolean)[0] || '', numero_facture: `${facturesChecked.size} factures` }
+                          setPickTxForFacture(fakeMulti)
+                        }}>
+                          <Search className="w-3 h-3" />
+                          Chercher la transaction
+                        </Button>
+                      )}
+                      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setFacturesChecked(new Set())}>✕</Button>
+                    </div>
+                  </div>
+                )
+              })()}
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-8">
+                      <input
+                        type="checkbox"
+                        className="h-3.5 w-3.5 cursor-pointer"
+                        checked={pageRows.filter(r => r.status !== 'paye').length > 0 && pageRows.filter(r => r.status !== 'paye').every(r => facturesChecked.has(r.f.id))}
+                        onChange={(e) => {
+                          const next = new Set(facturesChecked)
+                          pageRows.filter(r => r.status !== 'paye').forEach(r => {
+                            if (e.target.checked) next.add(r.f.id); else next.delete(r.f.id)
+                          })
+                          setFacturesChecked(next)
+                        }}
+                      />
+                    </TableHead>
                     <TableHead>Fournisseur</TableHead>
                     <TableHead>N° Facture</TableHead>
                     <TableHead className="text-right">Montant</TableHead>
@@ -1788,7 +1879,21 @@ Voulez-vous vraiment continuer ?`
                 </TableHeader>
                 <TableBody>
                   {pageRows.map(({ f, label, badgeCls, payDate, status, txLibelle }) => (
-                    <TableRow key={f.id}>
+                    <TableRow key={f.id} className={facturesChecked.has(f.id) ? 'bg-blue-50/50' : ''}>
+                      <TableCell>
+                        {status !== 'paye' && (
+                          <input
+                            type="checkbox"
+                            className="h-3.5 w-3.5 cursor-pointer"
+                            checked={facturesChecked.has(f.id)}
+                            onChange={() => {
+                              const next = new Set(facturesChecked)
+                              if (next.has(f.id)) next.delete(f.id); else next.add(f.id)
+                              setFacturesChecked(next)
+                            }}
+                          />
+                        )}
+                      </TableCell>
                       <TableCell className="text-sm font-medium">
                         <TruncatedCell text={f.tiers || '—'} />
                       </TableCell>
