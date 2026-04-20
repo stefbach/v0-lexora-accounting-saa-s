@@ -1990,16 +1990,29 @@ Voulez-vous vraiment continuer ?`
                           const fTTC = Number(f.montant_ttc) || 0
                           const fMUR = Number(f.montant_mur) || toMURLocal(fTTC, f.devise || 'MUR')
                           const fDevise = (f.devise || 'MUR').toUpperCase()
-                          const findCandidates = (pool: any[], limit: number) => pool.filter((t: any) => {
-                            const tDebit = Number(t.debit) || 0
-                            if (tDebit <= 0) return false
-                            const tDevise = (t.devise || 'MUR').toUpperCase()
-                            if (tDevise === fDevise && fDevise !== 'MUR' && fTTC > 0) return Math.abs(tDebit - fTTC) / fTTC < 0.15
-                            const tMUR = toMURLocal(tDebit, tDevise)
-                            if (fMUR > 0) return Math.abs(tMUR - fMUR) / fMUR < 0.15
-                            return false
-                          }).slice(0, limit)
-                          const candidates = findCandidates(unmatched, 5)
+                          const fDate = f.date_facture ? new Date(f.date_facture).getTime() : 0
+                          const candidates = (unmatched || [])
+                            .filter((t: any) => {
+                              const tDebit = Number(t.debit) || 0
+                              if (tDebit <= 0) return false
+                              // Exclure les transactions ANTÉRIEURES à la facture (on paie après)
+                              if (fDate && t.date) {
+                                const tDate = new Date(t.date).getTime()
+                                if (tDate < fDate - 7 * 86400000) return false
+                              }
+                              const tDevise = (t.devise || 'MUR').toUpperCase()
+                              if (tDevise === fDevise && fDevise !== 'MUR' && fTTC > 0) return Math.abs(tDebit - fTTC) / fTTC < 0.15
+                              const tMUR = toMURLocal(tDebit, tDevise)
+                              if (fMUR > 0) return Math.abs(tMUR - fMUR) / fMUR < 0.15
+                              return false
+                            })
+                            .sort((a: any, b: any) => {
+                              // Trier par proximité de date avec la facture
+                              const da = a.date ? Math.abs(new Date(a.date).getTime() - fDate) : Infinity
+                              const db = b.date ? Math.abs(new Date(b.date).getTime() - fDate) : Infinity
+                              return da - db
+                            })
+                            .slice(0, 5)
                           return (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
