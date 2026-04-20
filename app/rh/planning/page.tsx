@@ -12,21 +12,14 @@ import { Loader2, Calendar, ChevronLeft, ChevronRight, Send, Wand2, Users, Check
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { toast } from "sonner"
 import Link from "next/link"
+import type { PlanningShift, JourCode } from "@/types/planning"
+import { type Creneau, shiftToCreneau, creneauToShift } from "@/lib/planning/converters"
+
+const DEFAULT_JOURS: JourCode[] = ["lun", "mar", "mer", "jeu", "ven"]
 
 // ─── Types ──────────────────────────────────────────────────────────
-
-interface Creneau {
-  id: string
-  nom: string
-  code: string
-  heure_debut: string
-  heure_fin: string
-  pause_debut: string
-  pause_fin: string
-  pause_minutes: number
-  heures_effectives: number
-  couleur: string
-}
+// Le type Creneau est maintenant importé depuis @/lib/planning/converters
+// (source unique, compatible avec le nouveau PlanningShift côté DB).
 
 interface CellData {
   creneau_id: string
@@ -105,10 +98,11 @@ const WEEKLY_OT_LIMIT = 55
 const WEEK_DAY_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
 
 // Shifts par défaut GÉNÉRIQUES (pas DDS-spécifiques).
-// Utilisés uniquement quand la société n'a pas configuré ses propres shifts
-// dans regles_planning.shifts. Le RH peut personnaliser via /rh/planning/regles.
+// fallback si DB vide — utilisés uniquement quand la société n'a pas
+// encore configuré ses propres shifts dans societes.shifts_planning.
+// Le RH peut personnaliser via /rh/planning/regles.
 const DEFAULT_CRENEAUX: Creneau[] = [
-  { id: "c1", nom: "Journée", code: "J", heure_debut: "08:00", heure_fin: "17:00", pause_debut: "12:00", pause_fin: "13:00", pause_minutes: 60, heures_effectives: 8, couleur: COLORS[0] },
+  { id: "default_j", nom: "Journée", code: "J", heure_debut: "08:00", heure_fin: "17:00", pause_debut: "12:00", pause_fin: "13:00", pause_minutes: 60, heures_effectives: 8, couleur: COLORS[0] },
 ]
 
 // ─── Component ──────────────────────────────────────────────────────
@@ -139,8 +133,8 @@ export default function PlanningPage() {
   const [creneauConfigOpen, setCreneauConfigOpen] = useState(false)
   const [editingCreneau, setEditingCreneau] = useState<Creneau | null>(null)
 
-  // Load creneaux from DB (societes.regles_planning.shifts) when société changes.
-  // Fallback : localStorage (legacy) → DEFAULT_CRENEAUX (générique).
+  // Load creneaux from DB (societes.shifts_planning) when société changes.
+  // P2a — plus de fallback localStorage : source unique = DB.
   useEffect(() => {
     if (societe === "all") { setCreneaux(DEFAULT_CRENEAUX); return }
     let cancelled = false
@@ -149,50 +143,41 @@ export default function PlanningPage() {
         const res = await fetch(`/api/rh/planning/regles?societe_id=${societe}`)
         if (res.ok) {
           const data = await res.json()
-          const shifts = data?.regles?.shifts
-          if (Array.isArray(shifts) && shifts.length > 0) {
-            if (!cancelled) setCreneaux(shifts)
+          const shifts: PlanningShift[] = Array.isArray(data?.shifts_planning)
+            ? data.shifts_planning
+            : []
+          if (shifts.length > 0) {
+            if (!cancelled) setCreneaux(shifts.map(shiftToCreneau))
             return
           }
         }
       } catch {}
-      // Fallback localStorage (legacy — shifts sauvegardés avant ce refactor)
-      if (typeof window !== "undefined") {
-        try {
-          const stored = localStorage.getItem(`lexora_creneaux_${societe}`)
-          if (stored) {
-            const parsed = JSON.parse(stored)
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              if (!cancelled) setCreneaux(parsed)
-              return
-            }
-          }
-        } catch {}
-      }
       if (!cancelled) setCreneaux(DEFAULT_CRENEAUX)
     })()
     return () => { cancelled = true }
   }, [societe])
 
-  // Persist creneaux → DB (societes.regles_planning.shifts) + localStorage fallback
+  // Persist creneaux → DB (PUT societes.shifts_planning).
+  // P2a — plus d'écriture localStorage.
   const persistCreneaux = useCallback(async (next: Creneau[]) => {
-    // Save to localStorage immediately (instant feedback)
-    if (typeof window !== "undefined") {
-      try { localStorage.setItem(`lexora_creneaux_${societe || "default"}`, JSON.stringify(next)) } catch {}
-    }
-    // Save to DB (merge into existing regles_planning)
-    if (societe && societe !== "all") {
-      try {
-        const res = await fetch(`/api/rh/planning/regles?societe_id=${societe}`)
-        const current = res.ok ? (await res.json())?.regles || {} : {}
-        await fetch("/api/rh/planning/regles", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ societe_id: societe, regles: { ...current, shifts: next } }),
-        })
-      } catch (e: any) {
-        console.warn('[planning] persistCreneaux DB save failed:', e?.message)
+    if (!societe || societe === "all") return
+    try {
+      const res = await fetch("/api/rh/planning/regles", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          societe_id: societe,
+          shifts_planning: next.map(c =>
+            creneauToShift(c, (c.jours as JourCode[] | undefined) || DEFAULT_JOURS),
+          ),
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        toast.error("Erreur sauvegarde créneaux : " + (data?.error || `HTTP ${res.status}`))
       }
+    } catch (e: any) {
+      toast.error("Erreur réseau : " + (e?.message || ""))
     }
   }, [societe])
 
