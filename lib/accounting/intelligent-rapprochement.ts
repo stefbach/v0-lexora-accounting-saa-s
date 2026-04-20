@@ -764,9 +764,13 @@ export function autoClassify(
     const looksLikePerson = /\b(mr|mrs|miss|mme|monsieur|madame)\b/i.test(tiers + ' ' + lib)
 
     // ── Salaires ──
+    // UNIQUEMENT sur mots-clés bancaires explicites (bulk payment, payroll, salary).
+    // Un virement vers MR/MRS/MISS n'est PAS automatiquement un salaire —
+    // cela peut être un CCA, un prestataire, un remboursement, etc.
+    // La classification des paiements individuels est une décision humaine,
+    // ensuite le système apprend via les patterns historiques.
     const isSalaryByPattern = SALARY_PATTERNS.some(p => lib.includes(p) || tiers.includes(p))
-    const isSalaryByPerson = looksLikePerson && tx.debit > 0
-    if (isSalaryByPattern || isSalaryByPerson) {
+    if (isSalaryByPattern) {
       let note = 'Salaire / paie'
       let confidence = 0.85
 
