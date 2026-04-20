@@ -8,7 +8,11 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
-import { Loader2, Calendar, ChevronLeft, ChevronRight, Send, Wand2, Users, Check, Plus, Trash2, Clock, Coffee, AlertTriangle, FileDown, Copy, Eye, Shield, CheckCircle2, XCircle, Info } from "lucide-react"
+import { Loader2, Calendar, ChevronLeft, ChevronRight, Send, Wand2, Users, Check, Plus, Trash2, Clock, Coffee, AlertTriangle, FileDown, Copy, Eye, Shield, CheckCircle2, XCircle, Info, ChevronDown, Settings } from "lucide-react"
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { toast } from "sonner"
 import Link from "next/link"
@@ -1255,48 +1259,78 @@ export default function PlanningPage() {
                   <Eye className="inline h-3.5 w-3.5 mr-1" />Hebdomadaire
                 </button>
               </div>
-              <Button variant="outline" size="sm" onClick={generateStandard}><Wand2 className="h-4 w-4 mr-1" /> Standard</Button>
-              <Button variant="outline" size="sm" onClick={generate3x8}>3×8</Button>
-              <Button variant="outline" size="sm" onClick={() => setConfirmGenOpen(true)} style={{ borderColor: "#D4AF37", color: "#D4AF37" }}>
-                <Copy className="h-4 w-4 mr-1" /> Générer planning type
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => setBulkOpen(true)}><Users className="h-4 w-4 mr-1" /> Affectation multiple</Button>
-              <Button variant="outline" size="sm" onClick={() => toast.info("Export PDF bientôt disponible")} style={{ borderColor: "#4191FF", color: "#4191FF" }}>
-                <FileDown className="h-4 w-4 mr-1" /> Exporter PDF
-              </Button>
-              <Button variant="outline" size="sm" onClick={runValidation} style={{ borderColor: "#0B0F2E", color: "#0B0F2E" }}>
-                <Shield className="h-4 w-4 mr-1" /> Verifier conformite
-              </Button>
-              <Link href="/rh/planning/regles">
-                <Button variant="outline" size="sm" className="text-gray-600">
-                  <Shield className="h-4 w-4 mr-1" /> Regles
-                </Button>
-              </Link>
+              {/* Dropdown "Remplir" — regroupe Standard, 3×8, Copier semaine,
+                  Affectation multiple. Réduit le bruit visuel de la barre. */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Wand2 className="h-4 w-4 mr-1" /> Remplir <ChevronDown className="h-3 w-3 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel className="text-xs">Générateurs automatiques</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={generateStandard}>
+                    Planning standard
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={generate3x8}>
+                    Rotation 3×8
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setConfirmGenOpen(true)}>
+                    Copier la semaine actuelle
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setBulkOpen(true)}>
+                    Affectation multiple
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Dropdown "Outils" — Vérifier conformité, Export PDF, Règles */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Settings className="h-4 w-4 mr-1" /> Outils <ChevronDown className="h-3 w-3 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem onClick={runValidation}>
+                    Vérifier la conformité
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => toast.info("Export PDF bientôt disponible")}>
+                    Exporter en PDF
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link href="/rh/planning/regles">Règles et créneaux</Link>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
               {/* Sprint 7 FIX 5 — Sauver vs Publier clairement distincts.
-                  Sauver : style outline (secondaire), enregistre en brouillon,
-                  visible uniquement RH. Publier : style solid vert (primaire),
-                  rend le planning visible par tous les employés — confirmation
-                  obligatoire via Dialog pour éviter publication accidentelle. */}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => savePlanning(false)}
-                disabled={saving}
-                title="Enregistrer en brouillon — visible uniquement par vous (RH). Les employés ne voient rien tant que vous n'avez pas publié."
-              >
-                {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Check className="h-4 w-4 mr-1" />}
-                Sauver brouillon
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => setConfirmPublishOpen(true)}
-                disabled={saving}
-                className="text-white hover:opacity-90 bg-emerald-600 hover:bg-emerald-700"
-                title="Publier le planning — les employés pourront le consulter sur leur espace (/salarie). Nécessite confirmation."
-              >
-                <Send className="h-4 w-4 mr-1" />
-                Publier aux employés
-              </Button>
+                  Séparateur visuel (border-l) pour distinguer les actions
+                  finales des outils ci-dessus. */}
+              <div className="border-l pl-2 ml-1 flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => savePlanning(false)}
+                  disabled={saving}
+                  title="Enregistrer en brouillon — visible uniquement par vous (RH). Les employés ne voient rien tant que vous n'avez pas publié."
+                >
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Check className="h-4 w-4 mr-1" />}
+                  Sauver brouillon
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => setConfirmPublishOpen(true)}
+                  disabled={saving}
+                  className="text-white hover:opacity-90 bg-emerald-600 hover:bg-emerald-700"
+                  title="Publier le planning — les employés pourront le consulter sur leur espace (/salarie). Nécessite confirmation."
+                >
+                  <Send className="h-4 w-4 mr-1" />
+                  Publier aux employés
+                </Button>
+              </div>
             </div>
           </div>
         </CardHeader>
