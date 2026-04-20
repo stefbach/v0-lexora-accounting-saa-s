@@ -132,9 +132,11 @@ export default function ClientRapprochementPage() {
     inconnus: AutoBucket
   }>(null)
 
-  // Pagination — Factures fournisseurs table (Part 1: 20/page).
+  // Pagination + filtres — Factures fournisseurs table
   const [facturesPage, setFacturesPage] = useState(1)
   const FACTURES_PAGE_SIZE = 20
+  const [facturesStatusFilter, setFacturesStatusFilter] = useState<'all' | 'en_retard' | 'en_attente' | 'releve_manquant' | 'paye'>('all')
+  const [facturesFournisseurFilter, setFacturesFournisseurFilter] = useState<string | null>(null)
 
   // Part 2: Transactions section is split in 3 tabs.
   //   'aclasser' → unmatched (à traiter)
@@ -1636,6 +1638,12 @@ Voulez-vous vraiment continuer ?`
           retard: rows.filter(r => r.status === 'en_retard').length,
         }
 
+        // ── Sort by date_facture ASC (oldest first) ──
+        rows.sort((a, b) => (a.f.date_facture || '').localeCompare(b.f.date_facture || ''))
+
+        // ── Build unique fournisseur list ──
+        const fournisseurList = Array.from(new Set(rows.map(r => r.f.tiers).filter(Boolean))).sort() as string[]
+
         return (
           <Card>
             <CardHeader className="pb-3">
@@ -1652,7 +1660,6 @@ Voulez-vous vraiment continuer ?`
                 <span className="text-xs font-normal text-gray-400 ml-auto">
                   {rows.length} facture{rows.length > 1 ? 's' : ''}
                 </span>
-                {/* Bouton "Tout remettre en attente" — reset complet factures + tx + écritures BNQ */}
                 {rows.some(r => r.status === 'paye') && (
                   <Button
                     variant="outline"
@@ -1666,7 +1673,6 @@ Voulez-vous vraiment continuer ?`
                   </Button>
                 )}
               </CardTitle>
-              {/* Barre d'annulation en masse — visible quand ≥1 facture payée est cochée */}
               {selectedFacturesForAnnulation.size > 0 && (
                 <div className="flex items-center justify-between gap-3 rounded-lg border border-[#9F1239]/30 bg-[#9F1239]/5 px-3 py-2 mt-2">
                   <span className="text-sm">
@@ -1689,20 +1695,84 @@ Voulez-vous vraiment continuer ?`
                   </div>
                 </div>
               )}
-              <div className="flex flex-wrap gap-3 text-xs text-gray-500 pt-1">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" />{counts.paye} payées</span>
-                {counts.missingReleve > 0 && <span className="flex items-center gap-1 text-orange-700"><span className="w-2 h-2 rounded-full bg-orange-500" />{counts.missingReleve} relevé manquant</span>}
-                {counts.attente > 0 && <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" />{counts.attente} en attente</span>}
-                {counts.retard > 0 && <span className="flex items-center gap-1 text-red-700"><span className="w-2 h-2 rounded-full bg-red-500" />{counts.retard} en retard</span>}
+              {/* ── TABS STATUT ── */}
+              <div className="flex flex-wrap gap-1 pt-2 border-b border-gray-200">
+                {([
+                  { id: 'all', label: 'Toutes', count: rows.length, dot: 'bg-gray-400' },
+                  { id: 'en_retard', label: 'En retard', count: counts.retard, dot: 'bg-red-500' },
+                  { id: 'en_attente', label: 'En attente', count: counts.attente, dot: 'bg-amber-500' },
+                  { id: 'releve_manquant', label: 'Relevé manquant', count: counts.missingReleve, dot: 'bg-orange-500' },
+                  { id: 'paye', label: 'Payées', count: counts.paye, dot: 'bg-green-500' },
+                ] as const).map(tab => {
+                  const isActive = (facturesStatusFilter || 'all') === tab.id
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setFacturesStatusFilter(tab.id as any)}
+                      className={`px-3 py-1.5 -mb-px border-b-2 text-xs transition-colors ${
+                        isActive
+                          ? 'border-[#0B0F2E] text-[#0B0F2E] font-semibold'
+                          : 'border-transparent text-gray-500 hover:text-[#0B0F2E]'
+                      }`}
+                    >
+                      <span className={`inline-block w-2 h-2 rounded-full ${tab.dot} mr-1`} />
+                      {tab.label}
+                      <span className={`ml-1 text-[10px] ${isActive ? 'opacity-100' : 'opacity-60'}`}>({tab.count})</span>
+                    </button>
+                  )
+                })}
               </div>
+              {/* ── FILTRE FOURNISSEUR (tabs scrollables) ── */}
+              {fournisseurList.length > 1 && (
+                <div className="flex gap-1 pt-2 overflow-x-auto pb-1">
+                  <button
+                    type="button"
+                    onClick={() => setFacturesFournisseurFilter(null)}
+                    className={`shrink-0 px-2.5 py-1 rounded-full text-[11px] transition-colors ${
+                      !facturesFournisseurFilter
+                        ? 'bg-[#0B0F2E] text-white font-semibold'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    Tous ({rows.filter(r => (facturesStatusFilter || 'all') === 'all' || r.status === facturesStatusFilter).length})
+                  </button>
+                  {fournisseurList.map(fName => {
+                    const fCount = rows.filter(r =>
+                      r.f.tiers === fName &&
+                      ((facturesStatusFilter || 'all') === 'all' || r.status === facturesStatusFilter)
+                    ).length
+                    if (fCount === 0) return null
+                    return (
+                      <button
+                        key={fName}
+                        type="button"
+                        onClick={() => setFacturesFournisseurFilter(fName)}
+                        className={`shrink-0 px-2.5 py-1 rounded-full text-[11px] transition-colors ${
+                          facturesFournisseurFilter === fName
+                            ? 'bg-[#0B0F2E] text-white font-semibold'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        {fName.length > 25 ? fName.substring(0, 22) + '…' : fName} ({fCount})
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
             </CardHeader>
             <CardContent className="p-0 overflow-x-auto">
               {(() => {
-                // Pagination — clamp page if the rows length shrinks.
-                const totalPages = Math.max(1, Math.ceil(rows.length / FACTURES_PAGE_SIZE))
+                // Apply status + fournisseur filters
+                const filteredRows = rows.filter(r => {
+                  if (facturesStatusFilter !== 'all' && r.status !== facturesStatusFilter) return false
+                  if (facturesFournisseurFilter && r.f.tiers !== facturesFournisseurFilter) return false
+                  return true
+                })
+                const totalPages = Math.max(1, Math.ceil(filteredRows.length / FACTURES_PAGE_SIZE))
                 const safePage = Math.min(Math.max(1, facturesPage), totalPages)
                 const start = (safePage - 1) * FACTURES_PAGE_SIZE
-                const pageRows = rows.slice(start, start + FACTURES_PAGE_SIZE)
+                const pageRows = filteredRows.slice(start, start + FACTURES_PAGE_SIZE)
                 return (
               <>
               <Table>
@@ -1774,55 +1844,71 @@ Voulez-vous vraiment continuer ?`
                             </Button>
                           </div>
                         )}
-                        {status !== 'paye' && (
+                        {status !== 'paye' && (() => {
+                          const fTTC = Number(f.montant_ttc) || 0
+                          const fMUR = Number(f.montant_mur) || fTTC
+                          const fDevise = (f.devise || 'MUR').toUpperCase()
+                          const findCandidates = (pool: any[], limit: number) => pool.filter((t: any) => {
+                            const tDebit = Number(t.debit) || 0
+                            if (tDebit <= 0) return false
+                            const tDevise = (t.devise || 'MUR').toUpperCase()
+                            if (tDevise === fDevise && fTTC > 0) return Math.abs(tDebit - fTTC) / fTTC < 0.15
+                            if (fMUR > 0) return Math.abs(tDebit - fMUR) / fMUR < 0.15
+                            return false
+                          }).slice(0, limit)
+                          const candidates = findCandidates(unmatched, 5)
+                          return (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="outline" size="sm" className="h-7 text-xs gap-1">
                                 Lettrer <ChevronDown className="w-3 h-3" />
+                                {candidates.length > 0 && (
+                                  <span className="ml-0.5 w-4 h-4 rounded-full bg-blue-500 text-white text-[9px] flex items-center justify-center">{candidates.length}</span>
+                                )}
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-64">
-                              <DropdownMenuLabel className="text-xs">Action sur cette facture</DropdownMenuLabel>
+                            <DropdownMenuContent align="end" className="w-80">
+                              <DropdownMenuLabel className="text-xs">
+                                Facture {f.numero_facture} — {fmt(fTTC)} {f.devise || 'MUR'}
+                              </DropdownMenuLabel>
                               <DropdownMenuSeparator />
+                              {candidates.length > 0 && (
+                                <>
+                                  <DropdownMenuLabel className="text-[10px] text-blue-600 font-normal">
+                                    💡 Transactions bancaires candidates (±15%)
+                                  </DropdownMenuLabel>
+                                  {candidates.map((tx: any, ci: number) => (
+                                    <DropdownMenuItem key={ci} onClick={() => setLinkDialog(tx)} className="gap-2 py-2">
+                                      <div className="flex flex-col flex-1 min-w-0">
+                                        <div className="flex items-center justify-between gap-2">
+                                          <span className="text-sm font-medium truncate">{tx.tiers_detecte || tx.libelle?.substring(0, 30) || '—'}</span>
+                                          <span className="text-sm font-mono text-red-600 shrink-0">-{fmt(Number(tx.debit))} {tx.devise}</span>
+                                        </div>
+                                        <span className="text-[10px] text-gray-500">{formatDate(tx.date)} · {tx.banque || ''}</span>
+                                      </div>
+                                    </DropdownMenuItem>
+                                  ))}
+                                  <DropdownMenuSeparator />
+                                </>
+                              )}
                               <DropdownMenuItem onClick={() => handleMarquerPaye(f)} className="gap-2">
                                 <CheckCircle2 className="w-4 h-4 text-green-600" />
                                 <div className="flex flex-col">
-                                  <span className="text-sm">Marquer payée</span>
+                                  <span className="text-sm">Marquer payée (sans tx)</span>
                                   <span className="text-[10px] text-gray-500">Crée BNQ + lettre auto</span>
                                 </div>
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => {
-                                setDialogTab('factures')
-                                const fTTC = Number(f.montant_ttc) || 0
-                                const fMUR = Number(f.montant_mur) || fTTC
-                                const fDevise = (f.devise || 'MUR').toUpperCase()
-                                // Chercher une tx bancaire correspondant à cette facture (±10%)
-                                const findTx = (pool: any[]) => pool.find((t: any) => {
-                                  const tDebit = Number(t.debit) || 0
-                                  if (tDebit <= 0) return false
-                                  const tDevise = (t.devise || 'MUR').toUpperCase()
-                                  if (tDevise === fDevise && fTTC > 0) return Math.abs(tDebit - fTTC) / fTTC < 0.10
-                                  if (fMUR > 0) return Math.abs(tDebit - fMUR) / fMUR < 0.10
-                                  return false
-                                })
-                                const prefill = findTx(unmatched) || findTx(transactions)
-                                if (prefill) {
-                                  // Match net → on ouvre directement le dialog de lettrage habituel avec cette tx
-                                  setLinkDialog(prefill)
-                                } else {
-                                  // Pas de match net → on ouvre le picker pour choisir une tx manuellement
-                                  setPickTxForFacture(f)
-                                }
-                              }} className="gap-2">
-                                <Link2 className="w-4 h-4 text-blue-600" />
+                              <DropdownMenuItem onClick={() => setPickTxForFacture(f)} className="gap-2">
+                                <Search className="w-4 h-4 text-gray-500" />
                                 <div className="flex flex-col">
-                                  <span className="text-sm">Lettrer avec une transaction</span>
-                                  <span className="text-[10px] text-gray-500">Choisir une tx bancaire</span>
+                                  <span className="text-sm">Chercher dans toutes les transactions</span>
+                                  <span className="text-[10px] text-gray-500">Recherche manuelle</span>
                                 </div>
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
-                        )}
+                          )
+                        })()}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -1832,7 +1918,7 @@ Voulez-vous vraiment continuer ?`
                 <div className="flex items-center justify-between border-t bg-gray-50/50 px-4 py-2 text-sm">
                   <span className="text-gray-600">
                     Page <strong>{safePage}</strong> sur {totalPages}{" "}
-                    <span className="text-gray-400">· {rows.length} facture{rows.length > 1 ? "s" : ""}</span>
+                    <span className="text-gray-400">· {filteredRows.length} facture{filteredRows.length > 1 ? "s" : ""}</span>
                   </span>
                   <div className="flex gap-1">
                     <Button
