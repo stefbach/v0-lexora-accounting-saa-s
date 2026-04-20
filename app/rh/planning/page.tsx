@@ -1004,11 +1004,10 @@ export default function PlanningPage() {
         <div>
           <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>Planning</h1>
           <p className="text-gray-500 text-sm">
-            Créneaux personnalisables avec pauses ·{' '}
-            <span className="text-gray-600">
-              Limite hebdomadaire : <b>{weeklyLimit}h</b>
-              {weeklyLimit === WEEKLY_HOURS_LIMIT_DEFAULT ? ' (WRA 2019 défaut)' : ' (règle société)'}
-            </span>
+            Planifiez les horaires de vos collaborateurs pour {MONTH_NAMES[month]} {year}.
+            {societe !== "all" && (
+              <span className="ml-2 text-xs">· Limite hebdo : <b>{weeklyLimit}h</b></span>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -1352,7 +1351,7 @@ export default function PlanningPage() {
                   size="sm"
                   onClick={() => savePlanning(false)}
                   disabled={saving}
-                  title="Enregistrer en brouillon — visible uniquement par vous (RH). Les employés ne voient rien tant que vous n'avez pas publié."
+                  title="Enregistrer en brouillon - visible uniquement par vous (RH)"
                 >
                   {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Check className="h-4 w-4 mr-1" />}
                   Sauver brouillon
@@ -1362,7 +1361,7 @@ export default function PlanningPage() {
                   onClick={() => setConfirmPublishOpen(true)}
                   disabled={saving}
                   className="text-white hover:opacity-90 bg-emerald-600 hover:bg-emerald-700"
-                  title="Publier le planning — les employés pourront le consulter sur leur espace (/salarie). Nécessite confirmation."
+                  title="Rend le planning visible par tous les employés sur /salarie"
                 >
                   <Send className="h-4 w-4 mr-1" />
                   Publier aux employés
