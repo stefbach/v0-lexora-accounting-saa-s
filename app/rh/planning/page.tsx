@@ -1338,18 +1338,55 @@ export default function PlanningPage() {
           {loading ? (
             <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-gray-400" /></div>
           ) : employes.length === 0 ? (
-            <div className="text-center py-12 space-y-2">
-              <p className="text-gray-400">
-                {societe === "all"
-                  ? "Sélectionnez une société pour afficher son planning."
-                  : allEmployes.length === 0
-                    ? "Cette société n'a aucun employé actif. Ajoutez un employé dans /rh/employes pour commencer."
-                    : "Aucun employé sélectionné — cochez-les via le bouton « Filtrer employés »."}
-              </p>
-              {allEmployes.length > 0 && societe !== "all" && (
-                <p className="text-xs text-gray-400">
-                  {allEmployes.length} employé(s) disponible(s) pour cette société.
-                </p>
+            <div className="text-center py-16 space-y-3">
+              {societe === "all" ? (
+                <>
+                  <div className="w-16 h-16 rounded-full bg-gray-100 mx-auto flex items-center justify-center">
+                    <Calendar className="w-7 h-7 text-gray-400" />
+                  </div>
+                  <h3 className="text-lg font-semibold" style={{ color: "#0B0F2E" }}>
+                    Sélectionnez une société
+                  </h3>
+                  <p className="text-sm text-gray-500 max-w-md mx-auto">
+                    Choisissez une société dans le menu déroulant en haut pour afficher son planning.
+                  </p>
+                </>
+              ) : allEmployes.length === 0 ? (
+                <>
+                  <div className="w-16 h-16 rounded-full bg-amber-100 mx-auto flex items-center justify-center">
+                    <Users className="w-7 h-7 text-amber-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold" style={{ color: "#0B0F2E" }}>
+                    Aucun employé dans cette société
+                  </h3>
+                  <p className="text-sm text-gray-500 max-w-md mx-auto">
+                    Ajoutez des employés pour commencer à planifier leurs horaires.
+                  </p>
+                  <div className="pt-2">
+                    <Link href="/rh/employes">
+                      <Button size="sm" style={{ backgroundColor: "#0B0F2E" }} className="text-white">
+                        <Plus className="h-4 w-4 mr-1" /> Ajouter un employé
+                      </Button>
+                    </Link>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="w-16 h-16 rounded-full bg-blue-100 mx-auto flex items-center justify-center">
+                    <Users className="w-7 h-7 text-blue-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold" style={{ color: "#0B0F2E" }}>
+                    Personne à afficher
+                  </h3>
+                  <p className="text-sm text-gray-500 max-w-md mx-auto">
+                    {allEmployes.length} employé(s) disponible(s) dans cette société. Choisissez ceux à planifier.
+                  </p>
+                  <div className="pt-2">
+                    <Button size="sm" onClick={() => setEmpFilterOpen(true)}>
+                      <Users className="h-4 w-4 mr-1" /> Choisir les collaborateurs
+                    </Button>
+                  </div>
+                </>
               )}
             </div>
           ) : isPlanningEmpty && societe !== "all" ? (
