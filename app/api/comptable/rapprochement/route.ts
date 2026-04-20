@@ -3197,6 +3197,8 @@ export async function POST(request: Request) {
       }
 
       const code = `CL${String(Date.now()).slice(-6)}`
+      // Lire l'ancien code lettre AVANT de mettre à jour la transaction
+      const oldLettre = txs[txIdx]?.lettre || null
       txs[txIdx] = { ...txs[txIdx], statut: 'rapproche', matched_type: classification, lettre: code, note: `Classification manuelle: ${classification}` }
       const { error: updRelErr, data: updRelData } = await supabase
         .from('releves_bancaires')
@@ -3257,18 +3259,26 @@ export async function POST(request: Request) {
 
         // ── RECLASSIFICATION : supprimer les anciennes écritures AVANT d'insérer ──
         // Quand l'utilisateur corrige une classification, les écritures de l'ancienne
-        // classification (ref_folio CL-xxx ou ancien code lettre) doivent disparaître.
-        // Sinon le compte comptable précédent (ex: 4312 charges sociales) reste pollué
-        // avec un montant fantôme.
-        const oldLettre = txs[txIdx]?.lettre || null
-        // 1) Supprimer par ref_folio exact (reclassification du même CL-xxx)
+        // classification (ref_folio CL-xxx ou CLS-xxx ou ancien code lettre) doivent
+        // disparaître. Sinon le compte comptable précédent reste pollué avec un montant
+        // fantôme.
+        // 1) Supprimer par ref_folio CL-xxx (reclassification manuelle précédente)
         const { count: delByFolio } = await supabase
           .from('ecritures_comptables_v2')
           .delete({ count: 'exact' })
           .eq('societe_id', societe_id)
           .eq('ref_folio', refFolio)
         nbEcrituresSupprimees += (delByFolio || 0)
-        // 2) Supprimer par ancien code lettre (CLS005, CL7xxx… de la classification précédente)
+        // 2) Supprimer par ref_folio CLS-xxx (créé par auto_rapprocher phase finale)
+        const refFolioCLS = `CLS-${releve_id}-${txIdx}`
+        const { count: delByCLS } = await supabase
+          .from('ecritures_comptables_v2')
+          .delete({ count: 'exact' })
+          .eq('societe_id', societe_id)
+          .eq('ref_folio', refFolioCLS)
+        nbEcrituresSupprimees += (delByCLS || 0)
+        // 3) Supprimer par ancien code lettre (A043, CLS005, etc.)
+        // oldLettre est lu AVANT la mise à jour de txs[txIdx] (ligne 3200)
         if (oldLettre && oldLettre !== code) {
           const { count: delByLettre } = await supabase
             .from('ecritures_comptables_v2')
@@ -3279,7 +3289,7 @@ export async function POST(request: Request) {
           nbEcrituresSupprimees += (delByLettre || 0)
         }
         if (nbEcrituresSupprimees > 0) {
-          console.log(`[classer_transaction] ${nbEcrituresSupprimees} anciennes ecritures supprimees (ref_folio=${refFolio}, lettre=${oldLettre})`)
+          console.log(`[classer_transaction] ${nbEcrituresSupprimees} anciennes ecritures supprimees (ref_folio=${refFolio}|${refFolioCLS}, lettre=${oldLettre})`)
         }
 
         const ecrituresPayload = [
