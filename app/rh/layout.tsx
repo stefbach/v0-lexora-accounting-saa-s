@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { RHSidebarDedicated } from "@/components/layout/RHSidebarDedicated"
 import CommandSearch from "@/components/CommandSearch"
 
-const ALLOWED_ROLES = ['admin', 'super_admin', 'comptable', 'comptable_dedie', 'client_admin', 'client_user', 'rh', 'manager', 'direction']
+const ALLOWED_ROLES = ['admin', 'super_admin', 'comptable', 'comptable_dedie', 'client_admin', 'client_user', 'rh', 'rh_manager', 'manager', 'direction']
 
 export default async function RHLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()

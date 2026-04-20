@@ -3,7 +3,24 @@
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Building2, Plus, Loader2 } from "lucide-react"
+import { Building2, Plus, Loader2, UserCircle } from "lucide-react"
+import { Button } from "@/components/ui/button"
+
+/**
+ * Bouton de raccourci vers /salarie — affiché sur la page select-societe
+ * pour permettre à l'assistant (et autres multi-rôles) d'accéder à son
+ * espace salarié sans devoir choisir une société d'abord.
+ */
+function MonEspaceSalarieBouton() {
+  return (
+    <Link href="/salarie">
+      <Button variant="outline" size="sm" className="gap-2">
+        <UserCircle className="h-4 w-4" />
+        Mon espace salarié
+      </Button>
+    </Link>
+  )
+}
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { ClientPanel, ClientSectionHeader } from "@/components/client/ClientKit"
 import { useSocieteActive, type Societe } from "@/components/client/SocieteActiveProvider"
@@ -67,6 +84,7 @@ export default function SelectSocietePage() {
         kicker="Bienvenue"
         title="Aucune société n'est rattachée à votre compte"
         subtitle="Créez votre première société pour commencer à utiliser Lexora."
+        actions={<MonEspaceSalarieBouton />}
       >
         <ClientPanel>
           <div style={{ textAlign: "center", padding: "40px 24px" }}>
@@ -106,6 +124,7 @@ export default function SelectSocietePage() {
       kicker="Espace Client"
       title="Quelle société souhaitez-vous gérer ?"
       subtitle={`Vous avez ${societes.length} sociétés rattachées. Sélectionnez celle sur laquelle vous voulez travailler — vous pourrez en changer à tout moment depuis la barre latérale.`}
+      actions={<MonEspaceSalarieBouton />}
     >
       {error && (
         <div

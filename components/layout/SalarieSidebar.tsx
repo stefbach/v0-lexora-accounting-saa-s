@@ -28,19 +28,22 @@ const NAV = [
   { hash: "#profil",    label: "Ma fiche", icon: User },
 ]
 
-// Rôles qui voient le lien "Retour à l'espace RH" en haut du sidebar.
-// Un RH/manager/comptable avec fiche employé liée accède à /salarie, et
-// ce lien lui permet de rebasculer rapidement sur son espace admin.
-const ADMIN_ROLES = new Set([
-  "rh",
-  "rh_manager",
-  "admin",
-  "super_admin",
-  "manager",
-  "client_admin",
-  "client_assistant",
-  "comptable",
-])
+// Rôles multi-espaces : map le rôle vers l'espace d'origine pour afficher
+// un lien "Retour à l'espace …" en haut du sidebar /salarie. Chacun
+// retourne à l'espace qui lui est propre (client_admin → /client,
+// client_assistant → /client/assistant, comptable → /comptable, etc.).
+const RETURN_CONFIG: Record<string, { href: string; label: string }> = {
+  rh:               { href: "/rh",               label: "Retour à l'espace RH" },
+  rh_manager:       { href: "/rh",               label: "Retour à l'espace RH" },
+  admin:            { href: "/rh",               label: "Retour à l'espace RH" },
+  super_admin:      { href: "/rh",               label: "Retour à l'espace RH" },
+  manager:          { href: "/rh",               label: "Retour à l'espace RH" },
+  direction:        { href: "/rh",               label: "Retour à l'espace RH" },
+  client_admin:     { href: "/client",           label: "Retour à l'espace client" },
+  client_assistant: { href: "/client/assistant", label: "Retour à l'espace assistant" },
+  comptable:        { href: "/comptable",        label: "Retour à l'espace comptable" },
+  comptable_dedie:  { href: "/comptable",        label: "Retour à l'espace comptable" },
+}
 
 export function SalarieSidebar() {
   const pathname = usePathname()
@@ -66,7 +69,8 @@ export function SalarieSidebar() {
     })
   }, [])
 
-  const canSwitchToAdmin = userRole && ADMIN_ROLES.has(userRole)
+  const returnConfig = userRole ? RETURN_CONFIG[userRole] : null
+  const canSwitchToAdmin = !!returnConfig
 
   // Keep the "active link" highlight in sync with the current hash — the
   // employee page toggles its internal tab state on hashchange.
@@ -191,38 +195,36 @@ export function SalarieSidebar() {
               signifier que c'est une fonction spéciale hors de l'espace
               salarié. Même pattern que "Retour espace client" dans
               RHSidebarDedicated. */}
-          {canSwitchToAdmin && (
-            <>
-              <a
-                href="/rh"
-                onClick={(e) => {
-                  if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
-                  e.preventDefault()
-                  router.push("/rh")
-                }}
-                className="group relative flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm transition-colors mb-3"
+          {canSwitchToAdmin && returnConfig && (
+            <a
+              href={returnConfig.href}
+              onClick={(e) => {
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
+                e.preventDefault()
+                router.push(returnConfig.href)
+              }}
+              className="group relative flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm transition-colors mb-3"
+              style={{
+                color: "#D4AF37",
+                border: "1px solid rgba(212,175,55,0.30)",
+                background:
+                  "linear-gradient(135deg, rgba(212,175,55,0.08) 0%, rgba(212,175,55,0.02) 100%)",
+              }}
+            >
+              <ArrowLeft className="w-4 h-4 flex-shrink-0" />
+              <span className="flex-1">{returnConfig.label}</span>
+              <span
+                className="ml-auto inline-flex items-center justify-center text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full"
                 style={{
+                  backgroundColor: "rgba(212,175,55,0.18)",
                   color: "#D4AF37",
-                  border: "1px solid rgba(212,175,55,0.30)",
-                  background:
-                    "linear-gradient(135deg, rgba(212,175,55,0.08) 0%, rgba(212,175,55,0.02) 100%)",
+                  border: "1px solid rgba(212,175,55,0.35)",
                 }}
+                aria-label="Fonction administrateur"
               >
-                <ArrowLeft className="w-4 h-4 flex-shrink-0" />
-                <span className="flex-1">Retour à l'espace RH</span>
-                <span
-                  className="ml-auto inline-flex items-center justify-center text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full"
-                  style={{
-                    backgroundColor: "rgba(212,175,55,0.18)",
-                    color: "#D4AF37",
-                    border: "1px solid rgba(212,175,55,0.35)",
-                  }}
-                  aria-label="Fonction administrateur"
-                >
-                  Admin
-                </span>
-              </a>
-            </>
+                Admin
+              </span>
+            </a>
           )}
 
           {NAV.map(({ hash, label, icon: Icon }) => {

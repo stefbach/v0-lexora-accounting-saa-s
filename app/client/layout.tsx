@@ -1,32 +1,22 @@
-"use client"
-import { ClientSidebarFull } from "@/components/layout/ClientSidebarFull"
-import { ComptableSidebarNew } from "@/components/layout/ComptableSidebarNew"
-import { SocieteActiveProvider } from "@/components/client/SocieteActiveProvider"
-import { useProfile } from "@/hooks/use-profile"
-import { Loader2 } from "lucide-react"
+import { redirect } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server'
+import { ClientLayoutShell } from "./ClientLayoutShell"
 
-export default function ClientLayout({ children }: { children: React.ReactNode }) {
-  const { profile, loading } = useProfile()
+const ALLOWED_ROLES = [
+  'client_admin', 'client_assistant', 'client_user',
+  'admin', 'super_admin',
+  // Comptables accèdent à /client pour consulter les sociétés de leurs
+  // clients (le shell leur affiche ComptableSidebarNew à la place).
+  'comptable', 'comptable_dedie',
+]
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-gray-50">
-        <Loader2 className="h-8 w-8 animate-spin text-[#D4AF37]" />
-      </div>
-    )
-  }
+export default async function ClientLayout({ children }: { children: React.ReactNode }) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/auth/login')
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+  const role = profile?.role || ''
+  if (!ALLOWED_ROLES.includes(role)) redirect('/redirect')
 
-  // Comptable/comptable_dedie accessing client pages: show comptable sidebar.
-  // The Provider still wraps them because the child pages call
-  // useSocieteActive() and /api/client/societes returns their sociétés too.
-  const isComptable = profile?.role === "comptable" || profile?.role === "comptable_dedie"
-
-  return (
-    <SocieteActiveProvider>
-      <div className="flex min-h-screen bg-gray-50">
-        {isComptable ? <ComptableSidebarNew /> : <ClientSidebarFull />}
-        <main className="flex-1 overflow-auto md:ml-64">{children}</main>
-      </div>
-    </SocieteActiveProvider>
-  )
+  return <ClientLayoutShell>{children}</ClientLayoutShell>
 }

@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button"
 import { useState, useEffect } from "react"
 import { t, getLocale } from "@/lib/i18n"
 import { LanguageSwitcher } from "@/components/LanguageSwitcher"
-import MonEspaceSalarieLink from "@/components/rh/MonEspaceSalarieLink"
 import {
   LayoutDashboard,
   Users,
@@ -43,6 +42,7 @@ import {
   Target,
   ClipboardList,
   FilePen,
+  UserCircle,
 } from "lucide-react"
 
 const NAVY = "#0B0F2E"
@@ -464,10 +464,21 @@ export function ComptableSidebarNew() {
             {collapsed ? <ChevronRight className="h-4 w-4" /> : <><ChevronLeft className="h-4 w-4" /><span className="ml-2">Réduire</span></>}
           </Button>
 
-          {/* TÂCHE 8 — lien Mon espace salarié si comptable type='interne'
-              (mig 137 a employe_id renseigné). Le composant détecte
-              automatiquement et masque pour 'externe' / 'dedie'. */}
-          {!collapsed && <MonEspaceSalarieLink compact />}
+          {/* Entrée statique "Mon espace" — harmonisation avec les autres
+              sidebars (RH, Client). Si user n'a pas de fiche employé, la
+              page /salarie affiche "Profil employé non trouvé" — état accepté. */}
+          <Link
+            href="/salarie"
+            className={cn(
+              "flex items-center gap-2.5 px-3 py-2 rounded-xl text-white/60 hover:text-white text-sm transition-all",
+              collapsed && "justify-center",
+            )}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(232,234,252,0.06)" }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent" }}
+          >
+            <UserCircle className="w-4 h-4 flex-shrink-0" />
+            {!collapsed && <span>Mon espace</span>}
+          </Link>
 
           <Link
             href="/profil"
