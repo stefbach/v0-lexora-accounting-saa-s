@@ -4,7 +4,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { LanguageSwitcher } from "@/components/LanguageSwitcher"
-import { LayoutDashboard, CalendarDays, CreditCard, Calendar, TrendingUp, User, LogOut, Menu, X, HeartPulse, FolderOpen, Navigation, FileText, Clock } from "lucide-react"
+import { LayoutDashboard, CalendarDays, CreditCard, Calendar, TrendingUp, User, LogOut, Menu, X, HeartPulse, FolderOpen, Navigation, FileText, Clock, ArrowLeft } from "lucide-react"
 
 /**
  * Dedicated sidebar for the Espace Salarié (employee self-service portal).
@@ -28,6 +28,20 @@ const NAV = [
   { hash: "#profil",    label: "Ma fiche", icon: User },
 ]
 
+// Rôles qui voient le lien "Retour à l'espace RH" en haut du sidebar.
+// Un RH/manager/comptable avec fiche employé liée accède à /salarie, et
+// ce lien lui permet de rebasculer rapidement sur son espace admin.
+const ADMIN_ROLES = new Set([
+  "rh",
+  "rh_manager",
+  "admin",
+  "super_admin",
+  "manager",
+  "client_admin",
+  "client_assistant",
+  "comptable",
+])
+
 export function SalarieSidebar() {
   const pathname = usePathname()
   const router = useRouter()
@@ -36,8 +50,23 @@ export function SalarieSidebar() {
   const [badges, setBadges] = useState<{ contrats_a_signer: number; bulletins_non_lus: number }>({
     contrats_a_signer: 0, bulletins_non_lus: 0,
   })
+  const [userRole, setUserRole] = useState<string>("")
 
   useEffect(() => { setMobileOpen(false) }, [pathname])
+
+  // Récupère le rôle depuis profiles pour conditionner le lien "Retour
+  // espace RH" — même pattern que RHSidebarDedicated.
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return
+      supabase.from("profiles").select("role").eq("id", user.id).single().then(({ data }) => {
+        if (data?.role) setUserRole(data.role)
+      })
+    })
+  }, [])
+
+  const canSwitchToAdmin = userRole && ADMIN_ROLES.has(userRole)
 
   // Keep the "active link" highlight in sync with the current hash — the
   // employee page toggles its internal tab state on hashchange.
@@ -156,6 +185,46 @@ export function SalarieSidebar() {
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+          {/* Lien de bascule vers l'espace RH — visible uniquement pour
+              les utilisateurs multi-rôles (RH / manager / comptable /
+              admin). Démarqué via accent doré + badge "Admin" pour
+              signifier que c'est une fonction spéciale hors de l'espace
+              salarié. Même pattern que "Retour espace client" dans
+              RHSidebarDedicated. */}
+          {canSwitchToAdmin && (
+            <>
+              <a
+                href="/rh"
+                onClick={(e) => {
+                  if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
+                  e.preventDefault()
+                  router.push("/rh")
+                }}
+                className="group relative flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm transition-colors mb-3"
+                style={{
+                  color: "#D4AF37",
+                  border: "1px solid rgba(212,175,55,0.30)",
+                  background:
+                    "linear-gradient(135deg, rgba(212,175,55,0.08) 0%, rgba(212,175,55,0.02) 100%)",
+                }}
+              >
+                <ArrowLeft className="w-4 h-4 flex-shrink-0" />
+                <span className="flex-1">Retour à l'espace RH</span>
+                <span
+                  className="ml-auto inline-flex items-center justify-center text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full"
+                  style={{
+                    backgroundColor: "rgba(212,175,55,0.18)",
+                    color: "#D4AF37",
+                    border: "1px solid rgba(212,175,55,0.35)",
+                  }}
+                  aria-label="Fonction administrateur"
+                >
+                  Admin
+                </span>
+              </a>
+            </>
+          )}
+
           {NAV.map(({ hash, label, icon: Icon }) => {
             const active = activeHash === hash
             return (
