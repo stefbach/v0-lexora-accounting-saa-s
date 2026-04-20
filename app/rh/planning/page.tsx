@@ -104,11 +104,11 @@ const WEEKLY_HOURS_LIMIT_DEFAULT = 45
 const WEEKLY_OT_LIMIT = 55
 const WEEK_DAY_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
 
+// Shifts par défaut GÉNÉRIQUES (pas DDS-spécifiques).
+// Utilisés uniquement quand la société n'a pas configuré ses propres shifts
+// dans regles_planning.shifts. Le RH peut personnaliser via /rh/planning/regles.
 const DEFAULT_CRENEAUX: Creneau[] = [
   { id: "c1", nom: "Journée", code: "J", heure_debut: "08:00", heure_fin: "17:00", pause_debut: "12:00", pause_fin: "13:00", pause_minutes: 60, heures_effectives: 8, couleur: COLORS[0] },
-  { id: "c2", nom: "Matin", code: "M", heure_debut: "06:00", heure_fin: "14:00", pause_debut: "10:00", pause_fin: "10:30", pause_minutes: 30, heures_effectives: 7.5, couleur: COLORS[2] },
-  { id: "c3", nom: "Après-midi", code: "AM", heure_debut: "14:00", heure_fin: "22:00", pause_debut: "18:00", pause_fin: "18:30", pause_minutes: 30, heures_effectives: 7.5, couleur: COLORS[3] },
-  { id: "c4", nom: "Nuit", code: "N", heure_debut: "22:00", heure_fin: "06:00", pause_debut: "02:00", pause_fin: "02:30", pause_minutes: 30, heures_effectives: 7.5, couleur: COLORS[4] },
 ]
 
 // ─── Component ──────────────────────────────────────────────────────
@@ -139,28 +139,61 @@ export default function PlanningPage() {
   const [creneauConfigOpen, setCreneauConfigOpen] = useState(false)
   const [editingCreneau, setEditingCreneau] = useState<Creneau | null>(null)
 
-  // Load creneaux from localStorage when société changes
+  // Load creneaux from DB (societes.regles_planning.shifts) when société changes.
+  // Fallback : localStorage (legacy) → DEFAULT_CRENEAUX (générique).
   useEffect(() => {
-    if (typeof window === "undefined") return
-    const key = `lexora_creneaux_${societe || "default"}`
-    try {
-      const stored = localStorage.getItem(key)
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setCreneaux(parsed)
-          return
+    if (societe === "all") { setCreneaux(DEFAULT_CRENEAUX); return }
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/rh/planning/regles?societe_id=${societe}`)
+        if (res.ok) {
+          const data = await res.json()
+          const shifts = data?.regles?.shifts
+          if (Array.isArray(shifts) && shifts.length > 0) {
+            if (!cancelled) setCreneaux(shifts)
+            return
+          }
         }
+      } catch {}
+      // Fallback localStorage (legacy — shifts sauvegardés avant ce refactor)
+      if (typeof window !== "undefined") {
+        try {
+          const stored = localStorage.getItem(`lexora_creneaux_${societe}`)
+          if (stored) {
+            const parsed = JSON.parse(stored)
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              if (!cancelled) setCreneaux(parsed)
+              return
+            }
+          }
+        } catch {}
       }
-    } catch {}
-    setCreneaux(DEFAULT_CRENEAUX)
+      if (!cancelled) setCreneaux(DEFAULT_CRENEAUX)
+    })()
+    return () => { cancelled = true }
   }, [societe])
 
-  // Save creneaux to localStorage whenever they change
-  const persistCreneaux = useCallback((next: Creneau[]) => {
-    if (typeof window === "undefined") return
-    const key = `lexora_creneaux_${societe || "default"}`
-    try { localStorage.setItem(key, JSON.stringify(next)) } catch {}
+  // Persist creneaux → DB (societes.regles_planning.shifts) + localStorage fallback
+  const persistCreneaux = useCallback(async (next: Creneau[]) => {
+    // Save to localStorage immediately (instant feedback)
+    if (typeof window !== "undefined") {
+      try { localStorage.setItem(`lexora_creneaux_${societe || "default"}`, JSON.stringify(next)) } catch {}
+    }
+    // Save to DB (merge into existing regles_planning)
+    if (societe && societe !== "all") {
+      try {
+        const res = await fetch(`/api/rh/planning/regles?societe_id=${societe}`)
+        const current = res.ok ? (await res.json())?.regles || {} : {}
+        await fetch("/api/rh/planning/regles", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ societe_id: societe, regles: { ...current, shifts: next } }),
+        })
+      } catch (e: any) {
+        console.warn('[planning] persistCreneaux DB save failed:', e?.message)
+      }
+    }
   }, [societe])
 
   // Employee filter — who appears in the planning
@@ -813,6 +846,71 @@ export default function PlanningPage() {
     setBulkOpen(false)
   }
 
+  // ─── Planning creation wizard ─────────────────────────────────────
+  const [wizardOpen, setWizardOpen] = useState(false)
+  const [wizardMode, setWizardMode] = useState<"standard" | "rotation" | "manual">("standard")
+  const [wizardShift, setWizardShift] = useState("")
+  const [wizardRotation, setWizardRotation] = useState<string[]>([])
+
+  const isPlanningEmpty = employes.length > 0 && Object.values(planning).every(row =>
+    !row || Object.values(row).every(cell => !cell)
+  )
+
+  const applyWizard = () => {
+    if (wizardMode === "standard") {
+      const c = creneaux.find(cr => cr.id === wizardShift) || creneaux[0]
+      if (!c) return
+      setPlanning(prev => {
+        const next = { ...prev }
+        for (const empId of Object.keys(next)) {
+          const row = { ...next[empId] }
+          for (let d = 1; d <= daysInMonth; d++) {
+            const leaves = approvedLeaves[empId]
+            if (leaves && leaves.has(d)) {
+              const lt = leaves.get(d) || "AL"
+              row[d] = { creneau_id: `conge_${lt}`, heure_debut: "", heure_fin: "", pause_debut: "", pause_fin: "", heures_prevues: 0 }
+            } else {
+              row[d] = isWeekend(year, month, d) ? null : {
+                creneau_id: c.id, heure_debut: c.heure_debut, heure_fin: c.heure_fin,
+                pause_debut: c.pause_debut, pause_fin: c.pause_fin, heures_prevues: c.heures_effectives,
+              }
+            }
+          }
+          next[empId] = row
+        }
+        return next
+      })
+    } else if (wizardMode === "rotation") {
+      const rotShifts = wizardRotation.map(id => creneaux.find(c => c.id === id)).filter(Boolean) as Creneau[]
+      if (rotShifts.length < 2) return
+      setPlanning(prev => {
+        const next = { ...prev }
+        const empIds = Object.keys(next)
+        empIds.forEach((empId, idx) => {
+          const row = { ...next[empId] }
+          for (let d = 1; d <= daysInMonth; d++) {
+            const leaves = approvedLeaves[empId]
+            if (leaves && leaves.has(d)) {
+              const lt = leaves.get(d) || "AL"
+              row[d] = { creneau_id: `conge_${lt}`, heure_debut: "", heure_fin: "", pause_debut: "", pause_fin: "", heures_prevues: 0 }
+            } else {
+              const weekNum = Math.floor((d - 1) / 7)
+              const c = rotShifts[(idx + weekNum) % rotShifts.length]
+              row[d] = isWeekend(year, month, d) ? null : {
+                creneau_id: c.id, heure_debut: c.heure_debut, heure_fin: c.heure_fin,
+                pause_debut: c.pause_debut, pause_fin: c.pause_fin, heures_prevues: c.heures_effectives,
+              }
+            }
+          }
+          next[empId] = row
+        })
+        return next
+      })
+    }
+    // "manual" = close wizard, user edits cell by cell
+    setWizardOpen(false)
+  }
+
   const savePlanning = async (publish = false) => {
     setSaving(true)
     try {
@@ -1171,10 +1269,6 @@ export default function PlanningPage() {
           {loading ? (
             <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-gray-400" /></div>
           ) : employes.length === 0 ? (
-            // Sprint 5 BUG B — message plus précis selon l'état de société.
-            // Avant : "Aucun employé. Sélectionnez une société." même quand
-            // une société était déjà sélectionnée, ce qui masquait les
-            // plannings brouillon existants.
             <div className="text-center py-12 space-y-2">
               <p className="text-gray-400">
                 {societe === "all"
@@ -1186,6 +1280,41 @@ export default function PlanningPage() {
               {allEmployes.length > 0 && societe !== "all" && (
                 <p className="text-xs text-gray-400">
                   {allEmployes.length} employé(s) disponible(s) pour cette société.
+                </p>
+              )}
+            </div>
+          ) : isPlanningEmpty && societe !== "all" ? (
+            /* ── Planning vide : assistant de démarrage ── */
+            <div className="text-center py-16 space-y-4">
+              <Calendar className="w-12 h-12 mx-auto text-gray-300" />
+              <h3 className="text-lg font-semibold text-[#0B0F2E]">
+                Aucun planning pour {MONTH_NAMES[month]} {year}
+              </h3>
+              <p className="text-sm text-gray-500 max-w-md mx-auto">
+                Créez le planning de vos {employes.length} employé(s) en quelques clics.
+                Vous pouvez aussi remplir cellule par cellule.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
+                <Button
+                  onClick={() => { setWizardShift(creneaux[0]?.id || ""); setWizardMode("standard"); setWizardOpen(true) }}
+                  className="bg-[#0B0F2E] text-white"
+                >
+                  <Calendar className="w-4 h-4 mr-2" />
+                  Créer le planning
+                </Button>
+                {creneaux.length >= 3 && (
+                  <Button
+                    variant="outline"
+                    onClick={() => { setWizardRotation(creneaux.slice(0, 3).map(c => c.id)); setWizardMode("rotation"); setWizardOpen(true) }}
+                  >
+                    Rotation automatique ({creneaux.length} shifts)
+                  </Button>
+                )}
+              </div>
+              {creneaux.length <= 1 && (
+                <p className="text-xs text-amber-600 mt-2">
+                  Un seul créneau configuré. Ajoutez des shifts dans la section « Créneaux » ci-dessous
+                  pour activer la rotation automatique.
                 </p>
               )}
             </div>
@@ -1634,6 +1763,94 @@ export default function PlanningPage() {
               <Label className="text-sm">Week-end = Repos automatique</Label>
             </div>
             <Button className="w-full text-white" style={{ backgroundColor: "#0B0F2E" }} onClick={applyBulk}>Appliquer</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      {/* ── Wizard création planning ── */}
+      <Dialog open={wizardOpen} onOpenChange={setWizardOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle style={{ color: "#0B0F2E" }}>Créer le planning — {MONTH_NAMES[month]} {year}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                <input type="radio" checked={wizardMode === "standard"} onChange={() => setWizardMode("standard")} />
+                <div>
+                  <p className="text-sm font-medium">Planning standard</p>
+                  <p className="text-xs text-gray-500">Même shift tous les jours ouvrables</p>
+                </div>
+              </label>
+              {creneaux.length >= 2 && (
+                <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                  <input type="radio" checked={wizardMode === "rotation"} onChange={() => { setWizardMode("rotation"); setWizardRotation(creneaux.slice(0, Math.min(3, creneaux.length)).map(c => c.id)) }} />
+                  <div>
+                    <p className="text-sm font-medium">Rotation automatique</p>
+                    <p className="text-xs text-gray-500">Alterner {creneaux.length} shifts par semaine</p>
+                  </div>
+                </label>
+              )}
+              <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                <input type="radio" checked={wizardMode === "manual"} onChange={() => setWizardMode("manual")} />
+                <div>
+                  <p className="text-sm font-medium">Mode manuel</p>
+                  <p className="text-xs text-gray-500">Remplir cellule par cellule</p>
+                </div>
+              </label>
+            </div>
+
+            {wizardMode === "standard" && (
+              <div>
+                <Label>Shift à appliquer</Label>
+                <Select value={wizardShift || creneaux[0]?.id || ""} onValueChange={setWizardShift}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {creneaux.map(c => (
+                      <SelectItem key={c.id} value={c.id}>{c.code} — {c.nom} ({c.heure_debut}-{c.heure_fin})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {wizardMode === "rotation" && (
+              <div className="space-y-2">
+                <Label>Shifts dans l'ordre de rotation</Label>
+                {creneaux.map(c => (
+                  <label key={c.id} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={wizardRotation.includes(c.id)}
+                      onChange={e => {
+                        if (e.target.checked) setWizardRotation(prev => [...prev, c.id])
+                        else setWizardRotation(prev => prev.filter(id => id !== c.id))
+                      }}
+                    />
+                    {c.code} — {c.nom} ({c.heure_debut}-{c.heure_fin})
+                  </label>
+                ))}
+                {wizardRotation.length < 2 && (
+                  <p className="text-xs text-amber-600">Sélectionnez au moins 2 shifts pour la rotation.</p>
+                )}
+              </div>
+            )}
+
+            <p className="text-xs text-gray-500">
+              {employes.length} employé(s) concerné(s). Les congés approuvés seront respectés.
+              Les weekends restent en repos.
+            </p>
+
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => setWizardOpen(false)}>Annuler</Button>
+              <Button
+                className="flex-1 text-white"
+                style={{ backgroundColor: "#0B0F2E" }}
+                disabled={wizardMode === "rotation" && wizardRotation.length < 2}
+                onClick={applyWizard}
+              >
+                {wizardMode === "manual" ? "Commencer" : "Générer"}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
