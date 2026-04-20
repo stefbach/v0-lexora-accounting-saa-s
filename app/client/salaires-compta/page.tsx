@@ -31,8 +31,8 @@ export default function SalairesComptaPage() {
         groups[p].nb++
         groups[p].basic += Number(b.salaire_base) || 0
         groups[p].ot += Number(b.heures_sup_montant) || 0
-        groups[p].primes += Number(b.special_allowance_1) || 0
-        groups[p].brut += Number(b.salaire_brut || b.salaire_base) || 0
+        groups[p].primes += (Number(b.special_allowance_1) || 0) + (Number(b.special_allowance_2) || 0) + (Number(b.special_allowance_3) || 0) + (Number(b.other_refund) || 0)
+        groups[p].brut += (Number(b.salaire_base) || 0) + (Number(b.heures_sup_montant) || 0) + (Number(b.special_allowance_1) || 0) + (Number(b.special_allowance_2) || 0) + (Number(b.special_allowance_3) || 0) + (Number(b.other_refund) || 0)
         groups[p].net += Number(b.salaire_net) || 0
         groups[p].csg_sal += Number(b.csg_salarie) || 0
         groups[p].nsf_sal += Number(b.nsf_salarie) || 0
@@ -172,13 +172,13 @@ export default function SalairesComptaPage() {
             <CardContent>
               <div className="space-y-2">
                 {[
-                  { compte: "641100", label: "Salaires de base", debit: periodes.reduce((s, p) => s + p.basic, 0), color: "text-blue-600" },
-                  { compte: "641200", label: "Heures supplémentaires", debit: periodes.reduce((s, p) => s + p.ot, 0), color: "text-blue-500" },
-                  { compte: "641300", label: "Primes et indemnités", debit: periodes.reduce((s, p) => s + p.primes, 0), color: "text-blue-500" },
-                  { compte: "645100", label: "CSG patronale (3%/6%)", debit: totalCSGPat, color: "text-orange-600" },
-                  { compte: "645200", label: "NSF patronal (2.5%)", debit: totalNSFPat, color: "text-orange-500" },
-                  { compte: "645300", label: "Training Levy (1%)", debit: totalLevy, color: "text-orange-500" },
-                  { compte: "645400", label: "PRGF", debit: totalPrgf, color: "text-orange-500" },
+                  { compte: "6411", label: "Salaires de base", debit: periodes.reduce((s, p) => s + p.basic, 0), color: "text-blue-600" },
+                  { compte: "6414", label: "Heures supplémentaires", debit: periodes.reduce((s, p) => s + p.ot, 0), color: "text-blue-500" },
+                  { compte: "6415", label: "Primes et indemnités", debit: periodes.reduce((s, p) => s + p.primes, 0), color: "text-blue-500" },
+                  { compte: "6451", label: "CSG patronale (3%/6%)", debit: totalCSGPat, color: "text-orange-600" },
+                  { compte: "6452", label: "NSF patronal (2.5%)", debit: totalNSFPat, color: "text-orange-500" },
+                  { compte: "6454", label: "Training Levy (1%)", debit: totalLevy, color: "text-orange-500" },
+                  { compte: "6453", label: "PRGF", debit: totalPrgf, color: "text-orange-500" },
                 ].map(c => (
                   <div key={c.compte} className="flex items-center justify-between p-2 border rounded">
                     <div className="flex items-center gap-3">
@@ -191,10 +191,14 @@ export default function SalairesComptaPage() {
                 <div className="border-t pt-2 mt-2">
                   <p className="text-xs text-gray-500 font-medium mb-2">Dettes sociales (crédit)</p>
                   {[
-                    { compte: "421000", label: "Net à payer", credit: totalNet, color: "text-emerald-600" },
-                    { compte: "431000", label: "CSG à payer", credit: totalCSGSal + totalCSGPat, color: "text-red-600" },
-                    { compte: "444000", label: "PAYE à payer", credit: totalPaye, color: "text-red-500" },
-                    { compte: "432000", label: "Training Levy + PRGF à payer", credit: totalLevy + totalPrgf, color: "text-purple-600" },
+                    { compte: "4210", label: "Net à payer", credit: totalNet, color: "text-emerald-600" },
+                    { compte: "4311", label: "CSG salarié à payer", credit: totalCSGSal, color: "text-red-600" },
+                    { compte: "4321", label: "CSG patronal à payer", credit: totalCSGPat, color: "text-red-500" },
+                    { compte: "4312", label: "NSF salarié à payer", credit: totalNSFSal, color: "text-red-500" },
+                    { compte: "4322", label: "NSF patronal à payer", credit: totalNSFPat, color: "text-red-500" },
+                    { compte: "4330", label: "PAYE à payer", credit: totalPaye, color: "text-red-500" },
+                    { compte: "4324", label: "Training Levy à payer", credit: totalLevy, color: "text-purple-600" },
+                    { compte: "4323", label: "PRGF à payer", credit: totalPrgf, color: "text-purple-500" },
                   ].map(c => (
                     <div key={c.compte} className="flex items-center justify-between p-2 border rounded">
                       <div className="flex items-center gap-3">

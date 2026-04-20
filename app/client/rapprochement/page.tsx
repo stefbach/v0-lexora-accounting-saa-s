@@ -140,7 +140,7 @@ export default function ClientRapprochementPage() {
   //   'aclasser' → unmatched (à traiter)
   //   'classees' → confirmées + auto-classées + virements internes
   //   'verifier' → rapprochées sans pièce comptable (paidNoInvoice)
-  const [transactionTab, setTransactionTab] = useState<'aclasser' | 'classees' | 'verifier'>('aclasser')
+  const [transactionTab, setTransactionTab] = useState<'aclasser' | 'classees' | 'verifier' | 'fournisseurs'>('aclasser')
 
   // Pagination for the "À classer" tab list.
   const [unmatchedPage, setUnmatchedPage] = useState(1)
@@ -948,6 +948,41 @@ Voulez-vous vraiment continuer ?`
     } catch { alert("Erreur") }
   }
 
+  // ── Annuler le paiement d'une ou plusieurs factures ──────────────
+  // Remet la facture en "en_attente", clear les champs rapproche_*, et
+  // délettrer la transaction bancaire associée s'il y en a une.
+  const [annulationEnCours, setAnnulationEnCours] = useState(false)
+  const [selectedFacturesForAnnulation, setSelectedFacturesForAnnulation] = useState<Set<string>>(new Set())
+
+  const handleAnnulerPaiement = async (factureIds: string[]) => {
+    if (factureIds.length === 0) return
+    if (!confirm(`Annuler le paiement de ${factureIds.length} facture(s) ?\n\nLes factures repasseront en "en attente" et les transactions bancaires associées seront délettrées.`)) return
+    setAnnulationEnCours(true)
+    try {
+      const res = await fetch("/api/comptable/rapprochement", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "annuler_paiement_factures",
+          societe_id: societeId,
+          facture_ids: factureIds,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setToast({ type: 'error', message: data.error || `Erreur HTTP ${res.status}` })
+      } else {
+        setToast({ type: 'success', message: `✓ ${data.nb_factures_reset || factureIds.length} facture(s) remise(s) en attente` })
+        setSelectedFacturesForAnnulation(new Set())
+        await load()
+      }
+    } catch (e: any) {
+      setToast({ type: 'error', message: e.message || 'Erreur réseau' })
+    } finally {
+      setAnnulationEnCours(false)
+    }
+  }
+
   const handlePayeParAssocie = async (facture: any) => {
     if (!societeId || !payeParNom) return
     try {
@@ -1617,7 +1652,43 @@ Voulez-vous vraiment continuer ?`
                 <span className="text-xs font-normal text-gray-400 ml-auto">
                   {rows.length} facture{rows.length > 1 ? 's' : ''}
                 </span>
+                {/* Bouton "Tout remettre en attente" — reset complet factures + tx + écritures BNQ */}
+                {rows.some(r => r.status === 'paye') && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs gap-1 border-[#9F1239]/40 text-[#9F1239] hover:bg-[#9F1239]/5"
+                    disabled={annulationEnCours}
+                    onClick={() => handleAnnulerPaiement(['ALL'])}
+                  >
+                    {annulationEnCours ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                    Tout remettre en attente ({rows.filter(r => r.status === 'paye').length})
+                  </Button>
+                )}
               </CardTitle>
+              {/* Barre d'annulation en masse — visible quand ≥1 facture payée est cochée */}
+              {selectedFacturesForAnnulation.size > 0 && (
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-[#9F1239]/30 bg-[#9F1239]/5 px-3 py-2 mt-2">
+                  <span className="text-sm">
+                    <span className="font-semibold text-[#0B0F2E]">{selectedFacturesForAnnulation.size}</span>
+                    <span className="text-gray-600"> facture{selectedFacturesForAnnulation.size > 1 ? 's' : ''} sélectionnée{selectedFacturesForAnnulation.size > 1 ? 's' : ''}</span>
+                  </span>
+                  <div className="flex gap-2">
+                    <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setSelectedFacturesForAnnulation(new Set())} disabled={annulationEnCours}>
+                      Désélectionner
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="h-7 gap-1 bg-[#9F1239] hover:bg-[#9F1239]/90 text-white text-xs"
+                      onClick={() => handleAnnulerPaiement(Array.from(selectedFacturesForAnnulation))}
+                      disabled={annulationEnCours}
+                    >
+                      {annulationEnCours ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                      Remettre en attente ({selectedFacturesForAnnulation.size})
+                    </Button>
+                  </div>
+                </div>
+              )}
               <div className="flex flex-wrap gap-3 text-xs text-gray-500 pt-1">
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" />{counts.paye} payées</span>
                 {counts.missingReleve > 0 && <span className="flex items-center gap-1 text-orange-700"><span className="w-2 h-2 rounded-full bg-orange-500" />{counts.missingReleve} relevé manquant</span>}
@@ -1679,6 +1750,30 @@ Voulez-vous vraiment continuer ?`
                         ) : '—'}
                       </TableCell>
                       <TableCell>
+                        {status === 'paye' && (
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="checkbox"
+                              className="h-3.5 w-3.5 cursor-pointer"
+                              checked={selectedFacturesForAnnulation.has(f.id)}
+                              onChange={() => {
+                                setSelectedFacturesForAnnulation(prev => {
+                                  const next = new Set(prev)
+                                  if (next.has(f.id)) next.delete(f.id); else next.add(f.id)
+                                  return next
+                                })
+                              }}
+                            />
+                            <Button
+                              variant="ghost" size="sm"
+                              className="h-7 text-xs text-[#9F1239] hover:bg-[#9F1239]/5"
+                              onClick={() => handleAnnulerPaiement([f.id])}
+                              disabled={annulationEnCours}
+                            >
+                              Annuler
+                            </Button>
+                          </div>
+                        )}
                         {status !== 'paye' && (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -1774,6 +1869,7 @@ Voulez-vous vraiment continuer ?`
           ════════════════════════════════════════════════════════════════ */}
       <div className="flex gap-1 border-b border-gray-200">
         {([
+          { id: 'fournisseurs' as const, icon: '🏦', label: 'Relevé → Factures', count: 0, color: 'border-[#D4AF37] text-[#A88925]' },
           { id: 'aclasser' as const, icon: '📋', label: 'À classer', count: unmatched.length, color: 'border-orange-500 text-orange-700' },
           { id: 'classees' as const, icon: '✅', label: 'Classées', count: matchedWithInvoice.length + classifiedAuto.length + interne.length, color: 'border-green-500 text-green-700' },
           { id: 'verifier' as const, icon: '⚠️', label: 'À vérifier', count: paidNoInvoice.length, color: 'border-amber-500 text-amber-700' },
@@ -1966,7 +2062,7 @@ Voulez-vous vraiment continuer ?`
                                     </>
                                   )}
                                   <DropdownMenuSeparator />
-                                  <DropdownMenuItem onClick={() => { setDialogTab('factures'); setLinkDialog(tx) }}>
+                                  <DropdownMenuItem onClick={() => { setDialogTab('factures'); setLettrageTiersFilter(tx.tiers_detecte || ''); setSelectedFactureIds(new Set()); setLinkDialog(tx) }}>
                                     <Link2 className="w-4 h-4 mr-2 text-blue-600" />Lettrer avec une facture
                                   </DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => openNdfDialog(tx)}>
@@ -2093,6 +2189,238 @@ Voulez-vous vraiment continuer ?`
         </details>
       )}
 
+      {/* SECTION — Vue par relevé bancaire : lire la banque, chercher les factures */}
+      {/* Vue Relevé → Factures — DÉSACTIVÉE, sera remplacée par les agents IA */}
+      {transactionTab === 'fournisseurs' && false && (() => {
+        const allFacs = (data?.factures || []) as any[]
+        const unpaidFacs = allFacs.filter((f: any) => f.statut !== 'paye' && f.statut !== 'annule')
+        const RATES: Record<string, number> = { MUR: 1, EUR: 54.4, USD: 44.8, GBP: 54.2 }
+        const toMUR = (amount: number, devise: string) => amount * (RATES[(devise || 'MUR').toUpperCase()] || 1)
+
+        // Utiliser les transactions DÉJÀ FILTRÉES par le compte et le mois sélectionnés
+        // (pas toutes les tx — seulement celles de la période/compte choisis)
+        const outgoingTx = transactions
+          .filter((t: any) => t.statut === 'non_identifie' && Number(t.debit) > 0)
+          .sort((a: any, b: any) => (a.date || '').localeCompare(b.date || ''))
+
+        // Pour chaque tx bancaire, chercher les factures correspondantes
+        const txWithProposals = outgoingTx.map((tx: any) => {
+          const txAmt = Number(tx.debit) || 0
+          const txDevise = (tx.devise || 'MUR').toUpperCase()
+          const txAmtMUR = toMUR(txAmt, txDevise)
+          const txTiers = (tx.tiers_detecte || '').toLowerCase()
+          const txLibelle = (tx.libelle || '').toLowerCase()
+          const txDate = tx.date || ''
+
+          // Étape 1 : trouver les factures dont le TIERS correspond au libellé bancaire
+          const tiersMatches: Array<{ f: any; tiersSim: number; amtDiffPct: number }> = []
+          for (const f of unpaidFacs) {
+            const fTiers = (f.tiers || '').toLowerCase()
+            if (!fTiers || fTiers.length < 2) continue
+            // Mots du fournisseur qui apparaissent dans le libellé/tiers bancaire
+            const fWords = fTiers.split(/\s+/).filter((w: string) => w.length >= 3)
+            const matched = fWords.filter((w: string) => txTiers.includes(w) || txLibelle.includes(w))
+            const tiersSim = fWords.length > 0 ? matched.length / fWords.length : 0
+            if (tiersSim < 0.20) continue // au moins 1 mot sur 5 doit matcher
+
+            const fMUR = Number(f.montant_mur) || toMUR(Number(f.montant_ttc) || 0, f.devise || 'MUR')
+            const amtDiffPct = fMUR > 0 ? Math.abs(txAmtMUR - fMUR) / fMUR : 999
+            tiersMatches.push({ f, tiersSim, amtDiffPct })
+          }
+
+          // Étape 2 : parmi les factures du même tiers, trouver le meilleur match
+          // — soit 1 facture exacte
+          // — soit un groupe dont la somme = montant tx
+          let bestSingle: typeof tiersMatches[0] | null = null
+          let bestGroup: typeof tiersMatches | null = null
+
+          // 2a. Match unitaire : la facture la plus proche en montant
+          const singleCandidates = tiersMatches
+            .filter(m => m.amtDiffPct < 0.12)
+            .sort((a, b) => a.amtDiffPct - b.amtDiffPct)
+          if (singleCandidates.length > 0) {
+            bestSingle = singleCandidates[0]
+          }
+
+          // 2b. Match groupé : somme des factures du même fournisseur
+          // Regrouper par tiers normalisé
+          const byTiers = new Map<string, typeof tiersMatches>()
+          for (const m of tiersMatches) {
+            const key = (m.f.tiers || '').toLowerCase().substring(0, 20)
+            if (!byTiers.has(key)) byTiers.set(key, [])
+            byTiers.get(key)!.push(m)
+          }
+          for (const [, group] of byTiers) {
+            if (group.length < 2) continue
+            const sumMUR = group.reduce((s, m) => s + (Number(m.f.montant_mur) || toMUR(Number(m.f.montant_ttc) || 0, m.f.devise || 'MUR')), 0)
+            const groupDiff = Math.abs(txAmtMUR - sumMUR) / Math.max(sumMUR, 1)
+            if (groupDiff < 0.12) {
+              // Le groupe est un meilleur match que le single ?
+              if (!bestSingle || groupDiff < bestSingle.amtDiffPct) {
+                bestGroup = group
+              }
+            }
+          }
+
+          const proposal = bestGroup
+            ? { type: 'groupe' as const, factures: bestGroup.map(m => m.f), diff: Math.abs(txAmtMUR - bestGroup.reduce((s, m) => s + (Number(m.f.montant_mur) || toMUR(Number(m.f.montant_ttc) || 0, m.f.devise || 'MUR')), 0)) / txAmtMUR, tiersSim: bestGroup[0].tiersSim }
+            : bestSingle
+              ? { type: 'single' as const, factures: [bestSingle.f], diff: bestSingle.amtDiffPct, tiersSim: bestSingle.tiersSim }
+              : null
+
+          return { tx, proposal }
+        })
+
+        const withMatch = txWithProposals.filter((t: any) => t.proposal)
+        const withoutMatch = txWithProposals.filter((t: any) => !t.proposal)
+
+        return (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-[#0B0F2E] flex items-center gap-2 text-base">
+                <span>📊</span> Relevé bancaire → Factures
+                {selectedCompte && selectedCompte !== 'all' && (
+                  <Badge variant="outline" className="text-xs font-normal">{selectedCompte}</Badge>
+                )}
+                <span className="text-xs font-normal text-gray-400 ml-auto">
+                  {outgoingTx.length} paiement{outgoingTx.length > 1 ? 's' : ''} · {withMatch.length} avec correspondance · {withoutMatch.length} sans
+                </span>
+              </CardTitle>
+              <p className="text-xs text-gray-500 mt-1">
+                Sélectionnez un compte bancaire et un mois ci-dessus pour voir les paiements et leurs factures correspondantes.
+              </p>
+            </CardHeader>
+            <CardContent className="p-0 overflow-x-auto">
+              {outgoingTx.length === 0 ? (
+                <div className="text-center py-12 text-gray-500 text-sm">Aucun paiement non identifié dans le relevé</div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Libellé bancaire</TableHead>
+                      <TableHead className="text-right">Montant payé</TableHead>
+                      <TableHead>→</TableHead>
+                      <TableHead>Facture(s) proposée(s)</TableHead>
+                      <TableHead className="text-right">Montant facture</TableHead>
+                      <TableHead className="text-center">Écart</TableHead>
+                      <TableHead>Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {txWithProposals.map(({ tx, proposal }: any, i: number) => {
+                      const borderCls = proposal
+                        ? proposal.diff < 0.03 ? 'border-l-4 border-l-[#0F766E] bg-[#0F766E]/5'
+                          : 'border-l-4 border-l-[#D4AF37] bg-[#D4AF37]/5'
+                        : ''
+                      const facTotal = proposal
+                        ? proposal.factures.reduce((s: number, f: any) => s + (Number(f.montant_ttc) || 0), 0)
+                        : 0
+                      const facDevise = proposal?.factures[0]?.devise || ''
+                      return (
+                        <TableRow key={tx.id} className={borderCls}>
+                          <TableCell className="text-sm whitespace-nowrap">{formatDate(tx.date)}</TableCell>
+                          <TableCell className="text-sm max-w-[250px]">
+                            <div className="font-medium text-[#0B0F2E] truncate" title={tx.libelle}>{tx.tiers_detecte || tx.libelle?.substring(0, 40) || '—'}</div>
+                            <div className="text-[10px] text-gray-400 truncate" title={tx.libelle}>{tx.libelle?.substring(0, 60)}</div>
+                          </TableCell>
+                          <TableCell className="text-right font-mono font-semibold text-[#9F1239] text-sm whitespace-nowrap">
+                            -{fmt(Number(tx.debit))} {tx.devise || ''}
+                          </TableCell>
+                          <TableCell className="text-center text-gray-300">→</TableCell>
+                          <TableCell className="text-sm">
+                            {proposal ? (
+                              <div>
+                                <div className="font-medium text-[#0B0F2E]">
+                                  {proposal.factures.length === 1
+                                    ? `${proposal.factures[0].tiers} — ${proposal.factures[0].numero_facture}`
+                                    : `${proposal.factures[0].tiers} — ${proposal.factures.length} factures`
+                                  }
+                                </div>
+                                {proposal.factures.length > 1 && (
+                                  <div className="text-[10px] text-gray-400">
+                                    {proposal.factures.map((f: any) => f.numero_facture).join(', ')}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 text-xs">Aucune correspondance</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-sm whitespace-nowrap">
+                            {proposal ? `${fmt(facTotal)} ${facDevise}` : '—'}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {proposal ? (
+                              <Badge className={
+                                proposal.diff < 0.005 ? 'bg-[#0F766E]/10 text-[#0F766E]' :
+                                proposal.diff < 0.08 ? 'bg-[#D4AF37]/10 text-[#A88925]' :
+                                'bg-gray-100 text-gray-500'
+                              }>
+                                {proposal.diff < 0.005 ? '✓ exact' : `${(proposal.diff * 100).toFixed(1)}%`}
+                              </Badge>
+                            ) : '—'}
+                          </TableCell>
+                          <TableCell>
+                            {proposal ? (
+                              <div className="flex gap-1">
+                                <Button
+                                  size="sm"
+                                  className="h-7 text-xs bg-[#0F766E] hover:bg-[#0F766E]/90 text-white"
+                                  onClick={() => {
+                                    if (proposal.factures.length === 1) {
+                                      handleManualLink(tx, proposal.factures[0], 'facture')
+                                    } else {
+                                      handleManualLinkMulti(tx, proposal.factures)
+                                    }
+                                  }}
+                                >
+                                  Valider
+                                </Button>
+                                <Button
+                                  variant="ghost" size="sm" className="h-7 text-xs"
+                                  onClick={() => { setDialogTab('factures'); setLettrageTiersFilter(tx.tiers_detecte || ''); setSelectedFactureIds(new Set()); setLinkDialog(tx) }}
+                                >
+                                  Détail
+                                </Button>
+                              </div>
+                            ) : (
+                              <Button
+                                variant="outline" size="sm" className="h-7 text-xs"
+                                onClick={() => { setDialogTab('factures'); setLettrageTiersFilter(''); setSelectedFactureIds(new Set()); setLinkDialog(tx) }}
+                              >
+                                Chercher
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        )
+      })()}
+
+      {/* Placeholder pour le tab fournisseurs en attendant les agents IA */}
+      {transactionTab === 'fournisseurs' && (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <div className="text-4xl mb-4">🤖</div>
+            <h3 className="text-lg font-semibold text-[#0B0F2E] mb-2">Rapprochement intelligent — En construction</h3>
+            <p className="text-sm text-gray-500 max-w-md mx-auto">
+              Cette vue sera alimentée par le système d&apos;agents IA qui lit chaque ligne du relevé
+              et propose les factures correspondantes.
+            </p>
+            <p className="text-xs text-gray-400 mt-3">
+              En attendant, utilisez les onglets &quot;À classer&quot; et &quot;Classées&quot;.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* SECTION 4 — Transactions à classer — onglet "À classer" */}
       {transactionTab === 'aclasser' && (
       <Card className={unmatched.length > 0 ? "border-orange-200" : ""}>
@@ -2196,17 +2524,7 @@ Voulez-vous vraiment continuer ?`
                                   && norm(o.tiers_detecte || o.tiers || '') === myTiers
                                 ).length
                               : 0
-                            const classifications = [
-                              { code: 'frais_bancaires',         label: 'Frais bancaires',         compte: '627' },
-                              { code: 'paiement_mra',            label: 'Paiement MRA (impots)',   compte: '447' },
-                              { code: 'salaire',                 label: 'Salaire net',             compte: '421' },
-                              { code: 'compte_courant_associe',  label: 'Compte courant associe',  compte: '455' },
-                              { code: 'avance_personnel',        label: 'Avance au personnel',     compte: '425' },
-                              { code: 'virement_interne',        label: 'Virement interne',        compte: '580' },
-                              { code: 'remboursement_personnel', label: 'Remboursement personnel', compte: '108' },
-                              { code: 'charge_diverse',          label: 'Charge diverse',          compte: '658' },
-                              { code: 'autre',                   label: 'A classer plus tard',     compte: '471' },
-                            ]
+                            const classifications = CLASSIFICATION_CHOICES
                             return (
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
@@ -2243,7 +2561,7 @@ Voulez-vous vraiment continuer ?`
                                     </>
                                   )}
                                   <DropdownMenuSeparator />
-                                  <DropdownMenuItem onClick={() => { setDialogTab('factures'); setLinkDialog(tx) }}>
+                                  <DropdownMenuItem onClick={() => { setDialogTab('factures'); setLettrageTiersFilter(tx.tiers_detecte || ''); setSelectedFactureIds(new Set()); setLinkDialog(tx) }}>
                                     <Link2 className="w-4 h-4 mr-2 text-blue-600" />
                                     Lettrer avec facture(s) fournisseur
                                   </DropdownMenuItem>
@@ -2935,6 +3253,18 @@ Voulez-vous vraiment continuer ?`
                           placeholder="🔍 Client, n° facture, montant (1500), plage (1000-2000), date (2026-03)..."
                           className="h-8 text-sm flex-1"
                         />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 text-xs whitespace-nowrap"
+                          onClick={() => {
+                            const ids = new Set(selectedFactureIds)
+                            filtered.forEach((f: any) => ids.add(f.id))
+                            setSelectedFactureIds(ids)
+                          }}
+                        >
+                          Tout cocher ({filtered.length})
+                        </Button>
                         <span className="text-xs text-gray-500 whitespace-nowrap">
                           {filtered.length}/{factures.length}
                         </span>

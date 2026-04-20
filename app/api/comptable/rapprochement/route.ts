@@ -420,6 +420,22 @@ export async function POST(request: Request) {
         const updatedTxs = [...txs]
         let changed = false
         let skippedCount = 0
+
+        // Charger les associés/actionnaires pour détecter les CCA
+        const { data: associesData } = await supabase
+          .from('comptes_courants_associes')
+          .select('nom, type')
+          .eq('societe_id', societe_id)
+        const { data: directorsData } = await supabase
+          .from('directors_shareholders')
+          .select('nom_complet, role')
+          .eq('societe_id', societe_id)
+          .eq('active', true)
+        const associeNames = [
+          ...(associesData || []).map((a: any) => (a.nom || '').toLowerCase()),
+          ...(directorsData || []).map((d: any) => (d.nom_complet || '').toLowerCase()),
+        ].filter(n => n.length > 2)
+
         // Collect indices of unclassified transactions for batch engine matching
         const unclassifiedTxIndices: number[] = []
 
@@ -462,12 +478,17 @@ export async function POST(request: Request) {
             const selfWords = selfName.split(/\s+/).filter((w: string) => w.length > 2)
             const tiersWords = tiersName.split(/\s+/).filter((w: string) => w.length > 2)
             if (selfWords.length === 0 || tiersWords.length === 0) return false
-            // Chaque mot de self doit être trouvé (ou début de mot) dans tiers
-            const matchedSelf = selfWords.filter((sw: string) => tiersWords.some((tw: string) => tw.startsWith(sw.substring(0, 3)) || sw.startsWith(tw.substring(0, 3))))
+            // Minimum 4 caractères pour le matching (évite "myt" matchant n'importe quoi)
+            const matchedSelf = selfWords.filter((sw: string) => tiersWords.some((tw: string) => {
+              if (sw.length < 4 || tw.length < 4) return false
+              return tw.startsWith(sw.substring(0, 4)) || sw.startsWith(tw.substring(0, 4))
+            }))
             if (matchedSelf.length < selfWords.length * 0.7) return false
-            // Le tiers ne doit pas avoir beaucoup de mots non-matchés
-            const unmatchedTiers = tiersWords.filter((tw: string) => !selfWords.some((sw: string) => tw.startsWith(sw.substring(0, 3)) || sw.startsWith(tw.substring(0, 3))))
-            return unmatchedTiers.length === 0 // Aucun mot extra dans le tiers
+            const unmatchedTiers = tiersWords.filter((tw: string) => !selfWords.some((sw: string) => {
+              if (sw.length < 4 || tw.length < 4) return false
+              return tw.startsWith(sw.substring(0, 4)) || sw.startsWith(tw.substring(0, 4))
+            }))
+            return unmatchedTiers.length === 0
           }
 
           const isTiersSelf = selfNamesNorm.some(n => isSelfMatch(n, txTiersNorm))
@@ -488,6 +509,20 @@ export async function POST(request: Request) {
             updatedTxs[i] = { ...tx, statut: 'rapproche', matched_type: 'frais_bancaires', note: 'Frais bancaires', ecriture_id: feeEcriture?.id || null }
             if (feeEcriture) { ecritures = ecritures.filter(e => e.id !== feeEcriture.id); await supabase.from('ecritures_comptables').update({ lettre: `FEE${i}`, date_lettrage: new Date().toISOString().split('T')[0] }).eq('id', feeEcriture.id) }
             counts.frais_bancaires++; counts.matched++; changed = true; classified = true
+          }
+
+          // RULE B2 — Compte courant associé (CCA)
+          // Si le tiers est un associé/actionnaire connu → CCA (455), PAS salaire
+          if (!classified && associeNames.length > 0) {
+            const txFullText = (txTiers + ' ' + txLib).toLowerCase()
+            const matchedAssocie = associeNames.find(name => {
+              const words = name.split(/\s+/).filter((w: string) => w.length >= 3)
+              return words.length > 0 && words.every((w: string) => txFullText.includes(w))
+            })
+            if (matchedAssocie) {
+              updatedTxs[i] = { ...tx, statut: 'rapproche', matched_type: 'compte_courant_associe', note: `CCA — ${matchedAssocie}` }
+              counts.matched++; changed = true; classified = true
+            }
           }
 
           // RULE C — Bulk salary
@@ -712,7 +747,15 @@ export async function POST(request: Request) {
             (match.transaction as any)?.date ||
             new Date().toISOString().split('T')[0]
 
-          if (conf >= 0.60) {
+          // Seuil d'auto-application :
+          // - Match par alias fournisseur (strategy "supplier_*") → confiance ≥ 0.60
+          // - Match par montant (strategy "amount_*") → confiance ≥ 0.70
+          //   Requiert montant proche + tiers similaire. Sous 0.70 → proposé (jaune).
+          // Fallback par montant DÉSACTIVÉ pour auto-apply — sera remplacé par agents IA
+          const isFallbackMatch = (match.strategy || '').startsWith('amount_')
+          const autoApplyThreshold = isFallbackMatch ? 9.99 : 0.60
+
+          if (conf >= autoApplyThreshold) {
             // High confidence → auto-apply
             const code = `R${String(counts.matched + 1).padStart(3, '0')}`
             entry.updatedTxs[txIdx] = {
@@ -1181,7 +1224,10 @@ export async function POST(request: Request) {
               // ── Virements internes → 581 ──
               if (tx.statut === 'interne' || tx.matched_type === 'transfert_interne') {
                 const intRef = `VI-${releveId}-${i}`
-                const alreadyExists = (allEcr401v2 || []).some((e: any) => e.ref_folio === intRef)
+                const anyRefInt = `${releveId}-${i}`
+                const alreadyExists = (allEcr401v2 || []).some((e: any) =>
+                  e.ref_folio && (e.ref_folio === intRef || e.ref_folio.endsWith(anyRefInt))
+                )
                 if (alreadyExists) continue
 
                 // Use shared VI code from counterpart matching if available
@@ -1392,7 +1438,12 @@ export async function POST(request: Request) {
             // Salaires → D 421 / C 512, Particuliers → D 467 / C 512
             if (tx.statut === 'rapproche' && !tx.facture_id && tx.matched_type) {
               const classRef = `CLS-${releveId2}-${i2}`
-              const classExists = (allEcr401v2 || []).some((e: any) => e.ref_folio === classRef)
+              // Vérifier si une écriture BNQ existe DÉJÀ pour cette tx, quel que soit le ref_folio
+              // (évite les doublons entre CLS-xxx, CL-xxx, BANK-xxx)
+              const anyRef = `${releveId2}-${i2}`
+              const classExists = (allEcr401v2 || []).some((e: any) =>
+                e.ref_folio && (e.ref_folio === classRef || e.ref_folio.endsWith(anyRef))
+              )
               if (!classExists) {
                 let compteCharge = '471'
                 let libellePrefix = 'Opération bancaire'
@@ -1409,6 +1460,10 @@ export async function POST(request: Request) {
                   compteCharge = '421'; libellePrefix = 'Salaire'
                 } else if (tx.matched_type === 'reversal_salaire') {
                   compteCharge = '421'; libellePrefix = 'Reversal salaire'
+                } else if (tx.matched_type === 'compte_courant_associe') {
+                  compteCharge = '455'; libellePrefix = 'Compte courant associé'
+                } else if (tx.matched_type === 'loyer') {
+                  compteCharge = '613'; libellePrefix = 'Loyer'
                 } else if (tx.matched_type?.startsWith('rule_') && tx.classification_compte) {
                   // Classification par règle configurable (R01-R07+)
                   compteCharge = tx.classification_compte
@@ -1430,6 +1485,38 @@ export async function POST(request: Request) {
                     lettre: classLettre, ref_folio: classRef },
                 ])
                 ecrituresCreees++
+
+                // Lettrage salaires : lier le paiement BNQ (débit 421) avec la dette SAL (crédit 4210)
+                if (tx.matched_type === 'salaire_individuel' || tx.matched_type === 'salaire_bulk' || tx.matched_type === 'salaire_bulk_non_verifie') {
+                  const salComptes = ['4210', '421', '421000']
+                  const txMonth = txDate2?.substring(0, 7) || ''
+                  const { data: salEntries } = await supabase
+                    .from('ecritures_comptables_v2')
+                    .select('id, numero_compte, credit_mur, lettre, date_ecriture')
+                    .eq('societe_id', societe_id)
+                    .eq('journal', 'SAL')
+                    .in('numero_compte', salComptes)
+                    .is('lettre', null)
+                    .gt('credit_mur', 0)
+
+                  if (salEntries && salEntries.length > 0) {
+                    const isBulk = tx.matched_type !== 'salaire_individuel'
+                    const matched = salEntries.find((se: any) => {
+                      if (isBulk) {
+                        return (se.date_ecriture || '').startsWith(txMonth)
+                      } else {
+                        const diff = Math.abs(Number(se.credit_mur) - txAmountMUR2) / Math.max(txAmountMUR2, 1)
+                        return diff < 0.05
+                      }
+                    })
+                    if (matched) {
+                      await supabase.from('ecritures_comptables_v2')
+                        .update({ lettre: classLettre, date_lettrage: new Date().toISOString().split('T')[0] })
+                        .eq('id', matched.id)
+                      console.log(`[rapprochement] Lettrage salaire: BNQ ${classLettre} ↔ SAL ${matched.id}`)
+                    }
+                  }
+                }
               }
             }
           }
@@ -1525,16 +1612,22 @@ export async function POST(request: Request) {
         // Mapping étendu pour les classifications proposées par le menu
         // "Classer..." de la page rapprochement (Part 2 redesign).
         const CLASSE_COMPTES: Record<string, string> = {
-          compte_courant_associe: '455',  // Comptes courants associés
-          avance_personnel: '425',        // Avances au personnel
-          charge_diverse: '658',          // Autres charges de gestion
-          paiement_mra: '444',            // État, impôts (MRA)
-          frais_bancaires: '627',         // Services bancaires et assimilés
-          // Nouveaux types ajoutés par la refonte UI :
-          salaire: '641',                 // Personnel — rémunérations
-          virement_interne: '581',        // Virements internes (bridge account)
-          remboursement_personnel: '108', // Compte de l'exploitant
-          autre: '471',                   // Charges à classer (fallback explicite)
+          compte_courant_associe: '455',
+          avance_personnel: '425',
+          charge_diverse: '658',
+          paiement_mra: '444',
+          frais_bancaires: '627',
+          salaire: '4210',
+          virement_interne: '580',
+          remboursement_personnel: '108',
+          loyer: '613',
+          assurance: '616',
+          honoraires: '622',
+          telecom: '626',
+          impot_taxe: '635',
+          charge_sociale: '431',
+          fournisseur: '401',
+          autre: '471',
         }
         const compteCharge = CLASSE_COMPTES[classification] || '471'
         console.log(`[lettrer_manuel] societe=${societe_id} tx=${transaction_id} classification=${classification} → compte=${compteCharge}`)
@@ -3762,6 +3855,86 @@ export async function POST(request: Request) {
         devise,
         employe: nomEmploye,
         compte: compteDebit,
+      })
+    }
+
+    // ── annuler_paiement_factures : remettre N factures en "en_attente" ──
+    // Remet le statut, clear rapproche_*, et délettrer les tx bancaires associées.
+    // Si facture_ids = ['ALL'], remet TOUTES les factures + TOUTES les tx bancaires
+    // à zéro pour la société (reset complet du rapprochement).
+    if (action === 'annuler_paiement_factures') {
+      const { societe_id: socId, facture_ids } = body
+      if (!socId) {
+        return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
+      }
+
+      const isResetAll = Array.isArray(facture_ids) && facture_ids.length === 1 && facture_ids[0] === 'ALL'
+
+      // 1. Remettre les factures en attente
+      let resetQuery = supabase
+        .from('factures')
+        .update({
+          statut: 'en_attente',
+          rapproche_releve_id: null,
+          rapproche_transaction_idx: null,
+          rapproche_date: null,
+          rapproche_source: null,
+        })
+        .eq('societe_id', socId)
+        .neq('statut', 'annule')
+        .neq('statut', 'brouillon')
+
+      if (!isResetAll && Array.isArray(facture_ids) && facture_ids.length > 0) {
+        resetQuery = resetQuery.in('id', facture_ids)
+      }
+
+      const { data: resetData, error: resetErr } = await resetQuery.select('id')
+      if (resetErr) {
+        return NextResponse.json({ error: resetErr.message }, { status: 500 })
+      }
+
+      // 2. Remettre TOUTES les tx bancaires à non_identifie
+      // (pas seulement celles liées aux factures, car les tx auto-classifiées
+      // Phase 1/3 ne sont liées à aucune facture mais bloquent le re-rapprochement)
+      let txReset = 0
+      const { data: releves } = await supabase
+        .from('releves_bancaires')
+        .select('id, transactions_json')
+        .eq('societe_id', socId)
+
+      for (const rel of releves || []) {
+        const txs = [...(rel.transactions_json || [])]
+        let changed = false
+        for (let i = 0; i < txs.length; i++) {
+          const tx = txs[i]
+          if (!tx) continue
+          // Garder les virements internes (ils sont corrects)
+          if (tx.statut === 'interne' || tx.matched_type === 'transfert_interne') continue
+          // Tout le reste → non_identifie
+          if (tx.statut === 'rapproche' || tx.statut === 'propose' || tx.lettre || tx.facture_id || tx.facture_ids || tx.matched_type) {
+            const { lettre, facture_id, facture_ids: fids, ecriture_id, matched_type, match_confidence, note, rapproche_at, rapprochement_multi, nb_factures, ecart_montant, ...rest } = tx
+            txs[i] = { ...rest, statut: 'non_identifie' }
+            changed = true
+            txReset++
+          }
+        }
+        if (changed) {
+          await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', rel.id)
+        }
+      }
+
+      // 3. Supprimer les écritures BNQ liées au rapprochement
+      const { count: ecrituresDeleted } = await supabase
+        .from('ecritures_comptables_v2')
+        .delete({ count: 'exact' })
+        .eq('societe_id', socId)
+        .eq('journal', 'BNQ')
+
+      return NextResponse.json({
+        ok: true,
+        nb_factures_reset: (resetData || []).length,
+        nb_tx_delettrees: txReset,
+        nb_ecritures_supprimees: ecrituresDeleted || 0,
       })
     }
 

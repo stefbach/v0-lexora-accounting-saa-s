@@ -219,15 +219,16 @@ export async function GET(request: Request) {
     let facturesFromTable: any[] = []
     if (!facturesErr) facturesFromTable = facturesData || []
 
-    // Compute CA and dépenses from factures table (more reliable than écritures)
+    // Compute CA and dépenses from factures table — EN HT (hors taxe)
+    // En comptabilité, le résultat = CA HT - Charges HT. La TVA est séparée.
     const caFromFactures = facturesFromTable
       .filter(f => f.type_facture === 'client' && f.statut !== 'annule')
-      .reduce((s, f) => s + (Number(f.montant_mur) || convertToMUR(Number(f.montant_ttc) || 0, f.devise || 'MUR', rates)), 0)
+      .reduce((s, f) => s + convertToMUR(Number(f.montant_ht) || 0, f.devise || 'MUR', rates), 0)
 
-    // Fournisseur invoices total (from factures table — MUR)
+    // Fournisseur invoices total HT (from factures table — MUR)
     const depensesFournisseursFactures = facturesFromTable
       .filter(f => f.type_facture === 'fournisseur' && f.statut !== 'annule')
-      .reduce((s, f) => s + (Number(f.montant_mur) || convertToMUR(Number(f.montant_ttc) || 0, f.devise || 'MUR', rates)), 0)
+      .reduce((s, f) => s + convertToMUR(Number(f.montant_ht) || 0, f.devise || 'MUR', rates), 0)
     // depensesFromFactures will be augmented with payroll (641, 645) from écritures below
     // (computed after allEcritures is built)
     let depensesFromFactures = depensesFournisseursFactures
@@ -236,8 +237,8 @@ export async function GET(request: Request) {
     const allDocs = documents || []
 
     // Augment depensesFromFactures with payroll expenses from écritures
-    // (salaires 641, charges patronales 645, impots/taxes 63, charges financières 66)
-    // These are NOT in the factures fournisseurs table
+    // Classe 6 uniquement : charges réelles (641x salaires, 645x patronales, 627 frais, 63x impôts)
+    // PAS les classe 4 (4210, 4311...) qui sont les DETTES, pas les charges → double-comptage
     const depensesNonFournisseursEcritures = allEcritures
       .filter((e: any) => e.compte?.startsWith('6') && !e.compte?.startsWith('628'))
       .reduce((sum: number, e: any) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
@@ -531,11 +532,11 @@ export async function GET(request: Request) {
         }
       })
 
-    // Revenue: use factures clients (MUR) as primary, fallback to écritures classe 7
-    // Expenses: ALWAYS use écritures classe 6 (includes salaires, charges, all operational costs)
-    // Factures fournisseurs are a subset — they miss salaires (641), charges sociales (645), etc.
+    // Dépenses = factures fournisseurs (montant MUR) + écritures classe 6 hors fournisseurs
+    // (salaires 641, charges patronales 645, frais 627, impôts 63, etc.)
+    // depensesFromFactures combine TOUJOURS les deux sources (ligne 244)
     const finalCA = caFromFactures > 0 ? caFromFactures : totalRevenue
-    const finalDepenses = totalExpenses > 0 ? totalExpenses : depensesFromFactures
+    const finalDepenses = depensesFromFactures
     const finalResultat = finalCA - finalDepenses
 
     return NextResponse.json({
