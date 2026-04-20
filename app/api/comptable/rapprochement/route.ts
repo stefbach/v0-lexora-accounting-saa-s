@@ -1625,21 +1625,28 @@ export async function POST(request: Request) {
         // Mapping étendu pour les classifications proposées par le menu
         // "Classer..." de la page rapprochement (Part 2 redesign).
         const CLASSE_COMPTES: Record<string, string> = {
+          fournisseur: '401',
+          client: '411',
           compte_courant_associe: '455',
+          remboursement_associe: '108',
           avance_personnel: '425',
           charge_diverse: '658',
           paiement_mra: '444',
           frais_bancaires: '627',
           salaire: '4210',
+          salaire_bulk: '421',
           virement_interne: '580',
           remboursement_personnel: '108',
           loyer: '613',
+          entretien: '615',
           assurance: '616',
           honoraires: '622',
+          deplacement: '625',
           telecom: '626',
           impot_taxe: '635',
+          materiel: '606',
+          produit_divers: '706',
           charge_sociale: '431',
-          fournisseur: '401',
           autre: '471',
         }
         const compteCharge = CLASSE_COMPTES[classification] || '471'
@@ -3219,21 +3226,28 @@ export async function POST(request: Request) {
 
       // Mapping classification → compte comptable
       const CLASSE_COMPTES: Record<string, string> = {
+        fournisseur: '401',
+        client: '411',
         compte_courant_associe: '455',
+        remboursement_associe: '108',
         avance_personnel: '425',
         charge_diverse: '658',
         paiement_mra: '447',
         frais_bancaires: '627',
         salaire: '4210',
+        salaire_bulk: '421',
         virement_interne: '580',
         remboursement_personnel: '108',
-        fournisseur: '401',
         charge_sociale: '431',
         loyer: '613',
+        entretien: '615',
         assurance: '616',
         honoraires: '622',
+        deplacement: '625',
         telecom: '626',
         impot_taxe: '635',
+        materiel: '606',
+        produit_divers: '706',
         autre: '471',
       }
       const compte = CLASSE_COMPTES[classification] || '471'

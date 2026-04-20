@@ -25,21 +25,28 @@ import { BalanceComptes } from "@/components/rapprochement/BalanceComptes"
 function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 
 const CLASSIFICATION_CHOICES = [
-  { code: 'fournisseur',            label: 'Fournisseur',              compte: '401' },
-  { code: 'frais_bancaires',        label: 'Frais bancaires',          compte: '627' },
-  { code: 'paiement_mra',           label: 'Paiement MRA (impôts)',    compte: '447' },
+  { code: 'fournisseur',            label: 'Fournisseur',                compte: '401' },
+  { code: 'client',                 label: 'Encaissement client',        compte: '411' },
+  { code: 'frais_bancaires',        label: 'Frais bancaires',            compte: '627' },
+  { code: 'paiement_mra',           label: 'Paiement MRA (impôts)',      compte: '447' },
   { code: 'charge_sociale',         label: 'Charges sociales (CSG/NSF)', compte: '431' },
-  { code: 'salaire',                label: 'Salaire net',              compte: '4210' },
-  { code: 'compte_courant_associe', label: 'Compte courant associé',   compte: '455' },
-  { code: 'avance_personnel',       label: 'Avance au personnel',      compte: '425' },
-  { code: 'virement_interne',       label: 'Virement interne',         compte: '580' },
-  { code: 'loyer',                  label: 'Loyer / charges locatives', compte: '613' },
-  { code: 'assurance',              label: 'Assurance',                compte: '616' },
-  { code: 'honoraires',             label: 'Honoraires / comptable',   compte: '622' },
-  { code: 'telecom',                label: 'Télécom / internet',       compte: '626' },
-  { code: 'impot_taxe',             label: 'Impôts et taxes',          compte: '635' },
-  { code: 'charge_diverse',         label: 'Charge diverse',           compte: '658' },
-  { code: 'autre',                  label: 'À classer plus tard',      compte: '471' },
+  { code: 'salaire',                label: 'Salaire net',                compte: '4210' },
+  { code: 'salaire_bulk',           label: 'Masse salariale (bulk)',     compte: '421' },
+  { code: 'compte_courant_associe', label: 'Compte courant associé',     compte: '455' },
+  { code: 'remboursement_associe',  label: 'Remboursement associé',      compte: '108' },
+  { code: 'avance_personnel',       label: 'Avance au personnel',        compte: '425' },
+  { code: 'virement_interne',       label: 'Virement interne',           compte: '580' },
+  { code: 'loyer',                  label: 'Loyer / charges locatives',  compte: '613' },
+  { code: 'entretien',              label: 'Entretien / réparations',    compte: '615' },
+  { code: 'assurance',              label: 'Assurance',                  compte: '616' },
+  { code: 'honoraires',             label: 'Honoraires / comptable',     compte: '622' },
+  { code: 'deplacement',            label: 'Déplacements / missions',    compte: '625' },
+  { code: 'telecom',                label: 'Télécom / internet',         compte: '626' },
+  { code: 'impot_taxe',             label: 'Impôts et taxes',            compte: '635' },
+  { code: 'materiel',               label: 'Matériel / équipement',      compte: '606' },
+  { code: 'charge_diverse',         label: 'Charge diverse',             compte: '658' },
+  { code: 'produit_divers',         label: 'Produit / prestation reçue', compte: '706' },
+  { code: 'autre',                  label: 'À classer plus tard',        compte: '471' },
 ] as const
 function formatDate(d: string) { return d ? new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" }) : "—" }
 
@@ -2769,6 +2776,10 @@ Voulez-vous vraiment continuer ?`
                                   <DropdownMenuItem onClick={() => { setDialogTab('factures'); setLettrageTiersFilter(tx.tiers_detecte || ''); setSelectedFactureIds(new Set()); setLinkDialog(tx) }}>
                                     <Link2 className="w-4 h-4 mr-2 text-blue-600" />
                                     Lettrer avec facture(s) fournisseur
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => { setDialogTab('factures'); setLettrageTiersFilter(tx.tiers_detecte || ''); setSelectedFactureIds(new Set()); setLinkDialog(tx) }}>
+                                    <Link2 className="w-4 h-4 mr-2 text-green-600" />
+                                    Lettrer avec facture(s) client
                                   </DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => openNdfDialog(tx)}>
                                     <Users className="w-4 h-4 mr-2 text-purple-600" />
