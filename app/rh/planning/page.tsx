@@ -1260,7 +1260,7 @@ export default function PlanningPage() {
               <Button variant="outline" size="sm" onClick={() => setConfirmGenOpen(true)} style={{ borderColor: "#D4AF37", color: "#D4AF37" }}>
                 <Copy className="h-4 w-4 mr-1" /> Générer planning type
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setBulkOpen(true)}><Users className="h-4 w-4 mr-1" /> Masse</Button>
+              <Button variant="outline" size="sm" onClick={() => setBulkOpen(true)}><Users className="h-4 w-4 mr-1" /> Affectation multiple</Button>
               <Button variant="outline" size="sm" onClick={() => toast.info("Export PDF bientôt disponible")} style={{ borderColor: "#4191FF", color: "#4191FF" }}>
                 <FileDown className="h-4 w-4 mr-1" /> Exporter PDF
               </Button>
@@ -1770,7 +1770,7 @@ export default function PlanningPage() {
 
       <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle style={{ color: "#0B0F2E" }}>Affectation en masse</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle style={{ color: "#0B0F2E" }}>Affectation multiple</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div>
               <Label>Employés</Label>
