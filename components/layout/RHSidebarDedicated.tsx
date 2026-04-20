@@ -6,10 +6,9 @@ import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { t, getLocale } from "@/lib/i18n"
 import { LanguageSwitcher } from "@/components/LanguageSwitcher"
-import MonEspaceSalarieLink from "@/components/rh/MonEspaceSalarieLink"
 import {
   Clock, Users, Calendar, CreditCard, TrendingUp, Banknote,
-  Settings, LogOut, ArrowLeft, Menu, X, CalendarDays, Car, Bot, CheckCircle, Upload, UserMinus, Megaphone, MapPin, Route, Shield, FilePen
+  Settings, LogOut, ArrowLeft, Menu, X, CalendarDays, Car, Bot, CheckCircle, Upload, UserMinus, Megaphone, MapPin, Route, Shield, FilePen, UserCircle
 } from "lucide-react"
 
 interface NavLink {
@@ -244,11 +243,48 @@ export function RHSidebarDedicated() {
               </Link>
             )
           })}
+
+          {/* Divider + entrée "Mon espace" — toujours visible, renvoie vers
+              /salarie. Remplace l'ancien <MonEspaceSalarieLink compact />
+              qui ne s'affichait que pour les users avec fiche employé. */}
+          <div
+            className="my-3 h-px"
+            style={{ background: "linear-gradient(90deg, transparent 0%, rgba(232,234,252,0.14) 50%, transparent 100%)" }}
+            aria-hidden="true"
+          />
+          <Link
+            href="/salarie"
+            className={cn(
+              "group relative flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-all duration-200",
+              isActive("/salarie")
+                ? "text-[#0B0F2E] font-semibold"
+                : "text-white/70 hover:text-white",
+            )}
+            style={
+              isActive("/salarie")
+                ? {
+                    background: "linear-gradient(135deg, #D4AF37 0%, #E4C547 100%)",
+                    boxShadow: "0 8px 24px -8px rgba(212,175,55,0.55), inset 0 1px 0 rgba(255,255,255,0.4)",
+                  }
+                : undefined
+            }
+          >
+            {!isActive("/salarie") && (
+              <span
+                aria-hidden="true"
+                className="absolute inset-0 rounded-xl opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+                style={{
+                  background: "linear-gradient(135deg, rgba(65,145,255,0.14) 0%, rgba(232,234,252,0.06) 100%)",
+                }}
+              />
+            )}
+            <UserCircle className="w-4 h-4 flex-shrink-0 relative" style={{ color: isActive("/salarie") ? "#0B0F2E" : undefined }} />
+            <span className="truncate relative">Mon espace</span>
+          </Link>
         </nav>
 
-        {/* TÂCHE 8 — lien vers /salarie si l'user RH a une fiche employé liée.
-            Le composant détecte tout seul ; rend null sinon. */}
-        <MonEspaceSalarieLink compact />
+        {/* Ancien composant dynamique MonEspaceSalarieLink supprimé :
+            l'entrée statique ci-dessus le remplace. */}
 
         <div
           className="px-3 py-4 flex-shrink-0 space-y-1"

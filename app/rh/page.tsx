@@ -7,7 +7,7 @@ import {
   Users, CreditCard, Clock, Calendar, TrendingUp, AlertTriangle, Target, Settings,
   Calculator, Banknote, CheckCircle, ArrowRight, BarChart3, Building2,
   MessageSquare, Upload, CalendarDays, Briefcase, Bell,
-  AlertCircle, FileWarning, UserX, ChevronRight
+  AlertCircle, FileWarning, UserX, ChevronRight, UserCircle, Car
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -238,6 +238,11 @@ export default function RHDashboard() {
       <div className="space-y-6 max-w-[1400px] mx-auto">
         {/* Sprint 15 FIX 8 — Alerte deadline MRA 20 du mois */}
         <MraDeadlineAlert />
+
+        {/* Widget "Mon espace" — 4 actions rapides vers /salarie.
+            Compact, en haut du dashboard pour un accès immédiat. */}
+        <MonEspaceQuickActions />
+
         {/* TÂCHE 7 — Mon espace personnel (rendu uniquement si l'user RH
             a une fiche employé liée ; sinon le composant retourne null). */}
         <MonEspacePersonnel />
@@ -895,5 +900,62 @@ function ParametresTab() {
         </Card>
       </Link>
     </div>
+  )
+}
+
+// ─── Widget compact "Mon espace" ─────────────────────────────────────
+// 4 actions rapides vers /salarie, affichées en haut du dashboard RH.
+// Card discrète — pointage, congés, frais kilométriques, vue complète.
+
+function MonEspaceQuickActions() {
+  const actions = [
+    { href: "/salarie/pointage", label: "Pointer",            icon: Clock, color: "#4191FF" },
+    { href: "/salarie/conges",   label: "Demander un congé", icon: Calendar, color: "#2ECC8A" },
+    { href: "/salarie/frais",    label: "Mes frais",          icon: Car, color: "#F97316" },
+    { href: "/salarie",          label: "Voir tout mon espace", icon: UserCircle, color: GOLD },
+  ]
+  return (
+    <Card
+      className="overflow-hidden"
+      style={{ borderColor: CARD_BORDER, borderRadius: 14 }}
+    >
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div className="flex items-center gap-2">
+            <div
+              className="w-7 h-7 rounded-lg flex items-center justify-center"
+              style={{ backgroundColor: NAVY }}
+            >
+              <UserCircle className="w-4 h-4 text-white" />
+            </div>
+            <span className="text-sm font-semibold" style={{ color: NAVY }}>Mon espace</span>
+          </div>
+          <Link href="/salarie" className="text-xs font-medium hover:underline" style={{ color: BLUE }}>
+            Ouvrir →
+          </Link>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          {actions.map(a => {
+            const Icon = a.icon
+            return (
+              <Link
+                key={a.href}
+                href={a.href}
+                className="group flex items-center gap-2 px-3 py-2.5 rounded-lg border bg-white transition-all hover:shadow-md hover:border-transparent"
+                style={{ borderColor: CARD_BORDER }}
+              >
+                <span
+                  className="shrink-0 w-7 h-7 rounded-md flex items-center justify-center"
+                  style={{ backgroundColor: `${a.color}18` }}
+                >
+                  <Icon className="w-3.5 h-3.5" style={{ color: a.color }} />
+                </span>
+                <span className="text-xs font-medium truncate" style={{ color: NAVY }}>{a.label}</span>
+              </Link>
+            )
+          })}
+        </div>
+      </CardContent>
+    </Card>
   )
 }
