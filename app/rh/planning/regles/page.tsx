@@ -5,65 +5,408 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Badge } from "@/components/ui/badge"
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { toast } from "sonner"
-import { Shield, Clock, Moon, Coffee, Users, TrendingUp, RotateCcw, Save, ArrowLeft, Info } from "lucide-react"
+import {
+  ArrowLeft, Plus, Pencil, Trash2, Save, Shield, ChevronDown, Clock, Moon, Sun, Sunset,
+  CalendarDays, Loader2,
+} from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import Link from "next/link"
 
 // ─── Types ──────────────────────────────────────────────────────────
 
-interface PlanningRule {
-  key: string
+type JourCode = "lun" | "mar" | "mer" | "jeu" | "ven" | "sam" | "dim"
+
+interface Shift {
+  id: string
+  code: string
   label: string
-  value: number | string | boolean
-  unit: string
-  wraRef: string
-  category: "heures" | "repos" | "ot" | "equipe"
-  enabled: boolean
-  type: "number" | "time" | "boolean" | "percent"
+  debut: string | null      // HH:mm (null = créneau de repos)
+  fin: string | null
+  pause_minutes: number
+  couleur: string
+  flexible: boolean
+  debut_min?: string
+  debut_max?: string
+  heures_requises?: number
+  jours: JourCode[]
 }
 
-const DEFAULT_RULES: PlanningRule[] = [
-  // Heures de travail
-  { key: "max_heures_semaine", label: "Heures max par semaine", value: 45, unit: "heures", wraRef: "WRA 2019, Art. 14(1)", category: "heures", enabled: true, type: "number" },
-  { key: "max_heures_jour", label: "Heures max par jour (semaine 5j)", value: 9, unit: "heures", wraRef: "WRA 2019, Art. 14(2)(a)", category: "heures", enabled: true, type: "number" },
-  { key: "max_heures_jour_6j", label: "Heures max par jour (semaine 6j)", value: 8, unit: "heures", wraRef: "WRA 2019, Art. 14(2)(b)", category: "heures", enabled: true, type: "number" },
-  { key: "pause_minimum_minutes", label: "Pause minimum par 6h travaillees", value: 30, unit: "minutes", wraRef: "WRA 2019, Art. 15", category: "heures", enabled: true, type: "number" },
-  // Repos & Rotation
-  { key: "max_jours_consecutifs", label: "Jours consecutifs max avant repos", value: 6, unit: "jours", wraRef: "WRA 2019, Art. 16(1)", category: "repos", enabled: true, type: "number" },
-  { key: "repos_minimum_semaine", label: "Repos minimum par semaine", value: 1, unit: "jour (24h consecutives)", wraRef: "WRA 2019, Art. 16(2)", category: "repos", enabled: true, type: "number" },
-  { key: "rotation_preavis_jours", label: "Preavis avant changement de rotation", value: 7, unit: "jours", wraRef: "WRA 2019, Art. 17", category: "repos", enabled: true, type: "number" },
-  { key: "nuit_debut", label: "Debut travail de nuit", value: "18:00", unit: "", wraRef: "WRA 2019, Art. 2", category: "repos", enabled: true, type: "time" },
-  { key: "nuit_fin", label: "Fin travail de nuit", value: "06:00", unit: "", wraRef: "WRA 2019, Art. 2", category: "repos", enabled: true, type: "time" },
-  // Heures supplementaires
-  { key: "ot_apres_heures", label: "OT commence apres X heures/jour", value: 9, unit: "heures", wraRef: "WRA 2019, Art. 20(1)", category: "ot", enabled: true, type: "number" },
-  { key: "ot_taux_15x", label: "Taux 1.5x (2 premieres heures OT)", value: true, unit: "", wraRef: "WRA 2019, Art. 20(2)(a)", category: "ot", enabled: true, type: "boolean" },
-  { key: "ot_taux_2x", label: "Taux 2x (feries / nuit)", value: true, unit: "", wraRef: "WRA 2019, Art. 20(2)(b)", category: "ot", enabled: true, type: "boolean" },
-  { key: "ferie_travaille_taux", label: "Taux jour ferie travaille", value: 2.0, unit: "x salaire", wraRef: "WRA 2019, Art. 21", category: "ot", enabled: true, type: "number" },
-  // Contraintes equipe
-  { key: "max_employes_absents_pct", label: "Max employes absents meme jour", value: 30, unit: "%", wraRef: "Politique interne", category: "equipe", enabled: true, type: "percent" },
+interface ReglesWRA {
+  max_heures_semaine: number
+  repos_entre_journees: number
+  max_jours_consecutifs: number
+  pause_apres_6h_minutes: number
+}
+
+interface ReglesPlanning {
+  shifts: Shift[]
+  jours_travailles: JourCode[]
+  regles_wra: ReglesWRA
+}
+
+const JOURS: { code: JourCode; label: string; short: string }[] = [
+  { code: "lun", label: "Lundi", short: "Lun" },
+  { code: "mar", label: "Mardi", short: "Mar" },
+  { code: "mer", label: "Mercredi", short: "Mer" },
+  { code: "jeu", label: "Jeudi", short: "Jeu" },
+  { code: "ven", label: "Vendredi", short: "Ven" },
+  { code: "sam", label: "Samedi", short: "Sam" },
+  { code: "dim", label: "Dimanche", short: "Dim" },
 ]
 
-const CATEGORY_META: Record<string, { label: string; icon: any; color: string; bgColor: string }> = {
-  heures: { label: "Heures de travail", icon: Clock, color: "#4191FF", bgColor: "bg-blue-50 border-blue-200" },
-  repos: { label: "Repos & Rotation", icon: Moon, color: "#D4AF37", bgColor: "bg-amber-50 border-amber-200" },
-  ot: { label: "Heures supplementaires", icon: TrendingUp, color: "#F97316", bgColor: "bg-orange-50 border-orange-200" },
-  equipe: { label: "Contraintes equipe", icon: Users, color: "#0B0F2E", bgColor: "bg-slate-50 border-slate-200" },
+const COLORS = [
+  "#4CAF50", "#4191FF", "#F97316", "#D4AF37", "#9333EA",
+  "#DC2626", "#0891B2", "#64748B", "#9E9E9E",
+]
+
+const SHIFT_ICONS: Record<string, any> = {
+  J: Sun,       // Journée
+  M: Clock,     // Matin
+  AM: Sunset,   // Après-midi
+  N: Moon,      // Nuit
+  R: CalendarDays, // Repos
 }
 
-const STORAGE_KEY = "lexora_planning_rules"
+const DEFAULT_WRA: ReglesWRA = {
+  max_heures_semaine: 45,
+  repos_entre_journees: 11,
+  max_jours_consecutifs: 6,
+  pause_apres_6h_minutes: 30,
+}
+
+const DEFAULT_REGLES: ReglesPlanning = {
+  shifts: [],
+  jours_travailles: ["lun", "mar", "mer", "jeu", "ven"],
+  regles_wra: DEFAULT_WRA,
+}
+
+// ─── Parse / format regles_planning from DB ─────────────────────────
+
+/**
+ * Le JSONB `societes.regles_planning` existe sous deux formats :
+ *   1. Legacy (array) — ancien écran : liste de PlanningRule[],
+ *      avec parfois un dernier élément { shifts, jours_travailles } mixé.
+ *   2. Nouveau (object) — { shifts, jours_travailles, regles_wra }.
+ *
+ * Cette fonction reconnaît les deux et retourne toujours un objet propre.
+ */
+function parseRegles(raw: unknown): ReglesPlanning {
+  if (!raw) return { ...DEFAULT_REGLES }
+
+  // Nouveau format
+  if (typeof raw === "object" && !Array.isArray(raw)) {
+    const o = raw as Record<string, unknown>
+    const shifts = Array.isArray(o.shifts) ? (o.shifts as unknown[]).map(normalizeShift).filter(Boolean) as Shift[] : []
+    const jours = Array.isArray(o.jours_travailles) ? (o.jours_travailles as JourCode[]) : DEFAULT_REGLES.jours_travailles
+    const wra = (o.regles_wra && typeof o.regles_wra === "object")
+      ? { ...DEFAULT_WRA, ...(o.regles_wra as Partial<ReglesWRA>) }
+      : extractWraFromLegacy(o as any)
+    return { shifts, jours_travailles: jours, regles_wra: wra }
+  }
+
+  // Legacy array
+  if (Array.isArray(raw)) {
+    const shiftsEntry = raw.find((e: any) => e && typeof e === "object" && Array.isArray(e.shifts))
+    const shifts: Shift[] = shiftsEntry
+      ? (shiftsEntry.shifts as unknown[]).map(normalizeShift).filter(Boolean) as Shift[]
+      : []
+    const jours: JourCode[] = Array.isArray(shiftsEntry?.jours_travailles)
+      ? shiftsEntry!.jours_travailles
+      : DEFAULT_REGLES.jours_travailles
+    const wra = extractWraFromLegacyArray(raw)
+    return { shifts, jours_travailles: jours, regles_wra: wra }
+  }
+
+  return { ...DEFAULT_REGLES }
+}
+
+function normalizeShift(raw: unknown): Shift | null {
+  if (!raw || typeof raw !== "object") return null
+  const s = raw as Record<string, any>
+  // Tolérance aux variantes de clés : debut/heure_debut, fin/heure_fin, label/nom
+  const debut = (s.debut ?? s.heure_debut ?? null) as string | null
+  const fin = (s.fin ?? s.heure_fin ?? null) as string | null
+  const label = (s.label ?? s.nom ?? "Créneau") as string
+  const code = (s.code ?? label.slice(0, 1).toUpperCase()) as string
+  return {
+    id: (s.id as string) || `s_${Math.random().toString(36).slice(2, 10)}`,
+    code,
+    label,
+    debut: debut || null,
+    fin: fin || null,
+    pause_minutes: Number(s.pause_minutes) || 0,
+    couleur: (s.couleur as string) || "#4191FF",
+    flexible: !!s.flexible,
+    debut_min: s.debut_min || undefined,
+    debut_max: s.debut_max || undefined,
+    heures_requises: s.heures_requises !== undefined ? Number(s.heures_requises) : undefined,
+    jours: Array.isArray(s.jours) ? (s.jours as JourCode[]) : [],
+  }
+}
+
+function extractWraFromLegacy(o: Record<string, any>): ReglesWRA {
+  // Legacy format (nouvelle shape) peut exposer les règles à plat
+  return {
+    max_heures_semaine: Number(o.max_heures_semaine) || DEFAULT_WRA.max_heures_semaine,
+    repos_entre_journees: Number(o.repos_entre_journees) || DEFAULT_WRA.repos_entre_journees,
+    max_jours_consecutifs: Number(o.max_jours_consecutifs) || DEFAULT_WRA.max_jours_consecutifs,
+    pause_apres_6h_minutes: Number(o.pause_apres_6h_minutes) || DEFAULT_WRA.pause_apres_6h_minutes,
+  }
+}
+
+function extractWraFromLegacyArray(arr: any[]): ReglesWRA {
+  const find = (key: string) => arr.find((e: any) => e && typeof e === "object" && e.key === key && e.enabled)
+  const maxSemaine = find("max_heures_semaine")
+  const maxConsecutifs = find("max_jours_consecutifs")
+  const pauseMin = find("pause_minimum_minutes")
+  return {
+    max_heures_semaine: Number(maxSemaine?.value) || DEFAULT_WRA.max_heures_semaine,
+    repos_entre_journees: DEFAULT_WRA.repos_entre_journees, // pas dans legacy
+    max_jours_consecutifs: Number(maxConsecutifs?.value) || DEFAULT_WRA.max_jours_consecutifs,
+    pause_apres_6h_minutes: Number(pauseMin?.value) || DEFAULT_WRA.pause_apres_6h_minutes,
+  }
+}
+
+// ─── Shift Editor Dialog ─────────────────────────────────────────────
+
+function ShiftEditor({
+  open, initial, onSave, onCancel,
+}: {
+  open: boolean
+  initial: Shift | null
+  onSave: (s: Shift) => void
+  onCancel: () => void
+}) {
+  const [s, setS] = useState<Shift>(() => initial || newShift())
+  useEffect(() => { if (open) setS(initial || newShift()) }, [open, initial])
+
+  const toggleJour = (j: JourCode) => {
+    setS(prev => ({
+      ...prev,
+      jours: prev.jours.includes(j) ? prev.jours.filter(x => x !== j) : [...prev.jours, j],
+    }))
+  }
+
+  const canSave = s.label.trim().length > 0 && s.code.trim().length > 0
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onCancel() }}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{initial ? "Modifier le créneau" : "Nouveau créneau"}</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Nom du créneau</Label>
+              <Input value={s.label} onChange={e => {
+                const label = e.target.value
+                setS(p => ({ ...p, label, code: p.code || label.slice(0, 2).toUpperCase() }))
+              }} placeholder="Journée" />
+            </div>
+            <div>
+              <Label>Code (1-3 car.)</Label>
+              <Input value={s.code} maxLength={3} onChange={e => setS(p => ({ ...p, code: e.target.value.toUpperCase() }))} placeholder="J" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Heure de début</Label>
+              <Input type="time" value={s.debut || ""} onChange={e => setS(p => ({ ...p, debut: e.target.value || null }))} />
+            </div>
+            <div>
+              <Label>Heure de fin</Label>
+              <Input type="time" value={s.fin || ""} onChange={e => setS(p => ({ ...p, fin: e.target.value || null }))} />
+            </div>
+          </div>
+
+          <div>
+            <Label>Pause (minutes)</Label>
+            <Input
+              type="number"
+              min={0}
+              value={s.pause_minutes}
+              onChange={e => setS(p => ({ ...p, pause_minutes: Math.max(0, Number(e.target.value) || 0) }))}
+            />
+          </div>
+
+          <div>
+            <Label>Couleur</Label>
+            <div className="flex gap-2 mt-1 flex-wrap">
+              {COLORS.map(color => (
+                <button
+                  key={color}
+                  type="button"
+                  aria-label={`Couleur ${color}`}
+                  className={`w-9 h-9 rounded-lg border-2 transition-transform ${s.couleur === color ? "ring-2 ring-offset-2 ring-[#0B0F2E] scale-110" : "border-transparent"}`}
+                  style={{ backgroundColor: color }}
+                  onClick={() => setS(p => ({ ...p, couleur: color }))}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-lg border p-3 space-y-3 bg-slate-50">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="font-medium">Horaires flexibles</Label>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  L'employé peut commencer dans une fenêtre horaire tant qu'il fait ses heures requises
+                </p>
+              </div>
+              <Switch checked={s.flexible} onCheckedChange={(v) => setS(p => ({ ...p, flexible: v }))} />
+            </div>
+
+            {s.flexible && (
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <Label className="text-xs">Début min</Label>
+                  <Input type="time" value={s.debut_min || ""} onChange={e => setS(p => ({ ...p, debut_min: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">Début max</Label>
+                  <Input type="time" value={s.debut_max || ""} onChange={e => setS(p => ({ ...p, debut_max: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">Heures requises</Label>
+                  <Input
+                    type="number"
+                    step={0.5}
+                    min={0}
+                    value={s.heures_requises ?? ""}
+                    onChange={e => setS(p => ({ ...p, heures_requises: e.target.value === "" ? undefined : Number(e.target.value) }))}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <Label>Jours appliqués</Label>
+            <div className="flex flex-wrap gap-3 mt-2">
+              {JOURS.map(j => (
+                <label key={j.code} className="flex items-center gap-1.5 cursor-pointer">
+                  <Checkbox
+                    checked={s.jours.includes(j.code)}
+                    onCheckedChange={() => toggleJour(j.code)}
+                  />
+                  <span className="text-sm">{j.short}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onCancel}>Annuler</Button>
+          <Button
+            disabled={!canSave}
+            onClick={() => onSave(s)}
+            className="text-white"
+            style={{ backgroundColor: "#0B0F2E" }}
+          >
+            <Save className="h-4 w-4 mr-1.5" /> Enregistrer
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function newShift(): Shift {
+  return {
+    id: `s_${Math.random().toString(36).slice(2, 10)}`,
+    code: "",
+    label: "",
+    debut: "09:00",
+    fin: "17:00",
+    pause_minutes: 60,
+    couleur: COLORS[0],
+    flexible: false,
+    jours: ["lun", "mar", "mer", "jeu", "ven"],
+  }
+}
+
+// ─── Shift Card ──────────────────────────────────────────────────────
+
+function ShiftCard({ shift, onEdit, onDelete }: { shift: Shift; onEdit: () => void; onDelete: () => void }) {
+  const Icon = SHIFT_ICONS[shift.code] || Clock
+  const joursLabel = summarizeJours(shift.jours)
+  const pauseLabel = shift.pause_minutes > 0
+    ? `Pause ${shift.pause_minutes >= 60 ? `${(shift.pause_minutes / 60).toFixed(shift.pause_minutes % 60 === 0 ? 0 : 1)}h` : `${shift.pause_minutes}min`}`
+    : "Sans pause"
+  const horaireLabel = shift.debut && shift.fin ? `${shift.debut} → ${shift.fin}` : "Hors planning"
+
+  return (
+    <div className="rounded-xl border bg-white overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+      <div className="h-1.5" style={{ backgroundColor: shift.couleur }} />
+      <div className="p-4 space-y-2">
+        <div className="flex items-center gap-2">
+          <div
+            className="w-9 h-9 rounded-lg flex items-center justify-center text-white"
+            style={{ backgroundColor: shift.couleur }}
+          >
+            <Icon className="w-4 h-4" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-sm truncate" style={{ color: "#0B0F2E" }}>
+              {shift.label}
+            </h3>
+            <p className="text-[11px] text-gray-500">Code : {shift.code}</p>
+          </div>
+        </div>
+        <div className="text-sm text-gray-700">{horaireLabel} · {pauseLabel}</div>
+        {shift.flexible && shift.debut_min && shift.debut_max && (
+          <div className="text-xs text-blue-600 font-medium">
+            Flex : {shift.debut_min}–{shift.debut_max}
+            {shift.heures_requises ? ` · ${shift.heures_requises}h requises` : ""}
+          </div>
+        )}
+        <div className="text-xs text-gray-500">{joursLabel}</div>
+        <div className="flex items-center gap-2 pt-1">
+          <Button size="sm" variant="outline" className="h-8" onClick={onEdit}>
+            <Pencil className="w-3.5 h-3.5 mr-1" /> Modifier
+          </Button>
+          <Button size="sm" variant="outline" className="h-8 text-red-600 border-red-200 hover:bg-red-50" onClick={onDelete}>
+            <Trash2 className="w-3.5 h-3.5" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function summarizeJours(jours: JourCode[]): string {
+  if (jours.length === 0) return "Aucun jour"
+  if (jours.length === 7) return "Tous les jours"
+  // Détection simple Lun-Ven / Sam-Dim
+  const set = new Set(jours)
+  const lunVen: JourCode[] = ["lun", "mar", "mer", "jeu", "ven"]
+  const samDim: JourCode[] = ["sam", "dim"]
+  if (lunVen.every(j => set.has(j)) && !set.has("sam") && !set.has("dim")) return "Lun – Ven"
+  if (samDim.every(j => set.has(j)) && lunVen.every(j => !set.has(j))) return "Sam – Dim"
+  return JOURS.filter(j => set.has(j.code)).map(j => j.short).join(" · ")
+}
+
+// ─── Page ────────────────────────────────────────────────────────────
 
 export default function ReglesPage() {
-  const [rules, setRules] = useState<PlanningRule[]>(DEFAULT_RULES)
   const [societes, setSocietes] = useState<any[]>([])
-  // Sprint 1 — état initial vide (l'option « Toutes » a été retirée). La
-  // première société chargée est sélectionnée automatiquement à l'arrivée
-  // de la liste (cf. effet ci-dessous).
   const [societe, setSociete] = useState("")
+  const [regles, setRegles] = useState<ReglesPlanning>(DEFAULT_REGLES)
+  const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [loaded, setLoaded] = useState(false)
+
+  const [editorOpen, setEditorOpen] = useState(false)
+  const [editorShift, setEditorShift] = useState<Shift | null>(null)
+  const [wraOpen, setWraOpen] = useState(false)
 
   // Load societes
   useEffect(() => {
@@ -78,210 +421,260 @@ export default function ReglesPage() {
     })
   }, [])
 
-  // Load rules from localStorage + API
+  // Load regles quand la société change
   useEffect(() => {
-    // Try localStorage first
-    const stored = localStorage.getItem(`${STORAGE_KEY}_${societe}`)
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored) as PlanningRule[]
-        setRules(parsed)
-        setLoaded(true)
-        return
-      } catch {}
-    }
-    // Try API
-    if (societe && societe !== "all") {
-      fetch(`/api/rh/planning/regles?societe_id=${societe}`)
-        .then(r => r.json())
-        .then(data => {
-          if (data.regles && Array.isArray(data.regles) && data.regles.length > 0) {
-            setRules(data.regles)
-          } else {
-            setRules(DEFAULT_RULES)
-          }
-        })
-        .catch(() => setRules(DEFAULT_RULES))
-        .finally(() => setLoaded(true))
-    } else {
-      setRules(DEFAULT_RULES)
-      setLoaded(true)
-    }
+    if (!societe) return
+    setLoading(true)
+    fetch(`/api/rh/planning/regles?societe_id=${societe}`)
+      .then(r => r.json())
+      .then(d => {
+        setRegles(parseRegles(d?.regles))
+      })
+      .catch(() => setRegles({ ...DEFAULT_REGLES }))
+      .finally(() => setLoading(false))
   }, [societe])
 
-  const updateRule = (key: string, field: "value" | "enabled", val: any) => {
-    setRules(prev => prev.map(r => r.key === key ? { ...r, [field]: val } : r))
-  }
-
-  const resetDefaults = () => {
-    setRules(DEFAULT_RULES)
-    toast.info("Regles restaurees aux valeurs par defaut WRA 2019")
-  }
-
-  const saveRules = async () => {
+  const save = async () => {
+    if (!societe) return
     setSaving(true)
     try {
-      // Save to localStorage
-      localStorage.setItem(`${STORAGE_KEY}_${societe}`, JSON.stringify(rules))
-
-      // Save to API
-      if (societe && societe !== "all") {
-        const res = await fetch("/api/rh/planning/regles", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ societe_id: societe, regles: rules }),
-        })
-        if (!res.ok) {
-          const data = await res.json()
-          toast.error("Erreur API: " + (data.error || "Impossible de sauvegarder"))
-          return
-        }
+      const res = await fetch("/api/rh/planning/regles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ societe_id: societe, regles }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error("Erreur sauvegarde : " + (data?.error || `HTTP ${res.status}`))
+        return
       }
-      toast.success("Regles de planning sauvegardees")
+      toast.success("✅ Règles de planning enregistrées")
     } catch (e: any) {
-      toast.error("Erreur: " + (e.message || ""))
+      toast.error("Erreur réseau : " + (e?.message || ""))
     } finally {
       setSaving(false)
     }
   }
 
-  const categories = ["heures", "repos", "ot", "equipe"] as const
+  const openEditor = (shift: Shift | null) => {
+    setEditorShift(shift)
+    setEditorOpen(true)
+  }
+  const saveShift = (next: Shift) => {
+    setRegles(r => {
+      const idx = r.shifts.findIndex(s => s.id === next.id)
+      const shifts = idx >= 0
+        ? r.shifts.map(s => (s.id === next.id ? next : s))
+        : [...r.shifts, next]
+      return { ...r, shifts }
+    })
+    setEditorOpen(false)
+    setEditorShift(null)
+  }
+  const deleteShift = (id: string) => {
+    if (!window.confirm("Supprimer ce créneau ?")) return
+    setRegles(r => ({ ...r, shifts: r.shifts.filter(s => s.id !== id) }))
+  }
+
+  const toggleJourTravail = (j: JourCode) => {
+    setRegles(r => ({
+      ...r,
+      jours_travailles: r.jours_travailles.includes(j)
+        ? r.jours_travailles.filter(x => x !== j)
+        : [...r.jours_travailles, j],
+    }))
+  }
+
+  const updateWra = (field: keyof ReglesWRA, val: number) => {
+    setRegles(r => ({ ...r, regles_wra: { ...r.regles_wra, [field]: val } }))
+  }
+
+  const shifts = regles.shifts
 
   return (
     <ClientPageShell hideHero disableParticles>
-    <div className="space-y-6 max-w-5xl mx-auto">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: "#0B0F2E" }}>
-            <Shield className="w-5 h-5 text-white" />
+      <div className="space-y-6 max-w-5xl mx-auto">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: "#0B0F2E" }}>
+              <Shield className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>Règles de planning</h1>
+              <p className="text-gray-500 text-sm">Créneaux et paramètres horaires par société</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>Regles de planning</h1>
-            <p className="text-gray-500 text-sm">Configuration WRA 2019 - Workers' Rights Act (Maurice)</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Link href="/rh/planning">
+              <Button variant="outline" size="sm">
+                <ArrowLeft className="h-4 w-4 mr-1" /> Retour au planning
+              </Button>
+            </Link>
+            <Select value={societe} onValueChange={setSociete}>
+              <SelectTrigger className="w-[220px]"><SelectValue placeholder="Société" /></SelectTrigger>
+              <SelectContent>
+                {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <Link href="/rh/planning">
-            <Button variant="outline" size="sm">
-              <ArrowLeft className="h-4 w-4 mr-1" /> Retour au planning
-            </Button>
-          </Link>
-          {/* Sprint 1 — l'option « Toutes » est retirée : les règles WRA
-              s'appliquent par société, pas globalement. Le sélecteur ne
-              propose que les sociétés réellement accessibles à l'utilisateur
-              (filtrées par /api/comptable/societes + /api/client/societes
-              qui appliquent eux-mêmes getUserSocieteIds). */}
-          <Select value={societe} onValueChange={setSociete}>
-            <SelectTrigger className="w-[200px]"><SelectValue placeholder="Societe" /></SelectTrigger>
-            <SelectContent>
-              {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
 
-      {/* Info banner */}
-      <div className="flex items-start gap-3 px-4 py-3 rounded-lg border" style={{ backgroundColor: "#0B0F2E08", borderColor: "#0B0F2E20" }}>
-        <Info className="h-5 w-5 shrink-0 mt-0.5" style={{ color: "#4191FF" }} />
-        <div className="text-sm text-gray-600">
-          <p className="font-medium" style={{ color: "#0B0F2E" }}>Workers' Rights Act 2019 - Ile Maurice</p>
-          <p className="mt-1">Ces regles sont pre-remplies selon la legislation mauricienne. Vous pouvez les adapter par societe. Les regles desactivees ne seront pas verifiees lors de la validation du planning.</p>
-        </div>
-      </div>
-
-      {/* Rule cards by category */}
-      {categories.map(cat => {
-        const meta = CATEGORY_META[cat]
-        const Icon = meta.icon
-        const catRules = rules.filter(r => r.category === cat)
-
-        return (
-          <Card key={cat} className={`border ${meta.bgColor}`}>
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Icon className="w-5 h-5" style={{ color: meta.color }} />
-                <span style={{ color: "#0B0F2E" }}>{meta.label}</span>
-                <Badge variant="outline" className="ml-auto text-xs font-normal">
-                  {catRules.filter(r => r.enabled).length}/{catRules.length} actives
-                </Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {catRules.map(rule => (
-                <div
-                  key={rule.key}
-                  className={`flex items-center gap-4 p-3 rounded-lg bg-white border transition-opacity ${
-                    !rule.enabled ? "opacity-50" : ""
-                  }`}
-                >
-                  <Switch
-                    checked={rule.enabled}
-                    onCheckedChange={(v) => updateRule(rule.key, "enabled", v)}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <Label className="text-sm font-medium" style={{ color: "#0B0F2E" }}>
-                      {rule.label}
-                    </Label>
-                    <p className="text-xs text-gray-400 mt-0.5">{rule.wraRef}</p>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {rule.type === "boolean" ? (
-                      <Switch
-                        checked={rule.value as boolean}
-                        onCheckedChange={(v) => updateRule(rule.key, "value", v)}
-                        disabled={!rule.enabled}
-                      />
-                    ) : rule.type === "time" ? (
-                      <Input
-                        type="time"
-                        value={rule.value as string}
-                        onChange={(e) => updateRule(rule.key, "value", e.target.value)}
-                        disabled={!rule.enabled}
-                        className="w-[120px] text-sm"
-                      />
-                    ) : (
-                      <Input
-                        type="number"
-                        value={rule.value as number}
-                        onChange={(e) => updateRule(rule.key, "value", parseFloat(e.target.value) || 0)}
-                        disabled={!rule.enabled}
-                        className="w-[90px] text-sm text-right"
-                        min={0}
-                      />
-                    )}
-                    {rule.unit && (
-                      <span className="text-xs text-gray-500 min-w-[60px]">{rule.unit}</span>
-                    )}
-                  </div>
+        {loading ? (
+          <div className="flex justify-center py-16">
+            <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+          </div>
+        ) : (
+          <>
+            {/* SECTION 1 — Mes créneaux */}
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between gap-3">
+                  <CardTitle style={{ color: "#0B0F2E" }}>Mes créneaux</CardTitle>
+                  <Button
+                    size="sm"
+                    onClick={() => openEditor(null)}
+                    className="text-white"
+                    style={{ backgroundColor: "#D4AF37" }}
+                  >
+                    <Plus className="h-4 w-4 mr-1" /> Ajouter un créneau
+                  </Button>
                 </div>
-              ))}
-            </CardContent>
-          </Card>
-        )
-      })}
+                <p className="text-sm text-gray-500 mt-1">
+                  Configure les types de poste (shifts) disponibles pour le planning.
+                </p>
+              </CardHeader>
+              <CardContent>
+                {shifts.length === 0 ? (
+                  <div className="text-center py-10 text-gray-400 text-sm">
+                    Aucun créneau configuré. Cliquez sur "Ajouter un créneau" pour commencer.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {shifts.map(shift => (
+                      <ShiftCard
+                        key={shift.id}
+                        shift={shift}
+                        onEdit={() => openEditor(shift)}
+                        onDelete={() => deleteShift(shift.id)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
-      {/* Action buttons */}
-      <div className="flex items-center justify-between gap-3 pt-2 pb-8">
-        <Button
-          variant="outline"
-          onClick={resetDefaults}
-          className="border-amber-300 text-amber-700 hover:bg-amber-50"
-        >
-          <RotateCcw className="h-4 w-4 mr-2" />
-          Restaurer defauts WRA 2019
-        </Button>
-        <Button
-          onClick={saveRules}
-          disabled={saving}
-          className="text-white px-8"
-          style={{ backgroundColor: "#D4AF37" }}
-        >
-          <Save className="h-4 w-4 mr-2" />
-          {saving ? "Enregistrement..." : "Enregistrer les regles"}
-        </Button>
+            {/* SECTION 2 — Jours travaillés */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle style={{ color: "#0B0F2E" }}>Jours travaillés</CardTitle>
+                <p className="text-sm text-gray-500 mt-1">
+                  Jours ouvrés par défaut pour la société (appliqués au calcul des absences et du prorata).
+                </p>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-4">
+                  {JOURS.map(j => (
+                    <label key={j.code} className="flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border hover:border-[#4191FF] transition-colors">
+                      <Checkbox
+                        checked={regles.jours_travailles.includes(j.code)}
+                        onCheckedChange={() => toggleJourTravail(j.code)}
+                      />
+                      <span className="text-sm font-medium">{j.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* SECTION 3 — Règles WRA (collapsible) */}
+            <Collapsible open={wraOpen} onOpenChange={setWraOpen}>
+              <Card>
+                <CollapsibleTrigger asChild>
+                  <CardHeader className="cursor-pointer hover:bg-gray-50 transition-colors pb-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle style={{ color: "#0B0F2E" }}>Règles légales — Avancé</CardTitle>
+                        <p className="text-sm text-gray-500 mt-1">Pré-configurées WRA 2019.</p>
+                      </div>
+                      <ChevronDown className={`h-5 w-5 text-gray-500 transition-transform ${wraOpen ? "rotate-180" : ""}`} />
+                    </div>
+                  </CardHeader>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <CardContent className="space-y-4 border-t pt-4">
+                    <WraField
+                      label="Heures max / semaine"
+                      value={regles.regles_wra.max_heures_semaine}
+                      unit="h"
+                      onChange={(v) => updateWra("max_heures_semaine", v)}
+                    />
+                    <WraField
+                      label="Repos entre journées"
+                      value={regles.regles_wra.repos_entre_journees}
+                      unit="h"
+                      onChange={(v) => updateWra("repos_entre_journees", v)}
+                    />
+                    <WraField
+                      label="Jours consécutifs max"
+                      value={regles.regles_wra.max_jours_consecutifs}
+                      unit="j"
+                      onChange={(v) => updateWra("max_jours_consecutifs", v)}
+                    />
+                    <WraField
+                      label="Pause après 6h"
+                      value={regles.regles_wra.pause_apres_6h_minutes}
+                      unit="min"
+                      onChange={(v) => updateWra("pause_apres_6h_minutes", v)}
+                    />
+                  </CardContent>
+                </CollapsibleContent>
+              </Card>
+            </Collapsible>
+
+            {/* Footer actions */}
+            <div className="flex items-center justify-end gap-3 pt-2 pb-8 sticky bottom-4">
+              <Button
+                onClick={save}
+                disabled={saving || !societe}
+                className="text-white px-8 shadow-lg"
+                style={{ backgroundColor: "#0B0F2E" }}
+              >
+                <Save className="h-4 w-4 mr-2" />
+                {saving ? "Enregistrement..." : "Enregistrer"}
+              </Button>
+            </div>
+          </>
+        )}
+
+        {/* Editor Dialog */}
+        <ShiftEditor
+          open={editorOpen}
+          initial={editorShift}
+          onSave={saveShift}
+          onCancel={() => { setEditorOpen(false); setEditorShift(null) }}
+        />
+      </div>
+    </ClientPageShell>
+  )
+}
+
+function WraField({
+  label, value, unit, onChange,
+}: { label: string; value: number; unit: string; onChange: (v: number) => void }) {
+  return (
+    <div className="flex items-center justify-between gap-4 p-3 rounded-lg bg-gray-50 border">
+      <Label className="text-sm font-medium" style={{ color: "#0B0F2E" }}>{label}</Label>
+      <div className="flex items-center gap-2">
+        <Input
+          type="number"
+          min={0}
+          value={value}
+          onChange={e => onChange(Math.max(0, Number(e.target.value) || 0))}
+          className="w-24 text-right"
+        />
+        <span className="text-sm text-gray-500 w-10">{unit}</span>
       </div>
     </div>
-    </ClientPageShell>
   )
 }
