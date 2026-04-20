@@ -1902,6 +1902,7 @@ Voulez-vous vraiment continuer ?`
                     </TableHead>
                     <TableHead>Fournisseur</TableHead>
                     <TableHead>N° Facture</TableHead>
+                    <TableHead>Date</TableHead>
                     <TableHead className="text-right">Montant</TableHead>
                     <TableHead>Statut</TableHead>
                     <TableHead>Paiement</TableHead>
@@ -1930,6 +1931,9 @@ Voulez-vous vraiment continuer ?`
                       </TableCell>
                       <TableCell className="text-sm font-mono text-gray-600">
                         {f.numero_facture || '—'}
+                      </TableCell>
+                      <TableCell className="text-xs text-gray-600 whitespace-nowrap">
+                        {f.date_facture ? formatDate(f.date_facture) : '—'}
                       </TableCell>
                       <TableCell className="text-right font-medium">
                         {fmt(Number(f.montant_ttc) || Number(f.montant_mur) || 0)}{' '}
