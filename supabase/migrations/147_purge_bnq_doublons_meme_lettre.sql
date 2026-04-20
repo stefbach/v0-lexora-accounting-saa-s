@@ -1,25 +1,13 @@
 -- ═══════════════════════════════════════════════════════════════
 -- Migration 147: Purge UNIVERSELLE des doublons d'écritures
 --
--- Deux types de doublons observés en prod :
---
--- TYPE 1 — Même lettre, libellés différents (compte 411/401) :
---   • "Paiement SKYCALL — 02/03/2026" (R017)
---   • "Règlement 02/03/2026 — SKYCALL" (R017)
---   Cause : phase finale auto_rapprocher + sync_lettrage
---
--- TYPE 2 — Lettres DIFFÉRENTES, même montant/date (compte 512) :
---   • "Banque [EUR @ 54.5852] — MR STEPHANE HENRI BACH" (CL1670047)
---   • "Banque — MR STEPHANE HENRI BACH" (A036)
---   Cause : auto_rapprocher crée CLS- + classer_transaction crée CL-
---   sans supprimer la CLS- existante (ref_folio CL- ≠ CLS-),
---   ET oldLettre lu APRÈS mise à jour → suppression par lettre jamais exécutée
---
--- Le même bug touche TOUS les comptes BNQ (401, 411, 512, 581, 421, ...).
+-- ATTENTION : après PASSE 2, les écritures BNQ « orphelines »
+-- (dont la contrepartie 512 a été supprimée) doivent aussi être
+-- supprimées → PASSE 5 nettoie ces orphelins pour restaurer
+-- l'équilibre Débit = Crédit.
 -- ═══════════════════════════════════════════════════════════════
 
 -- ─── PASSE 1 : Doublons BNQ avec MÊME lettre ─────────────────────
--- Clé de dédup : (societe_id, numero_compte, lettre, debit, credit, date).
 DELETE FROM public.ecritures_comptables_v2
 WHERE id IN (
   SELECT id FROM (
@@ -36,11 +24,6 @@ WHERE id IN (
 );
 
 -- ─── PASSE 2 : Doublons BNQ avec lettres DIFFÉRENTES ─────────────
--- Cas MR STEPHANE HENRI BACH : même (societe_id, numero_compte,
--- debit_mur, credit_mur, date_ecriture) mais lettres distinctes.
--- On garde le plus ancien, on supprime les plus récents.
--- Sécurité : limité au journal BNQ uniquement (les ACH/VTE
--- légitimes ne sont pas touchés).
 DELETE FROM public.ecritures_comptables_v2
 WHERE id IN (
   SELECT id FROM (
@@ -56,9 +39,6 @@ WHERE id IN (
 );
 
 -- ─── PASSE 3 : Doublons ACH/VTE par facture_id ──────────────────
--- Une facture = 1 jeu d'écritures ACH ou VTE. Si la même facture a
--- plusieurs entrées sur le même numero_compte + même direction, c'est
--- un doublon.
 DELETE FROM public.ecritures_comptables_v2
 WHERE id IN (
   SELECT id FROM (
@@ -73,3 +53,34 @@ WHERE id IN (
   ) sub
   WHERE rn > 1
 );
+
+-- ─── PASSE 4 : Supprimer les écritures BNQ « total » quand les
+-- écritures « détail par facture » existent déjà ─────────────────
+DELETE FROM public.ecritures_comptables_v2 e
+WHERE e.journal = 'BNQ'
+  AND e.ref_folio IS NOT NULL
+  AND e.ref_folio LIKE 'BANK-%'
+  AND EXISTS (
+    SELECT 1 FROM public.ecritures_comptables_v2 e2
+    WHERE e2.journal = 'BNQ'
+      AND e2.societe_id = e.societe_id
+      AND e2.numero_compte = e.numero_compte
+      AND e2.ref_folio LIKE e.ref_folio || '-%'
+  );
+
+-- ─── PASSE 5 : Supprimer les écritures BNQ orphelines ───────────
+-- Après PASSE 2, certaines écritures débit (421/455) ont perdu leur
+-- contrepartie crédit (512) qui a été supprimée comme doublon.
+-- Une écriture BNQ lettrée dont le code lettre n'a AUCUNE autre
+-- écriture BNQ dans la même société est un orphelin → à supprimer
+-- pour restaurer l'équilibre.
+DELETE FROM public.ecritures_comptables_v2
+WHERE journal = 'BNQ'
+  AND lettre IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM public.ecritures_comptables_v2 e2
+    WHERE e2.journal = 'BNQ'
+      AND e2.lettre = ecritures_comptables_v2.lettre
+      AND e2.societe_id = ecritures_comptables_v2.societe_id
+      AND e2.id != ecritures_comptables_v2.id
+  );
