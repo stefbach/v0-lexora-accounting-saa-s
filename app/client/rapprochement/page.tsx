@@ -1843,12 +1843,10 @@ Voulez-vous vraiment continuer ?`
                             </DropdownMenuLabel>
                             <DropdownMenuSeparator />
                             {candidates.map((tx: any, ci: number) => (
-                              <DropdownMenuItem key={ci} onClick={() => {
-                                setLinkDialog(tx)
-                                const ids = new Set<string>()
-                                checkedRows.forEach(r => ids.add(r.f.id))
-                                setSelectedFactureIds(ids)
-                                setDialogTab('factures')
+                              <DropdownMenuItem key={ci} onClick={async () => {
+                                const facturesToLink = checkedRows.map(r => r.f)
+                                await handleManualLinkMulti(tx, facturesToLink)
+                                setFacturesChecked(new Set())
                               }} className="gap-2 py-2">
                                 <div className="flex flex-col flex-1 min-w-0">
                                   <div className="flex items-center justify-between gap-2">
