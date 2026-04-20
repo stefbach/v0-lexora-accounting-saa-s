@@ -189,6 +189,8 @@ export async function POST(request: Request) {
     // montant est dérivé) au lieu de capper le montant seul.
     if (action === 'saisir') {
       const { employe_id, periode, km_parcourus, justificatif, motif, societe_id } = body
+      // Accepter aussi un tarif explicite depuis le body (sinon dérivé de saisieRule).
+      const tarifBody = body.tarif_applique !== undefined ? Number(body.tarif_applique) : undefined
       if (!employe_id || !periode || km_parcourus === undefined) {
         return NextResponse.json({ error: 'employe_id, periode et km_parcourus requis' }, { status: 400 })
       }
@@ -212,7 +214,8 @@ export async function POST(request: Request) {
         saisieRule = sr2
       }
 
-      const tarif = Number(saisieRule?.tarif_par_km) || 4
+      // Priorité : body.tarif_applique > règle société > défaut 4
+      const tarif = (tarifBody && tarifBody > 0) ? tarifBody : (Number(saisieRule?.tarif_par_km) || 4)
       let kmEffectifs = Number(km_parcourus)
       // Apply monthly cap on km (puisque montant est GENERATED)
       const plafond = Number(saisieRule?.plafond_mensuel) || 0
@@ -225,7 +228,11 @@ export async function POST(request: Request) {
       // STORED en prod → ne JAMAIS l'inclure dans l'INSERT, sinon Postgres
       // renvoie 428C9 / 42601 et l'API répond 400. Le montant est calculé
       // automatiquement par la base. Même règle pour `approuve` : default
-      // côté DB (false) — on garde un payload minimal aux 5 champs requis.
+      // côté DB (false). Payload strict aux 5 champs requis.
+      //
+      // SAFETY NET — on construit l'objet de manière ultra-explicite et on
+      // delete defensivement toute occurrence de `montant` ou `approuve` qui
+      // pourrait avoir été ajoutée par un middleware ou un caller fantôme.
       const insertRow: Record<string, unknown> = {
         employe_id,
         periode: periodeDate,
@@ -233,6 +240,13 @@ export async function POST(request: Request) {
         tarif_applique: tarif,
         justificatif: justificatif || motif || null,
       }
+      delete (insertRow as any).montant
+      delete (insertRow as any).approuve
+
+      // Log explicite des clés envoyées — facilite le diagnostic Vercel
+      // quand on retombe sur une erreur 428C9 / "cannot insert into column".
+      console.log('[frais-km saisir] payload keys:', Object.keys(insertRow).join(','), 'periode:', periodeDate)
+
       const { data, error } = await supabase
         .from('frais_km_mois')
         .upsert(insertRow, { onConflict: 'employe_id,periode' })
@@ -245,10 +259,12 @@ export async function POST(request: Request) {
           code: error.code,
           hint: error.hint,
           details: error.details,
+          payload_keys: Object.keys(insertRow),
         })
         return NextResponse.json({
           error: `Erreur saisie frais km : ${error.message}${error.hint ? ` (${error.hint})` : ''}`,
           code: error.code,
+          payload_keys: Object.keys(insertRow),
         }, { status: 500 })
       }
       return NextResponse.json({
