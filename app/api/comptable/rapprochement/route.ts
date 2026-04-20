@@ -2083,7 +2083,7 @@ export async function POST(request: Request) {
           const ecartAbs = Math.round(ecart * 100) / 100
           let compteEcart: string
           let libelleEcart: string
-          if (ecart <= SEUIL_AUTO) {
+          if (ecart <= SEUIL_AUTO_ABS) {
             // Régularisation automatique <1 MUR
             compteEcart = ecartSigne > 0 ? '758' : '658'
             libelleEcart = `Régularisation écart <1 MUR — ${lettreCode}`
