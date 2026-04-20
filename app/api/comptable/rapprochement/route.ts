@@ -1992,13 +1992,14 @@ export async function POST(request: Request) {
       const { data: facturesData } = await supabase.from('factures').select('id, montant_ttc, numero_facture, tiers, type_facture').in('id', facture_ids)
       const facturesTotal = (facturesData || []).reduce((s, f) => s + (Number(f.montant_ttc) || 0), 0)
       const ecart = Math.abs(txAmount - facturesTotal)
-      const ecartSigne = txAmount - facturesTotal // + = reçu plus que prévu, - = reçu moins
-      const SEUIL_AUTO = 1 // MUR — en-dessous on régularise automatiquement en 658/758
+      const ecartSigne = txAmount - facturesTotal
+      const ecartPct = facturesTotal > 0 ? ecart / facturesTotal : 0
+      // Seuil auto : écarts < 2% sont acceptés automatiquement (frais bancaires,
+      // TDS, arrondis de change). Au-delà de 2% → demander qualification.
+      const SEUIL_AUTO_PCT = 0.02
+      const SEUIL_AUTO_ABS = 100 // MUR — petits montants toujours acceptés
 
-      // FIX 6 — Règle R4 : si écart > seuil auto ET aucun type_ecart fourni,
-      // on refuse le lettrage plutôt que de forcer. L'utilisateur doit
-      // qualifier l'écart (change, escompte, pénalité, exceptionnel).
-      if (ecart > SEUIL_AUTO && !type_ecart) {
+      if (ecart > SEUIL_AUTO_ABS && ecartPct > SEUIL_AUTO_PCT && !type_ecart) {
         return NextResponse.json({
           error: 'ecart_requires_qualification',
           message: `Écart de ${ecart.toFixed(2)} MUR entre la transaction (${txAmount.toFixed(2)}) et le total factures (${facturesTotal.toFixed(2)}). Règle R4 : pas de lettrage forcé. Qualifier l'écart avant de relancer.`,
