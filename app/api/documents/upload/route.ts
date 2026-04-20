@@ -472,8 +472,37 @@ Respond with ONLY the type word. Nothing else.`,
         ]}],
       })
       aiResponse = await bankStream.finalMessage()
-      const bankText = aiResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
-      console.log('[upload] Raw Claude bank response length:', bankText.length, 'first 500 chars:', bankText.substring(0, 500))
+      let bankText = aiResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
+      console.log('[upload] Raw Claude bank response length:', bankText.length, 'stop_reason:', aiResponse.stop_reason, 'first 500 chars:', bankText.substring(0, 500))
+
+      // Si la réponse a été tronquée par max_tokens, on fait un 2ème appel
+      // pour récupérer la suite (continuation du JSON).
+      if (aiResponse.stop_reason === 'max_tokens' || aiResponse.stop_reason === 'end_turn' && bankText.length > 60000) {
+        console.log('[upload] Bank response truncated — requesting continuation...')
+        try {
+          const contStream = anthropic.messages.stream({
+            model: CLAUDE_CONFIG.model,
+            max_tokens: CLAUDE_CONFIG.max_tokens_releve_bancaire,
+            temperature: CLAUDE_CONFIG.temperature,
+            system: 'Tu continues à extraire les transactions du relevé bancaire. Retourne UNIQUEMENT la suite du JSON (le tableau transactions[]) sans répéter les métadonnées.',
+            messages: [
+              { role: 'user', content: [
+                { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
+                { type: 'text', text: `Tu as déjà extrait ${bankText.length} caractères. Voici la fin de ta réponse précédente:\n\n${bankText.slice(-500)}\n\nContinue le JSON depuis là où tu t'es arrêté. Ne répète PAS les transactions déjà extraites. Retourne UNIQUEMENT les transactions manquantes dans le même format JSON.` },
+              ]},
+            ],
+          })
+          const contResponse = await contStream.finalMessage()
+          const contText = contResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
+          console.log('[upload] Continuation response length:', contText.length)
+          if (contText.length > 50) {
+            bankText = bankText + contText
+            console.log('[upload] Combined response length:', bankText.length)
+          }
+        } catch (contErr: any) {
+          console.warn('[upload] Continuation call failed:', contErr.message)
+        }
+      }
 
       // Robust JSON extraction: try multiple strategies
       let bankParsed: any = null
