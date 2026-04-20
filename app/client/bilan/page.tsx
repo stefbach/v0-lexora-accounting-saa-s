@@ -544,6 +544,7 @@ export default function BilanPage() {
                 </SelectContent>
               </Select>
             )}
+            {viewMode === "mensuel" && (
               <MonthPicker value={selectedMonth} onChange={v => { if (v) setSelectedMonth(v) }} showTout={false} />
             )}
           </div>
