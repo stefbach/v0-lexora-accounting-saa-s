@@ -24,6 +24,20 @@ const STATUT_COLORS: Record<string, string> = {
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
 
+/**
+ * Retourne les 12 derniers mois (mois en cours + 11 précédents) au format
+ * YYYY-MM, triés du plus récent au plus ancien. Utilisé pour que le
+ * sélecteur de période propose toujours le mois courant, même si aucun
+ * bulletin n'a encore été calculé pour ce mois-là.
+ */
+function last12Months(): string[] {
+  const today = new Date()
+  return Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(today.getFullYear(), today.getMonth() - i, 1)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  })
+}
+
 export default function PaiePage() {
   const [societes, setSocietes] = useState<any[]>([])
   const [societe, setSociete] = useState("all")
@@ -85,21 +99,28 @@ export default function PaiePage() {
       setSocietes(unique)
       const firstSociete = unique.length >= 1 ? unique[0].id : "all"
       setSociete(firstSociete)
+
+      // FIX — le sélecteur doit TOUJOURS proposer le mois en cours + les
+      // 11 mois précédents, même si aucun bulletin n'existe encore. On
+      // fusionne ces 12 mois avec les périodes qui ont des bulletins en
+      // DB (historique plus ancien). Défaut = mois en cours, toujours.
+      const todayYm = new Date().toISOString().slice(0, 7)
+      const derniersMois = last12Months()
       try {
         const params = new URLSearchParams()
         if (firstSociete !== "all") params.set("societe_id", firstSociete)
         const data = await fetch(`/api/rh/paie?${params}`).then(r => r.json())
         const allBulletins = data.bulletins || []
-        const periods = [...new Set(allBulletins.map((b: any) => (b.periode || "").slice(0, 7)).filter(Boolean))] as string[]
-        periods.sort((a, b) => b.localeCompare(a))
-        setAvailablePeriodes(periods)
-        if (periods.length > 0) {
-          setPeriode(periods[0])
-          setPeriodeReady(true)
-          return
-        }
-      } catch {}
-      setPeriode(new Date().toISOString().slice(0, 7))
+        const moisAvecBulletins = allBulletins
+          .map((b: any) => (b.periode || "").slice(0, 7))
+          .filter(Boolean) as string[]
+        const tousLesMois = Array.from(new Set([...derniersMois, ...moisAvecBulletins]))
+          .sort((a, b) => b.localeCompare(a))
+        setAvailablePeriodes(tousLesMois)
+      } catch {
+        setAvailablePeriodes(derniersMois)
+      }
+      setPeriode(todayYm)
       setPeriodeReady(true)
     })
   }, [])
@@ -499,20 +520,16 @@ export default function PaiePage() {
                 {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
               </SelectContent>
             </Select>
-            {availablePeriodes.length > 0 ? (
-              <Select value={periode} onValueChange={setPeriode}>
-                <SelectTrigger className="w-52"><SelectValue placeholder="Periode" /></SelectTrigger>
-                <SelectContent>
-                  {availablePeriodes.map(p => {
-                    const d = new Date(p + "-15")
-                    const label = d.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
-                    return <SelectItem key={p} value={p}>{label.charAt(0).toUpperCase() + label.slice(1)}</SelectItem>
-                  })}
-                </SelectContent>
-              </Select>
-            ) : (
-              <Input type="month" value={periode || new Date().toISOString().slice(0, 7)} onChange={e => { setPeriode(e.target.value); setPeriodeReady(true) }} className="w-40" />
-            )}
+            <Select value={periode} onValueChange={setPeriode}>
+              <SelectTrigger className="w-52"><SelectValue placeholder="Periode" /></SelectTrigger>
+              <SelectContent>
+                {availablePeriodes.map(p => {
+                  const d = new Date(p + "-15")
+                  const label = d.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
+                  return <SelectItem key={p} value={p}>{label.charAt(0).toUpperCase() + label.slice(1)}</SelectItem>
+                })}
+              </SelectContent>
+            </Select>
             {isLocked && (
               <Badge className="bg-red-100 text-red-700 gap-1"><Lock className="w-3 h-3" />PERIODE VERROUILLEE</Badge>
             )}

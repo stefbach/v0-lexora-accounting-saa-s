@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createSbClient } from '@supabase/supabase-js'
+import { resolveOwnership } from '@/lib/rh/ownership'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,7 +31,16 @@ export async function GET(request: Request) {
     const societe_id = url.searchParams.get('societe_id')
     const type_contrat = url.searchParams.get('type_contrat')
     const statut = url.searchParams.get('statut')
-    const employe_id = url.searchParams.get('employe_id')
+    let employe_id = url.searchParams.get('employe_id')
+
+    // P0 Sécurité — ownership check
+    const ownership = await resolveOwnership(supabase, user.id)
+    if (!ownership.isRH) {
+      if (employe_id && ownership.employe_id && employe_id !== ownership.employe_id) {
+        return NextResponse.json({ error: 'Accès refusé — vous ne pouvez voir que vos propres contrats.' }, { status: 403 })
+      }
+      if (!employe_id && ownership.employe_id) employe_id = ownership.employe_id
+    }
 
     // 1. Query contrats (no FK join)
     let query = supabase

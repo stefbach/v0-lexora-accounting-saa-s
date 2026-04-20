@@ -417,13 +417,6 @@ function ActualitesRHPanel({ stats }: { stats: any }) {
   }
 
   newsItems.push({
-    date: "01 Jan 2026",
-    title: "Compensation salariale 2026",
-    desc: "Rs 635 pour les salaires inferieur ou egal a 50,000",
-    dot: "green",
-  })
-
-  newsItems.push({
     date: dateStr(jour15),
     title: "Echeance CSG/NSF",
     desc: "A soumettre avant le 15 du mois suivant",

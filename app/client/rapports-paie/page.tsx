@@ -51,7 +51,6 @@ interface BulletinData {
   special_allowance_1: number
   special_allowance_2: number
   special_allowance_3: number
-  salary_compensation_montant?: number
   statut: string
   employe?: {
     code: string
@@ -139,7 +138,7 @@ export default function RapportsStatutairesPage() {
     const wages = Number(b.salaire_base || 0)
     const allowances = Number(b.transport_allowance || 0) + Number(b.petrol_allowance || 0) +
       Number(b.special_allowance_1 || 0) + Number(b.special_allowance_2 || 0) +
-      Number(b.special_allowance_3 || 0) + Number(b.salary_compensation_montant || 0)
+      Number(b.special_allowance_3 || 0)
     const commission = 0 // from bulletin if available
     const total = wages + allowances + commission
     const prgfCalc = calculerPRGF(total)
@@ -172,7 +171,7 @@ export default function RapportsStatutairesPage() {
     overtime: Number(b.heures_sup_montant || 0),
     allowances: Number(b.transport_allowance || 0) + Number(b.petrol_allowance || 0) +
       Number(b.special_allowance_1 || 0) + Number(b.special_allowance_2 || 0) +
-      Number(b.special_allowance_3 || 0) + Number(b.salary_compensation_montant || 0),
+      Number(b.special_allowance_3 || 0),
     total: Number(b.salaire_brut || 0),
   }))
   const emolumentsTotals = {

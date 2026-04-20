@@ -215,7 +215,14 @@ export async function GET(request: Request) {
     const employe_id = searchParams.get('employe_id')
     const periode = searchParams.get('periode')
     const societe_id = searchParams.get('societe_id')
-    step('step2: params', { periode, societe_id, employe_id })
+    // Pagination — opt-in : seulement actif si ?page=N fourni. Sans ?page,
+    // comportement legacy (toutes les lignes, pas de champs pagination).
+    const pageParam = searchParams.get('page')
+    const limitParam = searchParams.get('limit')
+    const paginated = pageParam !== null
+    const page = Math.max(1, Number(pageParam) || 1)
+    const limit = Math.min(100, Math.max(1, Number(limitParam) || 10))
+    step('step2: params', { periode, societe_id, employe_id, paginated, page, limit })
 
     // Multi-tenant: verify access — wrap in try/catch pour éviter 500 si
     // une table de mapping (profiles/dossiers/user_societes/...) manque.
@@ -258,9 +265,11 @@ export async function GET(request: Request) {
     }
 
     // Query bulletins (NO FK join — avoids schema cache issues)
+    // Pagination opt-in : on demande `count: 'exact'` uniquement si paginé,
+    // sinon on évite le surcoût du COUNT() côté Postgres.
     let query = supabase
       .from('bulletins_paie')
-      .select('*')
+      .select('*', paginated ? { count: 'exact' } : undefined)
       .order('periode', { ascending: false })
 
     if (employe_id) query = query.eq('employe_id', employe_id)
@@ -271,8 +280,14 @@ export async function GET(request: Request) {
       query = query.in('societe_id', accessibleIds)
     }
 
+    if (paginated) {
+      const from = (page - 1) * limit
+      const to = from + limit - 1
+      query = query.range(from, to)
+    }
+
     step('step5: bulletins query starting')
-    const { data, error } = await query
+    const { data, error, count } = await query
     if (error) {
       // Sprint 5 BUG A — renvoyer tous les détails Postgres pour debug
       // (code SQL, hint, details) au lieu juste du message tronqué.
@@ -393,6 +408,24 @@ export async function GET(request: Request) {
     }
 
     step('step10: DONE', { bulletins: enriched.length, pointage_actif })
+    // Pagination : si ?page fourni, on enrichit la réponse avec les champs
+    // {data, total, page, limit, totalPages}. Sans ?page, on garde la forme
+    // legacy pour ne pas casser les callers existants (UI /rh/paie, PDF).
+    if (paginated) {
+      const total = count ?? enriched.length
+      const totalPages = limit > 0 ? Math.max(1, Math.ceil(total / limit)) : 1
+      return NextResponse.json({
+        data: enriched,
+        total,
+        page,
+        limit,
+        totalPages,
+        bulletins: enriched,
+        totaux,
+        nb: enriched.length,
+        pointage_actif,
+      })
+    }
     return NextResponse.json({ bulletins: enriched, totaux, nb: enriched.length, pointage_actif })
   } catch (e: any) {
     // Sprint 5 BUG A — logger la stack complète + le nom de l'erreur pour
@@ -443,7 +476,9 @@ export async function POST(request: Request) {
       paye_taux_2: Number(paramsDB.paye_taux_2 ?? 0.15),
       // Sprint 2 — night shift majoration paramétrable (defaut 15%)
       night_shift_pct: Number(paramsDB.night_shift_pct ?? 0.15),
-      salary_compensation: Number(paramsDB.salary_compensation ?? 635),
+      // POLICY Lexora — compensation 635 MUR considérée incluse dans le
+      // salaire. Forcé à 0 peu importe la valeur DB (paramsDB legacy).
+      salary_compensation: 0,
       salary_compensation_seuil: Number(paramsDB.salary_compensation_seuil ?? 50000),
     } : PARAMS_MRA_DEFAUT
 
@@ -754,9 +789,16 @@ export async function POST(request: Request) {
         }
       }
 
-      // Déduire absences injustifiées + UL du net
-      const totalDeductionAbsence = montant_absence + montant_ul_single
-      const salaire_net_final = Math.round((resultat.salaire_net - totalDeductionAbsence) * 100) / 100
+      // POLICY Lexora — UL déduction plafonnée au salaire_brut (jamais plus
+      // que ce que l'employé gagne le mois). Idem pour le cumul absences +
+      // UL. Et le net final est cappé à 0.
+      const salaireBrutPlafond = Number(resultat.salaire_brut) || 0
+      const totalAbsenceRaw = montant_absence + montant_ul_single
+      const totalDeductionAbsence = Math.min(totalAbsenceRaw, salaireBrutPlafond)
+      const salaire_net_final = Math.max(
+        0,
+        Math.round((resultat.salaire_net - totalDeductionAbsence) * 100) / 100,
+      )
 
       const bulletin: Record<string, any> = {
         employe_id, societe_id: societe_id || emp.societe_id,
@@ -1281,10 +1323,9 @@ export async function POST(request: Request) {
         const isHorsMRA = emp.exclure_mra === true
 
         // Hors champs MRA : salaire brut = salaire de base uniquement
-        // Pas de transport, petrol, OT, primes, pas de salary compensation
+        // Pas de transport, petrol, OT, primes
         const elements = isHorsMRA ? {
           salaire_base: salaire_base_mur,
-          salary_compensation: 0,
           transport_allowance: 0,
           petrol_allowance: 0,
           heures_sup_montant: 0,
@@ -1375,7 +1416,13 @@ export async function POST(request: Request) {
         // Sprint 3 BUG 3 — déduction UL appliquée AUSSI quand isHorsMRA.
         // Avant : net = salaire_base si hors MRA → ignorait l'UL. Maintenant :
         // net = salaire_base - totalDeductionAbsence si hors MRA.
-        const totalDeductionAbsence = montant_absence_final + montant_ul
+        // POLICY Lexora — on plafonne le cumul absences + UL au salaire_brut
+        // (cas limite : UL > brut du mois, ex. premier mois prorata faible).
+        const salaireBrutPlafondBatch = isHorsMRA
+          ? salaire_base_mur
+          : (Number(resultat.salaire_brut) || 0)
+        const totalAbsenceRawBatch = montant_absence_final + montant_ul
+        const totalDeductionAbsence = Math.min(totalAbsenceRawBatch, salaireBrutPlafondBatch)
 
         // Sprint 15 FIX 1 — Avance sur salaire (WRA Art. 29).
         // Déduire la mensualité de l'avance active du salaire net.
@@ -1407,9 +1454,13 @@ export async function POST(request: Request) {
           console.warn('[paie batch] avance check failed (table absente ?):', e?.message || e)
         }
 
-        const salaire_net_final = isHorsMRA
-          ? Math.round((salaire_base_mur - totalDeductionAbsence - avanceDeduction) * 100) / 100
-          : Math.round((resultat.salaire_net - totalDeductionAbsence - avanceDeduction) * 100) / 100
+        // POLICY Lexora — salaire_net final plafonné à 0.
+        const salaire_net_final = Math.max(
+          0,
+          isHorsMRA
+            ? Math.round((salaire_base_mur - totalDeductionAbsence - avanceDeduction) * 100) / 100
+            : Math.round((resultat.salaire_net - totalDeductionAbsence - avanceDeduction) * 100) / 100,
+        )
 
         // Résumé notes pour le bulletin
         const transportAlloc = isHorsMRA ? 0 : (Number(emp.transport_allowance) || 0)
@@ -1465,9 +1516,9 @@ export async function POST(request: Request) {
           special_allowance_3: isHorsMRA ? 0 : Math.round((busAllowanceMensuel + primeFixe3) * 100) / 100,
           transport_allowance: isHorsMRA ? 0 : (Number(emp.transport_allowance) || 0),
           petrol_allowance: isHorsMRA ? 0 : (Number(emp.petrol_allowance) || 0),
-          // Salary compensation (635 MUR si base ≤ 50K) ajoutée à
-          // increment_salaire pour que le GENERATED salaire_brut l'inclue.
-          increment_salaire: isHorsMRA ? 0 : ((Number(emp.increment_salaire) || 0) + (salaire_base_mur <= 50000 ? 635 : 0)),
+          // POLICY Lexora — plus de salary compensation (635 MUR) ajoutée.
+          // increment_salaire = valeur fiche employé pure, rien d'autre.
+          increment_salaire: isHorsMRA ? 0 : (Number(emp.increment_salaire) || 0),
           // Sprint 11 BUG 7 — other_refund = refund fiche employé + frais km approuvés du mois
           other_refund: isHorsMRA ? 0 : ((Number(emp.other_refund) || 0) + total_frais_km),
           eoy_bonus: isHorsMRA ? 0 : eoy_bonus_montant,

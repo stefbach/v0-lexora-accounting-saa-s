@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { resolveOwnership } from '@/lib/rh/ownership'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,8 +23,17 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const societe_id = searchParams.get('societe_id')
     const periode = searchParams.get('periode')
-    const employe_id = searchParams.get('employe_id')
+    let employe_id = searchParams.get('employe_id')
     const type = searchParams.get('type')
+
+    // P0 Sécurité — ownership check
+    const ownership = await resolveOwnership(supabase, user.id)
+    if (!ownership.isRH) {
+      if (employe_id && ownership.employe_id && employe_id !== ownership.employe_id) {
+        return NextResponse.json({ error: 'Accès refusé — vous ne pouvez voir que vos propres primes.' }, { status: 403 })
+      }
+      if (!employe_id && ownership.employe_id) employe_id = ownership.employe_id
+    }
 
     if (type === 'saisie' || periode) {
       let query = supabase

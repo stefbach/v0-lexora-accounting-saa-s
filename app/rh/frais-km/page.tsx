@@ -1,5 +1,6 @@
 "use client"
 import { useState, useEffect, useCallback } from "react"
+import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -135,13 +136,18 @@ export default function FraisKmPage() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        alert("Erreur ajout frais km : " + (data.error || `HTTP ${res.status}`))
+        toast.error("Erreur ajout frais km : " + (data.error || `HTTP ${res.status}`))
         return
       }
+      // Fermer le dialog AVANT le rechargement pour que l'UX paraisse
+      // instantanée. await load() pour garantir que la liste est rafraîchie
+      // avant le toast — sinon l'utilisateur voit le toast mais une liste
+      // encore vide pendant 100-300 ms.
       setDialogOpen(false)
-      load()
+      await load()
+      toast.success(editingFrais ? "✅ Frais kilométriques mis à jour" : "✅ Frais kilométriques ajouté")
     } catch (e: any) {
-      alert("Erreur réseau : " + (e?.message || ""))
+      toast.error("Erreur réseau : " + (e?.message || ""))
     } finally {
       setSaving(false)
     }
@@ -154,10 +160,15 @@ export default function FraisKmPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "approuver", id }),
       })
-      if (!res.ok) { const d = await res.json().catch(() => ({})); alert("Erreur: " + (d.error || "")); return }
-      load()
-    } catch (e) {
-      console.error(e)
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        toast.error("Erreur approbation : " + (d.error || `HTTP ${res.status}`))
+        return
+      }
+      await load()
+      toast.success("✅ Frais kilométriques approuvés")
+    } catch (e: any) {
+      toast.error("Erreur réseau : " + (e?.message || ""))
     }
   }
 

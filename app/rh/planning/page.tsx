@@ -8,25 +8,22 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
-import { Loader2, Calendar, ChevronLeft, ChevronRight, Send, Wand2, Users, Check, Plus, Trash2, Clock, Coffee, AlertTriangle, FileDown, Copy, Eye, Shield, CheckCircle2, XCircle } from "lucide-react"
+import { Loader2, Calendar, ChevronLeft, ChevronRight, Send, Wand2, Users, Check, Plus, Trash2, Clock, Coffee, AlertTriangle, FileDown, Copy, Eye, Shield, CheckCircle2, XCircle, Info, ChevronDown, Settings } from "lucide-react"
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { toast } from "sonner"
 import Link from "next/link"
+import type { PlanningShift, JourCode } from "@/types/planning"
+import { type Creneau, shiftToCreneau, creneauToShift } from "@/lib/planning/converters"
+
+const DEFAULT_JOURS: JourCode[] = ["lun", "mar", "mer", "jeu", "ven"]
 
 // ─── Types ──────────────────────────────────────────────────────────
-
-interface Creneau {
-  id: string
-  nom: string
-  code: string
-  heure_debut: string
-  heure_fin: string
-  pause_debut: string
-  pause_fin: string
-  pause_minutes: number
-  heures_effectives: number
-  couleur: string
-}
+// Le type Creneau est maintenant importé depuis @/lib/planning/converters
+// (source unique, compatible avec le nouveau PlanningShift côté DB).
 
 interface CellData {
   creneau_id: string
@@ -104,11 +101,12 @@ const WEEKLY_HOURS_LIMIT_DEFAULT = 45
 const WEEKLY_OT_LIMIT = 55
 const WEEK_DAY_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
 
+// Shifts par défaut GÉNÉRIQUES (pas DDS-spécifiques).
+// fallback si DB vide — utilisés uniquement quand la société n'a pas
+// encore configuré ses propres shifts dans societes.shifts_planning.
+// Le RH peut personnaliser via /rh/planning/regles.
 const DEFAULT_CRENEAUX: Creneau[] = [
-  { id: "c1", nom: "Journée", code: "J", heure_debut: "08:00", heure_fin: "17:00", pause_debut: "12:00", pause_fin: "13:00", pause_minutes: 60, heures_effectives: 8, couleur: COLORS[0] },
-  { id: "c2", nom: "Matin", code: "M", heure_debut: "06:00", heure_fin: "14:00", pause_debut: "10:00", pause_fin: "10:30", pause_minutes: 30, heures_effectives: 7.5, couleur: COLORS[2] },
-  { id: "c3", nom: "Après-midi", code: "AM", heure_debut: "14:00", heure_fin: "22:00", pause_debut: "18:00", pause_fin: "18:30", pause_minutes: 30, heures_effectives: 7.5, couleur: COLORS[3] },
-  { id: "c4", nom: "Nuit", code: "N", heure_debut: "22:00", heure_fin: "06:00", pause_debut: "02:00", pause_fin: "02:30", pause_minutes: 30, heures_effectives: 7.5, couleur: COLORS[4] },
+  { id: "default_j", nom: "Journée", code: "J", heure_debut: "08:00", heure_fin: "17:00", pause_debut: "12:00", pause_fin: "13:00", pause_minutes: 60, heures_effectives: 8, couleur: COLORS[0] },
 ]
 
 // ─── Component ──────────────────────────────────────────────────────
@@ -139,28 +137,52 @@ export default function PlanningPage() {
   const [creneauConfigOpen, setCreneauConfigOpen] = useState(false)
   const [editingCreneau, setEditingCreneau] = useState<Creneau | null>(null)
 
-  // Load creneaux from localStorage when société changes
+  // Load creneaux from DB (societes.shifts_planning) when société changes.
+  // P2a — plus de fallback localStorage : source unique = DB.
   useEffect(() => {
-    if (typeof window === "undefined") return
-    const key = `lexora_creneaux_${societe || "default"}`
-    try {
-      const stored = localStorage.getItem(key)
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setCreneaux(parsed)
-          return
+    if (societe === "all") { setCreneaux(DEFAULT_CRENEAUX); return }
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/rh/planning/regles?societe_id=${societe}`)
+        if (res.ok) {
+          const data = await res.json()
+          const shifts: PlanningShift[] = Array.isArray(data?.shifts_planning)
+            ? data.shifts_planning
+            : []
+          if (shifts.length > 0) {
+            if (!cancelled) setCreneaux(shifts.map(shiftToCreneau))
+            return
+          }
         }
-      }
-    } catch {}
-    setCreneaux(DEFAULT_CRENEAUX)
+      } catch {}
+      if (!cancelled) setCreneaux(DEFAULT_CRENEAUX)
+    })()
+    return () => { cancelled = true }
   }, [societe])
 
-  // Save creneaux to localStorage whenever they change
-  const persistCreneaux = useCallback((next: Creneau[]) => {
-    if (typeof window === "undefined") return
-    const key = `lexora_creneaux_${societe || "default"}`
-    try { localStorage.setItem(key, JSON.stringify(next)) } catch {}
+  // Persist creneaux → DB (PUT societes.shifts_planning).
+  // P2a — plus d'écriture localStorage.
+  const persistCreneaux = useCallback(async (next: Creneau[]) => {
+    if (!societe || societe === "all") return
+    try {
+      const res = await fetch("/api/rh/planning/regles", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          societe_id: societe,
+          shifts_planning: next.map(c =>
+            creneauToShift(c, (c.jours as JourCode[] | undefined) || DEFAULT_JOURS),
+          ),
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        toast.error("Erreur sauvegarde créneaux : " + (data?.error || `HTTP ${res.status}`))
+      }
+    } catch (e: any) {
+      toast.error("Erreur réseau : " + (e?.message || ""))
+    }
   }, [societe])
 
   // Employee filter — who appears in the planning
@@ -749,7 +771,16 @@ export default function PlanningPage() {
   }
 
   const generateStandard = () => {
-    const c = creneaux[0] // Premier créneau = journée standard
+    // Cherche le premier créneau de TRAVAIL (heures > 0 et nom != "repos").
+    // Évite de remplir le mois avec un créneau "Repos" si c'est le 1er listé.
+    const workCreneau = creneaux.find(
+      c => c.heures_effectives > 0 && !c.nom.toLowerCase().includes("repos"),
+    ) || creneaux[0]
+    if (!workCreneau) {
+      toast.error("Aucun créneau de travail configuré")
+      return
+    }
+    const c = workCreneau
     setPlanning(prev => {
       const next = { ...prev }
       for (const empId of Object.keys(next)) {
@@ -771,6 +802,7 @@ export default function PlanningPage() {
       }
       return next
     })
+    toast.success(`Planning rempli avec "${workCreneau.nom}"`)
   }
 
   const generate3x8 = () => {
@@ -811,6 +843,71 @@ export default function PlanningPage() {
       return next
     })
     setBulkOpen(false)
+  }
+
+  // ─── Planning creation wizard ─────────────────────────────────────
+  const [wizardOpen, setWizardOpen] = useState(false)
+  const [wizardMode, setWizardMode] = useState<"standard" | "rotation" | "manual">("standard")
+  const [wizardShift, setWizardShift] = useState("")
+  const [wizardRotation, setWizardRotation] = useState<string[]>([])
+
+  const isPlanningEmpty = employes.length > 0 && Object.values(planning).every(row =>
+    !row || Object.values(row).every(cell => !cell)
+  )
+
+  const applyWizard = () => {
+    if (wizardMode === "standard") {
+      const c = creneaux.find(cr => cr.id === wizardShift) || creneaux[0]
+      if (!c) return
+      setPlanning(prev => {
+        const next = { ...prev }
+        for (const empId of Object.keys(next)) {
+          const row = { ...next[empId] }
+          for (let d = 1; d <= daysInMonth; d++) {
+            const leaves = approvedLeaves[empId]
+            if (leaves && leaves.has(d)) {
+              const lt = leaves.get(d) || "AL"
+              row[d] = { creneau_id: `conge_${lt}`, heure_debut: "", heure_fin: "", pause_debut: "", pause_fin: "", heures_prevues: 0 }
+            } else {
+              row[d] = isWeekend(year, month, d) ? null : {
+                creneau_id: c.id, heure_debut: c.heure_debut, heure_fin: c.heure_fin,
+                pause_debut: c.pause_debut, pause_fin: c.pause_fin, heures_prevues: c.heures_effectives,
+              }
+            }
+          }
+          next[empId] = row
+        }
+        return next
+      })
+    } else if (wizardMode === "rotation") {
+      const rotShifts = wizardRotation.map(id => creneaux.find(c => c.id === id)).filter(Boolean) as Creneau[]
+      if (rotShifts.length < 2) return
+      setPlanning(prev => {
+        const next = { ...prev }
+        const empIds = Object.keys(next)
+        empIds.forEach((empId, idx) => {
+          const row = { ...next[empId] }
+          for (let d = 1; d <= daysInMonth; d++) {
+            const leaves = approvedLeaves[empId]
+            if (leaves && leaves.has(d)) {
+              const lt = leaves.get(d) || "AL"
+              row[d] = { creneau_id: `conge_${lt}`, heure_debut: "", heure_fin: "", pause_debut: "", pause_fin: "", heures_prevues: 0 }
+            } else {
+              const weekNum = Math.floor((d - 1) / 7)
+              const c = rotShifts[(idx + weekNum) % rotShifts.length]
+              row[d] = isWeekend(year, month, d) ? null : {
+                creneau_id: c.id, heure_debut: c.heure_debut, heure_fin: c.heure_fin,
+                pause_debut: c.pause_debut, pause_fin: c.pause_fin, heures_prevues: c.heures_effectives,
+              }
+            }
+          }
+          next[empId] = row
+        })
+        return next
+      })
+    }
+    // "manual" = close wizard, user edits cell by cell
+    setWizardOpen(false)
   }
 
   const savePlanning = async (publish = false) => {
@@ -907,11 +1004,10 @@ export default function PlanningPage() {
         <div>
           <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>Planning</h1>
           <p className="text-gray-500 text-sm">
-            Créneaux personnalisables avec pauses ·{' '}
-            <span className="text-gray-600">
-              Limite hebdomadaire : <b>{weeklyLimit}h</b>
-              {weeklyLimit === WEEKLY_HOURS_LIMIT_DEFAULT ? ' (WRA 2019 défaut)' : ' (règle société)'}
-            </span>
+            Planifiez les horaires de vos collaborateurs pour {MONTH_NAMES[month]} {year}.
+            {societe !== "all" && (
+              <span className="ml-2 text-xs">· Limite hebdo : <b>{weeklyLimit}h</b></span>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -962,28 +1058,105 @@ export default function PlanningPage() {
         </div>
       </div>
 
-      {/* Créneaux summary */}
-      <Card className="border-dashed">
-        <CardContent className="pt-4 pb-3">
-          <div className="flex flex-wrap gap-2">
-            {creneaux.map(c => (
-              <div key={c.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium ${c.couleur}`}>
-                <span className="font-bold">{c.code}</span>
-                <span>{c.nom}</span>
-                <span className="opacity-75">{c.heure_debut}—{c.heure_fin}</span>
-                {c.pause_minutes > 0 && <span className="opacity-75 flex items-center gap-0.5"><Coffee className="w-3 h-3" />{c.pause_minutes}min</span>}
-                <span className="opacity-75">({c.heures_effectives}h eff.)</span>
+      {/* Créneaux summary — bandeau enrichi avec lien vers /rh/planning/regles */}
+      {(() => {
+        const societeNom = societes.find(s => s.id === societe)?.nom || "société"
+        const joursShort: Record<string, string> = { lun: "Lu", mar: "Ma", mer: "Me", jeu: "Je", ven: "Ve", sam: "Sa", dim: "Di" }
+        return (
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-sm font-semibold" style={{ color: "#0B0F2E" }}>
+                    Créneaux de {societeNom}
+                  </CardTitle>
+                  <Badge variant="outline" className="text-[10px]">
+                    {creneaux.length} actif{creneaux.length > 1 ? "s" : ""}
+                  </Badge>
+                </div>
+                <Link href="/rh/planning/regles" className="text-xs font-medium text-blue-600 hover:underline">
+                  Modifier →
+                </Link>
               </div>
-            ))}
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-200 text-gray-600">
-              <span className="font-bold">R</span> Repos
-            </div>
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-100 text-emerald-700">
-              <span className="font-bold">C</span> Congé
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {creneaux.length === 0 ? (
+                <div className="flex items-center justify-between gap-3 p-3 rounded-lg border border-dashed border-gray-300 bg-gray-50">
+                  <span className="text-sm text-gray-500">Aucun créneau configuré.</span>
+                  <Link href="/rh/planning/regles">
+                    <Button size="sm" variant="outline">Configurer</Button>
+                  </Link>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-stretch gap-2">
+                  {creneaux.map(c => {
+                    const jours = (c.jours || []).map(j => joursShort[j] || j).join("·")
+                    return (
+                      <div key={c.id} className={`flex items-center gap-2 px-3 py-2 rounded-lg ${c.couleur}`}>
+                        <span className="inline-flex items-center justify-center w-7 h-7 rounded bg-white/20 text-xs font-bold">
+                          {c.code}
+                        </span>
+                        <div className="flex flex-col leading-tight">
+                          <span className="text-sm font-semibold">{c.nom}</span>
+                          <span className="text-[10px] opacity-90">
+                            {c.heure_debut && c.heure_fin ? `${c.heure_debut}—${c.heure_fin}` : "—"}
+                            {c.pause_minutes > 0 ? ` · ${c.pause_minutes}min` : ""}
+                            {c.heures_effectives > 0 ? ` · ${c.heures_effectives}h eff.` : ""}
+                          </span>
+                          {jours && <span className="text-[9px] opacity-75">{jours}</span>}
+                        </div>
+                      </div>
+                    )
+                  })}
+                  <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-gray-200 text-gray-600 self-start">
+                    <span className="font-bold">R</span> Repos
+                  </div>
+                  <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-emerald-100 text-emerald-700 self-start">
+                    <span className="font-bold">C</span> Congé
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )
+      })()}
+
+      {/* Banner guidance — affiché si la société a des employés mais qu'aucune
+          cellule du planning n'est encore remplie pour le mois affiché. */}
+      {!loading && employes.length > 0 && (() => {
+        const filledCells = Object.values(planning).reduce(
+          (sum, empPlanning) => sum + Object.values(empPlanning).filter(c => c !== null).length,
+          0,
+        )
+        if (filledCells > 0) return null
+        return (
+          <Card className="border-blue-200 bg-blue-50">
+            <CardContent className="py-4">
+              <div className="flex items-start gap-3">
+                <div className="shrink-0 w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center">
+                  <Wand2 className="w-5 h-5 text-white" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-semibold text-blue-900">
+                    Prêt à créer le planning de {MONTH_NAMES[month]} {year} ?
+                  </h4>
+                  <p className="text-sm text-blue-800 mt-1">
+                    Utilisez un générateur rapide, ou cliquez directement sur une case.
+                  </p>
+                  <div className="flex gap-2 mt-3 flex-wrap">
+                    <Button size="sm" onClick={generateStandard}>
+                      Appliquer le créneau standard
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setBulkOpen(true)}>
+                      Affectation multiple
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )
+      })()}
 
       {/* Conflict alert bar */}
       {/* Sprint 11 BUG 8 — différencier erreurs bloquantes (rouge) des
@@ -1122,48 +1295,78 @@ export default function PlanningPage() {
                   <Eye className="inline h-3.5 w-3.5 mr-1" />Hebdomadaire
                 </button>
               </div>
-              <Button variant="outline" size="sm" onClick={generateStandard}><Wand2 className="h-4 w-4 mr-1" /> Standard</Button>
-              <Button variant="outline" size="sm" onClick={generate3x8}>3×8</Button>
-              <Button variant="outline" size="sm" onClick={() => setConfirmGenOpen(true)} style={{ borderColor: "#D4AF37", color: "#D4AF37" }}>
-                <Copy className="h-4 w-4 mr-1" /> Générer planning type
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => setBulkOpen(true)}><Users className="h-4 w-4 mr-1" /> Masse</Button>
-              <Button variant="outline" size="sm" onClick={() => toast.info("Export PDF bientôt disponible")} style={{ borderColor: "#4191FF", color: "#4191FF" }}>
-                <FileDown className="h-4 w-4 mr-1" /> Exporter PDF
-              </Button>
-              <Button variant="outline" size="sm" onClick={runValidation} style={{ borderColor: "#0B0F2E", color: "#0B0F2E" }}>
-                <Shield className="h-4 w-4 mr-1" /> Verifier conformite
-              </Button>
-              <Link href="/rh/planning/regles">
-                <Button variant="outline" size="sm" className="text-gray-600">
-                  <Shield className="h-4 w-4 mr-1" /> Regles
-                </Button>
-              </Link>
+              {/* Dropdown "Remplir" — regroupe Standard, 3×8, Copier semaine,
+                  Affectation multiple. Réduit le bruit visuel de la barre. */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Wand2 className="h-4 w-4 mr-1" /> Remplir <ChevronDown className="h-3 w-3 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel className="text-xs">Générateurs automatiques</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={generateStandard}>
+                    Planning standard
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={generate3x8}>
+                    Rotation 3×8
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setConfirmGenOpen(true)}>
+                    Copier la semaine actuelle
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setBulkOpen(true)}>
+                    Affectation multiple
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Dropdown "Outils" — Vérifier conformité, Export PDF, Règles */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Settings className="h-4 w-4 mr-1" /> Outils <ChevronDown className="h-3 w-3 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem onClick={runValidation}>
+                    Vérifier la conformité
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => toast.info("Export PDF bientôt disponible")}>
+                    Exporter en PDF
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link href="/rh/planning/regles">Règles et créneaux</Link>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
               {/* Sprint 7 FIX 5 — Sauver vs Publier clairement distincts.
-                  Sauver : style outline (secondaire), enregistre en brouillon,
-                  visible uniquement RH. Publier : style solid vert (primaire),
-                  rend le planning visible par tous les employés — confirmation
-                  obligatoire via Dialog pour éviter publication accidentelle. */}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => savePlanning(false)}
-                disabled={saving}
-                title="Enregistrer en brouillon — visible uniquement par vous (RH). Les employés ne voient rien tant que vous n'avez pas publié."
-              >
-                {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Check className="h-4 w-4 mr-1" />}
-                Sauver brouillon
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => setConfirmPublishOpen(true)}
-                disabled={saving}
-                className="text-white hover:opacity-90 bg-emerald-600 hover:bg-emerald-700"
-                title="Publier le planning — les employés pourront le consulter sur leur espace (/salarie). Nécessite confirmation."
-              >
-                <Send className="h-4 w-4 mr-1" />
-                Publier aux employés
-              </Button>
+                  Séparateur visuel (border-l) pour distinguer les actions
+                  finales des outils ci-dessus. */}
+              <div className="border-l pl-2 ml-1 flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => savePlanning(false)}
+                  disabled={saving}
+                  title="Enregistrer en brouillon - visible uniquement par vous (RH)"
+                >
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Check className="h-4 w-4 mr-1" />}
+                  Sauver brouillon
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => setConfirmPublishOpen(true)}
+                  disabled={saving}
+                  className="text-white hover:opacity-90 bg-emerald-600 hover:bg-emerald-700"
+                  title="Rend le planning visible par tous les employés sur /salarie"
+                >
+                  <Send className="h-4 w-4 mr-1" />
+                  Publier aux employés
+                </Button>
+              </div>
             </div>
           </div>
         </CardHeader>
@@ -1171,21 +1374,89 @@ export default function PlanningPage() {
           {loading ? (
             <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-gray-400" /></div>
           ) : employes.length === 0 ? (
-            // Sprint 5 BUG B — message plus précis selon l'état de société.
-            // Avant : "Aucun employé. Sélectionnez une société." même quand
-            // une société était déjà sélectionnée, ce qui masquait les
-            // plannings brouillon existants.
-            <div className="text-center py-12 space-y-2">
-              <p className="text-gray-400">
-                {societe === "all"
-                  ? "Sélectionnez une société pour afficher son planning."
-                  : allEmployes.length === 0
-                    ? "Cette société n'a aucun employé actif. Ajoutez un employé dans /rh/employes pour commencer."
-                    : "Aucun employé sélectionné — cochez-les via le bouton « Filtrer employés »."}
+            <div className="text-center py-16 space-y-3">
+              {societe === "all" ? (
+                <>
+                  <div className="w-16 h-16 rounded-full bg-gray-100 mx-auto flex items-center justify-center">
+                    <Calendar className="w-7 h-7 text-gray-400" />
+                  </div>
+                  <h3 className="text-lg font-semibold" style={{ color: "#0B0F2E" }}>
+                    Sélectionnez une société
+                  </h3>
+                  <p className="text-sm text-gray-500 max-w-md mx-auto">
+                    Choisissez une société dans le menu déroulant en haut pour afficher son planning.
+                  </p>
+                </>
+              ) : allEmployes.length === 0 ? (
+                <>
+                  <div className="w-16 h-16 rounded-full bg-amber-100 mx-auto flex items-center justify-center">
+                    <Users className="w-7 h-7 text-amber-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold" style={{ color: "#0B0F2E" }}>
+                    Aucun employé dans cette société
+                  </h3>
+                  <p className="text-sm text-gray-500 max-w-md mx-auto">
+                    Ajoutez des employés pour commencer à planifier leurs horaires.
+                  </p>
+                  <div className="pt-2">
+                    <Link href="/rh/employes">
+                      <Button size="sm" style={{ backgroundColor: "#0B0F2E" }} className="text-white">
+                        <Plus className="h-4 w-4 mr-1" /> Ajouter un employé
+                      </Button>
+                    </Link>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="w-16 h-16 rounded-full bg-blue-100 mx-auto flex items-center justify-center">
+                    <Users className="w-7 h-7 text-blue-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold" style={{ color: "#0B0F2E" }}>
+                    Personne à afficher
+                  </h3>
+                  <p className="text-sm text-gray-500 max-w-md mx-auto">
+                    {allEmployes.length} employé(s) disponible(s) dans cette société. Choisissez ceux à planifier.
+                  </p>
+                  <div className="pt-2">
+                    <Button size="sm" onClick={() => setEmpFilterOpen(true)}>
+                      <Users className="h-4 w-4 mr-1" /> Choisir les collaborateurs
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          ) : isPlanningEmpty && societe !== "all" ? (
+            /* ── Planning vide : assistant de démarrage ── */
+            <div className="text-center py-16 space-y-4">
+              <Calendar className="w-12 h-12 mx-auto text-gray-300" />
+              <h3 className="text-lg font-semibold text-[#0B0F2E]">
+                Aucun planning pour {MONTH_NAMES[month]} {year}
+              </h3>
+              <p className="text-sm text-gray-500 max-w-md mx-auto">
+                Créez le planning de vos {employes.length} employé(s) en quelques clics.
+                Vous pouvez aussi remplir cellule par cellule.
               </p>
-              {allEmployes.length > 0 && societe !== "all" && (
-                <p className="text-xs text-gray-400">
-                  {allEmployes.length} employé(s) disponible(s) pour cette société.
+              <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
+                <Button
+                  onClick={() => { setWizardShift(creneaux[0]?.id || ""); setWizardMode("standard"); setWizardOpen(true) }}
+                  className="bg-[#0B0F2E] text-white"
+                >
+                  <Calendar className="w-4 h-4 mr-2" />
+                  Créer le planning
+                </Button>
+                {creneaux.length >= 3 && (
+                  <Button
+                    variant="outline"
+                    onClick={() => { setWizardRotation(creneaux.slice(0, 3).map(c => c.id)); setWizardMode("rotation"); setWizardOpen(true) }}
+                  >
+                    Rotation automatique ({creneaux.length} shifts)
+                  </Button>
+                )}
+              </div>
+              {creneaux.length <= 1 && (
+                <p className="text-xs text-amber-600 mt-2">
+                  Un seul créneau configuré. Ajoutez des shifts dans la section « Créneaux » ci-dessous
+                  pour activer la rotation automatique.
                 </p>
               )}
             </div>
@@ -1501,6 +1772,13 @@ export default function PlanningPage() {
           <DialogHeader>
             <DialogTitle style={{ color: "#0B0F2E" }}>Créneaux horaires</DialogTitle>
           </DialogHeader>
+          <div className="flex items-start gap-2 px-3 py-2 rounded-lg border border-blue-200 bg-blue-50 text-xs text-blue-900 mb-3">
+            <Info className="w-4 h-4 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium">Les créneaux sont partagés avec les règles de planning</p>
+              <p className="mt-0.5">Pour une édition complète, utilisez <Link href="/rh/planning/regles" className="underline font-medium">Règles de planning</Link>.</p>
+            </div>
+          </div>
           {!editingCreneau ? (
             <div className="space-y-3">
               {creneaux.map(c => (
@@ -1599,7 +1877,7 @@ export default function PlanningPage() {
 
       <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle style={{ color: "#0B0F2E" }}>Affectation en masse</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle style={{ color: "#0B0F2E" }}>Affectation multiple</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div>
               <Label>Employés</Label>
@@ -1634,6 +1912,94 @@ export default function PlanningPage() {
               <Label className="text-sm">Week-end = Repos automatique</Label>
             </div>
             <Button className="w-full text-white" style={{ backgroundColor: "#0B0F2E" }} onClick={applyBulk}>Appliquer</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      {/* ── Wizard création planning ── */}
+      <Dialog open={wizardOpen} onOpenChange={setWizardOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle style={{ color: "#0B0F2E" }}>Créer le planning — {MONTH_NAMES[month]} {year}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                <input type="radio" checked={wizardMode === "standard"} onChange={() => setWizardMode("standard")} />
+                <div>
+                  <p className="text-sm font-medium">Planning standard</p>
+                  <p className="text-xs text-gray-500">Même shift tous les jours ouvrables</p>
+                </div>
+              </label>
+              {creneaux.length >= 2 && (
+                <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                  <input type="radio" checked={wizardMode === "rotation"} onChange={() => { setWizardMode("rotation"); setWizardRotation(creneaux.slice(0, Math.min(3, creneaux.length)).map(c => c.id)) }} />
+                  <div>
+                    <p className="text-sm font-medium">Rotation automatique</p>
+                    <p className="text-xs text-gray-500">Alterner {creneaux.length} shifts par semaine</p>
+                  </div>
+                </label>
+              )}
+              <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                <input type="radio" checked={wizardMode === "manual"} onChange={() => setWizardMode("manual")} />
+                <div>
+                  <p className="text-sm font-medium">Mode manuel</p>
+                  <p className="text-xs text-gray-500">Remplir cellule par cellule</p>
+                </div>
+              </label>
+            </div>
+
+            {wizardMode === "standard" && (
+              <div>
+                <Label>Shift à appliquer</Label>
+                <Select value={wizardShift || creneaux[0]?.id || ""} onValueChange={setWizardShift}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {creneaux.map(c => (
+                      <SelectItem key={c.id} value={c.id}>{c.code} — {c.nom} ({c.heure_debut}-{c.heure_fin})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {wizardMode === "rotation" && (
+              <div className="space-y-2">
+                <Label>Shifts dans l'ordre de rotation</Label>
+                {creneaux.map(c => (
+                  <label key={c.id} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={wizardRotation.includes(c.id)}
+                      onChange={e => {
+                        if (e.target.checked) setWizardRotation(prev => [...prev, c.id])
+                        else setWizardRotation(prev => prev.filter(id => id !== c.id))
+                      }}
+                    />
+                    {c.code} — {c.nom} ({c.heure_debut}-{c.heure_fin})
+                  </label>
+                ))}
+                {wizardRotation.length < 2 && (
+                  <p className="text-xs text-amber-600">Sélectionnez au moins 2 shifts pour la rotation.</p>
+                )}
+              </div>
+            )}
+
+            <p className="text-xs text-gray-500">
+              {employes.length} employé(s) concerné(s). Les congés approuvés seront respectés.
+              Les weekends restent en repos.
+            </p>
+
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => setWizardOpen(false)}>Annuler</Button>
+              <Button
+                className="flex-1 text-white"
+                style={{ backgroundColor: "#0B0F2E" }}
+                disabled={wizardMode === "rotation" && wizardRotation.length < 2}
+                onClick={applyWizard}
+              >
+                {wizardMode === "manual" ? "Commencer" : "Générer"}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

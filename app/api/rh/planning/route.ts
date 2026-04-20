@@ -32,6 +32,11 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const societe_id = searchParams.get('societe_id')
     const periode = searchParams.get('periode') // YYYY-MM
+    // ?merge_leaves=1 : fusionne les congés approuvés du mois dans les
+    // assignments côté serveur. Chaque assignment couvert par un congé
+    // approuvé reçoit un champ `type_conge` (AL, SL, UL, …). Utile pour
+    // l'espace salarié qui veut afficher un planning unifié.
+    const mergeLeaves = searchParams.get('merge_leaves') === '1'
 
     if (!societe_id) {
       // Régression hotfix — auparavant on renvoyait 400 si societe_id
@@ -101,10 +106,55 @@ export async function GET(request: Request) {
 
     if (assErr) throw assErr
 
+    // Build leave-by-date index if merge_leaves=1. On prend tous les congés
+    // approuvés qui chevauchent la période, et on marque chaque (employe_id, date)
+    // avec le type_conge. Si plusieurs congés chevauchent le même jour (cas
+    // limite), le premier trouvé gagne — l'UI doit traiter un seul type/jour.
+    const leaveByKey: Record<string, string> = {}
+    if (mergeLeaves && periode) {
+      const periodeWithDay = periode.length === 7 ? `${periode}-01` : periode
+      const ymShort = periode.slice(0, 7)
+      const monthStart = `${ymShort}-01`
+      const [y, m] = ymShort.split('-').map(n => parseInt(n, 10))
+      const lastDay = new Date(y, m, 0).getDate()
+      const monthEnd = `${ymShort}-${String(lastDay).padStart(2, '0')}`
+
+      const employeIds = [...new Set((assignments || []).map(a => a.employe_id))]
+      if (employeIds.length > 0) {
+        // Les congés approuvés qui débordent sur ce mois (début ≤ fin du mois ET fin ≥ début du mois)
+        const { data: leaves } = await supabase
+          .from('demandes_conges')
+          .select('employe_id, type_conge, date_debut, date_fin')
+          .in('employe_id', employeIds)
+          .eq('statut', 'approuve')
+          .lte('date_debut', monthEnd)
+          .gte('date_fin', monthStart)
+
+        for (const l of leaves || []) {
+          const start = String(l.date_debut).slice(0, 10)
+          const end = String(l.date_fin).slice(0, 10)
+          const from = start < monthStart ? monthStart : start
+          const to = end > monthEnd ? monthEnd : end
+          // Itération jour par jour, bornée à ~31 par congé (coût négligeable).
+          const cursor = new Date(from + 'T12:00:00')
+          const stop = new Date(to + 'T12:00:00')
+          while (cursor <= stop) {
+            const iso = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`
+            const key = `${l.employe_id}|${iso}`
+            if (!leaveByKey[key]) leaveByKey[key] = l.type_conge
+            cursor.setDate(cursor.getDate() + 1)
+          }
+        }
+      }
+    }
+
     // Flatten to the format the frontend expects:
     // { employe_id, jour (day-of-month number), shift (shift name) }
     const flatEntries = (assignments || []).map(a => {
       const dayOfMonth = new Date(a.date).getUTCDate()
+      const isoDate = typeof a.date === 'string' ? a.date.slice(0, 10) : new Date(a.date).toISOString().slice(0, 10)
+      const leaveKey = `${a.employe_id}|${isoDate}`
+      const type_conge = mergeLeaves ? (leaveByKey[leaveKey] || null) : undefined
       return {
         employe_id: a.employe_id,
         jour: dayOfMonth,
@@ -115,6 +165,7 @@ export async function GET(request: Request) {
         heure_fin: a.heure_fin,
         heures_prevues: a.heures_prevues,
         est_repos: a.est_repos,
+        ...(mergeLeaves ? { type_conge } : {}),
       }
     })
 

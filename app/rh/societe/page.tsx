@@ -919,8 +919,8 @@ function FiscalTab({
           <CardContent className="space-y-4">
             <Field label="Salaire minimum légal (MUR)" name="salaire_minimum" type="number" defaultValue={p.salaire_minimum ?? 16500} onChange={uP} />
             <Field label="Salaire minimum national (MUR)" name="salaire_minimum_national" type="number" defaultValue={p.salaire_minimum_national ?? 16500} onChange={uP} />
-            <Field label="Salary compensation (MUR)" name="salary_compensation" type="number" defaultValue={p.salary_compensation ?? 1000} onChange={uP} />
-            <Field label="Seuil compensation (MUR)" name="salary_compensation_seuil" type="number" defaultValue={p.salary_compensation_seuil ?? 50000} onChange={uP} />
+            {/* POLICY Lexora — compensation salariale Finance Act 2024 considérée
+                incluse dans le salaire négocié. Champs retirés du paramétrage. */}
           </CardContent>
         </Card>
 

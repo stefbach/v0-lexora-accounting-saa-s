@@ -20,23 +20,32 @@ export async function GET(request: Request) {
 
     const supabase = getAdminClient()
     const { searchParams } = new URL(request.url)
-    let societe_id = searchParams.get('societe_id')
+    const societe_id = searchParams.get('societe_id')
     const employe_id = searchParams.get('employe_id')
     const periode = searchParams.get('periode')
 
-    // Si pas de societe_id, utiliser la première société accessible
+    // Multi-tenant : si pas de societe_id, on étend la recherche à TOUTES
+    // les sociétés accessibles. Avant : on prenait juste la première, ce
+    // qui faisait que les frais saisis pour une autre société accessible
+    // n'apparaissaient pas dans la liste — bug "liste ne se rafraîchit
+    // pas après ajout" quand le sélecteur de société est sur "all".
+    let accessibleSocieteIds: string[] = []
     if (!societe_id) {
-      const accessible = await getUserSocieteIds(user.id)
-      if (accessible.length > 0) societe_id = accessible[0]
-      else return NextResponse.json({ rule: null, frais: [], tarif_km: 4, entries: [], total: 0 })
+      accessibleSocieteIds = await getUserSocieteIds(user.id)
+      if (accessibleSocieteIds.length === 0) {
+        return NextResponse.json({ rule: null, frais: [], tarif_km: 4, entries: [], total: 0 })
+      }
     }
 
-    // Fetch km rule — try both table names (frais_km_rules or frais_km_regles)
+    // Fetch km rule — try both table names (frais_km_rules or frais_km_regles).
+    // En mode multi-société (no societe_id), on prend la règle de la 1re
+    // société accessible juste pour exposer un tarif par défaut côté UI.
+    const ruleSocieteId = societe_id || accessibleSocieteIds[0]
     let rule: any = null
     const { data: r1, error: e1 } = await supabase
       .from('frais_km_rules')
       .select('*')
-      .eq('societe_id', societe_id)
+      .eq('societe_id', ruleSocieteId)
       .eq('actif', true)
       .order('date_effet', { ascending: false })
       .limit(1)
@@ -47,7 +56,7 @@ export async function GET(request: Request) {
       const { data: r2 } = await supabase
         .from('frais_km_regles')
         .select('*')
-        .eq('societe_id', societe_id)
+        .eq('societe_id', ruleSocieteId)
         .eq('actif', true)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -61,23 +70,37 @@ export async function GET(request: Request) {
       .select('*')
       .order('periode', { ascending: false })
 
-    // Filter by employees of this société
+    // Filter by employees of the relevant société(s).
+    // Sprint 5 FIX 1 — on exclut les employés partis (date_depart not null)
+    // des frais km courants. Les frais historiques restent accessibles via
+    // l'employe_id direct.
     if (employe_id) {
       entryQuery = entryQuery.eq('employe_id', employe_id)
     } else {
-      // Sprint 5 FIX 1 — exclure employés partis des frais km courants.
-      // Les frais historiques restent accessibles via l'employe_id direct.
-      const { data: emps } = await supabase
+      let empsQuery = supabase
         .from('employes')
         .select('id')
-        .eq('societe_id', societe_id)
         .eq('actif', true)
         .is('date_depart', null)
+      if (societe_id) {
+        empsQuery = empsQuery.eq('societe_id', societe_id)
+      } else {
+        empsQuery = empsQuery.in('societe_id', accessibleSocieteIds)
+      }
+      const { data: emps } = await empsQuery
       const ids = emps?.map(e => e.id) || []
       if (ids.length > 0) {
         entryQuery = entryQuery.in('employe_id', ids)
       } else {
-        return NextResponse.json({ rule, entries: [], total: 0 })
+        // FIX — toujours retourner `frais: []` (pas seulement entries) pour
+        // que le client puisse setFrais(fraisRes.frais || []) sans casser.
+        return NextResponse.json({
+          rule,
+          frais: [],
+          tarif_km: Number(rule?.tarif_par_km) || 4,
+          entries: [],
+          total: 0,
+        })
       }
     }
 
@@ -189,6 +212,8 @@ export async function POST(request: Request) {
     // montant est dérivé) au lieu de capper le montant seul.
     if (action === 'saisir') {
       const { employe_id, periode, km_parcourus, justificatif, motif, societe_id } = body
+      // Accepter aussi un tarif explicite depuis le body (sinon dérivé de saisieRule).
+      const tarifBody = body.tarif_applique !== undefined ? Number(body.tarif_applique) : undefined
       if (!employe_id || !periode || km_parcourus === undefined) {
         return NextResponse.json({ error: 'employe_id, periode et km_parcourus requis' }, { status: 400 })
       }
@@ -212,7 +237,8 @@ export async function POST(request: Request) {
         saisieRule = sr2
       }
 
-      const tarif = Number(saisieRule?.tarif_par_km) || 4
+      // Priorité : body.tarif_applique > règle société > défaut 4
+      const tarif = (tarifBody && tarifBody > 0) ? tarifBody : (Number(saisieRule?.tarif_par_km) || 4)
       let kmEffectifs = Number(km_parcourus)
       // Apply monthly cap on km (puisque montant est GENERATED)
       const plafond = Number(saisieRule?.plafond_mensuel) || 0
@@ -221,17 +247,29 @@ export async function POST(request: Request) {
       }
 
       const periodeDate = `${periode}-01`
-      // montant calculé manuellement (la colonne n'est PAS GENERATED en prod)
-      const montantCalcule = Math.round(kmEffectifs * tarif * 100) / 100
+      // frais_km_mois.montant est GENERATED ALWAYS AS (km_parcourus * tarif_applique)
+      // STORED en prod → ne JAMAIS l'inclure dans l'INSERT, sinon Postgres
+      // renvoie 428C9 / 42601 et l'API répond 400. Le montant est calculé
+      // automatiquement par la base. Même règle pour `approuve` : default
+      // côté DB (false). Payload strict aux 5 champs requis.
+      //
+      // SAFETY NET — on construit l'objet de manière ultra-explicite et on
+      // delete defensivement toute occurrence de `montant` ou `approuve` qui
+      // pourrait avoir été ajoutée par un middleware ou un caller fantôme.
       const insertRow: Record<string, unknown> = {
         employe_id,
         periode: periodeDate,
         km_parcourus: kmEffectifs,
         tarif_applique: tarif,
-        montant: montantCalcule,
         justificatif: justificatif || motif || null,
-        approuve: false,
       }
+      delete (insertRow as any).montant
+      delete (insertRow as any).approuve
+
+      // Log explicite des clés envoyées — facilite le diagnostic Vercel
+      // quand on retombe sur une erreur 428C9 / "cannot insert into column".
+      console.log('[frais-km saisir] payload keys:', Object.keys(insertRow).join(','), 'periode:', periodeDate)
+
       const { data, error } = await supabase
         .from('frais_km_mois')
         .upsert(insertRow, { onConflict: 'employe_id,periode' })
@@ -244,10 +282,12 @@ export async function POST(request: Request) {
           code: error.code,
           hint: error.hint,
           details: error.details,
+          payload_keys: Object.keys(insertRow),
         })
         return NextResponse.json({
           error: `Erreur saisie frais km : ${error.message}${error.hint ? ` (${error.hint})` : ''}`,
           code: error.code,
+          payload_keys: Object.keys(insertRow),
         }, { status: 500 })
       }
       return NextResponse.json({
