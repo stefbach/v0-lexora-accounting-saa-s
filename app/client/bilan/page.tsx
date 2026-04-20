@@ -501,41 +501,49 @@ export default function BilanPage() {
                   <SelectTrigger className="w-[160px] h-9"><SelectValue placeholder="Exercice" /></SelectTrigger>
                   <SelectContent>{availableExercices.map(ex => <SelectItem key={ex} value={ex}>{ex}</SelectItem>)}</SelectContent>
                 </Select>
-                {prevExercice && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-9 text-xs gap-1 text-red-600 border-red-200 hover:bg-red-50"
-                    disabled={purging}
-                    onClick={async () => {
-                      if (!societeId || !prevExercice) return
-                      const msg = `Supprimer TOUTES les écritures comptables de l'exercice ${prevExercice} ?\n\nCela supprimera les artefacts (soldes d'ouverture, écritures parasites) qui apparaissent dans la colonne N-1.\n\nCette action est irréversible.`
-                      if (!confirm(msg)) return
-                      setPurging(true)
-                      try {
-                        const res = await fetch('/api/comptable/ecritures?action=purge_exercice', {
-                          method: 'DELETE',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ societe_id: societeId, exercice: prevExercice }),
-                        })
-                        const d = await res.json()
-                        if (res.ok) {
-                          alert(`${d.deleted || 0} écriture(s) supprimée(s) pour l'exercice ${prevExercice}`)
-                          setPrevData(null)
-                          window.location.reload()
-                        } else {
-                          alert(d.error || 'Erreur')
-                        }
-                      } catch (e: any) { alert(e.message) }
-                      finally { setPurging(false) }
-                    }}
-                  >
-                    {purging ? '...' : `Purger ${prevExercice}`}
-                  </Button>
-                )}
               </>
             )}
-            {viewMode === "mensuel" && (
+            {/* Bouton Purger exercice — toujours visible si on a au moins 2 exercices */}
+            {availableExercices.length >= 2 && (
+              <Select
+                value=""
+                onValueChange={async (exToPurge) => {
+                  if (!exToPurge || !societeId) return
+                  const msg = `Supprimer TOUTES les écritures comptables de l'exercice ${exToPurge} ?\n\nCela supprimera les artefacts (soldes d'ouverture, écritures parasites).\n\nCette action est irréversible.`
+                  if (!confirm(msg)) return
+                  setPurging(true)
+                  try {
+                    const res = await fetch('/api/comptable/ecritures?action=purge_exercice', {
+                      method: 'DELETE',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ societe_id: societeId, exercice: exToPurge }),
+                    })
+                    const d = await res.json()
+                    if (res.ok) {
+                      alert(`${d.deleted || 0} écriture(s) supprimée(s) pour l'exercice ${exToPurge}`)
+                      setPrevData(null)
+                      window.location.reload()
+                    } else {
+                      alert(d.error || 'Erreur')
+                    }
+                  } catch (e: any) { alert(e.message) }
+                  finally { setPurging(false) }
+                }}
+              >
+                <SelectTrigger className="w-[180px] h-9 text-xs text-red-600 border-red-200">
+                  <SelectValue placeholder={purging ? 'Purge...' : '🗑 Purger un exercice'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableExercices
+                    .filter(ex => ex !== exercice)
+                    .map(ex => (
+                      <SelectItem key={ex} value={ex} className="text-red-600">
+                        Purger {ex}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            )}
               <MonthPicker value={selectedMonth} onChange={v => { if (v) setSelectedMonth(v) }} showTout={false} />
             )}
           </div>
