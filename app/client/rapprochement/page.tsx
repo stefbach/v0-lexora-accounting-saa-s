@@ -68,6 +68,8 @@ export default function ClientRapprochementPage() {
   // modale qui liste toutes les tx bancaires du mois, classées par proximité de montant.
   const [pickTxForFacture, setPickTxForFacture] = useState<any>(null)
   const [pickTxMonth, setPickTxMonth] = useState<string | null>(null)
+  const [pickTxSearch, setPickTxSearch] = useState('')
+  const [pickTxDevise, setPickTxDevise] = useState<string | null>(null)
   // Multi-facture lettrage : checkboxes selectionnees + filtre tiers
   const [selectedFactureIds, setSelectedFactureIds] = useState<Set<string>>(new Set())
   const [lettrageTiersFilter, setLettrageTiersFilter] = useState("")
@@ -3262,72 +3264,108 @@ Voulez-vous vraiment continuer ?`
           {pickTxForFacture && (() => {
             const FX: Record<string, number> = { MUR: 1, EUR: 54.4, USD: 44.8, GBP: 54.2 }
             const toMURLocal = (amt: number, dev: string) => amt * (FX[(dev || 'MUR').toUpperCase()] || 1)
+            const fromMUR = (amtMUR: number, dev: string) => { const r = FX[(dev || 'MUR').toUpperCase()] || 1; return r > 0 ? amtMUR / r : amtMUR }
             const f = pickTxForFacture
             const fTTC = Number(f.montant_ttc) || 0
             const fMUR = Number(f.montant_mur) || toMURLocal(fTTC, f.devise || 'MUR')
             const fDevise = (f.devise || 'MUR').toUpperCase()
             const pool = [...transactions].filter((t: any) => (Number(t.debit) || 0) > 0)
             const allMonths = Array.from(new Set(pool.map((t: any) => (t.date || '').substring(0, 7)).filter(Boolean))).sort().reverse()
+            const devises = Array.from(new Set(pool.map((t: any) => (t.devise || 'MUR').toUpperCase()))).sort()
             return (
               <div className="space-y-3">
                 <div className="text-xs text-gray-600 bg-gray-50 rounded-lg p-3 border">
-                  <div className="font-semibold text-[#0B0F2E]">Facture à lettrer</div>
+                  <div className="font-semibold text-[#0B0F2E]">
+                    {facturesChecked.size > 1 ? `${facturesChecked.size} factures à lettrer` : 'Facture à lettrer'}
+                  </div>
                   <div className="mt-1">{f.tiers || 'Fournisseur'} — {f.numero_facture || f.id}</div>
-                  <div className="mt-0.5">{formatDate(f.date_facture)} — <span className="font-mono font-semibold">{fmt(fTTC)} {fDevise}</span>
+                  <div className="mt-0.5">
+                    {f.date_facture && <>{formatDate(f.date_facture)} — </>}
+                    <span className="font-mono font-semibold">{fmt(fTTC)} {fDevise}</span>
                     {fDevise !== 'MUR' && <span className="text-gray-400 ml-1">(≈ {fmt(fMUR)} MUR)</span>}
+                    {fDevise === 'MUR' && devises.some(d => d !== 'MUR') && (
+                      <span className="text-gray-400 ml-1">
+                        {devises.filter(d => d !== 'MUR').map(d => `(≈ ${fmt(fromMUR(fMUR, d))} ${d})`).join(' ')}
+                      </span>
+                    )}
                   </div>
                 </div>
-                {/* Filtre par mois */}
-                <div className="flex flex-wrap gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setPickTxMonth(null)}
-                    className={`px-2.5 py-1 rounded-full text-[11px] transition-colors ${!pickTxMonth ? 'bg-[#0B0F2E] text-white font-semibold' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                  >
-                    Tous les mois
-                  </button>
-                  {allMonths.map(m => (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => setPickTxMonth(m)}
-                      className={`px-2.5 py-1 rounded-full text-[11px] transition-colors ${pickTxMonth === m ? 'bg-[#0B0F2E] text-white font-semibold' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                    >
-                      {(() => { const [y, mo] = m.split('-'); const MOIS = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc']; return `${MOIS[parseInt(mo)-1]} ${y}` })()}
+                {/* Recherche + filtre mois + filtre devise */}
+                <div className="space-y-2">
+                  <Input
+                    value={pickTxSearch}
+                    onChange={e => setPickTxSearch(e.target.value)}
+                    placeholder="🔍 Rechercher par libellé, tiers, banque..."
+                    className="h-8 text-sm"
+                  />
+                  <div className="flex flex-wrap gap-1">
+                    <button type="button" onClick={() => setPickTxMonth(null)}
+                      className={`px-2.5 py-1 rounded-full text-[11px] transition-colors ${!pickTxMonth ? 'bg-[#0B0F2E] text-white font-semibold' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                      Tous les mois
                     </button>
-                  ))}
+                    {allMonths.map(m => (
+                      <button key={m} type="button" onClick={() => setPickTxMonth(m)}
+                        className={`px-2.5 py-1 rounded-full text-[11px] transition-colors ${pickTxMonth === m ? 'bg-[#0B0F2E] text-white font-semibold' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                        {(() => { const [y, mo] = m.split('-'); const MOIS = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc']; return `${MOIS[parseInt(mo)-1]} ${y}` })()}
+                      </button>
+                    ))}
+                  </div>
+                  {devises.length > 1 && (
+                    <div className="flex flex-wrap gap-1">
+                      <span className="text-[10px] text-gray-400 self-center mr-1">Devise :</span>
+                      <button type="button" onClick={() => setPickTxDevise(null)}
+                        className={`px-2 py-0.5 rounded-full text-[10px] transition-colors ${!pickTxDevise ? 'bg-blue-600 text-white font-semibold' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                        Toutes
+                      </button>
+                      {devises.map(d => (
+                        <button key={d} type="button" onClick={() => setPickTxDevise(d)}
+                          className={`px-2 py-0.5 rounded-full text-[10px] transition-colors ${pickTxDevise === d ? 'bg-blue-600 text-white font-semibold' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                          {d}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 {(() => {
-                  const monthFiltered = pickTxMonth ? pool.filter((t: any) => (t.date || '').startsWith(pickTxMonth)) : pool
+                  const searchQ = (pickTxSearch || '').toLowerCase().trim()
+                  const monthFiltered = pool
+                    .filter((t: any) => !pickTxMonth || (t.date || '').startsWith(pickTxMonth))
+                    .filter((t: any) => !pickTxDevise || (t.devise || 'MUR').toUpperCase() === pickTxDevise)
+                    .filter((t: any) => {
+                      if (!searchQ) return true
+                      const hay = `${(t.libelle || '').toLowerCase()} ${(t.tiers_detecte || '').toLowerCase()} ${(t.banque || '').toLowerCase()}`
+                      return searchQ.split(/\s+/).every(w => hay.includes(w))
+                    })
                   const scored = monthFiltered.map((t: any) => {
                     const tDebit = Number(t.debit) || 0
                     const tDevise = (t.devise || 'MUR').toUpperCase()
                     const tMUR = toMURLocal(tDebit, tDevise)
-                    const sameDevise = tDevise === fDevise && fDevise !== 'MUR'
-                    const diffPct = sameDevise
-                      ? (fTTC > 0 ? Math.abs(tDebit - fTTC) / fTTC : 999)
-                      : (fMUR > 0 ? Math.abs(tMUR - fMUR) / fMUR : 999)
-                    return { tx: t, diffPct, tMUR }
+                    let diffPct: number
+                    if (tDevise === fDevise && fDevise !== 'MUR') {
+                      diffPct = fTTC > 0 ? Math.abs(tDebit - fTTC) / fTTC : 999
+                    } else {
+                      diffPct = fMUR > 0 ? Math.abs(tMUR - fMUR) / fMUR : 999
+                    }
+                    return { tx: t, diffPct, tMUR, tDevise }
                   }).sort((a, b) => a.diffPct - b.diffPct)
                   return scored.length === 0 ? (
                     <div className="text-sm text-gray-500 text-center py-6">
-                      Aucune transaction en débit{pickTxMonth ? ` pour ${pickTxMonth}` : ''}.<br />
-                      Vérifiez que le relevé bancaire est bien importé.
+                      Aucune transaction trouvée{pickTxMonth ? ` pour ${pickTxMonth}` : ''}{searchQ ? ` avec "${searchQ}"` : ''}.<br />
+                      Essayez un autre mois ou modifiez votre recherche.
                     </div>
                   ) : (
                     <>
                       <div className="text-xs text-gray-500">
-                        {scored.length} transaction{scored.length > 1 ? 's' : ''} — triée{scored.length > 1 ? 's' : ''} par proximité de montant
-                        {fDevise !== 'MUR' && ` (conversion ${fDevise} → MUR)`}.
+                        {scored.length} transaction{scored.length > 1 ? 's' : ''} — triée{scored.length > 1 ? 's' : ''} par proximité de montant.
                       </div>
                       <div className="space-y-1.5 max-h-[50vh] overflow-y-auto">
-                        {scored.slice(0, 100).map(({ tx, diffPct, tMUR }: any) => {
+                        {scored.slice(0, 100).map(({ tx, diffPct, tMUR, tDevise }: any) => {
+                          const tDebit = Number(tx.debit) || 0
                           const matchLevel = diffPct < 0.01 ? 'exact' : diffPct < 0.10 ? 'close' : diffPct < 0.30 ? 'far' : 'verydifferent'
                           const borderCls = matchLevel === 'exact' ? 'border-[#0F766E] bg-[#0F766E]/5'
                             : matchLevel === 'close' ? 'border-[#D4AF37] bg-[#D4AF37]/5'
                             : matchLevel === 'far' ? 'border-gray-200 bg-white'
                             : 'border-gray-100 bg-gray-50/50'
-                          const tDevise = (tx.devise || 'MUR').toUpperCase()
                           return (
                             <button
                               key={tx.id}
@@ -3336,6 +3374,8 @@ Voulez-vous vraiment continuer ?`
                                 setLinkDialog(tx)
                                 setPickTxForFacture(null)
                                 setPickTxMonth(null)
+                                setPickTxSearch('')
+                                setPickTxDevise(null)
                                 setDialogTab('factures')
                                 if (facturesChecked.size > 0) {
                                   setSelectedFactureIds(new Set(facturesChecked))
@@ -3345,22 +3385,30 @@ Voulez-vous vraiment continuer ?`
                             >
                               <div className="flex items-center justify-between gap-3">
                                 <div className="min-w-0 flex-1">
-                                  <div className="text-sm font-medium text-[#0B0F2E] truncate">{tx.libelle || '—'}</div>
-                                  <div className="text-[11px] text-gray-500">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold ${tDevise === 'EUR' ? 'bg-blue-100 text-blue-700' : tDevise === 'USD' ? 'bg-green-100 text-green-700' : tDevise === 'GBP' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'}`}>
+                                      {tDevise}
+                                    </span>
+                                    <span className="text-sm font-medium text-[#0B0F2E] truncate">{tx.libelle || '—'}</span>
+                                  </div>
+                                  <div className="text-[11px] text-gray-500 mt-0.5">
                                     {formatDate(tx.date)}
-                                    {tx.tiers_detecte && ` • ${tx.tiers_detecte}`}
-                                    {tx.banque && ` • ${tx.banque}`}
+                                    {tx.tiers_detecte && ` · ${tx.tiers_detecte}`}
+                                    {tx.banque && ` · ${tx.banque}`}
                                   </div>
                                 </div>
                                 <div className="text-right shrink-0">
                                   <div className="text-sm font-mono font-semibold text-[#9F1239]">
-                                    -{fmt(Number(tx.debit) || 0)} {tDevise}
+                                    -{fmt(tDebit)} {tDevise}
                                   </div>
                                   {tDevise !== 'MUR' && (
                                     <div className="text-[10px] text-gray-400">≈ {fmt(tMUR)} MUR</div>
                                   )}
-                                  <div className="text-[10px] text-gray-400">
-                                    {matchLevel === 'exact' ? '✓ exact' : `écart ${(diffPct * 100).toFixed(1)}%`}
+                                  {tDevise === 'MUR' && fDevise !== 'MUR' && (
+                                    <div className="text-[10px] text-gray-400">≈ {fmt(fromMUR(tDebit, fDevise))} {fDevise}</div>
+                                  )}
+                                  <div className={`text-[10px] ${matchLevel === 'exact' ? 'text-green-600 font-semibold' : matchLevel === 'close' ? 'text-amber-600' : 'text-gray-400'}`}>
+                                    {matchLevel === 'exact' ? '✓ montant exact' : `écart ${(diffPct * 100).toFixed(1)}%`}
                                   </div>
                                 </div>
                               </div>
