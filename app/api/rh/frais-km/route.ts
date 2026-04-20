@@ -20,23 +20,32 @@ export async function GET(request: Request) {
 
     const supabase = getAdminClient()
     const { searchParams } = new URL(request.url)
-    let societe_id = searchParams.get('societe_id')
+    const societe_id = searchParams.get('societe_id')
     const employe_id = searchParams.get('employe_id')
     const periode = searchParams.get('periode')
 
-    // Si pas de societe_id, utiliser la première société accessible
+    // Multi-tenant : si pas de societe_id, on étend la recherche à TOUTES
+    // les sociétés accessibles. Avant : on prenait juste la première, ce
+    // qui faisait que les frais saisis pour une autre société accessible
+    // n'apparaissaient pas dans la liste — bug "liste ne se rafraîchit
+    // pas après ajout" quand le sélecteur de société est sur "all".
+    let accessibleSocieteIds: string[] = []
     if (!societe_id) {
-      const accessible = await getUserSocieteIds(user.id)
-      if (accessible.length > 0) societe_id = accessible[0]
-      else return NextResponse.json({ rule: null, frais: [], tarif_km: 4, entries: [], total: 0 })
+      accessibleSocieteIds = await getUserSocieteIds(user.id)
+      if (accessibleSocieteIds.length === 0) {
+        return NextResponse.json({ rule: null, frais: [], tarif_km: 4, entries: [], total: 0 })
+      }
     }
 
-    // Fetch km rule — try both table names (frais_km_rules or frais_km_regles)
+    // Fetch km rule — try both table names (frais_km_rules or frais_km_regles).
+    // En mode multi-société (no societe_id), on prend la règle de la 1re
+    // société accessible juste pour exposer un tarif par défaut côté UI.
+    const ruleSocieteId = societe_id || accessibleSocieteIds[0]
     let rule: any = null
     const { data: r1, error: e1 } = await supabase
       .from('frais_km_rules')
       .select('*')
-      .eq('societe_id', societe_id)
+      .eq('societe_id', ruleSocieteId)
       .eq('actif', true)
       .order('date_effet', { ascending: false })
       .limit(1)
@@ -47,7 +56,7 @@ export async function GET(request: Request) {
       const { data: r2 } = await supabase
         .from('frais_km_regles')
         .select('*')
-        .eq('societe_id', societe_id)
+        .eq('societe_id', ruleSocieteId)
         .eq('actif', true)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -61,23 +70,37 @@ export async function GET(request: Request) {
       .select('*')
       .order('periode', { ascending: false })
 
-    // Filter by employees of this société
+    // Filter by employees of the relevant société(s).
+    // Sprint 5 FIX 1 — on exclut les employés partis (date_depart not null)
+    // des frais km courants. Les frais historiques restent accessibles via
+    // l'employe_id direct.
     if (employe_id) {
       entryQuery = entryQuery.eq('employe_id', employe_id)
     } else {
-      // Sprint 5 FIX 1 — exclure employés partis des frais km courants.
-      // Les frais historiques restent accessibles via l'employe_id direct.
-      const { data: emps } = await supabase
+      let empsQuery = supabase
         .from('employes')
         .select('id')
-        .eq('societe_id', societe_id)
         .eq('actif', true)
         .is('date_depart', null)
+      if (societe_id) {
+        empsQuery = empsQuery.eq('societe_id', societe_id)
+      } else {
+        empsQuery = empsQuery.in('societe_id', accessibleSocieteIds)
+      }
+      const { data: emps } = await empsQuery
       const ids = emps?.map(e => e.id) || []
       if (ids.length > 0) {
         entryQuery = entryQuery.in('employe_id', ids)
       } else {
-        return NextResponse.json({ rule, entries: [], total: 0 })
+        // FIX — toujours retourner `frais: []` (pas seulement entries) pour
+        // que le client puisse setFrais(fraisRes.frais || []) sans casser.
+        return NextResponse.json({
+          rule,
+          frais: [],
+          tarif_km: Number(rule?.tarif_par_km) || 4,
+          entries: [],
+          total: 0,
+        })
       }
     }
 

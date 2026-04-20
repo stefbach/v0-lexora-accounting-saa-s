@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { Analytics } from '@vercel/analytics/next'
+import { Toaster } from '@/components/ui/sonner'
 import { LenisProvider } from '@/components/LenisProvider'
 import './globals.css'
 
@@ -35,6 +36,7 @@ export default function RootLayout({
     <html lang="fr">
       <body className="font-sans antialiased">
         <LenisProvider>{children}</LenisProvider>
+        <Toaster richColors position="top-right" />
         <Analytics />
       </body>
     </html>
