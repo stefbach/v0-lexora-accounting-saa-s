@@ -11,7 +11,11 @@
  * - Training Levy (HRDC): 1% of basic salary
  * - PRGF: higher of 4.5% of total emoluments OR Rs 4.50 per day worked
  * - PAYE: 0% up to 390,000/yr, 10% on next 260,000, 15% on remainder
- * - Salary Compensation 2026: Rs 635 for employees earning <= 50,000 MUR
+ *
+ * POLICY Lexora — la compensation salariale Finance Act 2024 (Rs 635)
+ * est considérée comme DÉJÀ INCLUSE dans le salaire négocié avec
+ * l'employé. L'employeur ne la verse pas en plus. Aucun calcul
+ * salary_compensation n'est effectué par le moteur.
  */
 import type { ParametresPaieMRA } from '@/lib/types'
 
@@ -30,8 +34,11 @@ export const PARAMS_MRA_DEFAUT: ParametresPaieMRA = {
   paye_taux_1: 0.10,                // 10% tranche 1
   paye_seuil_taux_2: 650000,        // Seuil tranche 2 (390K + 260K)
   paye_taux_2: 0.15,                // 15% tranche 2+
-  salary_compensation: 635,          // Rs 635 Salary Compensation 2026
-  salary_compensation_seuil: 50000,  // Applicable si salaire <= 50,000
+  // POLICY Lexora : compensation considérée incluse dans le salaire.
+  // On garde les champs dans le type pour rétrocompatibilité des lectures
+  // mais le montant versé par le moteur est systématiquement 0.
+  salary_compensation: 0,
+  salary_compensation_seuil: 50000,
 }
 
 export interface ElementsBrut {
@@ -46,7 +53,6 @@ export interface ElementsBrut {
   other_refund?: number
   eoy_bonus?: number           // 13eme mois
   departure_notice?: number    // Preavis
-  salary_compensation?: number // Salary Compensation (auto-calculated if not provided)
   commission?: number          // Commission
 }
 
@@ -74,7 +80,6 @@ export interface ResultatPaie {
   montant_refacture_mur: number
   // Emoluments detail
   total_emoluments: number
-  salary_compensation_montant: number
   // NIT (Negative Income Tax, Finance Act 2024)
   nit_eligible: boolean
   nit_montant: number
@@ -104,12 +109,8 @@ export function calculerBulletin(
     commission = 0,
   } = elements
 
-  // Salary Compensation 2026: Rs 635 for employees earning <= 50,000
-  const salary_compensation_montant = elements.salary_compensation !== undefined
-    ? elements.salary_compensation
-    : (salaire_base <= params.salary_compensation_seuil ? params.salary_compensation : 0)
-
-  const salaire_brut_base = salaire_base + salary_compensation_montant + increment_salaire +
+  // POLICY Lexora — plus de salary_compensation ajoutée au brut.
+  const salaire_brut_base = salaire_base + increment_salaire +
     heures_sup_montant +
     transport_allowance + petrol_allowance +
     special_allowance_1 + special_allowance_2 + special_allowance_3 +
@@ -117,8 +118,8 @@ export function calculerBulletin(
 
   const salaire_brut = salaire_brut_base + eoy_bonus
 
-  // Total emoluments for PRGF calculation (basic + allowances + compensation, excl OT & EOY)
-  const total_emoluments = salaire_base + salary_compensation_montant + increment_salaire +
+  // Total emoluments for PRGF calculation (basic + allowances, excl OT & EOY)
+  const total_emoluments = salaire_base + increment_salaire +
     transport_allowance + petrol_allowance +
     special_allowance_1 + special_allowance_2 + special_allowance_3 +
     commission
@@ -155,7 +156,8 @@ export function calculerBulletin(
   const nit_applique = nit.eligible ? Math.min(nit.montant, payeBrut) : 0
 
   const total_deductions = csg_salarie + csg_bonus + nsf_salarie + paye
-  const salaire_net = salaire_brut - total_deductions
+  // POLICY Lexora — net ne peut jamais devenir négatif.
+  const salaire_net = Math.max(0, salaire_brut - total_deductions)
 
   // Charges patronales
   // CSG patronale progressive: 3% si brut <= 50K, 6% si > 50K (même seuil que CSG salarié)
@@ -204,7 +206,6 @@ export function calculerBulletin(
     cout_total_employeur: Math.round(cout_total_employeur * 100) / 100,
     montant_refacture_mur: Math.round(montant_refacture_mur * 100) / 100,
     total_emoluments: Math.round(total_emoluments * 100) / 100,
-    salary_compensation_montant: Math.round(salary_compensation_montant * 100) / 100,
     // Sprint 14 FIX 6 — NIT (Negative Income Tax)
     nit_eligible: nit.eligible,
     nit_montant: Math.round(nit_applique * 100) / 100,

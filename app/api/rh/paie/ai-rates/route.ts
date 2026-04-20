@@ -37,7 +37,6 @@ Réponds UNIQUEMENT en JSON valide, sans aucun texte avant ou après. Le format 
   "paye_taux_1": 0.10,
   "paye_seuil_taux_2": 650000,
   "paye_taux_2": 0.15,
-  "salary_compensation": 635,
   "jours_feries": [
     {"date": "${currentYear}-01-01", "label": "Jour de l'An"},
     {"date": "${currentYear}-01-02", "label": "Jour de l'An (suite)"}
@@ -52,7 +51,6 @@ IMPORTANT:
 - Training Levy: HRDC
 - PRGF: Portable Retirement Gratuity Fund — c'est un % du salaire brut (pas un montant fixe par jour)
 - PAYE: Pay As You Earn (barème progressif annuel)
-- Salary Compensation: montant fixe annuel
 - Inclus TOUS les jours fériés officiels de Maurice pour ${currentYear}
 - Valeurs en MUR sauf les taux qui sont des décimales (ex: 0.015 = 1.5%)
 - Si tu n'es pas sûr d'un taux, utilise la dernière valeur connue`
