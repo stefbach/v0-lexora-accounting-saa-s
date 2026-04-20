@@ -399,14 +399,24 @@ export default function BilanPage() {
         setPrevExercice(prevEx)
         if (json.financial?.available_exercices) setAvailableExercices(json.financial.available_exercices)
 
-        // Fetch previous year data
+        // Fetch previous year data — only if N-1 exercice exists
         if (prevEx) {
           const prevParams = new URLSearchParams()
           prevParams.set("societe_id", societeId)
           prevParams.set("exercice", prevEx)
           fetch(`/api/client/financial?${prevParams.toString()}`)
             .then(r => r.json())
-            .then(pJson => setPrevData(pJson.financial))
+            .then(pJson => {
+              const pf = pJson.financial
+              // Ne pas afficher N-1 si les données sont insignifiantes
+              // (pas de CA, pas de charges de personnel = exercice vide)
+              const hasRealData = pf && (
+                (pf.totalRevenue || 0) > 0 ||
+                (pf.totalExpenses || 0) > 1000 ||
+                (pf.totalEcritures || 0) > 20
+              )
+              setPrevData(hasRealData ? pf : null)
+            })
             .catch(() => setPrevData(null))
             .finally(() => setFetching(false))
         } else {
