@@ -1487,11 +1487,15 @@ export async function POST(request: Request) {
                 const classLib = `${libellePrefix} — ${(tx.tiers_detecte || tx.libelle || '').substring(0, 30)}`
                 const isOut = txDebit2 > 0
 
+                // R7 : pas de lettre sur comptes de résultat (6xxx/7xxx)
+                const chargeClass = compteCharge.charAt(0)
+                const lettreOnCharge = (chargeClass !== '6' && chargeClass !== '7') ? classLettre : null
+
                 await supabase.from('ecritures_comptables_v2').insert([
                   { dossier_id: dossier.id, societe_id: societe_id, date_ecriture: txDate2, journal: 'BNQ',
                     numero_compte: compteCharge, libelle: classLib,
                     debit_mur: isOut ? txAmountMUR2 : 0, credit_mur: isOut ? 0 : txAmountMUR2,
-                    lettre: classLettre, ref_folio: classRef },
+                    lettre: lettreOnCharge, ref_folio: classRef },
                   { dossier_id: dossier.id, societe_id: societe_id, date_ecriture: txDate2, journal: 'BNQ',
                     numero_compte: '512', libelle: `Banque — ${(tx.tiers_detecte || '').substring(0, 25)}`,
                     debit_mur: isOut ? 0 : txAmountMUR2, credit_mur: isOut ? txAmountMUR2 : 0,
@@ -3306,13 +3310,18 @@ export async function POST(request: Request) {
           console.log(`[classer_transaction] ${nbEcrituresSupprimees} anciennes ecritures supprimees (ref_folio=${refFolio}|${refFolioCLS}, lettre=${oldLettre})`)
         }
 
+        // R7 : pas de lettre sur comptes de résultat (6xxx/7xxx).
+        // Le ref_folio assure la traçabilité, la lettre ne va que sur le 512.
+        const compteClass = compte.charAt(0)
+        const lettreOnCompte = (compteClass !== '6' && compteClass !== '7') ? code : null
+
         const ecrituresPayload = [
           {
             dossier_id: dossier.id, societe_id, date_ecriture: tx.date || new Date().toISOString().split('T')[0],
             journal: 'BNQ', numero_compte: compte,
             libelle: `${classification} — ${(tx.tiers_detecte || tx.libelle || '').substring(0, 60)}${deviseLabel}`,
             debit_mur: isOut ? txAmtMUR : 0, credit_mur: isOut ? 0 : txAmtMUR,
-            lettre: code, ref_folio: refFolio,
+            lettre: lettreOnCompte, ref_folio: refFolio,
           },
           {
             dossier_id: dossier.id, societe_id, date_ecriture: tx.date || new Date().toISOString().split('T')[0],
