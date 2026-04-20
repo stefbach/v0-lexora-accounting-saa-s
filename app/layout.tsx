@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { Analytics } from '@vercel/analytics/next'
-import { Toaster } from '@/components/ui/sonner'
 import { LenisProvider } from '@/components/LenisProvider'
+import { Toaster } from '@/components/ui/sonner'
 import './globals.css'
 
 export const metadata: Metadata = {

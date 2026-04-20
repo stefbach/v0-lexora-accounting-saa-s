@@ -33,6 +33,9 @@ export function SalarieSidebar() {
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [activeHash, setActiveHash] = useState<string>("#dashboard")
+  const [badges, setBadges] = useState<{ contrats_a_signer: number; bulletins_non_lus: number }>({
+    contrats_a_signer: 0, bulletins_non_lus: 0,
+  })
 
   useEffect(() => { setMobileOpen(false) }, [pathname])
 
@@ -43,6 +46,27 @@ export function SalarieSidebar() {
     sync()
     window.addEventListener("hashchange", sync)
     return () => window.removeEventListener("hashchange", sync)
+  }, [])
+
+  // Sprint-salarie V3.5 — poll notification counts (contracts to sign,
+  // unread pay slips) to show small badges next to the relevant menu
+  // items. Lightweight: single call, refreshed every 60s.
+  useEffect(() => {
+    let cancelled = false
+    const fetchBadges = async () => {
+      try {
+        const res = await fetch("/api/salarie/notifications")
+        if (!res.ok) return
+        const data = await res.json()
+        if (!cancelled) setBadges({
+          contrats_a_signer: Number(data.contrats_a_signer) || 0,
+          bulletins_non_lus: Number(data.bulletins_non_lus) || 0,
+        })
+      } catch {}
+    }
+    fetchBadges()
+    const t = setInterval(fetchBadges, 60_000)
+    return () => { cancelled = true; clearInterval(t) }
   }, [])
 
   const handleLogout = async () => {
@@ -179,7 +203,31 @@ export function SalarieSidebar() {
                   />
                 )}
                 <Icon className="w-4 h-4 flex-shrink-0 relative" style={{ color: active ? "#0B0F2E" : undefined }} />
-                <span className="relative">{label}</span>
+                <span className="relative flex-1">{label}</span>
+                {hash === "#contrats" && badges.contrats_a_signer > 0 && (
+                  <span
+                    aria-label={`${badges.contrats_a_signer} contrat(s) à signer`}
+                    className="relative inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold leading-none"
+                    style={{
+                      backgroundColor: active ? "#0B0F2E" : "#D4AF37",
+                      color: active ? "#D4AF37" : "#0B0F2E",
+                    }}
+                  >
+                    {badges.contrats_a_signer}
+                  </span>
+                )}
+                {hash === "#bulletins" && badges.bulletins_non_lus > 0 && (
+                  <span
+                    aria-label={`${badges.bulletins_non_lus} bulletin(s) non lu(s)`}
+                    className="relative inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold leading-none"
+                    style={{
+                      backgroundColor: active ? "#0B0F2E" : "#4191FF",
+                      color: "#FFFFFF",
+                    }}
+                  >
+                    {badges.bulletins_non_lus}
+                  </span>
+                )}
               </a>
             )
           })}
