@@ -409,13 +409,9 @@ export default function BilanPage() {
             .then(r => r.json())
             .then(pJson => {
               const pf = pJson.financial
-              // Ne pas afficher N-1 si les données sont insignifiantes
-              // (pas de CA, pas de charges de personnel = exercice vide)
-              const hasRealData = pf && (
-                (pf.totalRevenue || 0) > 0 ||
-                (pf.totalExpenses || 0) > 1000 ||
-                (pf.totalEcritures || 0) > 20
-              )
+              // Ne pas afficher N-1 si pas de CA réel (les soldes bancaires
+              // et artefacts ne suffisent pas à justifier un comparatif)
+              const hasRealData = pf && (pf.totalRevenue || 0) > 0
               setPrevData(hasRealData ? pf : null)
             })
             .catch(() => setPrevData(null))
@@ -503,24 +499,27 @@ export default function BilanPage() {
                 </Select>
               </>
             )}
-            {/* Bouton Purger exercice — toujours visible si on a au moins 2 exercices */}
-            {availableExercices.length >= 2 && (
-              <Select
-                value=""
-                onValueChange={async (exToPurge) => {
-                  if (!exToPurge || !societeId) return
-                  const msg = `Supprimer TOUTES les écritures comptables de l'exercice ${exToPurge} ?\n\nCela supprimera les artefacts (soldes d'ouverture, écritures parasites).\n\nCette action est irréversible.`
+            {/* Bouton Purger exercice précédent */}
+            {prevExercice && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 text-xs gap-1 text-red-600 border-red-200 hover:bg-red-50"
+                disabled={purging}
+                onClick={async () => {
+                  if (!societeId) return
+                  const msg = `Supprimer TOUTES les écritures de l'exercice ${prevExercice} ?\n\nCela supprimera les données parasites (soldes d'ouverture, artefacts) de la colonne N-1.\n\nCette action est irréversible.`
                   if (!confirm(msg)) return
                   setPurging(true)
                   try {
                     const res = await fetch('/api/comptable/ecritures?action=purge_exercice', {
                       method: 'DELETE',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ societe_id: societeId, exercice: exToPurge }),
+                      body: JSON.stringify({ societe_id: societeId, exercice: prevExercice }),
                     })
                     const d = await res.json()
                     if (res.ok) {
-                      alert(`${d.deleted || 0} écriture(s) supprimée(s) pour l'exercice ${exToPurge}`)
+                      alert(`${d.deleted || 0} écriture(s) supprimée(s) pour ${prevExercice}`)
                       setPrevData(null)
                       window.location.reload()
                     } else {
@@ -530,19 +529,8 @@ export default function BilanPage() {
                   finally { setPurging(false) }
                 }}
               >
-                <SelectTrigger className="w-[180px] h-9 text-xs text-red-600 border-red-200">
-                  <SelectValue placeholder={purging ? 'Purge...' : '🗑 Purger un exercice'} />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableExercices
-                    .filter(ex => ex !== exercice)
-                    .map(ex => (
-                      <SelectItem key={ex} value={ex} className="text-red-600">
-                        Purger {ex}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
+                {purging ? '...' : `🗑 Purger ${prevExercice}`}
+              </Button>
             )}
             {viewMode === "mensuel" && (
               <MonthPicker value={selectedMonth} onChange={v => { if (v) setSelectedMonth(v) }} showTout={false} />
