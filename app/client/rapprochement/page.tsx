@@ -1106,15 +1106,28 @@ Voulez-vous vraiment continuer ?`
     'salaire', 'salaire_bulk', 'salaire_bulk_non_verifie', 'salaire_individuel',
     'paiement_mra', 'paiement_mra_non_verifie',
     'remboursement_personnel', 'remboursement_test',
-    'paiement_fournisseur',           // explicit fournisseur classification (no facture matched)
+    'paiement_fournisseur',
     'prestation_contracteur',
     'charges_sociales', 'reversal_salaire',
-    'identifie',                       // generic "classified" without a sub-type
-    // === Classifications du dropdown "Classer..." de l onglet À vérifier ===
+    'identifie',
     'compte_courant_associe',
     'avance_personnel',
     'charge_diverse',
     'autre',
+    // Classifications complètes du dropdown "Classer..."
+    'fournisseur',
+    'client',
+    'remboursement_associe',
+    'loyer',
+    'entretien',
+    'assurance',
+    'honoraires',
+    'deplacement',
+    'telecom',
+    'impot_taxe',
+    'materiel',
+    'produit_divers',
+    'charge_sociale',
   ])
   const STATUT_PROPOSED = new Set(['propose', 'a_verifier'])
 
