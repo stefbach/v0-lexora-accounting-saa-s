@@ -221,16 +221,17 @@ export async function POST(request: Request) {
       }
 
       const periodeDate = `${periode}-01`
-      // montant calculé manuellement (la colonne n'est PAS GENERATED en prod)
-      const montantCalcule = Math.round(kmEffectifs * tarif * 100) / 100
+      // frais_km_mois.montant est GENERATED ALWAYS AS (km_parcourus * tarif_applique)
+      // STORED en prod → ne JAMAIS l'inclure dans l'INSERT, sinon Postgres
+      // renvoie 428C9 / 42601 et l'API répond 400. Le montant est calculé
+      // automatiquement par la base. Même règle pour `approuve` : default
+      // côté DB (false) — on garde un payload minimal aux 5 champs requis.
       const insertRow: Record<string, unknown> = {
         employe_id,
         periode: periodeDate,
         km_parcourus: kmEffectifs,
         tarif_applique: tarif,
-        montant: montantCalcule,
         justificatif: justificatif || motif || null,
-        approuve: false,
       }
       const { data, error } = await supabase
         .from('frais_km_mois')
