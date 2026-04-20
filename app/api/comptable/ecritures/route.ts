@@ -269,6 +269,36 @@ export async function DELETE(request: Request) {
     if (!user) return NextResponse.json({ error: 'Non autorise' }, { status: 401 })
 
     const { searchParams } = new URL(request.url)
+    const action = searchParams.get('action')
+
+    // Purge d'un exercice complet
+    if (action === 'purge_exercice') {
+      const body = await request.json().catch(() => ({}))
+      const { societe_id: sid, exercice } = body
+      if (!sid || !exercice) {
+        return NextResponse.json({ error: 'societe_id et exercice requis' }, { status: 400 })
+      }
+      // Résoudre les dates de l'exercice (ex: "FY2024-2025" → 2024-07-01 / 2025-06-30)
+      const supabase = getAdminClient()
+      const { data: ex } = await supabase
+        .from('exercices_fiscaux')
+        .select('date_debut, date_fin')
+        .eq('societe_id', sid)
+        .eq('annee', exercice)
+        .single()
+      if (!ex) {
+        return NextResponse.json({ error: `Exercice ${exercice} non trouvé` }, { status: 404 })
+      }
+      const { count, error } = await supabase
+        .from('ecritures_comptables_v2')
+        .delete({ count: 'exact' })
+        .eq('societe_id', sid)
+        .gte('date_ecriture', ex.date_debut)
+        .lte('date_ecriture', ex.date_fin)
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json({ success: true, deleted: count || 0, exercice, date_debut: ex.date_debut, date_fin: ex.date_fin })
+    }
+
     const id = searchParams.get('id')
     const societe_id = searchParams.get('societe_id')
     if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
