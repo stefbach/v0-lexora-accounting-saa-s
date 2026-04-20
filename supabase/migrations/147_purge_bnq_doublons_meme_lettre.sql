@@ -1,29 +1,25 @@
 -- ═══════════════════════════════════════════════════════════════
 -- Migration 147: Purge UNIVERSELLE des doublons d'écritures
 --
--- Observé en prod (capture utilisateur sur compte 411) :
--- Pour chaque règlement client SKYCALL, DEUX écritures BNQ 411 crédit
--- sont visibles avec le même montant, la même date, la même lettre (R017,
--- R016, ...) mais des libellés légèrement différents :
---   • "Paiement SKYCALL — 02/03/2026"
---   • "Règlement 02/03/2026 — SKYCALL"
+-- Deux types de doublons observés en prod :
+--
+-- TYPE 1 — Même lettre, libellés différents (compte 411/401) :
+--   • "Paiement SKYCALL — 02/03/2026" (R017)
+--   • "Règlement 02/03/2026 — SKYCALL" (R017)
+--   Cause : phase finale auto_rapprocher + sync_lettrage
+--
+-- TYPE 2 — Lettres DIFFÉRENTES, même montant/date (compte 512) :
+--   • "Banque [EUR @ 54.5852] — MR STEPHANE HENRI BACH" (CL1670047)
+--   • "Banque — MR STEPHANE HENRI BACH" (A036)
+--   Cause : auto_rapprocher crée CLS- + classer_transaction crée CL-
+--   sans supprimer la CLS- existante (ref_folio CL- ≠ CLS-),
+--   ET oldLettre lu APRÈS mise à jour → suppression par lettre jamais exécutée
 --
 -- Le même bug touche TOUS les comptes BNQ (401, 411, 512, 581, 421, ...).
---
--- Cause : deux code paths (phase finale d'auto_rapprocher + sync_lettrage)
--- créent la même écriture avec un libellé différent qui échappe à la
--- dédup BNQ (qui compare par libellé). Les correctifs code évitent les
--- doublons futurs ; cette migration nettoie les doublons existants.
---
--- Stratégie : pour chaque groupe (societe_id, numero_compte, lettre,
--- debit_mur, credit_mur, date_ecriture) avec journal='BNQ' qui contient
--- plus d'une ligne, on garde la plus ancienne (created_at MIN) et on
--- supprime les autres.
 -- ═══════════════════════════════════════════════════════════════
 
--- ─── SUPPRESSION UNIVERSELLE des doublons BNQ lettrés ──────────────
--- Couvre 401, 411, 512, 581, 421, 4457, 627, etc.
--- Même clé de dédup : (societe_id, numero_compte, lettre, debit, credit, date).
+-- ─── PASSE 1 : Doublons BNQ avec MÊME lettre ─────────────────────
+-- Clé de dédup : (societe_id, numero_compte, lettre, debit, credit, date).
 DELETE FROM public.ecritures_comptables_v2
 WHERE id IN (
   SELECT id FROM (
@@ -39,29 +35,30 @@ WHERE id IN (
   WHERE rn > 1
 );
 
--- ─── Doublons BNQ NON lettrés ─────────────────────────────────────
--- Certaines écritures créées par backfill peuvent être sans lettre mais
--- identiques sur (societe_id, numero_compte, debit, credit, date, libelle).
--- On inclut le libellé dans la clé pour être plus conservateur sur les non-lettrées.
+-- ─── PASSE 2 : Doublons BNQ avec lettres DIFFÉRENTES ─────────────
+-- Cas MR STEPHANE HENRI BACH : même (societe_id, numero_compte,
+-- debit_mur, credit_mur, date_ecriture) mais lettres distinctes.
+-- On garde le plus ancien, on supprime les plus récents.
+-- Sécurité : limité au journal BNQ uniquement (les ACH/VTE
+-- légitimes ne sont pas touchés).
 DELETE FROM public.ecritures_comptables_v2
 WHERE id IN (
   SELECT id FROM (
     SELECT id,
       ROW_NUMBER() OVER (
-        PARTITION BY societe_id, numero_compte, debit_mur, credit_mur, date_ecriture, libelle
+        PARTITION BY societe_id, numero_compte, debit_mur, credit_mur, date_ecriture
         ORDER BY created_at ASC, id ASC
       ) AS rn
     FROM public.ecritures_comptables_v2
     WHERE journal = 'BNQ'
-      AND lettre IS NULL
   ) sub
   WHERE rn > 1
 );
 
--- ─── Doublons ACH/VTE par facture_id ──────────────────────────────
+-- ─── PASSE 3 : Doublons ACH/VTE par facture_id ──────────────────
 -- Une facture = 1 jeu d'écritures ACH ou VTE. Si la même facture a
 -- plusieurs entrées sur le même numero_compte + même direction, c'est
--- un doublon (pas une écriture multi-lignes légitime).
+-- un doublon.
 DELETE FROM public.ecritures_comptables_v2
 WHERE id IN (
   SELECT id FROM (
