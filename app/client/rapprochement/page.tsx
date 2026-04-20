@@ -1804,8 +1804,8 @@ Voulez-vous vraiment continuer ?`
                 const FX: Record<string, number> = { MUR: 1, EUR: 54.4, USD: 44.8, GBP: 54.2 }
                 const toMURLocal = (amt: number, dev: string) => amt * (FX[(dev || 'MUR').toUpperCase()] || 1)
                 const checkedRows = filteredRows.filter(r => facturesChecked.has(r.f.id))
-                const totalChecked = checkedRows.reduce((s, r) => s + (Number(r.f.montant_ttc) || 0), 0)
-                const totalMUR = checkedRows.reduce((s, r) => s + (Number(r.f.montant_mur) || toMURLocal(Number(r.f.montant_ttc) || 0, r.f.devise || 'MUR')), 0)
+                const totalChecked = checkedRows.reduce((s, r) => s + (Number(r.f.montant_ttc) || Number(r.f.montant_mur) || 0), 0)
+                const totalMUR = checkedRows.reduce((s, r) => s + (Number(r.f.montant_mur) || Number(r.f.montant_ttc) || 0), 0)
                 const checkedDevise = checkedRows[0]?.f.devise || 'MUR'
                 const candidates = [...(unmatched || [])].filter((t: any) => {
                   const tDebit = Number(t.debit) || 0
