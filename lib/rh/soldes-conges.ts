@@ -49,7 +49,13 @@ export interface SoldeCongesPeriodResult {
   vl_pris: number
   vl_cycle_debut: string | null
   vl_cycle_fin: string | null
-  vl_eligibility_status: 'eligible' | 'en_acquisition' | 'hors_wra_basic_sup_50k' | 'migrant_worker_exclu' | 'no_date_arrivee'
+  vl_eligibility_status:
+    | 'eligible'
+    | 'eligible_via_policy_societe'
+    | 'en_acquisition'
+    | 'hors_wra_basic_sup_50k'
+    | 'migrant_worker_exclu'
+    | 'no_date_arrivee'
 }
 
 /**
@@ -66,16 +72,29 @@ export async function recomputeSoldeCongesAll(
   dateReference?: string,
 ): Promise<SoldeCongesPeriodResult | null> {
   try {
-    // ── 1. Récupérer la date d'arrivée + infos VL (G2) ───────────────
+    // ── 1. Récupérer la date d'arrivée + infos VL (G2) + policy société (G3)
     const { data: emp } = await supabase
       .from('employes')
-      .select('date_arrivee, salaire_base, is_migrant_worker')
+      .select('date_arrivee, salaire_base, is_migrant_worker, societe_id')
       .eq('id', employeId)
       .maybeSingle()
 
     if (!emp?.date_arrivee) {
       console.warn(`[soldes-conges] ${employeId} : pas de date_arrivee, recompute skippé`)
       return null
+    }
+
+    // G3 — Policy de la société pour les hors_wra (défaut applique_wra_etendu).
+    let policyHorsWra: 'applique_wra_etendu' | 'contrat_uniquement' = 'applique_wra_etendu'
+    if (emp.societe_id) {
+      const { data: soc } = await supabase
+        .from('societes')
+        .select('policy_conges_hors_wra')
+        .eq('id', emp.societe_id)
+        .maybeSingle()
+      if (soc?.policy_conges_hors_wra === 'contrat_uniquement') {
+        policyHorsWra = 'contrat_uniquement'
+      }
     }
 
     const dateRef = dateReference
@@ -163,6 +182,7 @@ export async function recomputeSoldeCongesAll(
         p_salaire_base: Number(emp.salaire_base) || 0,
         p_is_migrant: Boolean(emp.is_migrant_worker),
         p_date_reference: dateRef,
+        p_policy_hors_wra: policyHorsWra,
       })
       .maybeSingle()
 
@@ -183,6 +203,7 @@ export async function recomputeSoldeCongesAll(
         Number(emp.salaire_base) || 0,
         Boolean(emp.is_migrant_worker),
         dateRef,
+        policyHorsWra,
       )
       vlDroit = vl.vl_droit
       vlCycleDebut = vl.vl_cycle_debut
@@ -379,6 +400,7 @@ function computeVlDroitJs(
   salaireBase: number,
   isMigrant: boolean,
   dateReference: string,
+  policyHorsWra: 'applique_wra_etendu' | 'contrat_uniquement' = 'applique_wra_etendu',
 ): {
   vl_droit: number
   vl_cycle_debut: string | null
@@ -388,7 +410,11 @@ function computeVlDroitJs(
   if (!dateArrivee) return { vl_droit: 0, vl_cycle_debut: null, vl_cycle_fin: null, eligibility_status: 'no_date_arrivee' }
   const months = Math.max(0, monthsBetween(dateArrivee, dateReference))
   if (isMigrant) return { vl_droit: 0, vl_cycle_debut: null, vl_cycle_fin: null, eligibility_status: 'migrant_worker_exclu' }
-  if ((salaireBase || 0) > 50000) return { vl_droit: 0, vl_cycle_debut: null, vl_cycle_fin: null, eligibility_status: 'hors_wra_basic_sup_50k' }
+
+  const isHorsWra = (salaireBase || 0) > 50000
+  if (isHorsWra && policyHorsWra === 'contrat_uniquement') {
+    return { vl_droit: 0, vl_cycle_debut: null, vl_cycle_fin: null, eligibility_status: 'hors_wra_basic_sup_50k' }
+  }
 
   const arr = new Date(String(dateArrivee).slice(0, 10) + 'T12:00:00')
   if (months < 60) {
@@ -407,6 +433,6 @@ function computeVlDroitJs(
     vl_droit: 30,
     vl_cycle_debut: isoDate(debut),
     vl_cycle_fin: isoDate(fin),
-    eligibility_status: 'eligible',
+    eligibility_status: isHorsWra ? 'eligible_via_policy_societe' : 'eligible',
   }
 }

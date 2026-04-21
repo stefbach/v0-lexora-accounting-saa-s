@@ -258,7 +258,7 @@ export async function GET(request: Request) {
     try {
       let q = supabase
         .from('employes')
-        .select('id, nom, prenom, poste, societe_id, date_arrivee, genre, gender, actif, date_depart, salaire_base, is_migrant_worker')
+        .select('id, nom, prenom, poste, societe_id, date_arrivee, genre, gender, actif, date_depart, salaire_base, is_migrant_worker, statut_wra')
         .in('societe_id', societeIds)
         .eq('actif', true)
         .is('date_depart', null)
@@ -358,17 +358,32 @@ export async function GET(request: Request) {
         const vlCycleFin = solde?.vl_cycle_fin
           ? String(solde.vl_cycle_fin).slice(0, 10)
           : null
-        // Déterminer le statut VL depuis les champs stockés + fallback
-        // (basic > 50k / migrant / < 5 ans).
-        let vlEligibilityStatus: 'eligible' | 'en_acquisition' | 'hors_wra_basic_sup_50k' | 'migrant_worker_exclu' | 'no_date_arrivee' = 'no_date_arrivee'
+        // Déterminer le statut VL. G3 — on considère statut_wra + le
+        // fait que vl_droit > 0 (déjà calculé par le helper via RPC en
+        // tenant compte de la policy société).
+        // Statut dérivé :
+        //   - pas de date_arrivee → no_date_arrivee
+        //   - migrant              → migrant_worker_exclu
+        //   - vl_droit > 0 et worker   → eligible
+        //   - vl_droit > 0 et hors_wra → eligible_via_policy_societe (policy étendue)
+        //   - vl_droit = 0 et hors_wra → hors_wra_basic_sup_50k (policy stricte)
+        //   - sinon (worker < 5 ans) → en_acquisition
+        const isHorsWra = (Number(emp.salaire_base) || 0) > 50000
+        let vlEligibilityStatus:
+          | 'eligible'
+          | 'eligible_via_policy_societe'
+          | 'en_acquisition'
+          | 'hors_wra_basic_sup_50k'
+          | 'migrant_worker_exclu'
+          | 'no_date_arrivee' = 'no_date_arrivee'
         if (!emp.date_arrivee) {
           vlEligibilityStatus = 'no_date_arrivee'
         } else if (emp.is_migrant_worker) {
           vlEligibilityStatus = 'migrant_worker_exclu'
-        } else if ((Number(emp.salaire_base) || 0) > 50000) {
-          vlEligibilityStatus = 'hors_wra_basic_sup_50k'
         } else if ((vlDroit || 0) > 0) {
-          vlEligibilityStatus = 'eligible'
+          vlEligibilityStatus = isHorsWra ? 'eligible_via_policy_societe' : 'eligible'
+        } else if (isHorsWra) {
+          vlEligibilityStatus = 'hors_wra_basic_sup_50k'
         } else {
           vlEligibilityStatus = 'en_acquisition'
         }
@@ -425,6 +440,9 @@ export async function GET(request: Request) {
           societe_id: emp.societe_id,
           gender: emp.genre || emp.gender,
           date_arrivee: emp.date_arrivee,
+          salaire_base: emp.salaire_base,
+          // G3 — Statut WRA 2019 (computed column mig 162)
+          statut_wra: emp.statut_wra || (isHorsWra ? 'hors_wra' : 'worker'),
           // ─── Période courante (B.1) ───
           periode_debut: solde ? String(solde.periode_debut).slice(0, 10) : null,
           periode_fin: solde ? String(solde.periode_fin).slice(0, 10) : null,
@@ -689,20 +707,36 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Employe non trouve' }, { status: 404 })
       }
 
-      // G2 — Validation VL (WRA S.47). Un employé non-éligible (migrant, basic
-      // > 50k ou < 5 ans d'ancienneté) ne peut pas soumettre de demande VL.
+      // G2 + G3 — Validation VL (WRA S.47). Un employé non-éligible
+      // (migrant, ou < 5 ans d'ancienneté, ou hors_wra sous policy stricte)
+      // ne peut pas soumettre de demande VL.
       if (body.type_conge === 'VL') {
+        // Charger la policy de la société pour les hors_wra
+        let policyHorsWra = 'applique_wra_etendu'
+        if (emp.societe_id) {
+          const { data: soc } = await supabase
+            .from('societes')
+            .select('policy_conges_hors_wra')
+            .eq('id', emp.societe_id)
+            .maybeSingle()
+          if (soc?.policy_conges_hors_wra === 'contrat_uniquement') {
+            policyHorsWra = 'contrat_uniquement'
+          }
+        }
         const { data: vlCheck } = await supabase.rpc('get_vacation_leave_droit', {
           p_date_arrivee: emp.date_arrivee,
           p_salaire_base: Number(emp.salaire_base) || 0,
           p_is_migrant: Boolean(emp.is_migrant_worker),
           p_date_reference: new Date().toISOString().slice(0, 10),
+          p_policy_hors_wra: policyHorsWra,
         }).maybeSingle()
         const status = (vlCheck as any)?.eligibility_status
-        if (status !== 'eligible') {
+        // 'eligible' (worker) et 'eligible_via_policy_societe' (hors_wra avec policy étendue) sont OK.
+        const isEligible = status === 'eligible' || status === 'eligible_via_policy_societe'
+        if (!isEligible) {
           return NextResponse.json({
             error: 'vacation_leave_not_eligible',
-            detail: "Le salarié n'a pas atteint 5 ans de service OU son basic salary dépasse 50 000 MUR.",
+            detail: "Le salarié n'a pas atteint 5 ans de service OU la policy société hors WRA ne l'autorise pas.",
             eligibility_status: status || 'unknown',
           }, { status: 400 })
         }
