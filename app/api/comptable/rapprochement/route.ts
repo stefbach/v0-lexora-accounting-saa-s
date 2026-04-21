@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createEcrituresForPayment, createEcrituresForFacture } from '@/lib/accounting/ecritures-factures'
+import { createEcrituresForPayment, createEcrituresForFacture, classifyTdsGap } from '@/lib/accounting/ecritures-factures'
 import { safeInsertBnq } from '@/lib/accounting/bnq-dedupe'
 import { analyzeAllTransactions, MatchingTransaction, MatchingFacture } from '@/lib/accounting/matching-engine'
 import { runIntelligentRapprochement, buildAliasMap } from '@/lib/accounting/intelligent-rapprochement'
@@ -304,7 +304,7 @@ export async function POST(request: Request) {
           supabase.from('releves_bancaires').select('id, compte_bancaire_id, transactions_json').eq('societe_id', societe_id),
           supabase.from('societes').select('nom, aliases').eq('id', societe_id),
           supabase.from('dossiers').select('id, client_id').eq('societe_id', societe_id),
-          supabase.from('factures').select('id, numero_facture, tiers, montant_ttc, montant_mur, type_facture, devise, date_facture, date_echeance, conditions_paiement, statut').eq('societe_id', societe_id).in('statut', ['en_attente', 'retard', 'partiel']),
+          supabase.from('factures').select('id, numero_facture, tiers, montant_ttc, montant_mur, type_facture, devise, date_facture, date_echeance, conditions_paiement, statut, avoir_origine_id').eq('societe_id', societe_id).in('statut', ['en_attente', 'retard', 'partiel']),
           getTauxChange().catch(() => ({ MUR: 1, EUR: 46.50, USD: 44.80, GBP: 54.20 })),
           // FIX 1 — compte_comptable est nécessaire pour router la 2e ligne
           // BNQ sur le bon 512xxx (ex: 512100 DDS MUR, 512200 DDS EUR).
@@ -331,18 +331,32 @@ export async function POST(request: Request) {
       // ── Charger règles de classification + dirigeants (best-effort) ──
       let classificationRules: ClassificationRule[] = []
       let directors: Array<{ id: string; nom_complet: string; role: string }> = []
+      // TDS defaults per supplier (migration 159) — optional, keyed by
+      // lower-cased tiers name so we can override heuristic TDS detection.
+      const tdsDefaultsByTiers = new Map<string, { code: string; rate: number; compte: string }>()
       try {
-        const [rulesRes, dirRes] = await Promise.all([
+        const [rulesRes, dirRes, tdsRes] = await Promise.all([
           supabase.from('classification_rules').select('*').eq('active', true)
             .or(`societe_id.eq.${societe_id},societe_id.is.null`).order('priority'),
           supabase.from('directors_shareholders').select('id, nom_complet, role')
             .eq('societe_id', societe_id).eq('active', true),
+          supabase.from('tiers_tds_defaults').select('tiers, tds_code, tds_rate_pct, tds_compte')
+            .eq('societe_id', societe_id),
         ])
         classificationRules = (rulesRes.data || []) as ClassificationRule[]
         directors = (dirRes.data || []) as any[]
-        console.log(`[rapprochement] Loaded ${classificationRules.length} rules, ${directors.length} directors`)
+        for (const row of (tdsRes?.data || []) as any[]) {
+          const key = String(row.tiers || '').toLowerCase().trim()
+          if (!key) continue
+          tdsDefaultsByTiers.set(key, {
+            code: String(row.tds_code || ''),
+            rate: Number(row.tds_rate_pct || 0) / 100,
+            compte: String(row.tds_compte || '447'),
+          })
+        }
+        console.log(`[rapprochement] Loaded ${classificationRules.length} rules, ${directors.length} directors, ${tdsDefaultsByTiers.size} TDS defaults`)
       } catch (rulesErr) {
-        console.warn('[rapprochement] classification_rules/directors not available (migration 135 not applied?):', rulesErr)
+        console.warn('[rapprochement] classification_rules/directors/tds not available:', rulesErr)
       }
 
       console.log(`[rapprochement] Parallel load done in ${Date.now() - t0}ms: ${releves.length} releves, ${(facturesData || []).length} factures`)
@@ -683,6 +697,7 @@ export async function POST(request: Request) {
           conditions_paiement: f.conditions_paiement != null ? Number(f.conditions_paiement) : null,
           type_facture: (f.type_facture === 'fournisseur' ? 'fournisseur' : 'client') as 'client' | 'fournisseur',
           statut: f.statut,
+          avoir_origine_id: f.avoir_origine_id ?? null,
         }))
 
         const allTxs = globalUnclassified.map(g => g.tx)
@@ -775,9 +790,19 @@ export async function POST(request: Request) {
             // Calculer le montant total des factures pour détecter paiement partiel / TDS
             const totalFactures = match.factures.reduce((s: number, f: any) => s + (Number(f.montant_mur) || Number(f.montant_ttc) || 0), 0)
             const txPayAmtMUR = toMUR(Math.max(Number(match.transaction.debit) || 0, Number(match.transaction.credit) || 0), match.transaction.devise || 'MUR')
-            const isPartial = totalFactures > 0 && txPayAmtMUR < totalFactures * 0.90 // < 90% = partiel
+            // TDS detection — classify the gap against the canonical Mauritian
+            // withholding rates (0.75%, 3%, 5%, 10%, 15%). A matched rate
+            // supersedes the "partial payment" interpretation because the
+            // supplier is contractually fully paid even though the bank line
+            // is NET of TDS.
             const diffForTds = totalFactures > 0 ? (totalFactures - txPayAmtMUR) / totalFactures : 0
-            const isTds = diffForTds >= 0.02 && diffForTds <= 0.06 // 2-6% = TDS
+            // Pre-configured TDS default for the supplier (overrides heuristic)
+            const supplierKey = (match.supplierName || '').toLowerCase().trim()
+            const supplierTdsDefault = supplierKey ? tdsDefaultsByTiers.get(supplierKey) : null
+            const classifiedTds = supplierTdsDefault
+              || (diffForTds >= 0.005 && diffForTds <= 0.16 ? classifyTdsGap(diffForTds) : null)
+            const isTds = !!classifiedTds
+            const isPartial = !isTds && totalFactures > 0 && txPayAmtMUR < totalFactures * 0.90
 
             for (const fId of match.factureIds) {
               const f = match.factures.find((x: any) => x.id === fId)
@@ -788,8 +813,14 @@ export async function POST(request: Request) {
               const soldeRestant = isPartial ? Math.round((fAmt - partCouverte) * 100) / 100 : 0
               const tdsRetenu = isTds ? Math.round((fAmt - partCouverte) * 100) / 100 : 0
 
+              // When TDS is detected, the invoice is considered FULLY paid
+              // (the deduction is a legal withholding, not an outstanding debt).
               const newStatut = isPartial && soldeRestant > 1 ? 'partiel' : 'paye'
-              const { error: updErr } = await supabase.from('factures').update({
+              // Race-condition guard: only claim the facture if it has not
+              // already been reconciled by a concurrent run. `rapproche_releve_id
+              // IS NULL` means no prior auto/manual reconciliation has linked it.
+              // This prevents two concurrent matches from overwriting each other.
+              const updatePayload: Record<string, any> = {
                 statut: newStatut,
                 rapproche_releve_id: releveId,
                 rapproche_transaction_idx: txIdx,
@@ -797,9 +828,18 @@ export async function POST(request: Request) {
                 rapproche_source: 'auto_intelligent',
                 solde_non_paye: soldeRestant > 1 ? soldeRestant : 0,
                 tds_retenu: tdsRetenu,
-              }).eq('id', fId)
+              }
+              if (isTds && classifiedTds) {
+                updatePayload.tds_code = classifiedTds.code
+              }
+              const { data: updRows, error: updErr } = await supabase.from('factures').update(updatePayload).eq('id', fId)
+                .is('rapproche_releve_id', null)
+                .in('statut', ['en_attente', 'retard', 'partiel'])
+                .select('id')
               if (updErr) {
                 console.error(`[rapprochement] Failed to update facture ${fId}:`, updErr.message)
+              } else if (!updRows || updRows.length === 0) {
+                console.warn(`[rapprochement] Facture ${fId} skipped: already reconciled or locked by concurrent run`)
               } else {
                 facturesUpdated++
               }
@@ -2776,6 +2816,8 @@ export async function POST(request: Request) {
 
       // Marquer les factures comme payées par associé
       // FIX 1 — rapproche_date jamais NULL (fallback date du jour).
+      // Race-condition guard: ne pas écraser une facture déjà rapprochée par
+      // un rapprochement automatique concurrent (rapproche_releve_id défini).
       const associePayDate = new Date().toISOString().split('T')[0]
       for (const f of factures || []) {
         await supabase.from('factures').update({
@@ -2785,6 +2827,8 @@ export async function POST(request: Request) {
           rapproche_date: associePayDate,
           rapproche_source: 'paye_par_associe',
         }).eq('id', f.id)
+          .is('rapproche_releve_id', null)
+          .in('statut', ['en_attente', 'retard', 'partiel'])
       }
 
       // Créer le mouvement CCA (avance)

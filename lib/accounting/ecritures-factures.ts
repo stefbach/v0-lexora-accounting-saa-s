@@ -3,6 +3,37 @@ type SupabaseClient = any
 
 import { safeInsertBnq } from './bnq-dedupe'
 
+/**
+ * TDS (Tax Deducted at Source) — Mauritius.
+ * Known rates and their canonical codes. Used both to classify a detected
+ * withholding percentage and to compute the expected amount.
+ */
+export const TDS_RATES: Record<string, number> = {
+  TDS_3: 0.03,
+  TDS_5: 0.05,
+  TDS_075: 0.0075,   // interest on bank deposits
+  TDS_10: 0.10,
+  TDS_15: 0.15,
+  TDS_EXEMPT: 0,
+}
+
+/**
+ * Match a measured payment-gap ratio (e.g. 0.05 = 5%) to a known TDS code.
+ * Accepts a small tolerance band because bank fees may eat into the gap.
+ *
+ * Returns null when the gap does not match any known TDS bracket — the
+ * caller should then treat the difference as a partial payment, not TDS.
+ */
+export function classifyTdsGap(gapRatio: number): { code: string; rate: number } | null {
+  if (!Number.isFinite(gapRatio) || gapRatio <= 0) return null
+  const tol = 0.008 // 0.8pt tolerance to absorb bank fees / rounding
+  for (const [code, rate] of Object.entries(TDS_RATES)) {
+    if (rate === 0) continue
+    if (Math.abs(gapRatio - rate) <= tol) return { code, rate }
+  }
+  return null
+}
+
 export interface FactureForEcritures {
   id: string
   societe_id: string
@@ -281,6 +312,15 @@ export async function createEcrituresForPayment(
     facture_id?: string | null
     lettre_code?: string | null
     numero_piece?: string | null
+    /**
+     * TDS withholding. When provided, generates a third entry crediting the
+     * withholding account (447 by default) so that the tier account (401/411)
+     * is fully cleared while the bank receives only the net amount.
+     * `amount_mur` must equal the NET amount (bank-side), not the gross.
+     */
+    tds_amount_mur?: number | null
+    tds_code?: string | null
+    tds_compte?: string | null
   }
 ): Promise<{ ok: boolean; error?: string; bnq_ids?: string[] }> {
   try {
@@ -322,20 +362,41 @@ export async function createEcrituresForPayment(
       date_lettrage: payment.lettre_code ? payment.date_payment : null,
     }
 
+    // TDS split: when TDS was withheld, the tier account (401/411) must be
+    // cleared at GROSS, the bank side at NET, and the difference credited
+    // (supplier) / debited (client) to the withholding account.
+    const tdsAmount = Math.max(0, Number(payment.tds_amount_mur) || 0)
+    const grossAmount = tdsAmount > 0 ? payment.amount_mur + tdsAmount : payment.amount_mur
+    const netAmount = payment.amount_mur
+    const tdsCompte = (payment.tds_compte || '447').trim() || '447'
+
     const tierSide = {
       ...base,
       numero_compte: isSupplier ? '401' : '411',
       nom_compte: isSupplier ? 'Fournisseurs' : 'Clients',
-      debit_mur: isSupplier ? payment.amount_mur : 0,
-      credit_mur: isSupplier ? 0 : payment.amount_mur,
+      debit_mur: isSupplier ? grossAmount : 0,
+      credit_mur: isSupplier ? 0 : grossAmount,
     }
     const bankSide = {
       ...base,
       numero_compte: compteBanque,
       nom_compte: nomBanque,
-      debit_mur: isSupplier ? 0 : payment.amount_mur,
-      credit_mur: isSupplier ? payment.amount_mur : 0,
+      debit_mur: isSupplier ? 0 : netAmount,
+      credit_mur: isSupplier ? netAmount : 0,
     }
+    const tdsSide = tdsAmount > 0 ? {
+      ...base,
+      numero_compte: tdsCompte,
+      nom_compte: 'Retenues à la source (TDS)',
+      libelle: `${libelle} — retenue ${payment.tds_code || 'TDS'}`,
+      description: `${libelle} — retenue ${payment.tds_code || 'TDS'}`,
+      // supplier payment: we withhold, so TDS is a CREDIT (payable to MRA)
+      // client payment: they withhold, so TDS is a DEBIT (credit against MRA liability)
+      debit_mur: isSupplier ? 0 : tdsAmount,
+      credit_mur: isSupplier ? tdsAmount : 0,
+    } : null
+
+    const toInsert: any[] = tdsSide ? [tierSide, bankSide, tdsSide] : [tierSide, bankSide]
 
     // Sprint 2 — Anti-doublon BNQ : si l'utilisateur clique 2x sur
     // « rapprocher » ou si sync_lettrage tourne 2 fois, on ne crée pas
@@ -343,7 +404,7 @@ export async function createEcrituresForPayment(
     // journal='BNQ' donc dedupBnqEntries le filtre. Le tierSide a
     // aussi journal='BNQ' (cf. base.journal = 'BNQ' ci-dessus) donc
     // les deux sont vérifiés.
-    const insRes = await safeInsertBnq(supabase, [tierSide, bankSide])
+    const insRes = await safeInsertBnq(supabase, toInsert)
     if (insRes.error) return { ok: false, error: insRes.error.message }
     if (insRes.skipped > 0) {
       console.log(`[createEcrituresForPayment] skipped ${insRes.skipped} doublon(s) BNQ:`, insRes.skipReasons)

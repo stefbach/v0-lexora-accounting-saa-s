@@ -23,7 +23,7 @@
  *   Agrège les résultats des 3 phases, priorise par confiance, déduplique.
  */
 
-import { normalize, tiersScore, toMUR } from './matching-engine'
+import { normalize, tiersScore, toMUR, isAvoir } from './matching-engine'
 import type { MatchingFacture, MatchingTransaction } from './matching-engine'
 
 // ═══════════════════════════════════════════════════════════════
@@ -317,8 +317,12 @@ export function buildSupplierRegistry(
   }
 
   // Seed from factures — chaque tiers de facture est un profil
+  // Les avoirs (credit notes) sont exclus du pool de matching auto : ils
+  // seraient faussement appariés à des paiements normaux. Ils doivent
+  // passer par le workflow d'avoir dédié (déduction sur facture d'origine).
   for (const f of factures) {
     if (!f.tiers) continue
+    if (isAvoir(f)) continue
     const key = normalizeAdvanced(f.tiers)
     if (!key || key.length < 2) continue
 

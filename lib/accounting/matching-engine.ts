@@ -35,6 +35,23 @@ export interface MatchingFacture {
   conditions_paiement: number | null
   type_facture: 'client' | 'fournisseur' | null
   statut: string | null
+  /** If set, this invoice is a credit note tied to the referenced original invoice. */
+  avoir_origine_id?: string | null
+}
+
+/**
+ * Return true if the invoice is a credit note (avoir). Credit notes must be
+ * excluded from the automatic matching pool — they are inversions of an
+ * original invoice and would produce incorrect positive matches on normal
+ * outgoing/incoming payments. They should be handled via dedicated refund
+ * or deduction workflows instead.
+ */
+export function isAvoir(f: Pick<MatchingFacture, 'avoir_origine_id' | 'montant_ttc' | 'numero_facture'>): boolean {
+  if (f?.avoir_origine_id) return true
+  const n = String(f?.numero_facture || '').toUpperCase()
+  if (/^(AV|AVR|CN|CRN|AVOIR)[-_ ]?/.test(n)) return true
+  if ((Number(f?.montant_ttc) || 0) < 0) return true
+  return false
 }
 
 export interface MatchingTransaction {
@@ -625,6 +642,11 @@ export function analyzeAllTransactions(
   const proposals: MatchProposal[] = []
   const usedFactureIds = new Set<string>()
 
+  // Exclude credit notes (avoirs) from the auto-matching pool. They are
+  // inversions of an existing invoice and must be handled via the dedicated
+  // refund / deduction workflow, not matched as regular payments.
+  const pool = factures.filter(f => !isAvoir(f))
+
   const sorted = [...transactions].sort((a, b) => {
     const aHasRef = /[A-Z]{2,}-?\d+/.test(a.libelle || '') ? 1 : 0
     const bHasRef = /[A-Z]{2,}-?\d+/.test(b.libelle || '') ? 1 : 0
@@ -632,7 +654,7 @@ export function analyzeAllTransactions(
   })
 
   for (const tx of sorted) {
-    const available = factures.filter(f => !usedFactureIds.has(f.id))
+    const available = pool.filter(f => !usedFactureIds.has(f.id))
     const match = findBestMatch(tx, available, rates, patterns)
     if (match && match.confidence >= 0.5) {
       proposals.push(match)

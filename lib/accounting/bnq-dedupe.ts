@@ -101,6 +101,18 @@ export async function dedupeBnqEntries(
   const skipReasons: string[] = []
   let skipped = 0
 
+  // In-batch deduplication: guard against the same candidate being passed
+  // twice in a single call (e.g. two factures grouped on the same BNQ line
+  // before the loop deduplication). We key on (societe, date, compte,
+  // debit, credit, ref_folio|facture_id) which is stricter than libellé.
+  const seenInBatch = new Set<string>()
+  const batchKey = (e: EcritureCandidate): string => {
+    const k = pickKey(e)
+    const ref = (e as any).facture_id || (e as any).ref_folio || k.libelle
+    const soc = (e as any).societe_id || ''
+    return [soc, k.date_ecriture, k.numero_compte, k.debit_mur, k.credit_mur, ref].join('|')
+  }
+
   for (const e of candidates) {
     if (String(e.journal || '').toUpperCase() !== 'BNQ') {
       toInsert.push(e)
@@ -112,6 +124,14 @@ export async function dedupeBnqEntries(
       toInsert.push(e)
       continue
     }
+
+    const bk = batchKey(e)
+    if (seenInBatch.has(bk)) {
+      skipped++
+      skipReasons.push(`BNQ in-batch duplicate skipped (${k.numero_compte} ${k.debit_mur}/${k.credit_mur} ${k.date_ecriture})`)
+      continue
+    }
+    seenInBatch.add(bk)
     try {
       // Anti-doublon renforcé : quand on a un facture_id, on considère comme
       // doublon toute entrée BNQ existante sur le même facture_id + compte +
@@ -133,6 +153,31 @@ export async function dedupeBnqEntries(
           skipped++
           skipReasons.push(
             `BNQ ${k.numero_compte} ${k.debit_mur}/${k.credit_mur} facture_id=${factureId} — déjà présent (id=${(byFacture as any).id})`,
+          )
+          continue
+        }
+      }
+
+      // Lookup via ref_folio — the BANK ref_folio (e.g. 'BANK-<releve>-<idx>')
+      // is unique per bank transaction, so any BNQ entry sharing that folio
+      // for the same account/amount is definitely a duplicate regardless of
+      // libellé variations.
+      const refFolio = (e as any).ref_folio
+      if (refFolio) {
+        let qr = supabase
+          .from('ecritures_comptables_v2')
+          .select('id')
+          .eq('journal', 'BNQ')
+          .eq('ref_folio', refFolio)
+          .eq('numero_compte', k.numero_compte)
+          .eq('debit_mur', k.debit_mur)
+          .eq('credit_mur', k.credit_mur)
+          .limit(1)
+        const { data: byRef } = await qr.maybeSingle()
+        if (byRef) {
+          skipped++
+          skipReasons.push(
+            `BNQ ${k.numero_compte} ${k.debit_mur}/${k.credit_mur} ref_folio=${refFolio} — déjà présent (id=${(byRef as any).id})`,
           )
           continue
         }

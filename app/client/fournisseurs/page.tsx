@@ -41,6 +41,21 @@ function getStatutBadge(statut: string) {
   }
 }
 
+/** Render the payment source: auto reconciliation vs. manual "mark as paid". */
+function getSourceBadge(row: any) {
+  if (!row.rapproche_source) {
+    return <span className="text-xs text-muted-foreground">—</span>
+  }
+  const src = String(row.rapproche_source)
+  if (row.rapproche_releve_id) {
+    return <Badge variant="outline" className="text-[10px] bg-blue-50 border-blue-200 text-blue-800">Bancaire rapproché</Badge>
+  }
+  if (src === 'paye_par_associe') {
+    return <Badge variant="outline" className="text-[10px] bg-purple-50 border-purple-200 text-purple-800">Associé (CCA)</Badge>
+  }
+  return <Badge variant="outline" className="text-[10px] bg-slate-50 border-slate-200 text-slate-800">Manuel</Badge>
+}
+
 export default function ClientFournisseursPage() {
   const { societeId } = useSocieteActive()
   const [search, setSearch] = useState("")
@@ -78,12 +93,45 @@ export default function ClientFournisseursPage() {
   }
 
   // Toggle client_offshore for all invoices of this tiers + societe_id
+  // Requires TWO confirmations: a preview with impact count, then an explicit
+  // "type the supplier name" confirmation for non-trivial impact.
   const [togglingOffshore, setTogglingOffshore] = useState<string | null>(null)
   const handleToggleOffshore = async (f: any) => {
     if (!f.tiers || !f.societe_id) return
     const newValue = !f.client_offshore
     const label = newValue ? 'fournisseur étranger (reverse charge)' : 'fournisseur local (Maurice)'
-    if (!confirm(`Marquer "${f.tiers}" comme ${label} ?\n\nToutes les factures de ce fournisseur seront mises à jour.`)) return
+
+    // Count impacted invoices from the already-loaded list.
+    const impacted = factures.filter(x => x.tiers === f.tiers)
+    const nbImpacted = impacted.length
+    const nbWithTva = impacted.filter(x => (Number(x.montant_tva) || 0) > 0).length
+    const totalTva = impacted.reduce((s, x) => s + (Number(x.montant_tva) || 0), 0)
+
+    const preview = [
+      `Marquer "${f.tiers}" comme ${label} ?`,
+      ``,
+      `${nbImpacted} facture(s) de ce fournisseur seront modifiées.`,
+      nbWithTva > 0
+        ? `⚠️  ${nbWithTva} facture(s) portent de la TVA (total ${totalTva.toFixed(2)} MUR).`
+          + `\n    Un changement vers "offshore/reverse charge" implique normalement de RECALCULER ces TVA.`
+          + `\n    Les écritures comptables ne seront PAS recalculées automatiquement.`
+        : '',
+      ``,
+      nbImpacted > 20
+        ? `Pour confirmer, saisissez le nom exact du tiers au prochain écran.`
+        : `Continuer ?`,
+    ].filter(Boolean).join('\n')
+
+    if (!confirm(preview)) return
+
+    if (nbImpacted > 20) {
+      const typed = window.prompt(`Saisissez "${f.tiers}" pour confirmer la modification de ${nbImpacted} factures :`)
+      if (typed !== f.tiers) {
+        toast.error('Confirmation annulée — saisie différente du nom du tiers.')
+        return
+      }
+    }
+
     setTogglingOffshore(f.id)
     try {
       const res = await fetch('/api/client/tiers-offshore', {
@@ -99,6 +147,9 @@ export default function ClientFournisseursPage() {
       const data = await res.json()
       if (res.ok) {
         toast.success(`${data.factures_updated || 0} facture(s) mise(s) à jour — "${f.tiers}" est maintenant ${label}`)
+        if (nbWithTva > 0) {
+          toast.warning(`Pensez à relancer « Générer écritures comptables » si la TVA doit être recalculée (${nbWithTva} factures concernées).`)
+        }
         load()
       } else {
         toast.error(data.error || 'Erreur')
@@ -444,8 +495,10 @@ export default function ClientFournisseursPage() {
                   <TableHead className="text-right">Montant HT</TableHead>
                   <TableHead className="text-right">TVA</TableHead>
                   <TableHead className="text-right">TTC</TableHead>
+                  <TableHead className="text-right">TDS retenue</TableHead>
                   <TableHead>Échéance</TableHead>
                   <TableHead>Statut</TableHead>
+                  <TableHead>Source paiement</TableHead>
                   <TableHead>Devise</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -459,8 +512,19 @@ export default function ClientFournisseursPage() {
                     <TableCell className="text-right font-mono">{formatMUR(row.montant_ht || 0)}</TableCell>
                     <TableCell className="text-right font-mono">{formatMUR(row.montant_tva || 0)}</TableCell>
                     <TableCell className="text-right font-mono font-semibold">{formatMUR(row.montant_ttc || 0)}</TableCell>
+                    <TableCell className="text-right font-mono text-xs">
+                      {Number(row.tds_retenu) > 0 ? (
+                        <span className="text-amber-700" title={row.tds_code || 'TDS retenue à la source'}>
+                          {formatMUR(row.tds_retenu)}
+                          {row.tds_code && <span className="ml-1 text-[10px] text-muted-foreground">({row.tds_code})</span>}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
                     <TableCell>{row.date_echeance ? new Date(row.date_echeance).toLocaleDateString("fr-FR") : "—"}</TableCell>
                     <TableCell>{getStatutBadge(row.statut)}</TableCell>
+                    <TableCell>{getSourceBadge(row)}</TableCell>
                     <TableCell>{row.devise || "MUR"}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
@@ -485,7 +549,7 @@ export default function ClientFournisseursPage() {
                 ))}
                 {filtered.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={12} className="text-center py-8 text-muted-foreground">
                       {search || selectedFournisseur !== "all"
                         ? "Aucune facture fournisseur trouvée pour cette recherche."
                         : "Aucune facture fournisseur disponible. Les factures apparaîtront ici une fois traitées par OCR."}
