@@ -258,7 +258,7 @@ export async function GET(request: Request) {
     try {
       let q = supabase
         .from('employes')
-        .select('id, nom, prenom, poste, societe_id, date_arrivee, genre, gender, actif, date_depart')
+        .select('id, nom, prenom, poste, societe_id, date_arrivee, genre, gender, actif, date_depart, salaire_base, is_migrant_worker')
         .in('societe_id', societeIds)
         .eq('actif', true)
         .is('date_depart', null)
@@ -297,7 +297,7 @@ export async function GET(request: Request) {
       const today = now.toISOString().slice(0, 10)
 
       // 1. Lire soldes_conges pour la PÉRIODE COURANTE de chaque employé
-      const SOLDES_FIELDS = 'employe_id, periode_debut, periode_fin, al_droit, al_pris, al_solde, al_reporte, al_impose_societe, al_impose_employe, sl_droit, sl_pris, sl_solde, sl_accumule'
+      const SOLDES_FIELDS = 'employe_id, periode_debut, periode_fin, al_droit, al_pris, al_solde, al_reporte, al_impose_societe, al_impose_employe, sl_droit, sl_pris, sl_solde, sl_accumule, vl_droit, vl_pris, vl_solde, vl_paye_compensation, vl_cycle_debut, vl_cycle_fin'
       const { data: soldesData } = await supabase
         .from('soldes_conges')
         .select(SOLDES_FIELDS)
@@ -347,6 +347,39 @@ export async function GET(request: Request) {
         const slDroit = solde ? Number(solde.sl_droit) : null
         const slPris = solde ? Number(solde.sl_pris) : null
         const slSolde = solde ? Number(solde.sl_solde) : null
+
+        // G2 — Vacation Leave (WRA S.47). Null si row soldes_conges absent.
+        const vlDroit = solde ? Number(solde.vl_droit ?? 0) : null
+        const vlPris = solde ? Number(solde.vl_pris ?? 0) : null
+        const vlSolde = solde ? Number(solde.vl_solde ?? 0) : null
+        const vlCycleDebut = solde?.vl_cycle_debut
+          ? String(solde.vl_cycle_debut).slice(0, 10)
+          : null
+        const vlCycleFin = solde?.vl_cycle_fin
+          ? String(solde.vl_cycle_fin).slice(0, 10)
+          : null
+        // Déterminer le statut VL depuis les champs stockés + fallback
+        // (basic > 50k / migrant / < 5 ans).
+        let vlEligibilityStatus: 'eligible' | 'en_acquisition' | 'hors_wra_basic_sup_50k' | 'migrant_worker_exclu' | 'no_date_arrivee' = 'no_date_arrivee'
+        if (!emp.date_arrivee) {
+          vlEligibilityStatus = 'no_date_arrivee'
+        } else if (emp.is_migrant_worker) {
+          vlEligibilityStatus = 'migrant_worker_exclu'
+        } else if ((Number(emp.salaire_base) || 0) > 50000) {
+          vlEligibilityStatus = 'hors_wra_basic_sup_50k'
+        } else if ((vlDroit || 0) > 0) {
+          vlEligibilityStatus = 'eligible'
+        } else {
+          vlEligibilityStatus = 'en_acquisition'
+        }
+        // Date à laquelle l'employé deviendra éligible VL (arrivée + 5 ans).
+        let vlEligibilityDate: string | null = null
+        if (emp.date_arrivee && vlEligibilityStatus === 'en_acquisition') {
+          const arr = new Date(String(emp.date_arrivee).slice(0, 10) + 'T12:00:00')
+          const fin5y = new Date(arr)
+          fin5y.setFullYear(fin5y.getFullYear() + 5)
+          vlEligibilityDate = fin5y.toISOString().slice(0, 10)
+        }
 
         // Sick certificate alert — dérivé des demandes SL approuvées
         const empSl = (slApproved || []).filter((c: any) => c.employe_id === emp.id)
@@ -409,6 +442,15 @@ export async function GET(request: Request) {
           sl_pris: slPris,
           sl_solde: slSolde,
           sl_accumule: solde ? Number(solde.sl_accumule ?? 0) : 0,
+          // ─── G2 : Vacation Leave (WRA S.47) ───
+          vl_droit: vlDroit,
+          vl_pris: vlPris,
+          vl_solde: vlSolde,
+          vl_paye_compensation: solde ? Number(solde.vl_paye_compensation ?? 0) : 0,
+          vl_cycle_debut: vlCycleDebut,
+          vl_cycle_fin: vlCycleFin,
+          vl_eligibility_status: vlEligibilityStatus,
+          vl_eligibility_date: vlEligibilityDate,
           // ─── Rétrocompat : al_deduits / sl_deduits restent exposés ───
           // Avant F5 ils distinguaient "pris approuvés" de "posés pending
           // inclus" — maintenant al_pris = al_deduits (source de vérité).
@@ -632,11 +674,11 @@ export async function POST(request: Request) {
       let emp: any = null
       {
         const { data, error } = await supabase.from('employes')
-          .select('id, societe_id, gender, genre, auth_user_id, email, date_arrivee')
+          .select('id, societe_id, gender, genre, auth_user_id, email, date_arrivee, salaire_base, is_migrant_worker')
           .eq('id', body.employe_id).maybeSingle()
         if (error && error.code === '42703') {
           const { data: d2 } = await supabase.from('employes')
-            .select('id, societe_id, gender, auth_user_id, email, date_arrivee')
+            .select('id, societe_id, gender, auth_user_id, email, date_arrivee, salaire_base')
             .eq('id', body.employe_id).maybeSingle()
           emp = d2
         } else {
@@ -645,6 +687,25 @@ export async function POST(request: Request) {
       }
       if (!emp) {
         return NextResponse.json({ error: 'Employe non trouve' }, { status: 404 })
+      }
+
+      // G2 — Validation VL (WRA S.47). Un employé non-éligible (migrant, basic
+      // > 50k ou < 5 ans d'ancienneté) ne peut pas soumettre de demande VL.
+      if (body.type_conge === 'VL') {
+        const { data: vlCheck } = await supabase.rpc('get_vacation_leave_droit', {
+          p_date_arrivee: emp.date_arrivee,
+          p_salaire_base: Number(emp.salaire_base) || 0,
+          p_is_migrant: Boolean(emp.is_migrant_worker),
+          p_date_reference: new Date().toISOString().slice(0, 10),
+        }).maybeSingle()
+        const status = (vlCheck as any)?.eligibility_status
+        if (status !== 'eligible') {
+          return NextResponse.json({
+            error: 'vacation_leave_not_eligible',
+            detail: "Le salarié n'a pas atteint 5 ans de service OU son basic salary dépasse 50 000 MUR.",
+            eligibility_status: status || 'unknown',
+          }, { status: 400 })
+        }
       }
 
       // Access check: either user has société access OR user IS the employee (self-service)
