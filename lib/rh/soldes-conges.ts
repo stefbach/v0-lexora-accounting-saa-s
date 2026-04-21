@@ -1,28 +1,28 @@
 /**
  * F3 + F6 — Helper canonique pour recalculer les soldes de congés d'un
- * employé pour une PÉRIODE de 12 mois (étape A.3, sprint "Années par
- * anniversaire").
+ * employé pour une PÉRIODE de 12 mois (étape A.3 + A.4-bis, sprint
+ * "Années par anniversaire").
  *
- * AVANT (F3, année civile) :
- *   recomputeSoldeCongesAll(supabase, employeId, annee?)
- *
- * APRÈS (F6 / A.3, période 12 mois basée sur date_arrivee) :
+ * Signature :
  *   recomputeSoldeCongesAll(supabase, employeId, dateReference?)
  *
  *   dateReference = date ISO (YYYY-MM-DD). Par défaut = today.
  *   On calcule la période de 12 mois qui contient dateReference à partir
- *   de date_arrivee de l'employé, via les fonctions SQL mig 154 :
+ *   de date_arrivee de l'employé, via les fonctions SQL mig 154/157 :
  *     get_conges_period_start(date_arrivee, dateReference)
  *     get_conges_period_end(date_arrivee, dateReference)
- *     is_eligible_conges(date_arrivee, dateReference)
+ *     get_conges_droits(date_arrivee, date_reference)
  *
- * RÈGLES MÉTIER (WRA 2019 Maurice ss.45 et 47) :
- *   - Si l'employé n'est pas encore éligible (< 12 mois d'emploi) :
- *     al_droit = 0, sl_droit = 0 (période d'acquisition)
- *   - Sinon :
- *     al_droit = 22, sl_droit = 15
- *     al_pris  = SUM(AL approuvés + UL-from-AL) dans la période
- *     sl_pris  = SUM(SL approuvés) dans la période
+ * RÈGLES MÉTIER (WRA 2019 Maurice ss.45 et 47, mig 157 accrual) :
+ *   - Ancienneté < 6 mois   : al_droit = 0, sl_droit = 0
+ *   - Ancienneté 6-11 mois  : +1/mois, max 6 (période d'acquisition)
+ *   - Ancienneté ≥ 12 mois  : al_droit = 22, sl_droit = 15
+ *   - Droits calculés à LEAST(dateReference, periode_fin) :
+ *     - période courante → droits à la date de référence
+ *     - période passée   → droits maxés à fin de période
+ *
+ *   - al_pris = SUM(AL approuvés + UL-from-AL) dans la période
+ *   - sl_pris = SUM(SL approuvés) dans la période
  *
  * IDEMPOTENT (SUM-based). UPSERT sur (employe_id, periode_debut).
  * La colonne legacy `annee` = EXTRACT(YEAR FROM periode_debut) pour
@@ -40,7 +40,8 @@ interface DemandeConge {
 export interface SoldeCongesPeriodResult {
   periode_debut: string        // ISO date
   periode_fin: string          // ISO date
-  eligible: boolean
+  al_droit: number
+  sl_droit: number
   al_pris: number
   sl_pris: number
 }
@@ -75,28 +76,30 @@ export async function recomputeSoldeCongesAll(
       ? String(dateReference).slice(0, 10)
       : new Date().toISOString().slice(0, 10)
 
-    // ── 2. Calculer la période via les fonctions SQL (mig 154) ───────
-    //    On passe par une seule query SELECT avec les 3 helpers.
-    const { data: periodRow, error: perErr } = await supabase.rpc('get_conges_period_info', {
-      p_date_arrivee: emp.date_arrivee,
-      p_date_reference: dateRef,
-    }).maybeSingle()
+    // ── 2. Calculer la période (JS, mirror mig 154) ──────────────────
+    const { periode_debut, periode_fin } = computePeriodJs(emp.date_arrivee, dateRef)
 
-    let periode_debut: string
-    let periode_fin: string
-    let eligible: boolean
+    // ── 2-bis. Droits via get_conges_droits (mig 157, accrual 6-12m) ─
+    //    On applique LEAST(dateRef, periode_fin) : droits à aujourd'hui
+    //    pour une période courante, max accrue pour une période passée.
+    const droitsRefDate = dateRef < periode_fin ? dateRef : periode_fin
+    let alDroit = 0
+    let slDroit = 0
+    const { data: droitsRow, error: droitsErr } = await supabase
+      .rpc('get_conges_droits', {
+        date_arrivee: emp.date_arrivee,
+        date_reference: droitsRefDate,
+      })
+      .maybeSingle()
 
-    if (perErr || !periodRow) {
-      // Fallback : calcul direct JS si la RPC n'existe pas encore (= pas
-      // installée). On reproduit la logique des fonctions SQL.
-      const result = computePeriodJs(emp.date_arrivee, dateRef)
-      periode_debut = result.periode_debut
-      periode_fin = result.periode_fin
-      eligible = result.eligible
+    if (!droitsErr && droitsRow) {
+      alDroit = Number((droitsRow as any).al_droit) || 0
+      slDroit = Number((droitsRow as any).sl_droit) || 0
     } else {
-      periode_debut = String((periodRow as any).periode_debut).slice(0, 10)
-      periode_fin = String((periodRow as any).periode_fin).slice(0, 10)
-      eligible = Boolean((periodRow as any).eligible)
+      // Fallback JS si RPC indisponible (réplique logique mig 157)
+      const droits = computeDroitsJs(emp.date_arrivee, droitsRefDate)
+      alDroit = droits.al_droit
+      slDroit = droits.sl_droit
     }
 
     // ── 3. Fetch demandes approuvées dans la période ─────────────────
@@ -138,9 +141,7 @@ export async function recomputeSoldeCongesAll(
     alImposeSociete = Math.round(alImposeSociete * 100) / 100
     alImposeEmploye = Math.round(alImposeEmploye * 100) / 100
 
-    // ── 5. Droits selon éligibilité ──────────────────────────────────
-    const alDroit = eligible ? 22 : 0
-    const slDroit = eligible ? 15 : 0
+    // ── 5. Droits déjà calculés via get_conges_droits ─────────────────
 
     // ── 6. UPSERT sur (employe_id, periode_debut) ────────────────────
     //    annee = EXTRACT(YEAR FROM periode_debut) pour rétrocompat.
@@ -219,47 +220,71 @@ export async function recomputeSoldeCongesAll(
 
     console.log(
       `[soldes-conges] period ${periode_debut}→${periode_fin} `
-      + `(eligible=${eligible}) for ${employeId}: AL=${alPris}/${alDroit} SL=${slPris}/${slDroit}`,
+      + `for ${employeId}: AL=${alPris}/${alDroit} SL=${slPris}/${slDroit}`,
     )
 
-    return { periode_debut, periode_fin, eligible, al_pris: alPris, sl_pris: slPris }
+    return {
+      periode_debut,
+      periode_fin,
+      al_droit: alDroit,
+      sl_droit: slDroit,
+      al_pris: alPris,
+      sl_pris: slPris,
+    }
   } catch (err: any) {
     console.warn('[soldes-conges] recomputeSoldeCongesAll failed (non-blocking):', err?.message || err)
     return null
   }
 }
 
+function monthsBetween(dateArrivee: string, dateReference: string): number {
+  const arr = new Date(String(dateArrivee).slice(0, 10) + 'T12:00:00')
+  const ref = new Date(String(dateReference).slice(0, 10) + 'T12:00:00')
+  let m = (ref.getFullYear() - arr.getFullYear()) * 12
+    + (ref.getMonth() - arr.getMonth())
+  if (ref.getDate() < arr.getDate()) m -= 1
+  return m
+}
+
+function isoDate(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${dd}`
+}
+
 /**
- * Fallback JS de la logique SQL (mig 154) utilisé si la RPC n'est pas
- * accessible. Reproduit exactement `get_conges_period_start/end` +
- * `is_eligible_conges`.
+ * Fallback JS de la logique SQL (mig 154) — `get_conges_period_start/end`.
  */
 function computePeriodJs(dateArrivee: string, dateReference: string): {
   periode_debut: string
   periode_fin: string
-  eligible: boolean
 } {
   const arr = new Date(String(dateArrivee).slice(0, 10) + 'T12:00:00')
-  const ref = new Date(String(dateReference).slice(0, 10) + 'T12:00:00')
-
-  let monthsElapsed = (ref.getFullYear() - arr.getFullYear()) * 12
-    + (ref.getMonth() - arr.getMonth())
-  if (ref.getDate() < arr.getDate()) monthsElapsed -= 1
-
+  const monthsElapsed = monthsBetween(dateArrivee, dateReference)
   const periodNumber = Math.max(0, Math.floor(monthsElapsed / 12))
   const debut = new Date(arr)
   debut.setMonth(debut.getMonth() + periodNumber * 12)
   const fin = new Date(debut)
   fin.setMonth(fin.getMonth() + 12)
   fin.setDate(fin.getDate() - 1)
+  return { periode_debut: isoDate(debut), periode_fin: isoDate(fin) }
+}
 
-  const eligible = monthsElapsed >= 12
-
-  const iso = (d: Date) => {
-    const y = d.getFullYear()
-    const m = String(d.getMonth() + 1).padStart(2, '0')
-    const dd = String(d.getDate()).padStart(2, '0')
-    return `${y}-${m}-${dd}`
+/**
+ * Fallback JS de la logique SQL (mig 157) — `get_conges_droits`.
+ * Règles WRA 2019 : <6m=0/0, 6-11m=+1/mois max 6, ≥12m=22/15.
+ */
+function computeDroitsJs(dateArrivee: string, dateReference: string): {
+  al_droit: number
+  sl_droit: number
+} {
+  if (dateReference < dateArrivee) return { al_droit: 0, sl_droit: 0 }
+  const months = monthsBetween(dateArrivee, dateReference)
+  if (months < 6) return { al_droit: 0, sl_droit: 0 }
+  if (months < 12) {
+    const accrued = Math.min(6, months - 5)
+    return { al_droit: accrued, sl_droit: accrued }
   }
-  return { periode_debut: iso(debut), periode_fin: iso(fin), eligible }
+  return { al_droit: 22, sl_droit: 15 }
 }
