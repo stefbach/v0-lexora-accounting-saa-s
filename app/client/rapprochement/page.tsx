@@ -1720,18 +1720,21 @@ Voulez-vous vraiment continuer ?`
                 <span className="text-xs font-normal text-gray-400 ml-auto">
                   {rows.length} facture{rows.length > 1 ? 's' : ''}
                 </span>
-                {rows.some(r => r.status === 'paye') && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs gap-1 border-[#9F1239]/40 text-[#9F1239] hover:bg-[#9F1239]/5"
-                    disabled={annulationEnCours}
-                    onClick={() => handleAnnulerPaiement(['ALL'])}
-                  >
-                    {annulationEnCours ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-                    Tout remettre en attente ({rows.filter(r => r.status === 'paye').length})
-                  </Button>
-                )}
+                {rows.some(r => r.status === 'paye') && (() => {
+                  const payeIds = rows.filter(r => r.status === 'paye').map(r => r.f.id).filter(Boolean)
+                  return (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs gap-1 border-[#9F1239]/40 text-[#9F1239] hover:bg-[#9F1239]/5"
+                      disabled={annulationEnCours || payeIds.length === 0}
+                      onClick={() => handleAnnulerPaiement(payeIds)}
+                    >
+                      {annulationEnCours ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                      Tout remettre en attente ({payeIds.length})
+                    </Button>
+                  )
+                })()}
               </CardTitle>
               {selectedFacturesForAnnulation.size > 0 && (
                 <div className="flex items-center justify-between gap-3 rounded-lg border border-[#9F1239]/30 bg-[#9F1239]/5 px-3 py-2 mt-2">
