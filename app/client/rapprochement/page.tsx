@@ -168,6 +168,24 @@ export default function ClientRapprochementPage() {
     setTimeout(() => setToast(null), 4000)
   }
 
+  // Build the { date_debut, date_fin } payload for analysis endpoints.
+  // selectedMois wins (scope the UI visible month) → fallback on fiscal year.
+  const buildAnalysisDateFilter = (): { date_debut?: string; date_fin?: string } => {
+    if (selectedMois) {
+      const [yy, mm] = selectedMois.split('-').map(Number)
+      const start = `${yy}-${String(mm).padStart(2, '0')}-01`
+      const lastDay = new Date(yy, mm, 0).getDate()
+      const end = `${yy}-${String(mm).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+      return { date_debut: start, date_fin: end }
+    }
+    if (selectedPeriode !== 'tout') {
+      return selectedPeriode === '2025-2026'
+        ? { date_debut: '2025-07-01', date_fin: '2026-06-30' }
+        : { date_debut: '2024-07-01', date_fin: '2025-06-30' }
+    }
+    return {}
+  }
+
   const handleSmartRapprochement = async () => {
     if (!societeId) return
     setSmartLoading(true)
@@ -179,10 +197,7 @@ export default function ClientRapprochementPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           societe_id: societeId,
-          ...(selectedPeriode !== 'tout' ? {
-            date_debut: selectedPeriode === '2025-2026' ? '2025-07-01' : '2024-07-01',
-            date_fin: selectedPeriode === '2025-2026' ? '2026-06-30' : '2025-06-30',
-          } : {}),
+          ...buildAnalysisDateFilter(),
         }),
       })
       const data = await res.json()
@@ -410,10 +425,7 @@ Voulez-vous vraiment continuer ?`
           societe_id: societeId,
           use_claude: false, // heuristic only for speed — avoids timeouts
           apply: false,
-          ...(selectedPeriode !== 'tout' ? {
-            date_debut: selectedPeriode === '2025-2026' ? '2025-07-01' : '2024-07-01',
-            date_fin: selectedPeriode === '2025-2026' ? '2026-06-30' : '2025-06-30',
-          } : {}),
+          ...buildAnalysisDateFilter(),
         }),
       })
       const data = await res.json()
