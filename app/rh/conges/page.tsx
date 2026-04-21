@@ -124,7 +124,10 @@ interface BalanceRow {
   vl_solde?: number | null
   vl_cycle_debut?: string | null
   vl_cycle_fin?: string | null
-  vl_eligibility_status?: 'eligible' | 'en_acquisition' | 'hors_wra_basic_sup_50k' | 'migrant_worker_exclu' | 'no_date_arrivee'
+  vl_eligibility_status?: 'eligible' | 'eligible_via_policy_societe' | 'en_acquisition' | 'hors_wra_basic_sup_50k' | 'migrant_worker_exclu' | 'no_date_arrivee'
+  /** G3 — Statut WRA 2019 S.2 : "worker" (basic ≤ 50k) ou "hors_wra" (basic > 50k). */
+  statut_wra?: 'worker' | 'hors_wra' | 'indetermine'
+  salaire_base?: number | null
   status_color: string
   sick_cert_alert: boolean
 }
@@ -554,6 +557,8 @@ export default function CongesPage() {
 
   // Search
   const [searchBal, setSearchBal] = useState("")
+  // G3 — Filtre statut WRA (all / worker / hors_wra)
+  const [filterStatutWra, setFilterStatutWra] = useState<'all' | 'worker' | 'hors_wra'>('all')
   const [searchHisto, setSearchHisto] = useState("")
 
   // ─── Data fetching ─────────────────────────────────────────────
@@ -939,6 +944,11 @@ export default function CongesPage() {
 
   // ─── Filtered data ────────────────────────────────────────────
   const filteredBalances = balances.filter(b => {
+    // G3 — Filtre statut WRA
+    if (filterStatutWra !== 'all') {
+      const statut = (b as any).statut_wra || 'worker'
+      if (statut !== filterStatutWra) return false
+    }
     if (!searchBal) return true
     const q = searchBal.toLowerCase()
     return `${b.prenom} ${b.nom}`.toLowerCase().includes(q) || (b.poste || "").toLowerCase().includes(q)
@@ -1112,19 +1122,32 @@ export default function CongesPage() {
         <TabsContent value="dashboard">
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
                 <CardTitle className="text-[#0B0F2E]">
                   Soldes de conges par employe (periode anniversaire)
                 </CardTitle>
-                <Input
-                  placeholder="Rechercher un employe..."
-                  value={searchBal}
-                  onChange={e => setSearchBal(e.target.value)}
-                  className="w-64"
-                />
+                <div className="flex items-center gap-2">
+                  {/* G3 — Filtre statut WRA */}
+                  <Select value={filterStatutWra} onValueChange={(v) => setFilterStatutWra(v as 'all' | 'worker' | 'hors_wra')}>
+                    <SelectTrigger className="w-44 h-9 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tous (worker + hors WRA)</SelectItem>
+                      <SelectItem value="worker">Workers uniquement</SelectItem>
+                      <SelectItem value="hors_wra">Hors WRA uniquement</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    placeholder="Rechercher un employe..."
+                    value={searchBal}
+                    onChange={e => setSearchBal(e.target.value)}
+                    className="w-56"
+                  />
+                </div>
               </div>
               <p className="text-xs text-gray-400 mt-1">
-                AL = Conge annuel (22j) | SL = Conge maladie (15j) | Periode de 12 mois glissante basee sur la date d&apos;arrivee de chaque employe (WRA 2019)
+                AL = Conge annuel (22j) | SL = Conge maladie (15j) | VL = Vacation Leave (30j/5a, workers WRA S.47) | Periode de 12 mois glissante basee sur la date d&apos;arrivee (WRA 2019)
               </p>
             </CardHeader>
             <CardContent className="p-0">
@@ -1143,6 +1166,7 @@ export default function CongesPage() {
                         <TableHead className="text-xs">Arrivee</TableHead>
                         <TableHead className="text-xs">Periode</TableHead>
                         <TableHead className="text-xs">Eligibilite</TableHead>
+                        <TableHead className="text-xs" title="WRA 2019 S.2 : worker (basic ≤ 50k) ou hors_wra (basic > 50k)">Statut WRA</TableHead>
                         <TableHead className="text-center">AL Droit</TableHead>
                         <TableHead className="text-center">AL Pris</TableHead>
                         <TableHead className="text-center">AL Solde</TableHead>
@@ -1178,6 +1202,17 @@ export default function CongesPage() {
                           </TableCell>
                           <TableCell>
                             <EligibiliteBadge status={(b.eligibility_status as EligibilityStatus) || "eligible"} />
+                          </TableCell>
+                          <TableCell>
+                            {(b as any).statut_wra === 'hors_wra' ? (
+                              <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 text-[10px]" title="Basic > 50 000 MUR — droits via contrat + policy société">
+                                Hors WRA
+                              </Badge>
+                            ) : (
+                              <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-[10px]" title="WRA 2019 intégral — basic ≤ 50 000 MUR">
+                                Worker
+                              </Badge>
+                            )}
                           </TableCell>
                           <TableCell className="text-center text-sm">
                             {isEditing ? (

@@ -309,6 +309,22 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                   <CalendarDays className="w-3 h-3" />{anciennete(employe.date_arrivee)}
                 </span>
               )}
+              {/* G3 — Statut WRA 2019 S.2 (computed depuis salaire_base) */}
+              {employe.statut_wra === 'worker' ? (
+                <span
+                  className="inline-flex items-center gap-1.5 bg-emerald-500/20 text-emerald-100 px-3 py-1 rounded-full text-xs border border-emerald-300/30"
+                  title="Worker au sens WRA 2019 S.2 — basic ≤ 50 000 MUR/mois. Bénéficie de l'intégralité des droits WRA (AL 22j, SL 15j, VL 30j/5a, etc.)."
+                >
+                  Worker (WRA intégral)
+                </span>
+              ) : employe.statut_wra === 'hors_wra' ? (
+                <span
+                  className="inline-flex items-center gap-1.5 bg-purple-500/20 text-purple-100 px-3 py-1 rounded-full text-xs border border-purple-300/30"
+                  title="Hors WRA — basic > 50 000 MUR/mois. Droits via contrat individuel + policy société (WRA S.3(3)(a) permet d'appliquer des conditions plus favorables)."
+                >
+                  Hors WRA (basic &gt; 50 000)
+                </span>
+              ) : null}
             </div>
           </div>
         </div>
