@@ -675,7 +675,15 @@ export async function POST(request: Request) {
         const workingDaysList = listWorkingDaysInPeriod(
           `${periodeStr}-01`, lastDayOfMonth(periodeStr), emp, joursFeriesSetSingle,
         )
+        // F2 — date de référence "aujourd'hui" en ISO. Les jours du mois
+        // qui sont dans le futur ne sont NI absents NI présents : ils
+        // n'existent pas encore. Les exclure du compteur d'absences.
+        // Mois passé : today > fin de mois → aucune exclusion (tous comptent).
+        // Mois futur : today < début de mois → tous exclus (jours_absence=0).
+        const today = new Date().toISOString().slice(0, 10)
         for (const day of workingDaysList) {
+          // F2 : skip les jours dans le futur
+          if (day > today) continue
           const pt = pointageByDate.get(day)
           const enConge = (congesApprouves || []).some(c => day >= c.date_debut && day <= c.date_fin)
           if (enConge) {
@@ -1240,7 +1248,13 @@ export async function POST(request: Request) {
           const workingDaysListBatch = listWorkingDaysInPeriod(
             periodeStart, periodeEnd, emp, joursFeriesSet,
           )
+          // F2 — date de référence "aujourd'hui". Les jours futurs ne sont
+          // NI absents NI présents : ils n'existent pas encore. Même règle
+          // que dans le chemin SINGLE (cf. action='calculer').
+          const todayBatch = new Date().toISOString().slice(0, 10)
           for (const day of workingDaysListBatch) {
+            // F2 : skip les jours dans le futur
+            if (day > todayBatch) continue
             const pt = pointageByDateBatch.get(day)
             const enConge = (congesApprouves || []).some(c => day >= c.date_debut && day <= c.date_fin)
             if (enConge) {
