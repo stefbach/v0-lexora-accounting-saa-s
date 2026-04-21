@@ -43,7 +43,11 @@ async function fetchBulletinData(supabase: any, bulletin: any) {
   const moisLabel = MOIS_FR[periodeDate.getMonth()] || ''
   const annee = periodeDate.getFullYear()
 
-  // Leave balances
+  // TODO (B.4) — Le bulletin de paie liste encore les congés pris par année
+  // civile. Pour être aligné avec la logique période anniversaire (WRA 2019)
+  // introduite dans le Sprint "Années par anniversaire", il faudrait lire
+  // soldes_conges (where periode_debut <= bulletin.periode <= periode_fin).
+  // Refactor différé : impacte le layout PDF, à traiter dans un sprint dédié.
   const { data: congesApprouves } = await supabase
     .from('demandes_conges').select('type_conge, nb_jours')
     .eq('employe_id', bulletin.employe_id).eq('statut', 'approuve')

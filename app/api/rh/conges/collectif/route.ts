@@ -40,6 +40,7 @@ import {
   getWorkingDaysForEmploye,
   getMauritiusPublicHolidays,
 } from '@/lib/rh/calculateWorkingDays'
+import { recomputeSoldeCongesAll } from '@/lib/rh/soldes-conges'
 
 export const dynamic = 'force-dynamic'
 
@@ -83,42 +84,10 @@ async function loadJoursFeriesForYears(
   return set
 }
 
-/** Recompute AL balance for one employee/year — split included. */
-async function recomputeALForEmploye(
-  supabase: ReturnType<typeof getAdminClient>,
-  employeId: string,
-  annee: number
-): Promise<void> {
-  const { data: approved } = await supabase
-    .from('demandes_conges')
-    .select('nb_jours, impose_par_societe')
-    .eq('employe_id', employeId).eq('type_conge', 'AL').eq('statut', 'approuve')
-    .gte('date_debut', `${annee}-01-01`).lte('date_debut', `${annee}-12-31`)
-
-  let imposeSociete = 0, imposeEmploye = 0
-  for (const c of approved || []) {
-    const n = Number(c.nb_jours) || 0
-    if (c.impose_par_societe === true) imposeSociete += n; else imposeEmploye += n
-  }
-  const totalPris = Math.round((imposeSociete + imposeEmploye) * 100) / 100
-  imposeSociete = Math.round(imposeSociete * 100) / 100
-  imposeEmploye = Math.round(imposeEmploye * 100) / 100
-
-  const { data: existing } = await supabase.from('soldes_conges')
-    .select('id').eq('employe_id', employeId).eq('annee', annee).maybeSingle()
-  if (existing) {
-    await supabase.from('soldes_conges').update({
-      al_pris: totalPris, al_impose_societe: imposeSociete, al_impose_employe: imposeEmploye,
-    }).eq('id', existing.id)
-  } else {
-    await supabase.from('soldes_conges').insert({
-      employe_id: employeId, annee,
-      al_droit: 22, al_pris: totalPris,
-      al_impose_societe: imposeSociete, al_impose_employe: imposeEmploye,
-      sl_droit: 15, sl_pris: 0,
-    })
-  }
-}
+// B.4 — recomputeALForEmploye() supprimé au profit de recomputeSoldeCongesAll
+// (helper canonique période anniversaire, mig 154-157). L'ancien helper
+// filtrait demandes par année civile + UPSERT soldes_conges par {annee},
+// ce qui ne matche plus le schéma period-based depuis la mig 155.
 
 export async function POST(request: Request) {
   try {
@@ -273,7 +242,10 @@ export async function POST(request: Request) {
     // straight away with impose_par_societe=true.
     const details: Array<{ employe_id: string; nom: string; prenom: string; nb_jours: number; demande_id: string }> = []
     const errors: Array<{ employe_id: string; reason: string }> = []
-    const touchedYears = new Map<string, Set<number>>() // employe_id → set of years to re-sync
+    // B.4 — On re-syncera les soldes par periode anniversaire (et non
+    // plus par annee civile) : on trace les dates de reference uniques
+    // (date_debut + date_fin couvrent tous les periodes possibles).
+    const touchedRefDates = new Map<string, Set<string>>() // employe_id -> ISO dates
 
     for (const r of rows) {
       const { data: dem, error: demErr } = await supabase.from('demandes_conges').insert({
@@ -304,20 +276,21 @@ export async function POST(request: Request) {
         demande_id: dem.id,
       })
 
-      // Track years impacted (leave can straddle a year boundary).
-      const yrs = touchedYears.get(r.employe_id) || new Set<number>()
-      for (let y = startYear; y <= endYear; y++) yrs.add(y)
-      touchedYears.set(r.employe_id, yrs)
+      // Track periodes impacted : un conge peut chevaucher la date
+      // anniversaire de l'employe, donc on recompute pour date_debut ET
+      // date_fin (couvre toutes les periodes concernees, recompute idempotent).
+      const refs = touchedRefDates.get(r.employe_id) || new Set<string>()
+      refs.add(String(date_debut).slice(0, 10))
+      refs.add(String(date_fin).slice(0, 10))
+      touchedRefDates.set(r.employe_id, refs)
     }
 
-    // Re-sync the annual AL balance for every impacted (employe, year).
-    // Uses the same "recompute from approved leaves" strategy as the rest
-    // of the module, so al_pris / al_impose_societe / al_impose_employe stay
-    // consistent no matter what other leaves exist.
+    // Re-sync soldes_conges pour chaque (employe, periode) impactée.
+    // recomputeSoldeCongesAll est idempotent (SUM-based) et period-aware.
     if (type_conge === 'AL') {
-      for (const [employeId, yrs] of touchedYears) {
-        for (const y of yrs) {
-          await recomputeALForEmploye(supabase, employeId, y)
+      for (const [employeId, refs] of touchedRefDates) {
+        for (const ref of refs) {
+          await recomputeSoldeCongesAll(supabase, employeId, ref)
         }
       }
     }

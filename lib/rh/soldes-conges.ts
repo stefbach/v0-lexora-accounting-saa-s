@@ -145,6 +145,8 @@ export async function recomputeSoldeCongesAll(
 
     // ── 6. UPSERT sur (employe_id, periode_debut) ────────────────────
     //    annee = EXTRACT(YEAR FROM periode_debut) pour rétrocompat.
+    //    DEPRECATED (B.4) : à supprimer quand tous les consommateurs
+    //    auront migré vers periode_debut/periode_fin.
     const annee = Number(periode_debut.slice(0, 4))
 
     // Check if row exists pour decider UPDATE vs INSERT

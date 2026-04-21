@@ -521,19 +521,33 @@ export async function POST(request: Request) {
     const action = body.action
 
     // ---- ACTION: modifier_solde (manually adjust employee leave balance) ----
+    // B.4 — Cible la ROW de la periode anniversaire courante (mig 155).
+    // Le client envoie `periode_debut` depuis la balance row affichee.
+    // Fallback pour retrocompat : si absent, on resout la periode courante
+    // depuis date_arrivee de l'employe + today. Le champ legacy `annee`
+    // envoye dans le body est encore lu pour retrocompat mais deprecie.
     if (action === 'modifier_solde') {
-      const { employe_id, annee, al_droit, al_pris, sl_droit, sl_pris, date_arrivee } = body
+      const { employe_id, al_droit, al_pris, sl_droit, sl_pris, date_arrivee } = body
+      let periode_debut: string | null = body.periode_debut || null
       if (!employe_id) return NextResponse.json({ error: 'employe_id requis' }, { status: 400 })
-      const year = annee || new Date().getFullYear()
 
       // Update employee date_arrivee if provided
       if (date_arrivee !== undefined) {
         await supabase.from('employes').update({ date_arrivee }).eq('id', employe_id)
       }
 
-      // Upsert soldes_conges record for the year
-      const { data: existing } = await supabase.from('soldes_conges')
-        .select('id').eq('employe_id', employe_id).eq('annee', year).maybeSingle()
+      // Fallback : resoudre la periode courante si non fournie.
+      if (!periode_debut) {
+        const { data: emp } = await supabase
+          .from('employes').select('date_arrivee').eq('id', employe_id).maybeSingle()
+        if (emp?.date_arrivee) {
+          const today = new Date().toISOString().slice(0, 10)
+          const { data: pd } = await supabase.rpc('get_conges_period_start', {
+            date_arrivee: emp.date_arrivee, date_reference: today,
+          })
+          if (pd) periode_debut = String(pd).slice(0, 10)
+        }
+      }
 
       const updates: any = {}
       if (al_droit !== undefined) updates.al_droit = Number(al_droit)
@@ -546,18 +560,23 @@ export async function POST(request: Request) {
       }
 
       if (Object.keys(updates).length > 0) {
+        if (!periode_debut) {
+          return NextResponse.json({
+            error: 'Impossible de resoudre la periode courante (date_arrivee manquante ?)',
+          }, { status: 400 })
+        }
+        const { data: existing } = await supabase.from('soldes_conges')
+          .select('id').eq('employe_id', employe_id).eq('periode_debut', periode_debut).maybeSingle()
+
         if (existing) {
           const { error } = await supabase.from('soldes_conges').update(updates).eq('id', existing.id)
           if (error) return NextResponse.json({ error: error.message }, { status: 500 })
         } else {
-          const { error } = await supabase.from('soldes_conges').insert({
-            employe_id, annee: year,
-            al_droit: updates.al_droit ?? 22,
-            al_pris: updates.al_pris ?? 0,
-            sl_droit: updates.sl_droit ?? 15,
-            sl_pris: updates.sl_pris ?? 0,
-          })
-          if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+          // Pas de row pour cette periode -> on laisse recomputeSoldeCongesAll
+          // creer la row canonique puis on applique les ajustements dessus.
+          await recomputeSoldeCongesAll(supabase, employe_id, periode_debut)
+          await supabase.from('soldes_conges').update(updates)
+            .eq('employe_id', employe_id).eq('periode_debut', periode_debut)
         }
       }
 

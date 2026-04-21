@@ -30,6 +30,7 @@ import {
   getWorkingDaysForEmploye,
   getMauritiusPublicHolidays,
 } from '@/lib/rh/calculateWorkingDays'
+import { recomputeSoldeCongesAll } from '@/lib/rh/soldes-conges'
 
 export const dynamic = 'force-dynamic'
 
@@ -107,7 +108,10 @@ export async function POST(request: Request) {
   if (demErr) return NextResponse.json({ error: `Demandes: ${demErr.message}` }, { status: 500 })
 
   const diffs: DiffRow[] = []
-  const touchedKeys = new Set<string>() // `${employe_id}|${annee}|${type}`
+  // B.4 — on trace (employe_id, date_debut ISO) au lieu de (employe, annee,
+  // type) : recomputeSoldeCongesAll est period-aware et gere tous les types
+  // en une passe.
+  const touchedRefs = new Set<string>() // `${employe_id}|${date_iso}`
 
   for (const d of demandes || []) {
     // Demi-journée requests carry nb_jours=0.5 by design — never recompute.
@@ -161,41 +165,16 @@ export async function POST(request: Request) {
       }
       updated++
       if (diff.statut === 'approuve' && (diff.type_conge === 'AL' || diff.type_conge === 'SL')) {
-        const annee = parseInt(String(diff.date_debut).slice(0, 4), 10)
-        touchedKeys.add(`${diff.employe_id}|${annee}|${diff.type_conge}`)
+        touchedRefs.add(`${diff.employe_id}|${String(diff.date_debut).slice(0, 10)}`)
       }
     }
 
-    // Re-sync soldes_conges for every impacted (employe, year, type).
-    for (const key of touchedKeys) {
-      const [employeId, anneeStr, typeConge] = key.split('|')
-      const annee = parseInt(anneeStr, 10)
-
-      const { data: approved } = await supabase.from('demandes_conges')
-        .select('nb_jours')
-        .eq('employe_id', employeId)
-        .eq('type_conge', typeConge)
-        .eq('statut', 'approuve')
-        .gte('date_debut', `${annee}-01-01`)
-        .lte('date_debut', `${annee}-12-31`)
-
-      const totalPris = (approved || []).reduce((s: number, c: any) => s + (Number(c.nb_jours) || 0), 0)
-      const field = typeConge === 'AL' ? 'al_pris' : 'sl_pris'
-
-      const { data: existing } = await supabase.from('soldes_conges')
-        .select('id').eq('employe_id', employeId).eq('annee', annee).maybeSingle()
-      if (existing) {
-        await supabase.from('soldes_conges').update({ [field]: totalPris }).eq('id', existing.id)
-      } else {
-        await supabase.from('soldes_conges').insert({
-          employe_id: employeId,
-          annee,
-          al_droit: 22,
-          al_pris: typeConge === 'AL' ? totalPris : 0,
-          sl_droit: 15,
-          sl_pris: typeConge === 'SL' ? totalPris : 0,
-        })
-      }
+    // B.4 — Re-sync soldes_conges via le helper canonique period-aware.
+    // Une passe par (employe, date_debut) suffit : recomputeSoldeCongesAll
+    // recalcule toute la période contenant date_debut, tous types confondus.
+    for (const key of touchedRefs) {
+      const [employeId, dateRef] = key.split('|')
+      await recomputeSoldeCongesAll(supabase, employeId, dateRef)
       soldesSynced++
     }
   }

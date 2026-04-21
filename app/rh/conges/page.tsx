@@ -472,7 +472,7 @@ export default function CongesPage() {
   const [kpis, setKpis] = useState<KPIs>({ total_al_taken: 0, total_sl_taken: 0, pending_requests: 0, alerts: 0 })
   const [loadingBalances, setLoadingBalances] = useState(true)
   const [editingBalId, setEditingBalId] = useState<string | null>(null)
-  const [editBalFields, setEditBalFields] = useState<{ al_droit: number; al_pris: number; sl_droit: number; sl_pris: number; date_arrivee: string }>({ al_droit: 22, al_pris: 0, sl_droit: 15, sl_pris: 0, date_arrivee: "" })
+  const [editBalFields, setEditBalFields] = useState<{ al_droit: number; al_pris: number; sl_droit: number; sl_pris: number; date_arrivee: string; periode_debut: string | null }>({ al_droit: 22, al_pris: 0, sl_droit: 15, sl_pris: 0, date_arrivee: "", periode_debut: null })
   const [savingBal, setSavingBal] = useState(false)
 
   // Demandes tab
@@ -598,6 +598,7 @@ export default function CongesPage() {
       sl_droit: b.sl_droit || 15,
       sl_pris: b.sl_pris || 0,
       date_arrivee: b.date_arrivee || "",
+      periode_debut: b.periode_debut,
     })
   }
 
@@ -610,7 +611,9 @@ export default function CongesPage() {
         body: JSON.stringify({
           action: "modifier_solde",
           employe_id: editingBalId,
-          annee: new Date().getFullYear(),
+          // B.4 — on cible la periode anniversaire courante de l'employe.
+          // Le backend resout la row via periode_debut (fallback: today).
+          periode_debut: editBalFields.periode_debut,
           al_droit: editBalFields.al_droit,
           al_pris: editBalFields.al_pris,
           sl_droit: editBalFields.sl_droit,
