@@ -45,7 +45,14 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
       fetch(`/api/rh/conges?action=balances&employe_id=${employe.id}`).then(r => r.json()).catch(() => ({})),
       fetch(`/api/rh/conges?employe_id=${employe.id}`).then(r => r.json()).catch(() => ({ conges: [] })),
     ])
-    setBalances(balRes.balances?.[0] || null)
+    // F5-bis — sélection défensive par employe_id. Avant le fix API qui
+    // filtre server-side, balances[] pouvait contenir plusieurs employés
+    // et balances[0] était le mauvais. On garde .find() en plus du filtre
+    // server comme ceinture + bretelles.
+    const mine = Array.isArray(balRes.balances)
+      ? balRes.balances.find((b: any) => b.employe_id === employe.id)
+      : null
+    setBalances(mine || balRes.balances?.[0] || null)
     setHistory(histRes.conges || histRes.demandes || [])
   }
 

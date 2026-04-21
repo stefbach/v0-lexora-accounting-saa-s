@@ -121,12 +121,24 @@ export async function userHasAccessToSociete(userId: string, societeId: string):
  */
 export async function userHasAccessToEmploye(userId: string, employeId: string): Promise<boolean> {
   const supabase = getAdminClient()
+  // F5-bis — bypass self-service : si l'user courant EST l'employé
+  // (lien via auth_user_id ou email), autoriser systématiquement.
+  // Avant ce fix, un employé avec rôle 'salarie' recevait 403 sur
+  // /api/rh/paie?employe_id=<self> car userHasAccessToSociete() ne
+  // reconnaissait pas son propre rôle comme ayant accès à sa société.
   const { data: emp } = await supabase
     .from('employes')
-    .select('societe_id')
+    .select('societe_id, auth_user_id, email')
     .eq('id', employeId)
     .maybeSingle()
   if (!emp?.societe_id) return false
+  if (emp.auth_user_id && emp.auth_user_id === userId) return true
+  if (emp.email) {
+    const { data: authUser } = await supabase.auth.admin.getUserById(userId)
+    if (authUser?.user?.email && authUser.user.email.toLowerCase() === String(emp.email).toLowerCase()) {
+      return true
+    }
+  }
   return userHasAccessToSociete(userId, emp.societe_id)
 }
 

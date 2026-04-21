@@ -251,22 +251,29 @@ export async function GET(request: Request) {
     // Sprint 16 fix — SELECT résilient : try/catch + retry sans colonnes
     // optionnelles si 42703. Colonnes gender/genre/actif peuvent manquer
     // sur certains envs selon les migrations appliquées.
+    // F5-bis — si employe_id est passé, on restreint à cet employé seulement
+    // (sinon balances[] contenait TOUS les employés de la société → CongesTab
+    // prenait balances[0] qui pouvait être un autre employé).
     let employees: any[] = []
     try {
-      const { data: emps, error: empErr } = await supabase
+      let q = supabase
         .from('employes')
         .select('id, nom, prenom, poste, societe_id, date_arrivee, genre, gender, actif, date_depart')
         .in('societe_id', societeIds)
         .eq('actif', true)
         .is('date_depart', null)
+      if (employe_id) q = q.eq('id', employe_id)
+      const { data: emps, error: empErr } = await q
       if (empErr) {
         // Retry without genre/actif if columns missing (42703)
         console.warn('[conges GET] employees query error, retrying:', empErr.message, empErr.code)
-        const { data: emps2 } = await supabase
+        let q2 = supabase
           .from('employes')
           .select('id, nom, prenom, poste, societe_id, date_arrivee')
           .in('societe_id', societeIds)
           .is('date_depart', null)
+        if (employe_id) q2 = q2.eq('id', employe_id)
+        const { data: emps2 } = await q2
         employees = emps2 || []
       } else {
         employees = emps || []
