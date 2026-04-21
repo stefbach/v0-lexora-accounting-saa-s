@@ -49,21 +49,24 @@ export async function createEcrituresForFacture(
 
     const dossier_id = dossier?.id || null
 
-    // Delete any existing entries for this facture (idempotent)
+    // Delete any existing UNlettered entries for this facture (idempotent)
+    // IMPORTANT : ne PAS supprimer les écritures déjà lettrées (rapprochées)
+    // sinon le backfill casse le lettrage existant.
     const refFolio = `FAC-${facture.id}`
     await supabase
       .from('ecritures_comptables_v2')
       .delete()
       .eq('societe_id', facture.societe_id)
       .eq('ref_folio', refFolio)
+      .is('lettre', null)
 
-    // Clean legacy duplicates: old code wrote via v1 view with ref_folio = facture.id
-    // (no FAC- prefix) or with facture_id FK. Both paths end up in v2.
+    // Clean legacy duplicates (non lettrées uniquement)
     await supabase
       .from('ecritures_comptables_v2')
       .delete()
       .eq('societe_id', facture.societe_id)
       .eq('ref_folio', facture.id)
+      .is('lettre', null)
 
     if (dossier_id) {
       await supabase
@@ -72,6 +75,19 @@ export async function createEcrituresForFacture(
         .eq('dossier_id', dossier_id)
         .eq('facture_id', facture.id)
         .in('journal', ['ACH', 'VTE'])
+        .is('lettre', null)
+    }
+
+    // Si des écritures lettrées existent déjà pour cette facture, ne pas recréer
+    const { data: existingLettered } = await supabase
+      .from('ecritures_comptables_v2')
+      .select('id')
+      .eq('societe_id', facture.societe_id)
+      .eq('ref_folio', refFolio)
+      .not('lettre', 'is', null)
+      .limit(1)
+    if (existingLettered && existingLettered.length > 0) {
+      return { ok: true, nb_entries: 0 }
     }
 
     const libelle = `Facture ${facture.numero_facture || ''} — ${facture.tiers || ''}`.trim()
