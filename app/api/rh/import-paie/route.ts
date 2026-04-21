@@ -479,11 +479,26 @@ export async function POST(request: Request) {
         const moisLabel = new Date(periodeDate).toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
         console.log(`[import-paie] Compta: basic=${t.basic}, ot=${t.ot}, allow=${t.allowances}, net=${t.net}, csg_s=${t.csg_sal}, csg_p=${t.csg_pat}`)
 
-        // Codes PCM (Plan Comptable Mauricien, migration 018) — canoniques 4 chiffres.
-        // Remplace les anciens codes 6-chiffres fantaisistes (641100, 421000, 431000, 432000…)
-        // qui créaient des comptes dupliqués incohérents avec le PCM officiel.
-        // L'inversion historique Training Levy / PRGF côté charge (645300 ↔ 645400) et dette
-        // (432000 ↔ 432100) est corrigée ici.
+        // ═══════════════════════════════════════════════════════════════
+        // Plan comptable UNIFIÉ avec generer_ecritures_paie() (migrations 120).
+        // Avant : cette route utilisait 4210/4311/4321/4330/etc. tandis que
+        // le trigger SQL utilisait 421/431/444, ce qui créait des comptes
+        // parallèles incohérents et cassait la balance (Σ D ≠ Σ C sur la
+        // balance par compte). On aligne tout sur le PCM officiel 3-chiffres
+        // utilisé par generer_ecritures_paie.
+        //
+        //   Charges (débits)                  Dettes (crédits)
+        //   6411 Rémunérations                421  Personnel — rémunérations dues
+        //   6414 Heures sup                   431  Sécurité sociale
+        //   6415 Primes                       444  État — PAYE
+        //   6416 Provision 13ème mois
+        //   6418 Ajustements
+        //   6419 Retenues
+        //   6451 CSG patronale
+        //   6452 NSF patronal
+        //   6453 PRGF
+        //   6454 Training Levy
+        // ═══════════════════════════════════════════════════════════════
         const refFolio = `SAL-${periodeDate.slice(0, 7)}`
         const socId = societe_id || null
         const mkEntry = (compte: string, libelle: string, debit: number, credit: number) => ({
@@ -500,47 +515,86 @@ export async function POST(request: Request) {
           t.nsf_pat > 0 ? mkEntry('6452', `NSF patronal ${moisLabel}`, Math.round(t.nsf_pat), 0) : null,
           t.levy > 0 ? mkEntry('6454', `Training Levy HRDC ${moisLabel}`, Math.round(t.levy), 0) : null,
           t.prgf > 0 ? mkEntry('6453', `PRGF ${moisLabel}`, Math.round(t.prgf), 0) : null,
-          // CRÉDIT — Dettes (classe 4)
-          mkEntry('4210', `Salaires nets à payer ${moisLabel}`, 0, Math.round(t.net)),
-          t.csg_sal > 0 ? mkEntry('4311', `CSG salarié à verser ${moisLabel}`, 0, Math.round(t.csg_sal)) : null,
-          t.csg_pat > 0 ? mkEntry('4321', `CSG patronal à verser ${moisLabel}`, 0, Math.round(t.csg_pat)) : null,
-          t.nsf_sal > 0 ? mkEntry('4312', `NSF salarié à verser ${moisLabel}`, 0, Math.round(t.nsf_sal)) : null,
-          t.nsf_pat > 0 ? mkEntry('4322', `NSF patronal à verser ${moisLabel}`, 0, Math.round(t.nsf_pat)) : null,
-          t.paye > 0 ? mkEntry('4330', `PAYE à reverser MRA ${moisLabel}`, 0, Math.round(t.paye)) : null,
-          t.levy > 0 ? mkEntry('4324', `Training Levy à verser ${moisLabel}`, 0, Math.round(t.levy)) : null,
-          t.prgf > 0 ? mkEntry('4323', `PRGF à verser ${moisLabel}`, 0, Math.round(t.prgf)) : null,
+          // CRÉDIT — Dettes (classe 4) — codes PCM 3-chiffres alignés avec generer_ecritures_paie
+          mkEntry('421', `Salaires nets à payer ${moisLabel}`, 0, Math.round(t.net)),
+          t.csg_sal > 0 ? mkEntry('431', `CSG salarié à verser ${moisLabel}`, 0, Math.round(t.csg_sal)) : null,
+          t.csg_pat > 0 ? mkEntry('431', `CSG patronal à verser ${moisLabel}`, 0, Math.round(t.csg_pat)) : null,
+          t.nsf_sal > 0 ? mkEntry('431', `NSF salarié à verser ${moisLabel}`, 0, Math.round(t.nsf_sal)) : null,
+          t.nsf_pat > 0 ? mkEntry('431', `NSF patronal à verser ${moisLabel}`, 0, Math.round(t.nsf_pat)) : null,
+          t.paye > 0 ? mkEntry('444', `PAYE à reverser MRA ${moisLabel}`, 0, Math.round(t.paye)) : null,
+          t.levy > 0 ? mkEntry('431', `Training Levy à verser ${moisLabel}`, 0, Math.round(t.levy)) : null,
+          t.prgf > 0 ? mkEntry('431', `PRGF à verser ${moisLabel}`, 0, Math.round(t.prgf)) : null,
           t.absence > 0 ? mkEntry('6419', `Retenues absences ${moisLabel}`, Math.round(t.absence), 0) : null,
           // Provision 13ème mois (YEB) — 1/12 du salaire de base mensuel
           t.basic > 0 ? mkEntry('6416', `Provision 13ème mois ${moisLabel}`, Math.round(t.basic / 12), 0) : null,
-          t.basic > 0 ? mkEntry('4212', `Provision 13ème mois à payer ${moisLabel}`, 0, Math.round(t.basic / 12)) : null,
+          t.basic > 0 ? mkEntry('421', `Provision 13ème mois à payer ${moisLabel}`, 0, Math.round(t.basic / 12)) : null,
         ].filter(Boolean) as any[]
 
-        // ── Vérification d'équilibre : débit total DOIT = crédit total ──────
+        // ── Vérification d'équilibre PRE-INSERT : débit total DOIT = crédit total ──
         // Certains bulletins Excel ont des composants dans le NET (housing, meal,
         // commissions…) qui ne sont pas captés par basic+ot+allowances. Sans cette
         // vérification, la balance est perpétuellement déséquilibrée.
-        // On ajoute une écriture d'ajustement en 6419 "Autres rémunérations" pour
+        // On ajoute une écriture d'ajustement en 6418 "Ajustement paie" pour
         // la différence, ce qui force l'équilibre et rend l'écart visible.
         const totalDebit = entries.reduce((s, e) => s + (e.debit_mur || 0), 0)
         const totalCredit = entries.reduce((s, e) => s + (e.credit_mur || 0), 0)
         const ecart = Math.round(totalCredit - totalDebit)
         if (ecart > 0) {
           entries.push(mkEntry('6418', `Ajustement paie (éléments non détaillés) ${moisLabel}`, ecart, 0))
-          console.log(`[import-paie] Ajustement +${ecart} MUR en 6419 pour équilibrer le bulletin SAL`)
+          console.log(`[import-paie] Ajustement +${ecart} MUR en 6418 pour équilibrer le bulletin SAL`)
         } else if (ecart < 0) {
-          entries.push(mkEntry('4210', `Ajustement paie (retenue non détaillée) ${moisLabel}`, 0, Math.abs(ecart)))
-          console.log(`[import-paie] Ajustement ${ecart} MUR en 4210 pour équilibrer le bulletin SAL`)
+          entries.push(mkEntry('421', `Ajustement paie (retenue non détaillée) ${moisLabel}`, 0, Math.abs(ecart)))
+          console.log(`[import-paie] Ajustement ${ecart} MUR en 421 pour équilibrer le bulletin SAL`)
+        }
+
+        // Re-vérifier l'équilibre final après ajustement
+        const finalDebit = entries.reduce((s, e) => s + (e.debit_mur || 0), 0)
+        const finalCredit = entries.reduce((s, e) => s + (e.credit_mur || 0), 0)
+        if (Math.abs(finalDebit - finalCredit) >= 0.01) {
+          console.error(`[import-paie] Balance NOT zero after adjustment: D=${finalDebit} C=${finalCredit}`)
+          errors.push(`Balance paie incohérente (D=${finalDebit}, C=${finalCredit}) — insertion refusée`)
+          return NextResponse.json({ created, updated, errors, total: employes.length, compta: false }, { status: 500 })
         }
 
         // Insert directement dans ecritures_comptables_v2 (pas la vue v1 qui
         // a un trigger INSTEAD OF cassé sur ref_folio).
-        const { error: comptaErr } = await supabase.from('ecritures_comptables_v2').insert(entries)
+        // Post-insert validation : vérifier que le nombre de lignes insérées
+        // correspond aux lignes envoyées. Si Supabase rejette silencieusement
+        // une ligne (RLS, constraint…), on DÉTECTE au lieu de laisser un
+        // journal SAL à moitié créé qui casserait la balance.
+        const { data: insertedRows, error: comptaErr } = await supabase
+          .from('ecritures_comptables_v2')
+          .insert(entries)
+          .select('id, debit_mur, credit_mur')
         if (comptaErr) {
           console.error('[import-paie] compta insert failed:', comptaErr.message)
           errors.push(`Compta: ${comptaErr.message}`)
+        } else if (!insertedRows || insertedRows.length !== entries.length) {
+          // Rollback partiel : si on a inséré moins de lignes que prévu, on
+          // repart à zéro pour éviter une balance cassée.
+          console.error(`[import-paie] Partial insert: ${insertedRows?.length || 0}/${entries.length} lignes. Rolling back.`)
+          await supabase.from('ecritures_comptables_v2')
+            .delete()
+            .eq('societe_id', societe_id)
+            .eq('journal', 'SAL')
+            .eq('date_ecriture', periodeDate)
+          errors.push(`Insertion partielle (${insertedRows?.length || 0}/${entries.length}) — rollback effectué`)
         } else {
-          comptaOk = true
-          console.log(`[import-paie] ${entries.length} écritures comptables créées (journal SAL)`)
+          // Vérifier l'équilibre des lignes EFFECTIVEMENT insérées
+          const insD = insertedRows.reduce((s: number, r: any) => s + (Number(r.debit_mur) || 0), 0)
+          const insC = insertedRows.reduce((s: number, r: any) => s + (Number(r.credit_mur) || 0), 0)
+          if (Math.abs(insD - insC) >= 0.01) {
+            console.error(`[import-paie] Inserted rows NOT balanced: D=${insD} C=${insC} — rolling back`)
+            await supabase.from('ecritures_comptables_v2')
+              .delete()
+              .eq('societe_id', societe_id)
+              .eq('journal', 'SAL')
+              .eq('date_ecriture', periodeDate)
+            errors.push(`Écritures insérées déséquilibrées (D=${insD}, C=${insC}) — rollback effectué`)
+          } else {
+            comptaOk = true
+            console.log(`[import-paie] ${entries.length} écritures comptables créées (journal SAL, équilibrées)`)
+          }
         }
       } else {
         console.warn('[import-paie] No dossier found for societe — compta skipped')
