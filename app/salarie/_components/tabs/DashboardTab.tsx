@@ -30,12 +30,25 @@ export function DashboardTab({
   const estimatedNet = lastBulletin?.salaire_net || 0
   const estimatedBase = lastBulletin?.salaire_base || 0
   const estimatedBrut = lastBulletin?.salaire_brut || 0
-  const alTotal = Number(conges.al_droit) || 22
-  const slTotal = Number(conges.sl_droit) || 15
-  const alPris = Number(conges.al_pris) || 0
-  const slPris = Number(conges.sl_pris) || 0
-  const alRemaining = Number(conges.al_solde) || (alTotal - alPris)
-  const slRemaining = Number(conges.sl_solde) || (slTotal - slPris)
+
+  // F5 — Soldes congés : source de vérité = API /api/rh/conges?action=balances
+  // qui lit soldes_conges. PAS de fallback silencieux `|| 22` / `|| 15` :
+  // si la row n'existe pas, on affiche un état d'erreur explicite.
+  const soldesMissing = !conges
+    || conges._missing_solde === true
+    || conges.al_droit == null
+    || conges.al_pris == null
+    || conges.al_solde == null
+    || conges.sl_droit == null
+    || conges.sl_pris == null
+    || conges.sl_solde == null
+
+  const alTotal = soldesMissing ? 0 : Number(conges.al_droit)
+  const slTotal = soldesMissing ? 0 : Number(conges.sl_droit)
+  const alPris = soldesMissing ? 0 : Number(conges.al_pris)
+  const slPris = soldesMissing ? 0 : Number(conges.sl_pris)
+  const alRemaining = soldesMissing ? 0 : Number(conges.al_solde)
+  const slRemaining = soldesMissing ? 0 : Number(conges.sl_solde)
   const alPct = alTotal > 0 ? Math.round((alRemaining / alTotal) * 100) : 0
   const slPct = slTotal > 0 ? Math.round((slRemaining / slTotal) * 100) : 0
 
@@ -123,6 +136,15 @@ export function DashboardTab({
         </CardContent>
       </Card>
 
+      {soldesMissing ? (
+        // F5 — État d'erreur explicite. Pas de valeurs par défaut (22/15)
+        // qui masqueraient un vrai problème DB.
+        <Card className="rounded-xl shadow-sm border-red-200 bg-red-50">
+          <CardContent className="p-4 text-sm text-red-700">
+            Impossible de charger vos soldes de congés. Contactez votre RH.
+          </CardContent>
+        </Card>
+      ) : (
       <div className="grid grid-cols-2 gap-3 md:gap-4">
         <Card className="rounded-xl shadow-sm">
           <CardContent className="p-4 flex flex-col items-center text-center">
@@ -159,6 +181,7 @@ export function DashboardTab({
           </CardContent>
         </Card>
       </div>
+      )}
 
       {annonces.length > 0 && (
         <div className="space-y-2">

@@ -162,13 +162,29 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
     setCancellingId(null)
   }
 
-  const alDroit = Number(balances?.al_droit) || 22
-  const slDroit = Number(balances?.sl_droit) || 15
-  const alPris = Number(balances?.al_pris) || 0
-  const alImposeSociete = Number(balances?.al_impose_societe) || 0
-  const alImposeEmploye = Number(balances?.al_impose_employe) || (alPris - alImposeSociete)
-  const alRemaining = Number(balances?.al_solde) || (alDroit - alPris)
-  const slRemaining = Number(balances?.sl_solde) || (slDroit - (Number(balances?.sl_pris) || 0))
+  // F5 — Source de vérité = API /api/rh/conges?action=balances qui lit
+  // soldes_conges. Plus de fallback silencieux `|| 22` / `|| 15` : si la
+  // row n'existe pas, on affiche un état d'erreur explicite plus bas.
+  const soldesMissing = !balances
+    || balances._missing_solde === true
+    || balances.al_droit == null
+    || balances.al_pris == null
+    || balances.al_solde == null
+    || balances.sl_droit == null
+    || balances.sl_pris == null
+    || balances.sl_solde == null
+
+  const alDroit = soldesMissing ? 0 : Number(balances.al_droit)
+  const slDroit = soldesMissing ? 0 : Number(balances.sl_droit)
+  const alPris = soldesMissing ? 0 : Number(balances.al_pris)
+  const alImposeSociete = soldesMissing ? 0 : Number(balances.al_impose_societe ?? 0)
+  const alImposeEmploye = soldesMissing
+    ? 0
+    : (balances.al_impose_employe != null
+        ? Number(balances.al_impose_employe)
+        : Math.max(0, alPris - alImposeSociete))
+  const alRemaining = soldesMissing ? 0 : Number(balances.al_solde)
+  const slRemaining = soldesMissing ? 0 : Number(balances.sl_solde)
   const alPct = alDroit > 0 ? Math.round((alRemaining / alDroit) * 100) : 0
   const slPct = slDroit > 0 ? Math.round((slRemaining / slDroit) * 100) : 0
 
@@ -183,6 +199,14 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
 
   return (
     <div className="space-y-6">
+      {soldesMissing ? (
+        // F5 — État d'erreur explicite. Pas de défauts silencieux (22/15).
+        <Card className="rounded-xl shadow-sm border-red-200 bg-red-50">
+          <CardContent className="p-4 text-sm text-red-700">
+            Impossible de charger vos soldes de congés. Contactez votre RH.
+          </CardContent>
+        </Card>
+      ) : (
       <div className="grid grid-cols-2 gap-3 md:gap-4">
         <Card className="rounded-xl shadow-sm">
           <CardContent className="p-4 space-y-3">
@@ -222,6 +246,7 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
           </CardContent>
         </Card>
       </div>
+      )}
 
       <Card className="rounded-xl shadow-sm">
         <CardHeader><CardTitle className="text-xl md:text-base" style={{ color: NAVY }}>Nouvelle demande</CardTitle></CardHeader>

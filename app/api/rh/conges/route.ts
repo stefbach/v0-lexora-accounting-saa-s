@@ -281,137 +281,84 @@ export async function GET(request: Request) {
     }
 
     // ---- ACTION: balances ----
+    // F5 — Source de vérité unique = table soldes_conges (pour AL/SL droit,
+    // pris, solde). Les calculs en mémoire depuis demandes_conges sont
+    // remplacés par une lecture DB simple + un auto-recompute des rows
+    // manquantes via recomputeSoldeCongesAll (F3). Les status_color et
+    // sick_cert_alert restent dérivés des demandes car ce sont des signaux
+    // d'UX, pas des soldes.
     if (action === 'balances') {
       const now = new Date()
       const currentYear = now.getFullYear()
 
-      // Sprint 13 BUG 2 — récupérer AUSSI les demandes en_attente pour
-      // calculer "AL pris" (compteur de suivi) indépendamment du solde.
-      // Les statuts 'approuve' et 'en_attente' comptent tous deux comme
-      // "congés posés" côté planning. Le solde al_solde reste basé sur
-      // les AL approuvés uniquement (les pending ne déduisent pas encore).
-      const { data: congesData } = await supabase
-        .from('demandes_conges')
-        .select('*')
+      // 1. Lire soldes_conges pour tous les employés de l'année courante
+      const { data: soldesData } = await supabase
+        .from('soldes_conges')
+        .select('employe_id, al_droit, al_pris, al_solde, al_reporte, al_impose_societe, al_impose_employe, sl_droit, sl_pris, sl_solde, sl_accumule')
         .in('employe_id', employeeIds)
-        .in('statut', ['approuve', 'en_attente'])
+        .eq('annee', currentYear)
+
+      const soldesByEmp = new Map<string, any>((soldesData || []).map((s: any) => [s.employe_id, s]))
+
+      // 2. Pour les employés sans row soldes_conges → recompute pour créer la
+      //    row avec défauts WRA + valeurs issues de demandes_conges.
+      //    recomputeSoldeCongesAll est idempotente (F3), on peut l'appeler
+      //    en parallèle sans risque.
+      const missing = employeeIds.filter((id: string) => !soldesByEmp.has(id))
+      if (missing.length > 0) {
+        await Promise.all(missing.map((id: string) =>
+          recomputeSoldeCongesAll(supabase, id, currentYear),
+        ))
+        // Re-fetch les lignes créées
+        const { data: newSoldes } = await supabase
+          .from('soldes_conges')
+          .select('employe_id, al_droit, al_pris, al_solde, al_reporte, al_impose_societe, al_impose_employe, sl_droit, sl_pris, sl_solde, sl_accumule')
+          .in('employe_id', missing)
+          .eq('annee', currentYear)
+        for (const s of newSoldes || []) soldesByEmp.set(s.employe_id, s)
+      }
+
+      // 3. Lire les SL approuvés de l'année (pour sick_cert_alert uniquement —
+      //    pas pour calculer les soldes).
+      const { data: slApproved } = await supabase
+        .from('demandes_conges')
+        .select('employe_id, type_conge, date_debut, date_fin, nb_jours')
+        .in('employe_id', employeeIds)
+        .eq('type_conge', 'SL')
+        .eq('statut', 'approuve')
         .gte('date_debut', `${currentYear}-01-01`)
         .lte('date_debut', `${currentYear}-12-31`)
 
-      const conges = congesData || []
-
-      // Sprint 13 BUG 2 — marker de bascule UL posé par POST action=creer
-      // quand le solde AL est insuffisant OU pendant la période de carence.
-      // motif contient toujours "[Auto-bascule UL]". Pour le compteur
-      // "AL pris" on récupère ces UL-from-AL pour les agréger.
-      //
-      // Deux cas produisent ce tag :
-      //   1. Solde insuffisant : "Solde Local Leave insuffisant..."
-      //   2. Carence < 6 mois : "Période de carence..."
-      // → On simplifie : tout UL avec "[Auto-bascule UL]" est un AL basculé
-      //   SAUF si le motif mentionne "Sick Leave" (bascule SL→UL).
-      const isBasculeAlToUl = (c: any): boolean =>
-        c?.type_conge === 'UL'
-        && typeof c?.motif === 'string'
-        && c.motif.includes('[Auto-bascule UL]')
-        && !/Sick\s+Leave/i.test(c.motif)
-
-      const isBasculeSlToUl = (c: any): boolean =>
-        c?.type_conge === 'UL'
-        && typeof c?.motif === 'string'
-        && c.motif.includes('[Auto-bascule UL]')
-        && /Sick\s+Leave/i.test(c.motif)
-
-      // Get all SL records (approuvés) pour consecutive check
-      const allSl = conges.filter((c: any) => c.type_conge === 'SL' && c.statut === 'approuve')
-
-      // Build balances per employee
+      // 4. Build balances — source de vérité = soldes_conges
       const balances = employees.map((emp: any) => {
-        const empConges = conges.filter((c: any) => c.employe_id === emp.id)
+        const solde = soldesByEmp.get(emp.id) || null
+        // Si après recompute la row est toujours absente (erreur DB), on
+        // retourne null pour les soldes au lieu d'inventer des valeurs.
+        // Le frontend (F5.2) affiche alors un état d'erreur explicite.
+        const alDroit = solde ? Number(solde.al_droit) : null
+        const alPris = solde ? Number(solde.al_pris) : null
+        const alSolde = solde ? Number(solde.al_solde) : null
+        const slDroit = solde ? Number(solde.sl_droit) : null
+        const slPris = solde ? Number(solde.sl_pris) : null
+        const slSolde = solde ? Number(solde.sl_solde) : null
 
-        // AL posés (compteur de suivi) = vrais AL + UL-from-AL bascule,
-        // tous statuts (approuve OU en_attente), INDÉPENDANT du solde.
-        const empAlPosés = empConges.filter((c: any) =>
-          c.type_conge === 'AL' || isBasculeAlToUl(c)
-        )
-        const alTaken = empAlPosés.reduce((sum: number, c: any) => sum + (c.nb_jours || 0), 0)
-
-        // AL réellement déduits du droit = AL pur ET approuvés uniquement
-        // (les pending ne baissent pas encore, les UL-from-AL n'ont JAMAIS
-        // été déduits du droit puisqu'ils ont basculé en UL).
-        const empAlReels = empConges.filter((c: any) =>
-          c.type_conge === 'AL' && c.statut === 'approuve'
-        )
-        const alDeduitsDuDroit = empAlReels.reduce((sum: number, c: any) => sum + (c.nb_jours || 0), 0)
-
-        // Split AL days between company-imposed and employee-chosen.
-        // Basé sur les AL posés (compteur de suivi) pour que le split
-        // reste cohérent avec al_pris affiché.
-        const alImposeSociete = empAlPosés
-          .filter((c: any) => c.impose_par_societe === true)
-          .reduce((sum: number, c: any) => sum + (c.nb_jours || 0), 0)
-        const alImposeEmploye = alTaken - alImposeSociete
-
-        // SL posés (même logique — inclut UL-from-SL bascule)
-        const empSlPosés = empConges.filter((c: any) =>
-          c.type_conge === 'SL' || isBasculeSlToUl(c)
-        )
-        const slTaken = empSlPosés.reduce((sum: number, c: any) => sum + (c.nb_jours || 0), 0)
-        const empSlReels = empSlPosés.filter((c: any) =>
-          c.type_conge === 'SL' && c.statut === 'approuve'
-        )
-        const slDeduitsDuDroit = empSlReels.reduce((sum: number, c: any) => sum + (c.nb_jours || 0), 0)
-
-        const alEntitled = calculateALEntitlement(emp.date_arrivee, currentYear)
-        const slEntitled = calculateSLEntitlement(emp.date_arrivee, currentYear)
-        // al_solde = droit - AL réellement déduits (pending et UL-from-AL exclus)
-        const alBalance = alEntitled - alDeduitsDuDroit
-        const slBalance = slEntitled - slDeduitsDuDroit
-
-        // Sick certificate alert
-        const empSl = allSl.filter((c: any) => c.employe_id === emp.id)
+        // Sick certificate alert — dérivé des demandes SL approuvées
+        const empSl = (slApproved || []).filter((c: any) => c.employe_id === emp.id)
         const sickCertAlert = detectSickCertAlert(empSl)
 
-        // Sprint 4 TÂCHE 4 — Points couleur alignés sur WRA 2019.
-        //
-        // Ancienne logique (avant Sprint 4) — mélangeait AL et SL :
-        //   rouge si al_solde <= 0 OU sl_solde <= 0
-        //   orange si al_solde <= 5 OU sl_solde <= 3
-        //   vert sinon
-        // Problème : employés en période d'essai (< 12 mois) étaient
-        // parfois flaggés orange sans raison claire (solde SL tombait
-        // bas après un arrêt maladie), et rien ne signalait les 3 mois
-        // de carence WRA 2019 qui empêchent TOUT droit à congé.
-        //
-        // Nouvelle logique (spec utilisateur — basée sur ancienneté AL) :
-        //   🔴 rouge   = pas éligible (< 3 mois de carence WRA)
-        //                OU solde AL totalement épuisé (= 0)
-        //   🟡 orange  = en période d'essai 3-12 mois (éligible prorata)
-        //                OU solde AL < 5 jours (alerte faible)
-        //   🟢 vert    = éligible plein droit (>= 12 mois) avec solde >= 5
-        //
-        // SL n'entre PLUS dans le calcul du point couleur : la colonne
-        // sick_cert_alert gère déjà l'alerte certificat médical, et le
-        // solde SL faible n'est pas aussi critique qu'un AL épuisé
-        // (WRA 2019 donne 15j SL/an récupérables sur déclaration).
+        // Status color — basé sur ancienneté + al_solde (WRA 2019)
         const hireDate = emp.date_arrivee ? new Date(String(emp.date_arrivee) + 'T00:00:00') : null
         const monthsService = hireDate
           ? (now.getFullYear() - hireDate.getFullYear()) * 12 + (now.getMonth() - hireDate.getMonth())
           : 99
 
         let statusColor: 'green' | 'orange' | 'red' = 'green'
+        const alBalance = alSolde ?? 0
         if (monthsService < 3 || alBalance <= 0) {
           statusColor = 'red'
         } else if (monthsService < 12 || alBalance < 5) {
           statusColor = 'orange'
         }
-
-        // Sprint 13 BUG 2 — détails de bascule UL pour transparence UI.
-        // Permet au RH de voir le nombre de jours AL basculés en UL
-        // (carence) vs les vrais AL déduits du solde.
-        const alBasculeUl = empAlPosés
-          .filter((c: any) => isBasculeAlToUl(c))
-          .reduce((sum: number, c: any) => sum + (c.nb_jours || 0), 0)
 
         return {
           employe_id: emp.id,
@@ -421,28 +368,32 @@ export async function GET(request: Request) {
           societe_id: emp.societe_id,
           gender: emp.genre || emp.gender,
           date_arrivee: emp.date_arrivee,
-          al_droit: alEntitled,
-          // Sprint 13 BUG 2 — al_pris = compteur de suivi indépendant du solde.
-          // Inclut AL + UL-from-AL (bascule carence), approuvés et en attente.
-          al_pris: alTaken,
-          al_impose_societe: Math.round(alImposeSociete * 100) / 100,
-          al_impose_employe: Math.round(alImposeEmploye * 100) / 100,
-          al_solde: alBalance,
-          // Détails pour UI (ex: distinguer les jours vraiment décomptés du solde)
-          al_deduits: Math.round(alDeduitsDuDroit * 100) / 100,
-          al_bascule_ul: Math.round(alBasculeUl * 100) / 100,
-          sl_droit: slEntitled,
-          sl_pris: slTaken,
-          sl_solde: slBalance,
-          sl_deduits: Math.round(slDeduitsDuDroit * 100) / 100,
+          // ─── Soldes (source de vérité = soldes_conges) ───
+          al_droit: alDroit,
+          al_pris: alPris,
+          al_solde: alSolde,
+          al_reporte: solde ? Number(solde.al_reporte ?? 0) : 0,
+          al_impose_societe: solde ? Number(solde.al_impose_societe ?? 0) : 0,
+          al_impose_employe: solde ? Number(solde.al_impose_employe ?? 0) : 0,
+          sl_droit: slDroit,
+          sl_pris: slPris,
+          sl_solde: slSolde,
+          sl_accumule: solde ? Number(solde.sl_accumule ?? 0) : 0,
+          // ─── Rétrocompat : al_deduits / sl_deduits restent exposés ───
+          // Avant F5 ils distinguaient "pris approuvés" de "posés pending
+          // inclus" — maintenant al_pris = al_deduits (source de vérité).
+          al_deduits: alPris,
+          sl_deduits: slPris,
           status_color: statusColor,
           sick_cert_alert: sickCertAlert,
+          // Signal d'erreur pour le frontend si la row n'a pas pu être chargée
+          _missing_solde: solde === null,
         }
       })
 
       // Summary KPIs
-      const totalAlTaken = balances.reduce((s: number, b: any) => s + b.al_pris, 0)
-      const totalSlTaken = balances.reduce((s: number, b: any) => s + b.sl_pris, 0)
+      const totalAlTaken = balances.reduce((s: number, b: any) => s + (Number(b.al_pris) || 0), 0)
+      const totalSlTaken = balances.reduce((s: number, b: any) => s + (Number(b.sl_pris) || 0), 0)
 
       // Pending requests count
       const { count: pendingCount } = await supabase
