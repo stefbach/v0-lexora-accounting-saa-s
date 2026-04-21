@@ -314,7 +314,8 @@ export async function GET(request: Request) {
       const missing = employeeIds.filter((id: string) => !soldesByEmp.has(id))
       if (missing.length > 0) {
         await Promise.all(missing.map((id: string) =>
-          recomputeSoldeCongesAll(supabase, id, currentYear),
+          // A.3 — default dateReference = today → crée la row de la période courante
+          recomputeSoldeCongesAll(supabase, id),
         ))
         // Re-fetch les lignes créées
         const { data: newSoldes } = await supabase
@@ -574,11 +575,10 @@ export async function POST(request: Request) {
 
       const { data, error } = await supabase.from('demandes_conges').update(updates).eq('id', id).select().single()
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-      // F3 — si la demande modifiée est approuvée (changement dates/nb_jours
-      // en cours de validité), recompute les soldes de l'année concernée.
+      // F3 + A.3 — si la demande modifiée est approuvée, recompute la
+      // période de 12 mois concernée (dateReference = date_debut du congé).
       if (data?.statut === 'approuve') {
-        const annee = new Date(data.date_debut).getFullYear()
-        await recomputeSoldeCongesAll(supabase, data.employe_id, annee)
+        await recomputeSoldeCongesAll(supabase, data.employe_id, data.date_debut)
       }
       return NextResponse.json({ demande: data })
     }
@@ -863,8 +863,7 @@ export async function POST(request: Request) {
       // recompute immédiatement les soldes. En mode 'en_attente' (demande
       // employé), le recompute se fera à l'approbation.
       if (data?.statut === 'approuve') {
-        const annee = new Date(data.date_debut).getFullYear()
-        await recomputeSoldeCongesAll(supabase, data.employe_id, annee)
+        await recomputeSoldeCongesAll(supabase, data.employe_id, data.date_debut)
       }
       return NextResponse.json({
         conge: data,
@@ -915,8 +914,7 @@ export async function POST(request: Request) {
       // so we call unconditionally. Uses the date_debut year to pick the
       // right row even when someone approves a leave that started last year.
       if (data) {
-        const annee = new Date(conge.date_debut).getFullYear()
-        await recomputeSoldeCongesAll(supabase, conge.employe_id, annee)
+        await recomputeSoldeCongesAll(supabase, conge.employe_id, conge.date_debut)
       }
 
       return NextResponse.json({ conge: data })
@@ -965,8 +963,7 @@ export async function POST(request: Request) {
       // (this refused one will no longer be counted). Helper is a no-op
       // for untracked types, so no conditional needed beyond wasApproved.
       if (wasApproved) {
-        const annee = new Date(conge.date_debut).getFullYear()
-        await recomputeSoldeCongesAll(supabase, conge.employe_id, annee)
+        await recomputeSoldeCongesAll(supabase, conge.employe_id, conge.date_debut)
       }
 
       return NextResponse.json({ conge: data })
@@ -1038,8 +1035,7 @@ export async function POST(request: Request) {
       // Restore the balance when cancelling an already-approved leave.
       // Helper is a no-op for untracked types.
       if (wasApproved) {
-        const annee = new Date(conge.date_debut).getFullYear()
-        await recomputeSoldeCongesAll(supabase, conge.employe_id, annee)
+        await recomputeSoldeCongesAll(supabase, conge.employe_id, conge.date_debut)
       }
 
       return NextResponse.json({ conge: data })
@@ -1072,8 +1068,7 @@ export async function POST(request: Request) {
       if (error) throw error
       // F3 — SL rétroactif statut='approuve' → recompute soldes
       if (data?.employe_id && data?.date_debut) {
-        const annee = new Date(data.date_debut).getFullYear()
-        await recomputeSoldeCongesAll(supabase, data.employe_id, annee)
+        await recomputeSoldeCongesAll(supabase, data.employe_id, data.date_debut)
       }
       return NextResponse.json({ conge: data }, { status: 201 })
     }

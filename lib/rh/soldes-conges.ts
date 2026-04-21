@@ -1,40 +1,33 @@
 /**
- * F3 — Helper canonique unique pour recalculer les soldes de congés d'un
- * employé pour une année donnée. Source de vérité : demandes_conges.
+ * F3 + F6 — Helper canonique pour recalculer les soldes de congés d'un
+ * employé pour une PÉRIODE de 12 mois (étape A.3, sprint "Années par
+ * anniversaire").
  *
- * Remplace les 2 copies historiques de recomputeSoldeConges() qui existaient
- * dans app/api/rh/conges/route.ts et .../[id]/route.ts, plus une troisième
- * variante (recomputeALForEmploye) dans .../collectif/route.ts.
+ * AVANT (F3, année civile) :
+ *   recomputeSoldeCongesAll(supabase, employeId, annee?)
  *
- * RÈGLES DE CALCUL (alignées avec l'ancien code pour rétrocompat) :
+ * APRÈS (F6 / A.3, période 12 mois basée sur date_arrivee) :
+ *   recomputeSoldeCongesAll(supabase, employeId, dateReference?)
  *
- *   AL  → soldes_conges.{al_pris, al_impose_societe, al_impose_employe}
- *         al_pris inclut :
- *           - toutes les demandes approuvées avec type_conge='AL'
- *           - + les UL auto-basculés depuis un AL (motif contient
- *             `[Auto-bascule UL]` sans mention "Sick Leave")
- *         Split impose_par_societe vs impose_employe.
+ *   dateReference = date ISO (YYYY-MM-DD). Par défaut = today.
+ *   On calcule la période de 12 mois qui contient dateReference à partir
+ *   de date_arrivee de l'employé, via les fonctions SQL mig 154 :
+ *     get_conges_period_start(date_arrivee, dateReference)
+ *     get_conges_period_end(date_arrivee, dateReference)
+ *     is_eligible_conges(date_arrivee, dateReference)
  *
- *   SL  → soldes_conges.sl_pris (somme simple des SL approuvés).
+ * RÈGLES MÉTIER (WRA 2019 Maurice ss.45 et 47) :
+ *   - Si l'employé n'est pas encore éligible (< 12 mois d'emploi) :
+ *     al_droit = 0, sl_droit = 0 (période d'acquisition)
+ *   - Sinon :
+ *     al_droit = 22, sl_droit = 15
+ *     al_pris  = SUM(AL approuvés + UL-from-AL) dans la période
+ *     sl_pris  = SUM(SL approuvés) dans la période
  *
- *   MAT → conges_employes row (type_conge='MAT') avec jours_pris.
- *         Default jours_droit = 112 (WRA 2019 §52, 16 semaines calendrier)
- *         à l'INSERT ; UPDATE préserve jours_droit existant.
- *
- *   PAT → conges_employes row (type_conge='PAT') avec jours_pris.
- *         Default jours_droit = 28 (WRA 2019 §53, 4 semaines).
- *
- *   Autres (UL pur, CAR, WI, COM, PH, ABS) → pas de solde tracké.
- *   (UL auto-bascule est compté DANS al_pris — c'est le cas spécial.)
- *
- * IDEMPOTENT par nature : SUM-based. Appels multiples = même résultat.
- * Ne throw JAMAIS : log warning en cas d'erreur DB.
+ * IDEMPOTENT (SUM-based). UPSERT sur (employe_id, periode_debut).
+ * La colonne legacy `annee` = EXTRACT(YEAR FROM periode_debut) pour
+ * rétrocompat étape B.
  */
-// Type large pour l'Admin Supabase client. Les autres routes RH utilisent
-// `ReturnType<typeof getAdminClient>` localement ; comme ce helper est partagé
-// par plusieurs routes avec des types inférés différents, on relâche à `any`
-// pour éviter la friction d'instanciation générique Postgrest. Sûr car le
-// helper ne fait que des lectures/UPSERTs typés côté SQL, pas de TS critique.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AdminClient = any
 
@@ -44,35 +37,80 @@ interface DemandeConge {
   motif?: string | null
 }
 
+export interface SoldeCongesPeriodResult {
+  periode_debut: string        // ISO date
+  periode_fin: string          // ISO date
+  eligible: boolean
+  al_pris: number
+  sl_pris: number
+}
+
 /**
- * Recalcule tous les soldes de congés (AL, SL, MAT, PAT) pour un employé
- * et une année. Source : demandes_conges avec statut='approuve'.
+ * Recalcule les soldes AL/SL/MAT/PAT pour la PÉRIODE de 12 mois qui
+ * contient dateReference (défaut = today) pour l'employé donné.
  *
- * @param supabase   Admin Supabase client (service role, bypass RLS)
- * @param employeId  UUID employé
- * @param annee      Année de référence (ex: 2026)
+ * Retourne les métadonnées de la période calculée, ou null si le helper
+ * n'a pas pu aboutir (ex: employé sans date_arrivee, employé introuvable,
+ * erreur DB). Ne throw jamais — log warning.
  */
 export async function recomputeSoldeCongesAll(
   supabase: AdminClient,
   employeId: string,
-  annee: number = new Date().getFullYear(),
-): Promise<void> {
+  dateReference?: string,
+): Promise<SoldeCongesPeriodResult | null> {
   try {
-    const yearStart = `${annee}-01-01`
-    const yearEnd = `${annee}-12-31`
+    // ── 1. Récupérer la date d'arrivée ───────────────────────────────
+    const { data: emp } = await supabase
+      .from('employes')
+      .select('date_arrivee')
+      .eq('id', employeId)
+      .maybeSingle()
 
-    // ── Fetch toutes les demandes approuvées de l'année (un seul query) ──
+    if (!emp?.date_arrivee) {
+      console.warn(`[soldes-conges] ${employeId} : pas de date_arrivee, recompute skippé`)
+      return null
+    }
+
+    const dateRef = dateReference
+      ? String(dateReference).slice(0, 10)
+      : new Date().toISOString().slice(0, 10)
+
+    // ── 2. Calculer la période via les fonctions SQL (mig 154) ───────
+    //    On passe par une seule query SELECT avec les 3 helpers.
+    const { data: periodRow, error: perErr } = await supabase.rpc('get_conges_period_info', {
+      p_date_arrivee: emp.date_arrivee,
+      p_date_reference: dateRef,
+    }).maybeSingle()
+
+    let periode_debut: string
+    let periode_fin: string
+    let eligible: boolean
+
+    if (perErr || !periodRow) {
+      // Fallback : calcul direct JS si la RPC n'existe pas encore (= pas
+      // installée). On reproduit la logique des fonctions SQL.
+      const result = computePeriodJs(emp.date_arrivee, dateRef)
+      periode_debut = result.periode_debut
+      periode_fin = result.periode_fin
+      eligible = result.eligible
+    } else {
+      periode_debut = String((periodRow as any).periode_debut).slice(0, 10)
+      periode_fin = String((periodRow as any).periode_fin).slice(0, 10)
+      eligible = Boolean((periodRow as any).eligible)
+    }
+
+    // ── 3. Fetch demandes approuvées dans la période ─────────────────
     const { data: rows } = await supabase
       .from('demandes_conges')
       .select('type_conge, nb_jours, impose_par_societe, motif')
       .eq('employe_id', employeId)
       .eq('statut', 'approuve')
-      .gte('date_debut', yearStart)
-      .lte('date_debut', yearEnd)
+      .gte('date_debut', periode_debut)
+      .lte('date_debut', periode_fin)
 
     const all = (rows || []) as Array<DemandeConge & { type_conge: string }>
 
-    // ── AL : AL purs + UL auto-basculés depuis un AL ──
+    // ── 4. Calculs par type (AL + UL-from-AL, SL) ────────────────────
     const isBasculeFromAl = (c: DemandeConge): boolean =>
       typeof c.motif === 'string'
       && c.motif.includes('[Auto-bascule UL]')
@@ -90,47 +128,63 @@ export async function recomputeSoldeCongesAll(
       if (c.impose_par_societe === true) alImposeSociete += n
       else alImposeEmploye += n
     }
-    const alPris = Math.round((alImposeSociete + alImposeEmploye) * 100) / 100
+    const alPrisRaw = alImposeSociete + alImposeEmploye
+    const slPrisRaw = all
+      .filter(c => c.type_conge === 'SL')
+      .reduce((s, c) => s + (Number(c.nb_jours) || 0), 0)
+
+    const alPris = Math.round(alPrisRaw * 100) / 100
+    const slPris = Math.round(slPrisRaw * 100) / 100
     alImposeSociete = Math.round(alImposeSociete * 100) / 100
     alImposeEmploye = Math.round(alImposeEmploye * 100) / 100
 
-    // ── SL : somme simple ──
-    const slPris = Math.round(
-      all
-        .filter(c => c.type_conge === 'SL')
-        .reduce((s, c) => s + (Number(c.nb_jours) || 0), 0) * 100,
-    ) / 100
+    // ── 5. Droits selon éligibilité ──────────────────────────────────
+    const alDroit = eligible ? 22 : 0
+    const slDroit = eligible ? 15 : 0
 
-    // ── UPSERT soldes_conges (AL + SL ensemble pour atomicité) ──
-    const { data: existingSolde } = await supabase
+    // ── 6. UPSERT sur (employe_id, periode_debut) ────────────────────
+    //    annee = EXTRACT(YEAR FROM periode_debut) pour rétrocompat.
+    const annee = Number(periode_debut.slice(0, 4))
+
+    // Check if row exists pour decider UPDATE vs INSERT
+    const { data: existing } = await supabase
       .from('soldes_conges')
       .select('id')
       .eq('employe_id', employeId)
-      .eq('annee', annee)
+      .eq('periode_debut', periode_debut)
       .maybeSingle()
 
-    if (existingSolde) {
+    if (existing) {
       await supabase.from('soldes_conges').update({
+        periode_fin,
+        annee,
+        al_droit: alDroit,
         al_pris: alPris,
         al_impose_societe: alImposeSociete,
         al_impose_employe: alImposeEmploye,
+        sl_droit: slDroit,
         sl_pris: slPris,
-      }).eq('id', existingSolde.id)
+        updated_at: new Date().toISOString(),
+      }).eq('id', existing.id)
     } else {
-      // Premier INSERT : défauts WRA 2019 Maurice (AL=22, SL=15)
       await supabase.from('soldes_conges').insert({
         employe_id: employeId,
         annee,
-        al_droit: 22,
+        periode_debut,
+        periode_fin,
+        al_droit: alDroit,
         al_pris: alPris,
         al_impose_societe: alImposeSociete,
         al_impose_employe: alImposeEmploye,
-        sl_droit: 15,
+        sl_droit: slDroit,
         sl_pris: slPris,
       })
     }
 
-    // ── MAT + PAT dans conges_employes (per-type-per-year) ──
+    // ── 7. MAT + PAT (per-type, per-year dans conges_employes) ──────
+    //    Note : on garde l'année civile pour MAT/PAT car la réglementation
+    //    ne se base pas sur la période d'anniversaire pour ces congés.
+    //    Source : demandes dans la période ci-dessus (simplifié).
     for (const typeConge of ['MAT', 'PAT'] as const) {
       const jours = Math.round(
         all
@@ -139,7 +193,7 @@ export async function recomputeSoldeCongesAll(
       ) / 100
       const defaultDroit = typeConge === 'MAT' ? 112 : 28
 
-      const { data: existing } = await supabase
+      const { data: existingMatPat } = await supabase
         .from('conges_employes')
         .select('id')
         .eq('employe_id', employeId)
@@ -147,13 +201,12 @@ export async function recomputeSoldeCongesAll(
         .eq('type_conge', typeConge)
         .maybeSingle()
 
-      if (existing) {
+      if (existingMatPat) {
         await supabase.from('conges_employes').update({
           jours_pris: jours,
           updated_at: new Date().toISOString(),
-        }).eq('id', existing.id)
+        }).eq('id', existingMatPat.id)
       } else if (jours > 0) {
-        // Ne pas créer une row vide si l'employé n'a jamais pris de MAT/PAT
         await supabase.from('conges_employes').insert({
           employe_id: employeId,
           annee,
@@ -165,10 +218,48 @@ export async function recomputeSoldeCongesAll(
     }
 
     console.log(
-      `[soldes-conges] recompute all for ${employeId} ${annee}: `
-      + `AL=${alPris} SL=${slPris} (${alRows.length + all.filter(c => c.type_conge === 'SL').length} demandes)`,
+      `[soldes-conges] period ${periode_debut}→${periode_fin} `
+      + `(eligible=${eligible}) for ${employeId}: AL=${alPris}/${alDroit} SL=${slPris}/${slDroit}`,
     )
+
+    return { periode_debut, periode_fin, eligible, al_pris: alPris, sl_pris: slPris }
   } catch (err: any) {
     console.warn('[soldes-conges] recomputeSoldeCongesAll failed (non-blocking):', err?.message || err)
+    return null
   }
+}
+
+/**
+ * Fallback JS de la logique SQL (mig 154) utilisé si la RPC n'est pas
+ * accessible. Reproduit exactement `get_conges_period_start/end` +
+ * `is_eligible_conges`.
+ */
+function computePeriodJs(dateArrivee: string, dateReference: string): {
+  periode_debut: string
+  periode_fin: string
+  eligible: boolean
+} {
+  const arr = new Date(String(dateArrivee).slice(0, 10) + 'T12:00:00')
+  const ref = new Date(String(dateReference).slice(0, 10) + 'T12:00:00')
+
+  let monthsElapsed = (ref.getFullYear() - arr.getFullYear()) * 12
+    + (ref.getMonth() - arr.getMonth())
+  if (ref.getDate() < arr.getDate()) monthsElapsed -= 1
+
+  const periodNumber = Math.max(0, Math.floor(monthsElapsed / 12))
+  const debut = new Date(arr)
+  debut.setMonth(debut.getMonth() + periodNumber * 12)
+  const fin = new Date(debut)
+  fin.setMonth(fin.getMonth() + 12)
+  fin.setDate(fin.getDate() - 1)
+
+  const eligible = monthsElapsed >= 12
+
+  const iso = (d: Date) => {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const dd = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${dd}`
+  }
+  return { periode_debut: iso(debut), periode_fin: iso(fin), eligible }
 }

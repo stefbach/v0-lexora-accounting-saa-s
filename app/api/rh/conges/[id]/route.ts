@@ -82,8 +82,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     if (error) throw error
 
     if (wasApproved) {
-      const annee = new Date(conge.date_debut).getFullYear()
-      await recomputeSoldeCongesAll(supabase, conge.employe_id, annee)
+      await recomputeSoldeCongesAll(supabase, conge.employe_id, conge.date_debut)
     }
 
     return NextResponse.json({ conge: data })
