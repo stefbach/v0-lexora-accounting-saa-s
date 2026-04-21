@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
-import { Loader2, Calendar, ChevronLeft, ChevronRight, Send, Wand2, Users, Check, Plus, Trash2, Clock, Coffee, AlertTriangle, FileDown, Copy, Eye, Shield, CheckCircle2, XCircle, Info, ChevronDown, Settings } from "lucide-react"
+import { Loader2, Calendar, ChevronLeft, ChevronRight, Send, Wand2, Users, Check, Plus, Trash2, Clock, Coffee, AlertTriangle, FileDown, Copy, Eye, Shield, CheckCircle2, XCircle, Info, ChevronDown, Settings, UserCheck } from "lucide-react"
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
   DropdownMenuSeparator, DropdownMenuTrigger,
@@ -218,6 +218,11 @@ export default function PlanningPage() {
   const [bulkEmployees, setBulkEmployees] = useState<string[]>([])
   const [bulkDateFrom, setBulkDateFrom] = useState(1)
   const [bulkDateTo, setBulkDateTo] = useState(1)
+
+  // Affecter un shift à des employés choisis (menu Remplir) — sprint bugs paie/conges
+  const [shiftAssignOpen, setShiftAssignOpen] = useState(false)
+  const [shiftAssignCreneauId, setShiftAssignCreneauId] = useState<string>("")
+  const [shiftAssignEmployes, setShiftAssignEmployes] = useState<string[]>([])
   const [bulkCreneauId, setBulkCreneauId] = useState("c1")
   const [bulkWeekendOff, setBulkWeekendOff] = useState(true)
 
@@ -780,10 +785,25 @@ export default function PlanningPage() {
       toast.error("Aucun créneau de travail configuré")
       return
     }
-    const c = workCreneau
+    // Option B — shift par défaut par employé : si emp.shift_template_id est
+    // renseigné et qu'on trouve le shift correspondant dans creneaux, on
+    // l'utilise pour cet employé. Sinon on retombe sur le shift standard.
+    const empById = new Map(employes.map(e => [e.id, e]))
+    const shiftByEmpId = (empId: string) => {
+      const emp = empById.get(empId)
+      const customId = emp?.shift_template_id ? String(emp.shift_template_id) : null
+      if (customId) {
+        const custom = creneaux.find(c => String(c.id) === customId)
+        if (custom) return custom
+      }
+      return workCreneau
+    }
+    let nbCustom = 0
     setPlanning(prev => {
       const next = { ...prev }
       for (const empId of Object.keys(next)) {
+        const c = shiftByEmpId(empId)
+        if (c.id !== workCreneau.id) nbCustom++
         const row = { ...next[empId] }
         for (let d = 1; d <= daysInMonth; d++) {
           // Respect approved congés: force "Congé" cell with leave type
@@ -802,7 +822,11 @@ export default function PlanningPage() {
       }
       return next
     })
-    toast.success(`Planning rempli avec "${workCreneau.nom}"`)
+    toast.success(
+      nbCustom > 0
+        ? `Planning rempli — ${nbCustom} employé(s) avec shift personnalisé, reste "${workCreneau.nom}"`
+        : `Planning rempli avec "${workCreneau.nom}"`,
+    )
   }
 
   const generate3x8 = () => {
@@ -822,6 +846,53 @@ export default function PlanningPage() {
       })
       return next
     })
+  }
+
+  // Sprint bugs paie/conges — "Affecter un shift à des employés" :
+  // applique un shift choisi à tous les jours ouvrés du mois pour les
+  // employés sélectionnés. Respecte les congés approuvés et les week-ends.
+  const applyShiftAssign = () => {
+    const c = getCreneauById(shiftAssignCreneauId)
+    if (!c || c.heures_effectives === 0) {
+      toast.error("Shift invalide")
+      return
+    }
+    setPlanning(prev => {
+      const next = { ...prev }
+      for (const empId of shiftAssignEmployes) {
+        if (!next[empId]) continue
+        const row = { ...next[empId] }
+        for (let d = 1; d <= daysInMonth; d++) {
+          // Respecter congé approuvé : ne pas écraser
+          const leaves = approvedLeaves[empId]
+          if (leaves && leaves.has(d)) {
+            const lt = leaves.get(d) || "AL"
+            row[d] = { creneau_id: `conge_${lt}`, heure_debut: "", heure_fin: "", pause_debut: "", pause_fin: "", heures_prevues: 0 }
+            continue
+          }
+          // Respecter week-end (jour de repos)
+          if (isWeekend(year, month, d)) {
+            row[d] = null
+            continue
+          }
+          // Appliquer le shift choisi
+          row[d] = {
+            creneau_id: c.id,
+            heure_debut: c.heure_debut,
+            heure_fin: c.heure_fin,
+            pause_debut: c.pause_debut,
+            pause_fin: c.pause_fin,
+            heures_prevues: c.heures_effectives,
+          }
+        }
+        next[empId] = row
+      }
+      return next
+    })
+    toast.success(`Shift "${c.nom}" appliqué à ${shiftAssignEmployes.length} employé(s)`)
+    setShiftAssignOpen(false)
+    setShiftAssignCreneauId("")
+    setShiftAssignEmployes([])
   }
 
   const applyBulk = () => {
@@ -1313,6 +1384,13 @@ export default function PlanningPage() {
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setConfirmGenOpen(true)}>
                     Copier la semaine actuelle
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setShiftAssignOpen(true)}>
+                    <UserCheck className="h-4 w-4 mr-2 text-indigo-600" />
+                    <div className="flex flex-col">
+                      <span className="font-medium text-sm">Affecter un shift à des employés</span>
+                      <span className="text-[10px] text-gray-500">Shift choisi pour employés choisis</span>
+                    </div>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => setBulkOpen(true)}>
@@ -1870,6 +1948,88 @@ export default function PlanningPage() {
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Send className="h-4 w-4 mr-1" />}
               Confirmer la publication
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog — Affecter un shift à des employés (menu Remplir) */}
+      <Dialog open={shiftAssignOpen} onOpenChange={setShiftAssignOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle style={{ color: "#0B0F2E" }}>Affecter un shift à des employés</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Shift à appliquer</Label>
+              <Select value={shiftAssignCreneauId} onValueChange={setShiftAssignCreneauId}>
+                <SelectTrigger><SelectValue placeholder="Choisir un shift" /></SelectTrigger>
+                <SelectContent>
+                  {creneaux.filter(c => c.heures_effectives > 0).map(c => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.code} — {c.nom} ({c.heure_debut}–{c.heure_fin})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Employés concernés</Label>
+              <div className="border rounded p-2 max-h-48 overflow-y-auto space-y-1 mt-1">
+                {employes.map(emp => (
+                  <label
+                    key={emp.id}
+                    className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 rounded px-2 py-1"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={shiftAssignEmployes.includes(emp.id)}
+                      onChange={e => setShiftAssignEmployes(prev =>
+                        e.target.checked
+                          ? [...prev, emp.id]
+                          : prev.filter(id => id !== emp.id),
+                      )}
+                    />
+                    {emp.prenom} {emp.nom}
+                  </label>
+                ))}
+              </div>
+              <div className="flex gap-2 mt-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs"
+                  onClick={() => setShiftAssignEmployes(employes.map(e => e.id))}
+                >
+                  Tout sélectionner
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs"
+                  onClick={() => setShiftAssignEmployes([])}
+                >
+                  Tout désélectionner
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2 px-3 py-2 rounded-lg border border-blue-200 bg-blue-50 text-xs text-blue-900">
+              <Info className="w-4 h-4 shrink-0 mt-0.5" />
+              <div>
+                Le shift sera appliqué sur tous les jours ouvrés du mois pour les employés
+                sélectionnés. Les congés approuvés et jours de repos sont respectés.
+              </div>
+            </div>
+
+            <Button
+              className="w-full text-white"
+              style={{ backgroundColor: "#0B0F2E" }}
+              onClick={applyShiftAssign}
+              disabled={!shiftAssignCreneauId || shiftAssignEmployes.length === 0}
+            >
+              Appliquer à {shiftAssignEmployes.length} employé{shiftAssignEmployes.length > 1 ? "s" : ""}
             </Button>
           </div>
         </DialogContent>

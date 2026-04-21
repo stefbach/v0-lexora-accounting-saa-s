@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getUserSocieteIds } from '@/lib/rh/access'
+import { recomputeSoldeCongesAll } from '@/lib/rh/soldes-conges'
 import {
   calculateWorkingDays,
   getMauritiusPublicHolidays,
@@ -90,186 +91,6 @@ function countWorkingDays(dateDebut: string, dateFin: string): number {
   return calculateWorkingDays(dateDebut, dateFin)
 }
 
-/**
- * Recompute and persist the annual balance row for an employee from the
- * current set of demandes_conges with statut='approuve'. This is the
- * canonical source-of-truth recalculation used whenever a demande
- * transitions into or out of the approuve bucket (approval, refusal of a
- * previously approved leave, cancellation, deletion). Idempotent by
- * design — repeated calls converge to the same result.
- *
- * Type-specific behaviour:
- *
- *   AL  → upsert soldes_conges with al_pris, al_impose_societe and
- *         al_impose_employe (split by the impose_par_societe flag on
- *         each demande). Invariant:
- *             al_pris = al_impose_societe + al_impose_employe
- *
- *   SL  → upsert soldes_conges with sl_pris (sum of approved SL days).
- *
- *   MAT → upsert conges_employes row (type_conge='MAT') with jours_pris
- *         set to the sum of approved MAT days for the year. Default
- *         jours_droit = 112 (16 weeks calendar days, WRA 2019 §52) on
- *         first insert; pre-existing rows keep their jours_droit.
- *
- *   PAT → same pattern as MAT but with default jours_droit = 28
- *         (4 weeks calendar days, WRA 2019 §53) and type_conge='PAT'.
- *
- *   Other types (UL, CAR, WI, COM, PH, ABS) → no-op. UL is deducted
- *   monthly in paie via calculer_batch; the rest don't accumulate.
- *
- * Never throws — logs a warning on failure so callers don't break.
- */
-async function recomputeSoldeConges(
-  supabase: ReturnType<typeof getAdminClient>,
-  employeId: string,
-  typeConge: string,
-  annee: number = new Date().getFullYear()
-): Promise<void> {
-  try {
-    if (typeConge === 'AL' || typeConge === 'UL') {
-      // FIX — al_pris doit compter les AL approuvés ET les UL basculés
-      // depuis un AL (motif contient `[Auto-bascule UL]` sans mention
-      // "Sick Leave"). Ces UL-from-AL représentent des jours que
-      // l'employé a bien pris en tant que congé annuel (carence ou
-      // solde insuffisant), donc ils comptent dans le compteur de suivi
-      // persisté sur soldes_conges.al_pris.
-      //
-      // Quand l'appelant passe typeConge='UL', c'est probablement après
-      // création/approbation d'une demande UL auto-basculée : on recompute
-      // alors l'al_pris (qui inclut les UL-from-AL).
-      const { data: approvedAl } = await supabase
-        .from('demandes_conges')
-        .select('nb_jours, impose_par_societe')
-        .eq('employe_id', employeId)
-        .eq('type_conge', 'AL')
-        .eq('statut', 'approuve')
-        .gte('date_debut', `${annee}-01-01`)
-        .lte('date_debut', `${annee}-12-31`)
-
-      const { data: approvedUlFromAl } = await supabase
-        .from('demandes_conges')
-        .select('nb_jours, impose_par_societe, motif')
-        .eq('employe_id', employeId)
-        .eq('type_conge', 'UL')
-        .eq('statut', 'approuve')
-        .gte('date_debut', `${annee}-01-01`)
-        .lte('date_debut', `${annee}-12-31`)
-
-      const ulFromAl = (approvedUlFromAl || []).filter(c =>
-        typeof c.motif === 'string'
-        && c.motif.includes('[Auto-bascule UL]')
-        && !/Sick\s+Leave/i.test(c.motif)
-      )
-
-      const approved = [...(approvedAl || []), ...ulFromAl]
-
-      let imposeSociete = 0
-      let imposeEmploye = 0
-      for (const c of approved) {
-        const n = Number(c.nb_jours) || 0
-        if (c.impose_par_societe === true) imposeSociete += n
-        else imposeEmploye += n
-      }
-      const totalPris = Math.round((imposeSociete + imposeEmploye) * 100) / 100
-      imposeSociete = Math.round(imposeSociete * 100) / 100
-      imposeEmploye = Math.round(imposeEmploye * 100) / 100
-
-      const { data: existing } = await supabase
-        .from('soldes_conges').select('id')
-        .eq('employe_id', employeId).eq('annee', annee).maybeSingle()
-
-      if (existing) {
-        await supabase.from('soldes_conges').update({
-          al_pris: totalPris,
-          al_impose_societe: imposeSociete,
-          al_impose_employe: imposeEmploye,
-        }).eq('id', existing.id)
-      } else {
-        await supabase.from('soldes_conges').insert({
-          employe_id: employeId,
-          annee,
-          al_droit: 22,
-          al_pris: totalPris,
-          al_impose_societe: imposeSociete,
-          al_impose_employe: imposeEmploye,
-          sl_droit: 15,
-          sl_pris: 0,
-        })
-      }
-      console.log(`[conges] Solde AL recomputed: pris=${totalPris} (société=${imposeSociete}, employé=${imposeEmploye}) employe=${employeId} annee=${annee}`)
-      return
-    }
-
-    if (typeConge === 'SL') {
-      const { data: approved } = await supabase
-        .from('demandes_conges').select('nb_jours')
-        .eq('employe_id', employeId).eq('type_conge', 'SL').eq('statut', 'approuve')
-        .gte('date_debut', `${annee}-01-01`).lte('date_debut', `${annee}-12-31`)
-
-      const totalPris = Math.round(
-        (approved || []).reduce((s: number, c: any) => s + (Number(c.nb_jours) || 0), 0) * 100
-      ) / 100
-
-      const { data: existing } = await supabase
-        .from('soldes_conges').select('id')
-        .eq('employe_id', employeId).eq('annee', annee).maybeSingle()
-
-      if (existing) {
-        await supabase.from('soldes_conges').update({ sl_pris: totalPris }).eq('id', existing.id)
-      } else {
-        await supabase.from('soldes_conges').insert({
-          employe_id: employeId,
-          annee,
-          al_droit: 22, al_pris: 0, al_impose_societe: 0, al_impose_employe: 0,
-          sl_droit: 15, sl_pris: totalPris,
-        })
-      }
-      console.log(`[conges] Solde SL recomputed: pris=${totalPris} employe=${employeId} annee=${annee}`)
-      return
-    }
-
-    if (typeConge === 'MAT' || typeConge === 'PAT') {
-      // MAT/PAT accumulate in conges_employes (per-type, per-year row).
-      // jours_droit = WRA 2019 default on insert; left alone on update.
-      const { data: approved } = await supabase
-        .from('demandes_conges').select('nb_jours')
-        .eq('employe_id', employeId).eq('type_conge', typeConge).eq('statut', 'approuve')
-        .gte('date_debut', `${annee}-01-01`).lte('date_debut', `${annee}-12-31`)
-
-      const totalPris = Math.round(
-        (approved || []).reduce((s: number, c: any) => s + (Number(c.nb_jours) || 0), 0) * 100
-      ) / 100
-
-      const defaultDroit = typeConge === 'MAT' ? 112 : 28
-      const { data: existing } = await supabase
-        .from('conges_employes').select('id, jours_droit')
-        .eq('employe_id', employeId).eq('annee', annee).eq('type_conge', typeConge)
-        .maybeSingle()
-
-      if (existing) {
-        await supabase.from('conges_employes').update({
-          jours_pris: totalPris,
-          updated_at: new Date().toISOString(),
-        }).eq('id', existing.id)
-      } else {
-        await supabase.from('conges_employes').insert({
-          employe_id: employeId,
-          annee,
-          type_conge: typeConge,
-          jours_droit: defaultDroit,
-          jours_pris: totalPris,
-        })
-      }
-      console.log(`[conges] ${typeConge} recomputed: pris=${totalPris} employe=${employeId} annee=${annee}`)
-      return
-    }
-
-    // Other types (UL, CAR, WI, COM, PH, ABS): no balance tracking.
-  } catch (err: any) {
-    console.warn(`[conges] recomputeSoldeConges failed (non-blocking):`, err?.message)
-  }
-}
 
 /** Calculate prorata AL entitlement based on hire date (Mauritius WRA 2019: 20 days/year) */
 /**
@@ -430,22 +251,29 @@ export async function GET(request: Request) {
     // Sprint 16 fix — SELECT résilient : try/catch + retry sans colonnes
     // optionnelles si 42703. Colonnes gender/genre/actif peuvent manquer
     // sur certains envs selon les migrations appliquées.
+    // F5-bis — si employe_id est passé, on restreint à cet employé seulement
+    // (sinon balances[] contenait TOUS les employés de la société → CongesTab
+    // prenait balances[0] qui pouvait être un autre employé).
     let employees: any[] = []
     try {
-      const { data: emps, error: empErr } = await supabase
+      let q = supabase
         .from('employes')
         .select('id, nom, prenom, poste, societe_id, date_arrivee, genre, gender, actif, date_depart')
         .in('societe_id', societeIds)
         .eq('actif', true)
         .is('date_depart', null)
+      if (employe_id) q = q.eq('id', employe_id)
+      const { data: emps, error: empErr } = await q
       if (empErr) {
         // Retry without genre/actif if columns missing (42703)
         console.warn('[conges GET] employees query error, retrying:', empErr.message, empErr.code)
-        const { data: emps2 } = await supabase
+        let q2 = supabase
           .from('employes')
           .select('id, nom, prenom, poste, societe_id, date_arrivee')
           .in('societe_id', societeIds)
           .is('date_depart', null)
+        if (employe_id) q2 = q2.eq('id', employe_id)
+        const { data: emps2 } = await q2
         employees = emps2 || []
       } else {
         employees = emps || []
@@ -460,137 +288,101 @@ export async function GET(request: Request) {
     }
 
     // ---- ACTION: balances ----
+    // F5 + B.1 — Source de vérité unique = table soldes_conges, indexée par
+    // (employe_id, periode_debut) depuis la mig 155 (années par anniversaire).
+    // La row sélectionnée est celle où today BETWEEN periode_debut AND
+    // periode_fin. Les rows manquantes sont créées par recomputeSoldeCongesAll.
     if (action === 'balances') {
       const now = new Date()
-      const currentYear = now.getFullYear()
+      const today = now.toISOString().slice(0, 10)
 
-      // Sprint 13 BUG 2 — récupérer AUSSI les demandes en_attente pour
-      // calculer "AL pris" (compteur de suivi) indépendamment du solde.
-      // Les statuts 'approuve' et 'en_attente' comptent tous deux comme
-      // "congés posés" côté planning. Le solde al_solde reste basé sur
-      // les AL approuvés uniquement (les pending ne déduisent pas encore).
-      const { data: congesData } = await supabase
-        .from('demandes_conges')
-        .select('*')
+      // 1. Lire soldes_conges pour la PÉRIODE COURANTE de chaque employé
+      const SOLDES_FIELDS = 'employe_id, periode_debut, periode_fin, al_droit, al_pris, al_solde, al_reporte, al_impose_societe, al_impose_employe, sl_droit, sl_pris, sl_solde, sl_accumule'
+      const { data: soldesData } = await supabase
+        .from('soldes_conges')
+        .select(SOLDES_FIELDS)
         .in('employe_id', employeeIds)
-        .in('statut', ['approuve', 'en_attente'])
+        .lte('periode_debut', today)
+        .gte('periode_fin', today)
+
+      const soldesByEmp = new Map<string, any>((soldesData || []).map((s: any) => [s.employe_id, s]))
+
+      // 2. Employés sans row pour la période courante → recompute pour créer
+      //    la row avec droits accrus (mig 157) + pris depuis demandes_conges.
+      const missing = employeeIds.filter((id: string) => !soldesByEmp.has(id))
+      if (missing.length > 0) {
+        await Promise.all(missing.map((id: string) =>
+          recomputeSoldeCongesAll(supabase, id),
+        ))
+        const { data: newSoldes } = await supabase
+          .from('soldes_conges')
+          .select(SOLDES_FIELDS)
+          .in('employe_id', missing)
+          .lte('periode_debut', today)
+          .gte('periode_fin', today)
+        for (const s of newSoldes || []) soldesByEmp.set(s.employe_id, s)
+      }
+
+      // 3. Lire les SL approuvés de l'année civile (pour sick_cert_alert
+      //    uniquement — signal d'UX orthogonal au compteur de soldes).
+      const currentYear = now.getFullYear()
+      const { data: slApproved } = await supabase
+        .from('demandes_conges')
+        .select('employe_id, type_conge, date_debut, date_fin, nb_jours')
+        .in('employe_id', employeeIds)
+        .eq('type_conge', 'SL')
+        .eq('statut', 'approuve')
         .gte('date_debut', `${currentYear}-01-01`)
         .lte('date_debut', `${currentYear}-12-31`)
 
-      const conges = congesData || []
-
-      // Sprint 13 BUG 2 — marker de bascule UL posé par POST action=creer
-      // quand le solde AL est insuffisant OU pendant la période de carence.
-      // motif contient toujours "[Auto-bascule UL]". Pour le compteur
-      // "AL pris" on récupère ces UL-from-AL pour les agréger.
-      //
-      // Deux cas produisent ce tag :
-      //   1. Solde insuffisant : "Solde Local Leave insuffisant..."
-      //   2. Carence < 6 mois : "Période de carence..."
-      // → On simplifie : tout UL avec "[Auto-bascule UL]" est un AL basculé
-      //   SAUF si le motif mentionne "Sick Leave" (bascule SL→UL).
-      const isBasculeAlToUl = (c: any): boolean =>
-        c?.type_conge === 'UL'
-        && typeof c?.motif === 'string'
-        && c.motif.includes('[Auto-bascule UL]')
-        && !/Sick\s+Leave/i.test(c.motif)
-
-      const isBasculeSlToUl = (c: any): boolean =>
-        c?.type_conge === 'UL'
-        && typeof c?.motif === 'string'
-        && c.motif.includes('[Auto-bascule UL]')
-        && /Sick\s+Leave/i.test(c.motif)
-
-      // Get all SL records (approuvés) pour consecutive check
-      const allSl = conges.filter((c: any) => c.type_conge === 'SL' && c.statut === 'approuve')
-
-      // Build balances per employee
+      // 4. Build balances — source de vérité = soldes_conges
       const balances = employees.map((emp: any) => {
-        const empConges = conges.filter((c: any) => c.employe_id === emp.id)
+        const solde = soldesByEmp.get(emp.id) || null
+        // Si après recompute la row est toujours absente (erreur DB), on
+        // retourne null pour les soldes au lieu d'inventer des valeurs.
+        // Le frontend (F5.2) affiche alors un état d'erreur explicite.
+        const alDroit = solde ? Number(solde.al_droit) : null
+        const alPris = solde ? Number(solde.al_pris) : null
+        const alSolde = solde ? Number(solde.al_solde) : null
+        const slDroit = solde ? Number(solde.sl_droit) : null
+        const slPris = solde ? Number(solde.sl_pris) : null
+        const slSolde = solde ? Number(solde.sl_solde) : null
 
-        // AL posés (compteur de suivi) = vrais AL + UL-from-AL bascule,
-        // tous statuts (approuve OU en_attente), INDÉPENDANT du solde.
-        const empAlPosés = empConges.filter((c: any) =>
-          c.type_conge === 'AL' || isBasculeAlToUl(c)
-        )
-        const alTaken = empAlPosés.reduce((sum: number, c: any) => sum + (c.nb_jours || 0), 0)
-
-        // AL réellement déduits du droit = AL pur ET approuvés uniquement
-        // (les pending ne baissent pas encore, les UL-from-AL n'ont JAMAIS
-        // été déduits du droit puisqu'ils ont basculé en UL).
-        const empAlReels = empConges.filter((c: any) =>
-          c.type_conge === 'AL' && c.statut === 'approuve'
-        )
-        const alDeduitsDuDroit = empAlReels.reduce((sum: number, c: any) => sum + (c.nb_jours || 0), 0)
-
-        // Split AL days between company-imposed and employee-chosen.
-        // Basé sur les AL posés (compteur de suivi) pour que le split
-        // reste cohérent avec al_pris affiché.
-        const alImposeSociete = empAlPosés
-          .filter((c: any) => c.impose_par_societe === true)
-          .reduce((sum: number, c: any) => sum + (c.nb_jours || 0), 0)
-        const alImposeEmploye = alTaken - alImposeSociete
-
-        // SL posés (même logique — inclut UL-from-SL bascule)
-        const empSlPosés = empConges.filter((c: any) =>
-          c.type_conge === 'SL' || isBasculeSlToUl(c)
-        )
-        const slTaken = empSlPosés.reduce((sum: number, c: any) => sum + (c.nb_jours || 0), 0)
-        const empSlReels = empSlPosés.filter((c: any) =>
-          c.type_conge === 'SL' && c.statut === 'approuve'
-        )
-        const slDeduitsDuDroit = empSlReels.reduce((sum: number, c: any) => sum + (c.nb_jours || 0), 0)
-
-        const alEntitled = calculateALEntitlement(emp.date_arrivee, currentYear)
-        const slEntitled = calculateSLEntitlement(emp.date_arrivee, currentYear)
-        // al_solde = droit - AL réellement déduits (pending et UL-from-AL exclus)
-        const alBalance = alEntitled - alDeduitsDuDroit
-        const slBalance = slEntitled - slDeduitsDuDroit
-
-        // Sick certificate alert
-        const empSl = allSl.filter((c: any) => c.employe_id === emp.id)
+        // Sick certificate alert — dérivé des demandes SL approuvées
+        const empSl = (slApproved || []).filter((c: any) => c.employe_id === emp.id)
         const sickCertAlert = detectSickCertAlert(empSl)
 
-        // Sprint 4 TÂCHE 4 — Points couleur alignés sur WRA 2019.
-        //
-        // Ancienne logique (avant Sprint 4) — mélangeait AL et SL :
-        //   rouge si al_solde <= 0 OU sl_solde <= 0
-        //   orange si al_solde <= 5 OU sl_solde <= 3
-        //   vert sinon
-        // Problème : employés en période d'essai (< 12 mois) étaient
-        // parfois flaggés orange sans raison claire (solde SL tombait
-        // bas après un arrêt maladie), et rien ne signalait les 3 mois
-        // de carence WRA 2019 qui empêchent TOUT droit à congé.
-        //
-        // Nouvelle logique (spec utilisateur — basée sur ancienneté AL) :
-        //   🔴 rouge   = pas éligible (< 3 mois de carence WRA)
-        //                OU solde AL totalement épuisé (= 0)
-        //   🟡 orange  = en période d'essai 3-12 mois (éligible prorata)
-        //                OU solde AL < 5 jours (alerte faible)
-        //   🟢 vert    = éligible plein droit (>= 12 mois) avec solde >= 5
-        //
-        // SL n'entre PLUS dans le calcul du point couleur : la colonne
-        // sick_cert_alert gère déjà l'alerte certificat médical, et le
-        // solde SL faible n'est pas aussi critique qu'un AL épuisé
-        // (WRA 2019 donne 15j SL/an récupérables sur déclaration).
+        // Ancienneté (mois calendaires révolus)
         const hireDate = emp.date_arrivee ? new Date(String(emp.date_arrivee) + 'T00:00:00') : null
-        const monthsService = hireDate
-          ? (now.getFullYear() - hireDate.getFullYear()) * 12 + (now.getMonth() - hireDate.getMonth())
-          : 99
+        let monthsService = 99
+        if (hireDate) {
+          monthsService = (now.getFullYear() - hireDate.getFullYear()) * 12
+            + (now.getMonth() - hireDate.getMonth())
+          if (now.getDate() < hireDate.getDate()) monthsService -= 1
+          if (monthsService < 0) monthsService = 0
+        }
 
+        // Statut d'éligibilité WRA 2019 (cf. mig 157)
+        let eligibilityStatus: 'not_eligible' | 'accruing' | 'eligible' = 'eligible'
+        if (monthsService < 6) eligibilityStatus = 'not_eligible'
+        else if (monthsService < 12) eligibilityStatus = 'accruing'
+
+        // Date à laquelle l'employé sera pleinement éligible (date_arrivee + 12 mois)
+        let eligibilityDate: string | null = null
+        if (hireDate && eligibilityStatus !== 'eligible') {
+          const eligible = new Date(hireDate)
+          eligible.setMonth(eligible.getMonth() + 12)
+          eligibilityDate = eligible.toISOString().slice(0, 10)
+        }
+
+        // Status color — basé sur ancienneté + al_solde (WRA 2019)
         let statusColor: 'green' | 'orange' | 'red' = 'green'
+        const alBalance = alSolde ?? 0
         if (monthsService < 3 || alBalance <= 0) {
           statusColor = 'red'
         } else if (monthsService < 12 || alBalance < 5) {
           statusColor = 'orange'
         }
-
-        // Sprint 13 BUG 2 — détails de bascule UL pour transparence UI.
-        // Permet au RH de voir le nombre de jours AL basculés en UL
-        // (carence) vs les vrais AL déduits du solde.
-        const alBasculeUl = empAlPosés
-          .filter((c: any) => isBasculeAlToUl(c))
-          .reduce((sum: number, c: any) => sum + (c.nb_jours || 0), 0)
 
         return {
           employe_id: emp.id,
@@ -600,28 +392,38 @@ export async function GET(request: Request) {
           societe_id: emp.societe_id,
           gender: emp.genre || emp.gender,
           date_arrivee: emp.date_arrivee,
-          al_droit: alEntitled,
-          // Sprint 13 BUG 2 — al_pris = compteur de suivi indépendant du solde.
-          // Inclut AL + UL-from-AL (bascule carence), approuvés et en attente.
-          al_pris: alTaken,
-          al_impose_societe: Math.round(alImposeSociete * 100) / 100,
-          al_impose_employe: Math.round(alImposeEmploye * 100) / 100,
-          al_solde: alBalance,
-          // Détails pour UI (ex: distinguer les jours vraiment décomptés du solde)
-          al_deduits: Math.round(alDeduitsDuDroit * 100) / 100,
-          al_bascule_ul: Math.round(alBasculeUl * 100) / 100,
-          sl_droit: slEntitled,
-          sl_pris: slTaken,
-          sl_solde: slBalance,
-          sl_deduits: Math.round(slDeduitsDuDroit * 100) / 100,
+          // ─── Période courante (B.1) ───
+          periode_debut: solde ? String(solde.periode_debut).slice(0, 10) : null,
+          periode_fin: solde ? String(solde.periode_fin).slice(0, 10) : null,
+          months_service: monthsService,
+          eligibility_status: eligibilityStatus,
+          eligibility_date: eligibilityDate,
+          // ─── Soldes (source de vérité = soldes_conges) ───
+          al_droit: alDroit,
+          al_pris: alPris,
+          al_solde: alSolde,
+          al_reporte: solde ? Number(solde.al_reporte ?? 0) : 0,
+          al_impose_societe: solde ? Number(solde.al_impose_societe ?? 0) : 0,
+          al_impose_employe: solde ? Number(solde.al_impose_employe ?? 0) : 0,
+          sl_droit: slDroit,
+          sl_pris: slPris,
+          sl_solde: slSolde,
+          sl_accumule: solde ? Number(solde.sl_accumule ?? 0) : 0,
+          // ─── Rétrocompat : al_deduits / sl_deduits restent exposés ───
+          // Avant F5 ils distinguaient "pris approuvés" de "posés pending
+          // inclus" — maintenant al_pris = al_deduits (source de vérité).
+          al_deduits: alPris,
+          sl_deduits: slPris,
           status_color: statusColor,
           sick_cert_alert: sickCertAlert,
+          // Signal d'erreur pour le frontend si la row n'a pas pu être chargée
+          _missing_solde: solde === null,
         }
       })
 
       // Summary KPIs
-      const totalAlTaken = balances.reduce((s: number, b: any) => s + b.al_pris, 0)
-      const totalSlTaken = balances.reduce((s: number, b: any) => s + b.sl_pris, 0)
+      const totalAlTaken = balances.reduce((s: number, b: any) => s + (Number(b.al_pris) || 0), 0)
+      const totalSlTaken = balances.reduce((s: number, b: any) => s + (Number(b.sl_pris) || 0), 0)
 
       // Pending requests count
       const { count: pendingCount } = await supabase
@@ -719,19 +521,33 @@ export async function POST(request: Request) {
     const action = body.action
 
     // ---- ACTION: modifier_solde (manually adjust employee leave balance) ----
+    // B.4 — Cible la ROW de la periode anniversaire courante (mig 155).
+    // Le client envoie `periode_debut` depuis la balance row affichee.
+    // Fallback pour retrocompat : si absent, on resout la periode courante
+    // depuis date_arrivee de l'employe + today. Le champ legacy `annee`
+    // envoye dans le body est encore lu pour retrocompat mais deprecie.
     if (action === 'modifier_solde') {
-      const { employe_id, annee, al_droit, al_pris, sl_droit, sl_pris, date_arrivee } = body
+      const { employe_id, al_droit, al_pris, sl_droit, sl_pris, date_arrivee } = body
+      let periode_debut: string | null = body.periode_debut || null
       if (!employe_id) return NextResponse.json({ error: 'employe_id requis' }, { status: 400 })
-      const year = annee || new Date().getFullYear()
 
       // Update employee date_arrivee if provided
       if (date_arrivee !== undefined) {
         await supabase.from('employes').update({ date_arrivee }).eq('id', employe_id)
       }
 
-      // Upsert soldes_conges record for the year
-      const { data: existing } = await supabase.from('soldes_conges')
-        .select('id').eq('employe_id', employe_id).eq('annee', year).maybeSingle()
+      // Fallback : resoudre la periode courante si non fournie.
+      if (!periode_debut) {
+        const { data: emp } = await supabase
+          .from('employes').select('date_arrivee').eq('id', employe_id).maybeSingle()
+        if (emp?.date_arrivee) {
+          const today = new Date().toISOString().slice(0, 10)
+          const { data: pd } = await supabase.rpc('get_conges_period_start', {
+            date_arrivee: emp.date_arrivee, date_reference: today,
+          })
+          if (pd) periode_debut = String(pd).slice(0, 10)
+        }
+      }
 
       const updates: any = {}
       if (al_droit !== undefined) updates.al_droit = Number(al_droit)
@@ -744,18 +560,23 @@ export async function POST(request: Request) {
       }
 
       if (Object.keys(updates).length > 0) {
+        if (!periode_debut) {
+          return NextResponse.json({
+            error: 'Impossible de resoudre la periode courante (date_arrivee manquante ?)',
+          }, { status: 400 })
+        }
+        const { data: existing } = await supabase.from('soldes_conges')
+          .select('id').eq('employe_id', employe_id).eq('periode_debut', periode_debut).maybeSingle()
+
         if (existing) {
           const { error } = await supabase.from('soldes_conges').update(updates).eq('id', existing.id)
           if (error) return NextResponse.json({ error: error.message }, { status: 500 })
         } else {
-          const { error } = await supabase.from('soldes_conges').insert({
-            employe_id, annee: year,
-            al_droit: updates.al_droit ?? 22,
-            al_pris: updates.al_pris ?? 0,
-            sl_droit: updates.sl_droit ?? 15,
-            sl_pris: updates.sl_pris ?? 0,
-          })
-          if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+          // Pas de row pour cette periode -> on laisse recomputeSoldeCongesAll
+          // creer la row canonique puis on applique les ajustements dessus.
+          await recomputeSoldeCongesAll(supabase, employe_id, periode_debut)
+          await supabase.from('soldes_conges').update(updates)
+            .eq('employe_id', employe_id).eq('periode_debut', periode_debut)
         }
       }
 
@@ -795,6 +616,11 @@ export async function POST(request: Request) {
 
       const { data, error } = await supabase.from('demandes_conges').update(updates).eq('id', id).select().single()
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      // F3 + A.3 — si la demande modifiée est approuvée, recompute la
+      // période de 12 mois concernée (dateReference = date_debut du congé).
+      if (data?.statut === 'approuve') {
+        await recomputeSoldeCongesAll(supabase, data.employe_id, data.date_debut)
+      }
       return NextResponse.json({ demande: data })
     }
 
@@ -1074,6 +900,12 @@ export async function POST(request: Request) {
         document_url: body.document_url || null,
       }).select().single()
       if (error) throw error
+      // F3 — si la demande est déjà approuvée (création directe par RH),
+      // recompute immédiatement les soldes. En mode 'en_attente' (demande
+      // employé), le recompute se fera à l'approbation.
+      if (data?.statut === 'approuve') {
+        await recomputeSoldeCongesAll(supabase, data.employe_id, data.date_debut)
+      }
       return NextResponse.json({
         conge: data,
         warning: bascule_ul_warning, // null si pas de bascule, sinon message UX
@@ -1123,8 +955,7 @@ export async function POST(request: Request) {
       // so we call unconditionally. Uses the date_debut year to pick the
       // right row even when someone approves a leave that started last year.
       if (data) {
-        const annee = new Date(conge.date_debut).getFullYear()
-        await recomputeSoldeConges(supabase, conge.employe_id, conge.type_conge, annee)
+        await recomputeSoldeCongesAll(supabase, conge.employe_id, conge.date_debut)
       }
 
       return NextResponse.json({ conge: data })
@@ -1173,8 +1004,7 @@ export async function POST(request: Request) {
       // (this refused one will no longer be counted). Helper is a no-op
       // for untracked types, so no conditional needed beyond wasApproved.
       if (wasApproved) {
-        const annee = new Date(conge.date_debut).getFullYear()
-        await recomputeSoldeConges(supabase, conge.employe_id, conge.type_conge, annee)
+        await recomputeSoldeCongesAll(supabase, conge.employe_id, conge.date_debut)
       }
 
       return NextResponse.json({ conge: data })
@@ -1246,8 +1076,7 @@ export async function POST(request: Request) {
       // Restore the balance when cancelling an already-approved leave.
       // Helper is a no-op for untracked types.
       if (wasApproved) {
-        const annee = new Date(conge.date_debut).getFullYear()
-        await recomputeSoldeConges(supabase, conge.employe_id, conge.type_conge, annee)
+        await recomputeSoldeCongesAll(supabase, conge.employe_id, conge.date_debut)
       }
 
       return NextResponse.json({ conge: data })
@@ -1278,6 +1107,10 @@ export async function POST(request: Request) {
         date_decision: new Date().toISOString(),
       }).select().single()
       if (error) throw error
+      // F3 — SL rétroactif statut='approuve' → recompute soldes
+      if (data?.employe_id && data?.date_debut) {
+        await recomputeSoldeCongesAll(supabase, data.employe_id, data.date_debut)
+      }
       return NextResponse.json({ conge: data }, { status: 201 })
     }
 

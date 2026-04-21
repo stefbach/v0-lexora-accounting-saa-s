@@ -10,6 +10,12 @@ import { Progress } from "@/components/ui/progress"
 import { Textarea } from "@/components/ui/textarea"
 import { Loader2, Calendar, CalendarPlus, CheckCircle, FileText, Upload, X } from "lucide-react"
 import { NAVY, GOLD, BLUE, GREEN } from "../shared/constants"
+import {
+  EligibiliteBadge,
+  EligibiliteBannerConges,
+  formatPeriodeFR,
+  type EligibilityStatus,
+} from "../shared/conges-eligibilite"
 
 const MAX_CERT_BYTES = 5 * 1024 * 1024 // 5 MB
 const ACCEPTED_CERT_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"]
@@ -45,7 +51,14 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
       fetch(`/api/rh/conges?action=balances&employe_id=${employe.id}`).then(r => r.json()).catch(() => ({})),
       fetch(`/api/rh/conges?employe_id=${employe.id}`).then(r => r.json()).catch(() => ({ conges: [] })),
     ])
-    setBalances(balRes.balances?.[0] || null)
+    // F5-bis — sélection défensive par employe_id. Avant le fix API qui
+    // filtre server-side, balances[] pouvait contenir plusieurs employés
+    // et balances[0] était le mauvais. On garde .find() en plus du filtre
+    // server comme ceinture + bretelles.
+    const mine = Array.isArray(balRes.balances)
+      ? balRes.balances.find((b: any) => b.employe_id === employe.id)
+      : null
+    setBalances(mine || balRes.balances?.[0] || null)
     setHistory(histRes.conges || histRes.demandes || [])
   }
 
@@ -162,15 +175,36 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
     setCancellingId(null)
   }
 
-  const alDroit = Number(balances?.al_droit) || 22
-  const slDroit = Number(balances?.sl_droit) || 15
-  const alPris = Number(balances?.al_pris) || 0
-  const alImposeSociete = Number(balances?.al_impose_societe) || 0
-  const alImposeEmploye = Number(balances?.al_impose_employe) || (alPris - alImposeSociete)
-  const alRemaining = Number(balances?.al_solde) || (alDroit - alPris)
-  const slRemaining = Number(balances?.sl_solde) || (slDroit - (Number(balances?.sl_pris) || 0))
+  // F5 — Source de vérité = API /api/rh/conges?action=balances qui lit
+  // soldes_conges. Plus de fallback silencieux `|| 22` / `|| 15` : si la
+  // row n'existe pas, on affiche un état d'erreur explicite plus bas.
+  const soldesMissing = !balances
+    || balances._missing_solde === true
+    || balances.al_droit == null
+    || balances.al_pris == null
+    || balances.al_solde == null
+    || balances.sl_droit == null
+    || balances.sl_pris == null
+    || balances.sl_solde == null
+
+  const alDroit = soldesMissing ? 0 : Number(balances.al_droit)
+  const slDroit = soldesMissing ? 0 : Number(balances.sl_droit)
+  const alPris = soldesMissing ? 0 : Number(balances.al_pris)
+  const alImposeSociete = soldesMissing ? 0 : Number(balances.al_impose_societe ?? 0)
+  const alImposeEmploye = soldesMissing
+    ? 0
+    : (balances.al_impose_employe != null
+        ? Number(balances.al_impose_employe)
+        : Math.max(0, alPris - alImposeSociete))
+  const alRemaining = soldesMissing ? 0 : Number(balances.al_solde)
+  const slRemaining = soldesMissing ? 0 : Number(balances.sl_solde)
   const alPct = alDroit > 0 ? Math.round((alRemaining / alDroit) * 100) : 0
   const slPct = slDroit > 0 ? Math.round((slRemaining / slDroit) * 100) : 0
+
+  // B.2 — Statut d'éligibilité (API B.1)
+  const eligibilityStatus: EligibilityStatus = (balances?.eligibility_status as EligibilityStatus) || "eligible"
+  const periodeLabel = formatPeriodeFR(balances?.periode_debut, balances?.periode_fin)
+  const canRequestConges = !soldesMissing && eligibilityStatus !== "not_eligible"
 
   const statutBadge = (s: string) => {
     if (s === "approuve" || s === "approved") return <Badge style={{ backgroundColor: `${GREEN}20`, color: GREEN }}>Approuvé</Badge>
@@ -183,47 +217,68 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-3 md:gap-4">
-        <Card className="rounded-xl shadow-sm">
-          <CardContent className="p-4 space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${GREEN}15` }}>
-                <Calendar className="h-5 w-5" style={{ color: GREEN }} />
-              </div>
-            </div>
-            <div>
-              <p className="text-2xl font-bold" style={{ color: NAVY }}>{alRemaining}<span className="text-sm font-normal text-gray-400">j</span></p>
-              <p className="text-xs text-gray-500 mt-0.5">Local Leave restants / {alDroit}j</p>
-            </div>
-            <Progress value={alPct} className="h-2 rounded-full" style={{ backgroundColor: `${GREEN}20` }} />
-            {(alImposeSociete > 0 || alPris > 0) && (
-              <div className="flex items-center justify-between text-[10px] text-gray-500 pt-1 border-t border-gray-100">
-                <span>Pris: <strong className="text-gray-700">{alPris}j</strong></span>
-                <span>· Moi: <strong className="text-gray-700">{alImposeEmploye}j</strong></span>
-                {alImposeSociete > 0 && (
-                  <span>· <span className="text-amber-700">Imposé: <strong>{alImposeSociete}j</strong></span></span>
-                )}
-              </div>
-            )}
+      {soldesMissing ? (
+        // F5 — État d'erreur explicite. Pas de défauts silencieux (22/15).
+        <Card className="rounded-xl shadow-sm border-red-200 bg-red-50">
+          <CardContent className="p-4 text-sm text-red-700">
+            Impossible de charger vos soldes de congés. Contactez votre RH.
           </CardContent>
         </Card>
-        <Card className="rounded-xl shadow-sm">
-          <CardContent className="p-4 space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: "#f9731615" }}>
-                <Calendar className="h-5 w-5 text-orange-500" />
+      ) : (
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3 md:gap-4">
+          <Card className={`rounded-xl shadow-sm ${eligibilityStatus === "not_eligible" ? "opacity-60" : ""}`}>
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${GREEN}15` }}>
+                  <Calendar className="h-5 w-5" style={{ color: GREEN }} />
+                </div>
+                <EligibiliteBadge status={eligibilityStatus} />
               </div>
-            </div>
-            <div>
-              <p className="text-2xl font-bold" style={{ color: NAVY }}>{slRemaining}<span className="text-sm font-normal text-gray-400">j</span></p>
-              <p className="text-xs text-gray-500 mt-0.5">Sick Leave restants / {slDroit}j</p>
-            </div>
-            <Progress value={slPct} className="h-2 rounded-full" style={{ backgroundColor: "#f9731620" }} />
-          </CardContent>
-        </Card>
+              <div>
+                <p className="text-2xl font-bold" style={{ color: NAVY }}>{alRemaining}<span className="text-sm font-normal text-gray-400">j</span></p>
+                <p className="text-xs text-gray-500 mt-0.5">Local Leave restants / {alDroit}j</p>
+              </div>
+              <Progress value={alPct} className="h-2 rounded-full" style={{ backgroundColor: `${GREEN}20` }} />
+              {(alImposeSociete > 0 || alPris > 0) && (
+                <div className="flex items-center justify-between text-[10px] text-gray-500 pt-1 border-t border-gray-100">
+                  <span>Pris: <strong className="text-gray-700">{alPris}j</strong></span>
+                  <span>· Moi: <strong className="text-gray-700">{alImposeEmploye}j</strong></span>
+                  {alImposeSociete > 0 && (
+                    <span>· <span className="text-amber-700">Imposé: <strong>{alImposeSociete}j</strong></span></span>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          <Card className={`rounded-xl shadow-sm ${eligibilityStatus === "not_eligible" ? "opacity-60" : ""}`}>
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: "#f9731615" }}>
+                  <Calendar className="h-5 w-5 text-orange-500" />
+                </div>
+                <EligibiliteBadge status={eligibilityStatus} />
+              </div>
+              <div>
+                <p className="text-2xl font-bold" style={{ color: NAVY }}>{slRemaining}<span className="text-sm font-normal text-gray-400">j</span></p>
+                <p className="text-xs text-gray-500 mt-0.5">Sick Leave restants / {slDroit}j</p>
+              </div>
+              <Progress value={slPct} className="h-2 rounded-full" style={{ backgroundColor: "#f9731620" }} />
+            </CardContent>
+          </Card>
+        </div>
+        <p className="text-[11px] text-center text-gray-500">Période : {periodeLabel}</p>
+        <EligibiliteBannerConges
+          status={eligibilityStatus}
+          eligibilityDate={balances?.eligibility_date ?? null}
+          dateArrivee={balances?.date_arrivee ?? null}
+          alDroit={alDroit}
+          slDroit={slDroit}
+        />
       </div>
+      )}
 
-      <Card className="rounded-xl shadow-sm">
+      <Card className={`rounded-xl shadow-sm ${!canRequestConges ? "opacity-60" : ""}`}>
         <CardHeader><CardTitle className="text-xl md:text-base" style={{ color: NAVY }}>Nouvelle demande</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           {success && <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700"><CheckCircle className="h-4 w-4" />{success}</div>}
@@ -240,7 +295,8 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
                 { value: "SANS_SOLDE", label: "Sans solde", color: "#6b7280" },
               ]).map(opt => (
                 <button key={opt.value} onClick={() => setTypeConge(opt.value)}
-                  className="px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 active:scale-[0.97]"
+                  disabled={!canRequestConges}
+                  className="px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 active:scale-[0.97] disabled:cursor-not-allowed"
                   style={typeConge === opt.value
                     ? { backgroundColor: opt.color, color: "white" }
                     : { backgroundColor: `${opt.color}10`, color: opt.color, border: `1px solid ${opt.color}30` }
@@ -257,6 +313,7 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
                 <input
                   type="checkbox"
                   checked={demiJournee}
+                  disabled={!canRequestConges}
                   onChange={e => {
                     setDemiJournee(e.target.checked)
                     if (e.target.checked && dateDebut) setDateFin(dateDebut)
@@ -272,6 +329,7 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
                       type="radio"
                       name="demi-moment"
                       value="matin"
+                      disabled={!canRequestConges}
                       checked={matinOuApresMidi === 'matin'}
                       onChange={() => setMatinOuApresMidi('matin')}
                     />
@@ -282,6 +340,7 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
                       type="radio"
                       name="demi-moment"
                       value="apres_midi"
+                      disabled={!canRequestConges}
                       checked={matinOuApresMidi === 'apres_midi'}
                       onChange={() => setMatinOuApresMidi('apres_midi')}
                     />
@@ -298,6 +357,7 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
               <Input
                 type="date"
                 value={dateDebut}
+                disabled={!canRequestConges}
                 onChange={e => {
                   setDateDebut(e.target.value)
                   if (demiJournee) setDateFin(e.target.value)
@@ -310,7 +370,7 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
               <Input
                 type="date"
                 value={demiJournee ? dateDebut : dateFin}
-                disabled={demiJournee}
+                disabled={!canRequestConges || demiJournee}
                 onChange={e => setDateFin(e.target.value)}
                 className="h-12 md:h-10 rounded-xl"
               />
@@ -319,7 +379,7 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
 
           <div>
             <Label>Motif (optionnel)</Label>
-            <Textarea value={motif} onChange={e => setMotif(e.target.value)} placeholder="Raison de la demande..." rows={3} className="rounded-xl" />
+            <Textarea value={motif} onChange={e => setMotif(e.target.value)} disabled={!canRequestConges} placeholder="Raison de la demande..." rows={3} className="rounded-xl" />
           </div>
 
           {needsCertificat && (
@@ -347,7 +407,13 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
             </div>
           )}
 
-          <Button onClick={handleSubmit} disabled={submitting} style={{ backgroundColor: NAVY }} className="w-full md:w-auto h-12 md:h-10 rounded-xl text-white text-base md:text-sm transition-all duration-200 active:scale-[0.98]">
+          <Button
+            onClick={handleSubmit}
+            disabled={submitting || !canRequestConges}
+            title={!canRequestConges ? "Vous n'êtes pas encore éligible aux congés (6 mois minimum)" : undefined}
+            style={{ backgroundColor: NAVY }}
+            className="w-full md:w-auto h-12 md:h-10 rounded-xl text-white text-base md:text-sm transition-all duration-200 active:scale-[0.98] disabled:cursor-not-allowed"
+          >
             {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CalendarPlus className="h-4 w-4 mr-2" />}
             Soumettre la demande
           </Button>

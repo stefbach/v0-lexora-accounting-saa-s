@@ -6,6 +6,13 @@ import { Button } from "@/components/ui/button"
 import { Bell, CreditCard, Calendar, CalendarPlus, Coffee, FileText, HeartPulse, LogIn, LogOut } from "lucide-react"
 import { NAVY, GOLD, BLUE, GREEN, MONTH_NAMES_FR } from "../shared/constants"
 import { fmt, fmtH, lastDayOfMonth } from "../shared/helpers"
+import {
+  EligibiliteBadge,
+  formatPeriodeFR,
+  formatDateFR,
+  computeDatePlus6Months,
+  type EligibilityStatus,
+} from "../shared/conges-eligibilite"
 import { useEffect, useState } from "react"
 
 type Router = ReturnType<typeof useRouter>
@@ -30,14 +37,34 @@ export function DashboardTab({
   const estimatedNet = lastBulletin?.salaire_net || 0
   const estimatedBase = lastBulletin?.salaire_base || 0
   const estimatedBrut = lastBulletin?.salaire_brut || 0
-  const alTotal = Number(conges.al_droit) || 22
-  const slTotal = Number(conges.sl_droit) || 15
-  const alPris = Number(conges.al_pris) || 0
-  const slPris = Number(conges.sl_pris) || 0
-  const alRemaining = Number(conges.al_solde) || (alTotal - alPris)
-  const slRemaining = Number(conges.sl_solde) || (slTotal - slPris)
+
+  // F5 — Soldes congés : source de vérité = API /api/rh/conges?action=balances
+  // qui lit soldes_conges. PAS de fallback silencieux `|| 22` / `|| 15` :
+  // si la row n'existe pas, on affiche un état d'erreur explicite.
+  const soldesMissing = !conges
+    || conges._missing_solde === true
+    || conges.al_droit == null
+    || conges.al_pris == null
+    || conges.al_solde == null
+    || conges.sl_droit == null
+    || conges.sl_pris == null
+    || conges.sl_solde == null
+
+  const alTotal = soldesMissing ? 0 : Number(conges.al_droit)
+  const slTotal = soldesMissing ? 0 : Number(conges.sl_droit)
+  const alPris = soldesMissing ? 0 : Number(conges.al_pris)
+  const slPris = soldesMissing ? 0 : Number(conges.sl_pris)
+  const alRemaining = soldesMissing ? 0 : Number(conges.al_solde)
+  const slRemaining = soldesMissing ? 0 : Number(conges.sl_solde)
   const alPct = alTotal > 0 ? Math.round((alRemaining / alTotal) * 100) : 0
   const slPct = slTotal > 0 ? Math.round((slRemaining / slTotal) * 100) : 0
+
+  // B.2 — Période anniversaire + statut d'éligibilité (API B.1)
+  const eligibilityStatus: EligibilityStatus = (conges?.eligibility_status as EligibilityStatus) || "eligible"
+  const periodeLabel = formatPeriodeFR(conges?.periode_debut, conges?.periode_fin)
+  const notEligibleMessage = eligibilityStatus === "not_eligible"
+    ? `Éligibilité le ${formatDateFR(computeDatePlus6Months(conges?.date_arrivee))} (6 mois d'ancienneté)`
+    : null
 
   const hasEntry = !!pointageToday?.heure_entree
   const hasExit = !!pointageToday?.heure_sortie
@@ -123,42 +150,60 @@ export function DashboardTab({
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-2 gap-3 md:gap-4">
-        <Card className="rounded-xl shadow-sm">
-          <CardContent className="p-4 flex flex-col items-center text-center">
-            <div className="relative h-20 w-20 mb-3">
-              <svg className="h-20 w-20 -rotate-90" viewBox="0 0 80 80">
-                <circle cx="40" cy="40" r="34" fill="none" stroke={`${GREEN}20`} strokeWidth="8" />
-                <circle cx="40" cy="40" r="34" fill="none" stroke={GREEN} strokeWidth="8" strokeLinecap="round"
-                  strokeDasharray={`${2 * Math.PI * 34}`} strokeDashoffset={`${2 * Math.PI * 34 * (1 - alPct / 100)}`}
-                  className="transition-all duration-700" />
-              </svg>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-lg font-bold" style={{ color: NAVY }}>{alRemaining}j</span>
-              </div>
-            </div>
-            <p className="font-medium text-sm" style={{ color: NAVY }}>Conges annuels</p>
-            <p className="text-xs text-gray-400">sur {alTotal}j</p>
+      {soldesMissing ? (
+        // F5 — État d'erreur explicite. Pas de valeurs par défaut (22/15)
+        // qui masqueraient un vrai problème DB.
+        <Card className="rounded-xl shadow-sm border-red-200 bg-red-50">
+          <CardContent className="p-4 text-sm text-red-700">
+            Impossible de charger vos soldes de congés. Contactez votre RH.
           </CardContent>
         </Card>
-        <Card className="rounded-xl shadow-sm">
-          <CardContent className="p-4 flex flex-col items-center text-center">
-            <div className="relative h-20 w-20 mb-3">
-              <svg className="h-20 w-20 -rotate-90" viewBox="0 0 80 80">
-                <circle cx="40" cy="40" r="34" fill="none" stroke="#f9731620" strokeWidth="8" />
-                <circle cx="40" cy="40" r="34" fill="none" stroke="#f97316" strokeWidth="8" strokeLinecap="round"
-                  strokeDasharray={`${2 * Math.PI * 34}`} strokeDashoffset={`${2 * Math.PI * 34 * (1 - slPct / 100)}`}
-                  className="transition-all duration-700" />
-              </svg>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-lg font-bold" style={{ color: NAVY }}>{slRemaining}j</span>
+      ) : (
+      <div className="space-y-2">
+        <div className="grid grid-cols-2 gap-3 md:gap-4">
+          <Card className={`rounded-xl shadow-sm ${eligibilityStatus === "not_eligible" ? "opacity-60" : ""}`}>
+            <CardContent className="p-4 flex flex-col items-center text-center">
+              <div className="relative h-20 w-20 mb-3">
+                <svg className="h-20 w-20 -rotate-90" viewBox="0 0 80 80">
+                  <circle cx="40" cy="40" r="34" fill="none" stroke={`${GREEN}20`} strokeWidth="8" />
+                  <circle cx="40" cy="40" r="34" fill="none" stroke={GREEN} strokeWidth="8" strokeLinecap="round"
+                    strokeDasharray={`${2 * Math.PI * 34}`} strokeDashoffset={`${2 * Math.PI * 34 * (1 - alPct / 100)}`}
+                    className="transition-all duration-700" />
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-lg font-bold" style={{ color: NAVY }}>{alRemaining}j</span>
+                </div>
               </div>
-            </div>
-            <p className="font-medium text-sm" style={{ color: NAVY }}>Sick Leave</p>
-            <p className="text-xs text-gray-400">sur {slTotal}j</p>
-          </CardContent>
-        </Card>
+              <p className="font-medium text-sm" style={{ color: NAVY }}>Conges annuels</p>
+              <p className="text-xs text-gray-400">sur {alTotal}j</p>
+              <div className="mt-2"><EligibiliteBadge status={eligibilityStatus} /></div>
+            </CardContent>
+          </Card>
+          <Card className={`rounded-xl shadow-sm ${eligibilityStatus === "not_eligible" ? "opacity-60" : ""}`}>
+            <CardContent className="p-4 flex flex-col items-center text-center">
+              <div className="relative h-20 w-20 mb-3">
+                <svg className="h-20 w-20 -rotate-90" viewBox="0 0 80 80">
+                  <circle cx="40" cy="40" r="34" fill="none" stroke="#f9731620" strokeWidth="8" />
+                  <circle cx="40" cy="40" r="34" fill="none" stroke="#f97316" strokeWidth="8" strokeLinecap="round"
+                    strokeDasharray={`${2 * Math.PI * 34}`} strokeDashoffset={`${2 * Math.PI * 34 * (1 - slPct / 100)}`}
+                    className="transition-all duration-700" />
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-lg font-bold" style={{ color: NAVY }}>{slRemaining}j</span>
+                </div>
+              </div>
+              <p className="font-medium text-sm" style={{ color: NAVY }}>Sick Leave</p>
+              <p className="text-xs text-gray-400">sur {slTotal}j</p>
+              <div className="mt-2"><EligibiliteBadge status={eligibilityStatus} /></div>
+            </CardContent>
+          </Card>
+        </div>
+        <p className="text-[11px] text-center text-gray-500">Période : {periodeLabel}</p>
+        {notEligibleMessage && (
+          <p className="text-[11px] text-center text-gray-500 italic">{notEligibleMessage}</p>
+        )}
       </div>
+      )}
 
       {annonces.length > 0 && (
         <div className="space-y-2">

@@ -62,7 +62,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       supabase.from('employes').select('*').eq('id', id).single(),
       bulletinQuery,
       congesQuery,
-      supabase.from('soldes_conges').select('*').eq('employe_id', id).order('annee', { ascending: false }),
+      // B.4 — ordre par periode_debut (la colonne annee est deprecated mais
+      // conservee pour retrocompat). Tri descendant : periode courante en tete.
+      supabase.from('soldes_conges').select('*').eq('employe_id', id).order('periode_debut', { ascending: false }),
       pointagesQuery,
     ])
 

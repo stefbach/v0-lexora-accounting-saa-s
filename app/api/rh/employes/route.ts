@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getUserSocieteIds } from '@/lib/rh/access'
+import { recomputeSoldeCongesAll } from '@/lib/rh/soldes-conges'
 
 export const dynamic = 'force-dynamic'
 
@@ -182,41 +183,15 @@ export async function POST(request: Request) {
     }
     step('insert OK', { id: data.id, code: data.code, stripped: strippedCols })
 
-    // Sprint 3 BUG 2 — Initialiser soldes congés année en cours AVEC les
-    // valeurs WRA 2019. Auparavant on insérait juste {employe_id, annee}
-    // → al_droit / sl_droit NULL en DB → cassait les rapports SQL et
-    // exports analytics. La page /rh/conges recalcule à la volée donc le
-    // bug était invisible côté UI.
-    //
-    // Calcul prorata si embauche en cours d'année :
-    //   • mois >= 12 → 22 j AL, 15 j SL (droit plein)
-    //   • sinon       → mois × 22/12 (resp. 15/12), arrondi à l'entier
-    const dateArrivee = data.date_arrivee ? new Date(String(data.date_arrivee)) : new Date()
-    const now = new Date()
-    const moisAnciennete = Math.max(0,
-      (now.getFullYear() - dateArrivee.getFullYear()) * 12
-      + (now.getMonth() - dateArrivee.getMonth())
-    )
-    const alDroit = moisAnciennete >= 12 ? 22 : Math.max(0, Math.round(moisAnciennete * 22 / 12))
-    const slDroit = moisAnciennete >= 12 ? 15 : Math.max(0, Math.round(moisAnciennete * 15 / 12))
-
-    // Sprint — soldes_conges insert en best-effort. Un échec ne doit pas
-    // faire 500 la création d'employé (les rapports recalculent à la
-    // volée côté /rh/conges). On log et on continue.
+    // B.4 — Initialiser soldes_conges via le helper canonique (periode
+    // anniversaire + accrual 6-12 mois mig 157). Avant : INSERT manuel
+    // avec seulement {annee} → cassait depuis la mig 155 qui a ajoute
+    // periode_debut NOT NULL. Best-effort : en cas d'echec on log et on
+    // continue (les rapports recalculent a la volee cote /rh/conges).
     try {
-      const { error: soldesErr } = await supabase.from('soldes_conges').insert({
-        employe_id: data.id,
-        annee: now.getFullYear(),
-        al_droit: alDroit,
-        al_pris: 0,
-        sl_droit: slDroit,
-        sl_pris: 0,
-      })
-      if (soldesErr) {
-        console.warn('[employes POST] soldes_conges insert échec (non bloquant):', soldesErr.message, soldesErr.code)
-      } else {
-        step('soldes_conges OK')
-      }
+      const result = await recomputeSoldeCongesAll(supabase, data.id)
+      if (result) step('soldes_conges OK', { periode_debut: result.periode_debut })
+      else console.warn('[employes POST] soldes_conges recompute skippe (pas de date_arrivee ?)')
     } catch (e: any) {
       console.warn('[employes POST] soldes_conges exception (non bloquant):', e?.message || e)
     }

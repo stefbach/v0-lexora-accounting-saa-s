@@ -20,6 +20,10 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { createClient } from "@/lib/supabase/client"
+import {
+  EligibiliteBadge,
+  type EligibilityStatus,
+} from "@/app/salarie/_components/shared/conges-eligibilite"
 
 // ─── Constants ───────────────────────────────────────────────────
 const TYPE_LABELS: Record<string, string> = {
@@ -95,6 +99,15 @@ interface BalanceRow {
   societe_id: string
   sexe: string
   date_arrivee: string | null
+  /** B.1 — Période anniversaire courante (null si soldes non chargés). */
+  periode_debut: string | null
+  periode_fin: string | null
+  /** B.1 — Ancienneté en mois révolus. */
+  months_service?: number
+  /** B.1 — Statut WRA 2019 : not_eligible (<6m) / accruing (6-11m) / eligible (≥12m). */
+  eligibility_status?: EligibilityStatus
+  /** B.1 — Date des 12 mois (null si déjà eligible). */
+  eligibility_date?: string | null
   al_droit: number
   al_pris: number
   /** Subset of al_pris consumed by company-imposed leaves (Commit 10). */
@@ -459,7 +472,7 @@ export default function CongesPage() {
   const [kpis, setKpis] = useState<KPIs>({ total_al_taken: 0, total_sl_taken: 0, pending_requests: 0, alerts: 0 })
   const [loadingBalances, setLoadingBalances] = useState(true)
   const [editingBalId, setEditingBalId] = useState<string | null>(null)
-  const [editBalFields, setEditBalFields] = useState<{ al_droit: number; al_pris: number; sl_droit: number; sl_pris: number; date_arrivee: string }>({ al_droit: 22, al_pris: 0, sl_droit: 15, sl_pris: 0, date_arrivee: "" })
+  const [editBalFields, setEditBalFields] = useState<{ al_droit: number; al_pris: number; sl_droit: number; sl_pris: number; date_arrivee: string; periode_debut: string | null }>({ al_droit: 22, al_pris: 0, sl_droit: 15, sl_pris: 0, date_arrivee: "", periode_debut: null })
   const [savingBal, setSavingBal] = useState(false)
 
   // Demandes tab
@@ -585,6 +598,7 @@ export default function CongesPage() {
       sl_droit: b.sl_droit || 15,
       sl_pris: b.sl_pris || 0,
       date_arrivee: b.date_arrivee || "",
+      periode_debut: b.periode_debut,
     })
   }
 
@@ -597,7 +611,9 @@ export default function CongesPage() {
         body: JSON.stringify({
           action: "modifier_solde",
           employe_id: editingBalId,
-          annee: new Date().getFullYear(),
+          // B.4 — on cible la periode anniversaire courante de l'employe.
+          // Le backend resout la row via periode_debut (fallback: today).
+          periode_debut: editBalFields.periode_debut,
           al_droit: editBalFields.al_droit,
           al_pris: editBalFields.al_pris,
           sl_droit: editBalFields.sl_droit,
@@ -1000,7 +1016,7 @@ export default function CongesPage() {
                 <Calendar className="w-5 h-5 text-[#4191FF]" />
               </div>
               <div>
-                <p className="text-xs text-gray-500">AL pris (total)</p>
+                <p className="text-xs text-gray-500" title="Somme des AL pris dans la periode anniversaire courante de chaque employe">AL pris (periode courante)</p>
                 <p className="text-xl font-bold text-[#4191FF]">{kpis.total_al_taken}<span className="text-sm font-normal text-gray-400"> jours</span></p>
               </div>
             </div>
@@ -1009,7 +1025,7 @@ export default function CongesPage() {
                 <Thermometer className="w-5 h-5 text-orange-500" />
               </div>
               <div>
-                <p className="text-xs text-gray-500">SL pris (total)</p>
+                <p className="text-xs text-gray-500" title="Somme des SL pris dans la periode anniversaire courante de chaque employe">SL pris (periode courante)</p>
                 <p className="text-xl font-bold text-orange-600">{kpis.total_sl_taken}<span className="text-sm font-normal text-gray-400"> jours</span></p>
               </div>
             </div>
@@ -1091,7 +1107,7 @@ export default function CongesPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="text-[#0B0F2E]">
-                  Soldes de conges par employe - {new Date().getFullYear()}
+                  Soldes de conges par employe (periode anniversaire)
                 </CardTitle>
                 <Input
                   placeholder="Rechercher un employe..."
@@ -1101,7 +1117,7 @@ export default function CongesPage() {
                 />
               </div>
               <p className="text-xs text-gray-400 mt-1">
-                AL = Conge annuel (20j/an) | SL = Conge maladie (15j/an) | Prorata applique pour les nouveaux employes
+                AL = Conge annuel (22j) | SL = Conge maladie (15j) | Periode de 12 mois glissante basee sur la date d&apos;arrivee de chaque employe (WRA 2019)
               </p>
             </CardHeader>
             <CardContent className="p-0">
@@ -1118,6 +1134,8 @@ export default function CongesPage() {
                         <TableHead>Employe</TableHead>
                         <TableHead>Poste</TableHead>
                         <TableHead className="text-xs">Arrivee</TableHead>
+                        <TableHead className="text-xs">Periode</TableHead>
+                        <TableHead className="text-xs">Eligibilite</TableHead>
                         <TableHead className="text-center">AL Droit</TableHead>
                         <TableHead className="text-center">AL Pris</TableHead>
                         <TableHead className="text-center">AL Solde</TableHead>
@@ -1143,6 +1161,14 @@ export default function CongesPage() {
                             ) : (
                               b.date_arrivee ? new Date(b.date_arrivee).toLocaleDateString("fr-FR") : "—"
                             )}
+                          </TableCell>
+                          <TableCell className="text-xs whitespace-nowrap text-gray-600">
+                            {b.periode_debut && b.periode_fin
+                              ? `${b.periode_debut.slice(8, 10)}/${b.periode_debut.slice(5, 7)}/${b.periode_debut.slice(2, 4)} → ${b.periode_fin.slice(8, 10)}/${b.periode_fin.slice(5, 7)}/${b.periode_fin.slice(2, 4)}`
+                              : "—"}
+                          </TableCell>
+                          <TableCell>
+                            <EligibiliteBadge status={(b.eligibility_status as EligibilityStatus) || "eligible"} />
                           </TableCell>
                           <TableCell className="text-center text-sm">
                             {isEditing ? (

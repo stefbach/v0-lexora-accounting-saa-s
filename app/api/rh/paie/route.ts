@@ -675,7 +675,15 @@ export async function POST(request: Request) {
         const workingDaysList = listWorkingDaysInPeriod(
           `${periodeStr}-01`, lastDayOfMonth(periodeStr), emp, joursFeriesSetSingle,
         )
+        // F2 — date de référence "aujourd'hui" en ISO. Les jours du mois
+        // qui sont dans le futur ne sont NI absents NI présents : ils
+        // n'existent pas encore. Les exclure du compteur d'absences.
+        // Mois passé : today > fin de mois → aucune exclusion (tous comptent).
+        // Mois futur : today < début de mois → tous exclus (jours_absence=0).
+        const today = new Date().toISOString().slice(0, 10)
         for (const day of workingDaysList) {
+          // F2 : skip les jours dans le futur
+          if (day > today) continue
           const pt = pointageByDate.get(day)
           const enConge = (congesApprouves || []).some(c => day >= c.date_debut && day <= c.date_fin)
           if (enConge) {
@@ -824,6 +832,11 @@ export async function POST(request: Request) {
         other_refund: elements.other_refund || 0,
         // montant_absence = unjustified absence + UL deduction (merged).
         montant_absence: Math.round(totalDeductionAbsence * 100) / 100,
+        // F1 — écrire jours_absence en DB (avant bug : champ jamais posé,
+        // default 0 → incohérence montant_absence>0 / jours_absence=0).
+        // On stocke le nombre de jours d'absences NON JUSTIFIÉES. Les
+        // jours UL sont comptés séparément (cf. notes et F6 à venir).
+        jours_absence: jours_absence_injust || 0,
         // Sprint 13 BUG 1 — trace prorata dans les notes pour l'UI
         notes: prorataSingle.ratio < 1 ? `[${prorataSingle.motif}]` : null,
         statut: 'brouillon',
@@ -1235,7 +1248,13 @@ export async function POST(request: Request) {
           const workingDaysListBatch = listWorkingDaysInPeriod(
             periodeStart, periodeEnd, emp, joursFeriesSet,
           )
+          // F2 — date de référence "aujourd'hui". Les jours futurs ne sont
+          // NI absents NI présents : ils n'existent pas encore. Même règle
+          // que dans le chemin SINGLE (cf. action='calculer').
+          const todayBatch = new Date().toISOString().slice(0, 10)
           for (const day of workingDaysListBatch) {
+            // F2 : skip les jours dans le futur
+            if (day > todayBatch) continue
             const pt = pointageByDateBatch.get(day)
             const enConge = (congesApprouves || []).some(c => day >= c.date_debut && day <= c.date_fin)
             if (enConge) {
@@ -1526,6 +1545,10 @@ export async function POST(request: Request) {
           // + UL). The breakdown is recorded in `notes` and can be recomputed
           // from demandes_conges for reporting (Commit 11 conges_details).
           montant_absence: isHorsMRA ? 0 : Math.round(totalDeductionAbsence * 100) / 100,
+          // F1 — écrire jours_absence en DB (avant bug : champ jamais posé,
+          // default 0 → incohérence montant_absence>0 / jours_absence=0).
+          // Stocke le nombre de jours d'absences NON JUSTIFIÉES.
+          jours_absence: isHorsMRA ? 0 : (jours_absence_injust || 0),
           notes: notesResume,
           statut: 'brouillon',
         }
