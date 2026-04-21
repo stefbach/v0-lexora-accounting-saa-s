@@ -78,21 +78,21 @@ export async function createEcrituresForFacture(
         .is('lettre', null)
     }
 
-    // Si des écritures lettrées existent déjà pour cette facture, ne pas recréer
-    const { data: existingLettered } = await supabase
-      .from('ecritures_comptables_v2')
-      .select('id')
-      .eq('societe_id', facture.societe_id)
-      .eq('ref_folio', refFolio)
-      .not('lettre', 'is', null)
-      .limit(1)
-    if (existingLettered && existingLettered.length > 0) {
-      return { ok: true, nb_entries: 0 }
-    }
-
     const libelle = `Facture ${facture.numero_facture || ''} — ${facture.tiers || ''}`.trim()
     const isClient = facture.type_facture === 'client'
     const journal = isClient ? 'VTE' : 'ACH'
+
+    // Vérifier si des écritures ACH/VTE existent déjà pour cette facture
+    const { data: existingVTE } = await supabase
+      .from('ecritures_comptables_v2')
+      .select('id')
+      .eq('societe_id', facture.societe_id)
+      .eq('journal', journal)
+      .or(`ref_folio.eq.${refFolio},facture_id.eq.${facture.id}`)
+      .limit(1)
+    if (existingVTE && existingVTE.length > 0) {
+      return { ok: true, nb_entries: 0 }
+    }
     const exercice = new Date(facture.date_facture).getFullYear().toString()
 
     const entries: Array<Record<string, unknown>> = []
