@@ -288,46 +288,44 @@ export async function GET(request: Request) {
     }
 
     // ---- ACTION: balances ----
-    // F5 — Source de vérité unique = table soldes_conges (pour AL/SL droit,
-    // pris, solde). Les calculs en mémoire depuis demandes_conges sont
-    // remplacés par une lecture DB simple + un auto-recompute des rows
-    // manquantes via recomputeSoldeCongesAll (F3). Les status_color et
-    // sick_cert_alert restent dérivés des demandes car ce sont des signaux
-    // d'UX, pas des soldes.
+    // F5 + B.1 — Source de vérité unique = table soldes_conges, indexée par
+    // (employe_id, periode_debut) depuis la mig 155 (années par anniversaire).
+    // La row sélectionnée est celle où today BETWEEN periode_debut AND
+    // periode_fin. Les rows manquantes sont créées par recomputeSoldeCongesAll.
     if (action === 'balances') {
       const now = new Date()
-      const currentYear = now.getFullYear()
+      const today = now.toISOString().slice(0, 10)
 
-      // 1. Lire soldes_conges pour tous les employés de l'année courante
+      // 1. Lire soldes_conges pour la PÉRIODE COURANTE de chaque employé
+      const SOLDES_FIELDS = 'employe_id, periode_debut, periode_fin, al_droit, al_pris, al_solde, al_reporte, al_impose_societe, al_impose_employe, sl_droit, sl_pris, sl_solde, sl_accumule'
       const { data: soldesData } = await supabase
         .from('soldes_conges')
-        .select('employe_id, al_droit, al_pris, al_solde, al_reporte, al_impose_societe, al_impose_employe, sl_droit, sl_pris, sl_solde, sl_accumule')
+        .select(SOLDES_FIELDS)
         .in('employe_id', employeeIds)
-        .eq('annee', currentYear)
+        .lte('periode_debut', today)
+        .gte('periode_fin', today)
 
       const soldesByEmp = new Map<string, any>((soldesData || []).map((s: any) => [s.employe_id, s]))
 
-      // 2. Pour les employés sans row soldes_conges → recompute pour créer la
-      //    row avec défauts WRA + valeurs issues de demandes_conges.
-      //    recomputeSoldeCongesAll est idempotente (F3), on peut l'appeler
-      //    en parallèle sans risque.
+      // 2. Employés sans row pour la période courante → recompute pour créer
+      //    la row avec droits accrus (mig 157) + pris depuis demandes_conges.
       const missing = employeeIds.filter((id: string) => !soldesByEmp.has(id))
       if (missing.length > 0) {
         await Promise.all(missing.map((id: string) =>
-          // A.3 — default dateReference = today → crée la row de la période courante
           recomputeSoldeCongesAll(supabase, id),
         ))
-        // Re-fetch les lignes créées
         const { data: newSoldes } = await supabase
           .from('soldes_conges')
-          .select('employe_id, al_droit, al_pris, al_solde, al_reporte, al_impose_societe, al_impose_employe, sl_droit, sl_pris, sl_solde, sl_accumule')
+          .select(SOLDES_FIELDS)
           .in('employe_id', missing)
-          .eq('annee', currentYear)
+          .lte('periode_debut', today)
+          .gte('periode_fin', today)
         for (const s of newSoldes || []) soldesByEmp.set(s.employe_id, s)
       }
 
-      // 3. Lire les SL approuvés de l'année (pour sick_cert_alert uniquement —
-      //    pas pour calculer les soldes).
+      // 3. Lire les SL approuvés de l'année civile (pour sick_cert_alert
+      //    uniquement — signal d'UX orthogonal au compteur de soldes).
+      const currentYear = now.getFullYear()
       const { data: slApproved } = await supabase
         .from('demandes_conges')
         .select('employe_id, type_conge, date_debut, date_fin, nb_jours')
@@ -354,12 +352,30 @@ export async function GET(request: Request) {
         const empSl = (slApproved || []).filter((c: any) => c.employe_id === emp.id)
         const sickCertAlert = detectSickCertAlert(empSl)
 
-        // Status color — basé sur ancienneté + al_solde (WRA 2019)
+        // Ancienneté (mois calendaires révolus)
         const hireDate = emp.date_arrivee ? new Date(String(emp.date_arrivee) + 'T00:00:00') : null
-        const monthsService = hireDate
-          ? (now.getFullYear() - hireDate.getFullYear()) * 12 + (now.getMonth() - hireDate.getMonth())
-          : 99
+        let monthsService = 99
+        if (hireDate) {
+          monthsService = (now.getFullYear() - hireDate.getFullYear()) * 12
+            + (now.getMonth() - hireDate.getMonth())
+          if (now.getDate() < hireDate.getDate()) monthsService -= 1
+          if (monthsService < 0) monthsService = 0
+        }
 
+        // Statut d'éligibilité WRA 2019 (cf. mig 157)
+        let eligibilityStatus: 'not_eligible' | 'accruing' | 'eligible' = 'eligible'
+        if (monthsService < 6) eligibilityStatus = 'not_eligible'
+        else if (monthsService < 12) eligibilityStatus = 'accruing'
+
+        // Date à laquelle l'employé sera pleinement éligible (date_arrivee + 12 mois)
+        let eligibilityDate: string | null = null
+        if (hireDate && eligibilityStatus !== 'eligible') {
+          const eligible = new Date(hireDate)
+          eligible.setMonth(eligible.getMonth() + 12)
+          eligibilityDate = eligible.toISOString().slice(0, 10)
+        }
+
+        // Status color — basé sur ancienneté + al_solde (WRA 2019)
         let statusColor: 'green' | 'orange' | 'red' = 'green'
         const alBalance = alSolde ?? 0
         if (monthsService < 3 || alBalance <= 0) {
@@ -376,6 +392,12 @@ export async function GET(request: Request) {
           societe_id: emp.societe_id,
           gender: emp.genre || emp.gender,
           date_arrivee: emp.date_arrivee,
+          // ─── Période courante (B.1) ───
+          periode_debut: solde ? String(solde.periode_debut).slice(0, 10) : null,
+          periode_fin: solde ? String(solde.periode_fin).slice(0, 10) : null,
+          months_service: monthsService,
+          eligibility_status: eligibilityStatus,
+          eligibility_date: eligibilityDate,
           // ─── Soldes (source de vérité = soldes_conges) ───
           al_droit: alDroit,
           al_pris: alPris,
