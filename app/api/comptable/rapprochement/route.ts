@@ -1451,12 +1451,19 @@ export async function POST(request: Request) {
             // Salaires → D 421 / C 512, Particuliers → D 467 / C 512
             if (tx.statut === 'rapproche' && !tx.facture_id && tx.matched_type) {
               const classRef = `CLS-${releveId2}-${i2}`
-              // Vérifier si une écriture BNQ existe DÉJÀ pour cette tx, quel que soit le ref_folio
-              // (évite les doublons entre CLS-xxx, CL-xxx, BANK-xxx)
+              // Check idempotence STRICT : query DB direct sur ref_folio.
+              // Historiquement on lisait allEcr401v2 (filtré par journal + comptes 401/411),
+              // ce qui ratait les doublons créés sur d'autres comptes (4312, 627, 421…)
+              // par les règles R03/R04. Un SELECT sur index idx_ecritures_v2_societe_ref_folio
+              // (migration 146) est peu coûteux et couvre TOUS les comptes.
               const anyRef = `${releveId2}-${i2}`
-              const classExists = (allEcr401v2 || []).some((e: any) =>
-                e.ref_folio && (e.ref_folio === classRef || e.ref_folio.endsWith(anyRef))
-              )
+              const { data: existingRefs } = await supabase
+                .from('ecritures_comptables_v2')
+                .select('id, ref_folio')
+                .eq('societe_id', societe_id)
+                .or(`ref_folio.eq.${classRef},ref_folio.like.%-${anyRef},ref_folio.like.%-${anyRef}-%`)
+                .limit(1)
+              const classExists = !!(existingRefs && existingRefs.length > 0)
               if (!classExists) {
                 let compteCharge = '471'
                 let libellePrefix = 'Opération bancaire'
