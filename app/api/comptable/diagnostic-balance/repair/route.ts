@@ -62,11 +62,36 @@ export async function POST(request: Request) {
     const doPurge = !!actions.purge_duplicate_sal
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
 
-    // Admin-only: this is a destructive-ish operation when apply=true.
+    // Access control:
+    //   • Global roles (admin / super_admin) : bypass.
+    //   • Comptables (comptable / comptable_dedie) : autorisés.
+    //   • Client admin : autorisé UNIQUEMENT si membre de user_societes
+    //     ou propriétaire (societes.created_by).
+    //   • Client user : refusé (lecture seule sur la balance).
     const { data: profile } = await authClient.from('profiles').select('role').eq('id', user.id).single()
     const role = (profile as any)?.role || ''
-    const isAdmin = ['admin', 'super_admin', 'comptable', 'comptable_dedie'].includes(role)
-    if (!isAdmin) return NextResponse.json({ error: 'Réservé aux comptables' }, { status: 403 })
+    const isGlobal = ['admin', 'super_admin'].includes(role)
+    const isComptable = ['comptable', 'comptable_dedie'].includes(role)
+    const isClientAdmin = role === 'client_admin'
+
+    if (!isGlobal && !isComptable && !isClientAdmin) {
+      return NextResponse.json({ error: 'Réservé aux comptables et client_admin' }, { status: 403 })
+    }
+
+    // Si pas admin global, on exige l'appartenance à la société demandée.
+    if (!isGlobal) {
+      const { data: userSocietes } = await authClient
+        .from('user_societes').select('societe_id').eq('user_id', user.id)
+      const { data: ownedSoc } = await authClient
+        .from('societes').select('id').eq('created_by', user.id)
+      const allowed = new Set<string>([
+        ...((userSocietes || []) as any[]).map(s => s.societe_id),
+        ...((ownedSoc || []) as any[]).map(s => s.id),
+      ])
+      if (!allowed.has(societe_id)) {
+        return NextResponse.json({ error: 'Forbidden — société non autorisée' }, { status: 403 })
+      }
+    }
 
     const supabase = getAdminClient()
     const report: Record<string, any> = { apply, actions: { consolidate_pcm: doConsolidate, balance_pieces: doBalance, purge_duplicate_sal: doPurge } }
