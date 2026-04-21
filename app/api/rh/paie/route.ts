@@ -465,15 +465,18 @@ export async function POST(request: Request) {
       csg_salarie_taux_reduit: Number(paramsDB.csg_salarie_taux_reduit),
       csg_salarie_taux_plein: Number(paramsDB.csg_salarie_taux_plein),
       csg_patronal: Number(paramsDB.csg_patronal),
+      csg_patronal_taux_reduit: Number(paramsDB.csg_patronal_taux_reduit ?? 0.030),
       nsf_salarie: Number(paramsDB.nsf_salarie),
       nsf_patronal: Number(paramsDB.nsf_patronal),
+      // F9 — Plafond insurable NSF (28 600 MUR en 2025-2026, mig 159).
+      nsf_plafond_mensuel: Number(paramsDB.nsf_plafond_mensuel ?? 28600),
       training_levy: Number(paramsDB.training_levy),
       prgf_patronal_par_jour: Number(paramsDB.prgf_patronal_par_jour ?? 4.50),
       prgf_taux_emoluments: Number(paramsDB.prgf_taux_emoluments ?? 0.045),
-      paye_seuil_exoneration: Number(paramsDB.paye_seuil_exoneration ?? 390000),
+      paye_seuil_exoneration: Number(paramsDB.paye_seuil_exoneration ?? 500000),
       paye_taux_1: Number(paramsDB.paye_taux_1 ?? 0.10),
-      paye_seuil_taux_2: Number(paramsDB.paye_seuil_taux_2 ?? 650000),
-      paye_taux_2: Number(paramsDB.paye_taux_2 ?? 0.15),
+      paye_seuil_taux_2: Number(paramsDB.paye_seuil_taux_2 ?? 1000000),
+      paye_taux_2: Number(paramsDB.paye_taux_2 ?? 0.20),
       // Sprint 2 — night shift majoration paramétrable (defaut 15%)
       night_shift_pct: Number(paramsDB.night_shift_pct ?? 0.15),
       // POLICY Lexora — compensation 635 MUR considérée incluse dans le

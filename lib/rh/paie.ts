@@ -3,14 +3,22 @@
  * Finance Act 2025-2026 + Workers' Rights Act 2019
  * Conforme table bulletins_paie (avec refacturation inter-societes)
  *
- * Rates applied:
- * - CSG Employee: 1.5% (salary <= 50,000 MUR), 3% (salary > 50,000 MUR)
- * - CSG Employer: 3% if basic ≤ 50K, 6% if > 50K (progressive like employee CSG)
- * - NSF Employee: 1.5% (standard)
- * - NSF Employer: 2.5%
- * - Training Levy (HRDC): 1% of basic salary
- * - PRGF: higher of 4.5% of total emoluments OR Rs 4.50 per day worked
- * - PAYE: 0% up to 390,000/yr, 10% on next 260,000, 15% on remainder
+ * Rates applied (2025-2026, validés via eservices.mra.mu/taxcalculator) :
+ * - CSG Employee    : 1.5% si salaire imposable ≤ 50 000 MUR, 3% sinon
+ * - CSG Employer    : 3% si ≤ 50K, 6% sinon (progressif comme salarié)
+ * - NSF Employee    : 1% (F9 — Sprint bugs) plafonné à 28 600 MUR/mois
+ * - NSF Employer    : 2.5% plafonné à 28 600 MUR/mois
+ * - Training Levy   : 1% du salaire de base (HRDC)
+ * - PRGF            : max(4.5% emoluments, Rs 4.50/jour)
+ * - PAYE            : cumul annuel sur × 13 → divisé par 13 (Math.floor) :
+ *     * 0 → 500 000 MUR        : 0%
+ *     * 500 000 → 1 000 000    : 10%
+ *     * > 1 000 000            : 20%
+ *
+ * F9 + F10 (Sprint bugs paie/conges) — les bases CSG/NSF/PAYE sont
+ * désormais calculées sur `salaire_imposable = salaire_brut_base -
+ * deductionAbsence` (UL + absences injustifiées) pour coller aux calculs
+ * officiels MRA (un employé absent paie moins de cotisations).
  *
  * POLICY Lexora — la compensation salariale Finance Act 2024 (Rs 635)
  * est considérée comme DÉJÀ INCLUSE dans le salaire négocié avec
@@ -21,19 +29,20 @@ import type { ParametresPaieMRA } from '@/lib/types'
 
 export const PARAMS_MRA_DEFAUT: ParametresPaieMRA = {
   csg_seuil_taux_reduit: 50000,
-  csg_salarie_taux_reduit: 0.015,   // 1.5% si brut <= 50 000 MUR
-  csg_salarie_taux_plein: 0.030,    // 3% si brut > 50 000 MUR
-  csg_patronal: 0.060,              // 6% employeur (si brut > 50K)
-  csg_patronal_taux_reduit: 0.030,  // 3% employeur (si brut <= 50K)
-  nsf_salarie: 0.015,               // 1.5% NSF salarie
+  csg_salarie_taux_reduit: 0.015,   // 1.5% si imposable <= 50 000 MUR
+  csg_salarie_taux_plein: 0.030,    // 3% si imposable > 50 000 MUR
+  csg_patronal: 0.060,              // 6% employeur (si imposable > 50K)
+  csg_patronal_taux_reduit: 0.030,  // 3% employeur (si imposable <= 50K)
+  nsf_salarie: 0.010,               // 1% NSF salarié (F9 Sprint bugs)
   nsf_patronal: 0.025,              // 2.5% NSF employeur
+  nsf_plafond_mensuel: 28600,       // Plafond insurable NSF (2025-2026)
   training_levy: 0.010,             // 1% HRDC sur salaire de base
-  prgf_patronal_par_jour: 4.50,     // PRGF par jour travaille
+  prgf_patronal_par_jour: 4.50,     // PRGF par jour travaillé
   prgf_taux_emoluments: 0.045,      // 4.5% des emoluments totaux
-  paye_seuil_exoneration: 390000,   // 0% jusqu'a 390K MUR/an
-  paye_taux_1: 0.10,                // 10% tranche 1
-  paye_seuil_taux_2: 650000,        // Seuil tranche 2 (390K + 260K)
-  paye_taux_2: 0.15,                // 15% tranche 2+
+  paye_seuil_exoneration: 500000,   // 0% jusqu'à 500K MUR/an (Budget 2025-2026)
+  paye_taux_1: 0.10,                // 10% tranche 500K-1M
+  paye_seuil_taux_2: 1000000,       // Seuil tranche 2 : 1 000 000 MUR/an
+  paye_taux_2: 0.20,                // 20% tranche > 1M
   // POLICY Lexora : compensation considérée incluse dans le salaire.
   // On garde les champs dans le type pour rétrocompatibilité des lectures
   // mais le montant versé par le moteur est systématiquement 0.
@@ -133,7 +142,13 @@ export function calculerBulletin(
   // Sprint 14 FIX 5 — CSG bonus suit la même tranche que le salaire de base
   // (1.5% si brut ≤ 50K, 3% si > 50K) au lieu du 3% forfaitaire.
   const csg_bonus = eoy_bonus > 0 ? Math.round(eoy_bonus * csgTaux) : 0
-  const nsf_salarie = Math.round(salaire_brut * params.nsf_salarie)
+
+  // F9 — NSF : base plafonnée à nsf_plafond_mensuel (28 600 MUR en 2025-2026).
+  // Max mensuel = 28 600 × 1% = 286 MUR. Base = salaire_brut_base (EOY
+  // bonus exclu côté NSF comme côté PAYE).
+  const nsfPlafond = params.nsf_plafond_mensuel ?? Number.POSITIVE_INFINITY
+  const nsf_base = Math.min(salaire_brut_base, nsfPlafond)
+  const nsf_salarie = Math.round(nsf_base * params.nsf_salarie)
 
   // PAYE -- bareme progressif annuel MRA 2025/26
   // EOY Bonus (13th month) is EXEMPT from PAYE in Mauritius (but subject to CSG)
@@ -167,7 +182,8 @@ export function calculerBulletin(
   const csg_patronal = Math.round(salaire_brut_base * csgPatronalTaux)
   // Sprint 14 FIX 5 — CSG patronal bonus suit la même tranche que le salaire
   const csg_patronal_bonus = eoy_bonus > 0 ? Math.round(eoy_bonus * csgPatronalTaux) : 0
-  const nsf_patronal = Math.round(salaire_brut * params.nsf_patronal)
+  // F9 — NSF patronal capé au même plafond que côté salarié.
+  const nsf_patronal = Math.round(nsf_base * params.nsf_patronal)
 
   // Training Levy (HRDC): 1% of basic salary only (not total emoluments)
   const training_levy = Math.round(salaire_base * params.training_levy)

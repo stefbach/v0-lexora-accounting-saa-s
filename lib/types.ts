@@ -36,6 +36,8 @@ export interface ParametresPaieMRA {
   csg_patronal_taux_reduit: number  // 3% employeur si brut <= 50K
   nsf_salarie: number
   nsf_patronal: number
+  /** F9 — Plafond mensuel NSF (insurable ceiling), 28 600 MUR en 2025-2026. */
+  nsf_plafond_mensuel?: number
   training_levy: number
   prgf_patronal_par_jour: number    // PRGF par jour travaillé
   prgf_taux_emoluments: number      // 4.5% — Portable Retirement Gratuity Fund
