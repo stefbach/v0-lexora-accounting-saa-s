@@ -804,7 +804,12 @@ Voulez-vous vraiment continuer ?`
         showToast(`⚠️ 0 résultat — total=${result.total}, factures=${dbg.factures_count || '?'}, non-classifiées=${dbg.global_unclassified || '?'}, version=${dbg.version || 'inconnue'}`, 'error')
       }
       load()
-    } catch { setAutoStep(""); setAutoResult({ matched: 0, total: 0, interne: 0, frais_bancaires: 0, salaire_bulk: 0, mra: 0, not_matched: 0, total_classified: 0, matches: [] }) }
+    } catch (e: any) {
+      console.error('[handleAutoMatch] network/parse error:', e)
+      setAutoStep("")
+      setAutoResult(null)
+      showToast(`❌ Erreur réseau : ${e?.message || 'connexion perdue'}`, 'error')
+    }
     finally { setAutoMatching(false) }
   }
 
