@@ -79,6 +79,9 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
     `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`
   )
   const [documents, setDocuments] = useState<any[]>([])
+  // Shifts disponibles pour cette société (source : societes.shifts_planning JSONB)
+  // Permet de choisir un shift par défaut pour cet employé (ETAPE 2).
+  const [societeShifts, setSocieteShifts] = useState<Array<{ id: string; label: string; code?: string; debut?: string | null; fin?: string | null }>>([])
   const photoInputRef = useRef<HTMLInputElement>(null)
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -125,6 +128,34 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
   useEffect(() => {
     if (employe && !form) setForm({ ...employe })
   }, [employe, form])
+
+  // Charger les shifts de la société (pour le selecteur "Shift par défaut").
+  // Source : societes.shifts_planning (JSONB), exposée via
+  // GET /api/rh/planning/regles?societe_id=…
+  useEffect(() => {
+    const sid = employe?.societe_id
+    if (!sid) { setSocieteShifts([]); return }
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/rh/planning/regles?societe_id=${sid}`)
+        if (!res.ok) return
+        const data = await res.json()
+        const shifts = Array.isArray(data?.shifts_planning) ? data.shifts_planning : []
+        if (cancelled) return
+        setSocieteShifts(shifts.map((s: any) => ({
+          id: String(s.id),
+          label: s.label || s.nom || s.code || 'Shift',
+          code: s.code,
+          debut: s.debut ?? s.heure_debut ?? null,
+          fin: s.fin ?? s.heure_fin ?? null,
+        })))
+      } catch {
+        if (!cancelled) setSocieteShifts([])
+      }
+    })()
+    return () => { cancelled = true }
+  }, [employe?.societe_id])
 
   const handleSave = async () => {
     if (!form) return
@@ -452,6 +483,30 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                 <Field label="Departement" field="departement" />
                 <Field label="Bureau / Site" field="office_site" />
                 <Field label="Superviseur (ID)" field="supervisor_id" placeholder="UUID du superviseur" />
+                {/* Shift par défaut — option B du sprint bugs paie/conges.
+                    Si renseigné, le générateur de planning utilisera ce shift
+                    pour l'employé au lieu du shift standard société. */}
+                <div>
+                  <Label className="text-xs text-gray-500">Shift par défaut</Label>
+                  <Select
+                    value={form.shift_template_id ?? "__none__"}
+                    onValueChange={v => u("shift_template_id", v === "__none__" ? null : v)}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Shift standard de la société" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Aucun (utiliser le shift standard société)</SelectItem>
+                      {societeShifts.map(s => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.code ? `${s.code} · ` : ""}{s.label}
+                          {s.debut && s.fin ? ` (${s.debut}–${s.fin})` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    Si aucun, l'employé utilisera le premier shift de travail de la société.
+                  </p>
+                </div>
                 <div>
                   <Label className="text-xs text-gray-500 mb-2 block">Jours de travail</Label>
                   <div className="flex gap-3 flex-wrap">

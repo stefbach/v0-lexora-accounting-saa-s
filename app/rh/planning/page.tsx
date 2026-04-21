@@ -780,10 +780,25 @@ export default function PlanningPage() {
       toast.error("Aucun créneau de travail configuré")
       return
     }
-    const c = workCreneau
+    // Option B — shift par défaut par employé : si emp.shift_template_id est
+    // renseigné et qu'on trouve le shift correspondant dans creneaux, on
+    // l'utilise pour cet employé. Sinon on retombe sur le shift standard.
+    const empById = new Map(employes.map(e => [e.id, e]))
+    const shiftByEmpId = (empId: string) => {
+      const emp = empById.get(empId)
+      const customId = emp?.shift_template_id ? String(emp.shift_template_id) : null
+      if (customId) {
+        const custom = creneaux.find(c => String(c.id) === customId)
+        if (custom) return custom
+      }
+      return workCreneau
+    }
+    let nbCustom = 0
     setPlanning(prev => {
       const next = { ...prev }
       for (const empId of Object.keys(next)) {
+        const c = shiftByEmpId(empId)
+        if (c.id !== workCreneau.id) nbCustom++
         const row = { ...next[empId] }
         for (let d = 1; d <= daysInMonth; d++) {
           // Respect approved congés: force "Congé" cell with leave type
@@ -802,7 +817,11 @@ export default function PlanningPage() {
       }
       return next
     })
-    toast.success(`Planning rempli avec "${workCreneau.nom}"`)
+    toast.success(
+      nbCustom > 0
+        ? `Planning rempli — ${nbCustom} employé(s) avec shift personnalisé, reste "${workCreneau.nom}"`
+        : `Planning rempli avec "${workCreneau.nom}"`,
+    )
   }
 
   const generate3x8 = () => {
