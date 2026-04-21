@@ -45,11 +45,18 @@ export interface MatchingFacture {
  * original invoice and would produce incorrect positive matches on normal
  * outgoing/incoming payments. They should be handled via dedicated refund
  * or deduction workflows instead.
+ *
+ * Detection rules (ordered):
+ *   1. explicit `avoir_origine_id` link (migration 134) — authoritative.
+ *   2. numero_facture prefix — `AV-*`, `AVR-*`, `CN-*`, `CRN-*`, `AVOIR-*`.
+ *      The lookahead `(?!ANCE)` excludes `AVANCE-*` numbers which are
+ *      prepayments, not credit notes.
+ *   3. negative montant_ttc.
  */
 export function isAvoir(f: Pick<MatchingFacture, 'avoir_origine_id' | 'montant_ttc' | 'numero_facture'>): boolean {
   if (f?.avoir_origine_id) return true
   const n = String(f?.numero_facture || '').toUpperCase()
-  if (/^(AV|AVR|CN|CRN|AVOIR)[-_ ]?/.test(n)) return true
+  if (/^(AV(?!ANCE)|AVR|CN|CRN|AVOIR)[-_ ]?/.test(n)) return true
   if ((Number(f?.montant_ttc) || 0) < 0) return true
   return false
 }

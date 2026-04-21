@@ -333,19 +333,30 @@ export async function POST(request: Request) {
       let directors: Array<{ id: string; nom_complet: string; role: string }> = []
       // TDS defaults per supplier (migration 159) — optional, keyed by
       // lower-cased tiers name so we can override heuristic TDS detection.
+      // Individual Promise.allSettled so that a missing optional table
+      // (e.g. tiers_tds_defaults before migration 159) does not nuke the
+      // other two loads.
       const tdsDefaultsByTiers = new Map<string, { code: string; rate: number; compte: string }>()
-      try {
-        const [rulesRes, dirRes, tdsRes] = await Promise.all([
-          supabase.from('classification_rules').select('*').eq('active', true)
-            .or(`societe_id.eq.${societe_id},societe_id.is.null`).order('priority'),
-          supabase.from('directors_shareholders').select('id, nom_complet, role')
-            .eq('societe_id', societe_id).eq('active', true),
-          supabase.from('tiers_tds_defaults').select('tiers, tds_code, tds_rate_pct, tds_compte')
-            .eq('societe_id', societe_id),
-        ])
-        classificationRules = (rulesRes.data || []) as ClassificationRule[]
-        directors = (dirRes.data || []) as any[]
-        for (const row of (tdsRes?.data || []) as any[]) {
+      const [rulesSettled, dirSettled, tdsSettled] = await Promise.allSettled([
+        supabase.from('classification_rules').select('*').eq('active', true)
+          .or(`societe_id.eq.${societe_id},societe_id.is.null`).order('priority'),
+        supabase.from('directors_shareholders').select('id, nom_complet, role')
+          .eq('societe_id', societe_id).eq('active', true),
+        supabase.from('tiers_tds_defaults').select('tiers, tds_code, tds_rate_pct, tds_compte')
+          .eq('societe_id', societe_id),
+      ])
+      if (rulesSettled.status === 'fulfilled') {
+        classificationRules = ((rulesSettled.value as any)?.data || []) as ClassificationRule[]
+      } else {
+        console.warn('[rapprochement] classification_rules unavailable:', rulesSettled.reason)
+      }
+      if (dirSettled.status === 'fulfilled') {
+        directors = ((dirSettled.value as any)?.data || []) as any[]
+      } else {
+        console.warn('[rapprochement] directors_shareholders unavailable:', dirSettled.reason)
+      }
+      if (tdsSettled.status === 'fulfilled') {
+        for (const row of (((tdsSettled.value as any)?.data) || []) as any[]) {
           const key = String(row.tiers || '').toLowerCase().trim()
           if (!key) continue
           tdsDefaultsByTiers.set(key, {
@@ -354,10 +365,10 @@ export async function POST(request: Request) {
             compte: String(row.tds_compte || '447'),
           })
         }
-        console.log(`[rapprochement] Loaded ${classificationRules.length} rules, ${directors.length} directors, ${tdsDefaultsByTiers.size} TDS defaults`)
-      } catch (rulesErr) {
-        console.warn('[rapprochement] classification_rules/directors/tds not available:', rulesErr)
+      } else {
+        console.warn('[rapprochement] tiers_tds_defaults unavailable (migration 159?):', tdsSettled.reason)
       }
+      console.log(`[rapprochement] Loaded ${classificationRules.length} rules, ${directors.length} directors, ${tdsDefaultsByTiers.size} TDS defaults`)
 
       console.log(`[rapprochement] Parallel load done in ${Date.now() - t0}ms: ${releves.length} releves, ${(facturesData || []).length} factures`)
 
@@ -820,6 +831,12 @@ export async function POST(request: Request) {
               // already been reconciled by a concurrent run. `rapproche_releve_id
               // IS NULL` means no prior auto/manual reconciliation has linked it.
               // This prevents two concurrent matches from overwriting each other.
+              //
+              // Intentional side-effect: factures already flagged `statut='paye'`
+              // through the "marquer payée" manual workflow are SKIPPED here —
+              // overwriting them would lose the manual provenance. Re-linking a
+              // manually-paid facture to a bank transaction must go through the
+              // explicit `lettrer_manuel` endpoint.
               const updatePayload: Record<string, any> = {
                 statut: newStatut,
                 rapproche_releve_id: releveId,
