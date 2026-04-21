@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getUserSocieteIds } from '@/lib/rh/access'
+import { recomputeSoldeCongesAll } from '@/lib/rh/soldes-conges'
 import {
   calculateWorkingDays,
   getMauritiusPublicHolidays,
@@ -90,186 +91,6 @@ function countWorkingDays(dateDebut: string, dateFin: string): number {
   return calculateWorkingDays(dateDebut, dateFin)
 }
 
-/**
- * Recompute and persist the annual balance row for an employee from the
- * current set of demandes_conges with statut='approuve'. This is the
- * canonical source-of-truth recalculation used whenever a demande
- * transitions into or out of the approuve bucket (approval, refusal of a
- * previously approved leave, cancellation, deletion). Idempotent by
- * design — repeated calls converge to the same result.
- *
- * Type-specific behaviour:
- *
- *   AL  → upsert soldes_conges with al_pris, al_impose_societe and
- *         al_impose_employe (split by the impose_par_societe flag on
- *         each demande). Invariant:
- *             al_pris = al_impose_societe + al_impose_employe
- *
- *   SL  → upsert soldes_conges with sl_pris (sum of approved SL days).
- *
- *   MAT → upsert conges_employes row (type_conge='MAT') with jours_pris
- *         set to the sum of approved MAT days for the year. Default
- *         jours_droit = 112 (16 weeks calendar days, WRA 2019 §52) on
- *         first insert; pre-existing rows keep their jours_droit.
- *
- *   PAT → same pattern as MAT but with default jours_droit = 28
- *         (4 weeks calendar days, WRA 2019 §53) and type_conge='PAT'.
- *
- *   Other types (UL, CAR, WI, COM, PH, ABS) → no-op. UL is deducted
- *   monthly in paie via calculer_batch; the rest don't accumulate.
- *
- * Never throws — logs a warning on failure so callers don't break.
- */
-async function recomputeSoldeConges(
-  supabase: ReturnType<typeof getAdminClient>,
-  employeId: string,
-  typeConge: string,
-  annee: number = new Date().getFullYear()
-): Promise<void> {
-  try {
-    if (typeConge === 'AL' || typeConge === 'UL') {
-      // FIX — al_pris doit compter les AL approuvés ET les UL basculés
-      // depuis un AL (motif contient `[Auto-bascule UL]` sans mention
-      // "Sick Leave"). Ces UL-from-AL représentent des jours que
-      // l'employé a bien pris en tant que congé annuel (carence ou
-      // solde insuffisant), donc ils comptent dans le compteur de suivi
-      // persisté sur soldes_conges.al_pris.
-      //
-      // Quand l'appelant passe typeConge='UL', c'est probablement après
-      // création/approbation d'une demande UL auto-basculée : on recompute
-      // alors l'al_pris (qui inclut les UL-from-AL).
-      const { data: approvedAl } = await supabase
-        .from('demandes_conges')
-        .select('nb_jours, impose_par_societe')
-        .eq('employe_id', employeId)
-        .eq('type_conge', 'AL')
-        .eq('statut', 'approuve')
-        .gte('date_debut', `${annee}-01-01`)
-        .lte('date_debut', `${annee}-12-31`)
-
-      const { data: approvedUlFromAl } = await supabase
-        .from('demandes_conges')
-        .select('nb_jours, impose_par_societe, motif')
-        .eq('employe_id', employeId)
-        .eq('type_conge', 'UL')
-        .eq('statut', 'approuve')
-        .gte('date_debut', `${annee}-01-01`)
-        .lte('date_debut', `${annee}-12-31`)
-
-      const ulFromAl = (approvedUlFromAl || []).filter(c =>
-        typeof c.motif === 'string'
-        && c.motif.includes('[Auto-bascule UL]')
-        && !/Sick\s+Leave/i.test(c.motif)
-      )
-
-      const approved = [...(approvedAl || []), ...ulFromAl]
-
-      let imposeSociete = 0
-      let imposeEmploye = 0
-      for (const c of approved) {
-        const n = Number(c.nb_jours) || 0
-        if (c.impose_par_societe === true) imposeSociete += n
-        else imposeEmploye += n
-      }
-      const totalPris = Math.round((imposeSociete + imposeEmploye) * 100) / 100
-      imposeSociete = Math.round(imposeSociete * 100) / 100
-      imposeEmploye = Math.round(imposeEmploye * 100) / 100
-
-      const { data: existing } = await supabase
-        .from('soldes_conges').select('id')
-        .eq('employe_id', employeId).eq('annee', annee).maybeSingle()
-
-      if (existing) {
-        await supabase.from('soldes_conges').update({
-          al_pris: totalPris,
-          al_impose_societe: imposeSociete,
-          al_impose_employe: imposeEmploye,
-        }).eq('id', existing.id)
-      } else {
-        await supabase.from('soldes_conges').insert({
-          employe_id: employeId,
-          annee,
-          al_droit: 22,
-          al_pris: totalPris,
-          al_impose_societe: imposeSociete,
-          al_impose_employe: imposeEmploye,
-          sl_droit: 15,
-          sl_pris: 0,
-        })
-      }
-      console.log(`[conges] Solde AL recomputed: pris=${totalPris} (société=${imposeSociete}, employé=${imposeEmploye}) employe=${employeId} annee=${annee}`)
-      return
-    }
-
-    if (typeConge === 'SL') {
-      const { data: approved } = await supabase
-        .from('demandes_conges').select('nb_jours')
-        .eq('employe_id', employeId).eq('type_conge', 'SL').eq('statut', 'approuve')
-        .gte('date_debut', `${annee}-01-01`).lte('date_debut', `${annee}-12-31`)
-
-      const totalPris = Math.round(
-        (approved || []).reduce((s: number, c: any) => s + (Number(c.nb_jours) || 0), 0) * 100
-      ) / 100
-
-      const { data: existing } = await supabase
-        .from('soldes_conges').select('id')
-        .eq('employe_id', employeId).eq('annee', annee).maybeSingle()
-
-      if (existing) {
-        await supabase.from('soldes_conges').update({ sl_pris: totalPris }).eq('id', existing.id)
-      } else {
-        await supabase.from('soldes_conges').insert({
-          employe_id: employeId,
-          annee,
-          al_droit: 22, al_pris: 0, al_impose_societe: 0, al_impose_employe: 0,
-          sl_droit: 15, sl_pris: totalPris,
-        })
-      }
-      console.log(`[conges] Solde SL recomputed: pris=${totalPris} employe=${employeId} annee=${annee}`)
-      return
-    }
-
-    if (typeConge === 'MAT' || typeConge === 'PAT') {
-      // MAT/PAT accumulate in conges_employes (per-type, per-year row).
-      // jours_droit = WRA 2019 default on insert; left alone on update.
-      const { data: approved } = await supabase
-        .from('demandes_conges').select('nb_jours')
-        .eq('employe_id', employeId).eq('type_conge', typeConge).eq('statut', 'approuve')
-        .gte('date_debut', `${annee}-01-01`).lte('date_debut', `${annee}-12-31`)
-
-      const totalPris = Math.round(
-        (approved || []).reduce((s: number, c: any) => s + (Number(c.nb_jours) || 0), 0) * 100
-      ) / 100
-
-      const defaultDroit = typeConge === 'MAT' ? 112 : 28
-      const { data: existing } = await supabase
-        .from('conges_employes').select('id, jours_droit')
-        .eq('employe_id', employeId).eq('annee', annee).eq('type_conge', typeConge)
-        .maybeSingle()
-
-      if (existing) {
-        await supabase.from('conges_employes').update({
-          jours_pris: totalPris,
-          updated_at: new Date().toISOString(),
-        }).eq('id', existing.id)
-      } else {
-        await supabase.from('conges_employes').insert({
-          employe_id: employeId,
-          annee,
-          type_conge: typeConge,
-          jours_droit: defaultDroit,
-          jours_pris: totalPris,
-        })
-      }
-      console.log(`[conges] ${typeConge} recomputed: pris=${totalPris} employe=${employeId} annee=${annee}`)
-      return
-    }
-
-    // Other types (UL, CAR, WI, COM, PH, ABS): no balance tracking.
-  } catch (err: any) {
-    console.warn(`[conges] recomputeSoldeConges failed (non-blocking):`, err?.message)
-  }
-}
 
 /** Calculate prorata AL entitlement based on hire date (Mauritius WRA 2019: 20 days/year) */
 /**
@@ -795,6 +616,12 @@ export async function POST(request: Request) {
 
       const { data, error } = await supabase.from('demandes_conges').update(updates).eq('id', id).select().single()
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      // F3 — si la demande modifiée est approuvée (changement dates/nb_jours
+      // en cours de validité), recompute les soldes de l'année concernée.
+      if (data?.statut === 'approuve') {
+        const annee = new Date(data.date_debut).getFullYear()
+        await recomputeSoldeCongesAll(supabase, data.employe_id, annee)
+      }
       return NextResponse.json({ demande: data })
     }
 
@@ -1074,6 +901,13 @@ export async function POST(request: Request) {
         document_url: body.document_url || null,
       }).select().single()
       if (error) throw error
+      // F3 — si la demande est déjà approuvée (création directe par RH),
+      // recompute immédiatement les soldes. En mode 'en_attente' (demande
+      // employé), le recompute se fera à l'approbation.
+      if (data?.statut === 'approuve') {
+        const annee = new Date(data.date_debut).getFullYear()
+        await recomputeSoldeCongesAll(supabase, data.employe_id, annee)
+      }
       return NextResponse.json({
         conge: data,
         warning: bascule_ul_warning, // null si pas de bascule, sinon message UX
@@ -1124,7 +958,7 @@ export async function POST(request: Request) {
       // right row even when someone approves a leave that started last year.
       if (data) {
         const annee = new Date(conge.date_debut).getFullYear()
-        await recomputeSoldeConges(supabase, conge.employe_id, conge.type_conge, annee)
+        await recomputeSoldeCongesAll(supabase, conge.employe_id, annee)
       }
 
       return NextResponse.json({ conge: data })
@@ -1174,7 +1008,7 @@ export async function POST(request: Request) {
       // for untracked types, so no conditional needed beyond wasApproved.
       if (wasApproved) {
         const annee = new Date(conge.date_debut).getFullYear()
-        await recomputeSoldeConges(supabase, conge.employe_id, conge.type_conge, annee)
+        await recomputeSoldeCongesAll(supabase, conge.employe_id, annee)
       }
 
       return NextResponse.json({ conge: data })
@@ -1247,7 +1081,7 @@ export async function POST(request: Request) {
       // Helper is a no-op for untracked types.
       if (wasApproved) {
         const annee = new Date(conge.date_debut).getFullYear()
-        await recomputeSoldeConges(supabase, conge.employe_id, conge.type_conge, annee)
+        await recomputeSoldeCongesAll(supabase, conge.employe_id, annee)
       }
 
       return NextResponse.json({ conge: data })
@@ -1278,6 +1112,11 @@ export async function POST(request: Request) {
         date_decision: new Date().toISOString(),
       }).select().single()
       if (error) throw error
+      // F3 — SL rétroactif statut='approuve' → recompute soldes
+      if (data?.employe_id && data?.date_debut) {
+        const annee = new Date(data.date_debut).getFullYear()
+        await recomputeSoldeCongesAll(supabase, data.employe_id, annee)
+      }
       return NextResponse.json({ conge: data }, { status: 201 })
     }
 
