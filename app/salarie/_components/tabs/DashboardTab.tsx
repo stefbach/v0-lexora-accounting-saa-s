@@ -8,10 +8,12 @@ import { NAVY, GOLD, BLUE, GREEN, MONTH_NAMES_FR } from "../shared/constants"
 import { fmt, fmtH, lastDayOfMonth } from "../shared/helpers"
 import {
   EligibiliteBadge,
+  VacationLeaveCard,
   formatPeriodeFR,
   formatDateFR,
   computeDatePlus6Months,
   type EligibilityStatus,
+  type VlEligibilityStatus,
 } from "../shared/conges-eligibilite"
 import { useEffect, useState } from "react"
 
@@ -202,6 +204,15 @@ export function DashboardTab({
         {notEligibleMessage && (
           <p className="text-[11px] text-center text-gray-500 italic">{notEligibleMessage}</p>
         )}
+        <VacationLeaveCard
+          vl_droit={conges?.vl_droit ?? null}
+          vl_pris={conges?.vl_pris ?? null}
+          vl_solde={conges?.vl_solde ?? null}
+          vl_cycle_debut={conges?.vl_cycle_debut ?? null}
+          vl_cycle_fin={conges?.vl_cycle_fin ?? null}
+          vl_eligibility_status={(conges?.vl_eligibility_status as VlEligibilityStatus) || "no_date_arrivee"}
+          vl_eligibility_date={conges?.vl_eligibility_date ?? null}
+        />
       </div>
       )}
 

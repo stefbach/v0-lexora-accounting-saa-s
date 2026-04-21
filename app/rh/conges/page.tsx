@@ -118,6 +118,13 @@ interface BalanceRow {
   sl_droit: number
   sl_pris: number
   sl_solde: number
+  /** G2 — Vacation Leave (WRA S.47) : 30j/5 ans pour workers (basic ≤ 50k). */
+  vl_droit?: number | null
+  vl_pris?: number | null
+  vl_solde?: number | null
+  vl_cycle_debut?: string | null
+  vl_cycle_fin?: string | null
+  vl_eligibility_status?: 'eligible' | 'en_acquisition' | 'hors_wra_basic_sup_50k' | 'migrant_worker_exclu' | 'no_date_arrivee'
   status_color: string
   sick_cert_alert: boolean
 }
@@ -1142,6 +1149,8 @@ export default function CongesPage() {
                         <TableHead className="text-center">SL Droit</TableHead>
                         <TableHead className="text-center">SL Pris</TableHead>
                         <TableHead className="text-center">SL Solde</TableHead>
+                        <TableHead className="text-center text-purple-700" title="Vacation Leave WRA S.47 — 30j/5 ans, workers basic ≤ 50k">VL Droit</TableHead>
+                        <TableHead className="text-center text-purple-700">VL Solde</TableHead>
                         <TableHead>Alertes</TableHead>
                         <TableHead className="w-24 text-right">Actions</TableHead>
                       </TableRow>
@@ -1223,6 +1232,24 @@ export default function CongesPage() {
                             <span className={`font-semibold ${b.sl_solde <= 0 ? "text-red-600" : b.sl_solde <= 3 ? "text-orange-500" : "text-green-600"}`}>
                               {isEditing ? (editBalFields.sl_droit - editBalFields.sl_pris) : b.sl_solde}
                             </span>
+                          </TableCell>
+                          <TableCell className="text-center text-sm">
+                            {b.vl_eligibility_status === 'eligible' ? (
+                              <span className="font-semibold text-purple-700" title={`Cycle ${b.vl_cycle_debut || ''} → ${b.vl_cycle_fin || ''}`}>
+                                {b.vl_droit ?? 30}
+                              </span>
+                            ) : b.vl_eligibility_status === 'en_acquisition' ? (
+                              <span className="text-[10px] text-gray-400">en acquisition</span>
+                            ) : (
+                              <span className="text-[10px] text-gray-300">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {b.vl_eligibility_status === 'eligible' ? (
+                              <span className="font-semibold text-purple-700">{b.vl_solde ?? 0}</span>
+                            ) : (
+                              <span className="text-[10px] text-gray-300">—</span>
+                            )}
                           </TableCell>
                           <TableCell>
                             {b.sick_cert_alert && (

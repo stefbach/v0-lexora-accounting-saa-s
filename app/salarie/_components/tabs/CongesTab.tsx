@@ -13,8 +13,10 @@ import { NAVY, GOLD, BLUE, GREEN } from "../shared/constants"
 import {
   EligibiliteBadge,
   EligibiliteBannerConges,
+  VacationLeaveCard,
   formatPeriodeFR,
   type EligibilityStatus,
+  type VlEligibilityStatus,
 } from "../shared/conges-eligibilite"
 
 const MAX_CERT_BYTES = 5 * 1024 * 1024 // 5 MB
@@ -212,8 +214,8 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
     return <Badge style={{ backgroundColor: "#f9731620", color: "#f97316" }}>En attente</Badge>
   }
 
-  const typeLabel: Record<string, string> = { AL: "Local Leave", SL: "Sick Leave", MAT: "Maternity Leave", PAT: "Paternity Leave", SANS_SOLDE: "Leave Without Pay" }
-  const typeColor: Record<string, string> = { AL: GREEN, SL: "#f97316", MAT: "#8b5cf6", PAT: BLUE, SANS_SOLDE: "#6b7280" }
+  const typeLabel: Record<string, string> = { AL: "Local Leave", SL: "Sick Leave", VL: "Vacation Leave", MAT: "Maternity Leave", PAT: "Paternity Leave", SANS_SOLDE: "Leave Without Pay" }
+  const typeColor: Record<string, string> = { AL: GREEN, SL: "#f97316", VL: "#9333ea", MAT: "#8b5cf6", PAT: BLUE, SANS_SOLDE: "#6b7280" }
 
   return (
     <div className="space-y-6">
@@ -275,6 +277,15 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
           alDroit={alDroit}
           slDroit={slDroit}
         />
+        <VacationLeaveCard
+          vl_droit={balances?.vl_droit ?? null}
+          vl_pris={balances?.vl_pris ?? null}
+          vl_solde={balances?.vl_solde ?? null}
+          vl_cycle_debut={balances?.vl_cycle_debut ?? null}
+          vl_cycle_fin={balances?.vl_cycle_fin ?? null}
+          vl_eligibility_status={(balances?.vl_eligibility_status as VlEligibilityStatus) || "no_date_arrivee"}
+          vl_eligibility_date={balances?.vl_eligibility_date ?? null}
+        />
       </div>
       )}
 
@@ -290,6 +301,10 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
               {([
                 { value: "AL", label: "Local Leave", color: GREEN },
                 { value: "SL", label: "Sick Leave", color: "#f97316" },
+                // G2 — VL affiché seulement si l'employé est éligible WRA S.47.
+                ...(balances?.vl_eligibility_status === "eligible"
+                  ? [{ value: "VL", label: "Vacation Leave", color: "#9333ea" }]
+                  : []),
                 { value: "MAT", label: "Maternity", color: "#8b5cf6" },
                 { value: "PAT", label: "Paternity", color: BLUE },
                 { value: "SANS_SOLDE", label: "Sans solde", color: "#6b7280" },
