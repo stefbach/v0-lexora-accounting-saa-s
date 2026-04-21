@@ -2339,7 +2339,7 @@ export async function POST(request: Request) {
       // lettrage.
       let facturesQuery = supabase
         .from('factures')
-        .select('id, numero_facture, montant_ht, montant_tva, montant_ttc, montant_mur, devise, date_facture, date_echeance, rapproche_date, rapproche_releve_id, rapproche_transaction_idx, tiers, type_facture, type_document, facture_origine_id')
+        .select('id, numero_facture, montant_ht, montant_tva, montant_ttc, montant_mur, devise, taux_change, date_facture, date_echeance, rapproche_date, rapproche_releve_id, rapproche_transaction_idx, tiers, type_facture, type_document, facture_origine_id')
         .eq('societe_id', socId)
         .eq('statut', 'paye')
       // Filtre optionnel sur le mois (pour sync_lettrage scope mensuel)
