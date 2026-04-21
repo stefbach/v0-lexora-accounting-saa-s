@@ -970,12 +970,24 @@ Voulez-vous vraiment continuer ?`
 
   const handleUnlink = async (tx: any) => {
     try {
-      await fetch("/api/comptable/rapprochement", {
+      const res = await fetch("/api/comptable/rapprochement", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "delettrer", transaction_id: tx.id, releve_id: tx.releve_id, facture_id: tx.facture_id, ecriture_id: tx.ecriture_id }),
+        body: JSON.stringify({
+          action: "delettrer",
+          societe_id: societeId,
+          transaction_id: tx.id,
+          releve_id: tx.releve_id,
+          facture_id: tx.facture_id,
+          ecriture_id: tx.ecriture_id,
+        }),
       })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setToast({ type: 'error', message: `❌ ${d.error || `HTTP ${res.status}`}` })
+        return
+      }
       load()
-    } catch { alert("Erreur") }
+    } catch (e: any) { setToast({ type: 'error', message: `❌ ${e?.message || 'Erreur réseau'}` }) }
   }
 
   // ── Annuler le paiement d'une ou plusieurs factures ──────────────
@@ -1238,12 +1250,19 @@ Voulez-vous vraiment continuer ?`
 
   const handleDelettrer = async (e: any) => {
     try {
-      await fetch("/api/comptable/rapprochement", {
+      // Écriture sans tx bancaire → endpoint lettrage (le /rapprochement delettrer
+      // exige releve_id et renverrait un 400 silencieux ici).
+      const res = await fetch("/api/comptable/lettrage", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "delettrer", ecriture_id: e.id }),
+        body: JSON.stringify({ action: "delettrer", ecriture_ids: [e.id] }),
       })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setToast({ type: 'error', message: `❌ ${d.error || `HTTP ${res.status}`}` })
+        return
+      }
       load()
-    } catch { alert("Erreur") }
+    } catch (err: any) { setToast({ type: 'error', message: `❌ ${err?.message || 'Erreur réseau'}` }) }
   }
 
   /**
