@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { createEcrituresForFacture } from '@/lib/accounting/ecritures-factures'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -60,6 +61,8 @@ export async function POST(request: Request) {
     const doConsolidate = actions.consolidate_pcm !== false
     const doBalance = actions.balance_pieces !== false
     const doPurge = !!actions.purge_duplicate_sal
+    const doRecomputeMur = actions.recompute_vte_ach_mur !== false
+    const doRegenMissing = actions.regenerate_missing_vte_ach !== false
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
 
     // Access control:
@@ -94,7 +97,16 @@ export async function POST(request: Request) {
     }
 
     const supabase = getAdminClient()
-    const report: Record<string, any> = { apply, actions: { consolidate_pcm: doConsolidate, balance_pieces: doBalance, purge_duplicate_sal: doPurge } }
+    const report: Record<string, any> = {
+      apply,
+      actions: {
+        consolidate_pcm: doConsolidate,
+        balance_pieces: doBalance,
+        purge_duplicate_sal: doPurge,
+        recompute_vte_ach_mur: doRecomputeMur,
+        regenerate_missing_vte_ach: doRegenMissing,
+      },
+    }
 
     // ── STEP 0: initial state ───────────────────────────────────────
     const initial = await getBalanceStats(supabase, societe_id)
@@ -178,6 +190,150 @@ export async function POST(request: Request) {
         }
       }
       report.purge_duplicate_sal = duplicates
+    }
+
+    // ── STEP 2.5a: recompute_vte_ach_mur ─────────────────────────────
+    // Les factures en devise étrangère (GBP/EUR/USD) avaient leurs
+    // montants natifs (GBP) stockés dans debit_mur / credit_mur au lieu
+    // de la conversion MUR. Conséquence visible : un paiement de 1 M MUR
+    // sur compte 411 face à une facture de 19 k GBP (débit) → solde 411
+    // largement créditeur alors qu'il devrait être proche de zéro.
+    //
+    // Stratégie : pour chaque facture avec devise≠MUR et montant_mur
+    // cohérent, on UPDATE directement les écritures VTE/ACH associées
+    // en recalculant debit_mur/credit_mur à partir de montant_mur.
+    // On préserve le lettrage existant.
+    if (doRecomputeMur) {
+      const { data: factDev } = await supabase
+        .from('factures')
+        .select('id, numero_facture, devise, montant_ht, montant_tva, montant_ttc, montant_mur, type_facture')
+        .eq('societe_id', societe_id)
+        .neq('devise', 'MUR')
+        .not('montant_mur', 'is', null)
+        .gt('montant_mur', 0)
+      const recomputed: any[] = []
+      for (const f of (factDev || []) as any[]) {
+        const nativeTtc = Number(f.montant_ttc) || 0
+        const murTtc = Number(f.montant_mur) || 0
+        if (nativeTtc <= 0 || murTtc <= 0) continue
+        const ratio = murTtc / nativeTtc
+        if (Math.abs(ratio - 1) < 0.001) continue // déjà en MUR
+
+        const murHt = Math.round((Number(f.montant_ht) || 0) * ratio * 100) / 100
+        const murTva = Math.round((Number(f.montant_tva) || 0) * ratio * 100) / 100
+        const ecartTtc = Math.round((murTtc - nativeTtc) * 100) / 100
+        if (Math.abs(ecartTtc) < 0.01) continue
+
+        // Fetch existing entries for this facture
+        const { data: existing } = await supabase
+          .from('ecritures_comptables_v2')
+          .select('id, numero_compte, debit_mur, credit_mur, lettre')
+          .eq('societe_id', societe_id)
+          .eq('facture_id', f.id)
+          .in('journal', ['ACH', 'VTE'])
+        const hits: Array<{ id: string; compte: string; before: number; after: number; side: 'D' | 'C' }> = []
+        for (const row of (existing || []) as any[]) {
+          const compte = String(row.numero_compte)
+          let expected: number | null = null
+          let side: 'D' | 'C' = 'D'
+          // Map compte → expected value (MUR) + side
+          if (compte === '411' || compte === '401') {
+            expected = murTtc; side = compte === '411' ? 'D' : 'C'
+          } else if (compte === '706' || compte === '607') {
+            expected = murHt; side = compte === '706' ? 'C' : 'D'
+          } else if (compte === '4457' || compte === '4456') {
+            expected = murTva; side = compte === '4457' ? 'C' : 'D'
+          }
+          if (expected == null) continue
+          const before = side === 'D' ? Number(row.debit_mur) : Number(row.credit_mur)
+          if (Math.abs(before - expected) < 0.01) continue
+          hits.push({ id: row.id, compte, before, after: expected, side })
+        }
+        if (hits.length === 0) continue
+        if (apply) {
+          for (const h of hits) {
+            const payload: Record<string, any> = h.side === 'D' ? { debit_mur: h.after } : { credit_mur: h.after }
+            await supabase.from('ecritures_comptables_v2').update(payload).eq('id', h.id)
+          }
+        }
+        recomputed.push({
+          facture_id: f.id,
+          numero_facture: f.numero_facture,
+          devise: f.devise,
+          native_ttc: nativeTtc,
+          mur_ttc: murTtc,
+          ratio: Math.round(ratio * 10000) / 10000,
+          updated: hits,
+        })
+      }
+      report.recompute_vte_ach_mur = {
+        nb_factures_affected: recomputed.length,
+        details: recomputed.slice(0, 100),
+        truncated: recomputed.length > 100,
+      }
+    }
+
+    // ── STEP 2.5b: regenerate_missing_vte_ach ────────────────────────
+    // Pour chaque facture existante (en_attente/partiel/paye/retard)
+    // qui n'a PAS d'écriture VTE/ACH liée (facture_id), on la recrée.
+    // Cas typique : OCR a créé la facture mais la génération d'écritures
+    // a échoué (RLS, timeout…) → le 411 du client reste sans débit
+    // correspondant → balance créditrice anormale.
+    if (doRegenMissing) {
+      const { data: fact } = await supabase
+        .from('factures')
+        .select('id, numero_facture, tiers, type_facture, date_facture, montant_ht, montant_tva, montant_ttc, montant_mur, devise, societe_id, statut')
+        .eq('societe_id', societe_id)
+        .in('statut', ['en_attente', 'partiel', 'paye', 'retard'])
+      const regenerated: any[] = []
+      for (const f of (fact || []) as any[]) {
+        const journalWanted = f.type_facture === 'client' ? 'VTE' : 'ACH'
+        const { data: existing } = await supabase
+          .from('ecritures_comptables_v2')
+          .select('id')
+          .eq('societe_id', societe_id)
+          .eq('facture_id', f.id)
+          .eq('journal', journalWanted)
+          .limit(1)
+        if (existing && existing.length > 0) continue
+        if (apply) {
+          const gen = await createEcrituresForFacture(supabase, {
+            id: f.id,
+            societe_id: f.societe_id,
+            numero_facture: f.numero_facture || '',
+            tiers: f.tiers || '',
+            date_facture: f.date_facture,
+            montant_ht: Number(f.montant_ht) || 0,
+            montant_tva: Number(f.montant_tva) || 0,
+            montant_ttc: Number(f.montant_ttc) || 0,
+            montant_mur: f.montant_mur != null ? Number(f.montant_mur) : null,
+            devise: f.devise || 'MUR',
+            type_facture: f.type_facture === 'client' ? 'client' : 'fournisseur',
+          })
+          regenerated.push({
+            facture_id: f.id,
+            numero_facture: f.numero_facture,
+            tiers: f.tiers,
+            type: f.type_facture,
+            ok: gen.ok,
+            error: gen.error,
+            nb_entries: gen.nb_entries,
+          })
+        } else {
+          regenerated.push({
+            facture_id: f.id,
+            numero_facture: f.numero_facture,
+            tiers: f.tiers,
+            type: f.type_facture,
+            would_create: journalWanted,
+          })
+        }
+      }
+      report.regenerate_missing_vte_ach = {
+        nb_factures_without_ecriture: regenerated.length,
+        details: regenerated.slice(0, 100),
+        truncated: regenerated.length > 100,
+      }
     }
 
     // ── STEP 3: balance every imbalanced pièce ──────────────────────

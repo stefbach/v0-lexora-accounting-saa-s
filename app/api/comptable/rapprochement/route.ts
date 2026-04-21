@@ -2527,6 +2527,8 @@ export async function POST(request: Request) {
               montant_ht: Number(f.montant_ht) || 0,
               montant_tva: Number(f.montant_tva) || 0,
               montant_ttc: Number(f.montant_ttc) || 0,
+              montant_mur: f.montant_mur != null ? Number(f.montant_mur) : null,
+              devise: f.devise || 'MUR',
               type_facture: (f.type_facture === 'client' ? 'client' : 'fournisseur'),
             })
             if (!gen.ok) {

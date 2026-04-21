@@ -43,7 +43,44 @@ export interface FactureForEcritures {
   montant_ht: number
   montant_tva: number
   montant_ttc: number
+  /**
+   * Facture-level MUR equivalent of montant_ttc.
+   * REQUIRED for any non-MUR invoice. When the facture is in MUR this is
+   * simply equal to montant_ttc. When the facture is in GBP/EUR/USD, this
+   * is the converted TTC at the invoice date's exchange rate — stored on
+   * the `factures` row by the import/OCR pipeline.
+   */
+  montant_mur?: number | null
+  /** Original facture currency, used to decide whether conversion applies. */
+  devise?: string | null
   type_facture: 'client' | 'fournisseur'
+}
+
+/**
+ * Derive the MUR amounts that must land in the debit_mur / credit_mur
+ * columns of ecritures_comptables_v2. For MUR invoices the values are
+ * identical to the native fields. For foreign-currency invoices we convert
+ * proportionally from montant_mur (authoritative TTC-MUR) so the three
+ * journal lines (tier + revenue/charge + VAT) remain balanced.
+ */
+function toMurAmounts(f: FactureForEcritures): { ttc: number; ht: number; tva: number } {
+  const nativeTtc = Number(f.montant_ttc) || 0
+  const nativeHt = Number(f.montant_ht) || 0
+  const nativeTva = Number(f.montant_tva) || 0
+  const devise = (f.devise || 'MUR').toUpperCase()
+  const murTtc = Number(f.montant_mur)
+
+  // MUR or no conversion available → take the native values.
+  if (devise === 'MUR' || !Number.isFinite(murTtc) || murTtc <= 0 || nativeTtc <= 0) {
+    return { ttc: nativeTtc, ht: nativeHt, tva: nativeTva }
+  }
+  // Scale HT and TVA proportionally so ttc = ht + tva holds in MUR as well.
+  const ratio = murTtc / nativeTtc
+  return {
+    ttc: Math.round(murTtc * 100) / 100,
+    ht: Math.round(nativeHt * ratio * 100) / 100,
+    tva: Math.round(nativeTva * ratio * 100) / 100,
+  }
 }
 
 /**
@@ -137,10 +174,15 @@ export async function createEcrituresForFacture(
     }
     const exercice = new Date(facture.date_facture).getFullYear().toString()
 
+    // Convertir les montants en MUR (colonnes debit_mur / credit_mur).
+    // Pour une facture en GBP/EUR/USD, c'est montant_mur qui fait foi,
+    // pas montant_ttc — sinon le grand livre 411/401 est en devise native.
+    const amounts = toMurAmounts(facture)
+
     const entries: Array<Record<string, unknown>> = []
 
     if (isClient) {
-      // Debit 411 Clients
+      // Debit 411 Clients (TTC en MUR)
       entries.push({
         societe_id: facture.societe_id,
         dossier_id,
@@ -152,13 +194,13 @@ export async function createEcrituresForFacture(
         nom_compte: 'Clients',
         libelle,
         description: libelle,
-        debit_mur: Number(facture.montant_ttc) || 0,
+        debit_mur: amounts.ttc,
         credit_mur: 0,
         exercice,
         facture_id: facture.id,
       })
-      // Credit 706 Prestations
-      if (Number(facture.montant_ht) > 0) {
+      // Credit 706 Prestations (HT en MUR)
+      if (amounts.ht > 0) {
         entries.push({
           societe_id: facture.societe_id,
           dossier_id,
@@ -171,13 +213,13 @@ export async function createEcrituresForFacture(
           libelle,
           description: libelle,
           debit_mur: 0,
-          credit_mur: Number(facture.montant_ht) || 0,
+          credit_mur: amounts.ht,
           exercice,
           facture_id: facture.id,
         })
       }
-      // Credit 4457 TVA collectee
-      if (Number(facture.montant_tva) > 0) {
+      // Credit 4457 TVA collectee (TVA en MUR)
+      if (amounts.tva > 0) {
         entries.push({
           societe_id: facture.societe_id,
           dossier_id,
@@ -190,15 +232,15 @@ export async function createEcrituresForFacture(
           libelle,
           description: libelle,
           debit_mur: 0,
-          credit_mur: Number(facture.montant_tva) || 0,
+          credit_mur: amounts.tva,
           exercice,
           facture_id: facture.id,
         })
       }
     } else {
       // FOURNISSEUR (supplier): journal ACH
-      // Debit 607 Achats
-      if (Number(facture.montant_ht) > 0) {
+      // Debit 607 Achats (HT en MUR)
+      if (amounts.ht > 0) {
         entries.push({
           societe_id: facture.societe_id,
           dossier_id,
@@ -210,14 +252,14 @@ export async function createEcrituresForFacture(
           nom_compte: 'Achats',
           libelle,
           description: libelle,
-          debit_mur: Number(facture.montant_ht) || 0,
+          debit_mur: amounts.ht,
           credit_mur: 0,
           exercice,
           facture_id: facture.id,
         })
       }
-      // Debit 4456 TVA deductible
-      if (Number(facture.montant_tva) > 0) {
+      // Debit 4456 TVA deductible (TVA en MUR)
+      if (amounts.tva > 0) {
         entries.push({
           societe_id: facture.societe_id,
           dossier_id,
@@ -229,13 +271,13 @@ export async function createEcrituresForFacture(
           nom_compte: 'TVA deductible',
           libelle,
           description: libelle,
-          debit_mur: Number(facture.montant_tva) || 0,
+          debit_mur: amounts.tva,
           credit_mur: 0,
           exercice,
           facture_id: facture.id,
         })
       }
-      // Credit 401 Fournisseurs
+      // Credit 401 Fournisseurs (TTC en MUR)
       entries.push({
         societe_id: facture.societe_id,
         dossier_id,
@@ -248,7 +290,7 @@ export async function createEcrituresForFacture(
         libelle,
         description: libelle,
         debit_mur: 0,
-        credit_mur: Number(facture.montant_ttc) || 0,
+        credit_mur: amounts.ttc,
         exercice,
         facture_id: facture.id,
       })

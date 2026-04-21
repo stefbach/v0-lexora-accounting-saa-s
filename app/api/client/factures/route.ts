@@ -238,6 +238,8 @@ export async function POST(request: Request) {
         montant_ht: Number(montant_ht) || 0,
         montant_tva: Number(montant_tva) || 0,
         montant_ttc: Number(ttc) || 0,
+        montant_mur: data.montant_mur != null ? Number(data.montant_mur) : null,
+        devise: data.devise || 'MUR',
         type_facture: 'client',
       })
     }
@@ -369,6 +371,8 @@ export async function PATCH(request: Request) {
         montant_ht: Number(data.montant_ht) || 0,
         montant_tva: Number(data.montant_tva) || 0,
         montant_ttc: Number(data.montant_ttc) || 0,
+        montant_mur: data.montant_mur != null ? Number(data.montant_mur) : null,
+        devise: data.devise || 'MUR',
         type_facture: data.type_facture || 'client',
       })
     }

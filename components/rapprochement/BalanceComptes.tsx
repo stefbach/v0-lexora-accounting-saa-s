@@ -99,34 +99,45 @@ export function BalanceComptes({ societeId, mois }: { societeId: string | null; 
   // Réparation automatique de la balance — deux passes :
   //   1. dry-run pour montrer un résumé à l'utilisateur
   //   2. apply si confirmé.
-  // Actions exécutées : consolidate_pcm + balance_pieces. Le purge_duplicate_sal
-  // reste opt-in (destructif) via un deuxième prompt.
+  // Actions activées par défaut :
+  //   • consolidate_pcm           (rename 4210→421, etc.)
+  //   • recompute_vte_ach_mur     (corriger les factures en devise étrangère)
+  //   • regenerate_missing_vte_ach (créer les écritures manquantes)
+  //   • balance_pieces            (équilibrer chaque pièce)
+  // purge_duplicate_sal reste opt-in via API directe (destructif).
   const handleRepair = async () => {
     if (!societeId) return
     setRepairing(true)
     try {
+      const repairActions = {
+        consolidate_pcm: true,
+        recompute_vte_ach_mur: true,
+        regenerate_missing_vte_ach: true,
+        balance_pieces: true,
+        purge_duplicate_sal: false,
+      }
       // Pass 1: dry-run
       const dryRes = await fetch("/api/comptable/diagnostic-balance/repair", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          societe_id: societeId,
-          apply: false,
-          actions: { consolidate_pcm: true, balance_pieces: true, purge_duplicate_sal: false },
-        }),
+        body: JSON.stringify({ societe_id: societeId, apply: false, actions: repairActions }),
       })
       const dry = await dryRes.json()
       if (!dryRes.ok) { alert(`Erreur dry-run : ${dry?.error || dryRes.status}`); return }
 
       const nbImbalanced = dry?.balance_pieces?.nb_imbalanced || 0
       const nbConsolidated = (dry?.consolidate_pcm || []).reduce((s: number, x: any) => s + (x.affected || 0), 0)
+      const nbRecompute = dry?.recompute_vte_ach_mur?.nb_factures_affected || 0
+      const nbRegen = dry?.regenerate_missing_vte_ach?.nb_factures_without_ecriture || 0
       const initial = dry?.initial?.ecart
       const msg = [
         `Diagnostic — ${dry?.initial?.nb_ecritures || 0} écritures, écart actuel ${fmt(initial || 0)} MUR.`,
         ``,
         `Actions qui seront appliquées :`,
         `  • Consolidation PCM paie : ${nbConsolidated} ligne(s) renommées (4210/4311/4321/4330 → 421/431/444).`,
-        `  • Équilibrage des pièces : ${nbImbalanced} pièce(s) recevront une écriture d'ajustement (compte 6418 ou 471).`,
+        `  • Recalcul en MUR des factures en devise étrangère : ${nbRecompute} facture(s) concernée(s) (GBP/EUR/USD).`,
+        `  • Génération des écritures manquantes : ${nbRegen} facture(s) sans VTE/ACH vont être recréées.`,
+        `  • Équilibrage final des pièces : ${nbImbalanced} pièce(s) recevront une écriture d'ajustement (6418 ou 471).`,
         ``,
         `Appliquer la réparation ?`,
       ].join("\n")
@@ -136,11 +147,7 @@ export function BalanceComptes({ societeId, mois }: { societeId: string | null; 
       const applyRes = await fetch("/api/comptable/diagnostic-balance/repair", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          societe_id: societeId,
-          apply: true,
-          actions: { consolidate_pcm: true, balance_pieces: true, purge_duplicate_sal: false },
-        }),
+        body: JSON.stringify({ societe_id: societeId, apply: true, actions: repairActions }),
       })
       const applied = await applyRes.json()
       if (!applyRes.ok) { alert(`Erreur apply : ${applied?.error || applyRes.status}`); return }
