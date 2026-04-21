@@ -1,5 +1,5 @@
 -- ============================================================================
--- Migration 161 — Backfill montants MUR pour les écritures VTE/ACH multi-devises
+-- Migration 164 — Backfill montants MUR pour les écritures VTE/ACH multi-devises
 -- ============================================================================
 --
 -- Contexte : migration 158+160 ont corrigé le plan comptable, mais les
@@ -115,8 +115,8 @@ BEGIN
             - COALESCE(f.montant_mur, f.montant_ttc * COALESCE(NULLIF(f.taux_change, 0), 1))) > 1.0;
 
   IF v_still_wrong > 0 THEN
-    RAISE WARNING 'Migration 161: % écritures VTE/ACH multi-devises ont encore un écart > 1 MUR après backfill — vérifier manuellement', v_still_wrong;
+    RAISE WARNING 'Migration 164: % écritures VTE/ACH multi-devises ont encore un écart > 1 MUR après backfill — vérifier manuellement', v_still_wrong;
   ELSE
-    RAISE NOTICE 'Migration 161 terminée — toutes les écritures VTE/ACH multi-devises sont alignées sur le montant MUR de la facture';
+    RAISE NOTICE 'Migration 164 terminée — toutes les écritures VTE/ACH multi-devises sont alignées sur le montant MUR de la facture';
   END IF;
 END $$;

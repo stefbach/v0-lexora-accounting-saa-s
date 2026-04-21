@@ -1,5 +1,5 @@
 -- ============================================================================
--- Migration 160 — Remap bare 3-digit (421/431/432/444) vers PCM 4-digits
+-- Migration 163 — Remap bare 3-digit (421/431/432/444) vers PCM 4-digits
 --                 par analyse du libellé
 -- ============================================================================
 --
@@ -88,7 +88,7 @@ WHERE numero_compte = '431'
 -- les retrouver manuellement si besoin.
 UPDATE public.ecritures_comptables_v2
 SET numero_compte = '4312',
-    nom_compte = 'NSF salarié à verser (remap fallback mig 160)'
+    nom_compte = 'NSF salarié à verser (remap fallback mig 163)'
 WHERE numero_compte = '431';
 
 -- ── 4. Compte 432 bare → 4323 (PRGF) / 4324 (Training Levy) ───────────────
@@ -362,7 +362,7 @@ END $$;
 
 COMMENT ON FUNCTION public.generer_ecritures_paie IS
   'Generate payroll journal entries for a bulletin — PCM 4-digits canonique '
-  '(migration 160). Accounts : 4210 net, 4311 CSG sal, 4312 NSF sal, 4321 CSG pat, '
+  '(migration 163). Accounts : 4210 net, 4311 CSG sal, 4312 NSF sal, 4321 CSG pat, '
   '4322 NSF pat, 4323 PRGF, 4324 Levy, 4330 PAYE. 641x débit pour les charges.';
 
 -- ── 8. Rapport ────────────────────────────────────────────────────────────
@@ -373,8 +373,8 @@ BEGIN
   FROM public.ecritures_comptables_v2
   WHERE numero_compte IN ('421', '431', '432', '433', '444');
   IF v_remaining > 0 THEN
-    RAISE WARNING 'Migration 160: % écritures restent en codes 3-digits bare (libellés non reconnus) — à inspecter manuellement', v_remaining;
+    RAISE WARNING 'Migration 163: % écritures restent en codes 3-digits bare (libellés non reconnus) — à inspecter manuellement', v_remaining;
   ELSE
-    RAISE NOTICE 'Migration 160 terminée — tous les codes 3-digits bare ont été remappés en PCM 4-digits';
+    RAISE NOTICE 'Migration 163 terminée — tous les codes 3-digits bare ont été remappés en PCM 4-digits';
   END IF;
 END $$;
