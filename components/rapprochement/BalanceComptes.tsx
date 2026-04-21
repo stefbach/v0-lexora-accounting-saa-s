@@ -68,8 +68,9 @@ export function BalanceComptes({ societeId, mois }: { societeId: string | null; 
   const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [filter, setFilter] = useState("")
+  const [repairing, setRepairing] = useState(false)
 
-  useEffect(() => {
+  const reload = () => {
     if (!societeId) return
     setLoading(true)
     setError(null)
@@ -88,7 +89,71 @@ export function BalanceComptes({ societeId, mois }: { societeId: string | null; 
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    reload()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [societeId, mois])
+
+  // Réparation automatique de la balance — deux passes :
+  //   1. dry-run pour montrer un résumé à l'utilisateur
+  //   2. apply si confirmé.
+  // Actions exécutées : consolidate_pcm + balance_pieces. Le purge_duplicate_sal
+  // reste opt-in (destructif) via un deuxième prompt.
+  const handleRepair = async () => {
+    if (!societeId) return
+    setRepairing(true)
+    try {
+      // Pass 1: dry-run
+      const dryRes = await fetch("/api/comptable/diagnostic-balance/repair", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          societe_id: societeId,
+          apply: false,
+          actions: { consolidate_pcm: true, balance_pieces: true, purge_duplicate_sal: false },
+        }),
+      })
+      const dry = await dryRes.json()
+      if (!dryRes.ok) { alert(`Erreur dry-run : ${dry?.error || dryRes.status}`); return }
+
+      const nbImbalanced = dry?.balance_pieces?.nb_imbalanced || 0
+      const nbConsolidated = (dry?.consolidate_pcm || []).reduce((s: number, x: any) => s + (x.affected || 0), 0)
+      const initial = dry?.initial?.ecart
+      const msg = [
+        `Diagnostic — ${dry?.initial?.nb_ecritures || 0} écritures, écart actuel ${fmt(initial || 0)} MUR.`,
+        ``,
+        `Actions qui seront appliquées :`,
+        `  • Consolidation PCM paie : ${nbConsolidated} ligne(s) renommées (4210/4311/4321/4330 → 421/431/444).`,
+        `  • Équilibrage des pièces : ${nbImbalanced} pièce(s) recevront une écriture d'ajustement (compte 6418 ou 471).`,
+        ``,
+        `Appliquer la réparation ?`,
+      ].join("\n")
+      if (!confirm(msg)) return
+
+      // Pass 2: apply
+      const applyRes = await fetch("/api/comptable/diagnostic-balance/repair", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          societe_id: societeId,
+          apply: true,
+          actions: { consolidate_pcm: true, balance_pieces: true, purge_duplicate_sal: false },
+        }),
+      })
+      const applied = await applyRes.json()
+      if (!applyRes.ok) { alert(`Erreur apply : ${applied?.error || applyRes.status}`); return }
+      const before = applied?.net_change?.ecart_before ?? initial
+      const after = applied?.net_change?.ecart_after ?? 0
+      alert(`Réparation appliquée.\nÉcart avant : ${fmt(before)} MUR\nÉcart après : ${fmt(after)} MUR`)
+      reload()
+    } catch (e: any) {
+      alert("Erreur : " + (e?.message || e))
+    } finally {
+      setRepairing(false)
+    }
+  }
 
   const toggleExpand = (compte: string) => {
     setExpanded(prev => {
@@ -125,13 +190,27 @@ export function BalanceComptes({ societeId, mois }: { societeId: string | null; 
             </span>
           )}
         </CardTitle>
-        <input
-          type="text"
-          value={filter}
-          onChange={e => setFilter(e.target.value)}
-          placeholder="🔍 Filtrer par numéro ou libellé..."
-          className="text-xs border rounded px-2 py-1 w-56"
-        />
+        <div className="flex items-center gap-2">
+          {totals && Math.abs(totals.difference) >= 0.01 && (
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={handleRepair}
+              disabled={repairing}
+              title="Lance un diagnostic puis équilibre chaque pièce déséquilibrée et unifie le plan comptable paie"
+            >
+              {repairing ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <AlertCircle className="w-3 h-3 mr-1" />}
+              Réparer la balance
+            </Button>
+          )}
+          <input
+            type="text"
+            value={filter}
+            onChange={e => setFilter(e.target.value)}
+            placeholder="🔍 Filtrer par numéro ou libellé..."
+            className="text-xs border rounded px-2 py-1 w-56"
+          />
+        </div>
       </CardHeader>
       <CardContent className="p-0 overflow-x-auto">
         {loading ? (
