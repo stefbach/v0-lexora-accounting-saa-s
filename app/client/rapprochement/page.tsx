@@ -751,7 +751,7 @@ Voulez-vous vraiment continuer ?`
   // lands on a stale empty page (e.g. change month → fewer rows → old page
   // is out of bounds until our clamp logic kicks in).
   useEffect(() => { setFacturesPage(1) }, [societeId, selectedMois, selectedPeriode])
-  useEffect(() => { setUnmatchedPage(1) }, [societeId, selectedMois, selectedPeriode, selectedCompte, transactionTab])
+  useEffect(() => { setUnmatchedPage(1) }, [societeId, selectedMois, selectedPeriode, selectedCompte, transactionTab, txSearch])
 
   const handleAutoMatch = async () => {
     if (!societeId) return
