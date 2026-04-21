@@ -3,11 +3,12 @@
  * Finance Act 2025-2026 + Workers' Rights Act 2019
  * Conforme table bulletins_paie (avec refacturation inter-societes)
  *
- * Rates applied (2025-2026, validés via eservices.mra.mu/taxcalculator) :
- * - CSG Employee    : 1.5% si salaire imposable ≤ 50 000 MUR, 3% sinon
- * - CSG Employer    : 3% si ≤ 50K, 6% sinon (progressif comme salarié)
- * - NSF Employee    : 1% (F9 — Sprint bugs) plafonné à 28 600 MUR/mois
- * - NSF Employer    : 2.5% plafonné à 28 600 MUR/mois
+ * Rates applied (2025-2026, validés via MRA officiel + Rogers Capital +
+ * bulletins payrollmauritius.com) :
+ * - CSG Employee    : 1.5% si base_csg_nsf ≤ 50 000 MUR, 3% sinon
+ * - CSG Employer    : 3% si base_csg_nsf ≤ 50K, 6% sinon (progressif)
+ * - NSF Employee    : 1% plafonné à 28 600 MUR/mois (F9)
+ * - NSF Employer    : 2.5% plafonné à 28 600 MUR/mois (F9)
  * - Training Levy   : 1% du salaire de base (HRDC)
  * - PRGF            : max(4.5% emoluments, Rs 4.50/jour)
  * - PAYE            : cumul annuel sur × 13 → divisé par 13 (Math.floor) :
@@ -15,10 +16,16 @@
  *     * 500 000 → 1 000 000    : 10%
  *     * > 1 000 000            : 20%
  *
- * F9 + F10 (Sprint bugs paie/conges) — les bases CSG/NSF/PAYE sont
- * désormais calculées sur `salaire_imposable = salaire_brut_base -
- * deductionAbsence` (UL + absences injustifiées) pour coller aux calculs
- * officiels MRA (un employé absent paie moins de cotisations).
+ * F11 (Sprint bugs paie/conges) — DEUX bases de calcul distinctes :
+ *   base_csg_nsf = salaire_base (basic seul) - prorata absence sur basic
+ *                → utilisée pour CSG et NSF (salarié ET patronal)
+ *   base_paye    = salaire_brut_base (basic + allowances) - deductionAbsence
+ *                → utilisée pour PAYE
+ * Les allowances (électricité, spéciale, transport, etc.) sont donc
+ * EXCLUES de la base CSG/NSF mais INCLUSES dans la base PAYE.
+ *
+ * F10 — La deductionAbsence (UL + absences injustifiées) réduit les bases
+ * de cotisation (un employé absent paie moins de CSG/NSF/PAYE).
  *
  * POLICY Lexora — la compensation salariale Finance Act 2024 (Rs 635)
  * est considérée comme DÉJÀ INCLUSE dans le salaire négocié avec
@@ -135,9 +142,26 @@ export function calculerBulletin(
 
   const salaire_brut = salaire_brut_base + eoy_bonus
 
-  // F10 — Salaire imposable = brut_base - absences (UL + injustifiées).
-  // Sert de base à CSG / NSF / PAYE. EOY bonus traité à part (csg_bonus).
-  const salaire_imposable = Math.max(0, salaire_brut_base - (deductionAbsence || 0))
+  // F11 — Règle MRA officielle (sources : MRA + Rogers Capital + bulletins
+  // payrollmauritius.com) : CSG et NSF sont calculés sur le SALAIRE_BASE
+  // UNIQUEMENT (basic salary), PAS sur le salaire_brut qui inclut les
+  // allowances (électricité, spéciale, transport, etc.).
+  // PAYE reste calculé sur les emoluments totaux (brut - absences).
+  //
+  // Quand un employé est absent, la déduction vient proportionnellement
+  // du basic ET des allowances → on prorate l'absence pour déterminer la
+  // part à retrancher du basic dans la base CSG/NSF.
+  const ratioBasicSurBrut = salaire_brut_base > 0 ? salaire_base / salaire_brut_base : 0
+  const prorataAbsenceBasic = (deductionAbsence || 0) * ratioBasicSurBrut
+
+  // Base CSG/NSF = salaire_base (basic seul) - prorata_absence_basic.
+  const base_csg_nsf = Math.max(0, salaire_base - prorataAbsenceBasic)
+
+  // Base PAYE = salaire_brut_base (basic + allowances) - deductionAbsence.
+  const base_paye = Math.max(0, salaire_brut_base - (deductionAbsence || 0))
+
+  // Alias rétrocompat (certains appelants externes peuvent utiliser ce nom).
+  const salaire_imposable = base_paye
 
   // Total emoluments for PRGF calculation (basic + allowances, excl OT & EOY)
   const total_emoluments = salaire_base + increment_salaire +
@@ -145,26 +169,27 @@ export function calculerBulletin(
     special_allowance_1 + special_allowance_2 + special_allowance_3 +
     commission
 
-  // F10 — CSG sur salaire imposable (hors EOY bonus — traité séparément).
-  const csgTaux = salaire_imposable <= params.csg_seuil_taux_reduit
+  // F11 — CSG sur base_csg_nsf (basic salary). Seuil sur la même base.
+  const csgTaux = base_csg_nsf <= params.csg_seuil_taux_reduit
     ? params.csg_salarie_taux_reduit
     : params.csg_salarie_taux_plein
 
-  const csg_salarie = Math.round(salaire_imposable * csgTaux)
+  const csg_salarie = Math.round(base_csg_nsf * csgTaux)
   // Sprint 14 FIX 5 — CSG bonus suit la même tranche que le salaire de base.
   const csg_bonus = eoy_bonus > 0 ? Math.round(eoy_bonus * csgTaux) : 0
 
-  // F9 — NSF : base plafonnée à nsf_plafond_mensuel (28 600 MUR en 2025-2026).
-  // F10 — Base = salaire_imposable (pour intégrer les absences dans le calcul).
+  // F9 + F11 — NSF sur base_csg_nsf (basic salary), plafonné à
+  // nsf_plafond_mensuel (28 600 MUR en 2025-2026). Max mensuel = 286 MUR.
   const nsfPlafond = params.nsf_plafond_mensuel ?? Number.POSITIVE_INFINITY
-  const nsf_base = Math.min(salaire_imposable, nsfPlafond)
+  const nsf_base = Math.min(base_csg_nsf, nsfPlafond)
   const nsf_salarie = Math.round(nsf_base * params.nsf_salarie)
 
   // F10 — PAYE méthode cumulative MRA annualisée × 13 (12 mois + bonus de
-  // fin d'année). Montant mensuel = paye_annuel / 13 (Math.floor).
+  // fin d'année). Base = base_paye (brut total - absences, allowances
+  // INCLUSES). Montant mensuel = paye_annuel / 13 (Math.floor).
   // Barème Finance Act 2025-2026 :
   //   0 → 500 000 : 0% | 500 000 → 1 000 000 : 10% | > 1 000 000 : 20%
-  const revenuAnnuel = salaire_imposable * 13
+  const revenuAnnuel = base_paye * 13
   let payeAnnuel = 0
   if (revenuAnnuel > params.paye_seuil_exoneration) {
     if (revenuAnnuel <= params.paye_seuil_taux_2) {
@@ -180,7 +205,7 @@ export function calculerBulletin(
   // Sprint 14 FIX 6 — NIT (Negative Income Tax, Finance Act 2024).
   // Crédit d'impôt pour les bas salaires — réduit le PAYE dû. Si NIT ≥
   // PAYE, PAYE = 0 (pas de crédit négatif versé, juste exonération).
-  const nit = calculerNIT(salaire_imposable)
+  const nit = calculerNIT(base_paye)
   const paye = Math.max(0, payeBrut - nit.montant)
   const nit_applique = nit.eligible ? Math.min(nit.montant, payeBrut) : 0
 
@@ -190,14 +215,16 @@ export function calculerBulletin(
   // applique la déduction finale avec plafonds + cap 0).
   const salaire_net = Math.max(0, salaire_brut - total_deductions)
 
-  // F10 — Charges patronales : même base imposable que côté salarié.
-  const csgPatronalTaux = salaire_imposable <= params.csg_seuil_taux_reduit
+  // F11 — Charges patronales : CSG/NSF patronal sur base_csg_nsf aussi
+  // (règle MRA cohérente avec la part salarié). PRGF et training levy
+  // conservent leurs bases respectives (total_emoluments / salaire_base).
+  const csgPatronalTaux = base_csg_nsf <= params.csg_seuil_taux_reduit
     ? (params.csg_patronal_taux_reduit || 0.030)
     : params.csg_patronal
-  const csg_patronal = Math.round(salaire_imposable * csgPatronalTaux)
+  const csg_patronal = Math.round(base_csg_nsf * csgPatronalTaux)
   // Sprint 14 FIX 5 — CSG patronal bonus suit la même tranche que le salaire.
   const csg_patronal_bonus = eoy_bonus > 0 ? Math.round(eoy_bonus * csgPatronalTaux) : 0
-  // F9 — NSF patronal capé au même plafond que côté salarié.
+  // F9 + F11 — NSF patronal même base (basic plafonné à nsf_plafond_mensuel).
   const nsf_patronal = Math.round(nsf_base * params.nsf_patronal)
 
   // Training Levy (HRDC): 1% of basic salary only (not total emoluments)
