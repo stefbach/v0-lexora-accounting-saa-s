@@ -83,14 +83,25 @@ export async function createEcrituresForFacture(
     const journal = isClient ? 'VTE' : 'ACH'
 
     // Vérifier si des écritures ACH/VTE existent déjà pour cette facture
-    const { data: existingVTE } = await supabase
+    // (par ref_folio OU par facture_id) — évite les doublons au re-backfill
+    const { data: byRef } = await supabase
       .from('ecritures_comptables_v2')
       .select('id')
       .eq('societe_id', facture.societe_id)
       .eq('journal', journal)
-      .or(`ref_folio.eq.${refFolio},facture_id.eq.${facture.id}`)
+      .eq('ref_folio', refFolio)
       .limit(1)
-    if (existingVTE && existingVTE.length > 0) {
+    if (byRef && byRef.length > 0) {
+      return { ok: true, nb_entries: 0 }
+    }
+    const { data: byFk } = await supabase
+      .from('ecritures_comptables_v2')
+      .select('id')
+      .eq('societe_id', facture.societe_id)
+      .eq('journal', journal)
+      .eq('facture_id', facture.id)
+      .limit(1)
+    if (byFk && byFk.length > 0) {
       return { ok: true, nb_entries: 0 }
     }
     const exercice = new Date(facture.date_facture).getFullYear().toString()
@@ -113,6 +124,7 @@ export async function createEcrituresForFacture(
         debit_mur: Number(facture.montant_ttc) || 0,
         credit_mur: 0,
         exercice,
+        facture_id: facture.id,
       })
       // Credit 706 Prestations
       if (Number(facture.montant_ht) > 0) {
@@ -130,6 +142,7 @@ export async function createEcrituresForFacture(
           debit_mur: 0,
           credit_mur: Number(facture.montant_ht) || 0,
           exercice,
+          facture_id: facture.id,
         })
       }
       // Credit 4457 TVA collectee
@@ -148,6 +161,7 @@ export async function createEcrituresForFacture(
           debit_mur: 0,
           credit_mur: Number(facture.montant_tva) || 0,
           exercice,
+          facture_id: facture.id,
         })
       }
     } else {
@@ -168,6 +182,7 @@ export async function createEcrituresForFacture(
           debit_mur: Number(facture.montant_ht) || 0,
           credit_mur: 0,
           exercice,
+          facture_id: facture.id,
         })
       }
       // Debit 4456 TVA deductible
@@ -186,6 +201,7 @@ export async function createEcrituresForFacture(
           debit_mur: Number(facture.montant_tva) || 0,
           credit_mur: 0,
           exercice,
+          facture_id: facture.id,
         })
       }
       // Credit 401 Fournisseurs
@@ -203,6 +219,7 @@ export async function createEcrituresForFacture(
         debit_mur: 0,
         credit_mur: Number(facture.montant_ttc) || 0,
         exercice,
+        facture_id: facture.id,
       })
     }
 
