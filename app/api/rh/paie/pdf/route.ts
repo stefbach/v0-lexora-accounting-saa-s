@@ -349,35 +349,28 @@ function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris
       ),
       React.createElement(DeductionRow, { label: `CSG salarie (${csgPct})`, value: `-${fmt(bulletin.csg_salarie)} MUR` }),
       Number(bulletin.csg_bonus) > 0 ? React.createElement(DeductionRow, { label: 'CSG sur 13eme mois (3%)', value: `-${fmt(bulletin.csg_bonus)} MUR` }) : null,
-      React.createElement(DeductionRow, { label: 'NSF salarie (1.5%)', value: `-${fmt(bulletin.nsf_salarie)} MUR` }),
+      React.createElement(DeductionRow, { label: 'NSF salarie (1%)', value: `-${fmt(bulletin.nsf_salarie)} MUR` }),
       Number(bulletin.paye) > 0
         ? React.createElement(DeductionRow, { label: 'PAYE', value: `-${fmt(bulletin.paye)} MUR` })
         : React.createElement(View, { style: s.row },
             React.createElement(Text, { style: [s.rowLabel, { color: '#27ae60' }] }, 'PAYE'),
             React.createElement(Text, { style: [s.rowValue, { color: '#27ae60' }] }, 'Exonere')
           ),
-      // BUG 2+3 — distinguer UL (congés non payés) des absences injustifiées.
-      // Si montant_absence > 0 et jours_absence = 0 → c'est du UL déduit.
-      // Si jours_absence > 0 → c'est de l'absence injustifiée.
-      (() => {
-        const montant = Number(bulletin.montant_absence) || 0
-        const jours = Number(bulletin.jours_absence) || 0
-        if (montant <= 0) return null
-        if (jours > 0 && montant > 0) {
-          // Absences injustifiées réelles
-          return React.createElement(View, { style: [s.row, { backgroundColor: '#fdf0f0' }] },
-            React.createElement(Text, { style: [s.rowLabel, { color: '#e74c3c' }] }, `Absences injustifiees (${jours}j)`),
-            React.createElement(Text, { style: [s.rowValue, { color: '#e74c3c' }] }, `-${fmt(montant)} MUR`)
+      // F6 — Lignes séparées pour UL (Unpaid Leave) et absences injustifiées.
+      // Les 2 sont désormais stockées dans des colonnes distinctes
+      // (montant_ul / jours_ul vs montant_absence / jours_absence).
+      Number(bulletin.montant_ul) > 0
+        ? React.createElement(View, { style: [s.row, { backgroundColor: '#fdf0f0' }] },
+            React.createElement(Text, { style: [s.rowLabel, { color: '#e74c3c' }] }, `Conges non payes UL (${Number(bulletin.jours_ul) || 0}j)`),
+            React.createElement(Text, { style: [s.rowValue, { color: '#e74c3c' }] }, `-${fmt(Number(bulletin.montant_ul))} MUR`)
           )
-        }
-        // UL (congés non payés) — extraire nb jours depuis notes
-        const ulMatch = (bulletin.notes || '').match(/UL:\s*(\d+)j/)
-        const ulJours = ulMatch ? ulMatch[1] : '?'
-        return React.createElement(View, { style: [s.row, { backgroundColor: '#fdf0f0' }] },
-          React.createElement(Text, { style: [s.rowLabel, { color: '#e74c3c' }] }, `Conges non payes UL (${ulJours}j)`),
-          React.createElement(Text, { style: [s.rowValue, { color: '#e74c3c' }] }, `-${fmt(montant)} MUR`)
-        )
-      })(),
+        : null,
+      Number(bulletin.montant_absence) > 0
+        ? React.createElement(View, { style: [s.row, { backgroundColor: '#fdf0f0' }] },
+            React.createElement(Text, { style: [s.rowLabel, { color: '#e74c3c' }] }, `Absences injustifiees (${Number(bulletin.jours_absence) || 0}j)`),
+            React.createElement(Text, { style: [s.rowValue, { color: '#e74c3c' }] }, `-${fmt(Number(bulletin.montant_absence))} MUR`)
+          )
+        : null,
       React.createElement(View, { style: s.totalRow },
         React.createElement(Text, { style: s.totalLabel }, 'TOTAL DEDUCTIONS'),
         React.createElement(Text, { style: s.totalValue }, `-${fmt(bulletin.total_deductions)} MUR`)

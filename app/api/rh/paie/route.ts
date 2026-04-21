@@ -809,6 +809,17 @@ export async function POST(request: Request) {
       const totalAbsenceRaw = montant_absence + montant_ul_single
       const totalDeductionAbsence = Math.min(totalAbsenceRaw, salaireBrutBaseSingle)
 
+      // F6 — Split UL / injustifiées pour stockage séparé. Si le cap
+      // plafond a été touché (raw > brut), on prorate les 2 montants
+      // proportionnellement pour que leur somme = totalDeductionAbsence.
+      let montantInjustFinal = montant_absence
+      let montantUlFinal = montant_ul_single
+      if (totalAbsenceRaw > salaireBrutBaseSingle && totalAbsenceRaw > 0) {
+        const scale = salaireBrutBaseSingle / totalAbsenceRaw
+        montantInjustFinal = Math.round(montant_absence * scale * 100) / 100
+        montantUlFinal = Math.round(montant_ul_single * scale * 100) / 100
+      }
+
       // F10 — calculerBulletin reçoit totalDeductionAbsence pour calculer
       // CSG/NSF/PAYE sur salaire_imposable = brut_base - totalDeductionAbsence.
       const resultat = calculerBulletin(
@@ -848,13 +859,14 @@ export async function POST(request: Request) {
         transport_allowance: elements.transport_allowance || 0,
         petrol_allowance: elements.petrol_allowance || 0,
         other_refund: elements.other_refund || 0,
-        // montant_absence = unjustified absence + UL deduction (merged).
-        montant_absence: Math.round(totalDeductionAbsence * 100) / 100,
-        // F1 — écrire jours_absence en DB (avant bug : champ jamais posé,
-        // default 0 → incohérence montant_absence>0 / jours_absence=0).
-        // On stocke le nombre de jours d'absences NON JUSTIFIÉES. Les
-        // jours UL sont comptés séparément (cf. notes et F6 à venir).
+        // F6 — Colonnes séparées :
+        //   montant_absence / jours_absence = absences INJUSTIFIÉES uniquement
+        //   montant_ul / jours_ul           = Unpaid Leave approuvés uniquement
+        // CSG/NSF/PAYE basés sur la SOMME des deux (cf. totalDeductionAbsence).
+        montant_absence: Math.round(montantInjustFinal * 100) / 100,
         jours_absence: jours_absence_injust || 0,
+        montant_ul: Math.round(montantUlFinal * 100) / 100,
+        jours_ul: joursUnpaidLeaveSingle || 0,
         // Sprint 13 BUG 1 — trace prorata dans les notes pour l'UI
         notes: prorataSingle.ratio < 1 ? `[${prorataSingle.motif}]` : null,
         statut: 'brouillon',
@@ -1434,6 +1446,16 @@ export async function POST(request: Request) {
         const totalAbsenceRawBatch = montant_absence_final + montant_ul
         const totalDeductionAbsence = Math.min(totalAbsenceRawBatch, salaireBrutBaseBatch)
 
+        // F6 — Split UL / injustifiées pour stockage séparé. Si le cap
+        // plafond a été touché, on prorate les 2 montants proportionnellement.
+        let montantInjustFinalBatch = montant_absence_final
+        let montantUlFinalBatch = montant_ul
+        if (totalAbsenceRawBatch > salaireBrutBaseBatch && totalAbsenceRawBatch > 0) {
+          const scale = salaireBrutBaseBatch / totalAbsenceRawBatch
+          montantInjustFinalBatch = Math.round(montant_absence_final * scale * 100) / 100
+          montantUlFinalBatch = Math.round(montant_ul * scale * 100) / 100
+        }
+
         // F10 — calculerBulletin avec totalDeductionAbsence -> CSG/NSF/PAYE
         // calculés sur salaire_imposable = brut_base - totalDeductionAbsence.
         const resultat = calculerBulletin(
@@ -1560,14 +1582,14 @@ export async function POST(request: Request) {
           // Sprint 11 BUG 7 — other_refund = refund fiche employé + frais km approuvés du mois
           other_refund: isHorsMRA ? 0 : ((Number(emp.other_refund) || 0) + total_frais_km),
           eoy_bonus: isHorsMRA ? 0 : eoy_bonus_montant,
-          // montant_absence holds the TOTAL deduction from absences (unjustified
-          // + UL). The breakdown is recorded in `notes` and can be recomputed
-          // from demandes_conges for reporting (Commit 11 conges_details).
-          montant_absence: isHorsMRA ? 0 : Math.round(totalDeductionAbsence * 100) / 100,
-          // F1 — écrire jours_absence en DB (avant bug : champ jamais posé,
-          // default 0 → incohérence montant_absence>0 / jours_absence=0).
-          // Stocke le nombre de jours d'absences NON JUSTIFIÉES.
+          // F6 — Colonnes séparées pour la traçabilité :
+          //   montant_absence / jours_absence = absences INJUSTIFIÉES uniquement
+          //   montant_ul / jours_ul           = Unpaid Leave approuvés uniquement
+          // CSG/NSF/PAYE basés sur la SOMME des deux (cf. totalDeductionAbsence).
+          montant_absence: isHorsMRA ? 0 : Math.round(montantInjustFinalBatch * 100) / 100,
           jours_absence: isHorsMRA ? 0 : (jours_absence_injust || 0),
+          montant_ul: isHorsMRA ? 0 : Math.round(montantUlFinalBatch * 100) / 100,
+          jours_ul: isHorsMRA ? 0 : (joursUnpaidLeave || 0),
           notes: notesResume,
           statut: 'brouillon',
         }
