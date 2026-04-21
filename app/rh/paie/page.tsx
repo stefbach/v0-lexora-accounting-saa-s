@@ -348,18 +348,36 @@ export default function PaiePage() {
   const [simResult, setSimResult] = useState<{ brut: number; deductions: number; net: number; coutEmployeur: number; detailCSG: string } | null>(null)
 
   const runSimulation = () => {
+    // F9 + F10 — simulation alignee sur le moteur calculerBulletin :
+    //  - CSG  : 1.5% si brut ≤ 50K, 3% sinon
+    //  - NSF  : 1% plafonné à 28 600 MUR (max 286 MUR/mois)
+    //  - PAYE : cumulatif annuel × 13 / 13 sur 500k-1M-20%
+    // Les taux patronaux suivent la même logique (CSG 3/6%, NSF 2.5% plafonné).
     const brut = parseFloat((document.getElementById("sim-brut") as HTMLInputElement)?.value || "0")
     const ot = parseFloat((document.getElementById("sim-ot") as HTMLInputElement)?.value || "0")
     const prime = parseFloat((document.getElementById("sim-prime") as HTMLInputElement)?.value || "0")
     const totalBrut = brut + ot + prime
+
     const csgRate = totalBrut <= 50000 ? 0.015 : 0.03
     const csg = Math.round(totalBrut * csgRate)
-    const nsf = Math.round(totalBrut * 0.015)
-    const paye = totalBrut > 25000 ? Math.round((totalBrut - 25000) * 0.10) : 0
+
+    const NSF_PLAFOND = 28600
+    const nsfBase = Math.min(totalBrut, NSF_PLAFOND)
+    const nsf = Math.round(nsfBase * 0.01)
+
+    const revenuAnnuel = totalBrut * 13
+    let payeAnnuel = 0
+    if (revenuAnnuel > 500000) {
+      if (revenuAnnuel <= 1000000) payeAnnuel = (revenuAnnuel - 500000) * 0.10
+      else payeAnnuel = 50000 + (revenuAnnuel - 1000000) * 0.20
+    }
+    const paye = Math.floor(payeAnnuel / 13)
+
     const deductions = csg + nsf + paye
     const net = totalBrut - deductions
-    const csgP = Math.round(totalBrut * 0.06)
-    const nsfP = Math.round(totalBrut * 0.025)
+    const csgPRate = totalBrut <= 50000 ? 0.03 : 0.06
+    const csgP = Math.round(totalBrut * csgPRate)
+    const nsfP = Math.round(nsfBase * 0.025)
     const tl = Math.round(totalBrut * 0.01)
     const prgf = Math.round(4.5 * 26)
     const totalCharges = csgP + nsfP + tl + prgf
@@ -368,7 +386,7 @@ export default function PaiePage() {
       deductions,
       net,
       coutEmployeur: totalBrut + totalCharges,
-      detailCSG: `CSG ${(csgRate * 100).toFixed(1)}% + NSF 1.5%${paye > 0 ? " + PAYE " + fmt(paye) : ""}`
+      detailCSG: `CSG ${(csgRate * 100).toFixed(1)}% + NSF 1% (plafond ${NSF_PLAFOND})${paye > 0 ? " + PAYE " + fmt(paye) : ""}`
     })
   }
 

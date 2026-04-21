@@ -101,7 +101,15 @@ export function calculerBulletin(
   joursTravailles: number = 26,
   pctRefacturation: number = 0,
   airboxMur: number = 924.48,
-  ordinateurMur: number = 818.22
+  ordinateurMur: number = 818.22,
+  /**
+   * F10 — Déduction totale à retrancher des bases de cotisation (UL +
+   * absences injustifiées). Si > 0, CSG/NSF/PAYE sont calculés sur
+   * `salaire_brut_base - deductionAbsence` (= salaire_imposable). Le
+   * salaire_brut retourné reste inchangé (valeur nominale) ; la déduction
+   * finale est appliquée au salaire_net côté appelant (avec plafonds).
+   */
+  deductionAbsence: number = 0,
 ): ResultatPaie {
   const {
     salaire_base,
@@ -127,60 +135,67 @@ export function calculerBulletin(
 
   const salaire_brut = salaire_brut_base + eoy_bonus
 
+  // F10 — Salaire imposable = brut_base - absences (UL + injustifiées).
+  // Sert de base à CSG / NSF / PAYE. EOY bonus traité à part (csg_bonus).
+  const salaire_imposable = Math.max(0, salaire_brut_base - (deductionAbsence || 0))
+
   // Total emoluments for PRGF calculation (basic + allowances, excl OT & EOY)
   const total_emoluments = salaire_base + increment_salaire +
     transport_allowance + petrol_allowance +
     special_allowance_1 + special_allowance_2 + special_allowance_3 +
     commission
 
-  // CSG sur salaire (hors EOY bonus -- traite separement)
-  const csgTaux = salaire_brut_base <= params.csg_seuil_taux_reduit
+  // F10 — CSG sur salaire imposable (hors EOY bonus — traité séparément).
+  const csgTaux = salaire_imposable <= params.csg_seuil_taux_reduit
     ? params.csg_salarie_taux_reduit
     : params.csg_salarie_taux_plein
 
-  const csg_salarie = Math.round(salaire_brut_base * csgTaux)
-  // Sprint 14 FIX 5 — CSG bonus suit la même tranche que le salaire de base
-  // (1.5% si brut ≤ 50K, 3% si > 50K) au lieu du 3% forfaitaire.
+  const csg_salarie = Math.round(salaire_imposable * csgTaux)
+  // Sprint 14 FIX 5 — CSG bonus suit la même tranche que le salaire de base.
   const csg_bonus = eoy_bonus > 0 ? Math.round(eoy_bonus * csgTaux) : 0
 
   // F9 — NSF : base plafonnée à nsf_plafond_mensuel (28 600 MUR en 2025-2026).
-  // Max mensuel = 28 600 × 1% = 286 MUR. Base = salaire_brut_base (EOY
-  // bonus exclu côté NSF comme côté PAYE).
+  // F10 — Base = salaire_imposable (pour intégrer les absences dans le calcul).
   const nsfPlafond = params.nsf_plafond_mensuel ?? Number.POSITIVE_INFINITY
-  const nsf_base = Math.min(salaire_brut_base, nsfPlafond)
+  const nsf_base = Math.min(salaire_imposable, nsfPlafond)
   const nsf_salarie = Math.round(nsf_base * params.nsf_salarie)
 
-  // PAYE -- bareme progressif annuel MRA 2025/26
-  // EOY Bonus (13th month) is EXEMPT from PAYE in Mauritius (but subject to CSG)
-  const salaireAnnuel = salaire_brut_base * 12 // eoy_bonus excluded from PAYE base
+  // F10 — PAYE méthode cumulative MRA annualisée × 13 (12 mois + bonus de
+  // fin d'année). Montant mensuel = paye_annuel / 13 (Math.floor).
+  // Barème Finance Act 2025-2026 :
+  //   0 → 500 000 : 0% | 500 000 → 1 000 000 : 10% | > 1 000 000 : 20%
+  const revenuAnnuel = salaire_imposable * 13
   let payeAnnuel = 0
-  if (salaireAnnuel > params.paye_seuil_exoneration) {
-    const tranche1 = Math.min(salaireAnnuel, params.paye_seuil_taux_2) - params.paye_seuil_exoneration
-    payeAnnuel += tranche1 * params.paye_taux_1
-    if (salaireAnnuel > params.paye_seuil_taux_2) {
-      payeAnnuel += (salaireAnnuel - params.paye_seuil_taux_2) * params.paye_taux_2
+  if (revenuAnnuel > params.paye_seuil_exoneration) {
+    if (revenuAnnuel <= params.paye_seuil_taux_2) {
+      payeAnnuel = (revenuAnnuel - params.paye_seuil_exoneration) * params.paye_taux_1
+    } else {
+      const tranche1 = (params.paye_seuil_taux_2 - params.paye_seuil_exoneration) * params.paye_taux_1
+      const tranche2 = (revenuAnnuel - params.paye_seuil_taux_2) * params.paye_taux_2
+      payeAnnuel = tranche1 + tranche2
     }
   }
-  const payeBrut = Math.round(payeAnnuel / 12)
+  const payeBrut = Math.floor(payeAnnuel / 13)
 
   // Sprint 14 FIX 6 — NIT (Negative Income Tax, Finance Act 2024).
   // Crédit d'impôt pour les bas salaires — réduit le PAYE dû. Si NIT ≥
   // PAYE, PAYE = 0 (pas de crédit négatif versé, juste exonération).
-  const nit = calculerNIT(salaire_brut_base)
+  const nit = calculerNIT(salaire_imposable)
   const paye = Math.max(0, payeBrut - nit.montant)
   const nit_applique = nit.eligible ? Math.min(nit.montant, payeBrut) : 0
 
   const total_deductions = csg_salarie + csg_bonus + nsf_salarie + paye
-  // POLICY Lexora — net ne peut jamais devenir négatif.
+  // POLICY Lexora — net ne peut jamais devenir négatif. Note : salaire_net
+  // calculé ICI ne déduit PAS deductionAbsence (c'est l'appelant qui
+  // applique la déduction finale avec plafonds + cap 0).
   const salaire_net = Math.max(0, salaire_brut - total_deductions)
 
-  // Charges patronales
-  // CSG patronale progressive: 3% si brut <= 50K, 6% si > 50K (même seuil que CSG salarié)
-  const csgPatronalTaux = salaire_brut_base <= params.csg_seuil_taux_reduit
+  // F10 — Charges patronales : même base imposable que côté salarié.
+  const csgPatronalTaux = salaire_imposable <= params.csg_seuil_taux_reduit
     ? (params.csg_patronal_taux_reduit || 0.030)
     : params.csg_patronal
-  const csg_patronal = Math.round(salaire_brut_base * csgPatronalTaux)
-  // Sprint 14 FIX 5 — CSG patronal bonus suit la même tranche que le salaire
+  const csg_patronal = Math.round(salaire_imposable * csgPatronalTaux)
+  // Sprint 14 FIX 5 — CSG patronal bonus suit la même tranche que le salaire.
   const csg_patronal_bonus = eoy_bonus > 0 ? Math.round(eoy_bonus * csgPatronalTaux) : 0
   // F9 — NSF patronal capé au même plafond que côté salarié.
   const nsf_patronal = Math.round(nsf_base * params.nsf_patronal)
@@ -275,25 +290,26 @@ export function calculerPRGF(
 }
 
 /**
- * Calculate PAYE (Pay As You Earn) for a given monthly income
- * @param salaireMensuelImposable - monthly taxable income (excl. EOY bonus)
- * @param params - MRA parameters
- * @returns monthly PAYE amount
+ * Calculate PAYE (Pay As You Earn) for a given monthly income.
+ * F10 — Méthode cumulative MRA × 13 (12 mois + bonus de fin d'année),
+ * divisé par 13 (Math.floor) pour obtenir le mensuel.
  */
 export function calculerPAYE(
   salaireMensuelImposable: number,
   params: ParametresPaieMRA = PARAMS_MRA_DEFAUT
 ): number {
-  const salaireAnnuel = salaireMensuelImposable * 12
+  const revenuAnnuel = salaireMensuelImposable * 13
   let payeAnnuel = 0
-  if (salaireAnnuel > params.paye_seuil_exoneration) {
-    const tranche1 = Math.min(salaireAnnuel, params.paye_seuil_taux_2) - params.paye_seuil_exoneration
-    payeAnnuel += tranche1 * params.paye_taux_1
-    if (salaireAnnuel > params.paye_seuil_taux_2) {
-      payeAnnuel += (salaireAnnuel - params.paye_seuil_taux_2) * params.paye_taux_2
+  if (revenuAnnuel > params.paye_seuil_exoneration) {
+    if (revenuAnnuel <= params.paye_seuil_taux_2) {
+      payeAnnuel = (revenuAnnuel - params.paye_seuil_exoneration) * params.paye_taux_1
+    } else {
+      const tranche1 = (params.paye_seuil_taux_2 - params.paye_seuil_exoneration) * params.paye_taux_1
+      const tranche2 = (revenuAnnuel - params.paye_seuil_taux_2) * params.paye_taux_2
+      payeAnnuel = tranche1 + tranche2
     }
   }
-  return Math.round(payeAnnuel / 12)
+  return Math.floor(payeAnnuel / 13)
 }
 
 /**

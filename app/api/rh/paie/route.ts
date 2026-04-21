@@ -774,38 +774,53 @@ export async function POST(request: Request) {
       }
 
       const joursTravailles = jours_travailles > 0 ? jours_travailles : (body.jours_travailles || 26)
-      const resultat = calculerBulletin(elements, params as any, joursTravailles, Number(emp.pct_refacturation) || 0)
 
-      // UL deduction: days in-period × salaire_brut / nb_jours_ouvres_mois.
-      // INTÉGRATION 3 — diagnostic log (cf. calculer_batch).
+      // F10 — Pré-calcul du salaire_brut_base (hors EOY bonus) pour pouvoir
+      // calculer l'UL AVANT calculerBulletin. CSG/NSF/PAYE seront ensuite
+      // calculés sur salaire_imposable = brut_base - total_absence.
+      const salaireBrutBaseSingle =
+        Number(elements.salaire_base)
+        + (Number(elements.transport_allowance) || 0)
+        + (Number(elements.petrol_allowance) || 0)
+        + (Number(elements.heures_sup_montant) || 0)
+        + (Number(elements.special_allowance_1) || 0)
+        + (Number(elements.special_allowance_2) || 0)
+        + (Number(elements.special_allowance_3) || 0)
+        + (Number(elements.increment_salaire) || 0)
+        + (Number(elements.other_refund) || 0)
+        + (Number(elements.departure_notice) || 0)
+
+      // UL deduction: days in-period × salaire_brut_base / nb_jours_ouvres_mois.
       let montant_ul_single = 0
       if (joursUnpaidLeaveSingle > 0) {
         const nbJoursOuvresMoisSingle = calculateWorkingDays(periodeStartSingle, periodeEndSingle, {
           workingDays: getWorkingDaysForEmploye(emp),
           joursFeries: joursFeriesSetSingle,
         })
-        const salaireBrutSingle = Number(resultat.salaire_brut ?? 0)
-          || (salaire_base_mur
-            + (Number(elements.transport_allowance) || 0)
-            + (Number(elements.petrol_allowance) || 0)
-            + (Number(elements.heures_sup_montant) || 0)
-            + (Number(elements.special_allowance_1) || 0)
-            + (Number(elements.special_allowance_2) || 0)
-            + (Number(elements.special_allowance_3) || 0))
-        if (nbJoursOuvresMoisSingle > 0 && salaireBrutSingle > 0) {
-          montant_ul_single = Math.round(joursUnpaidLeaveSingle * (salaireBrutSingle / nbJoursOuvresMoisSingle) * 100) / 100
-          console.log(`[paie] UL OK (single) ${emp.prenom} ${emp.nom} — ${joursUnpaidLeaveSingle}j × (${salaireBrutSingle} / ${nbJoursOuvresMoisSingle}) = ${montant_ul_single} MUR`)
+        if (nbJoursOuvresMoisSingle > 0 && salaireBrutBaseSingle > 0) {
+          montant_ul_single = Math.round(joursUnpaidLeaveSingle * (salaireBrutBaseSingle / nbJoursOuvresMoisSingle) * 100) / 100
+          console.log(`[paie] UL OK (single) ${emp.prenom} ${emp.nom} — ${joursUnpaidLeaveSingle}j × (${salaireBrutBaseSingle} / ${nbJoursOuvresMoisSingle}) = ${montant_ul_single} MUR`)
         } else {
-          console.warn(`[paie] UL SKIP zero-guard (single) — ${emp.prenom} ${emp.nom} joursOuvres=${nbJoursOuvresMoisSingle} salaireBrut=${salaireBrutSingle}`)
+          console.warn(`[paie] UL SKIP zero-guard (single) — ${emp.prenom} ${emp.nom} joursOuvres=${nbJoursOuvresMoisSingle} salaireBrut=${salaireBrutBaseSingle}`)
         }
       }
 
-      // POLICY Lexora — UL déduction plafonnée au salaire_brut (jamais plus
-      // que ce que l'employé gagne le mois). Idem pour le cumul absences +
-      // UL. Et le net final est cappé à 0.
-      const salaireBrutPlafond = Number(resultat.salaire_brut) || 0
+      // POLICY Lexora — cumul absences + UL plafonné au salaire_brut_base.
       const totalAbsenceRaw = montant_absence + montant_ul_single
-      const totalDeductionAbsence = Math.min(totalAbsenceRaw, salaireBrutPlafond)
+      const totalDeductionAbsence = Math.min(totalAbsenceRaw, salaireBrutBaseSingle)
+
+      // F10 — calculerBulletin reçoit totalDeductionAbsence pour calculer
+      // CSG/NSF/PAYE sur salaire_imposable = brut_base - totalDeductionAbsence.
+      const resultat = calculerBulletin(
+        elements,
+        params as any,
+        joursTravailles,
+        Number(emp.pct_refacturation) || 0,
+        undefined,
+        undefined,
+        totalDeductionAbsence,
+      )
+
       const salaire_net_final = Math.max(
         0,
         Math.round((resultat.salaire_net - totalDeductionAbsence) * 100) / 100,
@@ -1377,7 +1392,59 @@ export async function POST(request: Request) {
         }
 
         const jt = jours_travailles > 0 ? jours_travailles : 26
-        const resultat = calculerBulletin(elements, params as any, jt, Number(emp.pct_refacturation) || 0)
+
+        // F10 — Pré-calcul du salaire_brut_base (hors EOY) pour calculer
+        // l'UL AVANT calculerBulletin, et passer le total absence comme
+        // base de cotisation.
+        const salaireBrutBaseBatch =
+          Number(elements.salaire_base)
+          + (Number(elements.transport_allowance) || 0)
+          + (Number(elements.petrol_allowance) || 0)
+          + (Number(elements.heures_sup_montant) || 0)
+          + (Number(elements.special_allowance_1) || 0)
+          + (Number(elements.special_allowance_2) || 0)
+          + (Number(elements.special_allowance_3) || 0)
+          + (Number((elements as any).increment_salaire) || 0)
+          + (Number(elements.other_refund) || 0)
+          + (Number((elements as any).departure_notice) || 0)
+
+        // ── UL (Unpaid Leave) deduction ─────────────────────────────────
+        // Formula: deduction_ul = nb_jours_ul × (salaire_brut_base / nb_jours_ouvres_mois)
+        // INTÉGRATION 3 + Sprint 3 BUG 3 — UL deduction TOUJOURS appliquée
+        // (même pour isHorsMRA). Le flag isHorsMRA ne contrôle QUE
+        // l'inclusion dans les déclarations CSG/NSF/PAYE, pas le calcul net.
+        let montant_ul = 0
+        let ul_skip_reason: string | null = null
+        if (joursUnpaidLeave > 0) {
+          const nbJoursOuvresMois = calculateWorkingDays(periodeStart, periodeEnd, {
+            workingDays: getWorkingDaysForEmploye(emp),
+            joursFeries: joursFeriesSet,
+          })
+          if (nbJoursOuvresMois > 0 && salaireBrutBaseBatch > 0) {
+            montant_ul = Math.round(joursUnpaidLeave * (salaireBrutBaseBatch / nbJoursOuvresMois) * 100) / 100
+            const tag = isHorsMRA ? ' [hors MRA — déduction net seule]' : ''
+            console.log(`[paie] UL OK ${emp.prenom} ${emp.nom} — ${joursUnpaidLeave}j × (${salaireBrutBaseBatch} / ${nbJoursOuvresMois}) = ${montant_ul} MUR${tag}`)
+          } else {
+            ul_skip_reason = `joursOuvres=${nbJoursOuvresMois} salaireBrut=${salaireBrutBaseBatch}`
+            console.warn(`[paie] UL SKIP zero-guard — ${emp.prenom} ${emp.nom} ${ul_skip_reason}`)
+          }
+        }
+
+        // POLICY Lexora — cumul absences + UL plafonné au salaire_brut_base.
+        const totalAbsenceRawBatch = montant_absence_final + montant_ul
+        const totalDeductionAbsence = Math.min(totalAbsenceRawBatch, salaireBrutBaseBatch)
+
+        // F10 — calculerBulletin avec totalDeductionAbsence -> CSG/NSF/PAYE
+        // calculés sur salaire_imposable = brut_base - totalDeductionAbsence.
+        const resultat = calculerBulletin(
+          elements,
+          params as any,
+          jt,
+          Number(emp.pct_refacturation) || 0,
+          undefined,
+          undefined,
+          isHorsMRA ? 0 : totalDeductionAbsence,
+        )
 
         // Hors champs MRA : pas de CSG, NSF, PAYE, pas de charges patronales
         if (isHorsMRA) {
@@ -1394,57 +1461,6 @@ export async function POST(request: Request) {
           resultat.total_charges_patronales = 0
           resultat.salaire_net = salaire_base_mur // net = base pour hors MRA
         }
-
-        // ── UL (Unpaid Leave) deduction ─────────────────────────────────
-        // Formula: deduction_ul = nb_jours_ul × (salaire_brut / nb_jours_ouvres_mois)
-        // where nb_jours_ouvres_mois is computed using the EMPLOYEE'S
-        // working_days pattern + applicable jours fériés (Mon–Fri + MU
-        // holidays by default). This differs from the unjustified-absence
-        // formula which uses salaire_base/26 — UL docks the full gross
-        // pro rata, not just the basic salary.
-        // INTÉGRATION 3 + Sprint 3 BUG 3 — UL deduction TOUJOURS appliquée.
-        // Avant : la garde !isHorsMRA skippait silencieusement le calcul UL
-        // pour les employés exclure_mra=true (cas Sheetal Sekely). Or la
-        // déduction UL est INDÉPENDANTE de la déclaration MRA : un employé
-        // hors MRA peut quand même avoir des congés UL qui doivent être
-        // déduits du salaire net.
-        // Le flag isHorsMRA ne contrôle QUE l'inclusion dans les
-        // déclarations CSG/NSF/PAYE, pas le calcul net.
-        let montant_ul = 0
-        let ul_skip_reason: string | null = null
-        if (joursUnpaidLeave > 0) {
-          const nbJoursOuvresMois = calculateWorkingDays(periodeStart, periodeEnd, {
-            workingDays: getWorkingDaysForEmploye(emp),
-            joursFeries: joursFeriesSet,
-          })
-          const salaireBrutPaie = Number(resultat.salaire_brut ?? 0)
-            || (salaire_base_mur
-              + (Number(elements.transport_allowance) || 0)
-              + (Number(elements.petrol_allowance) || 0)
-              + (Number(elements.heures_sup_montant) || 0)
-              + (Number(elements.special_allowance_1) || 0)
-              + (Number(elements.special_allowance_2) || 0)
-              + (Number(elements.special_allowance_3) || 0))
-          if (nbJoursOuvresMois > 0 && salaireBrutPaie > 0) {
-            montant_ul = Math.round(joursUnpaidLeave * (salaireBrutPaie / nbJoursOuvresMois) * 100) / 100
-            const tag = isHorsMRA ? ' [hors MRA — déduction net seule]' : ''
-            console.log(`[paie] UL OK ${emp.prenom} ${emp.nom} — ${joursUnpaidLeave}j × (${salaireBrutPaie} / ${nbJoursOuvresMois}) = ${montant_ul} MUR${tag}`)
-          } else {
-            ul_skip_reason = `joursOuvres=${nbJoursOuvresMois} salaireBrut=${salaireBrutPaie}`
-            console.warn(`[paie] UL SKIP zero-guard — ${emp.prenom} ${emp.nom} ${ul_skip_reason} (resultat.salaire_brut=${resultat.salaire_brut})`)
-          }
-        }
-
-        // Sprint 3 BUG 3 — déduction UL appliquée AUSSI quand isHorsMRA.
-        // Avant : net = salaire_base si hors MRA → ignorait l'UL. Maintenant :
-        // net = salaire_base - totalDeductionAbsence si hors MRA.
-        // POLICY Lexora — on plafonne le cumul absences + UL au salaire_brut
-        // (cas limite : UL > brut du mois, ex. premier mois prorata faible).
-        const salaireBrutPlafondBatch = isHorsMRA
-          ? salaire_base_mur
-          : (Number(resultat.salaire_brut) || 0)
-        const totalAbsenceRawBatch = montant_absence_final + montant_ul
-        const totalDeductionAbsence = Math.min(totalAbsenceRawBatch, salaireBrutPlafondBatch)
 
         // Sprint 15 FIX 1 — Avance sur salaire (WRA Art. 29).
         // Déduire la mensualité de l'avance active du salaire net.
