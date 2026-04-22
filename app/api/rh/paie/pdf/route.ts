@@ -290,6 +290,13 @@ function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris
             value: `${fmt(Number(bulletin.montant_cash_in_lieu))} MUR`,
           })
         : null,
+      // G7 — Allocation naissance WRA S.52 (forfait non-imposable).
+      Number(bulletin.allocation_naissance) > 0
+        ? React.createElement(Row, {
+            label: 'Allocation naissance — WRA S.52 (forfait non-imposable)',
+            value: `${fmt(Number(bulletin.allocation_naissance))} MUR`,
+          })
+        : null,
       // Sprint — allowances & primes détaillées (cf. distribution sa1/sa2/sa3
       // dans app/api/rh/paie/route.ts) :
       // 1) Primes variables approuvées (libellé via catalogue_primes)

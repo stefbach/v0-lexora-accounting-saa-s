@@ -6,6 +6,7 @@ import { getUserSocieteIds, userHasAccessToSociete, userHasAccessToEmploye } fro
 import { calculateWorkingDays, getWorkingDaysForEmploye, getMauritiusPublicHolidays } from '@/lib/rh/calculateWorkingDays'
 import { lastDayOfMonth } from '@/lib/rh/period'
 import { fetchPaiementsValidesPourBulletin, marquerPaiementPaye } from '@/lib/rh/cash-in-lieu'
+import { fetchGrossessePourAllocationBulletin, marquerAllocationPayee } from '@/lib/rh/protection-maternite'
 
 export const dynamic = 'force-dynamic'
 
@@ -833,6 +834,14 @@ export async function POST(request: Request) {
         ? null
         : cilTypesSingle.size > 1 ? 'mixte' : (Array.from(cilTypesSingle)[0] as 'AL' | 'VL')
 
+      // G7 — Allocation naissance 3 000 MUR (WRA S.52). Forfait social
+      // NON soumis a CSG/NSF/PAYE : on NE l'ajoute PAS a calculerBulletin,
+      // on l'ecrit directement sur le bulletin en colonne dediee.
+      const allocNaissanceSingle = await fetchGrossessePourAllocationBulletin(
+        supabase, employe_id, periodeBulletinSingle.slice(0, 7),
+      )
+      const allocMontantSingle = allocNaissanceSingle?.montant || 0
+
       // F10 + G1 — calculerBulletin recoit totalDeductionAbsence ET cilMontant.
       const resultat = calculerBulletin(
         elements,
@@ -845,9 +854,10 @@ export async function POST(request: Request) {
         cilMontantSingle,
       )
 
+      // G7 — Allocation naissance s'ajoute au net (non-imposable, hors cotisations).
       const salaire_net_final = Math.max(
         0,
-        Math.round((resultat.salaire_net - totalDeductionAbsence) * 100) / 100,
+        Math.round((resultat.salaire_net - totalDeductionAbsence + allocMontantSingle) * 100) / 100,
       )
 
       const bulletin: Record<string, any> = {
@@ -884,6 +894,8 @@ export async function POST(request: Request) {
         montant_cash_in_lieu: Math.round(cilMontantSingle * 100) / 100,
         jours_cash_in_lieu: cilJoursSingle,
         cash_in_lieu_type: cilTypeSingle,
+        // G7 — Allocation naissance 3 000 MUR (WRA S.52, forfait non-imposable)
+        allocation_naissance: Math.round(allocMontantSingle * 100) / 100,
         // Sprint 13 BUG 1 — trace prorata dans les notes pour l'UI
         notes: prorataSingle.ratio < 1 ? `[${prorataSingle.motif}]` : null,
         statut: 'brouillon',
@@ -900,6 +912,11 @@ export async function POST(request: Request) {
         for (const pcc of cilPaiementsSingle) {
           await marquerPaiementPaye(supabase, pcc.id, data.id)
         }
+      }
+
+      // G7 — Marquer l'allocation naissance payee avec reference bulletin.
+      if (data?.id && allocNaissanceSingle) {
+        await marquerAllocationPayee(supabase, allocNaissanceSingle.id, data.id)
       }
 
       // Marquer les primes comme intégrées (colonne integre_paie + date_integration ajoutées en migration 028)
@@ -1493,6 +1510,13 @@ export async function POST(request: Request) {
           ? null
           : cilTypesBatch.size > 1 ? 'mixte' : (Array.from(cilTypesBatch)[0] as 'AL' | 'VL')
 
+        // G7 — Allocation naissance 3 000 MUR (WRA S.52). Injectee directement
+        // sur le bulletin (hors CSG/NSF/PAYE, forfait social non-imposable).
+        const allocNaissanceBatch = await fetchGrossessePourAllocationBulletin(
+          supabase, emp.id, periodeStr,
+        )
+        const allocMontantBatch = allocNaissanceBatch?.montant || 0
+
         // F10 + G1 — calculerBulletin avec totalDeductionAbsence + cilMontant.
         const resultat = calculerBulletin(
           elements,
@@ -1552,11 +1576,12 @@ export async function POST(request: Request) {
         }
 
         // POLICY Lexora — salaire_net final plafonné à 0.
+        // G7 — Allocation naissance s'ajoute au net (hors cotisations).
         const salaire_net_final = Math.max(
           0,
           isHorsMRA
-            ? Math.round((salaire_base_mur - totalDeductionAbsence - avanceDeduction) * 100) / 100
-            : Math.round((resultat.salaire_net - totalDeductionAbsence - avanceDeduction) * 100) / 100,
+            ? Math.round((salaire_base_mur - totalDeductionAbsence - avanceDeduction + allocMontantBatch) * 100) / 100
+            : Math.round((resultat.salaire_net - totalDeductionAbsence - avanceDeduction + allocMontantBatch) * 100) / 100,
         )
 
         // Résumé notes pour le bulletin
@@ -1631,6 +1656,8 @@ export async function POST(request: Request) {
           montant_cash_in_lieu: Math.round(cilMontantBatch * 100) / 100,
           jours_cash_in_lieu: cilJoursBatch,
           cash_in_lieu_type: cilTypeBatch,
+          // G7 — Allocation naissance 3 000 MUR (WRA S.52, non-imposable)
+          allocation_naissance: Math.round(allocMontantBatch * 100) / 100,
           notes: notesResume,
           statut: 'brouillon',
         }
@@ -1702,6 +1729,11 @@ export async function POST(request: Request) {
             for (const pcc of cilPaiementsBatch) {
               await marquerPaiementPaye(supabase, pcc.id, saved.id)
             }
+          }
+
+          // G7 — Marquer l'allocation naissance payee avec reference bulletin.
+          if (saved?.id && allocNaissanceBatch) {
+            await marquerAllocationPayee(supabase, allocNaissanceBatch.id, saved.id)
           }
           // Marquer primes intégrées (colonne integre_paie + date_integration ajoutées en migration 028)
           if (primesMois && primesMois.length > 0) {
