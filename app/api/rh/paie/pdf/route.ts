@@ -60,6 +60,35 @@ async function fetchBulletinData(supabase: any, bulletin: any) {
   const alDroit = mos < 6 ? 0 : mos < 12 ? Math.min(mos - 6, 6) : 22
   const slDroit = mos < 6 ? 0 : mos < 12 ? Math.min(mos - 6, 6) : 15
 
+  // G4 — VL (S.47) + FML (S.47A). VL vient de soldes_conges (cycle 5 ans),
+  // FML est déductible donc pas de colonne dédiée : on compte les demandes
+  // approuvées dans le cycle anniversaire courant.
+  const { data: soldeCourant } = await supabase
+    .from('soldes_conges')
+    .select('periode_debut, periode_fin, vl_droit, vl_pris')
+    .eq('employe_id', bulletin.employe_id)
+    .lte('periode_debut', bulletin.periode)
+    .gte('periode_fin', bulletin.periode)
+    .maybeSingle()
+  const vlDroit = Number(soldeCourant?.vl_droit) || 0
+  const vlPris = Number(soldeCourant?.vl_pris) || 0
+
+  let fmlUtilisesTotal = 0
+  const cycleDebut = soldeCourant?.periode_debut || `${annee}-01-01`
+  const cycleFin = soldeCourant?.periode_fin || `${annee}-12-31`
+  const { data: fmlRows } = await supabase
+    .from('demandes_conges')
+    .select('nb_jours')
+    .eq('employe_id', bulletin.employe_id)
+    .eq('type_conge', 'FML')
+    .eq('statut', 'approuve')
+    .gte('date_debut', cycleDebut)
+    .lte('date_debut', cycleFin)
+  fmlUtilisesTotal = (fmlRows || []).reduce(
+    (sum: number, r: any) => sum + (Number(r.nb_jours) || 0),
+    0,
+  )
+
   // Primes variables du mois — avec libellé depuis catalogue_primes.
   // Sprint 11 BUG 3 — on ne retient que les primes approuvées (les brouillons
   // ne doivent pas apparaître sur le bulletin).
@@ -91,7 +120,7 @@ async function fetchBulletinData(supabase: any, bulletin: any) {
     anciennete = y > 0 ? `${y} an(s) ${m} mois` : `${m} mois`
   }
 
-  return { emp, soc, moisLabel, annee, periodeDate, alPris, slPris, alDroit, slDroit, primesMois: primesMois || [], totalFraisKm, anciennete }
+  return { emp, soc, moisLabel, annee, periodeDate, alPris, slPris, alDroit, slDroit, vlDroit, vlPris, fmlUtilisesTotal, primesMois: primesMois || [], totalFraisKm, anciennete }
 }
 
 // ─── PDF Document Component ──────────────────────────────────────
@@ -156,7 +185,7 @@ const s = StyleSheet.create({
   otSubValue: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#ea580c', textAlign: 'right', width: 90 },
 })
 
-function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris, slPris, alDroit, slDroit, primesMois, totalFraisKm, anciennete }: any) {
+function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris, slPris, alDroit, slDroit, vlDroit, vlPris, fmlUtilisesTotal, primesMois, totalFraisKm, anciennete }: any) {
   const csgPct = Number(bulletin.salaire_brut) > 50000 ? '3%' : '1.5%'
   const hasOT = Number(bulletin.heures_sup_montant) > 0
 
@@ -398,6 +427,9 @@ function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris
       ),
 
       // ─── Leave Balances ─────────────────────────
+      // G4 — VL et FML affichés conditionnellement :
+      //  - VL si vl_droit>0 (eligible 5 ans) ou vl_pris>0 (a deja utilise)
+      //  - FML si l'employe a deja consomme au moins 1 jour dans le cycle
       React.createElement(View, { style: s.leaveBox },
         React.createElement(Text, { style: s.leaveTitle }, `Soldes Conges — ${annee}`),
         React.createElement(View, { style: s.leaveGrid },
@@ -410,7 +442,21 @@ function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris
             React.createElement(Text, { style: s.leaveCardLabel }, 'Sick Leave (SL)'),
             React.createElement(Text, { style: [s.leaveCardValue, { color: '#ea580c' }] }, `${slDroit - slPris}j`),
             React.createElement(Text, { style: s.leaveCardSub }, `restants / ${slDroit}j (${slPris}j pris)`)
-          )
+          ),
+          (Number(vlDroit) > 0 || Number(vlPris) > 0)
+            ? React.createElement(View, { style: s.leaveCard, key: 'vl' },
+                React.createElement(Text, { style: s.leaveCardLabel }, 'Vacation Leave (VL)'),
+                React.createElement(Text, { style: [s.leaveCardValue, { color: '#7c3aed' }] }, `${Number(vlDroit) - Number(vlPris)}j`),
+                React.createElement(Text, { style: s.leaveCardSub }, `restants / ${Number(vlDroit)}j (${Number(vlPris)}j pris)`)
+              )
+            : null,
+          Number(fmlUtilisesTotal) > 0
+            ? React.createElement(View, { style: s.leaveCard, key: 'fml' },
+                React.createElement(Text, { style: s.leaveCardLabel }, 'Family Medical Leave (FML)'),
+                React.createElement(Text, { style: [s.leaveCardValue, { color: '#0891b2' }] }, `${Number(fmlUtilisesTotal)}j`),
+                React.createElement(Text, { style: s.leaveCardSub }, `utilises / 10j (cycle courant)`)
+              )
+            : null
         )
       ),
 
