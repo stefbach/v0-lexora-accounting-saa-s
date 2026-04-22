@@ -24,6 +24,7 @@ import {
   EligibiliteBadge,
   type EligibilityStatus,
 } from "@/app/salarie/_components/shared/conges-eligibilite"
+import { CashInLieuPanel } from "./_components/CashInLieuPanel"
 
 // ─── Constants ───────────────────────────────────────────────────
 const TYPE_LABELS: Record<string, string> = {
@@ -1101,7 +1102,7 @@ export default function CongesPage() {
 
       {/* Tabs */}
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="dashboard">Tableau de bord</TabsTrigger>
           <TabsTrigger value="demandes" className="relative">
             Demandes
@@ -1116,6 +1117,9 @@ export default function CongesPage() {
           </TabsTrigger>
           <TabsTrigger value="absents">Absences aujourd&apos;hui</TabsTrigger>
           <TabsTrigger value="historique">Historique</TabsTrigger>
+          <TabsTrigger value="cash-in-lieu" className="text-purple-700">
+            Cash-in-lieu
+          </TabsTrigger>
         </TabsList>
 
         {/* ═══ TAB 1: TABLEAU DE BORD ═══ */}
@@ -1733,6 +1737,11 @@ export default function CongesPage() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* ═══ TAB 6: CASH-IN-LIEU (G1 — WRA S.45/S.47) ═══ */}
+        <TabsContent value="cash-in-lieu">
+          <CashInLieuPanel />
         </TabsContent>
       </Tabs>
 
