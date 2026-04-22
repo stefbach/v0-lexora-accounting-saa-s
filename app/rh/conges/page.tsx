@@ -16,7 +16,7 @@ import {
   Loader2, Plus, CheckCircle, XCircle, AlertTriangle,
   Calendar, Thermometer, Clock, ShieldAlert, Users, FileWarning,
   Upload, ChevronLeft, ChevronRight, Eye, Pencil, Save, X,
-  Megaphone
+  Megaphone, Trash2
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { createClient } from "@/lib/supabase/client"
@@ -538,6 +538,9 @@ export default function CongesPage() {
 
   // Fix 2 — cancel-imposed-leave dialog state
   const [annulerTarget, setAnnulerTarget] = useState<CongeRecord | null>(null)
+  // S1 — suppression definitive (hard delete + audit)
+  const [supprimerTarget, setSupprimerTarget] = useState<CongeRecord | null>(null)
+  const [supprimerMotif, setSupprimerMotif] = useState<string>("")
   const [annulerMotif, setAnnulerMotif] = useState("")
   const [toast, setToast] = useState<string | null>(null)
 
@@ -564,6 +567,8 @@ export default function CongesPage() {
 
   // Roles allowed to impose collective leave (matches the API gate).
   const canImposeCollectif = ['admin', 'super_admin', 'client_admin', 'rh', 'rh_manager', 'direction'].includes(userRole)
+  // S1 — seuls RH et admin peuvent supprimer definitivement une demande
+  const canSupprimer = ['admin', 'super_admin', 'rh', 'rh_manager'].includes(userRole)
 
   // Calendar tab
   const [calendarConges, setCalendarConges] = useState<CongeRecord[]>([])
@@ -928,6 +933,36 @@ export default function CongesPage() {
       setTimeout(() => setToast(null), 4500)
     } catch (e: any) {
       setToast(`⚠ Échec de l'annulation: ${e?.message || 'erreur'}`)
+      setTimeout(() => setToast(null), 6000)
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  // S1 — hard delete d'une demande (RH/admin uniquement).
+  // Appelle DELETE /api/rh/conges/:id?hard=true avec motif dans le body.
+  // Backend fait un snapshot JSONB dans demandes_conges_supprimees puis
+  // delete + recompute solde si applicable.
+  const supprimerDefinitivement = async () => {
+    if (!supprimerTarget) return
+    setActionLoading(supprimerTarget.id)
+    try {
+      const res = await fetch(`/api/rh/conges/${supprimerTarget.id}?hard=true`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ motif: supprimerMotif || null }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`)
+      setToast(data?.message || "Demande supprimée")
+      setSupprimerTarget(null)
+      setSupprimerMotif("")
+      loadDemandes()
+      loadBalances()
+      if (tab === "historique") loadHistorique()
+      setTimeout(() => setToast(null), 4500)
+    } catch (e: any) {
+      setToast(`⚠ Suppression échouée : ${e?.message || 'erreur'}`)
       setTimeout(() => setToast(null), 6000)
     } finally {
       setActionLoading(null)
@@ -1502,6 +1537,18 @@ export default function CongesPage() {
                               >
                                 <XCircle className="w-4 h-4 mr-1" />Refuser
                               </Button>
+                              {/* S1 — Suppression definitive (RH/admin uniquement) */}
+                              {canSupprimer && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-gray-500 hover:text-red-700 hover:bg-red-50 h-8 w-8 p-0"
+                                  title="Supprimer definitivement (audit trail conserve)"
+                                  onClick={() => { setSupprimerTarget(c); setSupprimerMotif("") }}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>
@@ -1741,25 +1788,39 @@ export default function CongesPage() {
                           </TableCell>
                           {canImposeCollectif && (
                             <TableCell className="text-right">
-                              {/* Annuler button — visible only on approved imposed leaves
-                                  (the original spec). We still gate by role for defence in
-                                  depth, even though the API also gates. */}
-                              {c.statut === "approuve" && c.impose_par_societe && (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-7 text-xs text-red-600 hover:bg-red-50"
-                                  disabled={actionLoading === c.id}
-                                  onClick={() => { setAnnulerTarget(c); setAnnulerMotif("") }}
-                                >
-                                  {actionLoading === c.id ? (
-                                    <Loader2 className="w-3 h-3 animate-spin mr-1" />
-                                  ) : (
-                                    <XCircle className="w-3 h-3 mr-1" />
-                                  )}
-                                  Annuler
-                                </Button>
-                              )}
+                              <div className="flex gap-1 justify-end">
+                                {/* Annuler button — visible only on approved imposed leaves
+                                    (the original spec). We still gate by role for defence in
+                                    depth, even though the API also gates. */}
+                                {c.statut === "approuve" && c.impose_par_societe && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 text-xs text-red-600 hover:bg-red-50"
+                                    disabled={actionLoading === c.id}
+                                    onClick={() => { setAnnulerTarget(c); setAnnulerMotif("") }}
+                                  >
+                                    {actionLoading === c.id ? (
+                                      <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                                    ) : (
+                                      <XCircle className="w-3 h-3 mr-1" />
+                                    )}
+                                    Annuler
+                                  </Button>
+                                )}
+                                {/* S1 — suppression definitive (RH/admin) */}
+                                {canSupprimer && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 w-7 p-0 text-gray-500 hover:text-red-700 hover:bg-red-50"
+                                    title="Supprimer definitivement (audit trail conserve)"
+                                    onClick={() => { setSupprimerTarget(c); setSupprimerMotif("") }}
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                )}
+                              </div>
                             </TableCell>
                           )}
                         </TableRow>
@@ -2219,6 +2280,79 @@ export default function CongesPage() {
             >
               {actionLoading === annulerTarget?.id && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
               <XCircle className="w-4 h-4 mr-2" />Confirmer l'annulation
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══ S1 — DIALOG suppression definitive (RH/admin) ═══ */}
+      <Dialog open={!!supprimerTarget} onOpenChange={open => { if (!open) { setSupprimerTarget(null); setSupprimerMotif("") } }}>
+        <DialogContent aria-describedby="supprimer-desc">
+          <DialogHeader>
+            <DialogTitle className="text-red-700 flex items-center gap-2">
+              <Trash2 className="w-5 h-5" />
+              Supprimer cette demande de congé ?
+            </DialogTitle>
+            <DialogDescription id="supprimer-desc">
+              Action irréversible. Audit trail conservé dans la DB.
+            </DialogDescription>
+          </DialogHeader>
+          {supprimerTarget && (
+            <div className="space-y-3 text-sm">
+              <div className="p-3 bg-gray-50 rounded-md border">
+                <div className="font-semibold text-[#0B0F2E]">
+                  {supprimerTarget.employe?.prenom} {supprimerTarget.employe?.nom}
+                </div>
+                <div className="text-xs text-gray-600 mt-1">
+                  <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium mr-2 ${TYPE_COLORS[supprimerTarget.type_conge] || "bg-gray-100 text-gray-800"}`}>
+                    {TYPE_LABELS[supprimerTarget.type_conge] || supprimerTarget.type_conge}
+                  </span>
+                  {formatDate(supprimerTarget.date_debut)} → {formatDate(supprimerTarget.date_fin)} — <strong>{supprimerTarget.nb_jours}j</strong>
+                  <span className={`ml-2 inline-block px-2 py-0.5 rounded-full text-[10px] font-medium ${STATUT_COLORS[supprimerTarget.statut] || ""}`}>
+                    {STATUT_LABELS[supprimerTarget.statut] || supprimerTarget.statut}
+                  </span>
+                </div>
+              </div>
+              <div className="text-xs text-gray-600 space-y-1">
+                <p>Cette action :</p>
+                <ul className="list-disc list-inside space-y-0.5 ml-2">
+                  <li>Supprimera définitivement la demande de la base.</li>
+                  <li>Recomputera automatiquement le solde de l&apos;employé (si la demande était approuvée).</li>
+                  <li>Sera tracée dans <code className="text-[10px] bg-gray-100 px-1 rounded">demandes_conges_supprimees</code>.</li>
+                </ul>
+                {supprimerTarget.statut === 'approuve' && (
+                  <p className="text-orange-700 font-medium pt-1">
+                    ⚠️ Si cette demande approuvée avait déjà été comptée sur un bulletin verrouillé, celui-ci ne sera PAS modifié — retraiter manuellement.
+                  </p>
+                )}
+              </div>
+              <div>
+                <Label className="text-xs text-gray-600">Motif de la suppression (optionnel)</Label>
+                <Textarea
+                  value={supprimerMotif}
+                  onChange={e => setSupprimerMotif(e.target.value)}
+                  placeholder="Ex : doublon, mauvaise saisie, test..."
+                  rows={2}
+                  className="mt-1 text-sm"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setSupprimerTarget(null); setSupprimerMotif("") }}>
+              Annuler
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={supprimerDefinitivement}
+              disabled={actionLoading === supprimerTarget?.id}
+            >
+              {actionLoading === supprimerTarget?.id ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <Trash2 className="w-4 h-4 mr-2" />
+              )}
+              Supprimer définitivement
             </Button>
           </DialogFooter>
         </DialogContent>
