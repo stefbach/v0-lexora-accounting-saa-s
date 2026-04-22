@@ -228,14 +228,15 @@ CREATE TRIGGER tr_balance_check_insert
   FOR EACH STATEMENT
   EXECUTE FUNCTION public.trg_check_balance_ref_folio();
 
--- Pour UPDATE, on n'a pas besoin de new_table AND old_table dans le même
--- trigger — le nom sera `new_table` dans la fonction ; on référence donc
--- `new_table` uniquement (le row updaté est dans new_table côté "after").
--- (Si PostgreSQL < 10, les transition tables ne sont pas supportées et le
--- trigger sera créé mais inactif ; à documenter côté SCHEMA.md.)
+-- Pour UPDATE, on ne peut PAS combiner `UPDATE OF col1, col2` avec
+-- `REFERENCING NEW TABLE/OLD TABLE` (limitation PostgreSQL — erreur 0A000
+-- « transition tables cannot be specified for triggers with column lists »).
+-- On utilise donc `AFTER UPDATE` sans column list. Le trigger fire sur
+-- TOUT update, mais la fonction court-circuite très vite si aucun
+-- ref_folio n'a bougé (scope via transition tables dans la CTE).
 DROP TRIGGER IF EXISTS tr_balance_check_update ON public.ecritures_comptables_v2;
 CREATE TRIGGER tr_balance_check_update
-  AFTER UPDATE OF debit_mur, credit_mur, ref_folio ON public.ecritures_comptables_v2
+  AFTER UPDATE ON public.ecritures_comptables_v2
   REFERENCING NEW TABLE AS new_table OLD TABLE AS old_table
   FOR EACH STATEMENT
   EXECUTE FUNCTION public.trg_check_balance_ref_folio();
