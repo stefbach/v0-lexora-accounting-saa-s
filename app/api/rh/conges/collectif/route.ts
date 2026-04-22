@@ -12,7 +12,9 @@
  *     date_debut: 'YYYY-MM-DD'                // required
  *     date_fin:   'YYYY-MM-DD'                // required, >= date_debut
  *     type_conge: string                      // 'AL' recommended (only AL has split columns)
- *     applique_a: 'all' | 'groupe'            // default 'all'
+ *     applique_a: 'tous' | 'groupe' | 'individuel'
+ *                                             // alias 'all' accepté (= 'tous') pour
+ *                                             // rétrocompat. default 'tous'.
  *     groupe_id?: string                      // required when applique_a='groupe'
  *     societe_id: string                      // target société
  *     motif?: string
@@ -110,11 +112,23 @@ export async function POST(request: Request) {
       date_debut,
       date_fin,
       type_conge = 'AL',
-      applique_a = 'all',
+      applique_a: rawAppliqueA = 'all',
       groupe_id = null,
       societe_id,
       motif = null,
     } = body || {}
+
+    // F16 — Normaliser applique_a. La contrainte DB CHECK accepte seulement
+    // 'tous', 'groupe', 'individuel'. Le code interne utilise historiquement
+    // 'all' (+ 'tous' en UI future) → on accepte les 2 en entrée et on
+    // convertit en valeur DB au moment de l'INSERT.
+    const applique_a = rawAppliqueA === 'all' || rawAppliqueA === 'tous'
+      ? 'tous'
+      : rawAppliqueA === 'groupe'
+      ? 'groupe'
+      : rawAppliqueA === 'individuel'
+      ? 'individuel'
+      : null
 
     // Basic validation
     if (!titre || !date_debut || !date_fin || !societe_id) {
@@ -123,8 +137,8 @@ export async function POST(request: Request) {
     if (String(date_fin) < String(date_debut)) {
       return NextResponse.json({ error: 'date_fin doit être ≥ date_debut' }, { status: 400 })
     }
-    if (applique_a !== 'all' && applique_a !== 'groupe') {
-      return NextResponse.json({ error: 'applique_a doit être "all" ou "groupe"' }, { status: 400 })
+    if (!applique_a) {
+      return NextResponse.json({ error: 'applique_a doit être "tous", "groupe" ou "individuel" (alias "all" accepté)' }, { status: 400 })
     }
     if (applique_a === 'groupe' && !groupe_id) {
       return NextResponse.json({ error: 'groupe_id requis lorsque applique_a = "groupe"' }, { status: 400 })
