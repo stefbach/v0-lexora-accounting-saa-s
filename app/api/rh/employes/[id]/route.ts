@@ -122,7 +122,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     // Remove fields that shouldn't be updated directly
     delete body.id
     delete body.created_at
+    // F17 — Colonnes GENERATED ALWAYS (interdites en UPDATE) :
+    //   - actif (expression: date_depart IS NULL)
+    //   - statut_wra (G3 mig 162, expression: worker/hors_wra selon salaire_base)
+    // Le frontend copie l'employe complet via SELECT * puis le renvoie au PATCH
+    // avec `form`, donc ces colonnes GENERATED arrivent ici et faisaient echouer
+    // Supabase avec erreur "cannot insert into column ... has a generation
+    // expression" -> 500 silencieux cote UI.
     delete body.actif
+    delete body.statut_wra
 
     // Même renommage que POST : role (envoyé par certains clients legacy)
     // → role_rh (colonne réelle en prod). profiles.role est un autre champ
@@ -176,7 +184,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       .eq('id', id)
       .select()
       .single()
-    if (error) throw error
+    if (error) {
+      // F17 — log explicite cote serveur (Vercel Functions) pour faciliter
+      // le diagnostic des 500 futurs : message + code + details + hint.
+      console.error('[employes PATCH] UPDATE failed', {
+        employe_id: id,
+        body_keys: Object.keys(body),
+        error_code: (error as any).code,
+        error_message: error.message,
+        error_details: (error as any).details,
+        error_hint: (error as any).hint,
+      })
+      throw error
+    }
 
     // Sprint 9 BUG 2 — si le salaire a changé, propager aux bulletins
     // NON VERROUILLÉS (verrouille != true) du mois en cours uniquement.
