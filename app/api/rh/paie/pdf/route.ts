@@ -3,6 +3,11 @@ import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { userHasAccessToEmploye } from '@/lib/rh/access'
 import { lastDayOfMonth } from '@/lib/rh/period'
+import {
+  calculerPeriodePaie,
+  formaterPeriodeCourte,
+  type PeriodePaieCalculee,
+} from '@/lib/rh/periode-paie'
 import React from 'react'
 import { renderToBuffer, Document, Page, View, Text, StyleSheet, Font } from '@react-pdf/renderer'
 
@@ -120,7 +125,25 @@ async function fetchBulletinData(supabase: any, bulletin: any) {
     anciennete = y > 0 ? `${y} an(s) ${m} mois` : `${m} mois`
   }
 
-  return { emp, soc, moisLabel, annee, periodeDate, alPris, slPris, alDroit, slDroit, vlDroit, vlPris, fmlUtilisesTotal, primesMois: primesMois || [], totalFraisKm, anciennete }
+  // PE1 — période + date paiement dynamiques selon la config société.
+  // En mode 'calendaire' (défaut), retombe sur 1er -> dernier du mois
+  // (rétrocompat). En mode 'cut_off_jour', affiche 25/03 → 24/04.
+  const periodePaie: PeriodePaieCalculee = await calculerPeriodePaie(
+    supabase,
+    bulletin.societe_id,
+    bulletin.periode, // stocké YYYY-MM-01
+  )
+  const periodePaieLabel = formaterPeriodeCourte(periodePaie)
+  const datePaiementLabel = (() => {
+    const dp = periodePaie.date_paiement
+    return `${dp.slice(8, 10)}/${dp.slice(5, 7)}/${dp.slice(0, 4)}`
+  })()
+
+  return {
+    emp, soc, moisLabel, annee, periodeDate, alPris, slPris, alDroit, slDroit,
+    vlDroit, vlPris, fmlUtilisesTotal, primesMois: primesMois || [], totalFraisKm,
+    anciennete, periodePaie, periodePaieLabel, datePaiementLabel,
+  }
 }
 
 // ─── PDF Document Component ──────────────────────────────────────
@@ -185,7 +208,7 @@ const s = StyleSheet.create({
   otSubValue: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#ea580c', textAlign: 'right', width: 90 },
 })
 
-function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris, slPris, alDroit, slDroit, vlDroit, vlPris, fmlUtilisesTotal, primesMois, totalFraisKm, anciennete }: any) {
+function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris, slPris, alDroit, slDroit, vlDroit, vlPris, fmlUtilisesTotal, primesMois, totalFraisKm, anciennete, periodePaieLabel, datePaiementLabel }: any) {
   const csgPct = Number(bulletin.salaire_brut) > 50000 ? '3%' : '1.5%'
   const hasOT = Number(bulletin.heures_sup_montant) > 0
 
@@ -256,6 +279,13 @@ function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris
         React.createElement(View, { style: s.headerRight },
           React.createElement(Text, { style: s.title }, 'BULLETIN DE PAIE'),
           React.createElement(Text, { style: s.subtitle }, `${moisLabel} ${annee}`),
+          // PE1 — période exacte + date paiement (dynamiques si cut_off_jour).
+          periodePaieLabel
+            ? React.createElement(Text, { style: s.smallGray }, `Période : ${periodePaieLabel}`)
+            : null,
+          datePaiementLabel
+            ? React.createElement(Text, { style: s.smallGray }, `Versement prévu : ${datePaiementLabel}`)
+            : null,
           React.createElement(Text, { style: s.smallGray }, `Ref: BUL-${annee}-${String(periodeDate.getMonth() + 1).padStart(2, '0')}-${emp?.code || '000'}`),
           React.createElement(Text, { style: s.smallGray }, `Emis le: ${new Date().toLocaleDateString('fr-FR')}`),
         )

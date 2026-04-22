@@ -12,6 +12,12 @@ import { Loader2, Calculator, Download, FileText, BookOpen, AlertTriangle, Check
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { PaieValidationPanel } from "@/components/rh/PaieValidationPanel"
+import {
+  calculerPeriodePaieSync,
+  DEFAULT_CONFIG as DEFAULT_PERIODE_CFG,
+  type PeriodePaieConfig,
+  type PeriodePaieMode,
+} from "@/lib/rh/periode-paie"
 
 function fmt(n: number) { return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "MUR", maximumFractionDigits: 0 }).format(n) }
 const STATUT_COLORS: Record<string, string> = {
@@ -44,6 +50,9 @@ export default function PaiePage() {
   const [periode, setPeriode] = useState("")
   const [periodeReady, setPeriodeReady] = useState(false)
   const [availablePeriodes, setAvailablePeriodes] = useState<string[]>([])
+  // PE1 — config période paie de la société active (pour afficher
+  // '25/03 → 24/04' dans le sélecteur quand mode != calendaire).
+  const [periodeCfg, setPeriodeCfg] = useState<PeriodePaieConfig>({ ...DEFAULT_PERIODE_CFG })
   const [bulletins, setBulletins] = useState<any[]>([])
   const [totaux, setTotaux] = useState<any>({})
   // Migration 135 — toggle pointage_actif renvoyé par /api/rh/paie pour
@@ -158,6 +167,26 @@ export default function PaiePage() {
       setPointageActif(null)
     } finally { setLoading(false) }
   }, [societe, periode, periodeReady])
+
+  // PE1 — charge la config période paie de la société sélectionnée.
+  useEffect(() => {
+    if (!societe || societe === "all") { setPeriodeCfg({ ...DEFAULT_PERIODE_CFG }); return }
+    let cancelled = false
+    fetch(`/api/rh/societe?societe_id=${societe}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (cancelled) return
+        const s = d?.societe || d || {}
+        setPeriodeCfg({
+          mode: (s.periode_paie_mode as PeriodePaieMode) || 'calendaire',
+          jour_cut_off: Number(s.periode_paie_jour_cut_off) || 24,
+          jour_paiement: s.periode_paie_jour_paiement == null ? null : Number(s.periode_paie_jour_paiement),
+          offset_paiement_mois: (Number(s.periode_paie_offset_paiement_mois) === 1 ? 1 : 0) as 0 | 1,
+        })
+      })
+      .catch(() => setPeriodeCfg({ ...DEFAULT_PERIODE_CFG }))
+    return () => { cancelled = true }
+  }, [societe])
 
   const loadWorkflow = useCallback(async () => {
     if (!periode || societe === "all") { setWorkflow(null); return }
@@ -566,12 +595,20 @@ export default function PaiePage() {
               </SelectContent>
             </Select>
             <Select value={periode} onValueChange={setPeriode}>
-              <SelectTrigger className="w-52"><SelectValue placeholder="Periode" /></SelectTrigger>
+              <SelectTrigger className="w-72"><SelectValue placeholder="Periode" /></SelectTrigger>
               <SelectContent>
                 {availablePeriodes.map(p => {
                   const d = new Date(p + "-15")
                   const label = d.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
-                  return <SelectItem key={p} value={p}>{label.charAt(0).toUpperCase() + label.slice(1)}</SelectItem>
+                  const base = label.charAt(0).toUpperCase() + label.slice(1)
+                  // PE1 — suffixe '(25/03 → 24/04)' si mode cut_off_jour.
+                  let suffix = ""
+                  if (periodeCfg.mode === 'cut_off_jour') {
+                    const r = calculerPeriodePaieSync(periodeCfg, `${p}-01`)
+                    const fmt = (s: string) => `${s.slice(8, 10)}/${s.slice(5, 7)}`
+                    suffix = ` (${fmt(r.periode_debut)} → ${fmt(r.periode_fin)})`
+                  }
+                  return <SelectItem key={p} value={p}>{base}{suffix}</SelectItem>
                 })}
               </SelectContent>
             </Select>
