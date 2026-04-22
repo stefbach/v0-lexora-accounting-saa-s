@@ -840,11 +840,17 @@ export default function PointagePage() {
                             <span className="font-mono text-red-300">--:--</span>
                           )}
                         </TableCell>
+                        {/* HOTFIX PO1 — duree_minutes ne contient que les
+                            sessions travail FERMÉES. Tant que l'employé n'a
+                            pas cliqué Sortie (heure_sortie IS NULL), on
+                            affiche '--' pour éviter les chiffres partiels
+                            trompeurs (ex. 6h55 alors qu'il est encore en
+                            session après-midi). */}
                         <TableCell className="text-center font-mono">
-                          {dureeFmt(p.duree_minutes)}
+                          {p.heure_sortie ? dureeFmt(p.duree_minutes) : '--'}
                         </TableCell>
                         <TableCell className="text-center font-mono text-[#D4AF37]">
-                          {p.heures_sup && p.heures_sup > 0
+                          {p.heure_sortie && p.heures_sup && p.heures_sup > 0
                             ? `${p.heures_sup.toFixed(1)}h`
                             : "--"}
                         </TableCell>
