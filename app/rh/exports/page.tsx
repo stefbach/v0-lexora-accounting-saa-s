@@ -44,21 +44,44 @@ export default function ExportsLegauxPage() {
   const [format, setFormat] = useState<FormatType>("xlsx")
   const [downloading, setDownloading] = useState<RegistreType | null>(null)
   const [loadingPermissions, setLoadingPermissions] = useState(true)
-  const [authorized, setAuthorized] = useState(false)
+  const [authorized, setAuthorized] = useState<boolean | null>(null)
+  const [roleMsg, setRoleMsg] = useState<string | null>(null)
 
-  // Check permissions at mount (simple fetch societes + error handler).
+  // G6 — Les exports S.116 sont réservés admin / super_admin / rh_manager.
+  // Vérif côté client ; la route API applique la même règle (défense en
+  // profondeur).
   useEffect(() => {
     let cancelled = false
-    fetch("/api/comptable/societes")
-      .then(r => r.ok ? r.json() : { societes: [] })
-      .then(d => {
+    ;(async () => {
+      try {
+        const { createClient } = await import('@/lib/supabase/client')
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) {
+          if (!cancelled) { setAuthorized(false); setRoleMsg('Non authentifié.') }
+          return
+        }
+        const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+        const role = (prof as any)?.role || ''
+        const ok = ['admin', 'super_admin', 'rh_manager'].includes(role)
+        if (cancelled) return
+        setAuthorized(ok)
+        if (!ok) {
+          setRoleMsg(`Accès réservé aux RH Manager et administrateurs (rôle courant : ${role || 'inconnu'}).`)
+          return
+        }
+        // Authorized : charger la liste des sociétés.
+        const res = await fetch('/api/comptable/societes')
+        const d = res.ok ? await res.json() : { societes: [] }
         if (cancelled) return
         setSocietes(d?.societes || [])
-        setAuthorized(true)
-        if (d?.societes?.length > 0 && !societeId) setSocieteId(d.societes[0].id)
-      })
-      .catch(() => { if (!cancelled) setAuthorized(false) })
-      .finally(() => { if (!cancelled) setLoadingPermissions(false) })
+        if (d?.societes?.length > 0) setSocieteId((prev) => prev || d.societes[0].id)
+      } catch {
+        if (!cancelled) { setAuthorized(false); setRoleMsg('Erreur de chargement.') }
+      } finally {
+        if (!cancelled) setLoadingPermissions(false)
+      }
+    })()
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -110,6 +133,28 @@ export default function ExportsLegauxPage() {
         <div className="flex items-center justify-center py-24">
           <Loader2 className="h-10 w-10 animate-spin text-gray-400" />
         </div>
+      </ClientPageShell>
+    )
+  }
+
+  if (authorized === false) {
+    return (
+      <ClientPageShell hideHero disableParticles>
+        <Card className="max-w-lg mx-auto mt-12 border-red-300 bg-red-50">
+          <CardContent className="p-6 flex items-start gap-3">
+            <ShieldCheck className="h-6 w-6 text-red-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-red-900">Accès refusé</p>
+              <p className="text-sm text-red-800 mt-1">
+                {roleMsg || 'Cette page est réservée aux RH Manager et administrateurs.'}
+              </p>
+              <p className="text-xs text-red-700 mt-2">
+                Les exports légaux S.116 contiennent des données sensibles et ne sont
+                accessibles qu&apos;aux responsables RH et administrateurs.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
       </ClientPageShell>
     )
   }

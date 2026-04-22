@@ -8,7 +8,7 @@ import { t, getLocale } from "@/lib/i18n"
 import { LanguageSwitcher } from "@/components/LanguageSwitcher"
 import {
   Clock, Users, Calendar, CreditCard, TrendingUp, Banknote,
-  Settings, LogOut, ArrowLeft, Menu, X, CalendarDays, Car, Bot, CheckCircle, Upload, UserMinus, Megaphone, MapPin, Route, Shield, FilePen, UserCircle
+  Settings, LogOut, ArrowLeft, Menu, X, CalendarDays, Car, Bot, CheckCircle, Upload, UserMinus, Megaphone, MapPin, Route, Shield, FilePen, UserCircle, ShieldCheck,
 } from "lucide-react"
 
 interface NavLink {
@@ -36,6 +36,8 @@ const ALL_LINKS: NavLink[] = [
   { href: '/rh/pointage', label: 'Pointage', labelKey: 'hr.time_clock', icon: Clock },
   { href: '/rh/conges', label: 'Absences & Congés', labelKey: 'rh.absences_leave', icon: Calendar },
   { href: '/rh/conges/parametres', label: 'Règles congés', icon: Settings, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
+  // G6 — Exports légaux WRA S.116 : réservés RH Manager / admin.
+  { href: '/rh/exports', label: 'Exports légaux (S.116)', icon: ShieldCheck, roles: ['admin', 'super_admin', 'rh_manager'] },
   { href: '/rh/jours-feries', label: 'Jours fériés', icon: Calendar, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
   { href: '/rh/paie', label: 'Paie & Bulletins', labelKey: 'hr.payslips', icon: CreditCard, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'comptable', 'comptable_dedie'] },
   { href: '/rh/paie/validation', label: 'Contrôle pré-paie', icon: CheckCircle, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
