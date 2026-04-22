@@ -117,6 +117,10 @@ interface BalanceRow {
   /** Subset of al_pris chosen by the employee. */
   al_impose_employe?: number
   al_solde: number
+  /** G5 — Modèle C accrual linéaire mensuel (jours accumulés au prorata). */
+  al_acquis?: number | null
+  /** G5 — al_acquis - al_pris : base paiement compensatoire (WRA S.45(2)). */
+  al_solde_acquis?: number | null
   sl_droit: number
   sl_pris: number
   sl_solde: number
@@ -1239,7 +1243,13 @@ export default function CongesPage() {
                         <TableHead className="text-xs">Periode</TableHead>
                         <TableHead className="text-xs">Eligibilite</TableHead>
                         <TableHead className="text-xs" title="WRA 2019 S.2 : worker (basic ≤ 50k) ou hors_wra (basic > 50k)">Statut WRA</TableHead>
-                        <TableHead className="text-center">AL Droit</TableHead>
+                        <TableHead className="text-center" title="AL utilisable (après 12 mois) — source historique, inchangé.">AL Droit</TableHead>
+                        <TableHead
+                          className="text-center text-teal-700"
+                          title="G5 Modèle C — jours accumulés au prorata mensuel (22/12 par mois). Base pour paiement compensatoire en cas de départ (WRA S.45(2)) et provisions IAS 19. Peut différer de 'AL Droit' avant le 12ème mois."
+                        >
+                          AL Acquis
+                        </TableHead>
                         <TableHead className="text-center">AL Pris</TableHead>
                         <TableHead className="text-center">AL Solde</TableHead>
                         <TableHead className="text-center">SL Droit</TableHead>
@@ -1291,6 +1301,10 @@ export default function CongesPage() {
                               <Input type="number" className="h-7 text-xs w-14 text-center" value={editBalFields.al_droit}
                                 onChange={e => setEditBalFields(f => ({ ...f, al_droit: parseFloat(e.target.value) || 0 }))} />
                             ) : b.al_droit}
+                          </TableCell>
+                          {/* G5 — AL Acquis (Modèle C accrual linéaire mensuel) */}
+                          <TableCell className="text-center text-sm text-teal-700 font-medium">
+                            {b.al_acquis != null ? Number(b.al_acquis).toFixed(2) : '—'}
                           </TableCell>
                           <TableCell className="text-center text-sm">
                             {isEditing ? (
