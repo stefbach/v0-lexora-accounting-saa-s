@@ -84,6 +84,21 @@ export function DashboardTab({
     return () => { cancelled = true }
   }, [])
 
+  // G7 — carte grossesse/paternité read-only (RLS SELECT_SELF garantit
+  // que l'employé(e) ne voit que SES données).
+  const [protection, setProtection] = useState<{
+    grossesse: any | null
+    paternite: any | null
+  }>({ grossesse: null, paternite: null })
+  useEffect(() => {
+    let cancelled = false
+    fetch("/api/salarie/protection-legale")
+      .then(r => r.ok ? r.json() : { grossesse: null, paternite: null })
+      .then(d => { if (!cancelled) setProtection({ grossesse: d.grossesse, paternite: d.paternite }) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+
   const notifications: { icon: typeof Bell; text: string; time: string }[] = []
   if (lastBulletin) {
     const per = lastBulletin.periode || ""
@@ -112,6 +127,75 @@ export function DashboardTab({
           </CardContent>
         </Card>
       )}
+
+      {/* G7 — Carte grossesse active (read-only, transparence WRA S.52/S.64) */}
+      {protection.grossesse && (() => {
+        const g = protection.grossesse
+        const fmt = (iso: string | null) => iso ? `${String(iso).slice(8, 10)}/${String(iso).slice(5, 7)}/${String(iso).slice(0, 4)}` : "—"
+        return (
+          <Card className="overflow-hidden rounded-xl shadow-sm border-0"
+            style={{ background: "linear-gradient(135deg, #fce7f3, #fdf2f8)", borderLeft: "4px solid #ec4899" }}>
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3">
+                <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-pink-200 shrink-0">
+                  <span className="text-xl">🤱</span>
+                </div>
+                <div className="flex-1 space-y-1 text-sm">
+                  <p className="font-semibold text-pink-900">
+                    {g.statut === 'declaree' && 'Grossesse enregistrée'}
+                    {g.statut === 'conge_en_cours' && 'Congé maternité en cours'}
+                    {g.statut === 'retour_effectue' && 'Congé maternité terminé'}
+                  </p>
+                  <div className="text-xs text-pink-800 space-y-0.5">
+                    {g.date_presume_accouchement && (
+                      <p>Date prévue : <strong>{fmt(g.date_presume_accouchement)}</strong></p>
+                    )}
+                    {g.conge_mat_debut && g.conge_mat_fin && (
+                      <p>Congé maternité : <strong>{fmt(g.conge_mat_debut)} → {fmt(g.conge_mat_fin)}</strong></p>
+                    )}
+                    {g.allocation_naissance_payee && (
+                      <p className="text-emerald-700">✓ Allocation naissance 3 000 MUR versée</p>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-pink-600 pt-1">
+                    Protection WRA 2019 Sections 52 &amp; 64. Pour toute modification, contactez le RH.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )
+      })()}
+
+      {/* G7 — Carte paternité active (read-only) */}
+      {protection.paternite && (() => {
+        const p = protection.paternite
+        const fmt = (iso: string | null) => iso ? `${String(iso).slice(8, 10)}/${String(iso).slice(5, 7)}/${String(iso).slice(0, 4)}` : "—"
+        return (
+          <Card className="overflow-hidden rounded-xl shadow-sm border-0"
+            style={{ background: "linear-gradient(135deg, #dbeafe, #eff6ff)", borderLeft: "4px solid #2563eb" }}>
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3">
+                <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-blue-200 shrink-0">
+                  <span className="text-xl">👶</span>
+                </div>
+                <div className="flex-1 space-y-1 text-sm">
+                  <p className="font-semibold text-blue-900">
+                    Congé paternité ({p.conge_paye ? '4 semaines payées' : '4 semaines non payées'})
+                  </p>
+                  <div className="text-xs text-blue-800 space-y-0.5">
+                    <p>Naissance : <strong>{fmt(p.date_naissance_enfant)}</strong></p>
+                    {p.conge_pat_debut && p.conge_pat_fin && (
+                      <p>Congé : <strong>{fmt(p.conge_pat_debut)} → {fmt(p.conge_pat_fin)}</strong></p>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-blue-600 pt-1">WRA 2019 Section 53.</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )
+      })()}
 
       {estimatedNet > 0 && (
         <Card className="overflow-hidden rounded-xl shadow-sm" style={{ border: `2px solid ${GOLD}30` }}>
