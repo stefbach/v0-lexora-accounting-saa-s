@@ -6,7 +6,7 @@
  *   type   : hours | salary | leave | overtime | absence
  *   format : xlsx (par défaut) | pdf
  *
- * Réservé aux admin / super_admin / rh_manager.
+ * Réservé aux admin / rh.
  * Retourne un fichier attaché (Content-Disposition: attachment) nommé
  *   registre_<type>_<societe_short>_<annee>[_<MM>].<ext>
  */
@@ -25,7 +25,7 @@ import {
 
 export const dynamic = 'force-dynamic'
 
-const ALLOWED_ROLES = ['admin', 'super_admin', 'rh_manager']
+const ALLOWED_ROLES = ['admin', 'rh']
 const VALID_TYPES: RegistreType[] = ['hours', 'salary', 'leave', 'overtime', 'absence']
 
 function getAdminClient() {
@@ -129,7 +129,7 @@ export async function GET(
     const role = (profile as any)?.role || ''
     if (!ALLOWED_ROLES.includes(role)) {
       return NextResponse.json(
-        { error: 'Accès réservé aux RH Manager et administrateurs (WRA S.116).' },
+        { error: 'Accès réservé aux RH et administrateurs (WRA S.116).' },
         { status: 403 },
       )
     }

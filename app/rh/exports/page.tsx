@@ -47,9 +47,8 @@ export default function ExportsLegauxPage() {
   const [authorized, setAuthorized] = useState<boolean | null>(null)
   const [roleMsg, setRoleMsg] = useState<string | null>(null)
 
-  // G6 — Les exports S.116 sont réservés admin / super_admin / rh_manager.
-  // Vérif côté client ; la route API applique la même règle (défense en
-  // profondeur).
+  // G6 — Les exports S.116 sont réservés admin / rh (pas de rôle 'super_admin'
+  // ni 'rh_manager' en DB — hotfix après constat terrain).
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -63,11 +62,11 @@ export default function ExportsLegauxPage() {
         }
         const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
         const role = (prof as any)?.role || ''
-        const ok = ['admin', 'super_admin', 'rh_manager'].includes(role)
+        const ok = ['admin', 'rh'].includes(role)
         if (cancelled) return
         setAuthorized(ok)
         if (!ok) {
-          setRoleMsg(`Accès réservé aux RH Manager et administrateurs (rôle courant : ${role || 'inconnu'}).`)
+          setRoleMsg(`Accès réservé aux RH et administrateurs (rôle courant : ${role || 'inconnu'}).`)
           return
         }
         // Authorized : charger la liste des sociétés.
