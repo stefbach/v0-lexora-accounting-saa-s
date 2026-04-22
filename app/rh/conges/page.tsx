@@ -1872,18 +1872,111 @@ export default function CongesPage() {
               <Select value={form.type_conge} onValueChange={v => setForm(f => ({ ...f, type_conge: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {Object.entries(TYPE_LABELS).map(([k, v]) => (
-                    <SelectItem key={k} value={k}>{v}</SelectItem>
-                  ))}
+                  {/* G4 — groupes WRA 2019 */}
+                  <div className="px-2 pt-1 pb-0.5 text-[10px] font-semibold uppercase text-gray-400">Principaux (WRA S.45-47)</div>
+                  <SelectItem value="AL">Annual Leave (22j/an)</SelectItem>
+                  <SelectItem value="SL">Sick Leave (15j/an)</SelectItem>
+                  <SelectItem value="VL">Vacation Leave (30j/5 ans, workers)</SelectItem>
+                  <div className="px-2 pt-1 pb-0.5 text-[10px] font-semibold uppercase text-gray-400">Familial (S.47A)</div>
+                  <SelectItem value="FML">Family Medical Leave (10j/an, déductible AL/SL/VL)</SelectItem>
+                  <div className="px-2 pt-1 pb-0.5 text-[10px] font-semibold uppercase text-gray-400">Exceptionnels (S.48)</div>
+                  <SelectItem value="SPC_MARIAGE_SELF">Mariage du salarié (6j)</SelectItem>
+                  <SelectItem value="SPC_MARIAGE_ENFANT">Mariage d'un enfant (3j)</SelectItem>
+                  <SelectItem value="SPC_DECES">Décès famille proche (3j)</SelectItem>
+                  <div className="px-2 pt-1 pb-0.5 text-[10px] font-semibold uppercase text-gray-400">Légaux (S.49-51)</div>
+                  <SelectItem value="JUR">Juré (durée service)</SelectItem>
+                  <SelectItem value="INT">Événement international (durée)</SelectItem>
+                  <SelectItem value="CRT">Convocation judiciaire</SelectItem>
+                  <div className="px-2 pt-1 pb-0.5 text-[10px] font-semibold uppercase text-gray-400">Maternité / Paternité (S.52-53)</div>
+                  <SelectItem value="MAT">Maternité (16 semaines)</SelectItem>
+                  <SelectItem value="PAT">Paternité (4 semaines)</SelectItem>
+                  <div className="px-2 pt-1 pb-0.5 text-[10px] font-semibold uppercase text-gray-400">Autres</div>
+                  <SelectItem value="UL">Sans solde (UL)</SelectItem>
+                  <SelectItem value="COM">Récupération (compensatoire)</SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-gray-400 mt-1">
-                {form.type_conge === "AL" && "Conge annuel: 20 jours ouvrables/an (prorata si embauche en cours d'annee)"}
-                {form.type_conge === "SL" && "Conge maladie: 15 jours ouvrables/an. Certificat medical requis si > 3 jours consecutifs"}
-                {form.type_conge === "MAT" && "Maternite: 14 semaines (98 jours calendaires). Reserves aux femmes."}
-                {form.type_conge === "PAT" && "Paternite: 5 jours ouvrables. Reserves aux hommes."}
+                {form.type_conge === "AL" && "Annual Leave : 22 jours ouvrables / an (WRA S.45)."}
+                {form.type_conge === "SL" && "Sick Leave : 15 jours / an (WRA S.46). Certificat medical si ≥ 3 jours."}
+                {form.type_conge === "VL" && "Vacation Leave : 30 jours / 5 ans (WRA S.47). Workers (basic ≤ 50k) uniquement."}
+                {form.type_conge === "FML" && "Family Medical Leave : 10j/an pour soigner parent/enfant/grand-parent (WRA S.47A). Déductible AL/SL/VL."}
+                {form.type_conge === "SPC_MARIAGE_SELF" && "6j pour premier mariage du salarié (WRA S.48)."}
+                {form.type_conge === "SPC_MARIAGE_ENFANT" && "3j pour premier mariage d'un enfant (WRA S.48)."}
+                {form.type_conge === "SPC_DECES" && "3j pour décès conjoint/enfant/parent/frère/sœur (WRA S.48)."}
+                {form.type_conge === "JUR" && "Durée du service juré (WRA S.49). Convocation officielle requise."}
+                {form.type_conge === "INT" && "Durée événement sportif/culturel international (WRA S.50)."}
+                {form.type_conge === "CRT" && "Temps nécessaire convocation judiciaire (WRA S.51)."}
+                {form.type_conge === "MAT" && "Maternité : 16 semaines, +2 si multiple/prématurée (WRA S.52). Allocation 3 000 MUR."}
+                {form.type_conge === "PAT" && "Paternité : 4 semaines (WRA S.53). Payé si ≥ 12 mois de service."}
               </p>
             </div>
+
+            {/* G4 — Champs conditionnels selon type (justificatifs) */}
+            {form.type_conge === 'FML' && (
+              <div className="space-y-2 p-3 bg-cyan-50 border border-cyan-200 rounded-md">
+                <Label className="text-xs text-cyan-900">Déduction du solde de :</Label>
+                <Select
+                  value={(form as any).deduction_source || 'AL'}
+                  onValueChange={v => setForm(f => ({ ...f, deduction_source: v } as any))}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="AL">Annual Leave</SelectItem>
+                    <SelectItem value="SL">Sick Leave</SelectItem>
+                    <SelectItem value="VL">Vacation Leave (si éligible)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input
+                  placeholder="URL certificat médical du parent malade (requis)"
+                  value={(form as any).certificat_medical_url || ''}
+                  onChange={e => setForm(f => ({ ...f, certificat_medical_url: e.target.value } as any))}
+                />
+                <Input
+                  placeholder="URL acte de naissance / preuve parenté (requis)"
+                  value={(form as any).acte_naissance_url || ''}
+                  onChange={e => setForm(f => ({ ...f, acte_naissance_url: e.target.value } as any))}
+                />
+              </div>
+            )}
+            {form.type_conge === 'SPC_MARIAGE_SELF' && (
+              <Input
+                placeholder="URL certificat de mariage (requis)"
+                value={(form as any).convocation_url || ''}
+                onChange={e => setForm(f => ({ ...f, convocation_url: e.target.value } as any))}
+              />
+            )}
+            {form.type_conge === 'SPC_MARIAGE_ENFANT' && (
+              <div className="space-y-2">
+                <Input
+                  placeholder="URL certificat de mariage de l'enfant (requis)"
+                  value={(form as any).convocation_url || ''}
+                  onChange={e => setForm(f => ({ ...f, convocation_url: e.target.value } as any))}
+                />
+                <Input
+                  placeholder="URL acte de naissance de l'enfant (requis)"
+                  value={(form as any).acte_naissance_url || ''}
+                  onChange={e => setForm(f => ({ ...f, acte_naissance_url: e.target.value } as any))}
+                />
+              </div>
+            )}
+            {form.type_conge === 'SPC_DECES' && (
+              <Input
+                placeholder="URL acte de décès (requis)"
+                value={(form as any).acte_deces_url || ''}
+                onChange={e => setForm(f => ({ ...f, acte_deces_url: e.target.value } as any))}
+              />
+            )}
+            {['JUR', 'INT', 'CRT'].includes(form.type_conge) && (
+              <Input
+                placeholder={
+                  form.type_conge === 'JUR' ? "URL convocation tribunal (requis)" :
+                  form.type_conge === 'INT' ? "URL documentation officielle événement (requis)" :
+                  "URL convocation judiciaire (requis)"
+                }
+                value={(form as any).convocation_url || ''}
+                onChange={e => setForm(f => ({ ...f, convocation_url: e.target.value } as any))}
+              />
+            )}
 
             {/* Demi-journée — only offered for leave types where it makes sense */}
             {DEMI_JOURNEE_ALLOWED_TYPES.has(form.type_conge) && (
