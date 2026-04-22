@@ -19,6 +19,7 @@ import {
   Loader2, RefreshCw, ChevronDown, ChevronRight,
   CheckCircle2, XCircle, AlertTriangle, Activity,
 } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 type Severity = "critical" | "warning" | "info"
@@ -43,7 +44,7 @@ interface HealthResponse {
 const NAVY = "#0B0F2E"
 
 function severityTone(severity: Severity, status: Status): {
-  bg: string; border: string; text: string; label: string; icon: React.ElementType
+  bg: string; border: string; text: string; label: string; icon: LucideIcon
 } {
   if (status === "pass") {
     return { bg: "#ECFDF5", border: "#A7F3D0", text: "#065F46", label: "OK", icon: CheckCircle2 }
