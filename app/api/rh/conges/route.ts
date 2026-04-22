@@ -708,6 +708,54 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Employe non trouve' }, { status: 404 })
       }
 
+      // G4 — Validation generique selon conges_regles (mig 170).
+      // Gere tous les types (AL/SL/VL/FML/SPC_*/JUR/INT/CRT/MAT/PAT/UL/COM)
+      // en lisant la config effective (override societe > globale) et en
+      // verifiant anciennete min, basic max, migrant, justificatifs requis.
+      //
+      // Exceptions pour retrocompat :
+      //   - AL/SL : logique interne historique (accrual M6-M12 gere par
+      //     get_conges_droits) > garde-fou conges_regles en premier filet.
+      //   - VL : logique G2 (get_vacation_leave_droit) plus precise -> garde
+      //     la validation VL specifique plus bas comme source autoritaire.
+      try {
+        const { getTypeCongeConfig, validerJustificatifs, verifierEligibilite } = await import('@/lib/rh/types-conges')
+        const cfg = await getTypeCongeConfig(supabase, body.type_conge, emp.societe_id)
+        if (cfg.source !== 'default') {
+          // Eligibilite (skippee pour VL qui a sa propre route below, et
+          // pour AL/SL qui ont le systeme accrual anciennete-aware).
+          if (!['AL', 'SL', 'VL'].includes(body.type_conge)) {
+            const elig = verifierEligibilite(cfg, emp, body.date_debut)
+            if (!elig.eligible) {
+              return NextResponse.json({
+                error: 'eligibilite_refusee',
+                raison: elig.raison,
+                date_eligibilite: elig.date_eligibilite || null,
+                type_conge: body.type_conge,
+                reference_wra: cfg.reference_wra,
+              }, { status: 422 })
+            }
+          }
+          // Justificatifs conditionnels
+          const justifValid = validerJustificatifs(cfg, {
+            certificat_medical: body.certificat_medical_url || body.certificat_url,
+            acte_naissance: body.acte_naissance_url,
+            acte_deces: body.acte_deces_url,
+            convocation: body.convocation_url,
+          })
+          if (!justifValid.ok) {
+            return NextResponse.json({
+              error: 'justificatifs_manquants',
+              manquants: justifValid.manquants,
+              type_conge: body.type_conge,
+              reference_wra: cfg.reference_wra,
+            }, { status: 422 })
+          }
+        }
+      } catch (e) {
+        console.warn('[conges creer G4] validation generique skippee:', (e as any)?.message)
+      }
+
       // G2 + G3 — Validation VL (WRA S.47). Un employé non-éligible
       // (migrant, ou < 5 ans d'ancienneté, ou hors_wra sous policy stricte)
       // ne peut pas soumettre de demande VL.
