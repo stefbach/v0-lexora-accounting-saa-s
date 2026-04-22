@@ -7,7 +7,11 @@ import { assertSocieteAccess, SocieteAccessError } from '@/lib/supabase/assert-s
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
-type SupabaseAdmin = ReturnType<typeof createClient>
+// Supabase admin — typé `any` pour rester compatible avec les INSERT multi-lignes
+// (sans schema generic, TS strict infère 'never'). Pattern aligné avec le reste du
+// projet (cf. safeQuery dans app/api/comptable/rapprochement/route.ts:59).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SupabaseAdmin = any
 
 type RepairStatus = 'pass' | 'fail' | 'skipped'
 
