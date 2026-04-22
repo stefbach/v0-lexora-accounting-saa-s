@@ -5,6 +5,7 @@ import { calculerBulletin, PARAMS_MRA_DEFAUT } from '@/lib/rh/paie'
 import { getUserSocieteIds, userHasAccessToSociete, userHasAccessToEmploye } from '@/lib/rh/access'
 import { calculateWorkingDays, getWorkingDaysForEmploye, getMauritiusPublicHolidays } from '@/lib/rh/calculateWorkingDays'
 import { lastDayOfMonth } from '@/lib/rh/period'
+import { calculerPeriodePaie, type PeriodePaieCalculee } from '@/lib/rh/periode-paie'
 import { fetchPaiementsValidesPourBulletin, marquerPaiementPaye } from '@/lib/rh/cash-in-lieu'
 import { fetchGrossessePourAllocationBulletin, marquerAllocationPayee } from '@/lib/rh/protection-maternite'
 
@@ -527,18 +528,28 @@ export async function POST(request: Request) {
         }
       }
 
+      // PE1 — période paie paramétrable. En mode 'calendaire' (défaut),
+      // periodeStartSingle/periodeEndSingle = 1er/dernier du mois de
+      // `periodeStr`. En mode 'cut_off_jour', ce sera par ex. 25/03 → 24/04.
+      const sidForPeriode = targetSocieteId || emp.societe_id
+      const periodeInfo: PeriodePaieCalculee = await calculerPeriodePaie(
+        supabase, sidForPeriode, `${periodeStr}-01`,
+      )
+      const periodeStartSingle = periodeInfo.periode_debut
+      const periodeEndSingle = periodeInfo.periode_fin
+
       // 1. Récupérer OT de la période depuis les pointages
       const { data: pointagesMois } = await supabase.from('pointages')
         .select('*').eq('employe_id', employe_id)
-        .gte('date_pointage', `${periodeStr}-01`)
-        .lte('date_pointage', lastDayOfMonth(periodeStr))
+        .gte('date_pointage', periodeStartSingle)
+        .lte('date_pointage', periodeEndSingle)
 
       // Bug 4 fix: fetch planning assignments for this employee+period to determine planned hours
       const { data: planAssignments } = await supabase.from('planning_assignments')
         .select('date, shift_code, heures_prevues, est_repos')
         .eq('employe_id', employe_id)
-        .gte('date', `${periodeStr}-01`)
-        .lte('date', lastDayOfMonth(periodeStr))
+        .gte('date', periodeStartSingle)
+        .lte('date', periodeEndSingle)
       const planMap: Record<string, { heures_prevues: number; est_repos: boolean }> = {}
       for (const pa of planAssignments || []) {
         planMap[pa.date] = { heures_prevues: Number(pa.heures_prevues) || 8, est_repos: pa.est_repos }
@@ -617,8 +628,7 @@ export async function POST(request: Request) {
       }
 
       // 3. Congés approuvés qui CHEVAUCHENT le mois (cf. fix de calculer_batch).
-      const periodeStartSingle = `${periodeStr}-01`
-      const periodeEndSingle = lastDayOfMonth(periodeStr)
+      // periodeStartSingle/periodeEndSingle définis plus haut (PE1).
       const { data: congesApprouves } = await supabase.from('demandes_conges')
         .select('*').eq('employe_id', employe_id).eq('statut', 'approuve')
         .lte('date_debut', periodeEndSingle).gte('date_fin', periodeStartSingle)
@@ -678,7 +688,7 @@ export async function POST(request: Request) {
           pointageByDate.set(pt.date_pointage, pt)
         }
         const workingDaysList = listWorkingDaysInPeriod(
-          `${periodeStr}-01`, lastDayOfMonth(periodeStr), emp, joursFeriesSetSingle,
+          periodeStartSingle, periodeEndSingle, emp, joursFeriesSetSingle,
         )
         // F2 — date de référence "aujourd'hui" en ISO. Les jours du mois
         // qui sont dans le futur ne sont NI absents NI présents : ils
@@ -1052,6 +1062,14 @@ export async function POST(request: Request) {
       const bulletinsSauvegardes = []
       const erreurs: string[] = []
 
+      // PE1 — Période paie paramétrable. Tous les employés d'un batch
+      // partagent `societe_id`, donc on résout la période une seule fois.
+      const periodeInfoBatch: PeriodePaieCalculee = await calculerPeriodePaie(
+        supabase, societe_id || null, `${periodeStr}-01`,
+      )
+      const periodeStartBatch = periodeInfoBatch.periode_debut
+      const periodeEndBatch = periodeInfoBatch.periode_fin
+
       // Fetch auto-prime rules for this société (once for all employees)
       let autoRegles: any[] = []
       try {
@@ -1064,14 +1082,14 @@ export async function POST(request: Request) {
         // 1. OT depuis pointages
         const { data: pointagesMois } = await supabase.from('pointages')
           .select('*').eq('employe_id', emp.id)
-          .gte('date_pointage', `${periodeStr}-01`).lte('date_pointage', lastDayOfMonth(periodeStr))
+          .gte('date_pointage', periodeStartBatch).lte('date_pointage', periodeEndBatch)
 
         // Bug 4 fix: fetch planning assignments for this employee+period
         const { data: planAssignments } = await supabase.from('planning_assignments')
           .select('date, shift_code, heures_prevues, est_repos')
           .eq('employe_id', emp.id)
-          .gte('date', `${periodeStr}-01`)
-          .lte('date', lastDayOfMonth(periodeStr))
+          .gte('date', periodeStartBatch)
+          .lte('date', periodeEndBatch)
         const planMap: Record<string, { heures_prevues: number; est_repos: boolean }> = {}
         for (const pa of planAssignments || []) {
           planMap[pa.date] = { heures_prevues: Number(pa.heures_prevues) || 8, est_repos: pa.est_repos }
@@ -1230,8 +1248,9 @@ export async function POST(request: Request) {
         // was invisible when computing the March 2026 bulletin). Correct
         // "overlaps" filter: leave.date_debut <= periodeEnd AND
         // leave.date_fin >= periodeStart.
-        const periodeStart = `${periodeStr}-01`
-        const periodeEnd = lastDayOfMonth(periodeStr)
+        // PE1 — utilise periodeStartBatch/periodeEndBatch résolus en haut.
+        const periodeStart = periodeStartBatch
+        const periodeEnd = periodeEndBatch
         const { data: congesApprouves } = await supabase.from('demandes_conges')
           .select('*').eq('employe_id', emp.id).eq('statut', 'approuve')
           .lte('date_debut', periodeEnd).gte('date_fin', periodeStart)
