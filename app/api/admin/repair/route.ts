@@ -148,20 +148,23 @@ async function repair_backfill_paiements_bnq(
     if (montant <= 0) { failed++; continue }
 
     // Lookup compte banque
-    const { data: releve } = await admin.from('releves_bancaires')
+    const { data: releveRaw } = await admin.from('releves_bancaires')
       .select('compte_bancaire_id').eq('id', f.rapproche_releve_id as string).maybeSingle()
+    const releve = releveRaw as { compte_bancaire_id: string | null } | null
     let compteBanque = '512', banqueNom = 'Banque'
     if (releve?.compte_bancaire_id) {
-      const { data: cb } = await admin.from('comptes_bancaires')
-        .select('compte_comptable, banque').eq('id', releve.compte_bancaire_id as string).maybeSingle()
-      if (cb?.compte_comptable) compteBanque = cb.compte_comptable as string
-      if (cb?.banque) banqueNom = cb.banque as string
+      const { data: cbRaw } = await admin.from('comptes_bancaires')
+        .select('compte_comptable, banque').eq('id', releve.compte_bancaire_id).maybeSingle()
+      const cb = cbRaw as { compte_comptable: string | null; banque: string | null } | null
+      if (cb?.compte_comptable) compteBanque = cb.compte_comptable
+      if (cb?.banque) banqueNom = cb.banque
     }
 
     let dossierId = f.dossier_id as string | null
     if (!dossierId) {
-      const { data: d } = await admin.from('dossiers').select('id').eq('societe_id', societeId).limit(1).maybeSingle()
-      dossierId = (d?.id as string) ?? null
+      const { data: dRaw } = await admin.from('dossiers').select('id').eq('societe_id', societeId).limit(1).maybeSingle()
+      const d = dRaw as { id: string } | null
+      dossierId = d?.id ?? null
     }
 
     const isClient = f.type_facture === 'client'
@@ -207,29 +210,24 @@ async function repair_purge_cca_doublons(
   admin: SupabaseAdmin, societeId: string, dryRun: boolean
 ): Promise<RepairResult> {
   if (dryRun) {
-    const { data } = await admin.rpc('count_cca_duplicates', { p_societe_id: societeId }).maybeSingle()
-    // Fallback if RPC missing — use inline query
-    if (!data) {
-      const { data: mouvements } = await admin.from('mouvements_compte_courant')
-        .select('id, compte_courant_id, date_mouvement, description, created_at')
-        .eq('societe_id', societeId) as { data: Array<Record<string, unknown>> | null }
-      const seen = new Map<string, boolean>()
-      let doublons = 0
-      for (const m of mouvements || []) {
-        const desc = (m.description as string) || ''
-        const match = desc.match(/[\[(](\d+\.\d+) [A-Z]{3}/)
-        if (!match) continue
-        const key = `${m.compte_courant_id}|${m.date_mouvement}|${match[1]}`
-        if (seen.has(key)) doublons++
-        else seen.set(key, true)
-      }
-      return {
-        action: 'purge_cca_doublons',
-        status: 'pass', affected: doublons,
-        message: `${doublons} doublon(s) CCA détecté(s) (dry-run)`,
-      }
+    const { data: mouvements } = await admin.from('mouvements_compte_courant')
+      .select('id, compte_courant_id, date_mouvement, description, created_at')
+      .eq('societe_id', societeId) as { data: Array<Record<string, unknown>> | null }
+    const seen = new Map<string, boolean>()
+    let doublons = 0
+    for (const m of mouvements || []) {
+      const desc = (m.description as string) || ''
+      const match = desc.match(/[\[(](\d+\.\d+) [A-Z]{3}/)
+      if (!match) continue
+      const key = `${m.compte_courant_id}|${m.date_mouvement}|${match[1]}`
+      if (seen.has(key)) doublons++
+      else seen.set(key, true)
     }
-    return { action: 'purge_cca_doublons', status: 'pass', affected: Number(data) || 0, message: 'dry-run' }
+    return {
+      action: 'purge_cca_doublons',
+      status: 'pass', affected: doublons,
+      message: `${doublons} doublon(s) CCA détecté(s) (dry-run)`,
+    }
   }
 
   // Dedup via window function en SQL pour atomicité
@@ -443,8 +441,9 @@ export async function POST(request: Request) {
     const server = await createServerClient()
     const { data: { user } } = await server.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
-    const { data: profile } = await server.from('profiles').select('role').eq('id', user.id).maybeSingle()
-    if (!profile || !['admin', 'super_admin'].includes(profile.role as string)) {
+    const { data: profileRaw } = await server.from('profiles').select('role').eq('id', user.id).maybeSingle()
+    const profile = profileRaw as { role: string | null } | null
+    if (!profile || !['admin', 'super_admin'].includes(profile.role || '')) {
       return NextResponse.json({ error: 'Accès admin requis' }, { status: 403 })
     }
 
