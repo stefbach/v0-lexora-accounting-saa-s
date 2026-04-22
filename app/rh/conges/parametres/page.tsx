@@ -1,564 +1,492 @@
 "use client"
 import { useState, useEffect, useCallback } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Switch } from "@/components/ui/switch"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
-  Loader2, Settings, Calendar, Edit2, ShieldCheck, Baby, Clock,
-  Umbrella, XCircle, Heart, Users, Gavel, Trophy, Scale, BookOpen,
-  AlertCircle, CheckCircle2, Briefcase, FileText, HeartPulse
+  Loader2, Settings, ShieldCheck, Baby, Umbrella, Heart, Users, Gavel,
+  Trophy, Scale, BookOpen, AlertCircle, CheckCircle2, HeartPulse,
+  Plane, AlertTriangle, RefreshCw,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import type { ConfigConge } from "@/lib/rh/types-conges"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
 const BLUE = "#4191FF"
 
-// ─── WRA 2019 Reference Data ───────────────────────────────────
-interface WRARef {
+// ─── UI metadata par type (icônes + couleurs + puces) ────────────────
+// Les chiffres affichés dans les cartes (22, 15, 30, 16 sem, …) sont
+// dérivés de `config.jours_par_cycle` retourné par l'endpoint. Les
+// valeurs hardcodées ci-dessous servent UNIQUEMENT de fallback si
+// l'endpoint est KO ou si la ligne est absente.
+interface TypeUI {
   id: string
   title: string
   titleEn: string
   section: string
-  color: string
-  quota: string
-  unit: string
-  rules: string[]
+  icon: any
+  // Tailwind palette cohérente pour bandeaux/bordures/badges.
+  tone: {
+    border: string
+    bg: string
+    accent: string
+    badgeBg: string
+    badgeText: string
+    text: string
+  }
+  // "16" pour MAT, "22" pour AL, "Variable" pour JUR/INT/CRT/Special…
+  formatValue: (c: ConfigConge | null) => { value: string; unit: string }
+  puces: (c: ConfigConge | null) => string[]
 }
 
-const WRA_TYPES: WRARef[] = [
+const TONES = {
+  green: {
+    border: "border-emerald-300",
+    bg: "bg-gradient-to-br from-emerald-50 to-white",
+    accent: "text-emerald-700",
+    badgeBg: "bg-emerald-100",
+    badgeText: "text-emerald-700",
+    text: "text-emerald-900",
+  },
+  orange: {
+    border: "border-orange-300",
+    bg: "bg-gradient-to-br from-orange-50 to-white",
+    accent: "text-orange-700",
+    badgeBg: "bg-orange-100",
+    badgeText: "text-orange-700",
+    text: "text-orange-900",
+  },
+  violet: {
+    border: "border-violet-300",
+    bg: "bg-gradient-to-br from-violet-50 to-white",
+    accent: "text-violet-700",
+    badgeBg: "bg-violet-100",
+    badgeText: "text-violet-700",
+    text: "text-violet-900",
+  },
+  cyan: {
+    border: "border-cyan-300",
+    bg: "bg-gradient-to-br from-cyan-50 to-white",
+    accent: "text-cyan-700",
+    badgeBg: "bg-cyan-100",
+    badgeText: "text-cyan-700",
+    text: "text-cyan-900",
+  },
+  pink: {
+    border: "border-pink-300",
+    bg: "bg-gradient-to-br from-pink-50 to-white",
+    accent: "text-pink-700",
+    badgeBg: "bg-pink-100",
+    badgeText: "text-pink-700",
+    text: "text-pink-900",
+  },
+  blue: {
+    border: "border-blue-300",
+    bg: "bg-gradient-to-br from-blue-50 to-white",
+    accent: "text-blue-700",
+    badgeBg: "bg-blue-100",
+    badgeText: "text-blue-700",
+    text: "text-blue-900",
+  },
+  amber: {
+    border: "border-amber-300",
+    bg: "bg-gradient-to-br from-amber-50 to-white",
+    accent: "text-amber-700",
+    badgeBg: "bg-amber-100",
+    badgeText: "text-amber-800",
+    text: "text-amber-900",
+  },
+  gray: {
+    border: "border-gray-300",
+    bg: "bg-gradient-to-br from-gray-50 to-white",
+    accent: "text-gray-700",
+    badgeBg: "bg-gray-100",
+    badgeText: "text-gray-700",
+    text: "text-gray-900",
+  },
+  indigo: {
+    border: "border-indigo-300",
+    bg: "bg-gradient-to-br from-indigo-50 to-white",
+    accent: "text-indigo-700",
+    badgeBg: "bg-indigo-100",
+    badgeText: "text-indigo-700",
+    text: "text-indigo-900",
+  },
+  slate: {
+    border: "border-slate-300",
+    bg: "bg-gradient-to-br from-slate-50 to-white",
+    accent: "text-slate-700",
+    badgeBg: "bg-slate-100",
+    badgeText: "text-slate-700",
+    text: "text-slate-900",
+  },
+}
+
+const TYPES_UI: TypeUI[] = [
   {
     id: "AL",
-    title: "Conge annuel (Local Leave)",
-    titleEn: "Annual Leave",
+    title: "Congé annuel",
+    titleEn: "Annual Leave — Local Leave",
     section: "Section 45",
-    color: "#4191FF",
-    quota: "22",
-    unit: "jours ouvrables / an",
-    rules: [
-      "20 jours ouvrables + 2 jours garantis = 22 jours/an",
-      "Weekends exclus, jours feries non deduits",
-      "Annee 1 : 0 jours (mois 1-6), puis 1 jour/mois max 6",
-      "Annee 2+ : 22 jours des le 1er jour",
-      "Preavis 48h requis",
+    icon: Umbrella,
+    tone: TONES.green,
+    formatValue: c => ({
+      value: String(c?.jours_par_cycle ?? 22),
+      unit: "jours ouvrables / an",
+    }),
+    puces: c => [
+      `${c?.jours_par_cycle ?? 22} jours ouvrables après ${c?.anciennete_min_mois ?? 12} mois d'emploi continu`,
+      "Weekends et jours fériés exclus",
+      "Cycle basé sur la date anniversaire (pas année civile)",
+      "Solde non pris : paiement compensatoire obligatoire",
     ],
   },
   {
     id: "SL",
-    title: "Conge maladie (Sick Leave)",
+    title: "Congé maladie",
     titleEn: "Sick Leave",
     section: "Section 46",
-    color: "#f97316",
-    quota: "15",
-    unit: "jours / an",
-    rules: [
-      "15 jours par an en cas de maladie",
-      "Certificat medical requis apres 3 jours consecutifs",
-      "Annee 1 : meme regle que AL (0 mois 1-6, puis 1 j/mois max 6)",
-      "Cumulatif : solde non pris reporte annee suivante",
+    icon: HeartPulse,
+    tone: TONES.orange,
+    formatValue: c => ({
+      value: String(c?.jours_par_cycle ?? 15),
+      unit: "jours / an",
+    }),
+    puces: c => [
+      `${c?.jours_par_cycle ?? 15} jours par an après 12 mois`,
+      "Accrual 1 j/mois de M7 à M12 (plafond 6)",
+      "Certificat médical si ≥ 3 jours consécutifs",
+      "Cumul possible jusqu'à 90 jours",
+    ],
+  },
+  {
+    id: "VL",
+    title: "Vacation Leave",
+    titleEn: "Vacation Leave — Workers",
+    section: "Section 47",
+    icon: Plane,
+    tone: TONES.violet,
+    formatValue: c => ({
+      value: String(c?.jours_par_cycle ?? 30),
+      unit: "jours / 5 ans",
+    }),
+    puces: c => [
+      `${c?.jours_par_cycle ?? 30} jours payés par cycle de 5 ans`,
+      `Workers uniquement (basic ≤ ${(c?.basic_salary_max ?? 50000).toLocaleString("fr-FR")} MUR/mois)`,
+      "Migrant workers exclus",
+      "Si refus employeur : cash-in-lieu obligatoire",
+    ],
+  },
+  {
+    id: "FML",
+    title: "Family Medical Leave",
+    titleEn: "Family Medical Leave",
+    section: "Section 47A",
+    icon: Heart,
+    tone: TONES.cyan,
+    formatValue: c => ({
+      value: String(c?.jours_par_cycle ?? 10),
+      unit: "jours / an",
+    }),
+    puces: c => [
+      `${c?.jours_par_cycle ?? 10} j/an pour parent/enfant/grand-parent malade`,
+      `Workers uniquement (basic ≤ ${(c?.basic_salary_max ?? 50000).toLocaleString("fr-FR")} MUR/mois)`,
+      `Déductible au choix de ${(c?.deductible_de?.length ? c.deductible_de.join(", ") : "AL, SL ou VL")}`,
+      "Certificat médical + lien de parenté requis",
     ],
   },
   {
     id: "MAT",
-    title: "Conge maternite",
+    title: "Congé maternité",
     titleEn: "Maternity Leave",
     section: "Section 52",
-    color: "#ec4899",
-    quota: "14",
-    unit: "semaines",
-    rules: [
-      "14 semaines (98 jours) remuneres",
-      "12 mois d'anciennete requis pour maintien de salaire",
-      "Prime de 3 mois pour les femmes sans anciennete",
-      "Repartition : 4 semaines avant + 10 apres accouchement",
-    ],
+    icon: Baby,
+    tone: TONES.pink,
+    formatValue: c => {
+      // 112 jours / 7 = 16 semaines. Fallback 16.
+      const weeks = c?.jours_par_cycle ? Math.round(Number(c.jours_par_cycle) / 7) : 16
+      return { value: String(weeks), unit: "semaines" }
+    },
+    puces: c => {
+      const weeks = c?.jours_par_cycle ? Math.round(Number(c.jours_par_cycle) / 7) : 16
+      return [
+        `${weeks} semaines après ${c?.anciennete_min_mois ?? 12} mois de service`,
+        `${weeks + 2} semaines si naissance multiple / prématurée`,
+        "Allocation 3 000 MUR (forfait non-imposable)",
+        "Protection absolue contre le licenciement (S.64)",
+      ]
+    },
   },
   {
     id: "PAT",
-    title: "Conge paternite",
+    title: "Congé paternité",
     titleEn: "Paternity Leave",
     section: "Section 53",
-    color: "#8b5cf6",
-    quota: "5",
-    unit: "jours ouvrables",
-    rules: [
-      "5 jours ouvrables consecutifs",
-      "A prendre dans les 6 semaines apres la naissance",
-      "12 mois d'anciennete requis",
-      "Remuneres par l'employeur",
-    ],
+    icon: Users,
+    tone: TONES.blue,
+    formatValue: c => {
+      const weeks = c?.jours_par_cycle ? Math.round(Number(c.jours_par_cycle) / 7) : 4
+      return { value: String(weeks), unit: "semaines" }
+    },
+    puces: c => {
+      const weeks = c?.jours_par_cycle ? Math.round(Number(c.jours_par_cycle) / 7) : 4
+      return [
+        `${weeks} semaines consécutives (FMPA 2024)`,
+        `Payé si ≥ ${c?.anciennete_min_mois ?? 12} mois service`,
+        `Non payé si < ${c?.anciennete_min_mois ?? 12} mois`,
+      ]
+    },
   },
   {
     id: "SPECIAL",
-    title: "Conges exceptionnels",
+    title: "Congés exceptionnels",
     titleEn: "Special Leave",
     section: "Section 48",
-    color: "#10b981",
-    quota: "Variable",
-    unit: "selon evenement",
-    rules: [
-      "Mariage du salarie : 6 jours",
+    icon: Heart,
+    tone: TONES.amber,
+    formatValue: () => ({ value: "Variable", unit: "selon événement" }),
+    puces: () => [
+      "Mariage salarié : 6 jours (une fois carrière)",
       "Mariage enfant : 3 jours",
-      "Deces famille proche : 3 jours",
-      "Autres evenements : selon discretion employeur",
+      "Décès famille proche : 3 jours",
+      "Après 12 mois, justificatifs requis",
     ],
   },
   {
-    id: "JURY",
-    title: "Conge de jure",
-    titleEn: "Jury Service Leave",
+    id: "JUR",
+    title: "Congé juré",
+    titleEn: "Juror Leave",
+    section: "Section 49",
+    icon: Gavel,
+    tone: TONES.gray,
+    formatValue: () => ({ value: "Variable", unit: "durée du service" }),
+    puces: () => [
+      "Tous les salariés (pas de seuil)",
+      "Durée service juré (Courts Act 1945)",
+      "Payé intégralement",
+    ],
+  },
+  {
+    id: "INT",
+    title: "Événement international",
+    titleEn: "International Events",
     section: "Section 50",
-    color: "#64748b",
-    quota: "Variable",
-    unit: "duree du service",
-    rules: [
-      "Duree du service de jure",
-      "Remunere par l'employeur",
-      "Convocation officielle requise",
+    icon: Trophy,
+    tone: TONES.indigo,
+    formatValue: () => ({ value: "Variable", unit: "durée de l'événement" }),
+    puces: () => [
+      "Tous les salariés",
+      "Durée de l'événement international",
+      "Documentation officielle requise",
+    ],
+  },
+  {
+    id: "CRT",
+    title: "Convocation judiciaire",
+    titleEn: "Court Leave",
+    section: "Section 51",
+    icon: Scale,
+    tone: TONES.slate,
+    formatValue: () => ({ value: "Variable", unit: "temps nécessaire" }),
+    puces: () => [
+      "Tous les salariés",
+      "Temps nécessaire à la démarche judiciaire",
+      "Payé intégralement",
     ],
   },
 ]
 
-// ─── Admin editable rules ────────────────────────────────────────
-interface LeaveRule {
-  id: string
-  type_conge: string
-  jours_par_an: number
-  prorata: boolean
-  max_report: number
-  anciennete_min_mois: number
-  genre: string | null
-  description: string
-}
-
-const TYPE_LABELS: Record<string, string> = {
-  AL: "Conge annuel",
-  SL: "Conge maladie",
-  MAT: "Conge maternite",
-  PAT: "Conge paternite",
-  SANS_SOLDE: "Conge sans solde",
-}
-
-const TYPE_ICONS: Record<string, any> = {
-  AL: Umbrella,
-  SL: HeartPulse,
-  MAT: Baby,
-  PAT: Users,
-  SANS_SOLDE: XCircle,
-}
-
-const TYPE_COLORS: Record<string, string> = {
-  AL: "#4191FF",
-  SL: "#f97316",
-  MAT: "#ec4899",
-  PAT: "#8b5cf6",
-  SANS_SOLDE: "#64748b",
-}
-
-const GENRE_LABELS: Record<string, string> = {
-  F: "Femme uniquement",
-  M: "Homme uniquement",
-  "": "Tous",
-}
-
-const DEFAULT_RULES: LeaveRule[] = [
-  { id: "default_al", type_conge: "AL", jours_par_an: 22, prorata: true, max_report: 5, anciennete_min_mois: 0, genre: null, description: "Conge annuel selon WRA 2019. 22 jours ouvrables par an, prorata pour service partiel." },
-  { id: "default_sl", type_conge: "SL", jours_par_an: 15, prorata: false, max_report: 0, anciennete_min_mois: 0, genre: null, description: "Conge maladie selon WRA 2019. 15 jours par an, certificat medical requis apres 3 jours." },
-  { id: "default_mat", type_conge: "MAT", jours_par_an: 98, prorata: false, max_report: 0, anciennete_min_mois: 12, genre: "F", description: "Conge maternite 14 semaines (98 jours) selon WRA 2019." },
-  { id: "default_pat", type_conge: "PAT", jours_par_an: 5, prorata: false, max_report: 0, anciennete_min_mois: 12, genre: "M", description: "Conge paternite 5 jours ouvrables selon WRA 2019." },
-  { id: "default_sans_solde", type_conge: "SANS_SOLDE", jours_par_an: 0, prorata: false, max_report: 0, anciennete_min_mois: 0, genre: null, description: "Conge sans solde, sur accord de l'employeur." },
-]
-
-// Per-type flag map: { AL: { demi_journee_autorisee: true, ... }, ... }
-type TypeFlags = Record<string, { demi_journee_autorisee: boolean; imposable_par_societe: boolean }>
-
-// ─── Main Page ───────────────────────────────────────────────────
+// ─── Page ────────────────────────────────────────────────────────────
 export default function CongesParametresPage() {
-  const [societes, setSocietes] = useState<any[]>([])
-  const [societe, setSociete] = useState("all")
-  const [rules, setRules] = useState<LeaveRule[]>(DEFAULT_RULES)
-  const [typeFlags, setTypeFlags] = useState<TypeFlags>({})
-  const [loading, setLoading] = useState(false)
-
-  const [editOpen, setEditOpen] = useState(false)
-  const [editRule, setEditRule] = useState<LeaveRule | null>(null)
-  const [formJours, setFormJours] = useState("")
-  const [formProrata, setFormProrata] = useState(false)
-  const [formMaxReport, setFormMaxReport] = useState("")
-  const [formAnciennete, setFormAnciennete] = useState("")
-  const [formGenre, setFormGenre] = useState("")
-  const [formDemiJournee, setFormDemiJournee] = useState(true)
-  const [formImposable, setFormImposable] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [saveFeedback, setSaveFeedback] = useState<string | null>(null)
-
-  useEffect(() => {
-    fetch("/api/comptable/societes")
-      .then(r => r.json())
-      .then(d => setSocietes(d.societes || []))
-      .catch(() => setSocietes([]))
-  }, [])
+  const [regles, setRegles] = useState<Record<string, ConfigConge>>({})
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    if (societe === "all" || !societe) {
-      setRules(DEFAULT_RULES)
-      setTypeFlags({})
-      return
-    }
     setLoading(true)
+    setError(null)
     try {
-      const res = await fetch(`/api/rh/conges/entitlements?societe_id=${societe}`)
-      if (!res.ok) { setRules(DEFAULT_RULES); setTypeFlags({}); return }
+      const res = await fetch("/api/rh/conges/regles")
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
-      const loaded = data.rules || data.regles || []
-      setRules(loaded.length > 0 ? loaded : DEFAULT_RULES)
-      setTypeFlags(data.type_flags || {})
-    } catch {
-      setRules(DEFAULT_RULES)
-      setTypeFlags({})
+      setRegles((data?.regles as Record<string, ConfigConge>) || {})
+    } catch (e: any) {
+      setError(e?.message || "Impossible de charger les règles")
+      setRegles({})
     } finally {
       setLoading(false)
     }
-  }, [societe])
+  }, [])
 
-  useEffect(() => { load() }, [load])
-
-  const openEdit = (rule: LeaveRule) => {
-    setEditRule(rule)
-    setFormJours(String(rule.jours_par_an))
-    setFormProrata(rule.prorata)
-    setFormMaxReport(String(rule.max_report))
-    setFormAnciennete(String(rule.anciennete_min_mois))
-    setFormGenre(rule.genre || "")
-    // Flag defaults: AL allows demi-journée and is imposable; the rest are
-    // conservative defaults until the RH team explicitly opts in.
-    const cur = typeFlags[rule.type_conge]
-    setFormDemiJournee(cur?.demi_journee_autorisee ?? (rule.type_conge === 'AL' || rule.type_conge === 'SL'))
-    setFormImposable(cur?.imposable_par_societe ?? (rule.type_conge === 'AL'))
-    setSaveFeedback(null)
-    setEditOpen(true)
-  }
-
-  const saveRule = async () => {
-    if (!editRule) return
-    setSaving(true)
-    setSaveFeedback(null)
-    try {
-      const updated: LeaveRule = {
-        ...editRule,
-        jours_par_an: parseInt(formJours) || 0,
-        prorata: formProrata,
-        max_report: parseInt(formMaxReport) || 0,
-        anciennete_min_mois: parseInt(formAnciennete) || 0,
-        genre: formGenre || null,
-      }
-      if (societe !== "all") {
-        // 1) Persist the WRA-style rule fields via the legacy POST action.
-        await fetch("/api/rh/conges/entitlements", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "update_rule", societe_id: societe, rule: updated }),
-        }).catch(() => {})
-
-        // 2) Persist the two per-type flags across conges_employes for every
-        //    active employee of the société (new PUT endpoint).
-        const putRes = await fetch("/api/rh/conges/entitlements", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            societe_id: societe,
-            type_conge: editRule.type_conge,
-            demi_journee_autorisee: formDemiJournee,
-            imposable_par_societe: formImposable,
-          }),
-        })
-        if (putRes.ok) {
-          const r = await putRes.json().catch(() => ({}))
-          const u = r.updated || 0
-          const c = r.created || 0
-          setSaveFeedback(`Paramètres appliqués: ${u} employé(s) mis à jour, ${c} créé(s).`)
-          // Update local type_flags so the UI reflects the change immediately.
-          setTypeFlags(prev => ({
-            ...prev,
-            [editRule.type_conge]: {
-              demi_journee_autorisee: formDemiJournee,
-              imposable_par_societe: formImposable,
-            },
-          }))
-        } else {
-          const err = await putRes.json().catch(() => ({}))
-          setSaveFeedback(`⚠ Flags non enregistrés: ${err?.error || putRes.status}`)
-        }
-      }
-      setRules(prev => prev.map(r => r.type_conge === editRule.type_conge ? updated : r))
-      // Keep dialog open briefly so user sees the feedback, then close.
-      setTimeout(() => { setEditOpen(false); setSaveFeedback(null) }, 1200)
-    } catch (e: any) {
-      // Sprint 1 — feedback déjà visible via setSaveFeedback ; pas de
-      // log console redondant en prod.
-      setSaveFeedback(`Erreur lors de l'enregistrement : ${e?.message || 'inconnue'}`)
-    } finally {
-      setSaving(false)
-    }
-  }
+  useEffect(() => {
+    load()
+  }, [load])
 
   return (
     <ClientPageShell hideHero disableParticles>
-    <div className="space-y-6 max-w-[1400px] mx-auto">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight" style={{ color: NAVY }}>
-            <Settings className="inline h-6 w-6 mr-2 -mt-1" style={{ color: GOLD }} />
-            Regles des conges
-          </h1>
-          <p className="text-gray-500 mt-1 text-sm">
-            Guide de reference selon le <span className="font-semibold" style={{ color: BLUE }}>Workers&apos; Rights Act 2019</span> de Maurice
-          </p>
-        </div>
-        <Select value={societe} onValueChange={setSociete}>
-          <SelectTrigger className="w-[220px]">
-            <SelectValue placeholder="Toutes les societes" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Toutes les societes</SelectItem>
-            {societes.map((s: any) => (
-              <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Info banner */}
-      <Card className="border-0 shadow-sm overflow-hidden">
-        <div className="px-5 py-3 flex items-start gap-3" style={{ background: `linear-gradient(135deg, ${NAVY}08, ${BLUE}10)` }}>
-          <ShieldCheck className="h-5 w-5 mt-0.5 shrink-0" style={{ color: BLUE }} />
-          <p className="text-sm text-gray-700">
-            <strong>Workers&apos; Rights Act 2019</strong> &mdash; Droits minimaux legaux a Maurice.
-            Les valeurs ci-dessous sont des references qui ne peuvent etre reduites par l&apos;employeur.
-          </p>
-        </div>
-      </Card>
-
-      {/* Tabs */}
-      <Tabs defaultValue="reference" className="space-y-5">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="reference" className="gap-2">
-            <BookOpen className="h-4 w-4" />
-            Guide WRA 2019
-          </TabsTrigger>
-          <TabsTrigger value="admin" className="gap-2">
-            <Settings className="h-4 w-4" />
-            Parametres editables
-          </TabsTrigger>
-        </TabsList>
-
-        {/* TAB 1: REFERENCE */}
-        <TabsContent value="reference" className="space-y-5">
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {WRA_TYPES.map(t => (
-              <Card key={t.id} className="border-2 overflow-hidden flex flex-col" style={{ borderColor: t.color + "40" }}>
-                <div className="px-5 py-4 flex items-start justify-between gap-3" style={{ background: `linear-gradient(135deg, ${t.color}15, ${t.color}05)` }}>
-                  <div>
-                    <h3 className="font-bold text-sm" style={{ color: NAVY }}>{t.title}</h3>
-                    <p className="text-[11px] text-gray-500">{t.titleEn}</p>
-                  </div>
-                  <Badge variant="outline" className="shrink-0 text-[10px] font-semibold" style={{ borderColor: t.color, color: t.color }}>
-                    {t.section}
-                  </Badge>
-                </div>
-                <CardContent className="px-5 py-4 flex-1 space-y-3">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-4xl font-black" style={{ color: t.color }}>{t.quota}</span>
-                    <span className="text-sm text-gray-500">{t.unit}</span>
-                  </div>
-                  <ul className="space-y-1.5 text-xs text-gray-700">
-                    {t.rules.map((r, i) => (
-                      <li key={i} className="flex items-start gap-2">
-                        <CheckCircle2 className="h-3 w-3 mt-0.5 shrink-0" style={{ color: t.color }} />
-                        <span>{r}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
-              </Card>
-            ))}
+      <div className="space-y-6 max-w-[1400px] mx-auto">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight" style={{ color: NAVY }}>
+              <Settings className="inline h-6 w-6 mr-2 -mt-1" style={{ color: GOLD }} />
+              Règles des congés
+            </h1>
+            <p className="text-gray-500 mt-1 text-sm">
+              Guide de référence selon le{" "}
+              <span className="font-semibold" style={{ color: BLUE }}>Workers&apos; Rights Act 2019</span>{" "}
+              de Maurice
+            </p>
           </div>
-        </TabsContent>
-
-        {/* TAB 2: ADMIN */}
-        <TabsContent value="admin" className="space-y-5">
-          <Card className="border-amber-200 bg-amber-50">
-            <CardContent className="py-3">
-              <p className="text-sm text-amber-800 flex items-start gap-2">
-                <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-                Les valeurs par defaut sont conformes au <strong>WRA 2019</strong>. Modifiez uniquement si votre politique interne permet des minimums plus eleves.
-              </p>
-            </CardContent>
-          </Card>
-
-          {loading ? (
-            <div className="flex justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {rules.map(rule => {
-                const Icon = TYPE_ICONS[rule.type_conge] || Calendar
-                const color = TYPE_COLORS[rule.type_conge] || "#64748b"
-                return (
-                  <Card key={rule.type_conge} className="border-2" style={{ borderColor: color + "40" }}>
-                    <CardHeader className="pb-3">
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-base flex items-center gap-2" style={{ color: NAVY }}>
-                          <Icon className="h-5 w-5" style={{ color }} />
-                          {TYPE_LABELS[rule.type_conge] || rule.type_conge}
-                        </CardTitle>
-                        <Badge style={{ backgroundColor: color + "20", color }}>{rule.type_conge}</Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      <p className="text-xs text-gray-500">{rule.description}</p>
-                      <div className="grid grid-cols-2 gap-3 text-sm">
-                        <div>
-                          <p className="text-gray-400 text-xs">Jours / an</p>
-                          <p className="font-bold text-lg" style={{ color: NAVY }}>
-                            {rule.type_conge === "SANS_SOLDE" ? "Illimite" : rule.jours_par_an}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-gray-400 text-xs">Prorata</p>
-                          <Badge variant={rule.prorata ? "default" : "secondary"} className={rule.prorata ? "bg-green-100 text-green-700" : ""}>
-                            {rule.prorata ? "Oui" : "Non"}
-                          </Badge>
-                        </div>
-                        <div>
-                          <p className="text-gray-400 text-xs">Report max</p>
-                          <p className="font-semibold">{rule.max_report > 0 ? `${rule.max_report} jours` : "Aucun"}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-400 text-xs">Anciennete min</p>
-                          <p className="font-semibold">{rule.anciennete_min_mois > 0 ? `${rule.anciennete_min_mois} mois` : "Aucune"}</p>
-                        </div>
-                      </div>
-                      {rule.genre && (
-                        <div className="flex items-center gap-1">
-                          <p className="text-xs text-gray-400">Genre:</p>
-                          <Badge variant="outline" className="text-xs">{GENRE_LABELS[rule.genre] || rule.genre}</Badge>
-                        </div>
-                      )}
-                      {/* Per-type flags — visible only when a société is selected */}
-                      {societe !== "all" && (
-                        <div className="flex flex-wrap gap-1.5 pt-1">
-                          {typeFlags[rule.type_conge]?.demi_journee_autorisee && (
-                            <Badge className="bg-purple-100 text-purple-700 text-[10px] font-medium">Demi-journée OK</Badge>
-                          )}
-                          {typeFlags[rule.type_conge]?.imposable_par_societe && (
-                            <Badge className="bg-amber-100 text-amber-700 text-[10px] font-medium">Imposable</Badge>
-                          )}
-                        </div>
-                      )}
-                      <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => openEdit(rule)} style={{ borderColor: GOLD, color: GOLD }}>
-                        <Edit2 className="h-3 w-3 mr-1" /> Modifier
-                      </Button>
-                    </CardContent>
-                  </Card>
-                )
-              })}
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
-
-      {/* Edit Dialog */}
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle style={{ color: NAVY }}>
-              Modifier : {editRule ? (TYPE_LABELS[editRule.type_conge] || editRule.type_conge) : ""}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div>
-              <Label>Jours par an</Label>
-              <Input type="number" value={formJours} onChange={e => setFormJours(e.target.value)} />
-            </div>
-            <div className="flex items-center justify-between">
-              <Label>Prorata pour nouveaux employes</Label>
-              <Switch checked={formProrata} onCheckedChange={setFormProrata} />
-            </div>
-            <div>
-              <Label>Jours reportables max (annee suivante)</Label>
-              <Input type="number" value={formMaxReport} onChange={e => setFormMaxReport(e.target.value)} />
-            </div>
-            <div>
-              <Label>Anciennete minimum requise (mois)</Label>
-              <Input type="number" value={formAnciennete} onChange={e => setFormAnciennete(e.target.value)} />
-            </div>
-            <div>
-              <Label>Genre</Label>
-              <Select value={formGenre || "all"} onValueChange={v => setFormGenre(v === "all" ? "" : v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tous</SelectItem>
-                  <SelectItem value="F">Femme uniquement</SelectItem>
-                  <SelectItem value="M">Homme uniquement</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Commit 11 — Paramètres toggles (persist to conges_employes) */}
-            <div className="rounded-lg border p-3 bg-gray-50 space-y-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                Règles de fonctionnement
-              </p>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <Label className="text-sm">Demi-journée autorisée</Label>
-                  <p className="text-[10px] text-gray-500">
-                    Les employés peuvent demander ½ journée (matin ou après-midi) pour ce type de congé.
-                  </p>
-                </div>
-                <Switch checked={formDemiJournee} onCheckedChange={setFormDemiJournee} />
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <Label className="text-sm">Imposable par la société</Label>
-                  <p className="text-[10px] text-gray-500">
-                    La RH peut imposer ce type de congé (fermeture, pont, …) via « Imposer congé collectif ».
-                  </p>
-                </div>
-                <Switch checked={formImposable} onCheckedChange={setFormImposable} />
-              </div>
-              {societe === "all" && (
-                <p className="text-[10px] text-amber-700">
-                  Choisissez une société dans le sélecteur en haut pour enregistrer ces paramètres.
-                </p>
-              )}
-            </div>
-
-            {saveFeedback && (
-              <div className={`rounded-md p-2 text-sm ${saveFeedback.startsWith('⚠') ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-green-50 text-green-800 border border-green-200'}`}>
-                {saveFeedback}
-              </div>
+          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+            {loading ? (
+              <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-1.5" />
             )}
+            Rafraîchir
+          </Button>
+        </div>
+
+        {/* Info banner */}
+        <Card className="border-0 shadow-sm overflow-hidden">
+          <div
+            className="px-5 py-3 flex items-start gap-3"
+            style={{ background: `linear-gradient(135deg, ${NAVY}08, ${BLUE}10)` }}
+          >
+            <ShieldCheck className="h-5 w-5 mt-0.5 shrink-0" style={{ color: BLUE }} />
+            <div className="text-sm text-gray-700">
+              <p>
+                <strong>Workers&apos; Rights Act 2019</strong> — Droits minimaux légaux à Maurice.
+                Les valeurs ci-dessous sont synchronisées avec la table{" "}
+                <code className="text-xs bg-white/60 px-1 rounded">conges_regles</code>.
+              </p>
+            </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditOpen(false)}>Annuler</Button>
-            <Button onClick={saveRule} disabled={saving} style={{ backgroundColor: NAVY, color: "white" }}>
-              {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-              Enregistrer
+        </Card>
+
+        {/* Error banner */}
+        {error && (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-4 flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-red-800">
+                Impossible de charger les règles
+              </p>
+              <p className="text-xs text-red-600 mt-0.5">{error}</p>
+              <p className="text-xs text-red-600 mt-1">
+                Les valeurs par défaut du WRA 2019 sont affichées ci-dessous.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={load}
+              className="border-red-300 text-red-700 hover:bg-red-100"
+            >
+              <RefreshCw className="h-3 w-3 mr-1" /> Réessayer
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+          </div>
+        )}
+
+        {/* Loading skeleton */}
+        {loading && Object.keys(regles).length === 0 ? (
+          <div className="flex justify-center py-20">
+            <Loader2 className="h-10 w-10 animate-spin text-gray-400" />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {TYPES_UI.map(t => {
+              // SPECIAL est une carte synthétique qui représente 3 types DB
+              // (SPC_MARIAGE_SELF / SPC_MARIAGE_ENFANT / SPC_DECES). On
+              // prend SPC_MARIAGE_SELF comme référence pour S.48.
+              const cfg =
+                t.id === "SPECIAL"
+                  ? regles["SPC_MARIAGE_SELF"] || null
+                  : regles[t.id] || null
+              const { value, unit } = t.formatValue(cfg)
+              const Icon = t.icon
+              return (
+                <Card
+                  key={t.id}
+                  className={`border-2 ${t.tone.border} ${t.tone.bg} overflow-hidden flex flex-col`}
+                >
+                  <div className="px-5 py-4 flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-2.5">
+                      <div className={`rounded-lg p-2 ${t.tone.badgeBg}`}>
+                        <Icon className={`h-5 w-5 ${t.tone.accent}`} />
+                      </div>
+                      <div>
+                        <h3 className={`font-bold text-sm ${t.tone.text}`}>
+                          {t.title}
+                        </h3>
+                        <p className="text-[11px] text-gray-500">{t.titleEn}</p>
+                      </div>
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className={`shrink-0 text-[10px] font-semibold ${t.tone.border} ${t.tone.accent}`}
+                    >
+                      {t.section}
+                    </Badge>
+                  </div>
+                  <CardContent className="px-5 pb-4 pt-0 flex-1 space-y-3">
+                    <div className="flex items-baseline gap-2">
+                      <span className={`text-4xl font-black ${t.tone.accent}`}>
+                        {value}
+                      </span>
+                      <span className="text-sm text-gray-500">{unit}</span>
+                    </div>
+                    <ul className="space-y-1.5 text-xs text-gray-700">
+                      {t.puces(cfg).map((p, i) => (
+                        <li key={i} className="flex items-start gap-2">
+                          <CheckCircle2
+                            className={`h-3 w-3 mt-0.5 shrink-0 ${t.tone.accent}`}
+                          />
+                          <span>{p}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Bandeau minima légaux */}
+        <Card className="border-2 border-amber-300 bg-amber-50">
+          <CardContent className="py-4 flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+            <p className="text-sm text-amber-900">
+              <span className="font-semibold">Ces valeurs sont les minima légaux WRA 2019.</span>{" "}
+              Un employeur peut seulement proposer des conditions{" "}
+              <span className="font-semibold underline">PLUS FAVORABLES</span>{" "}
+              (WRA S.3(3)(a)). Toute clause moins favorable est réputée nulle de plein droit.
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Liens utiles */}
+        <Card className="border-gray-200">
+          <CardContent className="py-4 flex items-start gap-3">
+            <BookOpen className="h-5 w-5 text-gray-500 shrink-0 mt-0.5" />
+            <div className="text-xs text-gray-600 space-y-1">
+              <p>
+                <span className="font-semibold">Source :</span> Workers&apos; Rights Act 2019 +
+                Family Medical & Paternity Amendment Act 2024 (FMPA).
+              </p>
+              <p>
+                Les règles sont stockées dans la table{" "}
+                <code className="bg-gray-100 px-1 rounded">conges_regles</code> ;
+                chaque société peut les surcharger via la fonction{" "}
+                <code className="bg-gray-100 px-1 rounded">get_conge_regle(societe_id, type)</code>.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </ClientPageShell>
   )
 }
