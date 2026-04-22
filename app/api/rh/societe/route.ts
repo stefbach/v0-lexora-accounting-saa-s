@@ -158,6 +158,12 @@ export async function PUT(req: NextRequest) {
       'paye_number', 'csg_number', 'nsf_number',
       // Pointage / déduction automatique des absences (mig 135)
       'pointage_actif',
+      // PE1 — période de paie paramétrable (mig 173)
+      'periode_paie_mode',
+      'periode_paie_jour_cut_off',
+      'periode_paie_jour_paiement',
+      'periode_paie_offset_paiement_mois',
+      'periode_paie_notes',
     ]
 
     const updates: Record<string, unknown> = {}
