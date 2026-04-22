@@ -297,7 +297,7 @@ export async function GET(request: Request) {
       const today = now.toISOString().slice(0, 10)
 
       // 1. Lire soldes_conges pour la PÉRIODE COURANTE de chaque employé
-      const SOLDES_FIELDS = 'employe_id, periode_debut, periode_fin, al_droit, al_pris, al_solde, al_reporte, al_impose_societe, al_impose_employe, sl_droit, sl_pris, sl_solde, sl_accumule, vl_droit, vl_pris, vl_solde, vl_paye_compensation, vl_cycle_debut, vl_cycle_fin'
+      const SOLDES_FIELDS = 'employe_id, periode_debut, periode_fin, al_droit, al_acquis, al_pris, al_solde, al_reporte, al_impose_societe, al_impose_employe, sl_droit, sl_pris, sl_solde, sl_accumule, vl_droit, vl_pris, vl_solde, vl_paye_compensation, vl_cycle_debut, vl_cycle_fin'
       const { data: soldesData } = await supabase
         .from('soldes_conges')
         .select(SOLDES_FIELDS)
@@ -344,6 +344,11 @@ export async function GET(request: Request) {
         const alDroit = solde ? Number(solde.al_droit) : null
         const alPris = solde ? Number(solde.al_pris) : null
         const alSolde = solde ? Number(solde.al_solde) : null
+        // G5 — Modèle C accrual linéaire mensuel (base paiement compensatoire).
+        const alAcquis = solde?.al_acquis != null ? Number(solde.al_acquis) : null
+        const alSoldeAcquis = alAcquis != null && alPris != null
+          ? Math.round((alAcquis - alPris) * 100) / 100
+          : null
         const slDroit = solde ? Number(solde.sl_droit) : null
         const slPris = solde ? Number(solde.sl_pris) : null
         const slSolde = solde ? Number(solde.sl_solde) : null
@@ -454,6 +459,11 @@ export async function GET(request: Request) {
           al_pris: alPris,
           al_solde: alSolde,
           al_reporte: solde ? Number(solde.al_reporte ?? 0) : 0,
+          // G5 — Modèle C (accrual mensuel linéaire). al_acquis est la base
+          // du paiement compensatoire en cas de départ. al_solde_acquis =
+          // al_acquis - al_pris (peut différer de al_solde avant M12).
+          al_acquis: alAcquis,
+          al_solde_acquis: alSoldeAcquis,
           al_impose_societe: solde ? Number(solde.al_impose_societe ?? 0) : 0,
           al_impose_employe: solde ? Number(solde.al_impose_employe ?? 0) : 0,
           sl_droit: slDroit,
