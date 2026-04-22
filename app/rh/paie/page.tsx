@@ -211,9 +211,31 @@ export default function PaiePage() {
       if (!res.ok) {
         alert("Erreur [" + res.status + "]: " + (data.error || JSON.stringify(data).slice(0, 300)))
       } else {
-        const nb = data.nb || data.bulletins?.length || 0
-        const erreurs = data.erreurs || []
-        alert(`${nb} bulletin(s) calcule(s) pour ${calcPeriode}${erreurs.length > 0 ? `\n\n${erreurs.length} erreur(s):\n${erreurs.join("\n")}` : ""}`)
+        // F14 — Toast detaille avec breakdown updates/inserts/skip/erreurs.
+        const r = data.recalcul
+        if (r) {
+          const parts: string[] = []
+          parts.push(`${r.action === 'recalcul_batch' ? '🔄 Recalcul' : '✅ Calcul initial'} — ${calcPeriode}`)
+          parts.push(`${r.nb_modifies} bulletin(s) modifie(s)`)
+          if (r.nb_updates > 0 && r.nb_inserts > 0) {
+            parts.push(`(${r.nb_updates} mis a jour, ${r.nb_inserts} crees)`)
+          }
+          if (r.nb_skip > 0) {
+            const raisonsList: string[] = []
+            for (const [k, v] of Object.entries(r.raisons_skip || {})) {
+              raisonsList.push(`${v} ${k}`)
+            }
+            parts.push(`${r.nb_skip} skip (${raisonsList.join(', ')})`)
+          }
+          if (r.nb_erreurs > 0) parts.push(`⚠️ ${r.nb_erreurs} erreur(s)`)
+          parts.push(`Duree : ${(r.duree_ms / 1000).toFixed(1)}s`)
+          const msg = parts.join('\n')
+          alert(msg + (r.nb_erreurs > 0 && data.erreurs ? `\n\nDetails:\n${data.erreurs.join("\n")}` : ""))
+        } else {
+          const nb = data.nb || data.bulletins?.length || 0
+          const erreurs = data.erreurs || []
+          alert(`${nb} bulletin(s) calcule(s) pour ${calcPeriode}${erreurs.length > 0 ? `\n\n${erreurs.length} erreur(s):\n${erreurs.join("\n")}` : ""}`)
+        }
         if (!availablePeriodes.includes(calcPeriode)) {
           setAvailablePeriodes(prev => [calcPeriode, ...prev].sort((a, b) => b.localeCompare(a)))
         }
