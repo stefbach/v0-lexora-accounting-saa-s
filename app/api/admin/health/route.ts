@@ -37,6 +37,40 @@ interface HealthCheck {
   details: Record<string, unknown>[]
 }
 
+interface FactureRow {
+  id: string
+  numero_facture: string | null
+  tiers: string | null
+  type_facture?: string | null
+  date_facture: string | null
+  montant_ttc: number | null
+  montant_mur?: number | null
+  devise?: string | null
+  taux_change?: number | null
+  statut: string | null
+  societe_id: string | null
+}
+
+interface EcritureRow {
+  id: string
+  societe_id: string | null
+  numero_compte: string | null
+  nom_compte?: string | null
+  description?: string | null
+  date_ecriture: string | null
+  journal: string | null
+  ref_folio: string | null
+  lettre?: string | null
+  debit_mur: number | null
+  credit_mur: number | null
+  facture_id?: string | null
+}
+
+interface SocieteRow {
+  id: string
+  nom: string | null
+}
+
 const DETAIL_LIMIT = 10
 
 async function requireAdmin(): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
@@ -71,7 +105,8 @@ export async function GET() {
       .eq('type_facture', 'client')
       .not('statut', 'in', '(brouillon,annule)')
 
-    const ids = (fClients || []).map(f => f.id)
+    const list = (fClients || []) as FactureRow[]
+    const ids = list.map((f: FactureRow) => f.id)
     const linked = new Set<string>()
     if (ids.length > 0) {
       // Supabase has URL-length limits; chunk the "in" filter.
@@ -84,17 +119,19 @@ export async function GET() {
           .in('facture_id', slice)
           .eq('journal', 'VTE')
           .eq('numero_compte', '411')
-        for (const e of ecr || []) if (e.facture_id) linked.add(e.facture_id)
+        for (const e of ((ecr || []) as Pick<EcritureRow, 'facture_id'>[])) {
+          if (e.facture_id) linked.add(e.facture_id)
+        }
       }
     }
-    const missing = (fClients || []).filter(f => !linked.has(f.id))
+    const missing = list.filter((f: FactureRow) => !linked.has(f.id))
     checks.push({
       check_id: 'factures_sans_ecriture_vte',
       description: "Factures clients non-brouillon sans écriture VTE 411",
       severity: 'critical',
       status: missing.length === 0 ? 'pass' : 'fail',
       count: missing.length,
-      details: missing.slice(0, DETAIL_LIMIT).map(f => ({
+      details: missing.slice(0, DETAIL_LIMIT).map((f: FactureRow) => ({
         facture_id: f.id, numero_facture: f.numero_facture, tiers: f.tiers,
         date_facture: f.date_facture, montant_ttc: f.montant_ttc, statut: f.statut,
       })),
@@ -118,7 +155,8 @@ export async function GET() {
       .eq('type_facture', 'fournisseur')
       .not('statut', 'in', '(brouillon,annule)')
 
-    const ids = (fFour || []).map(f => f.id)
+    const list = (fFour || []) as FactureRow[]
+    const ids = list.map((f: FactureRow) => f.id)
     const linked = new Set<string>()
     if (ids.length > 0) {
       const CHUNK = 200
@@ -130,17 +168,19 @@ export async function GET() {
           .in('facture_id', slice)
           .eq('journal', 'ACH')
           .eq('numero_compte', '401')
-        for (const e of ecr || []) if (e.facture_id) linked.add(e.facture_id)
+        for (const e of ((ecr || []) as Pick<EcritureRow, 'facture_id'>[])) {
+          if (e.facture_id) linked.add(e.facture_id)
+        }
       }
     }
-    const missing = (fFour || []).filter(f => !linked.has(f.id))
+    const missing = list.filter((f: FactureRow) => !linked.has(f.id))
     checks.push({
       check_id: 'factures_sans_ecriture_ach',
       description: "Factures fournisseurs sans écriture ACH 401",
       severity: 'critical',
       status: missing.length === 0 ? 'pass' : 'fail',
       count: missing.length,
-      details: missing.slice(0, DETAIL_LIMIT).map(f => ({
+      details: missing.slice(0, DETAIL_LIMIT).map((f: FactureRow) => ({
         facture_id: f.id, numero_facture: f.numero_facture, tiers: f.tiers,
         date_facture: f.date_facture, montant_ttc: f.montant_ttc, statut: f.statut,
       })),
@@ -163,7 +203,8 @@ export async function GET() {
       .select('id, numero_facture, tiers, type_facture, date_facture, montant_ttc, statut, societe_id')
       .eq('statut', 'paye')
 
-    const ids = (fPaid || []).map(f => f.id)
+    const list = (fPaid || []) as FactureRow[]
+    const ids = list.map((f: FactureRow) => f.id)
     const linked = new Set<string>()
     if (ids.length > 0) {
       const CHUNK = 200
@@ -174,17 +215,19 @@ export async function GET() {
           .select('facture_id')
           .in('facture_id', slice)
           .eq('journal', 'BNQ')
-        for (const e of ecr || []) if (e.facture_id) linked.add(e.facture_id)
+        for (const e of ((ecr || []) as Pick<EcritureRow, 'facture_id'>[])) {
+          if (e.facture_id) linked.add(e.facture_id)
+        }
       }
     }
-    const missing = (fPaid || []).filter(f => !linked.has(f.id))
+    const missing = list.filter((f: FactureRow) => !linked.has(f.id))
     checks.push({
       check_id: 'factures_paye_sans_bnq',
       description: "Factures marquées payées sans écriture BNQ",
       severity: 'critical',
       status: missing.length === 0 ? 'pass' : 'fail',
       count: missing.length,
-      details: missing.slice(0, DETAIL_LIMIT).map(f => ({
+      details: missing.slice(0, DETAIL_LIMIT).map((f: FactureRow) => ({
         facture_id: f.id, numero_facture: f.numero_facture, tiers: f.tiers,
         type_facture: f.type_facture, date_facture: f.date_facture, montant_ttc: f.montant_ttc,
       })),
@@ -208,14 +251,14 @@ export async function GET() {
       .select('id, societe_id, numero_compte, description, date_ecriture, journal, debit_mur, credit_mur, ref_folio')
       .in('numero_compte', LEGACY)
       .limit(5000)
-    const list = ecr || []
+    const list = (ecr || []) as EcritureRow[]
     checks.push({
       check_id: 'ecritures_3digit_bare',
       description: "Écritures avec numéro de compte legacy à 3 chiffres (421/431/432/433/444)",
       severity: 'warning',
       status: list.length === 0 ? 'pass' : 'fail',
       count: list.length,
-      details: list.slice(0, DETAIL_LIMIT).map(e => ({
+      details: list.slice(0, DETAIL_LIMIT).map((e: EcritureRow) => ({
         id: e.id, numero_compte: e.numero_compte, date_ecriture: e.date_ecriture,
         journal: e.journal, ref_folio: e.ref_folio, description: e.description,
         debit_mur: e.debit_mur, credit_mur: e.credit_mur,
@@ -241,14 +284,14 @@ export async function GET() {
       .like('numero_compte', '____%_%')
       .limit(5000)
     // Refine: exactly 6+ chars (the pattern above is 5+). Filter in JS to be safe.
-    const list = (ecr || []).filter(e => (e.numero_compte || '').length >= 6)
+    const list = ((ecr || []) as EcritureRow[]).filter((e: EcritureRow) => (e.numero_compte || '').length >= 6)
     checks.push({
       check_id: 'ecritures_6digit_bare',
       description: "Écritures avec numéro de compte à 6+ chiffres (sous-comptes non standard)",
       severity: 'info',
       status: list.length === 0 ? 'pass' : 'warn',
       count: list.length,
-      details: list.slice(0, DETAIL_LIMIT).map(e => ({
+      details: list.slice(0, DETAIL_LIMIT).map((e: EcritureRow) => ({
         id: e.id, numero_compte: e.numero_compte, date_ecriture: e.date_ecriture,
         journal: e.journal, ref_folio: e.ref_folio, description: e.description,
         debit_mur: e.debit_mur, credit_mur: e.credit_mur,
@@ -271,14 +314,14 @@ export async function GET() {
     const { data: societes } = await supabase.from('societes').select('id, nom')
     const anomalies: Record<string, unknown>[] = []
 
-    for (const soc of societes || []) {
+    for (const soc of ((societes || []) as SocieteRow[])) {
       const { data: ecr411 } = await supabase
         .from('ecritures_comptables_v2')
         .select('debit_mur, credit_mur')
         .eq('societe_id', soc.id)
         .eq('numero_compte', '411')
       let solde411 = 0
-      for (const e of ecr411 || []) {
+      for (const e of ((ecr411 || []) as Pick<EcritureRow, 'debit_mur' | 'credit_mur'>[])) {
         solde411 += (Number(e.debit_mur) || 0) - (Number(e.credit_mur) || 0)
       }
 
@@ -288,7 +331,8 @@ export async function GET() {
         .eq('societe_id', soc.id)
         .eq('type_facture', 'client')
         .not('statut', 'in', '(paye,annule,brouillon)')
-      const unpaidSum = (unpaid || []).reduce((s, f) => s + (Number(f.montant_mur) || 0), 0)
+      const unpaidSum = ((unpaid || []) as Pick<FactureRow, 'montant_mur'>[])
+        .reduce((s: number, f) => s + (Number(f.montant_mur) || 0), 0)
 
       const threshold = Math.max(unpaidSum * 10, 10000)
       if (Math.abs(solde411) > threshold && unpaidSum >= 0) {
@@ -332,7 +376,8 @@ export async function GET() {
       .limit(50000)
 
     const agg: Record<string, { debit: number; credit: number; journal: string; societe_id: string }> = {}
-    for (const e of ecr || []) {
+    type FolioEcr = Pick<EcritureRow, 'ref_folio' | 'journal' | 'societe_id' | 'debit_mur' | 'credit_mur'>
+    for (const e of ((ecr || []) as FolioEcr[])) {
       const key = `${e.societe_id || 'null'}::${e.ref_folio}`
       if (!agg[key]) agg[key] = { debit: 0, credit: 0, journal: e.journal || '', societe_id: e.societe_id || '' }
       agg[key].debit += Number(e.debit_mur) || 0
@@ -378,7 +423,7 @@ export async function GET() {
       .not('devise', 'eq', 'MUR')
       .not('devise', 'is', null)
 
-    const missing = (fx || []).filter(f => {
+    const missing = ((fx || []) as FactureRow[]).filter((f: FactureRow) => {
       const mur = Number(f.montant_mur)
       return !mur || mur === 0
     })
@@ -389,7 +434,7 @@ export async function GET() {
       severity: 'critical',
       status: missing.length === 0 ? 'pass' : 'fail',
       count: missing.length,
-      details: missing.slice(0, DETAIL_LIMIT).map(f => ({
+      details: missing.slice(0, DETAIL_LIMIT).map((f: FactureRow) => ({
         facture_id: f.id, numero_facture: f.numero_facture, tiers: f.tiers,
         devise: f.devise, montant_ttc: f.montant_ttc, montant_mur: f.montant_mur,
         taux_change: f.taux_change, statut: f.statut, date_facture: f.date_facture,
@@ -417,26 +462,27 @@ export async function GET() {
       .not('ref_folio', 'is', null)
       .limit(50000)
 
-    const groups: Record<string, typeof bnq> = {}
-    for (const e of bnq || []) {
+    const bnqList = (bnq || []) as EcritureRow[]
+    const groups: Record<string, EcritureRow[]> = {}
+    for (const e of bnqList) {
       const key = `${e.societe_id}::${e.ref_folio}::${e.numero_compte}`
       if (!groups[key]) groups[key] = []
-      groups[key]!.push(e)
+      groups[key].push(e)
     }
     const doublons: Record<string, unknown>[] = []
     for (const [key, rows] of Object.entries(groups)) {
-      if ((rows?.length || 0) > 1) {
+      if (rows.length > 1) {
         const [societe_id, ref_folio, numero_compte] = key.split('::')
         doublons.push({
           societe_id, ref_folio, numero_compte,
-          nb_occurrences: rows!.length,
-          ids: rows!.map(r => r.id),
+          nb_occurrences: rows.length,
+          ids: rows.map((r: EcritureRow) => r.id),
           sample: {
-            date_ecriture: rows![0].date_ecriture,
-            description: rows![0].description,
-            debit_mur: rows![0].debit_mur,
-            credit_mur: rows![0].credit_mur,
-            lettre: rows![0].lettre,
+            date_ecriture: rows[0].date_ecriture,
+            description: rows[0].description,
+            debit_mur: rows[0].debit_mur,
+            credit_mur: rows[0].credit_mur,
+            lettre: rows[0].lettre,
           },
         })
       }
@@ -469,7 +515,7 @@ export async function GET() {
       .select('id, numero_compte, lettre, date_ecriture, journal, ref_folio, description, debit_mur, credit_mur')
       .not('lettre', 'is', null)
       .limit(20000)
-    const bad = (ecr || []).filter(e => {
+    const bad = ((ecr || []) as EcritureRow[]).filter((e: EcritureRow) => {
       const c = e.numero_compte || ''
       return c.startsWith('6') || c.startsWith('7')
     })
@@ -479,7 +525,7 @@ export async function GET() {
       severity: 'warning',
       status: bad.length === 0 ? 'pass' : 'fail',
       count: bad.length,
-      details: bad.slice(0, DETAIL_LIMIT).map(e => ({
+      details: bad.slice(0, DETAIL_LIMIT).map((e: EcritureRow) => ({
         id: e.id, numero_compte: e.numero_compte, lettre: e.lettre,
         date_ecriture: e.date_ecriture, journal: e.journal, ref_folio: e.ref_folio,
         description: e.description, debit_mur: e.debit_mur, credit_mur: e.credit_mur,
@@ -496,9 +542,9 @@ export async function GET() {
   const duration_ms = Date.now() - startedAt
   const summary = {
     total: checks.length,
-    pass: checks.filter(c => c.status === 'pass').length,
-    fail: checks.filter(c => c.status === 'fail').length,
-    warn: checks.filter(c => c.status === 'warn').length,
+    pass: checks.filter((c: HealthCheck) => c.status === 'pass').length,
+    fail: checks.filter((c: HealthCheck) => c.status === 'fail').length,
+    warn: checks.filter((c: HealthCheck) => c.status === 'warn').length,
   }
 
   return NextResponse.json({

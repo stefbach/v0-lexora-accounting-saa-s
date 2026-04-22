@@ -139,7 +139,7 @@ function CheckCard({ check }: { check: HealthCheck }) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setOpen(o => !o)}
+              onClick={() => setOpen((o: boolean) => !o)}
               className="shrink-0"
             >
               {open ? (
@@ -305,7 +305,7 @@ export default function AdminHealthPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-4 pt-0">
-                {data.checks.filter(c => c.status !== "pass").length === 0 ? (
+                {data.checks.filter((c: HealthCheck) => c.status !== "pass").length === 0 ? (
                   <div className="py-8 text-center">
                     <CheckCircle2 className="w-10 h-10 mx-auto mb-2 text-green-500" />
                     <p className="font-medium text-green-700">Tous les checks sont OK</p>
@@ -314,21 +314,21 @@ export default function AdminHealthPage() {
                 ) : (
                   <div className="space-y-3">
                     {data.checks
-                      .filter(c => c.status !== "pass")
-                      .sort((a, b) => {
-                        const order = { fail: 0, warn: 1, pass: 2 } as const
+                      .filter((c: HealthCheck) => c.status !== "pass")
+                      .sort((a: HealthCheck, b: HealthCheck) => {
+                        const order: Record<Status, number> = { fail: 0, warn: 1, pass: 2 }
                         const s = order[a.status] - order[b.status]
                         if (s !== 0) return s
-                        const sev = { critical: 0, warning: 1, info: 2 } as const
+                        const sev: Record<Severity, number> = { critical: 0, warning: 1, info: 2 }
                         return sev[a.severity] - sev[b.severity]
                       })
-                      .map(c => <CheckCard key={c.check_id} check={c} />)}
+                      .map((c: HealthCheck) => <CheckCard key={c.check_id} check={c} />)}
                   </div>
                 )}
               </CardContent>
             </Card>
 
-            {data.checks.some(c => c.status === "pass") && (
+            {data.checks.some((c: HealthCheck) => c.status === "pass") && (
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-semibold" style={{ color: NAVY }}>
@@ -337,7 +337,7 @@ export default function AdminHealthPage() {
                 </CardHeader>
                 <CardContent className="p-4 pt-0">
                   <div className="space-y-3">
-                    {data.checks.filter(c => c.status === "pass").map(c => (
+                    {data.checks.filter((c: HealthCheck) => c.status === "pass").map((c: HealthCheck) => (
                       <CheckCard key={c.check_id} check={c} />
                     ))}
                   </div>
