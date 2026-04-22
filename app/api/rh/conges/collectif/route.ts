@@ -210,6 +210,10 @@ export async function POST(request: Request) {
     }
 
     // Create parent conges_collectifs row.
+    // F15 — Mapping colonnes DB strict : cree_par (pas created_by) et la
+    // table n'a pas de colonnes motif/nb_employes_concernes. On garde
+    // motif + nb_employes_concernes dans la reponse finale (calcul runtime)
+    // mais on ne les INSERT pas.
     const totalJours = rows.reduce((s, r) => s + r.nb_jours, 0)
     const { data: collectif, error: collectifErr } = await supabase
       .from('conges_collectifs')
@@ -221,11 +225,9 @@ export async function POST(request: Request) {
         date_fin,
         applique_a,
         groupe_id: applique_a === 'groupe' ? groupe_id : null,
-        motif,
-        nb_employes_concernes: rows.length,
-        created_by: user.id,
+        cree_par: user.id,
       })
-      .select('id, titre, date_debut, date_fin, type_conge, applique_a, groupe_id, nb_employes_concernes, created_at')
+      .select('id, titre, date_debut, date_fin, type_conge, applique_a, groupe_id, created_at')
       .single()
     if (collectifErr || !collectif) {
       console.error('[conges/collectif] create parent failed:', collectifErr?.message)
