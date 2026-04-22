@@ -671,7 +671,8 @@ export async function POST(request: Request) {
       if (demi_journee === true && newDebut === newFin) {
         updates.nb_jours = 0.5
       } else if (date_debut || date_fin || demi_journee !== undefined) {
-        updates.nb_jours = countWorkingDays(newDebut, newFin)
+        // F13 — employee-aware + jours_feries DB (cohérence avec création).
+        updates.nb_jours = await computeNbJoursForEmploye(supabase, existing.employe_id, newDebut, newFin)
       }
 
       const { data, error } = await supabase.from('demandes_conges').update(updates).eq('id', id).select().single()
@@ -1189,7 +1190,8 @@ export async function POST(request: Request) {
       }
 
       const dateFin = body.date_fin || body.date_debut
-      const nb_jours = countWorkingDays(body.date_debut, dateFin)
+      // F13 — employee-aware + jours_feries DB pour cohérence modal/back-end.
+      const nb_jours = await computeNbJoursForEmploye(supabase, body.employe_id, body.date_debut, dateFin)
 
       const { data, error } = await supabase.from('demandes_conges').insert({
         employe_id: body.employe_id,
@@ -1221,7 +1223,8 @@ export async function POST(request: Request) {
       }
 
       const dateFin = body.date_fin || body.date_debut
-      const nb_jours = countWorkingDays(body.date_debut, dateFin)
+      // F13 — employee-aware + jours_feries DB pour cohérence modal/back-end.
+      const nb_jours = await computeNbJoursForEmploye(supabase, body.employe_id, body.date_debut, dateFin)
 
       const { data, error } = await supabase.from('demandes_conges').insert({
         employe_id: body.employe_id,

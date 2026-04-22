@@ -20,6 +20,7 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { createClient } from "@/lib/supabase/client"
+import { countJoursOuvrablesSync, buildJoursFeriesSet } from "@/lib/rh/jours-ouvrables"
 import {
   EligibiliteBadge,
   type EligibilityStatus,
@@ -184,6 +185,19 @@ interface CongeRecord {
 const DEMI_JOURNEE_ALLOWED_TYPES = new Set(['AL', 'SL', 'CAR', 'UL'])
 
 // ─── Helper ──────────────────────────────────────────────────────
+// F13 — Compte le nombre de jours de weekend (sam+dim) entre 2 dates inclus.
+// Utilisé pour l'affichage détaillé de l'aperçu modal.
+function countWeekends(startDate: Date, endDate: Date): number {
+  let weekends = 0
+  const cursor = new Date(startDate)
+  while (cursor <= endDate) {
+    const day = cursor.getDay()
+    if (day === 0 || day === 6) weekends++
+    cursor.setDate(cursor.getDate() + 1)
+  }
+  return weekends
+}
+
 function formatDate(d: string) {
   return new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" })
 }
@@ -482,6 +496,8 @@ export default function CongesPage() {
   const [balances, setBalances] = useState<BalanceRow[]>([])
   const [kpis, setKpis] = useState<KPIs>({ total_al_taken: 0, total_sl_taken: 0, pending_requests: 0, alerts: 0 })
   const [loadingBalances, setLoadingBalances] = useState(true)
+  // F13 — jours feries charges une fois, utilises par l'apercu du modal
+  const [joursFeriesSet, setJoursFeriesSet] = useState<Set<string>>(() => new Set())
   const [editingBalId, setEditingBalId] = useState<string | null>(null)
   const [editBalFields, setEditBalFields] = useState<{ al_droit: number; al_pris: number; sl_droit: number; sl_pris: number; date_arrivee: string; periode_debut: string | null }>({ al_droit: 22, al_pris: 0, sl_droit: 15, sl_pris: 0, date_arrivee: "", periode_debut: null })
   const [savingBal, setSavingBal] = useState(false)
@@ -693,6 +709,23 @@ export default function CongesPage() {
 
   // Initial load
   useEffect(() => { loadSocietes() }, [loadSocietes])
+
+  // F13 — charger les jours_feries (année en cours + prochaine) pour aligner
+  // l'aperçu du modal sur le calcul backend (qui utilise la même DB).
+  useEffect(() => {
+    const year = new Date().getFullYear()
+    const supabase = createClient()
+    supabase.from('jours_feries')
+      .select('date, travail_autorise')
+      .gte('date', `${year}-01-01`)
+      .lte('date', `${year + 1}-12-31`)
+      .then(({ data }) => {
+        const dates = ((data || []) as any[])
+          .filter(r => !r.travail_autorise)
+          .map(r => String(r.date).slice(0, 10))
+        setJoursFeriesSet(buildJoursFeriesSet(dates))
+      })
+  }, [])
 
   // Fetch current user's role so we can gate the "Imposer collectif" button.
   useEffect(() => {
@@ -1890,31 +1923,33 @@ export default function CongesPage() {
               }
               return null
             })()}
-            {/* Aperçu nb_jours — montre au RH le calcul AVANT soumission */}
-            {form.date_debut && form.date_fin && !form.demi_journee && (() => {
+            {/* F13 — Aperçu nb_jours aligné sur le backend : utilise la
+                fonction canonique countJoursOuvrablesSync avec les
+                jours_feries chargés depuis la DB (joursFeriesSet). */}
+            {form.date_debut && form.date_fin && (() => {
               const s = new Date(form.date_debut + 'T12:00:00')
               const e = new Date(form.date_fin + 'T12:00:00')
               if (e < s) return null
               const calDays = Math.round((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1
-              let workDays = 0
-              const cursor = new Date(s)
-              while (cursor <= e) {
-                const day = cursor.getDay()
-                if (day !== 0 && day !== 6) workDays++
-                cursor.setDate(cursor.getDate() + 1)
-              }
+              const workDays = countJoursOuvrablesSync({
+                date_debut: form.date_debut,
+                date_fin: form.date_fin,
+                demi_journee: form.demi_journee,
+                jours_feries: joursFeriesSet,
+              })
+              const feriesDansPlage = calDays - workDays - countWeekends(s, e) - (form.demi_journee ? 0.5 : 0)
               return (
                 <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
                   <p className="text-sm font-medium text-blue-900">
                     Estimation : <strong>{workDays} jour{workDays > 1 ? "s" : ""} ouvrable{workDays > 1 ? "s" : ""}</strong>
-                    {calDays !== workDays && (
-                      <span className="text-xs text-blue-600 ml-2">
-                        ({calDays} jour{calDays > 1 ? "s" : ""} calendaire{calDays > 1 ? "s" : ""} dont {calDays - workDays} weekend{calDays - workDays > 1 ? "s" : ""})
-                      </span>
-                    )}
+                    <span className="text-xs text-blue-600 ml-2">
+                      ({calDays} calendaire{calDays > 1 ? "s" : ""}
+                      {feriesDansPlage > 0 ? ` · ${Math.round(feriesDansPlage)} férié${feriesDansPlage > 1 ? "s" : ""}` : ""}
+                      {form.demi_journee ? " · ½ journée" : ""})
+                    </span>
                   </p>
                   <p className="text-[10px] text-blue-600 mt-0.5">
-                    Le calcul final tiendra compte du planning de l'employé et des jours fériés.
+                    Aligné sur le calcul final (WRA 2019 + jours_feries Maurice).
                   </p>
                 </div>
               )
