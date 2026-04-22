@@ -94,14 +94,23 @@ export async function POST(request: Request) {
 
     const { data: solde } = await supabase
       .from('soldes_conges')
-      .select('al_droit, al_pris, al_solde')
+      .select('al_droit, al_acquis, al_pris, al_solde')
       .eq('employe_id', employe_id)
       .eq('periode_debut', cycle_debut)
       .eq('periode_fin', cycle_fin)
       .maybeSingle()
     if (!solde) return NextResponse.json({ error: 'Solde du cycle non trouve' }, { status: 404 })
 
-    const jours = Number(solde.al_solde) || 0
+    // G5 — Cash-in-lieu utilise al_acquis (Modèle C linéaire) et non
+    // al_solde (basé sur al_droit palier). Raison : WRA S.45(2) exige
+    // une compensation pour TOUS les jours accumulés, même avant M12.
+    // Ex : employé partant à M8 → 14.67j dûs (avant G5 : 0).
+    // Fallback vers al_solde si al_acquis manquant (rows legacy).
+    const alAcquis = solde.al_acquis != null ? Number(solde.al_acquis) : null
+    const alPris = Number(solde.al_pris) || 0
+    const jours = alAcquis != null
+      ? Math.max(0, Math.round((alAcquis - alPris) * 100) / 100)
+      : (Number(solde.al_solde) || 0)
     if (jours <= 0) {
       return NextResponse.json({ error: 'Aucun solde AL a payer pour ce cycle' }, { status: 400 })
     }

@@ -94,6 +94,11 @@ export async function detectCyclesAClore(
 /**
  * Calcule le montant compensatoire = jours × (salaire_base / 22).
  * Arrondi à 2 décimales.
+ *
+ * G5 — pour garantir la conformité WRA S.45(2), `joursNonPris` doit
+ * correspondre à (al_acquis - al_pris), PAS à al_solde qui est basé
+ * sur le modèle palier (0 avant M12). Les call sites (app/api/admin/
+ * cash-in-lieu) ont été mis à jour pour passer le bon input.
  */
 export function calculerMontantCashInLieu(
   salaireBase: number,
