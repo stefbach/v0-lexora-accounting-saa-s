@@ -134,13 +134,23 @@ export default function EspaceEmployePage() {
     if (!employe) return
     setPunching(true)
     try {
-      const res = await fetch("/api/rh/pointage", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ employe_id: employe.id, type_pointage: type, heure_forcee: timeMauritius(), date_pointage: todayISO() }),
+      // PO1 — route vers l'API sessions. Mapping des noms legacy :
+      //   entree -> entree | pause_debut -> pause | pause_fin -> fin-pause
+      const actionMap: Record<string, string> = {
+        entree: 'entree',
+        pause_debut: 'pause',
+        pause_fin: 'fin-pause',
+        sortie: 'sortie',
+      }
+      const action = actionMap[type] || type
+      const res = await fetch(`/api/rh/pointage/session?action=${action}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ employe_id: employe.id, heure: timeMauritius(), date: todayISO() }),
       })
       const data = await res.json()
-      if (data.error) setFeedback(data.message || data.error)
-      else { setFeedback(data.message || `${type} enregistré`); if (data.pointage) setPointageToday(data.pointage); load() }
+      if (!res.ok || data.error) setFeedback(data.error || `Erreur ${res.status}`)
+      else { setFeedback(`${type} enregistré`); load() }
     } catch { setFeedback("Erreur réseau") }
     setPunching(false)
   }
