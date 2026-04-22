@@ -901,7 +901,9 @@ export async function POST(request: Request) {
         statut: 'brouillon',
       }
 
-      const { data, error } = await supabase.from('bulletins_paie').upsert(bulletin, { onConflict: 'employe_id,periode' }).select().single()
+      // F14 — force updated_at pour que le recalcul soit visible cote UI.
+      const bulletinAvecTs = { ...bulletin, updated_at: new Date().toISOString() }
+      const { data, error } = await supabase.from('bulletins_paie').upsert(bulletinAvecTs, { onConflict: 'employe_id,periode' }).select().single()
       if (error) {
         console.error('[paie calculer]', error.message, error.details, error.hint)
         return NextResponse.json({ error: `Erreur bulletin: ${error.message}`, details: error.details, hint: error.hint }, { status: 500 })
@@ -957,6 +959,13 @@ export async function POST(request: Request) {
       if (!societe_id) {
         return NextResponse.json({ error: 'societe_id requis pour calculer_batch', bulletins: [], nb: 0 }, { status: 400 })
       }
+
+      // F14 — audit trail : start timer + track counters
+      const auditStart = Date.now()
+      const auditRaisonsSkip: Record<string, number> = {}
+      let auditNbUpdates = 0
+      let auditNbInserts = 0
+      let auditNbErreurs = 0
 
       // Multi-tenant: verify access to this société
       const hasAccess = await userHasAccessToSociete(user.id, societe_id)
@@ -1676,25 +1685,42 @@ export async function POST(request: Request) {
         let saved: any = null
         let error: any = null
 
-        // Check if bulletin already exists for this employee+period
+        // F14 — Check if bulletin already exists + ses flags verrouille/paiement
+        //        (pour compter les skip precis dans l'audit).
         const { data: existing } = await supabase.from('bulletins_paie')
-          .select('id').eq('employe_id', emp.id).eq('periode', periodeDate).maybeSingle()
+          .select('id, verrouille, date_paiement')
+          .eq('employe_id', emp.id).eq('periode', periodeDate).maybeSingle()
 
         if (existing) {
-          // UPDATE existing bulletin
+          // F14 — skip si bulletin verrouille ou deja paye (immuables).
+          if (existing.verrouille === true) {
+            auditRaisonsSkip['verrouille'] = (auditRaisonsSkip['verrouille'] || 0) + 1
+            console.log(`[paie batch F14] SKIP ${emp.prenom} ${emp.nom} — bulletin verrouille`)
+            continue
+          }
+          if (existing.date_paiement) {
+            auditRaisonsSkip['paye'] = (auditRaisonsSkip['paye'] || 0) + 1
+            console.log(`[paie batch F14] SKIP ${emp.prenom} ${emp.nom} — bulletin paye (${existing.date_paiement})`)
+            continue
+          }
+          // F14 — force updated_at pour que le recalcul soit visible cote UI.
+          const bulletinAvecTs = { ...bulletin, updated_at: new Date().toISOString() }
           const { data: updated, error: upErr } = await supabase.from('bulletins_paie')
-            .update(bulletin).eq('id', existing.id).select().single()
+            .update(bulletinAvecTs).eq('id', existing.id).select().single()
           saved = updated
           error = upErr
+          if (!upErr) auditNbUpdates++
         } else {
           // INSERT new bulletin
           const { data: inserted, error: insErr } = await supabase.from('bulletins_paie')
             .insert(bulletin).select().single()
           saved = inserted
           error = insErr
+          if (!insErr) auditNbInserts++
         }
 
         if (error) {
+          auditNbErreurs++
           const errMsg = `${emp.nom} ${emp.prenom}: ${error.message}${error.details ? ' — ' + error.details : ''}${error.hint ? ' (hint: ' + error.hint + ')' : ''}`
           console.error(`[paie batch] SAVE FAILED:`, errMsg)
           erreurs.push(errMsg)
@@ -1751,12 +1777,49 @@ export async function POST(request: Request) {
         cout_total_employeur: bulletinsSauvegardes.reduce((s, b) => s + Number(b.salaire_brut || 0) + Number(b.total_charges_patronales || 0), 0),
       }
 
+      // F14 — Audit trail : insertion d'une ligne par appel calculer_batch.
+      //   action = 'recalcul_batch' si au moins 1 UPDATE, sinon 'calcul_initial'.
+      //   nb_skip = bulletins verrouilles/payes non modifies.
+      const auditAction = auditNbUpdates > 0 ? 'recalcul_batch' : 'calcul_initial'
+      const auditNbSkip = Object.values(auditRaisonsSkip).reduce((a, b) => a + b, 0)
+      try {
+        await supabase.from('audit_recalcul_paie').insert({
+          societe_id,
+          periode: `${periodeStr}-01`,
+          action: auditAction,
+          nb_bulletins_cibles: (finalEmployes || []).length,
+          nb_bulletins_modifies: auditNbUpdates + auditNbInserts,
+          nb_bulletins_skip: auditNbSkip,
+          nb_bulletins_erreur: auditNbErreurs,
+          raisons_skip: Object.keys(auditRaisonsSkip).length > 0 ? auditRaisonsSkip : null,
+          erreurs: erreurs.length > 0 ? erreurs : null,
+          declenche_par: user.id,
+          duree_ms: Date.now() - auditStart,
+        })
+      } catch (auditErr: any) {
+        console.warn('[paie batch F14] audit insert failed (non-blocking):', auditErr?.message || auditErr)
+      }
+
+      console.log(`[paie batch F14] ${auditAction} — cibles=${(finalEmployes || []).length} updates=${auditNbUpdates} inserts=${auditNbInserts} skip=${auditNbSkip} erreurs=${auditNbErreurs} duree=${Date.now() - auditStart}ms`)
+
       return NextResponse.json({
         bulletins: bulletinsSauvegardes,
         totaux,
         nb: bulletinsSauvegardes.length,
         nb_employes: employes.length,
         erreurs: erreurs.length > 0 ? erreurs : undefined,
+        // F14 — detail du recalcul pour feedback UI precis
+        recalcul: {
+          action: auditAction,
+          nb_cibles: (finalEmployes || []).length,
+          nb_modifies: auditNbUpdates + auditNbInserts,
+          nb_updates: auditNbUpdates,
+          nb_inserts: auditNbInserts,
+          nb_skip: auditNbSkip,
+          nb_erreurs: auditNbErreurs,
+          raisons_skip: auditRaisonsSkip,
+          duree_ms: Date.now() - auditStart,
+        },
         debug: { societe_id, periode: periodeStr, nb_employes_total: allEmps.length, nb_actifs: employes.length, nb_bulletins: bulletinsSauvegardes.length, nb_erreurs: erreurs.length }
       })
     }
