@@ -3383,8 +3383,16 @@ export async function POST(request: Request) {
         try {
           const tx = txs[txIdx]
           const nomAssocie = (tx.tiers_detecte || '').trim()
+          // Blocklist : noms de banques / frais / tiers techniques qui ne
+          // peuvent JAMAIS être un compte courant associé. Évite la création
+          // de faux CCA "MCB", "SBM", "MAURITIUS TELECOM" etc. observée en
+          // prod (libellés bancaires détectés comme tiers à tort).
+          const BANK_LIKE_NAMES = /^(mcb|sbm|bom|bank of mauritius|mauritius commercial bank|state bank|absa|hsbc|barclays|afrasia|standard chartered)(\s|$)/i
+          const FEE_LIKE_NAMES = /^(tax amount due|service fee|outward transfer|swift charge|stamp duty|merchant|bank charge|commission)/i
           if (!nomAssocie || nomAssocie.length < 3) {
             ccaError = 'Tiers absent ou trop court pour creer le CCA'
+          } else if (BANK_LIKE_NAMES.test(nomAssocie) || FEE_LIKE_NAMES.test(nomAssocie)) {
+            ccaError = `Tiers "${nomAssocie}" ressemble à une banque ou un frais bancaire — refus de créer un CCA. Re-classifie cette transaction en 'frais_bancaires'.`
           } else {
             // Trouver ou creer le compte courant associe
             const { data: existingCompte } = await supabase
