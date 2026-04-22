@@ -283,6 +283,13 @@ function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris
         React.createElement(Text, { style: s.otSubLabel }, 'Sous-total heures supplementaires'),
         React.createElement(Text, { style: s.otSubValue }, `${fmt(bulletin.heures_sup_montant)} MUR`)
       ) : null,
+      // G1 — Cash-in-lieu (WRA S.45 AL / S.47 VL) ligne dediee dans Gains.
+      Number(bulletin.montant_cash_in_lieu) > 0
+        ? React.createElement(Row, {
+            label: `Paiement compensatoire conges (${Number(bulletin.jours_cash_in_lieu) || 0}j ${bulletin.cash_in_lieu_type || ''}) — WRA S.45/S.47`,
+            value: `${fmt(Number(bulletin.montant_cash_in_lieu))} MUR`,
+          })
+        : null,
       // Sprint — allowances & primes détaillées (cf. distribution sa1/sa2/sa3
       // dans app/api/rh/paie/route.ts) :
       // 1) Primes variables approuvées (libellé via catalogue_primes)

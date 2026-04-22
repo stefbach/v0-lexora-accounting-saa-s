@@ -117,6 +117,14 @@ export function calculerBulletin(
    * finale est appliquée au salaire_net côté appelant (avec plafonds).
    */
   deductionAbsence: number = 0,
+  /**
+   * G1 — Montant du paiement compensatoire (cash-in-lieu) WRA S.45/S.47
+   * pour les jours de congé non pris en fin de cycle. Considéré comme du
+   * salaire normal : ajouté à salaire_brut_base ET à la base CSG/NSF
+   * (équivalent au salaire de base, car les jours non pris auraient été
+   * payés comme salary). Inclus dans salaire_net retourné.
+   */
+  cashInLieuMontant: number = 0,
 ): ResultatPaie {
   const {
     salaire_base,
@@ -134,11 +142,13 @@ export function calculerBulletin(
   } = elements
 
   // POLICY Lexora — plus de salary_compensation ajoutée au brut.
+  // G1 — cashInLieuMontant ajouté au brut total (impacte PAYE et net).
   const salaire_brut_base = salaire_base + increment_salaire +
     heures_sup_montant +
     transport_allowance + petrol_allowance +
     special_allowance_1 + special_allowance_2 + special_allowance_3 +
-    other_refund + departure_notice + commission
+    other_refund + departure_notice + commission +
+    (cashInLieuMontant || 0)
 
   const salaire_brut = salaire_brut_base + eoy_bonus
 
@@ -148,16 +158,22 @@ export function calculerBulletin(
   // allowances (électricité, spéciale, transport, etc.).
   // PAYE reste calculé sur les emoluments totaux (brut - absences).
   //
+  // G1 — Le cash-in-lieu (CIL, paiement de jours de congé non pris) est
+  // assimilé à du salary normal pour CSG/NSF (les jours non pris auraient
+  // été payés comme du basic). On l'ajoute donc au numérateur de la base
+  // CSG/NSF.
+  //
   // Quand un employé est absent, la déduction vient proportionnellement
   // du basic ET des allowances → on prorate l'absence pour déterminer la
   // part à retrancher du basic dans la base CSG/NSF.
-  const ratioBasicSurBrut = salaire_brut_base > 0 ? salaire_base / salaire_brut_base : 0
+  const basicAvecCil = salaire_base + (cashInLieuMontant || 0)
+  const ratioBasicSurBrut = salaire_brut_base > 0 ? basicAvecCil / salaire_brut_base : 0
   const prorataAbsenceBasic = (deductionAbsence || 0) * ratioBasicSurBrut
 
-  // Base CSG/NSF = salaire_base (basic seul) - prorata_absence_basic.
-  const base_csg_nsf = Math.max(0, salaire_base - prorataAbsenceBasic)
+  // Base CSG/NSF = (salaire_base + CIL) - prorata_absence_basic.
+  const base_csg_nsf = Math.max(0, basicAvecCil - prorataAbsenceBasic)
 
-  // Base PAYE = salaire_brut_base (basic + allowances) - deductionAbsence.
+  // Base PAYE = salaire_brut_base (basic + allowances + CIL) - deductionAbsence.
   const base_paye = Math.max(0, salaire_brut_base - (deductionAbsence || 0))
 
   // Alias rétrocompat (certains appelants externes peuvent utiliser ce nom).

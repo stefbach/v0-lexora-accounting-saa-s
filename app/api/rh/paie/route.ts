@@ -5,6 +5,7 @@ import { calculerBulletin, PARAMS_MRA_DEFAUT } from '@/lib/rh/paie'
 import { getUserSocieteIds, userHasAccessToSociete, userHasAccessToEmploye } from '@/lib/rh/access'
 import { calculateWorkingDays, getWorkingDaysForEmploye, getMauritiusPublicHolidays } from '@/lib/rh/calculateWorkingDays'
 import { lastDayOfMonth } from '@/lib/rh/period'
+import { fetchPaiementsValidesPourBulletin, marquerPaiementPaye } from '@/lib/rh/cash-in-lieu'
 
 export const dynamic = 'force-dynamic'
 
@@ -820,8 +821,19 @@ export async function POST(request: Request) {
         montantUlFinal = Math.round(montant_ul_single * scale * 100) / 100
       }
 
-      // F10 — calculerBulletin reçoit totalDeductionAbsence pour calculer
-      // CSG/NSF/PAYE sur salaire_imposable = brut_base - totalDeductionAbsence.
+      // G1 — Cash-in-lieu (WRA S.45/S.47) : injecter les paiements compensation
+      // valides pour cette periode_bulletin. Le montant s'ajoute au brut et a
+      // la base CSG/NSF/PAYE (assimile a du salary normal).
+      const periodeBulletinSingle = periodeDate.slice(0, 10)
+      const cilPaiementsSingle = await fetchPaiementsValidesPourBulletin(supabase, employe_id, periodeBulletinSingle)
+      const cilMontantSingle = cilPaiementsSingle.reduce((s, p) => s + Number(p.montant_total || 0), 0)
+      const cilJoursSingle = cilPaiementsSingle.reduce((s, p) => s + Number(p.jours_payes_compensation || 0), 0)
+      const cilTypesSingle = new Set(cilPaiementsSingle.map(p => p.type_conge))
+      const cilTypeSingle: 'AL' | 'VL' | 'mixte' | null = cilTypesSingle.size === 0
+        ? null
+        : cilTypesSingle.size > 1 ? 'mixte' : (Array.from(cilTypesSingle)[0] as 'AL' | 'VL')
+
+      // F10 + G1 — calculerBulletin recoit totalDeductionAbsence ET cilMontant.
       const resultat = calculerBulletin(
         elements,
         params as any,
@@ -830,6 +842,7 @@ export async function POST(request: Request) {
         undefined,
         undefined,
         totalDeductionAbsence,
+        cilMontantSingle,
       )
 
       const salaire_net_final = Math.max(
@@ -867,6 +880,10 @@ export async function POST(request: Request) {
         jours_absence: jours_absence_injust || 0,
         montant_ul: Math.round(montantUlFinal * 100) / 100,
         jours_ul: joursUnpaidLeaveSingle || 0,
+        // G1 — Cash-in-lieu (WRA S.45/S.47)
+        montant_cash_in_lieu: Math.round(cilMontantSingle * 100) / 100,
+        jours_cash_in_lieu: cilJoursSingle,
+        cash_in_lieu_type: cilTypeSingle,
         // Sprint 13 BUG 1 — trace prorata dans les notes pour l'UI
         notes: prorataSingle.ratio < 1 ? `[${prorataSingle.motif}]` : null,
         statut: 'brouillon',
@@ -876,6 +893,13 @@ export async function POST(request: Request) {
       if (error) {
         console.error('[paie calculer]', error.message, error.details, error.hint)
         return NextResponse.json({ error: `Erreur bulletin: ${error.message}`, details: error.details, hint: error.hint }, { status: 500 })
+      }
+
+      // G1 — Marquer les paiements compensation comme 'paye' avec bulletin_paie_id.
+      if (data?.id && cilPaiementsSingle.length > 0) {
+        for (const pcc of cilPaiementsSingle) {
+          await marquerPaiementPaye(supabase, pcc.id, data.id)
+        }
       }
 
       // Marquer les primes comme intégrées (colonne integre_paie + date_integration ajoutées en migration 028)
@@ -1456,8 +1480,20 @@ export async function POST(request: Request) {
           montantUlFinalBatch = Math.round(montant_ul * scale * 100) / 100
         }
 
-        // F10 — calculerBulletin avec totalDeductionAbsence -> CSG/NSF/PAYE
-        // calculés sur salaire_imposable = brut_base - totalDeductionAbsence.
+        // G1 — Cash-in-lieu (WRA S.45/S.47) : injecter paiements compensation
+        // valides pour cette periode_bulletin (= 1er du mois).
+        const periodeBulletinBatch = `${periodeStr}-01`
+        const cilPaiementsBatch = isHorsMRA
+          ? []
+          : await fetchPaiementsValidesPourBulletin(supabase, emp.id, periodeBulletinBatch)
+        const cilMontantBatch = cilPaiementsBatch.reduce((s, p) => s + Number(p.montant_total || 0), 0)
+        const cilJoursBatch = cilPaiementsBatch.reduce((s, p) => s + Number(p.jours_payes_compensation || 0), 0)
+        const cilTypesBatch = new Set(cilPaiementsBatch.map(p => p.type_conge))
+        const cilTypeBatch: 'AL' | 'VL' | 'mixte' | null = cilTypesBatch.size === 0
+          ? null
+          : cilTypesBatch.size > 1 ? 'mixte' : (Array.from(cilTypesBatch)[0] as 'AL' | 'VL')
+
+        // F10 + G1 — calculerBulletin avec totalDeductionAbsence + cilMontant.
         const resultat = calculerBulletin(
           elements,
           params as any,
@@ -1466,6 +1502,7 @@ export async function POST(request: Request) {
           undefined,
           undefined,
           isHorsMRA ? 0 : totalDeductionAbsence,
+          cilMontantBatch,
         )
 
         // Hors champs MRA : pas de CSG, NSF, PAYE, pas de charges patronales
@@ -1590,6 +1627,10 @@ export async function POST(request: Request) {
           jours_absence: isHorsMRA ? 0 : (jours_absence_injust || 0),
           montant_ul: isHorsMRA ? 0 : Math.round(montantUlFinalBatch * 100) / 100,
           jours_ul: isHorsMRA ? 0 : (joursUnpaidLeave || 0),
+          // G1 — Cash-in-lieu (WRA S.45/S.47)
+          montant_cash_in_lieu: Math.round(cilMontantBatch * 100) / 100,
+          jours_cash_in_lieu: cilJoursBatch,
+          cash_in_lieu_type: cilTypeBatch,
           notes: notesResume,
           statut: 'brouillon',
         }
@@ -1656,6 +1697,12 @@ export async function POST(request: Request) {
             employe: { id: emp.id, code: emp.code_employe, nom: emp.nom, prenom: emp.prenom, poste: emp.poste },
             conges_details: congesDetailsForBulletin,
           })
+          // G1 — Marquer les paiements compensation comme 'paye' avec bulletin_paie_id.
+          if (saved?.id && cilPaiementsBatch.length > 0) {
+            for (const pcc of cilPaiementsBatch) {
+              await marquerPaiementPaye(supabase, pcc.id, saved.id)
+            }
+          }
           // Marquer primes intégrées (colonne integre_paie + date_integration ajoutées en migration 028)
           if (primesMois && primesMois.length > 0) {
             await supabase.from('primes_variables_mois')
