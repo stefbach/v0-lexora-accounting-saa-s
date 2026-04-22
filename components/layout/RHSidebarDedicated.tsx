@@ -37,7 +37,7 @@ const ALL_LINKS: NavLink[] = [
   { href: '/rh/conges', label: 'Absences & Congés', labelKey: 'rh.absences_leave', icon: Calendar },
   { href: '/rh/conges/parametres', label: 'Règles congés', icon: Settings, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
   // G6 — Exports légaux WRA S.116 : réservés RH Manager / admin.
-  { href: '/rh/exports', label: 'Exports légaux (S.116)', icon: ShieldCheck, roles: ['admin', 'rh'] },
+  { href: '/rh/exports-legaux', label: 'Exports légaux (S.116)', icon: ShieldCheck, roles: ['admin', 'rh'] },
   { href: '/rh/jours-feries', label: 'Jours fériés', icon: Calendar, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
   { href: '/rh/paie', label: 'Paie & Bulletins', labelKey: 'hr.payslips', icon: CreditCard, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'comptable', 'comptable_dedie'] },
   { href: '/rh/paie/validation', label: 'Contrôle pré-paie', icon: CheckCircle, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
