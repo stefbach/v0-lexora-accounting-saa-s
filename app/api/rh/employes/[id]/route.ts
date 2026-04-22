@@ -94,6 +94,31 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const supabase = getAdminClient()
     const body = await request.json()
 
+    // G7 — WRA S.64 + S.5(5)(aa) : protection absolue contre licenciement
+    // pendant grossesse/congé maternité. Bloque PATCH date_depart sauf
+    // si body.force = true (faute grave documentée).
+    if (body.date_depart && !body.force) {
+      const { data: prot } = await supabase
+        .rpc('is_employe_protege_licenciement', {
+          p_employe_id: id,
+          p_date_reference: body.date_depart,
+        })
+        .maybeSingle()
+      if (prot && (prot as any).est_protege === true) {
+        return NextResponse.json({
+          error: 'wra_protection_licenciement',
+          message: `Impossible de modifier la date de départ : ${(prot as any).motif}. Protection active jusqu'au ${String((prot as any).date_fin_protection).slice(0, 10)}. Pour une faute grave non liée à la grossesse, renvoyez avec { force: true } et un motif documenté.`,
+          motif: (prot as any).motif,
+          date_fin_protection: (prot as any).date_fin_protection,
+        }, { status: 403 })
+      }
+    }
+    if (body.force && body.date_depart) {
+      console.warn(`[employes PATCH] date_depart FORCED sur employe=${id} par user=${user.id} — motif=${body.motif_force || 'non-documente'}`)
+    }
+    delete body.force
+    delete body.motif_force
+
     // Remove fields that shouldn't be updated directly
     delete body.id
     delete body.created_at

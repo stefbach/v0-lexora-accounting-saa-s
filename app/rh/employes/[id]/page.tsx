@@ -20,6 +20,8 @@ import {
   Phone, MapPin, Building2, Hash, CircleDot
 } from "lucide-react"
 import { BANQUES_MAURITIUS } from "@/lib/rh/banques-mauritius"
+import { createClient } from "@/lib/supabase/client"
+import { ProtectionLegalePanel } from "./_components/ProtectionLegalePanel"
 
 function fmt(n: number) {
   return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "MUR", maximumFractionDigits: 0 }).format(n)
@@ -69,6 +71,8 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [employe, setEmploye] = useState<any>(null)
+  // G7 — role de l'utilisateur connecte (pour afficher le panneau ProtectionLegale)
+  const [userRole, setUserRole] = useState<string>("")
   const [form, setForm] = useState<any>(null)
   const [bulletins, setBulletins] = useState<any[]>([])
   const [conges, setConges] = useState<any[]>([])
@@ -123,6 +127,16 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
   }, [id])
 
   useEffect(() => { load(yearFilter, pointageMois) }, [load, yearFilter, pointageMois])
+
+  // G7 — charger le role de l'utilisateur connecte pour ProtectionLegalePanel
+  useEffect(() => {
+    const sb = createClient()
+    sb.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return
+      sb.from('profiles').select('role').eq('id', user.id).maybeSingle()
+        .then(({ data }) => { if (data?.role) setUserRole(String(data.role)) })
+    })
+  }, [])
 
   // On first load, set form from employe
   useEffect(() => {
@@ -329,6 +343,19 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
           </div>
         </div>
       </div>
+
+      {/* G7 — Protection légale WRA S.52/S.53/S.64 (visible RH + admins) */}
+      <ProtectionLegalePanel
+        employe={{
+          id: employe.id,
+          prenom: employe.prenom,
+          nom: employe.nom,
+          genre: employe.genre,
+          gender: employe.gender,
+          date_arrivee: employe.date_arrivee,
+        }}
+        canManage={['admin', 'super_admin', 'rh', 'rh_manager'].includes(String(userRole || '').toLowerCase())}
+      />
 
       {/* 9 Tabs */}
       <Tabs defaultValue="personnel" className="space-y-6">
