@@ -3432,6 +3432,11 @@ export async function POST(request: Request) {
                   type,
                   montant,
                   description,
+                  // Traçabilité + clé d'unicité (migration 167) — empêche un 2e
+                  // INSERT pour la même tx bancaire (propagation self-target).
+                  source_releve_id: releve_id,
+                  source_transaction_idx: txIdx,
+                  source_kind: 'classifier',
                 })
               if (mvtErr) {
                 ccaError = `Mouvement CCA non cree: ${mvtErr.message}`
@@ -3620,16 +3625,35 @@ export async function POST(request: Request) {
                       }
                       if (ccaId) {
                         const delta = isOut ? -txAmt : txAmt
-                        await supabase.from('mouvements_compte_courant').insert({
-                          compte_courant_id: ccaId, societe_id,
-                          date_mouvement: t.date || new Date().toISOString().split('T')[0],
-                          type: isOut ? 'avance' : 'apport',
-                          montant: txAmt,
-                          description: `Propage (${classification}) ${relDevise !== 'MUR' ? `[${txAmtOrig.toFixed(2)} ${relDevise} @ ${relTauxDevise}]` : ''} — ${(t.libelle || '').substring(0, 60)}`,
-                        })
-                        await supabase.from('comptes_courants_associes')
-                          .update({ solde: solde + delta, updated_at: new Date().toISOString() })
-                          .eq('id', ccaId)
+                        // Idempotent : si la tx (rel.id, i) a déjà un mouvement
+                        // sur ce compte, on skip (index unique partiel
+                        // ux_mouvements_cca_source — migration 167).
+                        const { data: existingMvt } = await supabase
+                          .from('mouvements_compte_courant')
+                          .select('id')
+                          .eq('compte_courant_id', ccaId)
+                          .eq('source_releve_id', rel.id)
+                          .eq('source_transaction_idx', i)
+                          .limit(1)
+                        if (!existingMvt || existingMvt.length === 0) {
+                          const { error: propInsErr } = await supabase.from('mouvements_compte_courant').insert({
+                            compte_courant_id: ccaId, societe_id,
+                            date_mouvement: t.date || new Date().toISOString().split('T')[0],
+                            type: isOut ? 'avance' : 'apport',
+                            montant: txAmt,
+                            description: `Propage (${classification}) ${relDevise !== 'MUR' ? `[${txAmtOrig.toFixed(2)} ${relDevise} @ ${relTauxDevise}]` : ''} — ${(t.libelle || '').substring(0, 60)}`,
+                            source_releve_id: rel.id,
+                            source_transaction_idx: i,
+                            source_kind: 'propagation',
+                          })
+                          if (!propInsErr) {
+                            await supabase.from('comptes_courants_associes')
+                              .update({ solde: solde + delta, updated_at: new Date().toISOString() })
+                              .eq('id', ccaId)
+                          }
+                          // Si l'INSERT échoue sur violation unique, l'index a
+                          // bien fait son travail — on ignore silencieusement.
+                        }
                       }
                     } catch (e: any) {
                       console.warn(`[propagation] CCA sync exception:`, e.message)
