@@ -9,16 +9,10 @@ import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 const NAVY = "#0B0F2E"
 
-const JOURS_FERIES_MU_DEFAUT = [
-  { date: "2025-01-01", label: "Jour de l'An" },
-  { date: "2025-01-02", label: "Jour de l'An (suite)" },
-  { date: "2025-03-12", label: "Jour de la Nation" },
-  { date: "2025-05-01", label: "Fête du Travail" },
-  { date: "2025-05-09", label: "Ascension" },
-  { date: "2025-08-15", label: "Assomption" },
-  { date: "2025-11-02", label: "Toussaint" },
-  { date: "2025-12-25", label: "Noël" },
-]
+// PE1 — les jours fériés Maurice sont chargés dynamiquement depuis la
+// table jours_feries (15 fériés officiels 2026 seedés). L'ancienne liste
+// hardcodée contenait 2 erreurs (Ascension non fériée à Maurice, et le
+// Labour Day positionné au 9/5 au lieu du 1/5).
 
 // ---------------------------------------------------------------------------
 // Isolated number field — has its own local state so typing never causes the
@@ -116,6 +110,30 @@ export default function ParametresPaiePage() {
   const [mraUpdatedAt, setMraUpdatedAt] = useState<string | null>(null)
   const [mraSource, setMraSource] = useState<string | null>(null)
 
+  // PE1 — fetch dynamique des jours fériés depuis la DB.
+  const [anneeFeries] = useState(new Date().getFullYear())
+  const [joursFeries, setJoursFeries] = useState<Array<{ date: string; libelle: string }>>([])
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/rh/jours-feries?annee=${anneeFeries}`)
+      .then(r => r.ok ? r.json() : { jours_feries: [] })
+      .then(d => {
+        if (cancelled) return
+        const rows = (d?.jours_feries || d?.data || []) as any[]
+        setJoursFeries(
+          rows
+            .filter(r => r?.date)
+            .map(r => ({
+              date: String(r.date).slice(0, 10),
+              libelle: String(r.libelle || r.label || ''),
+            }))
+            .sort((a, b) => a.date.localeCompare(b.date)),
+        )
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [anneeFeries])
+
   const fetchMraRates = async (opts: { fromMount?: boolean } = {}) => {
     setMraStatus('loading')
     setMraError(null)
@@ -201,7 +219,14 @@ export default function ParametresPaiePage() {
             paye_taux_1: String(d.params.paye_taux_1 || 0.10),
             paye_seuil_taux_2: String(d.params.paye_seuil_taux_2 || 650000),
             paye_taux_2: String(d.params.paye_taux_2 || 0.15),
-            night_shift_pct: String(d.params.night_shift_pct ?? 0.15),
+            // PE1 BUG 2 — night_shift_pct était parfois stocké en %
+            // (15) au lieu de décimal (0.15), d'où affichage "1500%".
+            // Normalisation défensive : valeur > 1 ⇒ diviser par 100.
+            night_shift_pct: String(
+              Number(d.params.night_shift_pct ?? 0.15) > 1
+                ? Number(d.params.night_shift_pct) / 100
+                : (d.params.night_shift_pct ?? 0.15),
+            ),
           })
         }
       })
@@ -362,7 +387,7 @@ export default function ParametresPaiePage() {
               />
               <div className="bg-blue-50 p-3 rounded text-xs text-blue-800 flex gap-2">
                 <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <p>Finance Act 2024/25 : 1.5% si brut ≤ 50 000 MUR, 3% au-delà. Patronal fixe à 6%.</p>
+                <p>Finance Act 2025/26 : 1.5% si brut ≤ 50 000 MUR, 3% au-delà. Patronal fixe à 6%.</p>
               </div>
             </CardContent>
           </Card>
@@ -452,7 +477,7 @@ export default function ParametresPaiePage() {
               />
               <div className="bg-blue-50 p-3 rounded text-xs text-blue-800 flex gap-2">
                 <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <p>Barème 2024/25 : 0% jusqu'à 390K MUR/an, 10% jusqu'à 650K, 15% au-delà.</p>
+                <p>Barème Finance Act 2025/26 : 0% jusqu'à 390 000 MUR/an, 10% jusqu'à 650 000, 15% au-delà.</p>
               </div>
 
               {/* Sprint 2 — night shift majoration paramétrable (mig 137) */}
@@ -571,29 +596,39 @@ export default function ParametresPaiePage() {
             </CardContent>
           </Card>
 
-          {/* Jours fériés */}
+          {/* Jours fériés (PE1 — chargés dynamiquement depuis la DB) */}
           <Card className="col-span-2">
             <CardHeader>
-              <CardTitle className="text-base" style={{ color: NAVY }}>
-                Jours fériés Maurice 2025
+              <CardTitle className="text-base flex items-center justify-between" style={{ color: NAVY }}>
+                <span>Jours fériés Maurice {anneeFeries}</span>
+                <span className="text-xs font-normal text-gray-500">
+                  {joursFeries.length > 0 ? `${joursFeries.length} fériés` : 'Chargement…'}
+                </span>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-4 gap-2">
-                {JOURS_FERIES_MU_DEFAUT.map(j => (
-                  <div key={j.date} className="flex items-center gap-2 p-2 bg-purple-50 rounded border border-purple-100">
-                    <span className="text-purple-600 text-sm">🎌</span>
-                    <div>
-                      <p className="text-xs font-medium text-purple-900">{j.label}</p>
-                      <p className="text-xs text-purple-500">
-                        {new Date(j.date + "T12:00:00").toLocaleDateString("fr-FR")}
-                      </p>
+              {joursFeries.length === 0 ? (
+                <p className="text-xs text-gray-400 italic">
+                  Aucun jour férié enregistré pour {anneeFeries}.
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                  {joursFeries.map(j => (
+                    <div key={j.date} className="flex items-center gap-2 p-2 bg-purple-50 rounded border border-purple-100">
+                      <span className="text-purple-600 text-sm">🎌</span>
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium text-purple-900 truncate" title={j.libelle}>{j.libelle}</p>
+                        <p className="text-xs text-purple-500">
+                          {new Date(j.date + "T12:00:00").toLocaleDateString("fr-FR")}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
               <p className="text-xs text-gray-400 mt-3">
-                Les jours fériés sont pris en compte automatiquement dans le calcul des OT (toutes heures × 2)
+                Les jours fériés sont pris en compte automatiquement dans le calcul des OT (× 2).
+                Modification : <code className="text-[11px] bg-gray-100 px-1 rounded">public.jours_feries</code>.
               </p>
             </CardContent>
           </Card>

@@ -480,8 +480,14 @@ export async function POST(request: Request) {
       paye_taux_1: Number(paramsDB.paye_taux_1 ?? 0.10),
       paye_seuil_taux_2: Number(paramsDB.paye_seuil_taux_2 ?? 1000000),
       paye_taux_2: Number(paramsDB.paye_taux_2 ?? 0.20),
-      // Sprint 2 — night shift majoration paramétrable (defaut 15%)
-      night_shift_pct: Number(paramsDB.night_shift_pct ?? 0.15),
+      // Sprint 2 — night shift majoration paramétrable (defaut 15%).
+      // PE1 BUG 2 — normalisation défensive : si la valeur stockée est
+      // > 1, on suppose qu'elle est en pourcentage (15) au lieu du
+      // décimal attendu (0.15) et on divise par 100.
+      night_shift_pct: (() => {
+        const raw = Number(paramsDB.night_shift_pct ?? 0.15)
+        return raw > 1 ? raw / 100 : raw
+      })(),
       // POLICY Lexora — compensation 635 MUR considérée incluse dans le
       // salaire. Forcé à 0 peu importe la valeur DB (paramsDB legacy).
       salary_compensation: 0,
