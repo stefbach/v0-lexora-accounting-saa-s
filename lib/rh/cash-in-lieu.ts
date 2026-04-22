@@ -6,11 +6,18 @@
  *   - calculer le montant compensatoire (jours × salaire_base / 22)
  *   - créer / valider / annuler les paiements compensation (table
  *     paiements_conges_compensation)
- *   - injecter le montant dans un bulletin de paie (sera utilisé par G1.3)
+ *   - injecter le montant dans un bulletin de paie (G1.3)
  *   - reset le cycle AL après paiement (G1.5)
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AdminClient = any
+
+// Lazy import pour éviter le cycle de dépendance (soldes-conges importerait
+// cash-in-lieu et inversement si on passait par G1.2 d'amont).
+async function getRecomputeSoldeCongesAll() {
+  const m = await import('./soldes-conges')
+  return m.recomputeSoldeCongesAll
+}
 
 export const JOURS_OUVRES_PAR_MOIS = 22
 
@@ -197,12 +204,27 @@ export async function annulerPaiementCompensation(
 /**
  * Lie un paiement (statut valide) à un bulletin et le marque comme 'paye'.
  * Utilisé par le moteur de paie (G1.3) après injection du montant.
+ *
+ * G1.5 — Si autoResetCycle=true, déclenche resetCycleApresPaiement qui
+ * recompute la row soldes_conges du nouveau cycle (cycle_fin + 1 jour).
  */
 export async function marquerPaiementPaye(
   supabase: AdminClient,
   paiementId: string,
   bulletinPaieId: string,
-): Promise<{ ok: boolean; error: string | null }> {
+  autoResetCycle: boolean = true,
+): Promise<{ ok: boolean; error: string | null; cycleResetTo?: string | null }> {
+  // Charger d'abord le paiement pour avoir employe_id + cycle_fin (pour reset)
+  const { data: paiementBefore } = await supabase
+    .from('paiements_conges_compensation')
+    .select('employe_id, cycle_fin, statut')
+    .eq('id', paiementId)
+    .maybeSingle()
+  if (!paiementBefore) return { ok: false, error: 'Paiement introuvable' }
+  if (paiementBefore.statut !== 'valide') {
+    return { ok: false, error: `Statut courant ${paiementBefore.statut} — only "valide" can be marked paye.` }
+  }
+
   const { error } = await supabase
     .from('paiements_conges_compensation')
     .update({
@@ -211,9 +233,48 @@ export async function marquerPaiementPaye(
       paye_le: new Date().toISOString(),
     })
     .eq('id', paiementId)
-    .in('statut', ['valide'])
+    .eq('statut', 'valide')
   if (error) return { ok: false, error: error.message }
-  return { ok: true, error: null }
+
+  // G1.5 — Reset du cycle : recompute soldes_conges pour le LENDEMAIN du
+  // cycle paye, ce qui ouvre la nouvelle period anniversary.
+  let cycleResetTo: string | null = null
+  if (autoResetCycle && paiementBefore.cycle_fin) {
+    cycleResetTo = await resetCycleApresPaiement(supabase, paiementBefore.employe_id, paiementBefore.cycle_fin)
+  }
+  return { ok: true, error: null, cycleResetTo }
+}
+
+/**
+ * G1.5 — Reset le cycle AL d'un employé après paiement compensation.
+ * Stratégie : appeler recomputeSoldeCongesAll avec dateReference =
+ * cycle_fin + 1 jour. Le helper period-aware (mig 154) calcule
+ * automatiquement la nouvelle période anniversary qui contient ce jour
+ * et upsert la row correspondante (al_pris = SUM demandes ≥ lendemain).
+ *
+ * Retourne la dateReference utilisée (ISO YYYY-MM-DD), ou null si erreur.
+ */
+export async function resetCycleApresPaiement(
+  supabase: AdminClient,
+  employeId: string,
+  cycleFin: string,
+): Promise<string | null> {
+  try {
+    const fin = new Date(String(cycleFin).slice(0, 10) + 'T12:00:00')
+    fin.setDate(fin.getDate() + 1)
+    const dateRef = fin.toISOString().slice(0, 10)
+    const recompute = await getRecomputeSoldeCongesAll()
+    const result = await recompute(supabase, employeId, dateRef)
+    if (result) {
+      console.log(`[cash-in-lieu] Cycle reset OK pour ${employeId} → nouveau cycle ${result.periode_debut} → ${result.periode_fin}`)
+      return dateRef
+    }
+    console.warn(`[cash-in-lieu] resetCycleApresPaiement : recompute a renvoye null pour ${employeId} ref=${dateRef}`)
+    return null
+  } catch (err: any) {
+    console.warn('[cash-in-lieu] resetCycleApresPaiement failed (non-blocking):', err?.message || err)
+    return null
+  }
 }
 
 /**
