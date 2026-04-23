@@ -536,6 +536,8 @@ export default function CongesPage() {
     demi_journee: false, matin_ou_apres_midi: 'matin',
   })
   const [formError, setFormError] = useState<string | null>(null)
+  // DOC1 — fichiers à joindre à la demande (uploadés après création).
+  const [pendingFiles, setPendingFiles] = useState<File[]>([])
   const [refusDialog, setRefusDialog] = useState<string | null>(null)
   const [refusMotif, setRefusMotif] = useState("")
   const [actionLoading, setActionLoading] = useState<string | null>(null)
@@ -849,6 +851,32 @@ export default function CongesPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Erreur")
+
+      // DOC1 — upload des fichiers joints (si présents) avec lien vers la
+      // demande tout juste créée. Non-bloquant : on informe via toast si un
+      // upload échoue mais on ne rollback pas la demande.
+      const demandeId = data?.conge?.id || data?.id
+      if (demandeId && pendingFiles.length > 0) {
+        const uploadResults = await Promise.all(pendingFiles.map(async (file) => {
+          try {
+            const fd = new FormData()
+            fd.append('file', file)
+            fd.append('employe_id', form.employe_id)
+            fd.append('categorie', form.type_conge === 'SL' || form.type_conge === 'FML' || form.type_conge === 'MAT'
+              ? 'certificat_medical' : 'justificatif_conge')
+            fd.append('direction', 'employe_vers_rh')
+            fd.append('lien_demande_conge_id', demandeId)
+            const r = await fetch('/api/documents-rh/upload', { method: 'POST', body: fd })
+            return r.ok
+          } catch { return false }
+        }))
+        const failed = uploadResults.filter(ok => !ok).length
+        if (failed > 0) {
+          setToast(`⚠ Demande créée mais ${failed} fichier(s) non uploadés — réessaie depuis l'onglet Documents.`)
+        }
+      }
+
+      setPendingFiles([])
       setDialogOpen(false)
       setForm({
         employe_id: "", type_conge: "AL", date_debut: "", date_fin: "", motif: "",
@@ -1990,6 +2018,37 @@ export default function CongesPage() {
                 value={(form as any).convocation_url || ''}
                 onChange={e => setForm(f => ({ ...f, convocation_url: e.target.value } as any))}
               />
+            )}
+
+            {/* DOC1 — Joindre des justificatifs (fichiers uploadés après
+                création de la demande, liés via lien_demande_conge_id).
+                Visible pour les types WRA qui requièrent justificatif + SL. */}
+            {['SL', 'FML', 'SPC_MARIAGE_SELF', 'SPC_MARIAGE_ENFANT', 'SPC_DECES',
+              'JUR', 'INT', 'CRT', 'MAT', 'PAT'].includes(form.type_conge) && (
+              <div className="space-y-2 p-3 bg-indigo-50 border border-indigo-200 rounded-md">
+                <Label className="text-xs text-indigo-900 font-semibold">
+                  📎 Joindre des justificatifs (recommandé)
+                </Label>
+                <Input
+                  type="file"
+                  multiple
+                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
+                  onChange={e => setPendingFiles(Array.from(e.target.files || []))}
+                  className="text-xs"
+                />
+                {pendingFiles.length > 0 && (
+                  <ul className="text-[11px] text-indigo-800 space-y-0.5">
+                    {pendingFiles.map((f, i) => (
+                      <li key={i}>• {f.name} ({(f.size / 1024).toFixed(0)} KB)</li>
+                    ))}
+                  </ul>
+                )}
+                <p className="text-[11px] text-indigo-700 italic">
+                  Max 10 MB/fichier. Les fichiers seront envoyés après création
+                  de la demande et rattachés automatiquement.
+                  Tu pourras aussi en joindre plus tard depuis l&apos;onglet Documents.
+                </p>
+              </div>
             )}
 
             {/* Demi-journée — only offered for leave types where it makes sense */}
